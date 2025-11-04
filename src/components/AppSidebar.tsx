@@ -9,8 +9,10 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarHeader,
 } from "@/components/ui/sidebar";
 import wizardLogo from "@/assets/wizard-logo.png";
+import { ProfileDropdown } from "@/components/ProfileDropdown";
 
 const menuItems = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
@@ -24,15 +26,18 @@ const menuItems = [
 export function AppSidebar() {
   return (
     <Sidebar>
-      <SidebarContent>
-        <div className="p-6">
+      <SidebarHeader>
+        <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-3">
             <img src={wizardLogo} alt="Wizard" className="w-12 h-12" />
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+            <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
               Weight Cut Wizard
             </h1>
           </div>
+          <ProfileDropdown />
         </div>
+      </SidebarHeader>
+      <SidebarContent>
         
         <SidebarGroup>
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
