@@ -81,6 +81,9 @@ export default function Wizard() {
     setMessages(newMessages);
     await saveMessage("user", userMessage);
 
+    // Add thinking indicator
+    setMessages([...newMessages, { role: "assistant", content: "🔮 The Wizard is thinking..." }]);
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       const { data: profile } = await supabase
