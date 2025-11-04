@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Send, Sparkles, Trash2 } from "lucide-react";
 import wizardAvatar from "@/assets/wizard-logo.png";
+import wizardThinking from "@/assets/wizard-thinking.png";
 
 interface Message {
   role: "user" | "assistant";
@@ -234,7 +235,14 @@ export default function Wizard() {
                         : "bg-gradient-to-br from-secondary/20 to-primary/10 border border-border/50 mr-4"
                     }`}
                   >
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                    {msg.content === "🔮 The Wizard is thinking..." ? (
+                      <div className="flex items-center gap-2">
+                        <img src={wizardThinking} alt="Thinking" className="w-6 h-6 animate-pulse" />
+                        <p className="text-sm leading-relaxed">The Wizard is thinking...</p>
+                      </div>
+                    ) : (
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                    )}
                   </div>
                 </div>
               ))}
