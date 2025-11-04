@@ -165,30 +165,38 @@ Generate meal plans that:
     // Try to parse JSON from the response
     let mealPlanData;
     try {
-      // Clean the content by removing markdown code blocks
+      // Clean the content by removing markdown code blocks and extracting JSON
       let cleanContent = content.trim();
       
-      // Remove markdown code blocks with various patterns
-      cleanContent = cleanContent.replace(/^```json\s*/gm, '');
-      cleanContent = cleanContent.replace(/^```\s*/gm, '');
-      cleanContent = cleanContent.replace(/\s*```$/gm, '');
+      // Remove all markdown code block markers
+      cleanContent = cleanContent.replace(/```json\s*/g, '');
+      cleanContent = cleanContent.replace(/```\s*/g, '');
       
-      // Try to extract JSON if it's embedded in text
-      const jsonMatch = cleanContent.match(/\{[\s\S]*\}/);
-      const jsonStr = jsonMatch ? jsonMatch[0] : cleanContent;
+      // Find the first { and last } to extract the complete JSON object
+      const firstBrace = cleanContent.indexOf('{');
+      const lastBrace = cleanContent.lastIndexOf('}');
       
+      if (firstBrace === -1 || lastBrace === -1) {
+        throw new Error("No valid JSON object found in response");
+      }
+      
+      const jsonStr = cleanContent.substring(firstBrace, lastBrace + 1);
       mealPlanData = JSON.parse(jsonStr);
+      
       console.log("Successfully parsed AI response");
+      console.log("Meal plan structure:", Object.keys(mealPlanData));
     } catch (e) {
       console.error("Failed to parse AI response as JSON:", e);
-      console.error("Raw content:", content);
-      // If parsing fails, return the raw content
-      mealPlanData = {
-        rawResponse: content,
-        dailyCalorieTarget: Math.round(dailyCalorieTarget),
-        safetyStatus: safetyIndicator,
-        safetyMessage
-      };
+      console.error("Raw content:", content.substring(0, 500));
+      
+      // Return error response that frontend can handle
+      return new Response(
+        JSON.stringify({ 
+          error: "Failed to parse meal plan from AI response. Please try again.",
+          details: e instanceof Error ? e.message : "Unknown parsing error"
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     return new Response(

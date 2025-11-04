@@ -268,22 +268,35 @@ export default function Nutrition() {
           .from("nutrition_logs")
           .insert(mealsWithUserId as any);
 
-        if (insertError) throw insertError;
-      }
+        if (insertError) {
+          console.error("Error inserting meals:", insertError);
+          throw insertError;
+        }
 
-      toast({
-        title: "Meal plan generated!",
-        description: mealPlan.tips || "Your AI-powered meal plan is ready",
-      });
+        // Calculate total macros from saved meals
+        const totalCals = mealsToSave.reduce((sum, m) => sum + m.calories, 0);
+        const totalProtein = mealsToSave.reduce((sum, m) => sum + (m.protein_g || 0), 0);
+
+        toast({
+          title: "✅ Meal plan saved!",
+          description: `Added ${mealsToSave.length} meals (${totalCals} cal, ${Math.round(totalProtein)}g protein) to ${format(new Date(selectedDate), "MMM d")}`,
+        });
+      } else {
+        toast({
+          title: "Meal plan generated!",
+          description: mealPlan.tips || "Your AI-powered meal plan is ready",
+        });
+      }
 
       setIsAiDialogOpen(false);
       setAiPrompt("");
-      loadMeals();
-    } catch (error) {
+      await loadMeals();
+    } catch (error: any) {
       console.error("Error generating meal plan:", error);
+      const errorMsg = error?.message || error?.error || "Failed to generate meal plan";
       toast({
-        title: "Error",
-        description: "Failed to generate meal plan",
+        title: "❌ Error generating meal plan",
+        description: typeof errorMsg === 'string' ? errorMsg : "Please try again",
         variant: "destructive",
       });
     } finally {
@@ -414,7 +427,8 @@ export default function Nutrition() {
                   </p>
                 )}
                 <Button onClick={handleGenerateMealPlan} disabled={loading} className="w-full">
-                  {loading ? "Generating..." : meals.length > 0 ? "Regenerate Meal Plan" : "Generate Meal Plan"}
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  {loading ? "Generating meals..." : meals.length > 0 ? "Regenerate Meal Plan" : "Generate Meal Plan"}
                 </Button>
               </div>
             </DialogContent>
