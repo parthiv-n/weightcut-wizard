@@ -25,7 +25,7 @@ const Index = () => {
       <div className="container mx-auto px-4 py-16">
         <div className="text-center mb-16">
           <div className="mx-auto mb-6">
-            <img src={wizardHero} alt="Weight Cut Wizard" className="h-40 w-40 mx-auto object-contain" />
+            <img src={wizardHero} alt="Weight Cut Wizard" className="h-64 w-64 mx-auto object-contain" />
           </div>
           <h1 className="text-5xl md:text-6xl font-title font-bold mb-6 pb-2 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
             Weight Cut Wizard
