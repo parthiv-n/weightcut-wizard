@@ -112,7 +112,8 @@ export default function WeightTracker() {
   const getWeightProgress = () => {
     if (!profile) return 0;
     const current = getCurrentWeight();
-    const start = profile.current_weight_kg;
+    // Use the first weight log as starting weight, or profile weight if no logs exist
+    const start = weightLogs.length > 0 ? weightLogs[0].weight_kg : profile.current_weight_kg;
     const goal = profile.goal_weight_kg;
     const total = start - goal;
     const progress = start - current;
