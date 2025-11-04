@@ -37,7 +37,7 @@ export function CalorieProgressRing({ consumed, target }: CalorieProgressRingPro
           </p>
         </div>
         
-        <div className="absolute bottom-6 right-6 w-24 h-24 p-1">
+        <div className="absolute bottom-6 right-6 w-36 h-36 p-1">
           <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
             <defs>
               <linearGradient id="calorieGradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -74,7 +74,7 @@ export function CalorieProgressRing({ consumed, target }: CalorieProgressRingPro
           
           {/* Center content */}
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <div className="text-xl font-bold">{Math.round(percentage)}%</div>
+            <div className="text-2xl font-bold">{Math.round(percentage)}%</div>
           </div>
         </div>
       </CardContent>
