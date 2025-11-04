@@ -11,9 +11,11 @@ import {
   SidebarMenuItem,
   SidebarHeader,
   SidebarFooter,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import wizardLogo from "@/assets/wizard-logo.png";
 import { ProfileDropdown } from "@/components/ProfileDropdown";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 const menuItems = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
@@ -25,6 +27,15 @@ const menuItems = [
 ];
 
 export function AppSidebar() {
+  const { setOpenMobile } = useSidebar();
+  const isMobile = useIsMobile();
+
+  const handleNavClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
+
   return (
     <Sidebar>
       <SidebarHeader>
@@ -48,6 +59,7 @@ export function AppSidebar() {
                   <SidebarMenuButton asChild>
                     <NavLink 
                       to={item.url}
+                      onClick={handleNavClick}
                       className={({ isActive }) => 
                         isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : ""
                       }
