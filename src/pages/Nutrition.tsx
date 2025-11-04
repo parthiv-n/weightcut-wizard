@@ -499,7 +499,7 @@ export default function Nutrition() {
     <div className="space-y-6 p-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <img src={wizardNutrition} alt="Wizard" className="w-16 h-16" />
+          <img src={wizardNutrition} alt="Wizard" className="w-32 h-32" />
           <div>
             <h1 className="text-3xl font-bold">Nutrition</h1>
             <p className="text-muted-foreground mt-1">AI-powered meal planning for safe weight loss</p>
