@@ -10,6 +10,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarHeader,
+  SidebarFooter,
 } from "@/components/ui/sidebar";
 import wizardLogo from "@/assets/wizard-logo.png";
 import { ProfileDropdown } from "@/components/ProfileDropdown";
@@ -27,14 +28,13 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader>
-        <div className="flex items-center justify-between p-4">
+        <div className="p-4">
           <div className="flex items-center gap-3">
             <img src={wizardLogo} alt="Wizard" className="w-12 h-12" />
             <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
               Weight Cut Wizard
             </h1>
           </div>
-          <ProfileDropdown />
         </div>
       </SidebarHeader>
       <SidebarContent>
@@ -62,6 +62,11 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter>
+        <div className="p-4 border-t">
+          <ProfileDropdown />
+        </div>
+      </SidebarFooter>
     </Sidebar>
   );
 }
