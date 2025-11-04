@@ -35,7 +35,7 @@ We combine science, coaching psychology, and a bit of fantasy charm to make weig
 
 ## 🎯 Who It’s For
 
-- 🥊 **MMA Fighters**
+- 🥊 **Muay Thai and MMA Fighters**
 - 🥋 **Boxers, Wrestlers, and BJJ Competitors**
 - 🧠 **Coaches and Nutritionists** managing fighter camps
 - 📊 **Athletic organizations** seeking data-driven, safe-cut frameworks
