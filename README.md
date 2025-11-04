@@ -130,21 +130,6 @@ All recommendations are clearly marked as **educational guidance only**, not med
 
 ---
 
-## 🎨 Design System
-
-**Brand Essence:**  
-> “Your magical AI weight-cutting companion — wise, supportive, mystical, and precise.”
-
-- **Wizard Blue:** `#5A7DFF`  
-- **Arcane Purple:** `#8A4DFF`
-- Gradient accents, glowing UI effects, 8-bit fighter avatar
-- Full light/dark mode with accessible contrast
-
-Typography:
-- Headings: *Poppins*  
-- Body/UI: *Manrope*
-
----
 
 ## 🧮 Formulas Used
 
