@@ -17,12 +17,23 @@ export default function Wizard() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [userName, setUserName] = useState("fighter");
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
   useEffect(() => {
     loadChatHistory();
+    loadUserName();
   }, []);
+
+  const loadUserName = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const emailName = user.email?.split("@")[0] || "fighter";
+      const formattedName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
+      setUserName(formattedName);
+    }
+  };
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -205,7 +216,7 @@ export default function Wizard() {
             <div className="space-y-4 max-h-[500px] overflow-y-auto mb-4 pr-2">
               {messages.length === 0 && (
                 <div className="text-center text-muted-foreground py-8">
-                  <p>Welcome, fighter! Ask me for guidance on your weight cut journey.</p>
+                  <p>Welcome, {userName}! Ask me for guidance on your weight cut journey.</p>
                 </div>
               )}
               {messages.map((msg, idx) => (
