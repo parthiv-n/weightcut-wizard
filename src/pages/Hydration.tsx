@@ -268,16 +268,16 @@ export default function Hydration() {
                   <p className="text-sm font-medium text-muted-foreground">Daily Target</p>
                   <p className="text-3xl font-bold">{getDailyTarget()}L</p>
                 </div>
-                <Droplets className="h-10 w-10 text-primary opacity-70" />
+                <Droplets className="h-10 w-10 text-primary opacity-70 flex-shrink-0" />
               </div>
               <Progress value={getHydrationProgress()} className="h-3 mb-2" />
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <span className="text-sm text-muted-foreground truncate">
                   {(todayIntake / 1000).toFixed(2)}L consumed
                 </span>
-                <Badge variant={status.color === "text-success" ? "default" : "secondary"} className="gap-1">
+                <Badge variant={status.color === "text-success" ? "default" : "secondary"} className="gap-1 w-fit flex-shrink-0">
                   <StatusIcon className={`h-3 w-3 ${status.color}`} />
-                  {status.label}
+                  <span className="whitespace-nowrap">{status.label}</span>
                 </Badge>
               </div>
             </CardContent>
