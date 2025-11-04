@@ -116,9 +116,9 @@ export default function Dashboard() {
       </div>
 
       <div className="rounded-lg bg-gradient-to-r from-primary/10 to-secondary/10 p-4 border border-primary/20">
-        <div className="flex items-start gap-3">
-          <div className="rounded-full bg-primary/20 p-2">
-            <img src={wizardLogo} alt="Wizard" className="w-8 h-8" />
+        <div className="flex items-start gap-4">
+          <div className="rounded-full bg-primary/20 p-3">
+            <img src={wizardLogo} alt="Wizard" className="w-16 h-16" />
           </div>
           <div className="flex-1">
             <h3 className="font-semibold">Wizard's Daily Wisdom</h3>
