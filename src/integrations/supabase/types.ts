@@ -121,6 +121,7 @@ export type Database = {
           date: string
           fats_g: number | null
           id: string
+          ingredients: Json | null
           is_ai_generated: boolean | null
           meal_name: string
           meal_type: string | null
@@ -137,6 +138,7 @@ export type Database = {
           date: string
           fats_g?: number | null
           id?: string
+          ingredients?: Json | null
           is_ai_generated?: boolean | null
           meal_name: string
           meal_type?: string | null
@@ -153,6 +155,7 @@ export type Database = {
           date?: string
           fats_g?: number | null
           id?: string
+          ingredients?: Json | null
           is_ai_generated?: boolean | null
           meal_name?: string
           meal_type?: string | null

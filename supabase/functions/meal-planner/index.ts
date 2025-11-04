@@ -73,8 +73,13 @@ RESPONSE FORMAT (must be valid JSON):
       "protein": 30,
       "carbs": 40,
       "fats": 15,
-      "portion": "Description",
-      "recipe": "Brief preparation notes"
+      "portion": "Total weight in grams",
+      "recipe": "Brief preparation notes",
+      "ingredients": [
+        {"name": "Chicken breast", "grams": 200},
+        {"name": "Brown rice", "grams": 150},
+        {"name": "Olive oil", "grams": 10}
+      ]
     },
     "lunch": { ... },
     "dinner": { ... },
@@ -90,6 +95,12 @@ RESPONSE FORMAT (must be valid JSON):
   "safetyMessage": "${safetyMessage}",
   "tips": "Motivational and practical tips for the day"
 }
+
+CRITICAL: For each meal, you MUST include:
+- An "ingredients" array with specific foods and their weights in GRAMS
+- Each ingredient must have "name" and "grams" properties
+- Ingredient weights should be realistic and add up to a reasonable total meal weight
+- Be specific (e.g., "Chicken breast" not just "Chicken", "Brown rice" not just "Rice")
 
 Generate meal plans that:
 - Stay within daily calorie target
