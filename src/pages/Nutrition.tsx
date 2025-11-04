@@ -14,6 +14,11 @@ import { MealCard } from "@/components/nutrition/MealCard";
 import { CalorieBudgetIndicator } from "@/components/nutrition/CalorieBudgetIndicator";
 import { format, subDays, addDays } from "date-fns";
 
+interface Ingredient {
+  name: string;
+  grams: number;
+}
+
 interface Meal {
   id: string;
   meal_name: string;
@@ -25,6 +30,7 @@ interface Meal {
   portion_size?: string;
   recipe_notes?: string;
   is_ai_generated?: boolean;
+  ingredients?: Ingredient[];
   date: string;
 }
 
@@ -51,7 +57,10 @@ export default function Nutrition() {
     meal_type: "breakfast",
     portion_size: "",
     recipe_notes: "",
+    ingredients: [] as Ingredient[],
   });
+
+  const [newIngredient, setNewIngredient] = useState({ name: "", grams: "" });
 
   useEffect(() => {
     loadProfile();
@@ -119,7 +128,13 @@ export default function Nutrition() {
       return;
     }
 
-    setMeals(data || []);
+    // Cast ingredients from Json to Ingredient[]
+    const typedMeals = (data || []).map(meal => ({
+      ...meal,
+      ingredients: (meal.ingredients as unknown) as Ingredient[] | undefined,
+    }));
+
+    setMeals(typedMeals as Meal[]);
   };
 
   const handleGenerateMealPlan = async () => {
@@ -166,7 +181,6 @@ export default function Nutrition() {
         
         if (plan.breakfast) {
           mealsToSave.push({
-            user_id: user.id,
             date: selectedDate,
             meal_name: plan.breakfast.name,
             calories: plan.breakfast.calories,
@@ -176,13 +190,13 @@ export default function Nutrition() {
             meal_type: "breakfast",
             portion_size: plan.breakfast.portion,
             recipe_notes: plan.breakfast.recipe,
+            ingredients: plan.breakfast.ingredients || null,
             is_ai_generated: true,
           });
         }
 
         if (plan.lunch) {
           mealsToSave.push({
-            user_id: user.id,
             date: selectedDate,
             meal_name: plan.lunch.name,
             calories: plan.lunch.calories,
@@ -192,13 +206,13 @@ export default function Nutrition() {
             meal_type: "lunch",
             portion_size: plan.lunch.portion,
             recipe_notes: plan.lunch.recipe,
+            ingredients: plan.lunch.ingredients || null,
             is_ai_generated: true,
           });
         }
 
         if (plan.dinner) {
           mealsToSave.push({
-            user_id: user.id,
             date: selectedDate,
             meal_name: plan.dinner.name,
             calories: plan.dinner.calories,
@@ -208,6 +222,7 @@ export default function Nutrition() {
             meal_type: "dinner",
             portion_size: plan.dinner.portion,
             recipe_notes: plan.dinner.recipe,
+            ingredients: plan.dinner.ingredients || null,
             is_ai_generated: true,
           });
         }
@@ -215,7 +230,6 @@ export default function Nutrition() {
         if (plan.snacks && Array.isArray(plan.snacks)) {
           plan.snacks.forEach((snack: any) => {
             mealsToSave.push({
-              user_id: user.id,
               date: selectedDate,
               meal_name: snack.name,
               calories: snack.calories,
@@ -225,6 +239,7 @@ export default function Nutrition() {
               meal_type: "snack",
               portion_size: snack.portion,
               recipe_notes: snack.recipe,
+              ingredients: snack.ingredients || null,
               is_ai_generated: true,
             });
           });
@@ -234,7 +249,7 @@ export default function Nutrition() {
       if (mealsToSave.length > 0) {
         const { error: insertError } = await supabase
           .from("nutrition_logs")
-          .insert(mealsToSave);
+          .insert(mealsToSave as any);
 
         if (insertError) throw insertError;
       }
@@ -275,7 +290,6 @@ export default function Nutrition() {
       if (!user) throw new Error("Not authenticated");
 
       const { error } = await supabase.from("nutrition_logs").insert({
-        user_id: user.id,
         date: selectedDate,
         meal_name: manualMeal.meal_name,
         calories: parseInt(manualMeal.calories),
@@ -285,8 +299,9 @@ export default function Nutrition() {
         meal_type: manualMeal.meal_type,
         portion_size: manualMeal.portion_size || null,
         recipe_notes: manualMeal.recipe_notes || null,
+        ingredients: manualMeal.ingredients.length > 0 ? manualMeal.ingredients : null,
         is_ai_generated: false,
-      });
+      } as any);
 
       if (error) throw error;
 
@@ -301,7 +316,9 @@ export default function Nutrition() {
         meal_type: "breakfast",
         portion_size: "",
         recipe_notes: "",
+        ingredients: [],
       });
+      setNewIngredient({ name: "", grams: "" });
       loadMeals();
     } catch (error) {
       console.error("Error adding meal:", error);
@@ -464,10 +481,73 @@ export default function Nutrition() {
                     />
                   </div>
                   <div className="col-span-2">
-                    <Label htmlFor="portion">Portion Size</Label>
+                    <Label>Ingredients (in grams)</Label>
+                    <div className="space-y-2 mt-2">
+                      {manualMeal.ingredients.map((ingredient, idx) => (
+                        <div key={idx} className="flex items-center gap-2 p-2 bg-muted rounded-md">
+                          <span className="flex-1">{ingredient.name}</span>
+                          <span className="font-medium">{ingredient.grams}g</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              const newIngredients = [...manualMeal.ingredients];
+                              newIngredients.splice(idx, 1);
+                              setManualMeal({ ...manualMeal, ingredients: newIngredients });
+                            }}
+                          >
+                            Remove
+                          </Button>
+                        </div>
+                      ))}
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Ingredient name"
+                          value={newIngredient.name}
+                          onChange={(e) => setNewIngredient({ ...newIngredient, name: e.target.value })}
+                        />
+                        <Input
+                          type="number"
+                          placeholder="Grams"
+                          value={newIngredient.grams}
+                          onChange={(e) => setNewIngredient({ ...newIngredient, grams: e.target.value })}
+                          className="w-32"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => {
+                            if (newIngredient.name && newIngredient.grams) {
+                              setManualMeal({
+                                ...manualMeal,
+                                ingredients: [
+                                  ...manualMeal.ingredients,
+                                  { name: newIngredient.name, grams: parseFloat(newIngredient.grams) }
+                                ]
+                              });
+                              setNewIngredient({ name: "", grams: "" });
+                            }
+                          }}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                      {manualMeal.ingredients.length > 0 && (
+                        <div className="flex justify-between items-center pt-2 border-t font-semibold">
+                          <span>Total weight:</span>
+                          <span>
+                            {manualMeal.ingredients.reduce((sum, ing) => sum + ing.grams, 0)}g
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="col-span-2">
+                    <Label htmlFor="portion">Portion Description (optional)</Label>
                     <Input
                       id="portion"
-                      placeholder="E.g., 200g chicken breast, 1 cup rice"
+                      placeholder="E.g., 1 plate, 2 servings"
                       value={manualMeal.portion_size}
                       onChange={(e) => setManualMeal({ ...manualMeal, portion_size: e.target.value })}
                     />
@@ -531,40 +611,35 @@ export default function Nutrition() {
         safetyMessage={safetyMessage}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Total Calories</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{totalCalories}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Protein</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{totalProtein.toFixed(1)}g</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Carbs</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{totalCarbs.toFixed(1)}g</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Fats</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{totalFats.toFixed(1)}g</p>
-          </CardContent>
-        </Card>
-      </div>
+      <Card className="bg-gradient-to-r from-primary/5 to-secondary/5 border-2">
+        <CardHeader>
+          <CardTitle className="text-center text-lg">Daily Macronutrient Totals</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="text-center">
+              <p className="text-sm font-medium text-muted-foreground mb-1">Total Calories</p>
+              <p className="text-3xl font-bold text-primary">{totalCalories}</p>
+              <p className="text-xs text-muted-foreground mt-1">kcal</p>
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-medium text-muted-foreground mb-1">Protein</p>
+              <p className="text-3xl font-bold text-blue-600">{totalProtein.toFixed(1)}</p>
+              <p className="text-xs text-muted-foreground mt-1">grams</p>
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-medium text-muted-foreground mb-1">Carbs</p>
+              <p className="text-3xl font-bold text-orange-600">{totalCarbs.toFixed(1)}</p>
+              <p className="text-xs text-muted-foreground mt-1">grams</p>
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-medium text-muted-foreground mb-1">Fats</p>
+              <p className="text-3xl font-bold text-green-600">{totalFats.toFixed(1)}</p>
+              <p className="text-xs text-muted-foreground mt-1">grams</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Tabs defaultValue="today" className="w-full">
         <TabsList>

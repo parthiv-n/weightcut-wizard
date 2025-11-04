@@ -4,6 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Edit2, Trash2, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
 import { useState } from "react";
 
+interface Ingredient {
+  name: string;
+  grams: number;
+}
+
 interface MealCardProps {
   meal: {
     id?: string;
@@ -16,6 +21,7 @@ interface MealCardProps {
     portion_size?: string;
     recipe_notes?: string;
     is_ai_generated?: boolean;
+    ingredients?: Ingredient[];
   };
   onEdit?: () => void;
   onDelete?: () => void;
@@ -83,7 +89,7 @@ export function MealCard({ meal, onEdit, onDelete }: MealCardProps) {
           </div>
         </div>
       </CardHeader>
-      {(meal.portion_size || meal.recipe_notes) && (
+      {(meal.ingredients || meal.portion_size || meal.recipe_notes) && (
         <>
           <CardContent className="pt-0">
             <Button
@@ -96,8 +102,27 @@ export function MealCard({ meal, onEdit, onDelete }: MealCardProps) {
               {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </Button>
             {expanded && (
-              <div className="mt-3 space-y-2 text-sm animate-fade-in">
-                {meal.portion_size && (
+              <div className="mt-3 space-y-3 text-sm animate-fade-in">
+                {meal.ingredients && meal.ingredients.length > 0 && (
+                  <div>
+                    <span className="font-semibold block mb-2">Ingredients:</span>
+                    <div className="space-y-1 pl-2">
+                      {meal.ingredients.map((ingredient, idx) => (
+                        <div key={idx} className="flex justify-between items-center">
+                          <span className="text-muted-foreground">{ingredient.name}</span>
+                          <span className="font-medium">{ingredient.grams}g</span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between items-center pt-2 border-t mt-2">
+                        <span className="font-semibold">Total weight:</span>
+                        <span className="font-semibold">
+                          {meal.ingredients.reduce((sum, ing) => sum + ing.grams, 0)}g
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {meal.portion_size && !meal.ingredients && (
                   <div>
                     <span className="font-semibold">Portion:</span> {meal.portion_size}
                   </div>
