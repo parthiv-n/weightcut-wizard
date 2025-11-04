@@ -141,7 +141,7 @@ All recommendations are clearly marked as **educational guidance only**, not med
 - Full light/dark mode with accessible contrast
 
 Typography:
-- Headings: *Cormorant Garamond*  
+- Headings: *Poppins*  
 - Body/UI: *Manrope*
 
 ---
