@@ -44,14 +44,17 @@ export function MealCard({ meal, onEdit, onDelete }: MealCardProps) {
     <Card className="hover:shadow-md transition-shadow animate-fade-in">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <CardTitle className="text-lg">{meal.meal_name}</CardTitle>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <CardTitle className="text-lg">{meal.meal_name}</CardTitle>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap">
               {meal.is_ai_generated && (
-                <Sparkles className="h-4 w-4 text-primary" />
+                <Badge variant="default" className="bg-primary/20 text-primary border-primary/30">
+                  <Sparkles className="h-3 w-3 mr-1" />
+                  AI Generated
+                </Badge>
               )}
-            </div>
-            <div className="flex items-center gap-2 flex-wrap">
               {meal.meal_type && (
                 <Badge variant="outline" className={getMealTypeColor(meal.meal_type)}>
                   {meal.meal_type}
