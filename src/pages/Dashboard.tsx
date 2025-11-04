@@ -6,11 +6,13 @@ import { Droplets, Target, TrendingDown, Calendar } from "lucide-react";
 import wizardLogo from "@/assets/wizard-logo.png";
 import { WeightProgressRing } from "@/components/dashboard/WeightProgressRing";
 import { useUser } from "@/contexts/UserContext";
+import { Button } from "@/components/ui/button";
 
 export default function Dashboard() {
   const [profile, setProfile] = useState<any>(null);
   const [weightLogs, setWeightLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [weightUnit, setWeightUnit] = useState<'kg' | 'lb'>('kg');
   const { userName } = useUser();
 
   useEffect(() => {
@@ -50,9 +52,13 @@ export default function Dashboard() {
   const weightToLose = profile ? (profile.current_weight_kg - profile.goal_weight_kg).toFixed(1) : 0;
   const dailyCalorieGoal = profile ? Math.round(profile.tdee - 500) : 0;
 
+  const convertWeight = (kg: number) => {
+    return weightUnit === 'kg' ? kg : kg * 2.20462;
+  };
+
   const chartData = weightLogs.map((log) => ({
     date: new Date(log.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-    weight: parseFloat(log.weight_kg),
+    weight: convertWeight(parseFloat(log.weight_kg)),
   }));
 
   return (
@@ -139,7 +145,27 @@ export default function Dashboard() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Weight History</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Weight History</CardTitle>
+            <div className="flex gap-1 bg-muted rounded-lg p-1">
+              <Button
+                variant={weightUnit === 'kg' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setWeightUnit('kg')}
+                className="h-7 text-xs"
+              >
+                kg
+              </Button>
+              <Button
+                variant={weightUnit === 'lb' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setWeightUnit('lb')}
+                className="h-7 text-xs"
+              >
+                lb
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           {chartData.length > 0 ? (
@@ -161,7 +187,7 @@ export default function Dashboard() {
                 <YAxis 
                   stroke="hsl(var(--muted-foreground))"
                   fontSize={12}
-                  label={{ value: 'kg', position: 'insideLeft', style: { fill: 'hsl(var(--muted-foreground))' } }}
+                  label={{ value: weightUnit, position: 'insideLeft', style: { fill: 'hsl(var(--muted-foreground))' } }}
                 />
                 <Tooltip 
                   contentStyle={{
@@ -169,7 +195,7 @@ export default function Dashboard() {
                     border: "1px solid hsl(var(--border))",
                     borderRadius: "8px"
                   }}
-                  formatter={(value: number) => [`${value} kg`, 'Weight']}
+                  formatter={(value: number) => [`${value.toFixed(1)} ${weightUnit}`, 'Weight']}
                 />
                 <Area
                   type="monotone"
