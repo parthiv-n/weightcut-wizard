@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { User, LogOut, Settings } from "lucide-react";
+import { useUser } from "@/contexts/UserContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -20,8 +21,7 @@ import { ProfilePictureUpload } from "./ProfilePictureUpload";
 
 export function ProfileDropdown() {
   const [user, setUser] = useState<any>(null);
-  const [userName, setUserName] = useState("");
-  const [avatarUrl, setAvatarUrl] = useState<string>("");
+  const { userName, avatarUrl, setUserName, setAvatarUrl } = useUser();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [editedName, setEditedName] = useState("");
   const { toast } = useToast();
@@ -31,25 +31,14 @@ export function ProfileDropdown() {
     loadUserData();
   }, []);
 
+  useEffect(() => {
+    setEditedName(userName);
+  }, [userName]);
+
   const loadUserData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       setUser(user);
-      const emailName = user.email?.split("@")[0] || "User";
-      const formattedName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
-      setUserName(formattedName);
-      setEditedName(formattedName);
-
-      // Load avatar from profile
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("avatar_url")
-        .eq("id", user.id)
-        .single();
-      
-      if (profile?.avatar_url) {
-        setAvatarUrl(profile.avatar_url);
-      }
     }
   };
 
@@ -60,17 +49,13 @@ export function ProfileDropdown() {
 
   const handleUpdateProfile = async () => {
     try {
-      // In a real app, you'd update the user's metadata or profile table
-      // For now, we'll just update the local state
       setUserName(editedName);
       toast({
-        title: "Profile updated",
-        description: "Your profile has been updated successfully",
+        description: "Profile updated successfully",
       });
       setIsProfileOpen(false);
     } catch (error) {
       toast({
-        title: "Error",
         description: "Failed to update profile",
         variant: "destructive",
       });
@@ -120,7 +105,7 @@ export function ProfileDropdown() {
               <Label>Profile Picture</Label>
               <ProfilePictureUpload
                 currentAvatarUrl={avatarUrl}
-                onUploadSuccess={(url) => setAvatarUrl(url)}
+                onUploadSuccess={setAvatarUrl}
               />
             </div>
             <div className="space-y-2">
