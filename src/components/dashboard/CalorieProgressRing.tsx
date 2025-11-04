@@ -7,7 +7,7 @@ interface CalorieProgressRingProps {
 
 export function CalorieProgressRing({ consumed, target }: CalorieProgressRingProps) {
   const percentage = target > 0 ? Math.min((consumed / target) * 100, 100) : 0;
-  const radius = 70;
+  const radius = 50;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
   const remaining = Math.max(target - consumed, 0);
@@ -28,8 +28,17 @@ export function CalorieProgressRing({ consumed, target }: CalorieProgressRingPro
   return (
     <Card className="overflow-hidden">
       <CardContent className="p-6">
-        <div className="flex flex-col items-center gap-6">
-          <div className="relative w-48 h-48">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex-1">
+            <div className="text-sm font-medium text-muted-foreground mb-1">Calorie Progress</div>
+            <div className="text-4xl font-bold mb-1">{consumed}</div>
+            <p className="text-xs text-muted-foreground">of {target} kcal</p>
+            <p className="text-xs font-medium mt-2" style={{ color: getStatusColor() }}>
+              {getStatusText()}
+            </p>
+          </div>
+          
+          <div className="relative w-24 h-24 flex-shrink-0">
             <svg className="w-full h-full transform -rotate-90">
               <defs>
                 <linearGradient id="calorieGradient" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -40,23 +49,23 @@ export function CalorieProgressRing({ consumed, target }: CalorieProgressRingPro
               
               {/* Background circle */}
               <circle
-                cx="96"
-                cy="96"
+                cx="48"
+                cy="48"
                 r={radius}
                 fill="none"
                 stroke="hsl(var(--muted))"
-                strokeWidth="12"
+                strokeWidth="8"
                 opacity="0.2"
               />
               
               {/* Progress circle */}
               <circle
-                cx="96"
-                cy="96"
+                cx="48"
+                cy="48"
                 r={radius}
                 fill="none"
                 stroke="url(#calorieGradient)"
-                strokeWidth="12"
+                strokeWidth="8"
                 strokeDasharray={circumference}
                 strokeDashoffset={strokeDashoffset}
                 strokeLinecap="round"
@@ -66,24 +75,7 @@ export function CalorieProgressRing({ consumed, target }: CalorieProgressRingPro
             
             {/* Center content */}
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <div className="text-4xl font-bold">{Math.round(percentage)}%</div>
-              <div className="text-xs text-muted-foreground mt-1">{getStatusText()}</div>
-            </div>
-          </div>
-
-          {/* Stats */}
-          <div className="w-full space-y-3">
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-muted-foreground">Consumed</span>
-              <span className="font-semibold">{consumed} kcal</span>
-            </div>
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-muted-foreground">Target</span>
-              <span className="font-semibold">{target} kcal</span>
-            </div>
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-muted-foreground">Remaining</span>
-              <span className="font-semibold">{remaining} kcal</span>
+              <div className="text-xl font-bold">{Math.round(percentage)}%</div>
             </div>
           </div>
         </div>
