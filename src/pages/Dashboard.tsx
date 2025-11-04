@@ -129,10 +129,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        {/* Weight Progress Ring - Takes 1 column */}
+      <div className="flex flex-col gap-4 lg:grid lg:grid-cols-3">
+        {/* Weight Progress Ring - Order 1 */}
         {profile && (
-          <div className="order-1 lg:order-none">
+          <div className="order-1">
             <WeightProgressRing
               currentWeight={weightLogs.length > 0 ? parseFloat(weightLogs[weightLogs.length - 1].weight_kg) : profile.current_weight_kg}
               startingWeight={weightLogs.length > 0 ? parseFloat(weightLogs[0].weight_kg) : profile.current_weight_kg}
@@ -141,40 +141,39 @@ export default function Dashboard() {
           </div>
         )}
         
-        {/* Stats Grid - Takes 2 columns on desktop */}
-        <div className="lg:col-span-2 grid gap-4 grid-cols-1 sm:grid-cols-2">
-          {/* Calorie Progress - Takes 2 rows on desktop, order 2 on mobile */}
-          <div className="order-2 lg:order-none sm:row-span-2">
-            <CalorieProgressRing
-              consumed={todayCalories}
-              target={dailyCalorieGoal}
-            />
-          </div>
-          
-          <Card className="order-3 lg:order-none">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Days Until Target</CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-4xl font-bold">{daysUntilTarget}</div>
-              <p className="text-sm text-muted-foreground mt-1">days remaining</p>
-            </CardContent>
-          </Card>
-
-          <Card className="order-4 lg:order-none">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Today's Hydration</CardTitle>
-              <Droplets className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-4xl font-bold">{(todayHydration / 1000).toFixed(1)}L</div>
-              <p className="text-sm text-muted-foreground mt-1">
-                {todayHydration >= 3000 ? "Great job!" : `${((3000 - todayHydration) / 1000).toFixed(1)}L to go`}
-              </p>
-            </CardContent>
-          </Card>
+        {/* Calorie Progress - Order 2 on mobile, positioned in grid on desktop */}
+        <div className="order-2 lg:order-none lg:row-span-2">
+          <CalorieProgressRing
+            consumed={todayCalories}
+            target={dailyCalorieGoal}
+          />
         </div>
+        
+        {/* Days Until Target - Order 3 */}
+        <Card className="order-3 lg:order-none">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Days Until Target</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-4xl font-bold">{daysUntilTarget}</div>
+            <p className="text-sm text-muted-foreground mt-1">days remaining</p>
+          </CardContent>
+        </Card>
+
+        {/* Today's Hydration - Order 4 */}
+        <Card className="order-4 lg:order-none">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Today's Hydration</CardTitle>
+            <Droplets className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-4xl font-bold">{(todayHydration / 1000).toFixed(1)}L</div>
+            <p className="text-sm text-muted-foreground mt-1">
+              {todayHydration >= 3000 ? "Great job!" : `${((3000 - todayHydration) / 1000).toFixed(1)}L to go`}
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
