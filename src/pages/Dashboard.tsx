@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Droplets, Target, TrendingDown, Calendar } from "lucide-react";
 import wizardLogo from "@/assets/wizard-logo.png";
+import { WeightProgressRing } from "@/components/dashboard/WeightProgressRing";
 
 export default function Dashboard() {
   const [profile, setProfile] = useState<any>(null);
@@ -31,7 +32,7 @@ export default function Dashboard() {
         .from("profiles")
         .select("*")
         .eq("id", user.id)
-        .single();
+        .maybeSingle();
 
       const { data: logsData } = await supabase
         .from("weight_logs")
@@ -84,50 +85,62 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Daily Calorie Goal</CardTitle>
-            <Target className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{dailyCalorieGoal}</div>
-            <p className="text-xs text-muted-foreground">kcal per day</p>
-          </CardContent>
-        </Card>
+      <div className="grid gap-4 lg:grid-cols-3">
+        {/* Weight Progress Ring - Takes 1 column */}
+        {profile && (
+          <WeightProgressRing
+            currentWeight={weightLogs.length > 0 ? parseFloat(weightLogs[weightLogs.length - 1].weight_kg) : profile.current_weight_kg}
+            startingWeight={profile.current_weight_kg}
+            goalWeight={profile.goal_weight_kg}
+          />
+        )}
+        
+        {/* Stats Grid - Takes 2 columns */}
+        <div className="lg:col-span-2 grid gap-4 md:grid-cols-2">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Daily Calorie Goal</CardTitle>
+              <Target className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{dailyCalorieGoal}</div>
+              <p className="text-xs text-muted-foreground">kcal per day</p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Weight to Lose</CardTitle>
-            <TrendingDown className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{weightToLose} kg</div>
-            <p className="text-xs text-muted-foreground">Until goal weight</p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Weight to Lose</CardTitle>
+              <TrendingDown className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{weightToLose} kg</div>
+              <p className="text-xs text-muted-foreground">Until goal weight</p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Days Until Target</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{daysUntilTarget}</div>
-            <p className="text-xs text-muted-foreground">days remaining</p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Days Until Target</CardTitle>
+              <Calendar className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{daysUntilTarget}</div>
+              <p className="text-xs text-muted-foreground">days remaining</p>
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Hydration Status</CardTitle>
-            <Droplets className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-success">Good</div>
-            <p className="text-xs text-muted-foreground">On track</p>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Hydration Status</CardTitle>
+              <Droplets className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-success">Good</div>
+              <p className="text-xs text-muted-foreground">On track</p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       <Card>
