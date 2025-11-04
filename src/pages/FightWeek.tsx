@@ -11,6 +11,7 @@ import { format, differenceInDays, addDays } from "date-fns";
 import { Calendar, Droplets, TrendingDown, AlertTriangle, CheckCircle, Activity, Sparkles } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import wizardLogo from "@/assets/wizard-logo.png";
 
 interface FightWeekPlan {
   id: string;
@@ -33,6 +34,7 @@ interface DailyLog {
 export default function FightWeek() {
   const [plan, setPlan] = useState<FightWeekPlan | null>(null);
   const [logs, setLogs] = useState<DailyLog[]>([]);
+  const [profile, setProfile] = useState<any>(null);
   const [newPlan, setNewPlan] = useState({ fight_date: "", starting_weight_kg: "", target_weight_kg: "" });
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [dailyLog, setDailyLog] = useState<DailyLog>({
@@ -49,8 +51,30 @@ export default function FightWeek() {
   const { toast } = useToast();
 
   useEffect(() => {
+    fetchProfile();
     fetchPlanAndLogs();
   }, []);
+
+  const fetchProfile = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { data } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .single();
+
+    if (data) {
+      setProfile(data);
+      // Pre-populate the form with profile data
+      setNewPlan(prev => ({
+        ...prev,
+        starting_weight_kg: prev.starting_weight_kg || data.current_weight_kg?.toString() || "",
+        target_weight_kg: prev.target_weight_kg || data.goal_weight_kg?.toString() || ""
+      }));
+    }
+  };
 
   const fetchPlanAndLogs = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -172,20 +196,51 @@ export default function FightWeek() {
     return (currentLoss / totalLoss) * 100;
   };
 
-  const getSafetyStatus = () => {
-    if (!plan) return { status: "safe", message: "" };
+  const getWeightCutBreakdown = () => {
+    if (!plan) return null;
+    
     const latestLog = logs[logs.length - 1];
-    if (!latestLog?.weight_kg) return { status: "safe", message: "Log your weight to get safety guidance" };
-
-    const weeklyLoss = plan.starting_weight_kg - latestLog.weight_kg;
-    const percentLoss = (weeklyLoss / plan.starting_weight_kg) * 100;
-
-    if (percentLoss > 1.5) {
-      return { status: "danger", message: "⚠️ Weight loss exceeds 1.5% weekly safe limit!" };
-    } else if (percentLoss > 1.0) {
-      return { status: "warning", message: "⚠️ Approaching safe weight loss limit" };
+    const currentWeight = latestLog?.weight_kg || plan.starting_weight_kg;
+    const totalWeightToCut = currentWeight - plan.target_weight_kg;
+    
+    // Scientific calculations
+    const glycogenWaterWeight = 2.0; // ~2kg from glycogen depletion + water
+    const safeDehydration = currentWeight * 0.03; // 3% max safe dehydration
+    const maxSafeCut = glycogenWaterWeight + safeDehydration;
+    
+    const isSafe = totalWeightToCut <= maxSafeCut;
+    const percentBodyweight = (totalWeightToCut / currentWeight) * 100;
+    
+    let status: "safe" | "warning" | "danger";
+    let message: string;
+    let wizardAdvice: string;
+    
+    if (percentBodyweight <= 5) {
+      status = "safe";
+      message = "Safe and manageable weight cut";
+      wizardAdvice = "Your weight cut is well within safe limits. Focus on gradual carb reduction starting 5 days out, maintain hydration until 24h before weigh-in, then implement controlled water loading/cutting protocol.";
+    } else if (percentBodyweight <= 8) {
+      status = "warning";
+      message = "Aggressive but doable with proper protocol";
+      wizardAdvice = "This is an aggressive cut that requires precise execution. You'll need to maximize glycogen depletion through carb restriction and strategic dehydration. Monitor your energy levels closely and consider extending your cut timeline if possible.";
+    } else {
+      status = "danger";
+      message = "DANGEROUS - Exceeds safe limits";
+      wizardAdvice = "⚠️ WARNING: This weight cut exceeds safe physiological limits and poses serious health risks including cognitive impairment, reduced performance, and potential medical complications. Strongly recommend reconsidering your target weight or fight timeline.";
     }
-    return { status: "safe", message: "✓ Weight loss is within safe limits" };
+    
+    return {
+      totalWeightToCut,
+      glycogenWaterWeight,
+      safeDehydration,
+      maxSafeCut,
+      isSafe,
+      status,
+      message,
+      percentBodyweight,
+      wizardAdvice,
+      currentWeight
+    };
   };
 
   const getChartData = () => {
@@ -196,7 +251,7 @@ export default function FightWeek() {
   };
 
   const daysUntilFight = getDaysUntilFight();
-  const safetyStatus = getSafetyStatus();
+  const weightCutInfo = getWeightCutBreakdown();
 
   if (!plan) {
     return (
@@ -263,19 +318,91 @@ export default function FightWeek() {
         </div>
       </div>
 
-      {/* Safety Alert */}
-      {safetyStatus.status !== "safe" && (
-        <Alert variant={safetyStatus.status === "danger" ? "destructive" : "default"}>
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>{safetyStatus.message}</AlertDescription>
-        </Alert>
+      {/* Weight Cut Breakdown & Wizard Guidance */}
+      {weightCutInfo && (
+        <Card className={`border-2 ${
+          weightCutInfo.status === 'safe' ? 'border-green-500/50 bg-green-500/5' :
+          weightCutInfo.status === 'warning' ? 'border-yellow-500/50 bg-yellow-500/5' :
+          'border-red-500/50 bg-red-500/5'
+        }`}>
+          <CardHeader>
+            <div className="flex items-start gap-4">
+              <img src={wizardLogo} alt="Wizard" className="w-16 h-16" />
+              <div className="flex-1">
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles className="h-5 w-5" />
+                  Weight Cut Analysis
+                </CardTitle>
+                <p className={`text-sm font-semibold mt-2 ${
+                  weightCutInfo.status === 'safe' ? 'text-green-600 dark:text-green-400' :
+                  weightCutInfo.status === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
+                  'text-red-600 dark:text-red-400'
+                }`}>
+                  {weightCutInfo.message}
+                </p>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Current Weight:</span>
+                  <span className="font-semibold">{weightCutInfo.currentWeight.toFixed(1)} kg</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Target Weight:</span>
+                  <span className="font-semibold">{plan.target_weight_kg} kg</span>
+                </div>
+                <div className="flex justify-between text-sm font-bold">
+                  <span>Total to Cut:</span>
+                  <span className={
+                    weightCutInfo.status === 'safe' ? 'text-green-600 dark:text-green-400' :
+                    weightCutInfo.status === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
+                    'text-red-600 dark:text-red-400'
+                  }>
+                    {weightCutInfo.totalWeightToCut.toFixed(1)} kg ({weightCutInfo.percentBodyweight.toFixed(1)}%)
+                  </span>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Via Carb Depletion:</span>
+                  <span className="font-semibold">~{weightCutInfo.glycogenWaterWeight.toFixed(1)} kg</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Safe Dehydration (3%):</span>
+                  <span className="font-semibold">~{weightCutInfo.safeDehydration.toFixed(1)} kg</span>
+                </div>
+                <div className="flex justify-between text-sm font-bold border-t pt-2">
+                  <span>Max Safe Cut:</span>
+                  <span className="text-green-600 dark:text-green-400">
+                    {weightCutInfo.maxSafeCut.toFixed(1)} kg
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <Alert className={
+              weightCutInfo.status === 'safe' ? 'border-green-500/50' :
+              weightCutInfo.status === 'warning' ? 'border-yellow-500/50' :
+              'border-red-500/50'
+            }>
+              <Sparkles className="h-4 w-4" />
+              <AlertDescription className="text-sm">
+                <strong>Wizard's Advice:</strong> {weightCutInfo.wizardAdvice}
+              </AlertDescription>
+            </Alert>
+          </CardContent>
+        </Card>
       )}
 
       {/* Progress Overview */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Weight Progress</CardTitle>
+            <CardTitle className="text-sm font-medium">Current Weight</CardTitle>
             <TrendingDown className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -305,16 +432,26 @@ export default function FightWeek() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Safety Status</CardTitle>
-            {safetyStatus.status === "safe" ? (
-              <CheckCircle className="h-4 w-4 text-green-500" />
-            ) : (
-              <AlertTriangle className="h-4 w-4 text-yellow-500" />
+            {weightCutInfo && (
+              weightCutInfo.status === "safe" ? (
+                <CheckCircle className="h-4 w-4 text-green-500" />
+              ) : weightCutInfo.status === "warning" ? (
+                <AlertTriangle className="h-4 w-4 text-yellow-500" />
+              ) : (
+                <AlertTriangle className="h-4 w-4 text-red-500" />
+              )
             )}
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold capitalize">{safetyStatus.status}</div>
+            <div className={`text-2xl font-bold capitalize ${
+              weightCutInfo?.status === 'safe' ? 'text-green-600 dark:text-green-400' :
+              weightCutInfo?.status === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
+              'text-red-600 dark:text-red-400'
+            }`}>
+              {weightCutInfo?.status}
+            </div>
             <p className="text-xs text-muted-foreground mt-2">
-              Weekly loss within limits
+              {weightCutInfo?.isSafe ? 'Within safe limits' : 'Exceeds safe guidelines'}
             </p>
           </CardContent>
         </Card>
