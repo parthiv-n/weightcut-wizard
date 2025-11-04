@@ -38,6 +38,78 @@ export type Database = {
         }
         Relationships: []
       }
+      fight_week_logs: {
+        Row: {
+          carbs_g: number | null
+          created_at: string | null
+          fluid_intake_ml: number | null
+          id: string
+          log_date: string
+          notes: string | null
+          supplements: string | null
+          sweat_session_min: number | null
+          updated_at: string | null
+          user_id: string
+          weight_kg: number | null
+        }
+        Insert: {
+          carbs_g?: number | null
+          created_at?: string | null
+          fluid_intake_ml?: number | null
+          id?: string
+          log_date: string
+          notes?: string | null
+          supplements?: string | null
+          sweat_session_min?: number | null
+          updated_at?: string | null
+          user_id: string
+          weight_kg?: number | null
+        }
+        Update: {
+          carbs_g?: number | null
+          created_at?: string | null
+          fluid_intake_ml?: number | null
+          id?: string
+          log_date?: string
+          notes?: string | null
+          supplements?: string | null
+          sweat_session_min?: number | null
+          updated_at?: string | null
+          user_id?: string
+          weight_kg?: number | null
+        }
+        Relationships: []
+      }
+      fight_week_plans: {
+        Row: {
+          created_at: string | null
+          fight_date: string
+          id: string
+          starting_weight_kg: number
+          target_weight_kg: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          fight_date: string
+          id?: string
+          starting_weight_kg: number
+          target_weight_kg: number
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          fight_date?: string
+          id?: string
+          starting_weight_kg?: number
+          target_weight_kg?: number
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       hydration_logs: {
         Row: {
           amount_ml: number
