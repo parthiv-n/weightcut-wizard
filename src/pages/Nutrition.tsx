@@ -529,26 +529,27 @@ export default function Nutrition() {
   const totalFats = meals.reduce((sum, meal) => sum + (meal.fats_g || 0), 0);
 
   return (
-    <div className="space-y-6 p-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <img src={wizardNutrition} alt="Wizard" className="w-32 h-32" />
+    <div className="space-y-6 p-3 sm:p-6 max-w-7xl mx-auto overflow-x-hidden">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <img src={wizardNutrition} alt="Wizard" className="w-20 h-20 sm:w-28 sm:h-28 lg:w-32 lg:h-32 flex-shrink-0" />
           <div>
-            <h1 className="text-3xl font-bold">Nutrition</h1>
-            <p className="text-muted-foreground mt-1">AI-powered meal planning for safe weight loss</p>
+            <h1 className="text-2xl sm:text-3xl font-bold">Nutrition</h1>
+            <p className="text-muted-foreground mt-1 text-sm sm:text-base">AI-powered meal planning</p>
           </div>
         </div>
-        <div className="flex gap-2 flex-wrap justify-end">
+        <div className="flex gap-2 flex-wrap w-full sm:w-auto justify-start sm:justify-end">
           <BarcodeScanner onFoodScanned={handleBarcodeScanned} disabled={loading} />
           <VoiceInput onTranscription={handleVoiceInput} disabled={loading || aiAnalyzing} />
           <Dialog open={isAiDialogOpen} onOpenChange={setIsAiDialogOpen}>
             <DialogTrigger asChild>
-              <Button>
+              <Button className="whitespace-nowrap">
                 <Sparkles className="mr-2 h-4 w-4" />
-                AI Meal Plan
+                <span className="hidden sm:inline">AI Meal Plan</span>
+                <span className="sm:hidden">AI Plan</span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="max-w-2xl w-[95vw] sm:w-full">
               <DialogHeader>
                 <DialogTitle>Generate Meal Plan Ideas for {format(new Date(selectedDate), "MMM d, yyyy")}</DialogTitle>
                 <DialogDescription>
@@ -576,12 +577,13 @@ export default function Nutrition() {
 
           <Dialog open={isManualDialogOpen} onOpenChange={setIsManualDialogOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline">
+              <Button variant="outline" className="whitespace-nowrap">
                 <Plus className="mr-2 h-4 w-4" />
-                Add Meal
+                <span className="hidden sm:inline">Add Meal</span>
+                <span className="sm:hidden">Add</span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
               <DialogHeader>
                 <DialogTitle>Add Manual Meal</DialogTitle>
                 <DialogDescription>
@@ -598,18 +600,20 @@ export default function Nutrition() {
                   <p className="text-xs text-muted-foreground">
                     Describe your meal and AI will estimate nutritional values
                   </p>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <Input
                       id="ai-description"
                       placeholder="E.g., 250g grilled chicken salad with olive oil"
                       value={aiMealDescription}
                       onChange={(e) => setAiMealDescription(e.target.value)}
                       disabled={aiAnalyzing}
+                      className="flex-1"
                     />
                     <Button
                       type="button"
                       onClick={handleAiAnalyzeMeal}
                       disabled={aiAnalyzing || !aiMealDescription.trim()}
+                      className="whitespace-nowrap flex-shrink-0"
                     >
                       <Sparkles className="h-4 w-4 mr-2" />
                       {aiAnalyzing ? "Analyzing..." : "Analyze"}
@@ -705,18 +709,19 @@ export default function Nutrition() {
                           </Button>
                         </div>
                       ))}
-                      <div className="flex gap-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
                         <Input
                           placeholder="Ingredient name"
                           value={newIngredient.name}
                           onChange={(e) => setNewIngredient({ ...newIngredient, name: e.target.value })}
+                          className="flex-1"
                         />
                         <Input
                           type="number"
                           placeholder="Grams"
                           value={newIngredient.grams}
                           onChange={(e) => setNewIngredient({ ...newIngredient, grams: e.target.value })}
-                          className="w-32"
+                          className="w-full sm:w-32"
                         />
                         <Button
                           type="button"
@@ -733,6 +738,7 @@ export default function Nutrition() {
                               setNewIngredient({ name: "", grams: "" });
                             }
                           }}
+                          className="flex-shrink-0"
                         >
                           <Plus className="h-4 w-4" />
                         </Button>
@@ -776,33 +782,36 @@ export default function Nutrition() {
         </div>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-4">
         <Button
           variant="outline"
           size="icon"
           onClick={() => setSelectedDate(format(subDays(new Date(selectedDate), 1), "yyyy-MM-dd"))}
+          className="flex-shrink-0"
         >
           ←
         </Button>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <CalendarIcon className="h-4 w-4" />
           <Input
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
-            className="w-auto"
+            className="w-auto min-w-[140px]"
           />
         </div>
         <Button
           variant="outline"
           size="icon"
           onClick={() => setSelectedDate(format(addDays(new Date(selectedDate), 1), "yyyy-MM-dd"))}
+          className="flex-shrink-0"
         >
           →
         </Button>
         <Button
           variant="ghost"
           onClick={() => setSelectedDate(format(new Date(), "yyyy-MM-dd"))}
+          className="flex-shrink-0"
         >
           Today
         </Button>
@@ -859,14 +868,16 @@ export default function Nutrition() {
                 <p className="text-sm text-muted-foreground mb-4">
                   Add a meal manually, scan a barcode, or generate meal ideas
                 </p>
-                <div className="flex gap-2 justify-center">
-                  <Button onClick={() => setIsAiDialogOpen(true)}>
+                <div className="flex flex-wrap gap-2 justify-center">
+                  <Button onClick={() => setIsAiDialogOpen(true)} className="whitespace-nowrap">
                     <Sparkles className="mr-2 h-4 w-4" />
-                    Generate Meal Ideas
+                    <span className="hidden sm:inline">Generate Meal Ideas</span>
+                    <span className="sm:hidden">Generate Ideas</span>
                   </Button>
-                  <Button variant="outline" onClick={() => setIsManualDialogOpen(true)}>
+                  <Button variant="outline" onClick={() => setIsManualDialogOpen(true)} className="whitespace-nowrap">
                     <Plus className="mr-2 h-4 w-4" />
-                    Add Meal Manually
+                    <span className="hidden sm:inline">Add Meal Manually</span>
+                    <span className="sm:hidden">Add Meal</span>
                   </Button>
                 </div>
               </CardContent>
