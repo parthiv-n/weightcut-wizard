@@ -3,11 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Droplets, Target, TrendingDown, Calendar } from "lucide-react";
+import wizardLogo from "@/assets/wizard-logo.png";
 
 export default function Dashboard() {
   const [profile, setProfile] = useState<any>(null);
   const [weightLogs, setWeightLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userName, setUserName] = useState("Fighter");
 
   useEffect(() => {
     loadDashboardData();
@@ -17,6 +19,13 @@ export default function Dashboard() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+
+      // Extract name from email
+      if (user.email) {
+        const emailName = user.email.split("@")[0];
+        const formattedName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
+        setUserName(formattedName);
+      }
 
       const { data: profileData } = await supabase
         .from("profiles")
@@ -55,7 +64,7 @@ export default function Dashboard() {
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-title font-bold">Welcome back, Fighter!</h1>
+          <h1 className="text-3xl font-bold">Welcome back, {userName}!</h1>
           <p className="text-muted-foreground">Your weight cut journey dashboard</p>
         </div>
       </div>
@@ -63,7 +72,7 @@ export default function Dashboard() {
       <div className="rounded-lg bg-gradient-to-r from-primary/10 to-secondary/10 p-4 border border-primary/20">
         <div className="flex items-start gap-3">
           <div className="rounded-full bg-primary/20 p-2">
-            <span className="text-2xl">🧙‍♂️</span>
+            <img src={wizardLogo} alt="Wizard" className="w-8 h-8" />
           </div>
           <div className="flex-1">
             <h3 className="font-semibold">Wizard's Daily Wisdom</h3>

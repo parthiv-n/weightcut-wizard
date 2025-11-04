@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Send, Sparkles, Trash2 } from "lucide-react";
-import wizardAvatar from "@/assets/wizard-avatar.jpeg";
+import wizardAvatar from "@/assets/wizard-logo.png";
 
 interface Message {
   role: "user" | "assistant";
