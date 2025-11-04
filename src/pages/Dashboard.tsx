@@ -5,12 +5,13 @@ import { ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, Respon
 import { Droplets, Target, TrendingDown, Calendar } from "lucide-react";
 import wizardLogo from "@/assets/wizard-logo.png";
 import { WeightProgressRing } from "@/components/dashboard/WeightProgressRing";
+import { useUser } from "@/contexts/UserContext";
 
 export default function Dashboard() {
   const [profile, setProfile] = useState<any>(null);
   const [weightLogs, setWeightLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userName, setUserName] = useState("Fighter");
+  const { userName } = useUser();
 
   useEffect(() => {
     loadDashboardData();
@@ -20,13 +21,6 @@ export default function Dashboard() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
-      // Extract name from email
-      if (user.email) {
-        const emailName = user.email.split("@")[0];
-        const formattedName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
-        setUserName(formattedName);
-      }
 
       const { data: profileData } = await supabase
         .from("profiles")
@@ -65,7 +59,7 @@ export default function Dashboard() {
     <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Welcome back, {userName}!</h1>
+          <h1 className="text-3xl font-bold">Welcome back, {userName || "Fighter"}!</h1>
           <p className="text-muted-foreground">Your weight cut journey dashboard</p>
         </div>
       </div>
