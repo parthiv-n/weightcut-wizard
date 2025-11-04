@@ -77,29 +77,89 @@ export type Database = {
         }
         Relationships: []
       }
+      meal_plans: {
+        Row: {
+          created_at: string | null
+          daily_calorie_target: number
+          dietary_preferences: string | null
+          end_date: string
+          id: string
+          plan_name: string
+          start_date: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          daily_calorie_target: number
+          dietary_preferences?: string | null
+          end_date: string
+          id?: string
+          plan_name: string
+          start_date: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          daily_calorie_target?: number
+          dietary_preferences?: string | null
+          end_date?: string
+          id?: string
+          plan_name?: string
+          start_date?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       nutrition_logs: {
         Row: {
           calories: number
+          carbs_g: number | null
           created_at: string | null
           date: string
+          fats_g: number | null
           id: string
+          is_ai_generated: boolean | null
           meal_name: string
+          meal_type: string | null
+          portion_size: string | null
+          protein_g: number | null
+          recipe_notes: string | null
+          updated_at: string | null
           user_id: string
         }
         Insert: {
           calories: number
+          carbs_g?: number | null
           created_at?: string | null
           date: string
+          fats_g?: number | null
           id?: string
+          is_ai_generated?: boolean | null
           meal_name: string
+          meal_type?: string | null
+          portion_size?: string | null
+          protein_g?: number | null
+          recipe_notes?: string | null
+          updated_at?: string | null
           user_id: string
         }
         Update: {
           calories?: number
+          carbs_g?: number | null
           created_at?: string | null
           date?: string
+          fats_g?: number | null
           id?: string
+          is_ai_generated?: boolean | null
           meal_name?: string
+          meal_type?: string | null
+          portion_size?: string | null
+          protein_g?: number | null
+          recipe_notes?: string | null
+          updated_at?: string | null
           user_id?: string
         }
         Relationships: []
@@ -149,6 +209,39 @@ export type Database = {
           tdee?: number | null
           training_frequency?: number | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      user_dietary_preferences: {
+        Row: {
+          created_at: string | null
+          dietary_restrictions: string[] | null
+          disliked_foods: string[] | null
+          favorite_cuisines: string[] | null
+          id: string
+          meal_preferences: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          dietary_restrictions?: string[] | null
+          disliked_foods?: string[] | null
+          favorite_cuisines?: string[] | null
+          id?: string
+          meal_preferences?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          dietary_restrictions?: string[] | null
+          disliked_foods?: string[] | null
+          favorite_cuisines?: string[] | null
+          id?: string
+          meal_preferences?: string | null
+          updated_at?: string | null
+          user_id?: string
         }
         Relationships: []
       }

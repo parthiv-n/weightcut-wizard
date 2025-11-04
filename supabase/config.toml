@@ -1,1 +1,10 @@
 project_id = "opfkiwgiedwfmdwyohxr"
+
+[functions.wizard-chat]
+verify_jwt = false
+
+[functions.meal-planner]
+verify_jwt = false
+
+[functions.hydration-insights]
+verify_jwt = false
