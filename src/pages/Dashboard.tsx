@@ -129,50 +129,51 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        {/* Weight Progress Ring - Takes 1 column */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {/* Weight Progress Ring - Order 1 on mobile, Order 1 on desktop */}
         {profile && (
-          <WeightProgressRing
-            currentWeight={weightLogs.length > 0 ? parseFloat(weightLogs[weightLogs.length - 1].weight_kg) : profile.current_weight_kg}
-            startingWeight={weightLogs.length > 0 ? parseFloat(weightLogs[0].weight_kg) : profile.current_weight_kg}
-            goalWeight={profile.goal_weight_kg}
-          />
-        )}
-        
-        {/* Stats Grid - Takes 2 columns */}
-        <div className="lg:col-span-2 grid gap-4 grid-cols-2">
-          {/* Calorie Progress - Takes 2 rows */}
-          <div className="row-span-2">
-            <CalorieProgressRing
-              consumed={todayCalories}
-              target={dailyCalorieGoal}
+          <div className="order-1">
+            <WeightProgressRing
+              currentWeight={weightLogs.length > 0 ? parseFloat(weightLogs[weightLogs.length - 1].weight_kg) : profile.current_weight_kg}
+              startingWeight={weightLogs.length > 0 ? parseFloat(weightLogs[0].weight_kg) : profile.current_weight_kg}
+              goalWeight={profile.goal_weight_kg}
             />
           </div>
-          
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Days Until Target</CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-4xl font-bold">{daysUntilTarget}</div>
-              <p className="text-sm text-muted-foreground mt-1">days remaining</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Today's Hydration</CardTitle>
-              <Droplets className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-4xl font-bold">{(todayHydration / 1000).toFixed(1)}L</div>
-              <p className="text-sm text-muted-foreground mt-1">
-                {todayHydration >= 3000 ? "Great job!" : `${((3000 - todayHydration) / 1000).toFixed(1)}L to go`}
-              </p>
-            </CardContent>
-          </Card>
+        )}
+        
+        {/* Calorie Progress - Order 2 on mobile, Order 3 on desktop */}
+        <div className="order-2 md:order-3 md:row-span-2">
+          <CalorieProgressRing
+            consumed={todayCalories}
+            target={dailyCalorieGoal}
+          />
         </div>
+        
+        {/* Days Until Target - Order 3 on mobile, Order 2 on desktop */}
+        <Card className="order-3 md:order-2">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Days Until Target</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-4xl font-bold">{daysUntilTarget}</div>
+            <p className="text-sm text-muted-foreground mt-1">days remaining</p>
+          </CardContent>
+        </Card>
+
+        {/* Today's Hydration - Order 4 on both mobile and desktop */}
+        <Card className="order-4">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Today's Hydration</CardTitle>
+            <Droplets className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-4xl font-bold">{(todayHydration / 1000).toFixed(1)}L</div>
+            <p className="text-sm text-muted-foreground mt-1">
+              {todayHydration >= 3000 ? "Great job!" : `${((3000 - todayHydration) / 1000).toFixed(1)}L to go`}
+            </p>
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
