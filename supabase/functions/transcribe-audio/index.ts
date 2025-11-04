@@ -65,8 +65,8 @@ serve(async (req) => {
 
     console.log('Sending to ElevenLabs Speech-to-Text API...');
 
-    // Send to ElevenLabs - using eleven_turbo_v2_5 for fast, multilingual transcription
-    const response = await fetch('https://api.elevenlabs.io/v1/speech-to-text/eleven_turbo_v2_5', {
+    // Send to ElevenLabs Speech-to-Text API
+    const response = await fetch('https://api.elevenlabs.io/v1/audio-native', {
       method: 'POST',
       headers: {
         'xi-api-key': ELEVENLABS_API_KEY,
