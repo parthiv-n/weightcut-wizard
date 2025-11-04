@@ -74,11 +74,11 @@ export function WeightProgressRing({ currentWeight, startingWeight, goalWeight }
         {/* Stats below the ring */}
         <div className="grid grid-cols-2 gap-4 w-full mt-6">
           <div className="text-center p-3 rounded-lg bg-primary/10">
-            <div className="text-2xl font-bold text-primary">{weightLost.toFixed(1)}kg</div>
+            <div className="text-lg font-bold text-primary">{weightLost.toFixed(1)}kg</div>
             <div className="text-xs text-muted-foreground">Lost</div>
           </div>
           <div className="text-center p-3 rounded-lg bg-secondary/10">
-            <div className="text-2xl font-bold text-secondary">{Math.max(0, weightRemaining).toFixed(1)}kg</div>
+            <div className="text-lg font-bold text-secondary">{Math.max(0, weightRemaining).toFixed(1)}kg</div>
             <div className="text-xs text-muted-foreground">To Go</div>
           </div>
         </div>
