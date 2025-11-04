@@ -14,6 +14,7 @@ import { MealCard } from "@/components/nutrition/MealCard";
 import { CalorieBudgetIndicator } from "@/components/nutrition/CalorieBudgetIndicator";
 import { VoiceInput } from "@/components/nutrition/VoiceInput";
 import { format, subDays, addDays } from "date-fns";
+import wizardNutrition from "@/assets/wizard-nutrition.png";
 
 interface Ingredient {
   name: string;
@@ -497,9 +498,12 @@ export default function Nutrition() {
   return (
     <div className="space-y-6 p-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Nutrition & Diet Tracking</h1>
-          <p className="text-muted-foreground mt-1">AI-powered meal planning for safe weight loss</p>
+        <div className="flex items-center gap-4">
+          <img src={wizardNutrition} alt="Wizard" className="w-16 h-16" />
+          <div>
+            <h1 className="text-3xl font-bold">Nutrition</h1>
+            <p className="text-muted-foreground mt-1">AI-powered meal planning for safe weight loss</p>
+          </div>
         </div>
         <div className="flex gap-2 flex-wrap justify-end">
           <VoiceInput onTranscription={handleVoiceInput} disabled={loading || aiAnalyzing} />
