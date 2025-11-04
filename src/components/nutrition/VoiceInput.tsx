@@ -26,38 +26,61 @@ export function VoiceInput({ onTranscription, disabled }: VoiceInputProps) {
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Check if browser supports Web Speech API
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
       
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'audio/webm',
-      });
-      
-      mediaRecorderRef.current = mediaRecorder;
-      chunksRef.current = [];
+      if (!SpeechRecognition) {
+        throw new Error("Speech recognition not supported in this browser");
+      }
 
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          chunksRef.current.push(event.data);
-        }
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        setIsRecording(true);
+        toast({
+          title: "Listening...",
+          description: "Speak what you ate",
+        });
       };
 
-      mediaRecorder.onstop = async () => {
-        stream.getTracks().forEach(track => track.stop());
-        await processRecording();
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        console.log('Transcription:', transcript);
+        
+        toast({
+          title: "Transcription complete",
+          description: `"${transcript}"`,
+        });
+        
+        onTranscription(transcript);
       };
 
-      mediaRecorder.start();
-      setIsRecording(true);
+      recognition.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error);
+        setIsRecording(false);
+        
+        toast({
+          title: "Recognition failed",
+          description: event.error === 'no-speech' ? "No speech detected" : "Failed to recognize speech",
+          variant: "destructive",
+        });
+      };
+
+      recognition.onend = () => {
+        setIsRecording(false);
+      };
+
+      mediaRecorderRef.current = recognition;
+      recognition.start();
       
-      toast({
-        title: "Recording started",
-        description: "Speak what you ate...",
-      });
     } catch (error) {
       console.error('Error starting recording:', error);
       toast({
-        title: "Microphone access denied",
-        description: "Please allow microphone access to use voice input",
+        title: "Speech recognition unavailable",
+        description: error instanceof Error ? error.message : "This feature requires Chrome or Edge browser",
         variant: "destructive",
       });
     }
@@ -65,51 +88,17 @@ export function VoiceInput({ onTranscription, disabled }: VoiceInputProps) {
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
+      if (typeof mediaRecorderRef.current.stop === 'function') {
+        mediaRecorderRef.current.stop();
+      }
       setIsRecording(false);
     }
   };
 
   const processRecording = async () => {
-    setIsProcessing(true);
-    try {
-      const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
-      
-      // Convert blob to base64
-      const reader = new FileReader();
-      reader.readAsDataURL(audioBlob);
-      
-      reader.onloadend = async () => {
-        const base64Audio = (reader.result as string).split(',')[1];
-        
-        // Send to transcription function
-        const { data, error } = await supabase.functions.invoke("transcribe-audio", {
-          body: { audio: base64Audio },
-        });
-
-        if (error) throw error;
-
-        if (data.text) {
-          toast({
-            title: "Transcription complete",
-            description: `"${data.text}"`,
-          });
-          onTranscription(data.text);
-        } else {
-          throw new Error("No transcription returned");
-        }
-      };
-    } catch (error: any) {
-      console.error('Error processing recording:', error);
-      toast({
-        title: "Transcription failed",
-        description: error.message || "Failed to transcribe audio",
-        variant: "destructive",
-      });
-    } finally {
-      setIsProcessing(false);
-      chunksRef.current = [];
-    }
+    // No processing needed - Web Speech API handles transcription in real-time
+    setIsProcessing(false);
+    chunksRef.current = [];
   };
 
   return (
