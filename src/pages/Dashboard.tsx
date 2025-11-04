@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { LineChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Droplets, Target, TrendingDown, Calendar } from "lucide-react";
 import wizardLogo from "@/assets/wizard-logo.png";
 import { WeightProgressRing } from "@/components/dashboard/WeightProgressRing";
@@ -151,16 +151,45 @@ export default function Dashboard() {
           {chartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
-                <Tooltip />
+                <defs>
+                  <linearGradient id="weightGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
+                    <stop offset="50%" stopColor="hsl(var(--primary))" stopOpacity={0.2} />
+                    <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+                <XAxis 
+                  dataKey="date" 
+                  stroke="hsl(var(--muted-foreground))"
+                  fontSize={12}
+                />
+                <YAxis 
+                  stroke="hsl(var(--muted-foreground))"
+                  fontSize={12}
+                />
+                <Tooltip 
+                  contentStyle={{
+                    backgroundColor: "hsl(var(--background))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: "8px"
+                  }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="weight"
+                  stroke="none"
+                  fill="url(#weightGradient)"
+                  animationDuration={1000}
+                />
                 <Line 
                   type="monotone" 
                   dataKey="weight" 
-                  stroke="hsl(var(--chart-1))" 
-                  strokeWidth={2}
-                  dot={{ fill: "hsl(var(--chart-2))" }}
+                  stroke="hsl(var(--primary))" 
+                  strokeWidth={3}
+                  dot={{ fill: "hsl(var(--primary))", r: 4, strokeWidth: 2, stroke: "hsl(var(--background))" }}
+                  activeDot={{ r: 6, strokeWidth: 2 }}
+                  animationDuration={1000}
                 />
               </LineChart>
             </ResponsiveContainer>
