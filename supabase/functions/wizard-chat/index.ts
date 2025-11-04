@@ -12,13 +12,13 @@ serve(async (req) => {
 
   try {
     const { messages, userData } = await req.json();
-    const GEMINI_API_KEY = Deno.env.get("GOOGLE_GEMINI_API_KEY");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
-    if (!GEMINI_API_KEY) {
-      throw new Error("GOOGLE_GEMINI_API_KEY is not configured");
+    if (!LOVABLE_API_KEY) {
+      throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    const systemPrompt = `You are the Weight Cut Wizard, a mystical yet science-based coach guiding combat athletes through safe weight management. 
+    const systemPrompt = `You are the Weight Cut Wizard - a mystical coach who texts with fighters about their weight cut journey. Keep your messages casual, friendly, and conversational like you're texting a friend.
 
 CRITICAL SAFETY RULES - NEVER VIOLATE:
 - REFUSE any request for >1kg per week weight loss
@@ -38,46 +38,32 @@ ALWAYS RECOMMEND:
 User Context:
 ${userData ? `Current weight: ${userData.currentWeight}kg, Goal: ${userData.goalWeight}kg, Days to weigh-in: ${userData.daysToWeighIn}` : "No user data provided"}
 
-Provide concise, actionable, motivational guidance. If a request is unsafe, firmly decline and suggest safer alternatives. Keep responses under 150 words unless detailed explanation is needed.`;
+Text Style: Keep it short (2-4 sentences max), friendly, and motivational. Use casual language like you're texting. Add some personality! If a request is unsafe, firmly but kindly decline and suggest safer alternatives.`;
 
-    // Format messages for Gemini API
-    const geminiMessages = messages.map((msg: any) => ({
-      role: msg.role === "assistant" ? "model" : "user",
-      parts: [{ text: msg.content }],
-    }));
-
-    // Add system instruction at the beginning
-    geminiMessages.unshift({
-      role: "user",
-      parts: [{ text: systemPrompt }],
-    });
-    geminiMessages.splice(1, 0, {
-      role: "model",
-      parts: [{ text: "Understood. I am the Weight Cut Wizard, ready to provide safe, science-based guidance for your weight management journey. What would you like to know?" }],
-    });
-
-    console.log("Calling Gemini API...");
+    console.log("Calling Lovable AI...");
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:streamGenerateContent?key=${GEMINI_API_KEY}`,
+      "https://ai.gateway.lovable.dev/v1/chat/completions",
       {
         method: "POST",
         headers: {
+          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          contents: geminiMessages,
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 800,
-          },
+          model: "google/gemini-2.5-flash",
+          messages: [
+            { role: "system", content: systemPrompt },
+            ...messages
+          ],
+          stream: true,
         }),
       }
     );
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Gemini API error:", response.status, errorText);
+      console.error("Lovable AI error:", response.status, errorText);
       
       if (response.status === 429) {
         return new Response(
@@ -85,61 +71,22 @@ Provide concise, actionable, motivational guidance. If a request is unsafe, firm
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+
+      if (response.status === 402) {
+        return new Response(
+          JSON.stringify({ error: "Payment required. Please add credits to your Lovable AI workspace." }),
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       
       return new Response(
-        JSON.stringify({ error: `Gemini API error: ${response.status}` }),
+        JSON.stringify({ error: `AI error: ${response.status}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Stream the response in SSE format
-    const encoder = new TextEncoder();
-    const readable = new ReadableStream({
-      async start(controller) {
-        try {
-          const reader = response.body?.getReader();
-          if (!reader) throw new Error("No reader available");
-
-          const decoder = new TextDecoder();
-          let buffer = "";
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split("\n");
-            buffer = lines.pop() || "";
-
-            for (const line of lines) {
-              if (line.trim() === "") continue;
-              
-              try {
-                const json = JSON.parse(line);
-                const text = json.candidates?.[0]?.content?.parts?.[0]?.text;
-                
-                if (text) {
-                  const sseData = `data: ${JSON.stringify({
-                    choices: [{ delta: { content: text } }],
-                  })}\n\n`;
-                  controller.enqueue(encoder.encode(sseData));
-                }
-              } catch (e) {
-                console.error("Error parsing Gemini response:", e);
-              }
-            }
-          }
-
-          controller.enqueue(encoder.encode("data: [DONE]\n\n"));
-          controller.close();
-        } catch (error) {
-          console.error("Stream error:", error);
-          controller.error(error);
-        }
-      },
-    });
-
-    return new Response(readable, {
+    // Return the stream directly
+    return new Response(response.body, {
       headers: {
         ...corsHeaders,
         "Content-Type": "text/event-stream",
