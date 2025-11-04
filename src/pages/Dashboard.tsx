@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { Droplets, Target, TrendingDown, Calendar } from "lucide-react";
+import { Droplets, TrendingDown, Calendar } from "lucide-react";
 import wizardLogo from "@/assets/wizard-logo.png";
 import { WeightProgressRing } from "@/components/dashboard/WeightProgressRing";
+import { CalorieProgressRing } from "@/components/dashboard/CalorieProgressRing";
 import { useUser } from "@/contexts/UserContext";
 import { Button } from "@/components/ui/button";
 
@@ -13,6 +14,8 @@ export default function Dashboard() {
   const [weightLogs, setWeightLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lb'>('kg');
+  const [todayCalories, setTodayCalories] = useState(0);
+  const [todayHydration, setTodayHydration] = useState(0);
   const { userName } = useUser();
 
   useEffect(() => {
@@ -23,6 +26,8 @@ export default function Dashboard() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
+
+      const today = new Date().toISOString().split('T')[0];
 
       const { data: profileData } = await supabase
         .from("profiles")
@@ -37,8 +42,27 @@ export default function Dashboard() {
         .order("date", { ascending: true })
         .limit(30);
 
+      // Fetch today's nutrition data
+      const { data: nutritionData } = await supabase
+        .from("nutrition_logs")
+        .select("calories")
+        .eq("user_id", user.id)
+        .eq("date", today);
+
+      // Fetch today's hydration data
+      const { data: hydrationData } = await supabase
+        .from("hydration_logs")
+        .select("amount_ml")
+        .eq("user_id", user.id)
+        .eq("date", today);
+
+      const totalCalories = nutritionData?.reduce((sum, log) => sum + log.calories, 0) || 0;
+      const totalHydration = hydrationData?.reduce((sum, log) => sum + log.amount_ml, 0) || 0;
+
       setProfile(profileData);
       setWeightLogs(logsData || []);
+      setTodayCalories(totalCalories);
+      setTodayHydration(totalHydration);
     } finally {
       setLoading(false);
     }
@@ -51,6 +75,27 @@ export default function Dashboard() {
   const daysUntilTarget = profile ? Math.ceil((new Date(profile.target_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : 0;
   const weightToLose = profile ? (profile.current_weight_kg - profile.goal_weight_kg).toFixed(1) : 0;
   const dailyCalorieGoal = profile ? Math.round(profile.tdee - 500) : 0;
+
+  // Generate dynamic wizard wisdom
+  const getWizardWisdom = () => {
+    const caloriePercentage = dailyCalorieGoal > 0 ? (todayCalories / dailyCalorieGoal) * 100 : 0;
+    const hydrationGoal = 3000; // 3L in ml
+    const hydrationPercentage = (todayHydration / hydrationGoal) * 100;
+
+    if (caloriePercentage < 50 && hydrationPercentage < 50) {
+      return "You're starting slow today! Make sure to fuel up and hydrate. Your body needs energy to perform at its best.";
+    } else if (caloriePercentage > 110) {
+      return "You've exceeded your calorie target today. Don't worry, consistency matters more than perfection! Get back on track tomorrow.";
+    } else if (caloriePercentage < 80) {
+      return "You're under your calorie target. Make sure you're eating enough to maintain your energy and support recovery.";
+    } else if (hydrationPercentage < 50) {
+      return "Great job with nutrition, but don't forget to hydrate! Water is crucial for performance and weight management.";
+    } else if (caloriePercentage >= 90 && caloriePercentage <= 110 && hydrationPercentage >= 80) {
+      return "Outstanding! You're hitting your targets perfectly. This is exactly the kind of consistency that leads to success!";
+    } else {
+      return "You're making excellent progress! Remember to stay hydrated and trust the process. Your body is adapting to this journey.";
+    }
+  };
 
   const convertWeight = (kg: number) => {
     return weightUnit === 'kg' ? kg : kg * 2.20462;
@@ -78,8 +123,7 @@ export default function Dashboard() {
           <div className="flex-1">
             <h3 className="font-semibold">Wizard's Daily Wisdom</h3>
             <p className="text-sm text-muted-foreground mt-1">
-              You're making excellent progress! Remember to stay hydrated and trust the process. 
-              Your body is adapting to this journey.
+              {getWizardWisdom()}
             </p>
           </div>
         </div>
@@ -95,19 +139,14 @@ export default function Dashboard() {
           />
         )}
         
-        {/* Stats Grid - Takes 2 columns */}
-        <div className="lg:col-span-2 grid gap-4 md:grid-cols-2">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Daily Calorie Goal</CardTitle>
-              <Target className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-4xl font-bold">{dailyCalorieGoal}</div>
-              <p className="text-sm text-muted-foreground mt-1">kcal per day</p>
-            </CardContent>
-          </Card>
-
+        {/* Calorie Progress Ring - Takes 1 column */}
+        <CalorieProgressRing
+          consumed={todayCalories}
+          target={dailyCalorieGoal}
+        />
+        
+        {/* Stats Grid - Takes 1 column */}
+        <div className="grid gap-4 md:grid-cols-2">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Weight to Lose</CardTitle>
@@ -132,12 +171,14 @@ export default function Dashboard() {
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Hydration Status</CardTitle>
+              <CardTitle className="text-sm font-medium">Today's Hydration</CardTitle>
               <Droplets className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-4xl font-bold text-success">Good</div>
-              <p className="text-sm text-muted-foreground mt-1">On track</p>
+              <div className="text-4xl font-bold">{(todayHydration / 1000).toFixed(1)}L</div>
+              <p className="text-sm text-muted-foreground mt-1">
+                {todayHydration >= 3000 ? "Great job!" : `${((3000 - todayHydration) / 1000).toFixed(1)}L to go`}
+              </p>
             </CardContent>
           </Card>
         </div>
