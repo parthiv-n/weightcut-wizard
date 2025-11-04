@@ -19,6 +19,7 @@ export default function Wizard() {
   const [loading, setLoading] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [userName, setUserName] = useState("fighter");
+  const [chatCleared, setChatCleared] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -41,6 +42,9 @@ export default function Wizard() {
   }, [messages]);
 
   const loadChatHistory = async () => {
+    // Don't reload if chat was intentionally cleared
+    if (chatCleared) return;
+    
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
@@ -77,6 +81,11 @@ export default function Wizard() {
     const userMessage = input.trim();
     setInput("");
     setLoading(true);
+    
+    // Reset cleared flag when user sends a new message
+    if (chatCleared) {
+      setChatCleared(false);
+    }
 
     const newMessages = [...messages, { role: "user" as const, content: userMessage }];
     setMessages(newMessages);
@@ -171,9 +180,28 @@ export default function Wizard() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    await supabase.from("chat_messages").delete().eq("user_id", user.id);
-    setMessages([]);
-    toast({ title: "Chat cleared", description: "Starting fresh conversation" });
+    try {
+      const { error } = await supabase
+        .from("chat_messages")
+        .delete()
+        .eq("user_id", user.id);
+      
+      if (error) throw error;
+      
+      setMessages([]);
+      setChatCleared(true);
+      toast({ 
+        title: "Chat deleted successfully", 
+        description: "Starting fresh conversation" 
+      });
+    } catch (error) {
+      console.error("Error clearing chat:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete chat",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
