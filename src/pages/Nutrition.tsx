@@ -13,8 +13,10 @@ import { Plus, Sparkles, Calendar as CalendarIcon, TrendingUp } from "lucide-rea
 import { MealCard } from "@/components/nutrition/MealCard";
 import { CalorieBudgetIndicator } from "@/components/nutrition/CalorieBudgetIndicator";
 import { VoiceInput } from "@/components/nutrition/VoiceInput";
+import { BarcodeScanner } from "@/components/nutrition/BarcodeScanner";
 import { format, subDays, addDays } from "date-fns";
 import wizardNutrition from "@/assets/wizard-nutrition.png";
+import { Badge } from "@/components/ui/badge";
 
 interface Ingredient {
   name: string;
@@ -38,6 +40,7 @@ interface Meal {
 
 export default function Nutrition() {
   const [meals, setMeals] = useState<Meal[]>([]);
+  const [mealPlanIdeas, setMealPlanIdeas] = useState<Meal[]>([]);
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [loading, setLoading] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
@@ -153,20 +156,6 @@ export default function Nutrition() {
 
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      // Delete existing meals for this date first
-      if (meals.length > 0) {
-        const { error: deleteError } = await supabase
-          .from("nutrition_logs")
-          .delete()
-          .eq("user_id", user.id)
-          .eq("date", selectedDate);
-        
-        if (deleteError) throw deleteError;
-      }
-
       const userData = profile ? {
         currentWeight: profile.current_weight_kg,
         goalWeight: profile.goal_weight_kg,
@@ -188,15 +177,15 @@ export default function Nutrition() {
 
       const { mealPlan, dailyCalorieTarget: target, safetyStatus: status, safetyMessage: message } = response.data;
 
-      // Save meals to database
-      const mealsToSave = [];
+      // Store as meal plan ideas instead of logging them
+      const ideasToStore: Meal[] = [];
       
       if (mealPlan.mealPlan) {
         const plan = mealPlan.mealPlan;
         
         if (plan.breakfast) {
-          mealsToSave.push({
-            date: selectedDate,
+          ideasToStore.push({
+            id: `idea-breakfast-${Date.now()}`,
             meal_name: plan.breakfast.name,
             calories: plan.breakfast.calories,
             protein_g: plan.breakfast.protein,
@@ -205,14 +194,15 @@ export default function Nutrition() {
             meal_type: "breakfast",
             portion_size: plan.breakfast.portion,
             recipe_notes: plan.breakfast.recipe,
-            ingredients: plan.breakfast.ingredients || null,
+            ingredients: plan.breakfast.ingredients || undefined,
             is_ai_generated: true,
+            date: selectedDate,
           });
         }
 
         if (plan.lunch) {
-          mealsToSave.push({
-            date: selectedDate,
+          ideasToStore.push({
+            id: `idea-lunch-${Date.now()}`,
             meal_name: plan.lunch.name,
             calories: plan.lunch.calories,
             protein_g: plan.lunch.protein,
@@ -221,14 +211,15 @@ export default function Nutrition() {
             meal_type: "lunch",
             portion_size: plan.lunch.portion,
             recipe_notes: plan.lunch.recipe,
-            ingredients: plan.lunch.ingredients || null,
+            ingredients: plan.lunch.ingredients || undefined,
             is_ai_generated: true,
+            date: selectedDate,
           });
         }
 
         if (plan.dinner) {
-          mealsToSave.push({
-            date: selectedDate,
+          ideasToStore.push({
+            id: `idea-dinner-${Date.now()}`,
             meal_name: plan.dinner.name,
             calories: plan.dinner.calories,
             protein_g: plan.dinner.protein,
@@ -237,15 +228,16 @@ export default function Nutrition() {
             meal_type: "dinner",
             portion_size: plan.dinner.portion,
             recipe_notes: plan.dinner.recipe,
-            ingredients: plan.dinner.ingredients || null,
+            ingredients: plan.dinner.ingredients || undefined,
             is_ai_generated: true,
+            date: selectedDate,
           });
         }
 
         if (plan.snacks && Array.isArray(plan.snacks)) {
-          plan.snacks.forEach((snack: any) => {
-            mealsToSave.push({
-              date: selectedDate,
+          plan.snacks.forEach((snack: any, idx: number) => {
+            ideasToStore.push({
+              id: `idea-snack-${idx}-${Date.now()}`,
               meal_name: snack.name,
               calories: snack.calories,
               protein_g: snack.protein,
@@ -254,53 +246,73 @@ export default function Nutrition() {
               meal_type: "snack",
               portion_size: snack.portion,
               recipe_notes: snack.recipe,
-              ingredients: snack.ingredients || null,
+              ingredients: snack.ingredients || undefined,
               is_ai_generated: true,
+              date: selectedDate,
             });
           });
         }
       }
 
-      if (mealsToSave.length > 0) {
-        // Add user_id to all meals
-        const mealsWithUserId = mealsToSave.map(meal => ({
-          ...meal,
-          user_id: user.id,
-        }));
+      setMealPlanIdeas(ideasToStore);
+      setDailyCalorieTarget(target || dailyCalorieTarget);
+      setSafetyStatus(status || safetyStatus);
+      setSafetyMessage(message || safetyMessage);
 
-        const { error: insertError } = await supabase
-          .from("nutrition_logs")
-          .insert(mealsWithUserId as any);
-
-        if (insertError) {
-          console.error("Error inserting meals:", insertError);
-          throw insertError;
-        }
-
-        // Calculate total macros from saved meals
-        const totalCals = mealsToSave.reduce((sum, m) => sum + m.calories, 0);
-        const totalProtein = mealsToSave.reduce((sum, m) => sum + (m.protein_g || 0), 0);
-
-        toast({
-          title: "✅ Meal plan saved!",
-          description: `Added ${mealsToSave.length} meals (${totalCals} cal, ${Math.round(totalProtein)}g protein) to ${format(new Date(selectedDate), "MMM d")}`,
-        });
-      } else {
-        toast({
-          title: "Meal plan generated!",
-          description: mealPlan.tips || "Your AI-powered meal plan is ready",
-        });
-      }
+      toast({
+        title: "Meal plan generated!",
+        description: `${ideasToStore.length} meal ideas created. Click "Log This Meal" to add them to your day.`,
+      });
 
       setIsAiDialogOpen(false);
       setAiPrompt("");
-      await loadMeals();
     } catch (error: any) {
       console.error("Error generating meal plan:", error);
       const errorMsg = error?.message || error?.error || "Failed to generate meal plan";
       toast({
         title: "❌ Error generating meal plan",
         description: typeof errorMsg === 'string' ? errorMsg : "Please try again",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogMealIdea = async (mealIdea: Meal) => {
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const { error } = await supabase.from("nutrition_logs").insert({
+        user_id: user.id,
+        date: selectedDate,
+        meal_name: mealIdea.meal_name,
+        calories: mealIdea.calories,
+        protein_g: mealIdea.protein_g,
+        carbs_g: mealIdea.carbs_g,
+        fats_g: mealIdea.fats_g,
+        meal_type: mealIdea.meal_type,
+        portion_size: mealIdea.portion_size,
+        recipe_notes: mealIdea.recipe_notes,
+        ingredients: mealIdea.ingredients,
+        is_ai_generated: true,
+      } as any);
+
+      if (error) throw error;
+
+      toast({
+        title: "Meal logged!",
+        description: `${mealIdea.meal_name} added to your day`,
+      });
+
+      await loadMeals();
+    } catch (error) {
+      console.error("Error logging meal:", error);
+      toast({
+        title: "Error",
+        description: "Failed to log meal",
         variant: "destructive",
       });
     } finally {
@@ -469,6 +481,27 @@ export default function Nutrition() {
     }
   };
 
+  const handleBarcodeScanned = async (foodData: {
+    meal_name: string;
+    calories: number;
+    protein_g: number;
+    carbs_g: number;
+    fats_g: number;
+  }) => {
+    setManualMeal({
+      meal_name: foodData.meal_name,
+      calories: foodData.calories.toString(),
+      protein_g: foodData.protein_g.toString(),
+      carbs_g: foodData.carbs_g.toString(),
+      fats_g: foodData.fats_g.toString(),
+      meal_type: "snack",
+      portion_size: "100g",
+      recipe_notes: "",
+      ingredients: [],
+    });
+    setIsManualDialogOpen(true);
+  };
+
   const handleDeleteMeal = async (mealId: string) => {
     try {
       const { error } = await supabase
@@ -506,6 +539,7 @@ export default function Nutrition() {
           </div>
         </div>
         <div className="flex gap-2 flex-wrap justify-end">
+          <BarcodeScanner onFoodScanned={handleBarcodeScanned} disabled={loading} />
           <VoiceInput onTranscription={handleVoiceInput} disabled={loading || aiAnalyzing} />
           <Dialog open={isAiDialogOpen} onOpenChange={setIsAiDialogOpen}>
             <DialogTrigger asChild>
@@ -516,9 +550,9 @@ export default function Nutrition() {
             </DialogTrigger>
             <DialogContent className="max-w-2xl">
               <DialogHeader>
-                <DialogTitle>Generate AI Meal Plan for {format(new Date(selectedDate), "MMM d, yyyy")}</DialogTitle>
+                <DialogTitle>Generate Meal Plan Ideas for {format(new Date(selectedDate), "MMM d, yyyy")}</DialogTitle>
                 <DialogDescription>
-                  Describe what kind of meals you'd like. If meals already exist for this day, they will be replaced.
+                  Describe what kind of meals you'd like. These will be created as suggestions that you can log to your day.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
@@ -532,14 +566,9 @@ export default function Nutrition() {
                     rows={4}
                   />
                 </div>
-                {meals.length > 0 && (
-                  <p className="text-sm text-yellow-600 dark:text-yellow-400">
-                    ⚠️ This will replace {meals.length} existing meal(s) for this day
-                  </p>
-                )}
                 <Button onClick={handleGenerateMealPlan} disabled={loading} className="w-full">
                   <Sparkles className="mr-2 h-4 w-4" />
-                  {loading ? "Generating meals..." : meals.length > 0 ? "Regenerate Meal Plan" : "Generate Meal Plan"}
+                  {loading ? "Generating ideas..." : "Generate Meal Ideas"}
                 </Button>
               </div>
             </DialogContent>
@@ -816,21 +845,24 @@ export default function Nutrition() {
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="today" className="w-full">
+      <Tabs defaultValue="logged" className="w-full">
         <TabsList>
-          <TabsTrigger value="today">Today's Meals</TabsTrigger>
-          <TabsTrigger value="summary">Weekly Summary</TabsTrigger>
+          <TabsTrigger value="logged">Today's Logged Meals</TabsTrigger>
+          <TabsTrigger value="ideas">Meal Plan Ideas</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="today" className="space-y-4 mt-6">
+        <TabsContent value="logged" className="space-y-4 mt-6">
           {meals.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
                 <p className="text-muted-foreground mb-4">No meals logged for this day</p>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Add a meal manually, scan a barcode, or generate meal ideas
+                </p>
                 <div className="flex gap-2 justify-center">
                   <Button onClick={() => setIsAiDialogOpen(true)}>
                     <Sparkles className="mr-2 h-4 w-4" />
-                    Generate AI Meal Plan
+                    Generate Meal Ideas
                   </Button>
                   <Button variant="outline" onClick={() => setIsManualDialogOpen(true)}>
                     <Plus className="mr-2 h-4 w-4" />
@@ -852,17 +884,67 @@ export default function Nutrition() {
           )}
         </TabsContent>
 
-        <TabsContent value="summary" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Weekly Progress</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground">
-                Weekly summary and analytics coming soon...
-              </p>
-            </CardContent>
-          </Card>
+        <TabsContent value="ideas" className="space-y-4 mt-6">
+          {mealPlanIdeas.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <p className="text-muted-foreground mb-4">No meal plan ideas generated yet</p>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Click "AI Meal Plan" to generate personalized meal suggestions
+                </p>
+                <Button onClick={() => setIsAiDialogOpen(true)}>
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Generate Meal Ideas
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {mealPlanIdeas.map((meal) => (
+                <Card key={meal.id}>
+                  <CardContent className="p-6">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <h3 className="text-xl font-semibold">{meal.meal_name}</h3>
+                        <div className="flex gap-2 mt-2 flex-wrap">
+                          <Badge variant="outline">{meal.calories} cal</Badge>
+                          <Badge variant="outline">{meal.protein_g}g protein</Badge>
+                          <Badge variant="outline">{meal.carbs_g}g carbs</Badge>
+                          <Badge variant="outline">{meal.fats_g}g fats</Badge>
+                          <Badge>{meal.meal_type}</Badge>
+                        </div>
+                      </div>
+                    </div>
+                    {meal.portion_size && (
+                      <p className="text-sm text-muted-foreground mb-2">
+                        <strong>Portion:</strong> {meal.portion_size}
+                      </p>
+                    )}
+                    {meal.ingredients && Array.isArray(meal.ingredients) && meal.ingredients.length > 0 && (
+                      <div className="mb-2">
+                        <p className="text-sm font-medium mb-1">Ingredients:</p>
+                        <ul className="text-sm text-muted-foreground list-disc list-inside">
+                          {meal.ingredients.map((ing: Ingredient, idx: number) => (
+                            <li key={idx}>{ing.name} - {ing.grams}g</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {meal.recipe_notes && (
+                      <div className="mb-4">
+                        <p className="text-sm font-medium mb-1">Recipe:</p>
+                        <p className="text-sm text-muted-foreground">{meal.recipe_notes}</p>
+                      </div>
+                    )}
+                    <Button onClick={() => handleLogMealIdea(meal)} disabled={loading} className="w-full">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Log This Meal
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
     </div>
