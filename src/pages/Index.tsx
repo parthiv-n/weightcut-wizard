@@ -2,8 +2,9 @@ import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Sparkles, Shield, TrendingDown, Brain } from "lucide-react";
+import { Shield, TrendingDown, Brain } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import wizardHero from "@/assets/wizard-hero.png";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -23,10 +24,10 @@ const Index = () => {
       </div>
       <div className="container mx-auto px-4 py-16">
         <div className="text-center mb-16">
-          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-primary to-secondary mb-6">
-            <Sparkles className="h-10 w-10 text-white" />
+          <div className="mx-auto mb-6">
+            <img src={wizardHero} alt="Weight Cut Wizard" className="h-40 w-40 mx-auto object-contain" />
           </div>
-          <h1 className="text-5xl md:text-6xl font-title font-bold mb-4 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+          <h1 className="text-5xl md:text-6xl font-title font-bold mb-6 pb-2 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
             Weight Cut Wizard
           </h1>
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
