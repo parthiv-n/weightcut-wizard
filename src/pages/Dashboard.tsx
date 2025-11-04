@@ -103,8 +103,8 @@ export default function Dashboard() {
               <Target className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{dailyCalorieGoal}</div>
-              <p className="text-xs text-muted-foreground">kcal per day</p>
+              <div className="text-4xl font-bold">{dailyCalorieGoal}</div>
+              <p className="text-sm text-muted-foreground mt-1">kcal per day</p>
             </CardContent>
           </Card>
 
@@ -114,8 +114,8 @@ export default function Dashboard() {
               <TrendingDown className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{weightToLose} kg</div>
-              <p className="text-xs text-muted-foreground">Until goal weight</p>
+              <div className="text-4xl font-bold">{weightToLose} kg</div>
+              <p className="text-sm text-muted-foreground mt-1">Until goal weight</p>
             </CardContent>
           </Card>
 
@@ -125,8 +125,8 @@ export default function Dashboard() {
               <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{daysUntilTarget}</div>
-              <p className="text-xs text-muted-foreground">days remaining</p>
+              <div className="text-4xl font-bold">{daysUntilTarget}</div>
+              <p className="text-sm text-muted-foreground mt-1">days remaining</p>
             </CardContent>
           </Card>
 
@@ -136,8 +136,8 @@ export default function Dashboard() {
               <Droplets className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-success">Good</div>
-              <p className="text-xs text-muted-foreground">On track</p>
+              <div className="text-4xl font-bold text-success">Good</div>
+              <p className="text-sm text-muted-foreground mt-1">On track</p>
             </CardContent>
           </Card>
         </div>
