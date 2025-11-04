@@ -12,6 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Sparkles, Calendar as CalendarIcon, TrendingUp } from "lucide-react";
 import { MealCard } from "@/components/nutrition/MealCard";
 import { CalorieBudgetIndicator } from "@/components/nutrition/CalorieBudgetIndicator";
+import { VoiceInput } from "@/components/nutrition/VoiceInput";
 import { format, subDays, addDays } from "date-fns";
 
 interface Ingredient {
@@ -414,6 +415,59 @@ export default function Nutrition() {
     }
   };
 
+  const handleVoiceInput = async (transcribedText: string) => {
+    setAiMealDescription(transcribedText);
+    
+    // Automatically analyze the meal
+    setAiAnalyzing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("analyze-meal", {
+        body: { mealDescription: transcribedText },
+      });
+
+      if (error) throw error;
+
+      const { nutritionData } = data;
+      
+      // Auto-add the meal directly
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      const { error: insertError } = await supabase.from("nutrition_logs").insert({
+        user_id: user.id,
+        date: selectedDate,
+        meal_name: nutritionData.meal_name,
+        calories: nutritionData.calories,
+        protein_g: nutritionData.protein_g,
+        carbs_g: nutritionData.carbs_g,
+        fats_g: nutritionData.fats_g,
+        meal_type: "snack", // Default to snack for voice inputs
+        portion_size: nutritionData.portion_size,
+        recipe_notes: null,
+        ingredients: nutritionData.ingredients || null,
+        is_ai_generated: true,
+      } as any);
+
+      if (insertError) throw insertError;
+
+      toast({
+        title: "Meal added!",
+        description: `${nutritionData.meal_name} (${nutritionData.calories} cal) logged successfully`,
+      });
+
+      await loadMeals();
+    } catch (error: any) {
+      console.error("Error processing voice input:", error);
+      toast({
+        title: "Failed to add meal",
+        description: error.message || "Failed to process voice input",
+        variant: "destructive",
+      });
+    } finally {
+      setAiAnalyzing(false);
+    }
+  };
+
   const handleDeleteMeal = async (mealId: string) => {
     try {
       const { error } = await supabase
@@ -447,7 +501,8 @@ export default function Nutrition() {
           <h1 className="text-3xl font-bold">Nutrition & Diet Tracking</h1>
           <p className="text-muted-foreground mt-1">AI-powered meal planning for safe weight loss</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap justify-end">
+          <VoiceInput onTranscription={handleVoiceInput} disabled={loading || aiAnalyzing} />
           <Dialog open={isAiDialogOpen} onOpenChange={setIsAiDialogOpen}>
             <DialogTrigger asChild>
               <Button>
