@@ -27,8 +27,8 @@ export function CalorieProgressRing({ consumed, target }: CalorieProgressRingPro
 
   return (
     <Card className="overflow-hidden">
-      <CardContent className="p-6 relative min-h-[140px]">
-        <div className="flex flex-col">
+      <CardContent className="p-6 pb-28 relative">
+        <div className="flex flex-col pr-28">
           <div className="text-sm font-medium text-muted-foreground mb-1">Calorie Progress</div>
           <div className="text-4xl font-bold mb-1">{consumed}</div>
           <p className="text-xs text-muted-foreground">of {target} kcal</p>
@@ -37,7 +37,7 @@ export function CalorieProgressRing({ consumed, target }: CalorieProgressRingPro
           </p>
         </div>
         
-        <div className="absolute bottom-4 right-4 w-24 h-24 p-1">
+        <div className="absolute bottom-6 right-6 w-24 h-24 p-1">
           <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
             <defs>
               <linearGradient id="calorieGradient" x1="0%" y1="0%" x2="100%" y2="100%">
