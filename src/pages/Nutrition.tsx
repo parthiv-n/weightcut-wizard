@@ -59,6 +59,8 @@ export default function Nutrition() {
     recipe_notes: "",
     ingredients: [] as Ingredient[],
   });
+  const [aiMealDescription, setAiMealDescription] = useState("");
+  const [aiAnalyzing, setAiAnalyzing] = useState(false);
 
   const [newIngredient, setNewIngredient] = useState({ name: "", grams: "" });
 
@@ -349,6 +351,7 @@ export default function Nutrition() {
         recipe_notes: "",
         ingredients: [],
       });
+      setAiMealDescription("");
       setNewIngredient({ name: "", grams: "" });
       loadMeals();
     } catch (error) {
@@ -360,6 +363,54 @@ export default function Nutrition() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAiAnalyzeMeal = async () => {
+    if (!aiMealDescription.trim()) {
+      toast({
+        title: "Missing description",
+        description: "Please describe your meal",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setAiAnalyzing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("analyze-meal", {
+        body: { mealDescription: aiMealDescription },
+      });
+
+      if (error) throw error;
+
+      const { nutritionData } = data;
+      
+      setManualMeal({
+        meal_name: nutritionData.meal_name,
+        calories: nutritionData.calories.toString(),
+        protein_g: nutritionData.protein_g.toString(),
+        carbs_g: nutritionData.carbs_g.toString(),
+        fats_g: nutritionData.fats_g.toString(),
+        meal_type: manualMeal.meal_type,
+        portion_size: nutritionData.portion_size,
+        recipe_notes: manualMeal.recipe_notes,
+        ingredients: nutritionData.ingredients || [],
+      });
+
+      toast({
+        title: "Analysis complete!",
+        description: "Nutritional information has been filled in",
+      });
+    } catch (error: any) {
+      console.error("Error analyzing meal:", error);
+      toast({
+        title: "Analysis failed",
+        description: error.message || "Failed to analyze meal",
+        variant: "destructive",
+      });
+    } finally {
+      setAiAnalyzing(false);
     }
   };
 
@@ -446,10 +497,38 @@ export default function Nutrition() {
               <DialogHeader>
                 <DialogTitle>Add Manual Meal</DialogTitle>
                 <DialogDescription>
-                  Log a meal manually with nutritional information
+                  Log a meal manually with nutritional information or let AI analyze it
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
+                {/* AI Quick Fill Section */}
+                <div className="p-4 bg-primary/5 rounded-lg border border-primary/20 space-y-3">
+                  <Label htmlFor="ai-description" className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    AI Quick Fill (Optional)
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Describe your meal and AI will estimate nutritional values
+                  </p>
+                  <div className="flex gap-2">
+                    <Input
+                      id="ai-description"
+                      placeholder="E.g., 250g grilled chicken salad with olive oil"
+                      value={aiMealDescription}
+                      onChange={(e) => setAiMealDescription(e.target.value)}
+                      disabled={aiAnalyzing}
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleAiAnalyzeMeal}
+                      disabled={aiAnalyzing || !aiMealDescription.trim()}
+                    >
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      {aiAnalyzing ? "Analyzing..." : "Analyze"}
+                    </Button>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
                     <Label htmlFor="meal_name">Meal Name *</Label>
