@@ -320,6 +320,7 @@ export default function Nutrition() {
       if (!user) throw new Error("Not authenticated");
 
       const { error } = await supabase.from("nutrition_logs").insert({
+        user_id: user.id,
         date: selectedDate,
         meal_name: manualMeal.meal_name,
         calories: parseInt(manualMeal.calories),
