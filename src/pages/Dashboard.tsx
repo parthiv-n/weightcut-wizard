@@ -84,7 +84,7 @@ export default function Dashboard() {
         {profile && (
           <WeightProgressRing
             currentWeight={weightLogs.length > 0 ? parseFloat(weightLogs[weightLogs.length - 1].weight_kg) : profile.current_weight_kg}
-            startingWeight={profile.current_weight_kg}
+            startingWeight={weightLogs.length > 0 ? parseFloat(weightLogs[0].weight_kg) : profile.current_weight_kg}
             goalWeight={profile.goal_weight_kg}
           />
         )}
