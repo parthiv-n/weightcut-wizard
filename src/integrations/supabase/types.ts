@@ -44,6 +44,11 @@ export type Database = {
           created_at: string | null
           date: string
           id: string
+          notes: string | null
+          sodium_mg: number | null
+          sweat_loss_percent: number | null
+          training_weight_post: number | null
+          training_weight_pre: number | null
           user_id: string
         }
         Insert: {
@@ -51,6 +56,11 @@ export type Database = {
           created_at?: string | null
           date: string
           id?: string
+          notes?: string | null
+          sodium_mg?: number | null
+          sweat_loss_percent?: number | null
+          training_weight_post?: number | null
+          training_weight_pre?: number | null
           user_id: string
         }
         Update: {
@@ -58,6 +68,11 @@ export type Database = {
           created_at?: string | null
           date?: string
           id?: string
+          notes?: string | null
+          sodium_mg?: number | null
+          sweat_loss_percent?: number | null
+          training_weight_post?: number | null
+          training_weight_pre?: number | null
           user_id?: string
         }
         Relationships: []
