@@ -57,7 +57,10 @@ export function CalorieBudgetIndicator({
             {remaining >= 0 ? `${remaining} remaining` : `${Math.abs(remaining)} over`}
           </span>
         </div>
-        <Progress value={Math.min(percentage, 100)} className={getProgressColor()} />
+        <Progress 
+          value={Math.min(percentage, 100)} 
+          indicatorClassName={getProgressColor()} 
+        />
         <div className="text-xs text-muted-foreground text-center">
           {percentage.toFixed(1)}% of daily target
         </div>
