@@ -200,7 +200,7 @@ export default function Wizard() {
                 <img
                   src={wizardAvatar}
                   alt="Weight Cut Wizard"
-                  className="w-32 h-32"
+                  className="w-48 h-48"
                 />
                 {isSpeaking && (
                   <div className="absolute -inset-2 bg-primary/20 animate-ping" />
