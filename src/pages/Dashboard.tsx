@@ -139,14 +139,14 @@ export default function Dashboard() {
           />
         )}
         
-        {/* Calorie Progress Ring - Takes 1 column */}
-        <CalorieProgressRing
-          consumed={todayCalories}
-          target={dailyCalorieGoal}
-        />
-        
-        {/* Stats Grid - Takes 1 column */}
-        <div className="grid gap-4 md:grid-cols-2">
+        {/* Stats Grid - Takes 2 columns */}
+        <div className="lg:col-span-2 grid gap-4 md:grid-cols-2">
+          {/* Calorie Progress */}
+          <CalorieProgressRing
+            consumed={todayCalories}
+            target={dailyCalorieGoal}
+          />
+          
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Weight to Lose</CardTitle>
