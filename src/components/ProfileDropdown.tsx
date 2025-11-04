@@ -93,7 +93,7 @@ export function ProfileDropdown() {
           </Avatar>
           <span className="text-sm font-medium hidden md:inline">{userName}</span>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuContent align="end" className="w-56 mr-4" sideOffset={8}>
           <DropdownMenuLabel>My Account</DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setIsProfileOpen(true)}>
