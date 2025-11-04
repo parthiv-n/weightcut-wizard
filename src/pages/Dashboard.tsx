@@ -161,6 +161,7 @@ export default function Dashboard() {
                 <YAxis 
                   stroke="hsl(var(--muted-foreground))"
                   fontSize={12}
+                  label={{ value: 'kg', position: 'insideLeft', style: { fill: 'hsl(var(--muted-foreground))' } }}
                 />
                 <Tooltip 
                   contentStyle={{
@@ -168,6 +169,7 @@ export default function Dashboard() {
                     border: "1px solid hsl(var(--border))",
                     borderRadius: "8px"
                   }}
+                  formatter={(value: number) => [`${value} kg`, 'Weight']}
                 />
                 <Area
                   type="monotone"
