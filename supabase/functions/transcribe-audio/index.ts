@@ -56,7 +56,8 @@ serve(async (req) => {
     // Prepare form data
     const formData = new FormData();
     const blob = new Blob([binaryAudio], { type: 'audio/webm' });
-    formData.append('audio', blob, 'audio.webm');
+    formData.append('file', blob, 'audio.webm');
+    formData.append('model_id', 'scribe_v1');
 
     const ELEVENLABS_API_KEY = Deno.env.get('ELEVENLABS_API_KEY');
     if (!ELEVENLABS_API_KEY) {
