@@ -7,7 +7,7 @@ interface CalorieProgressRingProps {
 
 export function CalorieProgressRing({ consumed, target }: CalorieProgressRingProps) {
   const percentage = target > 0 ? Math.min((consumed / target) * 100, 100) : 0;
-  const radius = 50;
+  const radius = 40;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
   const remaining = Math.max(target - consumed, 0);
@@ -38,8 +38,8 @@ export function CalorieProgressRing({ consumed, target }: CalorieProgressRingPro
             </p>
           </div>
           
-          <div className="relative w-24 h-24 flex-shrink-0">
-            <svg className="w-full h-full transform -rotate-90">
+          <div className="relative w-20 h-20 flex-shrink-0 p-1">
+            <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
               <defs>
                 <linearGradient id="calorieGradient" x1="0%" y1="0%" x2="100%" y2="100%">
                   <stop offset="0%" stopColor={getStatusColor()} stopOpacity="1" />
@@ -49,23 +49,23 @@ export function CalorieProgressRing({ consumed, target }: CalorieProgressRingPro
               
               {/* Background circle */}
               <circle
-                cx="48"
-                cy="48"
+                cx="50"
+                cy="50"
                 r={radius}
                 fill="none"
                 stroke="hsl(var(--muted))"
-                strokeWidth="8"
+                strokeWidth="6"
                 opacity="0.2"
               />
               
               {/* Progress circle */}
               <circle
-                cx="48"
-                cy="48"
+                cx="50"
+                cy="50"
                 r={radius}
                 fill="none"
                 stroke="url(#calorieGradient)"
-                strokeWidth="8"
+                strokeWidth="6"
                 strokeDasharray={circumference}
                 strokeDashoffset={strokeDashoffset}
                 strokeLinecap="round"
@@ -75,7 +75,7 @@ export function CalorieProgressRing({ consumed, target }: CalorieProgressRingPro
             
             {/* Center content */}
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <div className="text-xl font-bold">{Math.round(percentage)}%</div>
+              <div className="text-lg font-bold">{Math.round(percentage)}%</div>
             </div>
           </div>
         </div>
