@@ -152,6 +152,17 @@ export default function Nutrition() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
+      // Delete existing meals for this date first
+      if (meals.length > 0) {
+        const { error: deleteError } = await supabase
+          .from("nutrition_logs")
+          .delete()
+          .eq("user_id", user.id)
+          .eq("date", selectedDate);
+        
+        if (deleteError) throw deleteError;
+      }
+
       const userData = profile ? {
         currentWeight: profile.current_weight_kg,
         goalWeight: profile.goal_weight_kg,
@@ -247,9 +258,15 @@ export default function Nutrition() {
       }
 
       if (mealsToSave.length > 0) {
+        // Add user_id to all meals
+        const mealsWithUserId = mealsToSave.map(meal => ({
+          ...meal,
+          user_id: user.id,
+        }));
+
         const { error: insertError } = await supabase
           .from("nutrition_logs")
-          .insert(mealsToSave as any);
+          .insert(mealsWithUserId as any);
 
         if (insertError) throw insertError;
       }
@@ -375,14 +392,14 @@ export default function Nutrition() {
             </DialogTrigger>
             <DialogContent className="max-w-2xl">
               <DialogHeader>
-                <DialogTitle>Generate AI Meal Plan</DialogTitle>
+                <DialogTitle>Generate AI Meal Plan for {format(new Date(selectedDate), "MMM d, yyyy")}</DialogTitle>
                 <DialogDescription>
-                  Describe what kind of meals you'd like, and the AI Wizard will create a personalized meal plan
+                  Describe what kind of meals you'd like. If meals already exist for this day, they will be replaced.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="aiPrompt">What would you like to eat today?</Label>
+                  <Label htmlFor="aiPrompt">What would you like to eat?</Label>
                   <Textarea
                     id="aiPrompt"
                     placeholder="E.g., 'I want high-protein meals with chicken and vegetables, no dairy' or 'Mediterranean diet with fish'"
@@ -391,8 +408,13 @@ export default function Nutrition() {
                     rows={4}
                   />
                 </div>
+                {meals.length > 0 && (
+                  <p className="text-sm text-yellow-600 dark:text-yellow-400">
+                    ⚠️ This will replace {meals.length} existing meal(s) for this day
+                  </p>
+                )}
                 <Button onClick={handleGenerateMealPlan} disabled={loading} className="w-full">
-                  {loading ? "Generating..." : "Generate Meal Plan"}
+                  {loading ? "Generating..." : meals.length > 0 ? "Regenerate Meal Plan" : "Generate Meal Plan"}
                 </Button>
               </div>
             </DialogContent>
