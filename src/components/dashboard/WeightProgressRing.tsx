@@ -22,13 +22,13 @@ export function WeightProgressRing({ currentWeight, startingWeight, goalWeight }
   const strokeDashoffset = circumference - (displayProgress / 100) * circumference;
 
   return (
-    <Card className="overflow-hidden">
+    <Card className="overflow-hidden animate-fade-in">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">Weight Loss Progress</CardTitle>
         <TrendingDown className="h-4 w-4 text-muted-foreground" />
       </CardHeader>
       <CardContent className="flex flex-col items-center justify-center py-6">
-        <div className="relative w-48 h-48">
+        <div className="relative w-48 h-48 animate-scale-in">
           <svg className="w-full h-full transform -rotate-90" viewBox="0 0 160 160">
             {/* Background circle */}
             <circle
