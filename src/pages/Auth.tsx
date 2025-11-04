@@ -72,8 +72,8 @@ export default function Auth() {
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-background to-card p-4">
       <Card className="w-full max-w-md shadow-xl">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-primary to-secondary overflow-hidden">
-            <img src={wizardLogo} alt="Weight Cut Wizard" className="h-12 w-12 object-contain" />
+          <div className="mx-auto mb-4">
+            <img src={wizardLogo} alt="Weight Cut Wizard" className="h-24 w-24 object-contain" />
           </div>
           <CardTitle className="text-3xl font-title">Weight Cut Wizard</CardTitle>
           <CardDescription>
