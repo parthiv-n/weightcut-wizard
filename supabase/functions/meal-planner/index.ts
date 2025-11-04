@@ -165,12 +165,23 @@ Generate meal plans that:
     // Try to parse JSON from the response
     let mealPlanData;
     try {
-      // Extract JSON from markdown code blocks if present
-      const jsonMatch = content.match(/```json\n([\s\S]*?)\n```/) || content.match(/```\n([\s\S]*?)\n```/);
-      const jsonStr = jsonMatch ? jsonMatch[1] : content;
+      // Clean the content by removing markdown code blocks
+      let cleanContent = content.trim();
+      
+      // Remove markdown code blocks with various patterns
+      cleanContent = cleanContent.replace(/^```json\s*/gm, '');
+      cleanContent = cleanContent.replace(/^```\s*/gm, '');
+      cleanContent = cleanContent.replace(/\s*```$/gm, '');
+      
+      // Try to extract JSON if it's embedded in text
+      const jsonMatch = cleanContent.match(/\{[\s\S]*\}/);
+      const jsonStr = jsonMatch ? jsonMatch[0] : cleanContent;
+      
       mealPlanData = JSON.parse(jsonStr);
+      console.log("Successfully parsed AI response");
     } catch (e) {
       console.error("Failed to parse AI response as JSON:", e);
+      console.error("Raw content:", content);
       // If parsing fails, return the raw content
       mealPlanData = {
         rawResponse: content,
