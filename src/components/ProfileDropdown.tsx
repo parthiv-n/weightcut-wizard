@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,10 +16,12 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+import { ProfilePictureUpload } from "./ProfilePictureUpload";
 
 export function ProfileDropdown() {
   const [user, setUser] = useState<any>(null);
   const [userName, setUserName] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState<string>("");
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [editedName, setEditedName] = useState("");
   const { toast } = useToast();
@@ -37,6 +39,17 @@ export function ProfileDropdown() {
       const formattedName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
       setUserName(formattedName);
       setEditedName(formattedName);
+
+      // Load avatar from profile
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("avatar_url")
+        .eq("id", user.id)
+        .single();
+      
+      if (profile?.avatar_url) {
+        setAvatarUrl(profile.avatar_url);
+      }
     }
   };
 
@@ -73,6 +86,7 @@ export function ProfileDropdown() {
       <DropdownMenu>
         <DropdownMenuTrigger className="flex items-center gap-2 outline-none">
           <Avatar className="h-8 w-8">
+            {avatarUrl && <AvatarImage src={avatarUrl} alt={userName} />}
             <AvatarFallback className="bg-primary text-primary-foreground">
               {getInitials(userName)}
             </AvatarFallback>
@@ -102,6 +116,13 @@ export function ProfileDropdown() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Profile Picture</Label>
+              <ProfilePictureUpload
+                currentAvatarUrl={avatarUrl}
+                onUploadSuccess={(url) => setAvatarUrl(url)}
+              />
+            </div>
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
               <Input

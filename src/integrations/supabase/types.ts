@@ -243,6 +243,7 @@ export type Database = {
         Row: {
           activity_level: string
           age: number
+          avatar_url: string | null
           bmr: number | null
           created_at: string | null
           current_weight_kg: number
@@ -258,6 +259,7 @@ export type Database = {
         Insert: {
           activity_level: string
           age: number
+          avatar_url?: string | null
           bmr?: number | null
           created_at?: string | null
           current_weight_kg: number
@@ -273,6 +275,7 @@ export type Database = {
         Update: {
           activity_level?: string
           age?: number
+          avatar_url?: string | null
           bmr?: number | null
           created_at?: string | null
           current_weight_kg?: number
