@@ -12,6 +12,9 @@ export function CalorieProgressRing({ consumed, target }: CalorieProgressRingPro
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
   const remaining = Math.max(target - consumed, 0);
   
+  // Debug logging
+  console.log('CalorieProgressRing:', { consumed, target, percentage, circumference, strokeDashoffset });
+  
   // Determine status color based on consumption
   const getStatusColor = () => {
     if (consumed < target * 0.8) return "hsl(var(--chart-1))"; // Under target
