@@ -31,12 +31,27 @@ interface DailyLog {
   notes?: string;
 }
 
+interface AIAnalysis {
+  riskLevel: "green" | "yellow" | "red";
+  riskPercentage: number;
+  weightRemaining: number;
+  dehydrationRequired: number;
+  carbDepletionEstimate: number;
+  isOnTrack: boolean;
+  progressStatus: string;
+  dailyAnalysis: string;
+  adaptations: string[];
+  riskExplanation: string;
+  recommendation: string;
+}
+
 export default function FightWeek() {
   const [plan, setPlan] = useState<FightWeekPlan | null>(null);
   const [logs, setLogs] = useState<DailyLog[]>([]);
   const [profile, setProfile] = useState<any>(null);
-  const [newPlan, setNewPlan] = useState({ fight_date: "", starting_weight_kg: "", target_weight_kg: "" });
+  const [newPlan, setNewPlan] = useState({ fight_date: "", starting_weight_kg: "", target_weight_kg: "", is_waterloading: false });
   const [selectedDate, setSelectedDate] = useState<string>("");
+  const [isWaterloading, setIsWaterloading] = useState(false);
   const [dailyLog, setDailyLog] = useState<DailyLog>({
     log_date: "",
     weight_kg: undefined,
@@ -47,7 +62,7 @@ export default function FightWeek() {
     notes: ""
   });
   const [loading, setLoading] = useState(false);
-  const [aiGuidance, setAiGuidance] = useState<string>("");
+  const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -106,6 +121,8 @@ export default function FightWeek() {
     if (!user) return;
 
     setLoading(true);
+    setIsWaterloading(newPlan.is_waterloading);
+    
     const { error } = await supabase.from("fight_week_plans").insert({
       user_id: user.id,
       fight_date: newPlan.fight_date,
@@ -118,7 +135,7 @@ export default function FightWeek() {
     } else {
       toast({ title: "Fight week plan created!", description: "Your countdown has started." });
       fetchPlanAndLogs();
-      setNewPlan({ fight_date: "", starting_weight_kg: "", target_weight_kg: "" });
+      setNewPlan({ fight_date: "", starting_weight_kg: "", target_weight_kg: "", is_waterloading: false });
     }
     setLoading(false);
   };
@@ -147,7 +164,13 @@ export default function FightWeek() {
       toast({ title: "Error saving log", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Daily log saved!", description: "Your progress has been tracked." });
-      fetchPlanAndLogs();
+      await fetchPlanAndLogs();
+      
+      // Trigger AI analysis after saving weight
+      if (dailyLog.weight_kg && plan) {
+        await getAIAnalysis();
+      }
+      
       setDailyLog({
         log_date: "",
         weight_kg: undefined,
@@ -161,23 +184,28 @@ export default function FightWeek() {
     setLoading(false);
   };
 
-  const getAIGuidance = async (day: number) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user || !plan) return;
+  const getAIAnalysis = async () => {
+    if (!plan || logs.length === 0) return;
 
     setLoading(true);
-    const currentLog = logs.find(l => l.log_date === format(addDays(new Date(plan.fight_date), -day), "yyyy-MM-dd"));
-    
-    const prompt = `Day ${day} of fight week. Target weight: ${plan.target_weight_kg}kg. Current weight: ${currentLog?.weight_kg || plan.starting_weight_kg}kg. Provide safe guidance for carb intake, hydration, and training.`;
+    const latestLog = logs[logs.length - 1];
+    const currentWeight = latestLog?.weight_kg || plan.starting_weight_kg;
 
-    const { data, error } = await supabase.functions.invoke("wizard-chat", {
-      body: { messages: [{ role: "user", content: prompt }] }
+    const { data, error } = await supabase.functions.invoke("fight-week-analysis", {
+      body: {
+        currentWeight,
+        targetWeight: plan.target_weight_kg,
+        daysUntilFight: getDaysUntilFight(),
+        dailyLogs: logs,
+        startingWeight: plan.starting_weight_kg,
+        isWaterloading
+      }
     });
 
     if (error) {
-      toast({ title: "AI guidance unavailable", variant: "destructive" });
-    } else {
-      setAiGuidance(data?.response || "Focus on gradual carb reduction and maintaining hydration.");
+      toast({ title: "AI analysis unavailable", description: error.message, variant: "destructive" });
+    } else if (data?.analysis) {
+      setAiAnalysis(data.analysis);
     }
     setLoading(false);
   };
@@ -295,6 +323,18 @@ export default function FightWeek() {
                 onChange={(e) => setNewPlan({ ...newPlan, target_weight_kg: e.target.value })}
               />
             </div>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="waterloading"
+                checked={newPlan.is_waterloading}
+                onChange={(e) => setNewPlan({ ...newPlan, is_waterloading: e.target.checked })}
+                className="rounded"
+              />
+              <Label htmlFor="waterloading" className="cursor-pointer">
+                I will be water loading (increases safe cut capacity by 2-3kg)
+              </Label>
+            </div>
             <Button onClick={createPlan} disabled={loading} className="w-full">
               {loading ? "Creating..." : "Start Fight Week"}
             </Button>
@@ -318,11 +358,11 @@ export default function FightWeek() {
         </div>
       </div>
 
-      {/* Weight Cut Breakdown & Wizard Guidance */}
-      {weightCutInfo && (
+      {/* AI-Powered Adaptive Analysis */}
+      {aiAnalysis && (
         <Card className={`border-2 ${
-          weightCutInfo.status === 'safe' ? 'border-green-500/50 bg-green-500/5' :
-          weightCutInfo.status === 'warning' ? 'border-yellow-500/50 bg-yellow-500/5' :
+          aiAnalysis.riskLevel === 'green' ? 'border-green-500/50 bg-green-500/5' :
+          aiAnalysis.riskLevel === 'yellow' ? 'border-yellow-500/50 bg-yellow-500/5' :
           'border-red-500/50 bg-red-500/5'
         }`}>
           <CardHeader>
@@ -331,15 +371,21 @@ export default function FightWeek() {
               <div className="flex-1">
                 <CardTitle className="flex items-center gap-2">
                   <Sparkles className="h-5 w-5" />
-                  Weight Cut Analysis
+                  AI Weight Cut Analysis
                 </CardTitle>
-                <p className={`text-sm font-semibold mt-2 ${
-                  weightCutInfo.status === 'safe' ? 'text-green-600 dark:text-green-400' :
-                  weightCutInfo.status === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
-                  'text-red-600 dark:text-red-400'
-                }`}>
-                  {weightCutInfo.message}
-                </p>
+                <div className="flex items-center gap-2 mt-2">
+                  <span className={`text-2xl font-bold uppercase ${
+                    aiAnalysis.riskLevel === 'green' ? 'text-green-600 dark:text-green-400' :
+                    aiAnalysis.riskLevel === 'yellow' ? 'text-yellow-600 dark:text-yellow-400' :
+                    'text-red-600 dark:text-red-400'
+                  }`}>
+                    {aiAnalysis.riskLevel === 'green' ? 'SAFE' : 
+                     aiAnalysis.riskLevel === 'yellow' ? 'MODERATE RISK' : 'HIGH RISK'}
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    ({aiAnalysis.riskPercentage.toFixed(1)}% of body weight)
+                  </span>
+                </div>
               </div>
             </div>
           </CardHeader>
@@ -347,53 +393,79 @@ export default function FightWeek() {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Current Weight:</span>
-                  <span className="font-semibold">{weightCutInfo.currentWeight.toFixed(1)} kg</span>
+                  <span className="text-muted-foreground">Weight Remaining:</span>
+                  <span className="font-semibold">{aiAnalysis.weightRemaining.toFixed(1)} kg</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Target Weight:</span>
-                  <span className="font-semibold">{plan.target_weight_kg} kg</span>
+                  <span className="text-muted-foreground">Via Carb Depletion:</span>
+                  <span className="font-semibold">~{aiAnalysis.carbDepletionEstimate.toFixed(1)} kg</span>
                 </div>
-                <div className="flex justify-between text-sm font-bold">
-                  <span>Total to Cut:</span>
-                  <span className={
-                    weightCutInfo.status === 'safe' ? 'text-green-600 dark:text-green-400' :
-                    weightCutInfo.status === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
-                    'text-red-600 dark:text-red-400'
-                  }>
-                    {weightCutInfo.totalWeightToCut.toFixed(1)} kg ({weightCutInfo.percentBodyweight.toFixed(1)}%)
-                  </span>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Via Dehydration:</span>
+                  <span className="font-semibold">~{aiAnalysis.dehydrationRequired.toFixed(1)} kg</span>
                 </div>
               </div>
               
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Via Carb Depletion:</span>
-                  <span className="font-semibold">~{weightCutInfo.glycogenWaterWeight.toFixed(1)} kg</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Safe Dehydration (3%):</span>
-                  <span className="font-semibold">~{weightCutInfo.safeDehydration.toFixed(1)} kg</span>
-                </div>
-                <div className="flex justify-between text-sm font-bold border-t pt-2">
-                  <span>Max Safe Cut:</span>
-                  <span className="text-green-600 dark:text-green-400">
-                    {weightCutInfo.maxSafeCut.toFixed(1)} kg
+                  <span className="text-muted-foreground">Progress Status:</span>
+                  <span className={`font-semibold ${
+                    aiAnalysis.isOnTrack ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'
+                  }`}>
+                    {aiAnalysis.progressStatus}
                   </span>
                 </div>
+                {isWaterloading && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Droplets className="h-4 w-4 text-blue-500" />
+                    <span className="text-blue-600 dark:text-blue-400 font-semibold">Water Loading Active</span>
+                  </div>
+                )}
               </div>
             </div>
 
             <Alert className={
-              weightCutInfo.status === 'safe' ? 'border-green-500/50' :
-              weightCutInfo.status === 'warning' ? 'border-yellow-500/50' :
+              aiAnalysis.riskLevel === 'green' ? 'border-green-500/50' :
+              aiAnalysis.riskLevel === 'yellow' ? 'border-yellow-500/50' :
               'border-red-500/50'
             }>
               <Sparkles className="h-4 w-4" />
-              <AlertDescription className="text-sm">
-                <strong>Wizard's Advice:</strong> {weightCutInfo.wizardAdvice}
+              <AlertDescription className="text-sm space-y-2">
+                <p><strong>Risk Assessment:</strong> {aiAnalysis.riskExplanation}</p>
+                <p><strong>Daily Analysis:</strong> {aiAnalysis.dailyAnalysis}</p>
               </AlertDescription>
             </Alert>
+
+            {aiAnalysis.adaptations.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-semibold text-sm">Recommended Adaptations:</h4>
+                <ul className="space-y-1">
+                  {aiAnalysis.adaptations.map((adaptation, idx) => (
+                    <li key={idx} className="text-sm flex items-start gap-2">
+                      <CheckCircle className="h-4 w-4 mt-0.5 text-primary flex-shrink-0" />
+                      <span>{adaptation}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <Alert>
+              <Activity className="h-4 w-4" />
+              <AlertDescription className="text-sm">
+                <strong>Strategic Recommendation:</strong> {aiAnalysis.recommendation}
+              </AlertDescription>
+            </Alert>
+          </CardContent>
+        </Card>
+      )}
+
+      {!aiAnalysis && logs.length > 0 && (
+        <Card>
+          <CardContent className="pt-6">
+            <Button onClick={getAIAnalysis} disabled={loading} className="w-full">
+              {loading ? "Analyzing..." : "Get AI Analysis"}
+            </Button>
           </CardContent>
         </Card>
       )}
@@ -560,27 +632,38 @@ export default function FightWeek() {
         </CardContent>
       </Card>
 
-      {/* AI Guidance */}
+      {/* Waterload Protocol Toggle */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>AI Wizard Guidance</CardTitle>
-            <Sparkles className="h-5 w-5 text-primary" />
+            <CardTitle>Water Loading Protocol</CardTitle>
+            <Droplets className="h-5 w-5 text-primary" />
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="waterload-toggle"
+              checked={isWaterloading}
+              onChange={(e) => {
+                setIsWaterloading(e.target.checked);
+                toast({ 
+                  title: e.target.checked ? "Water loading enabled" : "Water loading disabled",
+                  description: e.target.checked 
+                    ? "This increases safe dehydration capacity by 2-3kg. Update AI analysis to reflect changes." 
+                    : "Standard carb depletion + 3% dehydration protocol."
+                });
+              }}
+              className="rounded"
+            />
+            <Label htmlFor="waterload-toggle" className="cursor-pointer">
+              I am water loading (increases safe cut by 2-3kg)
+            </Label>
+          </div>
           <p className="text-sm text-muted-foreground">
-            Get personalized daily guidance for safe weight cutting
+            Water loading involves drinking increased amounts of water in the days before cutting to enhance natural diuresis. When enabled, this adjusts your AI analysis to account for the additional 2-3kg safe dehydration capacity.
           </p>
-          {aiGuidance && (
-            <Alert>
-              <Sparkles className="h-4 w-4" />
-              <AlertDescription>{aiGuidance}</AlertDescription>
-            </Alert>
-          )}
-          <Button onClick={() => getAIGuidance(daysUntilFight)} disabled={loading} variant="outline" className="w-full">
-            {loading ? "Loading..." : "Get Today's Guidance"}
-          </Button>
         </CardContent>
       </Card>
 
