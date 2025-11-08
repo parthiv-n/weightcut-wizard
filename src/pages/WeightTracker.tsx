@@ -8,9 +8,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { format } from "date-fns";
-import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Sparkles, Activity, Apple } from "lucide-react";
+import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Sparkles, Activity, Apple, Trash2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import wizardLogo from "@/assets/wizard-logo.png";
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 
 interface WeightLog {
   id: string;
@@ -56,6 +57,8 @@ export default function WeightTracker() {
   const [newDate, setNewDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [loading, setLoading] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [logToDelete, setLogToDelete] = useState<WeightLog | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -126,6 +129,39 @@ export default function WeightTracker() {
     setLoading(false);
   };
 
+  const handleDeleteLog = async () => {
+    if (!logToDelete) return;
+
+    setLoading(true);
+    const { error } = await supabase
+      .from("weight_logs")
+      .delete()
+      .eq("id", logToDelete.id);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete weight log",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Deleted",
+        description: "Weight log has been removed",
+      });
+      fetchData();
+    }
+
+    setLoading(false);
+    setDeleteDialogOpen(false);
+    setLogToDelete(null);
+  };
+
+  const initiateDelete = (log: WeightLog) => {
+    setLogToDelete(log);
+    setDeleteDialogOpen(true);
+  };
+
   const getAIAnalysis = async () => {
     if (!profile) return;
 
@@ -175,9 +211,21 @@ export default function WeightTracker() {
       date: format(new Date(log.date), "MMM dd"),
       weight: log.weight_kg,
       goal: profile.goal_weight_kg,
+      logId: log.id,
+      fullDate: log.date,
     }));
 
     return data;
+  };
+
+  const handleChartClick = (data: any) => {
+    if (data && data.activePayload && data.activePayload[0]) {
+      const payload = data.activePayload[0].payload;
+      const log = weightLogs.find(l => l.id === payload.logId);
+      if (log) {
+        initiateDelete(log);
+      }
+    }
   };
 
   const getCurrentWeight = () => {
@@ -555,44 +603,86 @@ export default function WeightTracker() {
             </CardHeader>
             <CardContent>
               {getChartData().length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={getChartData()}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
-                    <XAxis
-                      dataKey="date"
-                      stroke="hsl(var(--muted-foreground))"
-                      fontSize={12}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      stroke="hsl(var(--muted-foreground))"
-                      fontSize={12}
-                      tickLine={false}
-                      domain={["dataMin - 2", "dataMax + 2"]}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--card))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "8px",
-                      }}
-                    />
-                    <ReferenceLine
-                      y={profile?.goal_weight_kg}
-                      stroke="hsl(var(--primary))"
-                      strokeDasharray="5 5"
-                      label={{ value: "Target", fill: "hsl(var(--primary))", fontSize: 12 }}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="weight"
-                      stroke="hsl(var(--chart-1))"
-                      strokeWidth={3}
-                      dot={{ fill: "hsl(var(--chart-1))", r: 5 }}
-                      activeDot={{ r: 7 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+                <>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={getChartData()} onClick={handleChartClick}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+                      <XAxis
+                        dataKey="date"
+                        stroke="hsl(var(--muted-foreground))"
+                        fontSize={12}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        stroke="hsl(var(--muted-foreground))"
+                        fontSize={12}
+                        tickLine={false}
+                        domain={["dataMin - 2", "dataMax + 2"]}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "hsl(var(--card))",
+                          border: "1px solid hsl(var(--border))",
+                          borderRadius: "8px",
+                        }}
+                        content={({ active, payload }) => {
+                          if (active && payload && payload.length) {
+                            return (
+                              <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
+                                <p className="text-sm font-medium">{payload[0].payload.fullDate}</p>
+                                <p className="text-lg font-bold text-primary">{payload[0].value}kg</p>
+                                <p className="text-xs text-muted-foreground mt-1">Click to delete</p>
+                              </div>
+                            );
+                          }
+                          return null;
+                        }}
+                      />
+                      <ReferenceLine
+                        y={profile?.goal_weight_kg}
+                        stroke="hsl(var(--primary))"
+                        strokeDasharray="5 5"
+                        label={{ value: "Target", fill: "hsl(var(--primary))", fontSize: 12 }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="weight"
+                        stroke="hsl(var(--chart-1))"
+                        strokeWidth={3}
+                        dot={{ fill: "hsl(var(--chart-1))", r: 5, cursor: "pointer" }}
+                        activeDot={{ r: 8, cursor: "pointer" }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                  
+                  {/* Weight Logs List */}
+                  <div className="mt-6 space-y-2">
+                    <h4 className="text-sm font-semibold text-muted-foreground">Recent Entries</h4>
+                    <div className="max-h-48 overflow-y-auto space-y-2">
+                      {weightLogs.slice().reverse().slice(0, 10).map((log) => (
+                        <div
+                          key={log.id}
+                          className="flex items-center justify-between p-2 rounded-md bg-muted/30 hover:bg-muted/50 transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="text-sm">
+                              <p className="font-medium">{format(new Date(log.date), "MMM dd, yyyy")}</p>
+                              <p className="text-xs text-muted-foreground">{log.weight_kg}kg</p>
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => initiateDelete(log)}
+                            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
               ) : (
                 <div className="h-[300px] flex items-center justify-center text-muted-foreground">
                   <p>No weight data yet. Start logging to see your progress!</p>
@@ -601,6 +691,14 @@ export default function WeightTracker() {
             </CardContent>
           </Card>
         </div>
+
+        <DeleteConfirmDialog
+          open={deleteDialogOpen}
+          onOpenChange={setDeleteDialogOpen}
+          onConfirm={handleDeleteLog}
+          title="Delete Weight Log"
+          itemName={logToDelete ? `${logToDelete.weight_kg}kg on ${format(new Date(logToDelete.date), "MMM dd, yyyy")}` : undefined}
+        />
       </div>
     </div>
   );
