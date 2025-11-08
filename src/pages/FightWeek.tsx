@@ -534,6 +534,27 @@ export default function FightWeek() {
               </Alert>
             )}
 
+            {/* Carb Depletion Warning */}
+            <Alert className="border-orange-500/50 bg-orange-500/5">
+              <AlertTriangle className="h-4 w-4 text-orange-500" />
+              <AlertDescription className="text-sm space-y-2">
+                <p className="font-semibold text-orange-600 dark:text-orange-400">
+                  ⚠️ Individual Response Variability
+                </p>
+                <p className="text-muted-foreground">
+                  Carb depletion estimates (typically 2-2.5kg) can vary significantly based on your individual physiology, 
+                  glycogen storage capacity, training status, and previous diet. If your weight doesn't drop as expected 
+                  from carb depletion alone, <strong>be prepared to increase dehydration</strong> to compensate - but stay 
+                  within safe limits (max 3% bodyweight, or 5-6% if water loading).
+                </p>
+                <p className="text-muted-foreground">
+                  Monitor your daily weight closely and adjust your protocol early if you're falling behind schedule. 
+                  Don't wait until the last day to realize you need extra dehydration.
+                </p>
+              </AlertDescription>
+            </Alert>
+
+
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
