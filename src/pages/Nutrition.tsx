@@ -18,6 +18,7 @@ import { format, subDays, addDays } from "date-fns";
 import wizardNutrition from "@/assets/wizard-nutrition.png";
 import { Badge } from "@/components/ui/badge";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
+import { nutritionLogSchema } from "@/lib/validation";
 
 interface Ingredient {
   name: string;
@@ -324,10 +325,22 @@ export default function Nutrition() {
   };
 
   const handleAddManualMeal = async () => {
-    if (!manualMeal.meal_name || !manualMeal.calories) {
+    // Validate input
+    const validationResult = nutritionLogSchema.safeParse({
+      meal_name: manualMeal.meal_name,
+      calories: parseInt(manualMeal.calories),
+      protein_g: manualMeal.protein_g ? parseFloat(manualMeal.protein_g) : null,
+      carbs_g: manualMeal.carbs_g ? parseFloat(manualMeal.carbs_g) : null,
+      fats_g: manualMeal.fats_g ? parseFloat(manualMeal.fats_g) : null,
+      meal_type: manualMeal.meal_type,
+      portion_size: manualMeal.portion_size || null,
+      recipe_notes: manualMeal.recipe_notes || null,
+    });
+
+    if (!validationResult.success) {
       toast({
-        title: "Missing information",
-        description: "Please fill in at least meal name and calories",
+        title: "Validation Error",
+        description: validationResult.error.errors[0].message,
         variant: "destructive",
       });
       return;
