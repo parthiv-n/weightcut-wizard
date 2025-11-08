@@ -38,6 +38,66 @@ export type Database = {
         }
         Relationships: []
       }
+      fight_camps: {
+        Row: {
+          created_at: string | null
+          end_weight_kg: number | null
+          event_name: string | null
+          fight_date: string
+          id: string
+          is_completed: boolean | null
+          name: string
+          performance_feeling: string | null
+          profile_pic_url: string | null
+          rehydration_notes: string | null
+          starting_weight_kg: number | null
+          total_weight_cut: number | null
+          updated_at: string | null
+          user_id: string
+          weigh_in_timing: string | null
+          weight_via_carb_reduction: number | null
+          weight_via_dehydration: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          end_weight_kg?: number | null
+          event_name?: string | null
+          fight_date: string
+          id?: string
+          is_completed?: boolean | null
+          name: string
+          performance_feeling?: string | null
+          profile_pic_url?: string | null
+          rehydration_notes?: string | null
+          starting_weight_kg?: number | null
+          total_weight_cut?: number | null
+          updated_at?: string | null
+          user_id: string
+          weigh_in_timing?: string | null
+          weight_via_carb_reduction?: number | null
+          weight_via_dehydration?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          end_weight_kg?: number | null
+          event_name?: string | null
+          fight_date?: string
+          id?: string
+          is_completed?: boolean | null
+          name?: string
+          performance_feeling?: string | null
+          profile_pic_url?: string | null
+          rehydration_notes?: string | null
+          starting_weight_kg?: number | null
+          total_weight_cut?: number | null
+          updated_at?: string | null
+          user_id?: string
+          weigh_in_timing?: string | null
+          weight_via_carb_reduction?: number | null
+          weight_via_dehydration?: number | null
+        }
+        Relationships: []
+      }
       fight_week_logs: {
         Row: {
           carbs_g: number | null
@@ -83,6 +143,7 @@ export type Database = {
       fight_week_plans: {
         Row: {
           created_at: string | null
+          fight_camp_id: string | null
           fight_date: string
           id: string
           starting_weight_kg: number
@@ -92,6 +153,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          fight_camp_id?: string | null
           fight_date: string
           id?: string
           starting_weight_kg: number
@@ -101,6 +163,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          fight_camp_id?: string | null
           fight_date?: string
           id?: string
           starting_weight_kg?: number
@@ -108,7 +171,15 @@ export type Database = {
           updated_at?: string | null
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fight_week_plans_fight_camp_id_fkey"
+            columns: ["fight_camp_id"]
+            isOneToOne: false
+            referencedRelation: "fight_camps"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       hydration_logs: {
         Row: {

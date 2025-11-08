@@ -1,4 +1,4 @@
-import { Home, Utensils, Weight, Droplets, Calendar, Sparkles } from "lucide-react";
+import { Home, Utensils, Weight, Droplets, Calendar, Sparkles, Trophy } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import {
   Sidebar,
@@ -19,6 +19,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 
 const menuItems = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
+  { title: "Fight Camps", url: "/fight-camps", icon: Trophy },
   { title: "Nutrition", url: "/nutrition", icon: Utensils },
   { title: "Weight Tracker", url: "/weight", icon: Weight },
   { title: "Rehydration", url: "/hydration", icon: Droplets },
