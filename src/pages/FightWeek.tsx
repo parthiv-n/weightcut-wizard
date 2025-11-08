@@ -11,6 +11,7 @@ import { format, differenceInDays, addDays } from "date-fns";
 import { Calendar, Droplets, TrendingDown, AlertTriangle, CheckCircle, Activity, Sparkles, Trash2 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Skeleton } from "@/components/ui/skeleton";
 import wizardLogo from "@/assets/wizard-logo.png";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 
@@ -63,10 +64,11 @@ export default function FightWeek() {
     notes: ""
   });
   const [loading, setLoading] = useState(false);
+  const [analyzingWeight, setAnalyzingWeight] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [logToDelete, setLogToDelete] = useState<DailyLog | null>(null);
-  const { toast} = useToast();
+  const { toast } = useToast();
 
   useEffect(() => {
     fetchProfile();
@@ -193,12 +195,12 @@ export default function FightWeek() {
   const getAIAnalysis = async () => {
     if (!plan) return;
 
-    setLoading(true);
+    setAnalyzingWeight(true);
     
     // Fetch fresh logs from database to ensure we have the latest weight
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      setLoading(false);
+      setAnalyzingWeight(false);
       return;
     }
 
@@ -209,7 +211,7 @@ export default function FightWeek() {
       .order("log_date", { ascending: true });
 
     if (!freshLogs || freshLogs.length === 0) {
-      setLoading(false);
+      setAnalyzingWeight(false);
       return;
     }
 
@@ -219,6 +221,7 @@ export default function FightWeek() {
     const currentWeight = latestLog?.weight_kg || plan.starting_weight_kg;
 
     console.log("AI Analysis - Using current weight:", currentWeight, "from date:", latestLog?.log_date);
+    console.log("Water loading status:", isWaterloading);
 
     const { data, error } = await supabase.functions.invoke("fight-week-analysis", {
       body: {
@@ -238,7 +241,7 @@ export default function FightWeek() {
       console.log("AI Analysis received:", data.analysis);
       setAiAnalysis(data.analysis);
     }
-    setLoading(false);
+    setAnalyzingWeight(false);
   };
 
   const handleDeleteLog = async () => {
@@ -437,9 +440,43 @@ export default function FightWeek() {
         </div>
       </div>
 
+      {/* AI Analysis Loading State */}
+      {analyzingWeight && (
+        <Card className="border-2 border-primary/30 animate-pulse">
+          <CardHeader>
+            <div className="flex items-start gap-4">
+              <Skeleton className="w-16 h-16 rounded-full" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-6 w-48" />
+                <Skeleton className="h-8 w-64" />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-3">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-full" />
+              </div>
+              <div className="space-y-3">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-full" />
+              </div>
+            </div>
+            <Skeleton className="h-24 w-full rounded-lg" />
+            <Skeleton className="h-20 w-full rounded-lg" />
+            <div className="text-center py-4">
+              <Sparkles className="h-8 w-8 mx-auto text-primary animate-spin" />
+              <p className="text-sm text-muted-foreground mt-2">Analyzing your weight cut strategy...</p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* AI-Powered Adaptive Analysis */}
-      {aiAnalysis && (
-        <Card className={`border-2 ${
+      {!analyzingWeight && aiAnalysis && (
+        <Card className={`border-2 animate-fade-in ${
           aiAnalysis.riskLevel === 'green' ? 'border-green-500/50 bg-green-500/5' :
           aiAnalysis.riskLevel === 'yellow' ? 'border-yellow-500/50 bg-yellow-500/5' :
           'border-red-500/50 bg-red-500/5'
@@ -469,6 +506,34 @@ export default function FightWeek() {
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Water Loading Section */}
+            {isWaterloading && (
+              <Alert className="border-blue-500/50 bg-blue-500/5 animate-fade-in">
+                <Droplets className="h-4 w-4 text-blue-500" />
+                <AlertDescription className="text-sm">
+                  <div className="space-y-2">
+                    <p className="font-semibold text-blue-600 dark:text-blue-400">
+                      Water Loading Protocol Active
+                    </p>
+                    <p className="text-muted-foreground">
+                      Water loading increases your safe dehydration capacity by 2-3kg through enhanced natural diuresis. 
+                      This allows for a larger total weight cut while maintaining safety margins.
+                    </p>
+                    <div className="grid grid-cols-2 gap-2 mt-2 text-xs">
+                      <div className="bg-background/50 p-2 rounded">
+                        <p className="font-semibold">Days 7-3 before weigh-in:</p>
+                        <p className="text-muted-foreground">Drink 8-10L water daily</p>
+                      </div>
+                      <div className="bg-background/50 p-2 rounded">
+                        <p className="font-semibold">Days 2-1 before weigh-in:</p>
+                        <p className="text-muted-foreground">Reduce to normal intake</p>
+                      </div>
+                    </div>
+                  </div>
+                </AlertDescription>
+              </Alert>
+            )}
+
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
@@ -483,6 +548,15 @@ export default function FightWeek() {
                   <span className="text-muted-foreground">Via Dehydration:</span>
                   <span className="font-semibold">~{aiAnalysis.dehydrationRequired.toFixed(1)} kg</span>
                 </div>
+                {isWaterloading && (
+                  <div className="flex justify-between text-sm pt-2 border-t">
+                    <span className="text-muted-foreground flex items-center gap-1">
+                      <Droplets className="h-3 w-3 text-blue-500" />
+                      Water Load Bonus:
+                    </span>
+                    <span className="font-semibold text-blue-600 dark:text-blue-400">+2-3 kg capacity</span>
+                  </div>
+                )}
               </div>
               
               <div className="space-y-2">
@@ -494,12 +568,12 @@ export default function FightWeek() {
                     {aiAnalysis.progressStatus}
                   </span>
                 </div>
-                {isWaterloading && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <Droplets className="h-4 w-4 text-blue-500" />
-                    <span className="text-blue-600 dark:text-blue-400 font-semibold">Water Loading Active</span>
-                  </div>
-                )}
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Protocol:</span>
+                  <span className={`font-semibold ${isWaterloading ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground'}`}>
+                    {isWaterloading ? 'Water Loading + Dehydration' : 'Standard Dehydration'}
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -539,27 +613,27 @@ export default function FightWeek() {
         </Card>
       )}
 
-      {!aiAnalysis && logs.length > 0 && (
+      {!analyzingWeight && !aiAnalysis && logs.length > 0 && (
         <Card>
           <CardContent className="pt-6">
-            <Button onClick={getAIAnalysis} disabled={loading} className="w-full">
+            <Button onClick={getAIAnalysis} disabled={analyzingWeight} className="w-full">
               <Sparkles className="h-4 w-4 mr-2" />
-              {loading ? "Analyzing..." : "Get AI Analysis"}
+              {analyzingWeight ? "Analyzing..." : "Get AI Analysis"}
             </Button>
           </CardContent>
         </Card>
       )}
 
-      {aiAnalysis && logs.length > 0 && (
-        <Card className="border-primary/30">
+      {!analyzingWeight && aiAnalysis && logs.length > 0 && (
+        <Card className="border-primary/30 animate-fade-in">
           <CardContent className="pt-6">
             <div className="flex items-center justify-between gap-4">
               <p className="text-sm text-muted-foreground">
-                Get fresh analysis with your latest weight data
+                Get fresh analysis with your latest weight data and water loading status
               </p>
-              <Button onClick={getAIAnalysis} disabled={loading} variant="outline" size="sm">
+              <Button onClick={getAIAnalysis} disabled={analyzingWeight} variant="outline" size="sm">
                 <Sparkles className="h-4 w-4 mr-2" />
-                {loading ? "Re-analyzing..." : "Re-analyze Weight Cut"}
+                {analyzingWeight ? "Re-analyzing..." : "Re-analyze Weight Cut"}
               </Button>
             </div>
           </CardContent>
