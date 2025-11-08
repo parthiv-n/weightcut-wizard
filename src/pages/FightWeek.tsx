@@ -91,7 +91,7 @@ export default function FightWeek() {
       setNewPlan(prev => ({
         ...prev,
         starting_weight_kg: prev.starting_weight_kg || data.current_weight_kg?.toString() || "",
-        target_weight_kg: data.fight_week_target_kg?.toString() || data.goal_weight_kg?.toString() || ""
+        target_weight_kg: data.goal_weight_kg?.toString() || ""
       }));
     }
   };
@@ -401,7 +401,7 @@ export default function FightWeek() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="target_weight">Fight Week Target Weight (kg)</Label>
+              <Label htmlFor="target_weight">Fight Night Weigh-in Weight (kg)</Label>
               <Input
                 id="target_weight"
                 type="number"
@@ -411,7 +411,7 @@ export default function FightWeek() {
                 className="bg-muted"
               />
               <p className="text-xs text-muted-foreground">
-                Using your fight week target from Goals (before dehydration cut)
+                Using your fight night target from Goals (competition weight)
               </p>
             </div>
             <div className="flex items-center space-x-2">
