@@ -145,7 +145,19 @@ Provide comprehensive analysis with:
     }
 
     // Parse the JSON analysis
-    const analysis = JSON.parse(analysisText);
+    let analysis;
+    try {
+      analysis = JSON.parse(analysisText);
+    } catch (parseError) {
+      console.error("Failed to parse AI response as JSON:", analysisText);
+      return new Response(
+        JSON.stringify({ 
+          error: "AI returned invalid response format. Please try again.",
+          details: analysisText.substring(0, 200) 
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     return new Response(JSON.stringify({ analysis }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
