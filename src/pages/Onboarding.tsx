@@ -8,6 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Sparkles, AlertTriangle, CheckCircle } from "lucide-react";
 
 const ACTIVITY_MULTIPLIERS = {
   sedentary: 1.2,
@@ -34,6 +36,9 @@ export default function Onboarding() {
     activity_level: "",
     training_frequency: "",
   });
+
+  const [useAutoTarget, setUseAutoTarget] = useState(true);
+  const [targetSafetyLevel, setTargetSafetyLevel] = useState<"safe" | "moderate" | "risky">("safe");
 
   useEffect(() => {
     // Check if user already has a profile
@@ -108,6 +113,58 @@ export default function Onboarding() {
   };
 
   const progress = (step / 4) * 100;
+
+  // Calculate AI-recommended fight week target
+  const calculateRecommendedTarget = (fightNightWeight: number) => {
+    // Safe dehydration is 5-7% of body weight with water loading
+    // Conservative recommendation: 5.5% of fight night weight
+    const safeDehydrationPercentage = 0.055;
+    const recommendedTarget = fightNightWeight * (1 + safeDehydrationPercentage);
+    return Math.round(recommendedTarget * 10) / 10; // Round to 1 decimal
+  };
+
+  // Assess safety level of manual target
+  const assessTargetSafety = (fightNightWeight: number, fightWeekTarget: number) => {
+    const cutAmount = fightWeekTarget - fightNightWeight;
+    const cutPercentage = (cutAmount / fightNightWeight) * 100;
+
+    if (cutPercentage <= 5) {
+      return { level: "safe" as const, message: "Safe range (≤5% dehydration)", color: "text-green-600 dark:text-green-400" };
+    } else if (cutPercentage <= 7) {
+      return { level: "moderate" as const, message: "Moderate risk (5-7% dehydration)", color: "text-yellow-600 dark:text-yellow-400" };
+    } else {
+      return { level: "risky" as const, message: "High risk (>7% dehydration)", color: "text-red-600 dark:text-red-400" };
+    }
+  };
+
+  // Update fight week target when goal weight changes or auto mode is enabled
+  useEffect(() => {
+    if (useAutoTarget && formData.goal_weight_kg) {
+      const recommended = calculateRecommendedTarget(parseFloat(formData.goal_weight_kg));
+      setFormData(prev => ({ ...prev, fight_week_target_kg: recommended.toString() }));
+      setTargetSafetyLevel("safe");
+    }
+  }, [formData.goal_weight_kg, useAutoTarget]);
+
+  // Assess safety when manual target changes
+  useEffect(() => {
+    if (!useAutoTarget && formData.goal_weight_kg && formData.fight_week_target_kg) {
+      const assessment = assessTargetSafety(
+        parseFloat(formData.goal_weight_kg),
+        parseFloat(formData.fight_week_target_kg)
+      );
+      setTargetSafetyLevel(assessment.level);
+    }
+  }, [formData.fight_week_target_kg, formData.goal_weight_kg, useAutoTarget]);
+
+  const getSafetyFeedback = () => {
+    if (!formData.goal_weight_kg || !formData.fight_week_target_kg) return null;
+    
+    return assessTargetSafety(
+      parseFloat(formData.goal_weight_kg),
+      parseFloat(formData.fight_week_target_kg)
+    );
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-background to-card p-4">
@@ -193,24 +250,80 @@ export default function Onboarding() {
                     required
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="fight_week_target">
-                    Fight Week Target (kg)
-                    <span className="text-xs text-muted-foreground ml-2">Weight before dehydration cut</span>
-                  </Label>
+                
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="fight_week_target">
+                      Fight Week Target (kg)
+                      <span className="text-xs text-muted-foreground ml-2">Weight before dehydration</span>
+                    </Label>
+                    <Button
+                      type="button"
+                      variant={useAutoTarget ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setUseAutoTarget(!useAutoTarget)}
+                      className="gap-2"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      {useAutoTarget ? "AI Auto" : "Manual"}
+                    </Button>
+                  </div>
+                  
                   <Input
                     id="fight_week_target"
                     type="number"
                     step="0.1"
                     placeholder="e.g., 77"
                     value={formData.fight_week_target_kg}
-                    onChange={(e) => setFormData({ ...formData, fight_week_target_kg: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, fight_week_target_kg: e.target.value });
+                      setUseAutoTarget(false);
+                    }}
+                    disabled={useAutoTarget}
                     required
                   />
+                  
+                  {useAutoTarget ? (
+                    <Alert className="border-primary/50 bg-primary/5">
+                      <Sparkles className="h-4 w-4 text-primary" />
+                      <AlertDescription className="text-sm">
+                        AI calculated safe target based on 5.5% dehydration capacity with water loading protocol
+                      </AlertDescription>
+                    </Alert>
+                  ) : (
+                    getSafetyFeedback() && (
+                      <Alert className={`${
+                        targetSafetyLevel === "safe" ? "border-green-500/50 bg-green-500/5" :
+                        targetSafetyLevel === "moderate" ? "border-yellow-500/50 bg-yellow-500/5" :
+                        "border-red-500/50 bg-red-500/5"
+                      }`}>
+                        {targetSafetyLevel === "safe" ? (
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <AlertTriangle className={`h-4 w-4 ${
+                            targetSafetyLevel === "moderate" ? "text-yellow-500" : "text-red-500"
+                          }`} />
+                        )}
+                        <AlertDescription className={`text-sm ${getSafetyFeedback()?.color}`}>
+                          {getSafetyFeedback()?.message}
+                          {formData.goal_weight_kg && formData.fight_week_target_kg && (
+                            <span className="block mt-1">
+                              Dehydration cut: {(parseFloat(formData.fight_week_target_kg) - parseFloat(formData.goal_weight_kg)).toFixed(1)}kg 
+                              ({((parseFloat(formData.fight_week_target_kg) - parseFloat(formData.goal_weight_kg)) / parseFloat(formData.goal_weight_kg) * 100).toFixed(1)}% of body weight)
+                            </span>
+                          )}
+                        </AlertDescription>
+                      </Alert>
+                    )
+                  )}
+                  
                   <p className="text-xs text-muted-foreground">
-                    Usually 5-7kg above fight night weight (diet-down goal)
+                    {useAutoTarget 
+                      ? "AI will calculate the optimal target based on safe dehydration limits"
+                      : "Manual mode: Set your own target (typically 5-7kg above fight night weight)"}
                   </p>
                 </div>
+                
                 <div className="space-y-2">
                   <Label htmlFor="target_date">Target Date</Label>
                   <Input
