@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import wizardLogo from "@/assets/wizard-logo.png";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
+import { weightLogSchema } from "@/lib/validation";
 
 interface WeightLog {
   id: string;
@@ -103,6 +104,22 @@ export default function WeightTracker() {
 
   const handleAddWeight = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate input
+    const validationResult = weightLogSchema.safeParse({
+      weight_kg: parseFloat(newWeight),
+      date: newDate,
+    });
+
+    if (!validationResult.success) {
+      toast({
+        title: "Validation Error",
+        description: validationResult.error.errors[0].message,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
 
     const { data: { user } } = await supabase.auth.getUser();

@@ -12,17 +12,47 @@ serve(async (req) => {
   }
 
   try {
-    const { prompt, userData, action } = await req.json();
+    // Verify authentication
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), 
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+    if (userError || !user) {
+      return new Response(JSON.stringify({ error: 'Invalid token' }), 
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // Fetch user data from database instead of trusting client
+    const { data: profile } = await supabaseClient
+      .from('profiles')
+      .select('current_weight_kg, goal_weight_kg, tdee, target_date')
+      .eq('id', user.id)
+      .single();
+
+    const userData = profile ? {
+      currentWeight: profile.current_weight_kg,
+      goalWeight: profile.goal_weight_kg,
+      tdee: profile.tdee,
+      daysToWeighIn: Math.ceil(
+        (new Date(profile.target_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
+      )
+    } : null;
+
+    const { prompt, action } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
-
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_ANON_KEY") ?? ""
-    );
 
     // Calculate safe calorie target
     const currentWeight = userData?.currentWeight || 70;
@@ -61,8 +91,6 @@ Current weight: ${currentWeight}kg
 Goal weight: ${goalWeight}kg
 TDEE: ${tdee} cal/day
 Days to goal: ${daysToGoal}
-
-${userData?.dietaryPreferences ? `Dietary preferences: ${userData.dietaryPreferences}` : ""}
 
 RESPONSE FORMAT (must be valid JSON):
 {

@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Sparkles, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
+import { profileSchema } from "@/lib/validation";
 
 const ACTIVITY_MULTIPLIERS = {
   sedentary: 1.2,
@@ -149,6 +150,25 @@ export default function Goals() {
   };
 
   const handleSubmit = async () => {
+    // Validate input
+    const validationResult = profileSchema.safeParse({
+      age: parseInt(formData.age),
+      height_cm: parseFloat(formData.height_cm),
+      current_weight_kg: parseFloat(formData.current_weight_kg),
+      goal_weight_kg: parseFloat(formData.goal_weight_kg),
+      fight_week_target_kg: parseFloat(formData.fight_week_target_kg),
+      training_frequency: parseInt(formData.training_frequency),
+    });
+
+    if (!validationResult.success) {
+      toast({
+        variant: "destructive",
+        title: "Validation Error",
+        description: validationResult.error.errors[0].message,
+      });
+      return;
+    }
+
     setSaving(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
