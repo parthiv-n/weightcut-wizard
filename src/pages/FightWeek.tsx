@@ -8,10 +8,11 @@ import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { format, differenceInDays, addDays } from "date-fns";
-import { Calendar, Droplets, TrendingDown, AlertTriangle, CheckCircle, Activity, Sparkles } from "lucide-react";
+import { Calendar, Droplets, TrendingDown, AlertTriangle, CheckCircle, Activity, Sparkles, Trash2 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import wizardLogo from "@/assets/wizard-logo.png";
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 
 interface FightWeekPlan {
   id: string;
@@ -63,7 +64,9 @@ export default function FightWeek() {
   });
   const [loading, setLoading] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
-  const { toast } = useToast();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [logToDelete, setLogToDelete] = useState<DailyLog | null>(null);
+  const { toast} = useToast();
 
   useEffect(() => {
     fetchProfile();
@@ -238,6 +241,42 @@ export default function FightWeek() {
     setLoading(false);
   };
 
+  const handleDeleteLog = async () => {
+    if (!logToDelete?.id) return;
+
+    setLoading(true);
+    const { error } = await supabase
+      .from("fight_week_logs")
+      .delete()
+      .eq("id", logToDelete.id);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to delete log entry",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Deleted",
+        description: "Log entry has been removed",
+      });
+      await fetchPlanAndLogs();
+      if (logs.length > 0) {
+        await getAIAnalysis();
+      }
+    }
+
+    setLoading(false);
+    setDeleteDialogOpen(false);
+    setLogToDelete(null);
+  };
+
+  const initiateDelete = (log: DailyLog) => {
+    setLogToDelete(log);
+    setDeleteDialogOpen(true);
+  };
+
   const getDaysUntilFight = () => {
     if (!plan) return 0;
     return differenceInDays(new Date(plan.fight_date), new Date());
@@ -302,8 +341,20 @@ export default function FightWeek() {
   const getChartData = () => {
     return logs.map(log => ({
       date: format(new Date(log.log_date), "MMM dd"),
-      weight: log.weight_kg
+      weight: log.weight_kg,
+      logId: log.id,
+      fullDate: log.log_date
     }));
+  };
+
+  const handleChartClick = (data: any) => {
+    if (data && data.activePayload && data.activePayload[0]) {
+      const payload = data.activePayload[0].payload;
+      const log = logs.find(l => l.id === payload.logId);
+      if (log) {
+        initiateDelete(log);
+      }
+    }
   };
 
   const daysUntilFight = getDaysUntilFight();
@@ -565,15 +616,60 @@ export default function FightWeek() {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={getChartData()}>
+              <LineChart data={getChartData()} onClick={handleChartClick}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
                 <YAxis domain={['dataMin - 1', 'dataMax + 1']} />
-                <Tooltip />
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      return (
+                        <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
+                          <p className="text-sm font-medium">{payload[0].payload.fullDate}</p>
+                          <p className="text-lg font-bold text-primary">{payload[0].value}kg</p>
+                          <p className="text-xs text-muted-foreground mt-1">Click to delete</p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
                 <ReferenceLine y={plan.target_weight_kg} stroke="hsl(var(--primary))" strokeDasharray="3 3" label="Target" />
-                <Line type="monotone" dataKey="weight" stroke="hsl(var(--primary))" strokeWidth={2} />
+                <Line type="monotone" dataKey="weight" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ cursor: "pointer", r: 5 }} activeDot={{ cursor: "pointer", r: 7 }} />
               </LineChart>
             </ResponsiveContainer>
+            
+            {/* Fight Week Logs List */}
+            <div className="mt-6 space-y-2">
+              <h4 className="text-sm font-semibold text-muted-foreground">Fight Week Entries</h4>
+              <div className="max-h-48 overflow-y-auto space-y-2">
+                {logs.slice().reverse().map((log) => (
+                  <div
+                    key={log.id}
+                    className="flex items-center justify-between p-3 rounded-md bg-muted/30 hover:bg-muted/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3 flex-1">
+                      <div className="text-sm">
+                        <p className="font-medium">{format(new Date(log.log_date), "MMM dd, yyyy")}</p>
+                        <div className="text-xs text-muted-foreground space-y-0.5">
+                          {log.weight_kg && <p>Weight: {log.weight_kg}kg</p>}
+                          {log.carbs_g && <p>Carbs: {log.carbs_g}g</p>}
+                          {log.fluid_intake_ml && <p>Fluids: {log.fluid_intake_ml}ml</p>}
+                        </div>
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => initiateDelete(log)}
+                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -712,6 +808,14 @@ export default function FightWeek() {
           <p>• Stop immediately if experiencing: dizziness, extreme fatigue, confusion</p>
         </CardContent>
       </Card>
+      
+      <DeleteConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={handleDeleteLog}
+        title="Delete Fight Week Log"
+        itemName={logToDelete ? `Log from ${format(new Date(logToDelete.log_date), "MMM dd, yyyy")}` : undefined}
+      />
     </div>
   );
 }

@@ -17,6 +17,7 @@ import { BarcodeScanner } from "@/components/nutrition/BarcodeScanner";
 import { format, subDays, addDays } from "date-fns";
 import wizardNutrition from "@/assets/wizard-nutrition.png";
 import { Badge } from "@/components/ui/badge";
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 
 interface Ingredient {
   name: string;
@@ -50,6 +51,8 @@ export default function Nutrition() {
   const [dailyCalorieTarget, setDailyCalorieTarget] = useState(2000);
   const [safetyStatus, setSafetyStatus] = useState<"green" | "yellow" | "red">("green");
   const [safetyMessage, setSafetyMessage] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [mealToDelete, setMealToDelete] = useState<Meal | null>(null);
   const { toast } = useToast();
 
   // Manual meal form
@@ -502,17 +505,26 @@ export default function Nutrition() {
     setIsManualDialogOpen(true);
   };
 
-  const handleDeleteMeal = async (mealId: string) => {
+  const initiateDeleteMeal = (meal: Meal) => {
+    setMealToDelete(meal);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeleteMeal = async () => {
+    if (!mealToDelete) return;
+
     try {
       const { error } = await supabase
         .from("nutrition_logs")
         .delete()
-        .eq("id", mealId);
+        .eq("id", mealToDelete.id);
 
       if (error) throw error;
 
       toast({ title: "Meal deleted" });
       loadMeals();
+      setDeleteDialogOpen(false);
+      setMealToDelete(null);
     } catch (error) {
       console.error("Error deleting meal:", error);
       toast({
@@ -888,7 +900,7 @@ export default function Nutrition() {
                 <MealCard
                   key={meal.id}
                   meal={meal}
-                  onDelete={() => handleDeleteMeal(meal.id)}
+                  onDelete={() => initiateDeleteMeal(meal)}
                 />
               ))}
             </div>
@@ -958,6 +970,14 @@ export default function Nutrition() {
           )}
         </TabsContent>
       </Tabs>
+      
+      <DeleteConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={handleDeleteMeal}
+        title="Delete Meal Entry"
+        itemName={mealToDelete ? `${mealToDelete.meal_name} (${mealToDelete.calories} cal)` : undefined}
+      />
     </div>
   );
 }
