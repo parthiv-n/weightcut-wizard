@@ -247,6 +247,7 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
       if (!user) return;
 
       // Delete all user data in order (respecting foreign keys)
+      // NOTE: Fight camps are preserved - only tracking data is reset
       await Promise.all([
         supabase.from("fight_week_logs").delete().eq("user_id", user.id),
         supabase.from("nutrition_logs").delete().eq("user_id", user.id),
@@ -255,16 +256,15 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
         supabase.from("chat_messages").delete().eq("user_id", user.id),
         supabase.from("user_dietary_preferences").delete().eq("user_id", user.id),
         supabase.from("meal_plans").delete().eq("user_id", user.id),
+        supabase.from("fight_week_plans").delete().eq("user_id", user.id),
       ]);
 
-      // Delete fight week plans (has foreign key to fight_camps)
-      await supabase.from("fight_week_plans").delete().eq("user_id", user.id);
-
-      // Delete fight camps
-      await supabase.from("fight_camps").delete().eq("user_id", user.id);
-
-      // Delete profile last
-      await supabase.from("profiles").delete().eq("id", user.id);
+      // Delete profile last (fight camps are preserved)
+      const { error: deleteError } = await supabase.from("profiles").delete().eq("id", user.id);
+      
+      if (deleteError) {
+        throw deleteError;
+      }
 
       toast({
         title: "Data Reset Complete",
@@ -298,16 +298,19 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
           </div>
           <AlertDialogDescription className="space-y-3 pt-2">
             <p>
-              This will permanently delete all your data including:
+              This will permanently delete your tracking data including:
             </p>
             <ul className="list-disc list-inside space-y-1 text-sm">
-              <li>Profile information</li>
+              <li>Profile information (age, height, targets)</li>
               <li>All weight logs</li>
               <li>All nutrition logs</li>
               <li>All hydration logs</li>
-              <li>All fight camps and fight week data</li>
+              <li>Fight week plans and logs</li>
               <li>All AI chat history</li>
             </ul>
+            <p className="text-sm font-medium text-primary">
+              ✓ Fight camps will be preserved
+            </p>
             <p className="font-semibold text-foreground">
               This action cannot be undone.
             </p>
