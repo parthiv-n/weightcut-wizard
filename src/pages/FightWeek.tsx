@@ -162,11 +162,14 @@ export default function FightWeek() {
 
     if (error) {
       toast({ title: "Error saving log", description: error.message, variant: "destructive" });
+      setLoading(false);
     } else {
       toast({ title: "Daily log saved!", description: "Your progress has been tracked." });
+      
+      // First refresh the logs display
       await fetchPlanAndLogs();
       
-      // Trigger AI analysis after saving weight
+      // Then trigger AI analysis with fresh data if weight was logged
       if (dailyLog.weight_kg && plan) {
         await getAIAnalysis();
       }
@@ -180,31 +183,56 @@ export default function FightWeek() {
         supplements: "",
         notes: ""
       });
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const getAIAnalysis = async () => {
-    if (!plan || logs.length === 0) return;
+    if (!plan) return;
 
     setLoading(true);
-    const latestLog = logs[logs.length - 1];
+    
+    // Fetch fresh logs from database to ensure we have the latest weight
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+
+    const { data: freshLogs } = await supabase
+      .from("fight_week_logs")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("log_date", { ascending: true });
+
+    if (!freshLogs || freshLogs.length === 0) {
+      setLoading(false);
+      return;
+    }
+
+    // Get the latest log entry (most recent date with weight)
+    const logsWithWeight = freshLogs.filter(log => log.weight_kg !== null);
+    const latestLog = logsWithWeight[logsWithWeight.length - 1];
     const currentWeight = latestLog?.weight_kg || plan.starting_weight_kg;
+
+    console.log("AI Analysis - Using current weight:", currentWeight, "from date:", latestLog?.log_date);
 
     const { data, error } = await supabase.functions.invoke("fight-week-analysis", {
       body: {
         currentWeight,
         targetWeight: plan.target_weight_kg,
         daysUntilFight: getDaysUntilFight(),
-        dailyLogs: logs,
+        dailyLogs: freshLogs,
         startingWeight: plan.starting_weight_kg,
         isWaterloading
       }
     });
 
     if (error) {
+      console.error("AI analysis error:", error);
       toast({ title: "AI analysis unavailable", description: error.message, variant: "destructive" });
     } else if (data?.analysis) {
+      console.log("AI Analysis received:", data.analysis);
       setAiAnalysis(data.analysis);
     }
     setLoading(false);
