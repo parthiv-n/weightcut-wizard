@@ -16,6 +16,8 @@ import Nutrition from "./pages/Nutrition";
 import WeightTracker from "./pages/WeightTracker";
 import Hydration from "./pages/Hydration";
 import FightWeek from "./pages/FightWeek";
+import FightCamps from "./pages/FightCamps";
+import FightCampDetail from "./pages/FightCampDetail";
 import Wizard from "./pages/Wizard";
 import NotFound from "./pages/NotFound";
 
@@ -78,6 +80,20 @@ const App = () => (
             <ProtectedRoute>
               <AppLayout>
                 <Hydration />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/fight-camps" element={
+            <ProtectedRoute>
+              <AppLayout>
+                <FightCamps />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/fight-camps/:id" element={
+            <ProtectedRoute>
+              <AppLayout>
+                <FightCampDetail />
               </AppLayout>
             </ProtectedRoute>
           } />
