@@ -7,10 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Calendar, Plus, Trophy, Trash2, Eye } from "lucide-react";
+import { Calendar, Plus, Trophy, Trash2, Eye, Scale, Droplets, TrendingDown, Activity } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
+import { Badge } from "@/components/ui/badge";
 
 interface FightCamp {
   id: string;
@@ -20,7 +21,11 @@ interface FightCamp {
   profile_pic_url: string | null;
   is_completed: boolean;
   starting_weight_kg: number | null;
+  end_weight_kg: number | null;
   total_weight_cut: number | null;
+  weight_via_dehydration: number | null;
+  weight_via_carb_reduction: number | null;
+  weigh_in_timing: string | null;
 }
 
 export default function FightCamps() {
@@ -237,17 +242,67 @@ export default function FightCamps() {
                 <div className="flex items-center gap-2 text-sm">
                   <Calendar className="w-4 h-4 text-muted-foreground" />
                   <span>{format(new Date(camp.fight_date), "MMM dd, yyyy")}</span>
+                  {camp.weigh_in_timing && (
+                    <Badge variant="outline" className="ml-auto text-xs">
+                      {camp.weigh_in_timing === 'day_before' ? 'Day Before' : 'Day Of'}
+                    </Badge>
+                  )}
                 </div>
-                {camp.is_completed && camp.starting_weight_kg && camp.total_weight_cut && (
-                  <div className="space-y-1 text-sm">
-                    <p className="text-muted-foreground">
-                      Starting: <span className="font-semibold text-foreground">{camp.starting_weight_kg}kg</span>
-                    </p>
-                    <p className="text-muted-foreground">
-                      Cut: <span className="font-semibold text-primary">{camp.total_weight_cut.toFixed(1)}kg</span>
-                    </p>
+
+                {camp.starting_weight_kg || camp.total_weight_cut ? (
+                  <div className="space-y-2 pt-2 border-t">
+                    <h4 className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                      <Scale className="w-3 h-3" />
+                      Weight Cut Summary
+                    </h4>
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      {camp.starting_weight_kg && (
+                        <div className="space-y-0.5">
+                          <p className="text-muted-foreground">Starting</p>
+                          <p className="font-semibold text-foreground">{camp.starting_weight_kg}kg</p>
+                        </div>
+                      )}
+                      {camp.end_weight_kg && (
+                        <div className="space-y-0.5">
+                          <p className="text-muted-foreground">Ending</p>
+                          <p className="font-semibold text-foreground">{camp.end_weight_kg}kg</p>
+                        </div>
+                      )}
+                      {camp.total_weight_cut && (
+                        <div className="space-y-0.5">
+                          <p className="text-muted-foreground flex items-center gap-1">
+                            <TrendingDown className="w-3 h-3 text-primary" />
+                            Total Cut
+                          </p>
+                          <p className="font-semibold text-primary">{camp.total_weight_cut.toFixed(1)}kg</p>
+                        </div>
+                      )}
+                      {camp.weight_via_dehydration && (
+                        <div className="space-y-0.5">
+                          <p className="text-muted-foreground flex items-center gap-1">
+                            <Droplets className="w-3 h-3 text-blue-500" />
+                            Dehydration
+                          </p>
+                          <p className="font-semibold text-blue-600 dark:text-blue-400">{camp.weight_via_dehydration.toFixed(1)}kg</p>
+                        </div>
+                      )}
+                      {camp.weight_via_carb_reduction && (
+                        <div className="space-y-0.5 col-span-2">
+                          <p className="text-muted-foreground flex items-center gap-1">
+                            <Activity className="w-3 h-3" />
+                            Carb Reduction
+                          </p>
+                          <p className="font-semibold">{camp.weight_via_carb_reduction.toFixed(1)}kg</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-xs text-muted-foreground italic py-2">
+                    No weight cut data recorded yet
                   </div>
                 )}
+
                 <Button
                   variant="outline"
                   className="w-full"
