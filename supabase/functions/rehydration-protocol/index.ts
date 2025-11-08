@@ -25,6 +25,8 @@ CRITICAL SAFETY PRINCIPLES:
 - Gradual, controlled rehydration is essential
 - Electrolyte balance is as important as fluid volume
 - Carbohydrate reintroduction must be gradual and strategic
+- Target 5-10g carbs per kg body weight post weigh-in
+- Avoid high fiber, high fat foods that slow digestion
 
 You provide evidence-based rehydration protocols based on:
 - Weight lost via dehydration
@@ -40,7 +42,6 @@ OUTPUT FORMAT - You must respond with valid JSON only:
       "fluidML": 500,
       "sodium": 460,
       "potassium": 120,
-      "carbs": 0,
       "notes": "Start slow - isotonic solution"
     }
   ],
@@ -49,14 +50,18 @@ OUTPUT FORMAT - You must respond with valid JSON only:
     "potassium": "120mg per 500ml",
     "magnesium": "24mg per 500ml"
   },
-  "carbReintroduction": [
-    {
-      "timing": "Hour 1-2",
-      "amount": "0g",
-      "foods": [],
-      "rationale": "Focus on rehydration first"
-    }
-  ],
+  "carbRefuelPlan": {
+    "targetCarbs": "calculate based on fighter weight (6-8g per kg)",
+    "meals": [
+      {
+        "timing": "Hour 1",
+        "carbsG": 0,
+        "mealIdeas": ["Focus on fluids only"],
+        "rationale": "Prioritize rehydration first"
+      }
+    ],
+    "totalCarbs": "sum of all meal carbs"
+  },
   "summary": "Brief overview of the protocol",
   "warnings": ["Important safety warnings"]
 }
@@ -65,9 +70,12 @@ Use these evidence-based guidelines:
 - Replace 150% of weight lost over available hours
 - Start with isotonic solutions (similar to plasma osmolality)
 - Sodium: 400-500mg per 500ml initially
-- Carbs: delay until Hour 2-3, then gradual introduction
+- Carbs: Target 6-8g per kg body weight total, distributed across meals
+- Start carbs Hour 2-3, gradually increase
+- Suggest specific low-fiber, easily digestible foods (white rice, white bread, bananas, honey, sports drinks, rice cakes, chicken breast)
 - Same-day weigh-in: aggressive but safe protocol (4-6 hours)
-- Day-before weigh-in: slower, more comfortable protocol (12-24 hours)`;
+- Day-before weigh-in: slower, more comfortable protocol (12-24 hours)
+- Calculate total carb intake and show progression toward goal`;
 
     const userPrompt = `Create a rehydration protocol for:
 - Weight lost via dehydration: ${weightLostKg}kg
@@ -75,7 +83,11 @@ Use these evidence-based guidelines:
 - Current weight: ${currentWeightKg}kg
 - Time until fight: ${fightTimeHours} hours
 
-Provide hour-by-hour rehydration protocol with specific fluid volumes, electrolyte content, and carbohydrate reintroduction strategy.`;
+Provide:
+1. Hour-by-hour rehydration protocol with specific fluid volumes and electrolyte content
+2. Detailed carb refuel plan targeting 6-8g per kg body weight (for ${currentWeightKg}kg = ${(currentWeightKg * 6).toFixed(0)}-${(currentWeightKg * 8).toFixed(0)}g total carbs)
+3. Specific meal suggestions with carb amounts for each time window
+4. Calculate and show total carb intake across all meals`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

@@ -19,11 +19,17 @@ interface HourlyStep {
   notes: string;
 }
 
-interface CarbStep {
+interface MealPlan {
   timing: string;
-  amount: string;
-  foods: string[];
+  carbsG: number;
+  mealIdeas: string[];
   rationale: string;
+}
+
+interface CarbRefuelPlan {
+  targetCarbs: string;
+  meals: MealPlan[];
+  totalCarbs: string;
 }
 
 interface RehydrationProtocol {
@@ -33,7 +39,7 @@ interface RehydrationProtocol {
     potassium: string;
     magnesium: string;
   };
-  carbReintroduction: CarbStep[];
+  carbRefuelPlan: CarbRefuelPlan;
   summary: string;
   warnings: string[];
 }
@@ -239,99 +245,102 @@ export default function Hydration() {
               </CardContent>
             </Card>
 
-            {/* Hourly Timeline */}
-            <Card className="border-border/50">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Clock className="h-5 w-5 text-primary" />
-                  Hour-by-Hour Rehydration Timeline
-                </CardTitle>
-                <CardDescription>Follow this protocol precisely for optimal recovery</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {protocol.hourlyProtocol.map((step, idx) => (
-                    <div key={idx} className="relative pl-8 pb-6 border-l-2 border-primary/30 last:border-transparent">
-                      {/* Timeline dot */}
-                      <div className="absolute left-0 top-0 -translate-x-[9px] w-4 h-4 rounded-full bg-primary border-4 border-background" />
-                      
-                      <div className="bg-card border border-border/50 rounded-lg p-4 hover:border-primary/50 transition-colors">
-                        <div className="flex items-center justify-between mb-3">
-                          <Badge variant="outline" className="text-sm">
-                            Hour {step.hour}
-                          </Badge>
-                          <span className="text-2xl font-bold text-primary">{step.fluidML}ml</span>
-                        </div>
+            {/* Two Column Layout for Rehydration and Carb Refuel */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Oral Rehydration Timeline */}
+              <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-primary/10">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Droplets className="h-5 w-5 text-primary" />
+                    Oral Rehydration Solution Timeline
+                  </CardTitle>
+                  <CardDescription>Hour-by-hour fluid and electrolyte protocol</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {protocol.hourlyProtocol.map((step, idx) => (
+                      <div key={idx} className="relative pl-8 pb-4 border-l-2 border-primary/30 last:border-transparent">
+                        {/* Timeline dot */}
+                        <div className="absolute left-0 top-0 -translate-x-[9px] w-4 h-4 rounded-full bg-primary border-4 border-background" />
                         
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-                          <div>
-                            <p className="text-xs text-muted-foreground">Sodium</p>
-                            <p className="font-semibold">{step.sodium}mg</p>
+                        <div className="bg-card border border-border/50 rounded-lg p-4 hover:border-primary/50 transition-colors">
+                          <div className="flex items-center justify-between mb-3">
+                            <Badge variant="outline" className="text-sm">
+                              Hour {step.hour}
+                            </Badge>
+                            <span className="text-2xl font-bold text-primary">{step.fluidML}ml</span>
                           </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground">Potassium</p>
-                            <p className="font-semibold">{step.potassium}mg</p>
+                          
+                          <div className="grid grid-cols-2 gap-3 mb-3">
+                            <div>
+                              <p className="text-xs text-muted-foreground">Sodium</p>
+                              <p className="font-semibold">{step.sodium}mg</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Potassium</p>
+                              <p className="font-semibold">{step.potassium}mg</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-xs text-muted-foreground">Carbs</p>
-                            <p className="font-semibold">{step.carbs}g</p>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            {step.carbs > 0 && (
-                              <Badge variant="secondary" className="text-xs">
-                                + Food
-                              </Badge>
-                            )}
-                          </div>
+                          
+                          <p className="text-sm text-muted-foreground border-t border-border/50 pt-3">
+                            {step.notes}
+                          </p>
                         </div>
-                        
-                        <p className="text-sm text-muted-foreground border-t border-border/50 pt-3">
-                          {step.notes}
-                        </p>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
 
-            {/* Carbohydrate Reintroduction */}
-            <Card className="border-border/50 bg-gradient-to-br from-success/5 to-success/10">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Heart className="h-5 w-5 text-success" />
-                  Carbohydrate Reintroduction Strategy
-                </CardTitle>
-                <CardDescription>Gradual fuel restoration for performance without GI distress</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {protocol.carbReintroduction.map((step, idx) => (
-                    <div key={idx} className="p-4 rounded-lg bg-card border border-border/50">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-semibold">{step.timing}</h4>
-                        <Badge variant="outline">{step.amount}</Badge>
-                      </div>
-                      
-                      {step.foods && step.foods.length > 0 && (
-                        <div className="mb-2">
-                          <p className="text-sm font-medium text-muted-foreground mb-1">Recommended Foods:</p>
-                          <div className="flex flex-wrap gap-2">
-                            {step.foods.map((food, foodIdx) => (
-                              <Badge key={foodIdx} variant="secondary" className="text-xs">
-                                {food}
-                              </Badge>
-                            ))}
+              {/* Carb Refuel Plan */}
+              <Card className="border-success/30 bg-gradient-to-br from-success/5 to-success/10">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Heart className="h-5 w-5 text-success" />
+                    Carbohydrate Refuel Strategy
+                  </CardTitle>
+                  <CardDescription>
+                    Target: {protocol.carbRefuelPlan.targetCarbs} | Total: {protocol.carbRefuelPlan.totalCarbs}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {protocol.carbRefuelPlan.meals.map((meal, idx) => (
+                      <div key={idx} className="relative pl-8 pb-4 border-l-2 border-success/30 last:border-transparent">
+                        {/* Timeline dot */}
+                        <div className="absolute left-0 top-0 -translate-x-[9px] w-4 h-4 rounded-full bg-success border-4 border-background" />
+                        
+                        <div className="bg-card border border-border/50 rounded-lg p-4 hover:border-success/50 transition-colors">
+                          <div className="flex items-center justify-between mb-3">
+                            <Badge variant="outline" className="text-sm border-success text-success">
+                              {meal.timing}
+                            </Badge>
+                            <span className="text-2xl font-bold text-success">{meal.carbsG}g</span>
                           </div>
+                          
+                          {meal.mealIdeas && meal.mealIdeas.length > 0 && (
+                            <div className="mb-3">
+                              <p className="text-xs font-medium text-muted-foreground mb-2">Meal Ideas:</p>
+                              <div className="flex flex-wrap gap-2">
+                                {meal.mealIdeas.map((food, foodIdx) => (
+                                  <Badge key={foodIdx} variant="secondary" className="text-xs">
+                                    {food}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                          
+                          <p className="text-sm text-muted-foreground border-t border-border/50 pt-3 italic">
+                            {meal.rationale}
+                          </p>
                         </div>
-                      )}
-                      
-                      <p className="text-sm text-muted-foreground italic">{step.rationale}</p>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
 
             {/* Important Notes */}
             <Card className="border-info bg-info/5">
