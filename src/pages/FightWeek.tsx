@@ -543,8 +543,25 @@ export default function FightWeek() {
         <Card>
           <CardContent className="pt-6">
             <Button onClick={getAIAnalysis} disabled={loading} className="w-full">
+              <Sparkles className="h-4 w-4 mr-2" />
               {loading ? "Analyzing..." : "Get AI Analysis"}
             </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {aiAnalysis && logs.length > 0 && (
+        <Card className="border-primary/30">
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between gap-4">
+              <p className="text-sm text-muted-foreground">
+                Get fresh analysis with your latest weight data
+              </p>
+              <Button onClick={getAIAnalysis} disabled={loading} variant="outline" size="sm">
+                <Sparkles className="h-4 w-4 mr-2" />
+                {loading ? "Re-analyzing..." : "Re-analyze Weight Cut"}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
