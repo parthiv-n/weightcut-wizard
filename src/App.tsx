@@ -12,6 +12,7 @@ import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
+import Goals from "./pages/Goals";
 import Nutrition from "./pages/Nutrition";
 import WeightTracker from "./pages/WeightTracker";
 import Hydration from "./pages/Hydration";
@@ -59,6 +60,13 @@ const App = () => (
             <ProtectedRoute>
               <AppLayout>
                 <Dashboard />
+              </AppLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/goals" element={
+            <ProtectedRoute>
+              <AppLayout>
+                <Goals />
               </AppLayout>
             </ProtectedRoute>
           } />

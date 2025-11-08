@@ -1,4 +1,4 @@
-import { Home, Utensils, Weight, Droplets, Calendar, Sparkles, Trophy, RotateCcw } from "lucide-react";
+import { Home, Utensils, Weight, Droplets, Calendar, Sparkles, Trophy, RotateCcw, Target } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useState } from "react";
 import {
@@ -22,6 +22,7 @@ import { DataResetDialog } from "@/components/DataResetDialog";
 
 const menuItems = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
+  { title: "Goals", url: "/goals", icon: Target },
   { title: "Fight Camps", url: "/fight-camps", icon: Trophy },
   { title: "Nutrition", url: "/nutrition", icon: Utensils },
   { title: "Weight Tracker", url: "/weight", icon: Weight },
