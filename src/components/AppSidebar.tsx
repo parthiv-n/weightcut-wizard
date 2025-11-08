@@ -21,7 +21,7 @@ const menuItems = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
   { title: "Nutrition", url: "/nutrition", icon: Utensils },
   { title: "Weight Tracker", url: "/weight", icon: Weight },
-  { title: "Hydration", url: "/hydration", icon: Droplets },
+  { title: "Rehydration", url: "/hydration", icon: Droplets },
   { title: "Fight Week", url: "/fight-week", icon: Calendar },
   { title: "AI Wizard", url: "/wizard", icon: Sparkles },
 ];
