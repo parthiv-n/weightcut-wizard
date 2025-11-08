@@ -29,6 +29,7 @@ export default function Onboarding() {
     height_cm: "",
     current_weight_kg: "",
     goal_weight_kg: "",
+    fight_week_target_kg: "",
     target_date: "",
     activity_level: "",
     training_frequency: "",
@@ -80,6 +81,7 @@ export default function Onboarding() {
         height_cm: parseFloat(formData.height_cm),
         current_weight_kg: parseFloat(formData.current_weight_kg),
         goal_weight_kg: parseFloat(formData.goal_weight_kg),
+        fight_week_target_kg: parseFloat(formData.fight_week_target_kg),
         target_date: formData.target_date,
         activity_level: formData.activity_level,
         training_frequency: parseInt(formData.training_frequency),
@@ -172,17 +174,42 @@ export default function Onboarding() {
           {step === 2 && (
             <div className="space-y-4">
               <h3 className="font-semibold text-lg">Weight Goals</h3>
-              <div className="grid gap-4 md:grid-cols-2">
+              <p className="text-sm text-muted-foreground">
+                Set your fight night weight (weigh-in) and fight week target (before dehydration cut)
+              </p>
+              <div className="grid gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="goal_weight">Goal Weight (kg)</Label>
+                  <Label htmlFor="goal_weight">
+                    Fight Night Weight (kg) 
+                    <span className="text-xs text-muted-foreground ml-2">Your competition weight class</span>
+                  </Label>
                   <Input
                     id="goal_weight"
                     type="number"
                     step="0.1"
+                    placeholder="e.g., 70"
                     value={formData.goal_weight_kg}
                     onChange={(e) => setFormData({ ...formData, goal_weight_kg: e.target.value })}
                     required
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="fight_week_target">
+                    Fight Week Target (kg)
+                    <span className="text-xs text-muted-foreground ml-2">Weight before dehydration cut</span>
+                  </Label>
+                  <Input
+                    id="fight_week_target"
+                    type="number"
+                    step="0.1"
+                    placeholder="e.g., 77"
+                    value={formData.fight_week_target_kg}
+                    onChange={(e) => setFormData({ ...formData, fight_week_target_kg: e.target.value })}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Usually 5-7kg above fight night weight (diet-down goal)
+                  </p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="target_date">Target Date</Label>
@@ -245,7 +272,8 @@ export default function Onboarding() {
                 <p><strong>Sex:</strong> {formData.sex}</p>
                 <p><strong>Height:</strong> {formData.height_cm} cm</p>
                 <p><strong>Current Weight:</strong> {formData.current_weight_kg} kg</p>
-                <p><strong>Goal Weight:</strong> {formData.goal_weight_kg} kg</p>
+                <p><strong>Fight Night Weight:</strong> {formData.goal_weight_kg} kg</p>
+                <p><strong>Fight Week Target:</strong> {formData.fight_week_target_kg} kg</p>
                 <p><strong>Target Date:</strong> {formData.target_date}</p>
                 <p><strong>Activity Level:</strong> {formData.activity_level?.replace(/_/g, " ")}</p>
                 <p><strong>Training Frequency:</strong> {formData.training_frequency} sessions/week</p>
