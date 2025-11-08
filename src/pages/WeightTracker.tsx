@@ -8,7 +8,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { format } from "date-fns";
-import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle } from "lucide-react";
+import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Sparkles, Activity, Apple } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import wizardLogo from "@/assets/wizard-logo.png";
 
 interface WeightLog {
   id: string;
@@ -20,6 +22,31 @@ interface Profile {
   current_weight_kg: number;
   goal_weight_kg: number;
   target_date: string;
+  activity_level: string;
+  age: number;
+  sex: string;
+  height_cm: number;
+  tdee: number;
+}
+
+interface AIAnalysis {
+  riskLevel: "green" | "yellow" | "red";
+  requiredWeeklyLoss: number;
+  recommendedCalories: number;
+  calorieDeficit: number;
+  proteinGrams: number;
+  carbsGrams: number;
+  fatsGrams: number;
+  riskExplanation: string;
+  strategicGuidance: string;
+  nutritionTips: string[];
+  trainingConsiderations: string;
+  timeline: string;
+  weeklyPlan: {
+    week1: string;
+    week2: string;
+    ongoing: string;
+  };
 }
 
 export default function WeightTracker() {
@@ -28,11 +55,18 @@ export default function WeightTracker() {
   const [newWeight, setNewWeight] = useState("");
   const [newDate, setNewDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [loading, setLoading] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (profile) {
+      getAIAnalysis();
+    }
+  }, [profile]);
 
   const fetchData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -90,6 +124,48 @@ export default function WeightTracker() {
     }
 
     setLoading(false);
+  };
+
+  const getAIAnalysis = async () => {
+    if (!profile) return;
+
+    setLoading(true);
+    const currentWeight = getCurrentWeight();
+
+    const { data, error } = await supabase.functions.invoke("weight-tracker-analysis", {
+      body: {
+        currentWeight,
+        goalWeight: profile.goal_weight_kg,
+        targetDate: profile.target_date,
+        activityLevel: profile.activity_level,
+        age: profile.age,
+        sex: profile.sex,
+        heightCm: profile.height_cm,
+        tdee: profile.tdee
+      }
+    });
+
+    if (error) {
+      toast({ 
+        title: "AI analysis unavailable", 
+        description: error.message, 
+        variant: "destructive" 
+      });
+    } else if (data?.analysis) {
+      setAiAnalysis(data.analysis);
+    }
+    setLoading(false);
+  };
+
+  const getWeeklyLossRequired = () => {
+    if (!profile) return 0;
+    const current = getCurrentWeight();
+    const targetDate = new Date(profile.target_date);
+    const today = new Date();
+    const daysRemaining = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const weeksRemaining = Math.max(1, daysRemaining / 7);
+    const weightRemaining = current - profile.goal_weight_kg;
+    return weightRemaining / weeksRemaining;
   };
 
   const getChartData = () => {
@@ -258,33 +334,182 @@ export default function WeightTracker() {
           </div>
         )}
 
-        {/* Progress Bar */}
-        {profile && (
-          <Card className="border-border/50">
-            <CardContent className="pt-6">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">Overall Progress</span>
-                  <span className="text-sm font-bold text-primary">{getWeightProgress().toFixed(0)}%</span>
+        {/* AI-Powered Weight Loss Analysis */}
+        {aiAnalysis && (
+          <Card className={`border-2 ${
+            aiAnalysis.riskLevel === 'green' ? 'border-green-500/50 bg-green-500/5' :
+            aiAnalysis.riskLevel === 'yellow' ? 'border-yellow-500/50 bg-yellow-500/5' :
+            'border-red-500/50 bg-red-500/5'
+          }`}>
+            <CardHeader>
+              <div className="flex items-start gap-4">
+                <img src={wizardLogo} alt="Wizard" className="w-16 h-16" />
+                <div className="flex-1">
+                  <CardTitle className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5" />
+                    AI Weight Loss Strategy
+                  </CardTitle>
+                  <div className="flex items-center gap-2 mt-2">
+                    <span className={`text-2xl font-bold uppercase ${
+                      aiAnalysis.riskLevel === 'green' ? 'text-green-600 dark:text-green-400' :
+                      aiAnalysis.riskLevel === 'yellow' ? 'text-yellow-600 dark:text-yellow-400' :
+                      'text-red-600 dark:text-red-400'
+                    }`}>
+                      {aiAnalysis.riskLevel === 'green' ? 'SAFE PACE' : 
+                       aiAnalysis.riskLevel === 'yellow' ? 'MODERATE PACE' : 'AGGRESSIVE PACE'}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      ({aiAnalysis.requiredWeeklyLoss.toFixed(2)} kg/week required)
+                    </span>
+                  </div>
                 </div>
-                <Progress value={getWeightProgress()} className="h-3" />
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Calorie & Macro Recommendations */}
+              <div className="grid gap-4 md:grid-cols-2">
+                <Card className="bg-background/50">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Apple className="h-4 w-4" />
+                      Daily Calorie Target
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-3xl font-bold text-primary">
+                        {aiAnalysis.recommendedCalories}
+                      </span>
+                      <span className="text-sm text-muted-foreground">kcal/day</span>
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      Deficit: {aiAnalysis.calorieDeficit} kcal/day
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-background/50">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Activity className="h-4 w-4" />
+                      Macronutrient Breakdown
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-1 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Protein:</span>
+                      <span className="font-semibold">{aiAnalysis.proteinGrams}g</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Carbs:</span>
+                      <span className="font-semibold">{aiAnalysis.carbsGrams}g</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Fats:</span>
+                      <span className="font-semibold">{aiAnalysis.fatsGrams}g</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Risk Explanation */}
+              <Alert className={
+                aiAnalysis.riskLevel === 'green' ? 'border-green-500/50' :
+                aiAnalysis.riskLevel === 'yellow' ? 'border-yellow-500/50' :
+                'border-red-500/50'
+              }>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription className="text-sm">
+                  <strong>Risk Assessment:</strong> {aiAnalysis.riskExplanation}
+                </AlertDescription>
+              </Alert>
+
+              {/* Strategic Guidance */}
+              <Alert>
+                <Sparkles className="h-4 w-4" />
+                <AlertDescription className="text-sm">
+                  <strong>Strategic Guidance:</strong> {aiAnalysis.strategicGuidance}
+                </AlertDescription>
+              </Alert>
+
+              {/* Nutrition Tips */}
+              {aiAnalysis.nutritionTips.length > 0 && (
+                <div className="space-y-2">
+                  <h4 className="font-semibold text-sm flex items-center gap-2">
+                    <Apple className="h-4 w-4" />
+                    Nutrition Tips
+                  </h4>
+                  <ul className="space-y-1">
+                    {aiAnalysis.nutritionTips.map((tip, idx) => (
+                      <li key={idx} className="text-sm flex items-start gap-2">
+                        <span className="text-primary mt-1">•</span>
+                        <span>{tip}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Training Considerations */}
+              <Alert>
+                <Activity className="h-4 w-4" />
+                <AlertDescription className="text-sm">
+                  <strong>Training Considerations:</strong> {aiAnalysis.trainingConsiderations}
+                </AlertDescription>
+              </Alert>
+
+              {/* Timeline Assessment */}
+              <Alert className="border-primary/50">
+                <Calendar className="h-4 w-4" />
+                <AlertDescription className="text-sm">
+                  <strong>Timeline Assessment:</strong> {aiAnalysis.timeline}
+                </AlertDescription>
+              </Alert>
+
+              {/* Weekly Plan */}
+              <div className="space-y-3">
+                <h4 className="font-semibold text-sm">Weekly Execution Plan</h4>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <Card className="bg-background/30">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">Week 1</CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-xs text-muted-foreground">
+                      {aiAnalysis.weeklyPlan.week1}
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-background/30">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">Week 2</CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-xs text-muted-foreground">
+                      {aiAnalysis.weeklyPlan.week2}
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-background/30">
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm">Ongoing</CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-xs text-muted-foreground">
+                      {aiAnalysis.weeklyPlan.ongoing}
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* AI Insights */}
-        <Card className="border-border/50 bg-gradient-to-br from-card to-card/50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <InsightIcon className={`h-5 w-5 ${insight.color}`} />
-              Wizard Insight
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className={`${insight.color} font-medium`}>{insight.message}</p>
-          </CardContent>
-        </Card>
+        {!aiAnalysis && profile && (
+          <Card>
+            <CardContent className="pt-6">
+              <Button onClick={getAIAnalysis} disabled={loading} className="w-full">
+                <Sparkles className="h-4 w-4 mr-2" />
+                {loading ? "Analyzing..." : "Get AI Weight Loss Strategy"}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Weight Input */}
