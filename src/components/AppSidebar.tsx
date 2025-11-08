@@ -1,5 +1,6 @@
-import { Home, Utensils, Weight, Droplets, Calendar, Sparkles, Trophy } from "lucide-react";
+import { Home, Utensils, Weight, Droplets, Calendar, Sparkles, Trophy, RotateCcw } from "lucide-react";
 import { NavLink } from "react-router-dom";
+import { useState } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -13,9 +14,11 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
 import wizardLogo from "@/assets/wizard-logo.png";
 import { ProfileDropdown } from "@/components/ProfileDropdown";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { DataResetDialog } from "@/components/DataResetDialog";
 
 const menuItems = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
@@ -30,6 +33,7 @@ const menuItems = [
 export function AppSidebar() {
   const { setOpenMobile } = useSidebar();
   const isMobile = useIsMobile();
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
 
   const handleNavClick = () => {
     if (isMobile) {
@@ -76,10 +80,20 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter>
-        <div className="p-4 border-t">
+        <div className="p-4 border-t space-y-3">
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+            onClick={() => setResetDialogOpen(true)}
+          >
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Reset All Data
+          </Button>
           <ProfileDropdown />
         </div>
       </SidebarFooter>
+      <DataResetDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen} />
     </Sidebar>
   );
 }
