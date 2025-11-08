@@ -73,7 +73,8 @@ export default function Dashboard() {
   }
 
   const daysUntilTarget = profile ? Math.ceil((new Date(profile.target_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : 0;
-  const weightToLose = profile ? (profile.current_weight_kg - profile.goal_weight_kg).toFixed(1) : 0;
+  // Use fight_week_target for diet calculations, goal_weight is for weigh-in
+  const weightToLose = profile ? (profile.current_weight_kg - (profile.fight_week_target_kg || profile.goal_weight_kg)).toFixed(1) : 0;
   const dailyCalorieGoal = profile ? Math.round(profile.tdee - 500) : 0;
 
   // Generate dynamic wizard wisdom

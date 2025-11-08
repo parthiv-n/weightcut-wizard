@@ -23,6 +23,7 @@ interface WeightLog {
 interface Profile {
   current_weight_kg: number;
   goal_weight_kg: number;
+  fight_week_target_kg: number | null;
   target_date: string;
   activity_level: string;
   age: number;
@@ -173,7 +174,9 @@ export default function WeightTracker() {
     const { data, error } = await supabase.functions.invoke("weight-tracker-analysis", {
       body: {
         currentWeight,
-        goalWeight: profile.goal_weight_kg,
+        // Use fight_week_target for diet calculations, goal_weight is for final weigh-in
+        goalWeight: profile.fight_week_target_kg || profile.goal_weight_kg,
+        fightNightWeight: profile.goal_weight_kg,
         targetDate: profile.target_date,
         activityLevel: profile.activity_level,
         age: profile.age,
@@ -202,17 +205,23 @@ export default function WeightTracker() {
     const today = new Date();
     const daysRemaining = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     const weeksRemaining = Math.max(1, daysRemaining / 7);
-    const weightRemaining = current - profile.goal_weight_kg;
+    // Use fight_week_target for diet planning
+    const fightWeekTarget = profile.fight_week_target_kg || profile.goal_weight_kg;
+    const weightRemaining = current - fightWeekTarget;
     return weightRemaining / weeksRemaining;
   };
 
   const getChartData = () => {
     if (!weightLogs.length || !profile) return [];
 
+    // Show both fight week target and fight night weight on chart
+    const fightWeekTarget = profile.fight_week_target_kg || profile.goal_weight_kg;
+    
     const data = weightLogs.map((log) => ({
       date: format(new Date(log.date), "MMM dd"),
       weight: log.weight_kg,
-      goal: profile.goal_weight_kg,
+      fightWeekGoal: fightWeekTarget,
+      fightNightGoal: profile.goal_weight_kg,
       logId: log.id,
       fullDate: log.date,
     }));
@@ -240,8 +249,9 @@ export default function WeightTracker() {
     const current = getCurrentWeight();
     // Use the first weight log as starting weight, or profile weight if no logs exist
     const start = weightLogs.length > 0 ? weightLogs[0].weight_kg : profile.current_weight_kg;
-    const goal = profile.goal_weight_kg;
-    const total = start - goal;
+    // Progress towards fight week target (diet goal)
+    const fightWeekTarget = profile.fight_week_target_kg || profile.goal_weight_kg;
+    const total = start - fightWeekTarget;
     const progress = start - current;
     return Math.min(100, Math.max(0, (progress / total) * 100));
   };
@@ -256,11 +266,12 @@ export default function WeightTracker() {
     }
 
     const current = getCurrentWeight();
-    const goal = profile.goal_weight_kg;
+    // Use fight week target for diet calculations
+    const fightWeekTarget = profile.fight_week_target_kg || profile.goal_weight_kg;
     const targetDate = new Date(profile.target_date);
     const today = new Date();
     const daysRemaining = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    const weightRemaining = current - goal;
+    const weightRemaining = current - fightWeekTarget;
 
     // Calculate recent weight loss rate (last 7 days)
     const recentLogs = weightLogs.slice(-7);
@@ -353,8 +364,9 @@ export default function WeightTracker() {
             <Card className="border-border/50">
               <CardContent className="pt-6">
                 <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground">Target Weight</p>
-                  <p className="text-3xl font-bold">{profile.goal_weight_kg.toFixed(1)} kg</p>
+                  <p className="text-sm font-medium text-muted-foreground">Fight Week Target</p>
+                  <p className="text-3xl font-bold">{(profile.fight_week_target_kg || profile.goal_weight_kg).toFixed(1)} kg</p>
+                  <p className="text-xs text-muted-foreground">Diet-down goal</p>
                 </div>
               </CardContent>
             </Card>
@@ -364,8 +376,9 @@ export default function WeightTracker() {
                 <div className="space-y-2">
                   <p className="text-sm font-medium text-muted-foreground">Remaining</p>
                   <p className="text-3xl font-bold text-primary">
-                    {(getCurrentWeight() - profile.goal_weight_kg).toFixed(1)} kg
+                    {(getCurrentWeight() - (profile.fight_week_target_kg || profile.goal_weight_kg)).toFixed(1)} kg
                   </p>
+                  <p className="text-xs text-muted-foreground">To fight week target</p>
                 </div>
               </CardContent>
             </Card>
@@ -675,11 +688,19 @@ export default function WeightTracker() {
                         }}
                       />
                       <ReferenceLine
-                        y={profile?.goal_weight_kg}
+                        y={profile?.fight_week_target_kg || profile?.goal_weight_kg}
                         stroke="hsl(var(--primary))"
                         strokeDasharray="5 5"
-                        label={{ value: "Target", fill: "hsl(var(--primary))", fontSize: 12 }}
+                        label={{ value: "Fight Week Target", fill: "hsl(var(--primary))", fontSize: 12 }}
                       />
+                      {profile?.fight_week_target_kg && (
+                        <ReferenceLine
+                          y={profile.goal_weight_kg}
+                          stroke="hsl(var(--destructive))"
+                          strokeDasharray="3 3"
+                          label={{ value: "Fight Night", fill: "hsl(var(--destructive))", fontSize: 10 }}
+                        />
+                      )}
                       <Line
                         type="monotone"
                         dataKey="weight"
