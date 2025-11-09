@@ -51,6 +51,7 @@ export default function FightWeek() {
   const [plan, setPlan] = useState<FightWeekPlan | null>(null);
   const [logs, setLogs] = useState<DailyLog[]>([]);
   const [profile, setProfile] = useState<any>(null);
+  const [currentWeight, setCurrentWeight] = useState<number>(0);
   const [newPlan, setNewPlan] = useState({ fight_date: "", starting_weight_kg: "", target_weight_kg: "", is_waterloading: false });
   const [selectedDate, setSelectedDate] = useState<string>("");
   const [isWaterloading, setIsWaterloading] = useState(false);
@@ -75,6 +76,12 @@ export default function FightWeek() {
     fetchPlanAndLogs();
   }, []);
 
+  useEffect(() => {
+    if (plan) {
+      updateCurrentWeight();
+    }
+  }, [logs, plan]);
+
   const fetchProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -87,13 +94,52 @@ export default function FightWeek() {
 
     if (data) {
       setProfile(data);
-      // Pre-populate the form with profile data
+      
+      // Get the most recent weight from weight_logs
+      const { data: latestWeightLog } = await supabase
+        .from("weight_logs")
+        .select("weight_kg")
+        .eq("user_id", user.id)
+        .order("date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      // Use latest weight log if available, otherwise use profile weight
+      const currentWeight = latestWeightLog?.weight_kg || data.current_weight_kg;
+      
+      // Pre-populate the form with latest weight data
       setNewPlan(prev => ({
         ...prev,
-        starting_weight_kg: prev.starting_weight_kg || data.current_weight_kg?.toString() || "",
+        starting_weight_kg: prev.starting_weight_kg || currentWeight?.toString() || "",
         target_weight_kg: data.goal_weight_kg?.toString() || ""
       }));
     }
+  };
+
+  const updateCurrentWeight = async () => {
+    if (!plan) return;
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    
+    // Check fight week logs first
+    const latestFightWeekLog = logs[logs.length - 1];
+    let weight = latestFightWeekLog?.weight_kg;
+    
+    // If no fight week log with weight, check weight_logs table
+    if (!weight) {
+      const { data: latestWeightLog } = await supabase
+        .from("weight_logs")
+        .select("weight_kg")
+        .eq("user_id", user.id)
+        .order("date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      weight = latestWeightLog?.weight_kg || plan.starting_weight_kg;
+    }
+    
+    setCurrentWeight(weight);
   };
 
   const fetchPlanAndLogs = async () => {
@@ -291,19 +337,14 @@ export default function FightWeek() {
   };
 
   const getWeightProgress = () => {
-    if (!plan) return 0;
-    const latestLog = logs[logs.length - 1];
-    const currentWeight = latestLog?.weight_kg || plan.starting_weight_kg;
+    if (!plan || !currentWeight) return 0;
     const totalLoss = plan.starting_weight_kg - plan.target_weight_kg;
     const currentLoss = plan.starting_weight_kg - currentWeight;
     return (currentLoss / totalLoss) * 100;
   };
 
   const getWeightCutBreakdown = () => {
-    if (!plan) return null;
-    
-    const latestLog = logs[logs.length - 1];
-    const currentWeight = latestLog?.weight_kg || plan.starting_weight_kg;
+    if (!plan || !currentWeight) return null;
     const totalWeightToCut = currentWeight - plan.target_weight_kg;
     
     // Scientific calculations
@@ -678,7 +719,7 @@ export default function FightWeek() {
             <TrendingDown className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{logs[logs.length - 1]?.weight_kg || plan.starting_weight_kg}kg</div>
+            <div className="text-2xl font-bold">{currentWeight || plan.starting_weight_kg}kg</div>
             <Progress value={getWeightProgress()} className="mt-2" />
             <p className="text-xs text-muted-foreground mt-2">
               Target: {plan.target_weight_kg}kg
