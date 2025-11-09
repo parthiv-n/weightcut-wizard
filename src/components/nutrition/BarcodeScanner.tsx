@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useZxing } from "react-zxing";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { ScanBarcode, X } from "lucide-react";
+import { ScanBarcode, X, Camera } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface BarcodeScannerProps {
   onFoodScanned: (foodData: {
@@ -20,9 +21,18 @@ interface BarcodeScannerProps {
 export const BarcodeScanner = ({ onFoodScanned, disabled }: BarcodeScannerProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [cameraError, setCameraError] = useState<string>("");
   const { toast } = useToast();
 
   const { ref } = useZxing({
+    constraints: {
+      audio: false,
+      video: {
+        facingMode: "environment", // Use back camera on mobile
+        width: { ideal: 1280 },
+        height: { ideal: 720 }
+      }
+    },
     onDecodeResult(result) {
       if (isProcessing) return;
       
@@ -32,8 +42,15 @@ export const BarcodeScanner = ({ onFoodScanned, disabled }: BarcodeScannerProps)
     },
     onError(error) {
       console.error("Scanner error:", error);
+      setCameraError("Failed to access camera. Please ensure camera permissions are enabled.");
     },
   });
+
+  useEffect(() => {
+    if (!isOpen) {
+      setCameraError("");
+    }
+  }, [isOpen]);
 
   const handleBarcodeScanned = async (barcode: string) => {
     setIsProcessing(true);
@@ -94,20 +111,49 @@ export const BarcodeScanner = ({ onFoodScanned, disabled }: BarcodeScannerProps)
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Scan Food Barcode</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Camera className="h-5 w-5" />
+              Scan Food Barcode
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            {cameraError ? (
+              <Alert variant="destructive">
+                <AlertDescription>{cameraError}</AlertDescription>
+              </Alert>
+            ) : null}
+            
             <div className="relative aspect-square bg-black rounded-lg overflow-hidden">
-              <video ref={ref} className="w-full h-full object-cover" />
+              <video 
+                ref={ref} 
+                className="w-full h-full object-cover"
+                autoPlay
+                playsInline
+                muted
+              />
               {isProcessing && (
-                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                  <p className="text-white">Processing...</p>
+                <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center gap-2">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                  <p className="text-white text-sm">Processing barcode...</p>
+                </div>
+              )}
+              
+              {!isProcessing && !cameraError && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="border-2 border-primary w-64 h-32 rounded-lg"></div>
                 </div>
               )}
             </div>
-            <p className="text-sm text-muted-foreground text-center">
-              Position the barcode within the camera view
-            </p>
+            
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground text-center">
+                Position the barcode within the highlighted area
+              </p>
+              <p className="text-xs text-muted-foreground text-center">
+                Ensure good lighting and hold steady
+              </p>
+            </div>
+            
             <Button
               variant="outline"
               className="w-full"
