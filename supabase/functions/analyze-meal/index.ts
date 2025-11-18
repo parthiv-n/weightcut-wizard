@@ -80,6 +80,8 @@ CRITICAL RULES:
 2. If the user says "500 calories" - the meal must be exactly 500 calories, not an estimate
 3. Only estimate nutritional values when the user doesn't provide specific numbers
 4. Always respect user-provided nutritional data over your own calculations
+5. Always indicate the data source for nutrition information (e.g., "USDA Food Database", "Nutrition Database", "Standard Nutrition Values", "Food Composition Database")
+6. Use authoritative sources like USDA, nutrition databases, or established food composition tables
 
 Be realistic and precise with portion sizes.`
           },
@@ -127,14 +129,22 @@ Be realistic and precise with portion sizes.`
                       type: "object",
                       properties: {
                         name: { type: "string" },
-                        grams: { type: "number" }
+                        grams: { type: "number" },
+                        source: { 
+                          type: "string",
+                          description: "Data source for nutrition information (e.g., 'USDA Food Database', 'Nutrition Database', 'Standard Nutrition Values')"
+                        }
                       },
                       required: ["name", "grams"]
                     },
                     description: "List of ingredients with weights in grams"
+                  },
+                  data_source: {
+                    type: "string",
+                    description: "Primary data source for the nutrition information (e.g., 'USDA Food Database', 'Nutrition Database', 'Standard Nutrition Values')"
                   }
                 },
-                required: ["meal_name", "calories", "protein_g", "carbs_g", "fats_g", "portion_size", "ingredients"],
+                required: ["meal_name", "calories", "protein_g", "carbs_g", "fats_g", "portion_size", "ingredients", "data_source"],
                 additionalProperties: false
               }
             }
