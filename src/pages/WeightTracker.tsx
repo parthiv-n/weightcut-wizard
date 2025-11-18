@@ -185,15 +185,26 @@ export default function WeightTracker() {
   const getAIAnalysis = async () => {
     if (!profile) return;
 
+    // Ensure fight_week_target_kg is set - this is the diet goal, not the final weigh-in goal
+    const fightWeekTarget = profile.fight_week_target_kg;
+    if (!fightWeekTarget) {
+      toast({
+        title: "Fight Week Target Required",
+        description: "Please set your fight week target weight in Goals to get AI analysis.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setAnalyzingWeight(true);
     const currentWeight = getCurrentWeight();
 
     const { data, error } = await supabase.functions.invoke("weight-tracker-analysis", {
       body: {
         currentWeight,
-        // Use fight_week_target for diet calculations, goal_weight is for final weigh-in
-        goalWeight: profile.fight_week_target_kg || profile.goal_weight_kg,
-        fightNightWeight: profile.goal_weight_kg,
+        // Use fight_week_target_kg as the end goal for weight loss strategy (diet target before dehydration)
+        goalWeight: fightWeekTarget,
+        fightNightWeight: profile.goal_weight_kg, // Final weigh-in goal (after dehydration)
         targetDate: profile.target_date,
         activityLevel: profile.activity_level,
         age: profile.age,
@@ -222,8 +233,9 @@ export default function WeightTracker() {
     const today = new Date();
     const daysRemaining = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     const weeksRemaining = Math.max(1, daysRemaining / 7);
-    // Use fight_week_target for diet planning
-    const fightWeekTarget = profile.fight_week_target_kg || profile.goal_weight_kg;
+    // Use fight_week_target_kg as the end goal (diet target before dehydration)
+    const fightWeekTarget = profile.fight_week_target_kg;
+    if (!fightWeekTarget) return 0;
     const weightRemaining = current - fightWeekTarget;
     return weightRemaining / weeksRemaining;
   };
@@ -231,7 +243,8 @@ export default function WeightTracker() {
   const getChartData = () => {
     if (!weightLogs.length || !profile) return [];
 
-    // Show both fight week target and fight night weight on chart
+    // Show both fight week target (diet goal) and fight night weight (final weigh-in) on chart
+    // Prioritize fight_week_target_kg as the primary diet goal
     const fightWeekTarget = profile.fight_week_target_kg || profile.goal_weight_kg;
     
     const data = weightLogs.map((log) => ({
@@ -266,8 +279,9 @@ export default function WeightTracker() {
     const current = getCurrentWeight();
     // Use the first weight log as starting weight, or profile weight if no logs exist
     const start = weightLogs.length > 0 ? weightLogs[0].weight_kg : profile.current_weight_kg;
-    // Progress towards fight week target (diet goal)
-    const fightWeekTarget = profile.fight_week_target_kg || profile.goal_weight_kg;
+    // Progress towards fight week target (diet goal before dehydration)
+    const fightWeekTarget = profile.fight_week_target_kg;
+    if (!fightWeekTarget) return 0;
     const total = start - fightWeekTarget;
     const progress = start - current;
     return Math.min(100, Math.max(0, (progress / total) * 100));
@@ -283,8 +297,15 @@ export default function WeightTracker() {
     }
 
     const current = getCurrentWeight();
-    // Use fight week target for diet calculations
-    const fightWeekTarget = profile.fight_week_target_kg || profile.goal_weight_kg;
+    // Use fight_week_target_kg as the end goal (diet target before dehydration)
+    const fightWeekTarget = profile.fight_week_target_kg;
+    if (!fightWeekTarget) {
+      return {
+        message: "Please set your fight week target weight in Goals to see insights.",
+        icon: Target,
+        color: "text-muted-foreground",
+      };
+    }
     const targetDate = new Date(profile.target_date);
     const today = new Date();
     const daysRemaining = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
