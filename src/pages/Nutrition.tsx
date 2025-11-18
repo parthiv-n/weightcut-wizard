@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Sparkles, Calendar as CalendarIcon, TrendingUp } from "lucide-react";
+import { Plus, Sparkles, Calendar as CalendarIcon, TrendingUp, Loader2, AlertCircle } from "lucide-react";
 import { MealCard } from "@/components/nutrition/MealCard";
 import { CalorieBudgetIndicator } from "@/components/nutrition/CalorieBudgetIndicator";
 import { VoiceInput } from "@/components/nutrition/VoiceInput";
@@ -23,6 +23,11 @@ import { nutritionLogSchema } from "@/lib/validation";
 interface Ingredient {
   name: string;
   grams: number;
+  calories_per_100g?: number;
+  protein_per_100g?: number;
+  carbs_per_100g?: number;
+  fats_per_100g?: number;
+  source?: string; // e.g., "USDA", "Nutrition Database", "AI Analysis"
 }
 
 interface Meal {
@@ -70,8 +75,21 @@ export default function Nutrition() {
   });
   const [aiMealDescription, setAiMealDescription] = useState("");
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
+  const [aiIngredientDescription, setAiIngredientDescription] = useState("");
+  const [aiAnalyzingIngredient, setAiAnalyzingIngredient] = useState(false);
 
   const [newIngredient, setNewIngredient] = useState({ name: "", grams: "" });
+  const [lookingUpIngredient, setLookingUpIngredient] = useState(false);
+  const [ingredientLookupError, setIngredientLookupError] = useState<string | null>(null);
+  const [manualNutritionDialog, setManualNutritionDialog] = useState({
+    open: false,
+    ingredientName: "",
+    grams: 0,
+    calories_per_100g: "",
+    protein_per_100g: "",
+    carbs_per_100g: "",
+    fats_per_100g: "",
+  });
 
   useEffect(() => {
     loadProfile();
@@ -444,6 +462,173 @@ export default function Nutrition() {
     }
   };
 
+  // Helper function to extract ingredient name from user input
+  const extractIngredientName = (userInput: string): string => {
+    let cleaned = userInput.trim();
+    
+    // Remove weight/quantity patterns (e.g., "250g", "1 cup", "2 tbsp")
+    cleaned = cleaned.replace(/(\d+(?:\.\d+)?)\s*(g|kg|oz|lb|cup|cups|tbsp|tsp|tablespoon|teaspoon|ml|l|gram|grams|kilogram|kilograms|ounce|ounces|pound|pounds)/gi, "");
+    
+    // Remove quantity words at the start
+    cleaned = cleaned.replace(/^(one|two|three|four|five|six|seven|eight|nine|ten|\d+|a|an)\s+/i, "");
+    
+    // Remove common prefixes
+    cleaned = cleaned.replace(/^(about|approximately|around|roughly)\s+/i, "");
+    
+    // Clean up extra whitespace
+    cleaned = cleaned.replace(/\s+/g, " ").trim();
+    
+    // Capitalize first letter of each word for better presentation
+    cleaned = cleaned.split(" ").map(word => 
+      word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+    ).join(" ");
+    
+    return cleaned || userInput; // Fallback to original if cleaning removes everything
+  };
+
+  const handleAiAnalyzeIngredient = async () => {
+    if (!aiIngredientDescription.trim()) {
+      toast({
+        title: "Input Required",
+        description: "Please describe the ingredient",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setAiAnalyzingIngredient(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("analyze-meal", {
+        body: { mealDescription: aiIngredientDescription },
+      });
+
+      if (error) throw error;
+
+      const { nutritionData } = data;
+      
+      // Extract ingredient information
+      let ingredientName = "";
+      let ingredientGrams = 0;
+      let ingredientSource = "";
+      let caloriesPer100g = 0;
+      let proteinPer100g = 0;
+      let carbsPer100g = 0;
+      let fatsPer100g = 0;
+
+      // Try to get ingredient from ingredients array
+      if (nutritionData.ingredients && nutritionData.ingredients.length > 0) {
+        const ingredient = nutritionData.ingredients[0];
+        // Use extracted name from user input for better matching
+        ingredientName = extractIngredientName(aiIngredientDescription);
+        // If extracted name is too generic, use AI's name
+        if (ingredientName.length < 3 || ingredientName.toLowerCase() === aiIngredientDescription.toLowerCase().trim()) {
+          ingredientName = ingredient.name || nutritionData.meal_name;
+        }
+        ingredientGrams = ingredient.grams || 0;
+        ingredientSource = ingredient.source || nutritionData.data_source || "AI Analysis";
+      } else {
+        // Fallback: parse from meal name and portion size
+        ingredientName = extractIngredientName(aiIngredientDescription);
+        // If extracted name is too generic, use AI's meal name
+        if (ingredientName.length < 3) {
+          ingredientName = nutritionData.meal_name;
+        }
+        ingredientSource = nutritionData.data_source || "AI Analysis";
+        
+        // Try to extract grams from portion_size (e.g., "250g", "1 cup (200g)")
+        const portionSize = nutritionData.portion_size || "";
+        const gramsMatch = portionSize.match(/(\d+(?:\.\d+)?)\s*g/i);
+        if (gramsMatch) {
+          ingredientGrams = parseFloat(gramsMatch[1]);
+        } else {
+          // If no grams found, try to estimate from common measurements
+          // This is a fallback - ideally the AI should provide grams
+          toast({
+            title: "Weight Required",
+            description: "Could not determine ingredient weight. Please specify weight (e.g., '250g chicken breast')",
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+
+      if (ingredientGrams <= 0) {
+        toast({
+          title: "Invalid Weight",
+          description: "Could not determine ingredient weight. Please specify weight (e.g., '250g chicken breast')",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Calculate nutrition per 100g from meal totals
+      const mealCalories = nutritionData.calories || 0;
+      const mealProtein = nutritionData.protein_g || 0;
+      const mealCarbs = nutritionData.carbs_g || 0;
+      const mealFats = nutritionData.fats_g || 0;
+
+      caloriesPer100g = (mealCalories / ingredientGrams) * 100;
+      proteinPer100g = (mealProtein / ingredientGrams) * 100;
+      carbsPer100g = (mealCarbs / ingredientGrams) * 100;
+      fatsPer100g = (mealFats / ingredientGrams) * 100;
+
+      // Add ingredient to the list
+      const newIngredients = [
+        ...manualMeal.ingredients,
+        {
+          name: ingredientName,
+          grams: ingredientGrams,
+          calories_per_100g: Math.round(caloriesPer100g),
+          protein_per_100g: Math.round(proteinPer100g * 10) / 10,
+          carbs_per_100g: Math.round(carbsPer100g * 10) / 10,
+          fats_per_100g: Math.round(fatsPer100g * 10) / 10,
+          source: ingredientSource,
+        }
+      ];
+
+      // Calculate new meal totals
+      const totalCalories = newIngredients.reduce((sum, ing) => 
+        sum + (ing.calories_per_100g || 0) * ing.grams / 100, 0
+      );
+      const totalProtein = newIngredients.reduce((sum, ing) => 
+        sum + (ing.protein_per_100g || 0) * ing.grams / 100, 0
+      );
+      const totalCarbs = newIngredients.reduce((sum, ing) => 
+        sum + (ing.carbs_per_100g || 0) * ing.grams / 100, 0
+      );
+      const totalFats = newIngredients.reduce((sum, ing) => 
+        sum + (ing.fats_per_100g || 0) * ing.grams / 100, 0
+      );
+
+      // Update meal with new ingredient and calculated totals
+      setManualMeal({
+        ...manualMeal,
+        ingredients: newIngredients,
+        calories: Math.round(totalCalories).toString(),
+        protein_g: Math.round(totalProtein * 10) / 10 !== 0 ? (Math.round(totalProtein * 10) / 10).toString() : "",
+        carbs_g: Math.round(totalCarbs * 10) / 10 !== 0 ? (Math.round(totalCarbs * 10) / 10).toString() : "",
+        fats_g: Math.round(totalFats * 10) / 10 !== 0 ? (Math.round(totalFats * 10) / 10).toString() : "",
+      });
+
+      // Clear input
+      setAiIngredientDescription("");
+
+      toast({
+        title: "Ingredient Added",
+        description: `${ingredientName} (${ingredientGrams}g) added. Meal totals updated.`,
+      });
+    } catch (error: any) {
+      console.error("Error analyzing ingredient:", error);
+      toast({
+        title: "Analysis failed",
+        description: error.message || "Failed to analyze ingredient. Please try again or add manually.",
+        variant: "destructive",
+      });
+    } finally {
+      setAiAnalyzingIngredient(false);
+    }
+  };
+
   const handleVoiceInput = async (transcribedText: string) => {
     setAiMealDescription(transcribedText);
     
@@ -516,6 +701,172 @@ export default function Nutrition() {
       ingredients: [],
     });
     setIsManualDialogOpen(true);
+  };
+
+  // Lookup ingredient nutrition data using AI
+  const lookupIngredientNutrition = async (ingredientName: string): Promise<{
+    calories_per_100g: number;
+    protein_per_100g: number;
+    carbs_per_100g: number;
+    fats_per_100g: number;
+    source?: string;
+  } | null> => {
+    try {
+      const { data, error } = await supabase.functions.invoke("lookup-ingredient", {
+        body: { ingredientName },
+      });
+
+      if (error) {
+        console.error("Ingredient lookup error:", error);
+        // If it's a 404, the ingredient wasn't found - return null to trigger manual entry
+        if (error.message?.includes("404") || error.message?.includes("not found")) {
+          return null;
+        }
+        // For other errors, also return null to trigger manual entry
+        return null;
+      }
+
+      if (data?.error) {
+        // Edge function returned an error (e.g., not found)
+        console.log("Ingredient not found:", data.error);
+        return null;
+      }
+
+      if (data?.nutritionData) {
+        return data.nutritionData;
+      }
+
+      return null;
+    } catch (error) {
+      console.error("Error looking up ingredient:", error);
+      return null;
+    }
+  };
+
+  // Auto-calculate meal totals from ingredients
+  const calculateMealTotalsFromIngredients = () => {
+    if (manualMeal.ingredients.length === 0) {
+      // If no ingredients, clear calculated values (but keep manual entries)
+      return;
+    }
+
+    let totalCalories = 0;
+    let totalProtein = 0;
+    let totalCarbs = 0;
+    let totalFats = 0;
+    let hasAnyNutritionData = false;
+
+    manualMeal.ingredients.forEach((ingredient) => {
+      if (ingredient.calories_per_100g !== undefined) {
+        totalCalories += (ingredient.calories_per_100g * ingredient.grams) / 100;
+        hasAnyNutritionData = true;
+      }
+      if (ingredient.protein_per_100g !== undefined) {
+        totalProtein += (ingredient.protein_per_100g * ingredient.grams) / 100;
+      }
+      if (ingredient.carbs_per_100g !== undefined) {
+        totalCarbs += (ingredient.carbs_per_100g * ingredient.grams) / 100;
+      }
+      if (ingredient.fats_per_100g !== undefined) {
+        totalFats += (ingredient.fats_per_100g * ingredient.grams) / 100;
+      }
+    });
+
+    if (!hasAnyNutritionData) return;
+
+    // Always update with calculated totals from ingredients
+    // User can manually override by typing in the fields
+    setManualMeal((prev) => ({
+      ...prev,
+      calories: Math.round(totalCalories).toString(),
+      protein_g: Math.round(totalProtein * 10) / 10 !== 0 ? (Math.round(totalProtein * 10) / 10).toString() : "",
+      carbs_g: Math.round(totalCarbs * 10) / 10 !== 0 ? (Math.round(totalCarbs * 10) / 10).toString() : "",
+      fats_g: Math.round(totalFats * 10) / 10 !== 0 ? (Math.round(totalFats * 10) / 10).toString() : "",
+    }));
+  };
+
+  // Auto-calculate when ingredients change
+  useEffect(() => {
+    if (manualMeal.ingredients.length > 0) {
+      // Only calculate if we have ingredients with nutrition data
+      const hasNutritionData = manualMeal.ingredients.some(ing => ing.calories_per_100g !== undefined);
+      if (hasNutritionData) {
+        calculateMealTotalsFromIngredients();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manualMeal.ingredients]);
+
+  // Handle manual nutrition entry
+  const handleManualNutritionSubmit = () => {
+    if (!manualNutritionDialog.calories_per_100g) {
+      toast({
+        title: "Calories Required",
+        description: "Please enter calories per 100g",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const ingredientName = manualNutritionDialog.ingredientName;
+    const nutritionData = {
+      calories_per_100g: parseFloat(manualNutritionDialog.calories_per_100g),
+      protein_per_100g: manualNutritionDialog.protein_per_100g ? parseFloat(manualNutritionDialog.protein_per_100g) : 0,
+      carbs_per_100g: manualNutritionDialog.carbs_per_100g ? parseFloat(manualNutritionDialog.carbs_per_100g) : 0,
+      fats_per_100g: manualNutritionDialog.fats_per_100g ? parseFloat(manualNutritionDialog.fats_per_100g) : 0,
+    };
+
+    // Add ingredient with manual nutrition data
+    const newIngredients = [
+      ...manualMeal.ingredients,
+      {
+        name: ingredientName,
+        grams: manualNutritionDialog.grams,
+        ...nutritionData,
+      }
+    ];
+    
+    // Calculate totals immediately
+    const totalCalories = newIngredients.reduce((sum, ing) => 
+      sum + (ing.calories_per_100g || 0) * ing.grams / 100, 0
+    );
+    const totalProtein = newIngredients.reduce((sum, ing) => 
+      sum + (ing.protein_per_100g || 0) * ing.grams / 100, 0
+    );
+    const totalCarbs = newIngredients.reduce((sum, ing) => 
+      sum + (ing.carbs_per_100g || 0) * ing.grams / 100, 0
+    );
+    const totalFats = newIngredients.reduce((sum, ing) => 
+      sum + (ing.fats_per_100g || 0) * ing.grams / 100, 0
+    );
+    
+    // Update meal with ingredients and calculated totals
+    setManualMeal({
+      ...manualMeal,
+      ingredients: newIngredients,
+      calories: Math.round(totalCalories).toString(),
+      protein_g: Math.round(totalProtein * 10) / 10 !== 0 ? (Math.round(totalProtein * 10) / 10).toString() : "",
+      carbs_g: Math.round(totalCarbs * 10) / 10 !== 0 ? (Math.round(totalCarbs * 10) / 10).toString() : "",
+      fats_g: Math.round(totalFats * 10) / 10 !== 0 ? (Math.round(totalFats * 10) / 10).toString() : "",
+    });
+
+    // Reset dialog
+    setManualNutritionDialog({
+      open: false,
+      ingredientName: "",
+      grams: 0,
+      calories_per_100g: "",
+      protein_per_100g: "",
+      carbs_per_100g: "",
+      fats_per_100g: "",
+    });
+
+    setIngredientLookupError(null);
+
+    toast({
+      title: "Ingredient Added",
+      description: `${ingredientName} added with manual nutrition data`,
+    });
   };
 
   const initiateDeleteMeal = (meal: Meal) => {
@@ -600,7 +951,13 @@ export default function Nutrition() {
             </DialogContent>
           </Dialog>
 
-          <Dialog open={isManualDialogOpen} onOpenChange={setIsManualDialogOpen}>
+          <Dialog open={isManualDialogOpen} onOpenChange={(open) => {
+            setIsManualDialogOpen(open);
+            if (!open) {
+              // Reset ingredient lookup error when dialog closes
+              setIngredientLookupError(null);
+            }
+          }}>
             <DialogTrigger asChild>
               <Button variant="outline" className="whitespace-nowrap">
                 <Plus className="mr-2 h-4 w-4" />
@@ -646,6 +1003,36 @@ export default function Nutrition() {
                   </div>
                 </div>
 
+                {/* AI Quick Fill Ingredients Section */}
+                <div className="p-4 bg-primary/5 rounded-lg border border-primary/20 space-y-3">
+                  <Label htmlFor="ai-ingredient-description" className="flex items-center gap-2">
+                    <Sparkles className="h-4 w-4 text-primary" />
+                    AI Quick Fill Ingredients
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Describe a single ingredient with weight and AI will add it to your ingredients list
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Input
+                      id="ai-ingredient-description"
+                      placeholder="E.g., 250g chicken breast, 1 cup rice, 100g salmon"
+                      value={aiIngredientDescription}
+                      onChange={(e) => setAiIngredientDescription(e.target.value)}
+                      disabled={aiAnalyzingIngredient}
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      onClick={handleAiAnalyzeIngredient}
+                      disabled={aiAnalyzingIngredient || !aiIngredientDescription.trim()}
+                      className="whitespace-nowrap flex-shrink-0"
+                    >
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      {aiAnalyzingIngredient ? "Analyzing..." : "Add Ingredient"}
+                    </Button>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
                     <Label htmlFor="meal_name">Meal Name *</Label>
@@ -674,7 +1061,14 @@ export default function Nutrition() {
                     </Select>
                   </div>
                   <div>
-                    <Label htmlFor="calories">Calories *</Label>
+                    <Label htmlFor="calories" className="flex items-center gap-2">
+                      Calories *
+                      {manualMeal.ingredients.some(ing => ing.calories_per_100g !== undefined) && (
+                        <Badge variant="outline" className="text-xs">
+                          Auto-calculated
+                        </Badge>
+                      )}
+                    </Label>
                     <Input
                       id="calories"
                       type="number"
@@ -684,30 +1078,54 @@ export default function Nutrition() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="protein">Protein (g)</Label>
+                    <Label htmlFor="protein" className="flex items-center gap-2">
+                      Protein (g)
+                      {manualMeal.ingredients.some(ing => ing.protein_per_100g !== undefined) && (
+                        <Badge variant="outline" className="text-xs">
+                          Auto-calculated
+                        </Badge>
+                      )}
+                    </Label>
                     <Input
                       id="protein"
                       type="number"
+                      step="0.1"
                       placeholder="30"
                       value={manualMeal.protein_g}
                       onChange={(e) => setManualMeal({ ...manualMeal, protein_g: e.target.value })}
                     />
                   </div>
                   <div>
-                    <Label htmlFor="carbs">Carbs (g)</Label>
+                    <Label htmlFor="carbs" className="flex items-center gap-2">
+                      Carbs (g)
+                      {manualMeal.ingredients.some(ing => ing.carbs_per_100g !== undefined) && (
+                        <Badge variant="outline" className="text-xs">
+                          Auto-calculated
+                        </Badge>
+                      )}
+                    </Label>
                     <Input
                       id="carbs"
                       type="number"
+                      step="0.1"
                       placeholder="40"
                       value={manualMeal.carbs_g}
                       onChange={(e) => setManualMeal({ ...manualMeal, carbs_g: e.target.value })}
                     />
                   </div>
                   <div>
-                    <Label htmlFor="fats">Fats (g)</Label>
+                    <Label htmlFor="fats" className="flex items-center gap-2">
+                      Fats (g)
+                      {manualMeal.ingredients.some(ing => ing.fats_per_100g !== undefined) && (
+                        <Badge variant="outline" className="text-xs">
+                          Auto-calculated
+                        </Badge>
+                      )}
+                    </Label>
                     <Input
                       id="fats"
                       type="number"
+                      step="0.1"
                       placeholder="15"
                       value={manualMeal.fats_g}
                       onChange={(e) => setManualMeal({ ...manualMeal, fats_g: e.target.value })}
@@ -716,24 +1134,58 @@ export default function Nutrition() {
                   <div className="col-span-2">
                     <Label>Ingredients (in grams)</Label>
                     <div className="space-y-2 mt-2">
-                      {manualMeal.ingredients.map((ingredient, idx) => (
-                        <div key={idx} className="flex items-center gap-2 p-2 bg-muted rounded-md">
-                          <span className="flex-1">{ingredient.name}</span>
-                          <span className="font-medium">{ingredient.grams}g</span>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              const newIngredients = [...manualMeal.ingredients];
-                              newIngredients.splice(idx, 1);
-                              setManualMeal({ ...manualMeal, ingredients: newIngredients });
-                            }}
-                          >
-                            Remove
-                          </Button>
-                        </div>
-                      ))}
+                      {manualMeal.ingredients.map((ingredient, idx) => {
+                        const hasNutritionData = ingredient.calories_per_100g !== undefined;
+                        const ingredientCalories = hasNutritionData ? Math.round((ingredient.calories_per_100g * ingredient.grams) / 100) : null;
+                        const ingredientProtein = hasNutritionData ? Math.round(((ingredient.protein_per_100g || 0) * ingredient.grams) / 100 * 10) / 10 : null;
+                        const ingredientCarbs = hasNutritionData ? Math.round(((ingredient.carbs_per_100g || 0) * ingredient.grams) / 100 * 10) / 10 : null;
+                        const ingredientFats = hasNutritionData ? Math.round(((ingredient.fats_per_100g || 0) * ingredient.grams) / 100 * 10) / 10 : null;
+
+                        return (
+                          <div key={idx} className="p-3 bg-muted rounded-md space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-medium">{ingredient.name}</span>
+                                  <span className="text-sm text-muted-foreground">{ingredient.grams}g</span>
+                                  {!hasNutritionData && (
+                                    <Badge variant="outline" className="text-xs">
+                                      <AlertCircle className="h-3 w-3 mr-1" />
+                                      No nutrition data
+                                    </Badge>
+                                  )}
+                                  {hasNutritionData && ingredient.source && (
+                                    <Badge variant="outline" className="text-xs text-muted-foreground">
+                                      <span className="text-[10px]">Source: {ingredient.source}</span>
+                                    </Badge>
+                                  )}
+                                </div>
+                                {hasNutritionData && (
+                                  <div className="text-xs text-muted-foreground mt-1 space-x-3">
+                                    <span>Cal: {ingredientCalories}kcal</span>
+                                    <span>P: {ingredientProtein?.toFixed(1)}g</span>
+                                    <span>C: {ingredientCarbs?.toFixed(1)}g</span>
+                                    <span>F: {ingredientFats?.toFixed(1)}g</span>
+                                  </div>
+                                )}
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  const newIngredients = [...manualMeal.ingredients];
+                                  newIngredients.splice(idx, 1);
+                                  setManualMeal({ ...manualMeal, ingredients: newIngredients });
+                                }}
+                                className="flex-shrink-0"
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
                       <div className="flex flex-col sm:flex-row gap-2">
                         <Input
                           placeholder="Ingredient name"
@@ -751,29 +1203,141 @@ export default function Nutrition() {
                         <Button
                           type="button"
                           variant="outline"
-                          onClick={() => {
-                            if (newIngredient.name && newIngredient.grams) {
-                              setManualMeal({
-                                ...manualMeal,
-                                ingredients: [
-                                  ...manualMeal.ingredients,
-                                  { name: newIngredient.name, grams: parseFloat(newIngredient.grams) }
-                                ]
+                          onClick={async () => {
+                            if (!newIngredient.name.trim() || !newIngredient.grams) {
+                              toast({
+                                title: "Missing Information",
+                                description: "Please enter ingredient name and grams",
+                                variant: "destructive",
                               });
-                              setNewIngredient({ name: "", grams: "" });
+                              return;
+                            }
+
+                            const ingredientName = newIngredient.name.trim();
+                            const grams = parseFloat(newIngredient.grams);
+
+                            if (isNaN(grams) || grams <= 0) {
+                              toast({
+                                title: "Invalid Amount",
+                                description: "Please enter a valid number of grams",
+                                variant: "destructive",
+                              });
+                              return;
+                            }
+
+                            setLookingUpIngredient(true);
+                            setIngredientLookupError(null);
+
+                            try {
+                              // Lookup nutrition data for the ingredient
+                              const nutritionData = await lookupIngredientNutrition(ingredientName);
+
+                              if (nutritionData) {
+                                // Add ingredient with nutrition data
+                                const newIngredients = [
+                                  ...manualMeal.ingredients,
+                                  {
+                                    name: ingredientName,
+                                    grams: grams,
+                                    calories_per_100g: nutritionData.calories_per_100g,
+                                    protein_per_100g: nutritionData.protein_per_100g,
+                                    carbs_per_100g: nutritionData.carbs_per_100g,
+                                    fats_per_100g: nutritionData.fats_per_100g,
+                                    source: nutritionData.source,
+                                  }
+                                ];
+                                
+                                // Calculate totals immediately
+                                const totalCalories = newIngredients.reduce((sum, ing) => 
+                                  sum + (ing.calories_per_100g || 0) * ing.grams / 100, 0
+                                );
+                                const totalProtein = newIngredients.reduce((sum, ing) => 
+                                  sum + (ing.protein_per_100g || 0) * ing.grams / 100, 0
+                                );
+                                const totalCarbs = newIngredients.reduce((sum, ing) => 
+                                  sum + (ing.carbs_per_100g || 0) * ing.grams / 100, 0
+                                );
+                                const totalFats = newIngredients.reduce((sum, ing) => 
+                                  sum + (ing.fats_per_100g || 0) * ing.grams / 100, 0
+                                );
+                                
+                                // Update meal with ingredients and calculated totals in one call
+                                setManualMeal({
+                                  ...manualMeal,
+                                  ingredients: newIngredients,
+                                  calories: Math.round(totalCalories).toString(),
+                                  protein_g: Math.round(totalProtein * 10) / 10 !== 0 ? (Math.round(totalProtein * 10) / 10).toString() : "",
+                                  carbs_g: Math.round(totalCarbs * 10) / 10 !== 0 ? (Math.round(totalCarbs * 10) / 10).toString() : "",
+                                  fats_g: Math.round(totalFats * 10) / 10 !== 0 ? (Math.round(totalFats * 10) / 10).toString() : "",
+                                });
+                                
+                                setNewIngredient({ name: "", grams: "" });
+                                toast({
+                                  title: "Ingredient Added",
+                                  description: `Found nutrition data for ${ingredientName}. Meal totals updated.`,
+                                });
+                              } else {
+                                // Not found - open manual nutrition dialog
+                                setManualNutritionDialog({
+                                  open: true,
+                                  ingredientName: ingredientName,
+                                  grams: grams,
+                                  calories_per_100g: "",
+                                  protein_per_100g: "",
+                                  carbs_per_100g: "",
+                                  fats_per_100g: "",
+                                });
+                              }
+                            } catch (error) {
+                              console.error("Error looking up ingredient:", error);
+                              setIngredientLookupError("Failed to lookup ingredient. Please enter nutrition data manually.");
+                              setManualNutritionDialog({
+                                open: true,
+                                ingredientName: ingredientName,
+                                grams: grams,
+                                calories_per_100g: "",
+                                protein_per_100g: "",
+                                carbs_per_100g: "",
+                                fats_per_100g: "",
+                              });
+                            } finally {
+                              setLookingUpIngredient(false);
                             }
                           }}
+                          disabled={lookingUpIngredient || !newIngredient.name.trim() || !newIngredient.grams}
                           className="flex-shrink-0"
                         >
-                          <Plus className="h-4 w-4" />
+                          {lookingUpIngredient ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Looking up...
+                            </>
+                          ) : (
+                            <>
+                              <Plus className="h-4 w-4" />
+                              Add
+                            </>
+                          )}
                         </Button>
                       </div>
+                      {ingredientLookupError && (
+                        <div className="p-2 bg-destructive/10 border border-destructive/20 rounded-md text-sm text-destructive">
+                          {ingredientLookupError}
+                        </div>
+                      )}
                       {manualMeal.ingredients.length > 0 && (
-                        <div className="flex justify-between items-center pt-2 border-t font-semibold">
-                          <span>Total weight:</span>
-                          <span>
-                            {manualMeal.ingredients.reduce((sum, ing) => sum + ing.grams, 0)}g
-                          </span>
+                        <div className="space-y-1 pt-2 border-t">
+                          <div className="flex justify-between items-center font-semibold">
+                            <span>Total weight:</span>
+                            <span>
+                              {manualMeal.ingredients.reduce((sum, ing) => sum + ing.grams, 0)}g
+                            </span>
+                          </div>
+                          {manualMeal.ingredients.some(ing => ing.calories_per_100g !== undefined) && (
+                            <div className="text-xs text-muted-foreground">
+                              Nutrition totals are calculated automatically above
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -801,6 +1365,120 @@ export default function Nutrition() {
                 <Button onClick={handleAddManualMeal} disabled={loading} className="w-full">
                   {loading ? "Adding..." : "Add Meal"}
                 </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Manual Nutrition Input Dialog */}
+          <Dialog open={manualNutritionDialog.open} onOpenChange={(open) => {
+            if (!open) {
+              setManualNutritionDialog({
+                open: false,
+                ingredientName: "",
+                grams: 0,
+                calories_per_100g: "",
+                protein_per_100g: "",
+                carbs_per_100g: "",
+                fats_per_100g: "",
+              });
+              setIngredientLookupError(null);
+            }
+          }}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Enter Nutrition Data</DialogTitle>
+                <DialogDescription>
+                  Could not find nutrition data for "{manualNutritionDialog.ingredientName}" online. Please enter the nutrition values per 100g.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="p-3 bg-muted rounded-md">
+                  <div className="text-sm font-medium">{manualNutritionDialog.ingredientName}</div>
+                  <div className="text-xs text-muted-foreground">{manualNutritionDialog.grams}g</div>
+                </div>
+                <div>
+                  <Label htmlFor="manual-calories">Calories per 100g *</Label>
+                  <Input
+                    id="manual-calories"
+                    type="number"
+                    placeholder="165"
+                    value={manualNutritionDialog.calories_per_100g}
+                    onChange={(e) => setManualNutritionDialog({
+                      ...manualNutritionDialog,
+                      calories_per_100g: e.target.value
+                    })}
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label htmlFor="manual-protein">Protein (g)</Label>
+                    <Input
+                      id="manual-protein"
+                      type="number"
+                      step="0.1"
+                      placeholder="31.0"
+                      value={manualNutritionDialog.protein_per_100g}
+                      onChange={(e) => setManualNutritionDialog({
+                        ...manualNutritionDialog,
+                        protein_per_100g: e.target.value
+                      })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="manual-carbs">Carbs (g)</Label>
+                    <Input
+                      id="manual-carbs"
+                      type="number"
+                      step="0.1"
+                      placeholder="0.0"
+                      value={manualNutritionDialog.carbs_per_100g}
+                      onChange={(e) => setManualNutritionDialog({
+                        ...manualNutritionDialog,
+                        carbs_per_100g: e.target.value
+                      })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="manual-fats">Fats (g)</Label>
+                    <Input
+                      id="manual-fats"
+                      type="number"
+                      step="0.1"
+                      placeholder="3.6"
+                      value={manualNutritionDialog.fats_per_100g}
+                      onChange={(e) => setManualNutritionDialog({
+                        ...manualNutritionDialog,
+                        fats_per_100g: e.target.value
+                      })}
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => {
+                      setManualNutritionDialog({
+                        open: false,
+                        ingredientName: "",
+                        grams: 0,
+                        calories_per_100g: "",
+                        protein_per_100g: "",
+                        carbs_per_100g: "",
+                        fats_per_100g: "",
+                      });
+                      setIngredientLookupError(null);
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    onClick={handleManualNutritionSubmit}
+                  >
+                    Add Ingredient
+                  </Button>
+                </div>
               </div>
             </DialogContent>
           </Dialog>

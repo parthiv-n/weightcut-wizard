@@ -33,13 +33,27 @@ serve(async (req) => {
     const product = data.product;
     const nutriments = product.nutriments || {};
 
-    // Extract nutritional information per 100g
-    const calories = Math.round(nutriments['energy-kcal_100g'] || nutriments['energy-kcal'] || 0);
-    const protein_g = parseFloat(nutriments['proteins_100g'] || nutriments['proteins'] || 0);
-    const carbs_g = parseFloat(nutriments['carbohydrates_100g'] || nutriments['carbohydrates'] || 0);
-    const fats_g = parseFloat(nutriments['fat_100g'] || nutriments['fat'] || 0);
+    // Extract nutritional information per 100g (OpenFoodFacts provides per 100g by default)
+    const calories_per_100g = Math.round(nutriments['energy-kcal_100g'] || nutriments['energy-kcal'] || 0);
+    const protein_per_100g = parseFloat(nutriments['proteins_100g'] || nutriments['proteins'] || 0);
+    const carbs_per_100g = parseFloat(nutriments['carbohydrates_100g'] || nutriments['carbohydrates'] || 0);
+    const fats_per_100g = parseFloat(nutriments['fat_100g'] || nutriments['fat'] || 0);
 
-    const productName = product.product_name || product.product_name_en || "Unknown Product";
+    const productName = product.product_name || product.product_name_en || product.generic_name || "Unknown Product";
+    const servingSize = product.serving_size || "100g";
+    
+    // Extract serving size in grams if available
+    let servingSizeGrams = 100; // Default to 100g
+    const servingMatch = servingSize.match(/(\d+(?:\.\d+)?)\s*g/i);
+    if (servingMatch) {
+      servingSizeGrams = parseFloat(servingMatch[1]);
+    }
+
+    // Calculate nutrition for serving size (if different from 100g)
+    const calories = Math.round((calories_per_100g * servingSizeGrams) / 100);
+    const protein_g = Math.round((protein_per_100g * servingSizeGrams / 100) * 10) / 10;
+    const carbs_g = Math.round((carbs_per_100g * servingSizeGrams / 100) * 10) / 10;
+    const fats_g = Math.round((fats_per_100g * servingSizeGrams / 100) * 10) / 10;
 
     console.log("Product found:", productName);
 
@@ -48,10 +62,18 @@ serve(async (req) => {
         found: true,
         productName,
         calories,
-        protein_g: Math.round(protein_g * 10) / 10,
-        carbs_g: Math.round(carbs_g * 10) / 10,
-        fats_g: Math.round(fats_g * 10) / 10,
-        serving_size: product.serving_size || "100g",
+        protein_g,
+        carbs_g,
+        fats_g,
+        calories_per_100g,
+        protein_per_100g: Math.round(protein_per_100g * 10) / 10,
+        carbs_per_100g: Math.round(carbs_per_100g * 10) / 10,
+        fats_per_100g: Math.round(fats_per_100g * 10) / 10,
+        serving_size: servingSize,
+        serving_size_g: servingSizeGrams,
+        source: "OpenFoodFacts",
+        brand: product.brands || null,
+        image_url: product.image_url || product.image_front_url || null,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
