@@ -115,7 +115,163 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  html {
+    /* Fix iOS Safari 100vh bug - use CSS custom property for dynamic viewport height */
+    height: 100%;
+    height: -webkit-fill-available;
+    /* Prevent iOS overscroll bounce effect */
+    overscroll-behavior: none;
+    /* Smooth scrolling on iOS */
+    -webkit-overflow-scrolling: touch;
+  }
+
   body {
     @apply bg-background text-foreground font-sans;
+    /* Fix iOS Safari 100vh bug */
+    min-height: 100%;
+    min-height: -webkit-fill-available;
+    /* Prevent text size adjustment on iOS orientation change */
+    -webkit-text-size-adjust: 100%;
+    /* Prevent pull-to-refresh on mobile */
+    overscroll-behavior-y: none;
+    /* Improve touch scrolling performance */
+    -webkit-overflow-scrolling: touch;
+    /* Prevent iOS tap highlight */
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Fix iOS input zoom on focus - ensure font-size is at least 16px */
+  input[type="text"],
+  input[type="email"],
+  input[type="number"],
+  input[type="password"],
+  input[type="search"],
+  input[type="tel"],
+  input[type="url"],
+  textarea,
+  select {
+    font-size: 16px; /* Prevents iOS zoom on focus */
+  }
+
+  /* Improve touch targets for mobile */
+  button,
+  a,
+  [role="button"],
+  input[type="submit"],
+  input[type="button"] {
+    /* Minimum touch target size for iOS (44x44px recommended) */
+    min-height: 44px;
+    min-width: 44px;
+    /* Improve tap responsiveness */
+    touch-action: manipulation;
+  }
+
+  /* Prevent iOS Safari from adding unwanted styling to inputs */
+  input,
+  textarea,
+  select {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+}
+
+@layer utilities {
+  /* Mobile-first responsive utilities */
+  .safe-area-inset-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .safe-area-inset-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-area-inset-left {
+    padding-left: env(safe-area-inset-left);
+  }
+
+  .safe-area-inset-right {
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Fix for iOS viewport height - use dynamic viewport units when supported */
+  .min-h-screen-safe {
+    min-height: 100vh;
+    min-height: 100dvh; /* Dynamic viewport height for mobile browsers */
+    min-height: -webkit-fill-available; /* Fallback for iOS Safari */
+  }
+
+  .h-screen-safe {
+    height: 100vh;
+    height: 100dvh; /* Dynamic viewport height for mobile browsers */
+    height: -webkit-fill-available; /* Fallback for iOS Safari */
+  }
+
+  /* Touch-friendly spacing for mobile */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Prevent horizontal scrolling on mobile */
+  .no-horizontal-scroll {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
+  /* Page transition animations - optimized with GPU acceleration */
+  .page-transition-wrapper {
+    @apply w-full h-full;
+    /* Use transform and opacity for GPU acceleration */
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+  }
+
+  .page-enter {
+    animation: pageEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    will-change: transform, opacity;
+  }
+
+  .page-exit {
+    animation: pageExit 0.25s cubic-bezier(0.4, 0, 1, 1) forwards;
+    will-change: transform, opacity;
+  }
+
+  @keyframes pageEnter {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  @keyframes pageExit {
+    from {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(-6px) scale(0.99);
+    }
+  }
+
+  /* Optimize animations for reduced motion preferences */
+  @media (prefers-reduced-motion: reduce) {
+    .page-transition-wrapper {
+      animation: none !important;
+    }
+    
+    .page-enter,
+    .page-exit {
+      animation: none !important;
+      opacity: 1;
+      transform: none;
+    }
   }
 }
