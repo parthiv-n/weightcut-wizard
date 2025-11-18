@@ -851,29 +851,30 @@ export default function Nutrition() {
 
       <Card className="bg-gradient-to-r from-primary/5 to-secondary/5 border-2">
         <CardHeader>
-          <CardTitle className="text-center text-lg">Daily Macronutrient Totals</CardTitle>
+          <CardTitle className="text-center text-base sm:text-lg">Daily Macronutrient Totals</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <CardContent className="p-3 sm:p-6">
+          {/* Horizontal layout on all screen sizes, with responsive sizing for mobile */}
+          <div className="grid grid-cols-4 gap-2 sm:gap-4 md:gap-6">
             <div className="text-center">
-              <p className="text-sm font-medium text-muted-foreground mb-1">Total Calories</p>
-              <p className="text-3xl font-bold text-primary">{totalCalories}</p>
-              <p className="text-xs text-muted-foreground mt-1">kcal</p>
+              <p className="text-xs sm:text-sm font-medium text-muted-foreground mb-0.5 sm:mb-1">Total Calories</p>
+              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-primary">{totalCalories}</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">kcal</p>
             </div>
             <div className="text-center">
-              <p className="text-sm font-medium text-muted-foreground mb-1">Protein</p>
-              <p className="text-3xl font-bold text-blue-600">{totalProtein.toFixed(1)}</p>
-              <p className="text-xs text-muted-foreground mt-1">grams</p>
+              <p className="text-xs sm:text-sm font-medium text-muted-foreground mb-0.5 sm:mb-1">Protein</p>
+              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-600">{totalProtein.toFixed(1)}</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">grams</p>
             </div>
             <div className="text-center">
-              <p className="text-sm font-medium text-muted-foreground mb-1">Carbs</p>
-              <p className="text-3xl font-bold text-orange-600">{totalCarbs.toFixed(1)}</p>
-              <p className="text-xs text-muted-foreground mt-1">grams</p>
+              <p className="text-xs sm:text-sm font-medium text-muted-foreground mb-0.5 sm:mb-1">Carbs</p>
+              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-orange-600">{totalCarbs.toFixed(1)}</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">grams</p>
             </div>
             <div className="text-center">
-              <p className="text-sm font-medium text-muted-foreground mb-1">Fats</p>
-              <p className="text-3xl font-bold text-green-600">{totalFats.toFixed(1)}</p>
-              <p className="text-xs text-muted-foreground mt-1">grams</p>
+              <p className="text-xs sm:text-sm font-medium text-muted-foreground mb-0.5 sm:mb-1">Fats</p>
+              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-green-600">{totalFats.toFixed(1)}</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">grams</p>
             </div>
           </div>
         </CardContent>

@@ -108,22 +108,24 @@ export default function Dashboard() {
   }));
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6 w-full max-w-7xl mx-auto">
+      {/* Mobile-first header with responsive text sizing */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
         <div>
-          <h1 className="text-3xl font-bold">Welcome back, {userName || "Fighter"}!</h1>
-          <p className="text-muted-foreground">Your weight cut journey dashboard</p>
+          <h1 className="text-2xl sm:text-3xl font-bold">Welcome back, {userName || "Fighter"}!</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Your weight cut journey dashboard</p>
         </div>
       </div>
 
-      <div className="rounded-lg bg-gradient-to-r from-primary/10 to-secondary/10 p-4 border border-primary/20">
-        <div className="flex items-start gap-4">
-          <div className="rounded-full bg-primary/20 p-3">
-            <img src={wizardLogo} alt="Wizard" className="w-16 h-16" />
+      {/* Mobile-optimized wizard wisdom card */}
+      <div className="rounded-lg bg-gradient-to-r from-primary/10 to-secondary/10 p-3 sm:p-4 border border-primary/20">
+        <div className="flex items-start gap-3 sm:gap-4">
+          <div className="rounded-full bg-primary/20 p-2 sm:p-3 flex-shrink-0">
+            <img src={wizardLogo} alt="Wizard" className="w-12 h-12 sm:w-16 sm:h-16" />
           </div>
-          <div className="flex-1">
-            <h3 className="font-semibold">Wizard's Daily Wisdom</h3>
-            <p className="text-sm text-muted-foreground mt-1">
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-sm sm:text-base">Wizard's Daily Wisdom</h3>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               {getWizardWisdom()}
             </p>
           </div>
@@ -165,9 +167,9 @@ export default function Dashboard() {
               <CardTitle className="text-sm font-medium">Days Until Target</CardTitle>
               <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-4xl font-bold">{daysUntilTarget}</div>
-              <p className="text-sm text-muted-foreground mt-1">days remaining</p>
+            <CardContent className="p-4 sm:p-6">
+              <div className="text-3xl sm:text-4xl font-bold">{daysUntilTarget}</div>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1">days remaining</p>
             </CardContent>
           </Card>
 
@@ -176,9 +178,9 @@ export default function Dashboard() {
               <CardTitle className="text-sm font-medium">Today's Hydration</CardTitle>
               <Droplets className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
-            <CardContent>
-              <div className="text-4xl font-bold">{(todayHydration / 1000).toFixed(1)}L</div>
-              <p className="text-sm text-muted-foreground mt-1">
+            <CardContent className="p-4 sm:p-6">
+              <div className="text-3xl sm:text-4xl font-bold">{(todayHydration / 1000).toFixed(1)}L</div>
+              <p className="text-xs sm:text-sm text-muted-foreground mt-1">
                 {todayHydration >= 3000 ? "Great job!" : `${((3000 - todayHydration) / 1000).toFixed(1)}L to go`}
               </p>
             </CardContent>
@@ -191,9 +193,9 @@ export default function Dashboard() {
             <CardTitle className="text-sm font-medium">Days Until Target</CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-bold">{daysUntilTarget}</div>
-            <p className="text-sm text-muted-foreground mt-1">days remaining</p>
+          <CardContent className="p-4 sm:p-6">
+            <div className="text-3xl sm:text-4xl font-bold">{daysUntilTarget}</div>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">days remaining</p>
           </CardContent>
         </Card>
 
@@ -203,9 +205,9 @@ export default function Dashboard() {
             <CardTitle className="text-sm font-medium">Today's Hydration</CardTitle>
             <Droplets className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-4xl font-bold">{(todayHydration / 1000).toFixed(1)}L</div>
-            <p className="text-sm text-muted-foreground mt-1">
+          <CardContent className="p-4 sm:p-6">
+            <div className="text-3xl sm:text-4xl font-bold">{(todayHydration / 1000).toFixed(1)}L</div>
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1">
               {todayHydration >= 3000 ? "Great job!" : `${((3000 - todayHydration) / 1000).toFixed(1)}L to go`}
             </p>
           </CardContent>
@@ -221,7 +223,7 @@ export default function Dashboard() {
                 variant={weightUnit === 'kg' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setWeightUnit('kg')}
-                className="h-7 text-xs"
+                className="h-9 min-h-[36px] text-xs sm:h-8 sm:min-h-[32px] touch-target"
               >
                 kg
               </Button>
@@ -229,16 +231,16 @@ export default function Dashboard() {
                 variant={weightUnit === 'lb' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setWeightUnit('lb')}
-                className="h-7 text-xs"
+                className="h-9 min-h-[36px] text-xs sm:h-8 sm:min-h-[32px] touch-target"
               >
                 lb
               </Button>
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-3 sm:p-6">
           {chartData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={250} className="sm:h-[300px]">
               <ComposedChart data={chartData}>
                 <defs>
                   <linearGradient id="weightGradient" x1="0" y1="0" x2="0" y2="1">

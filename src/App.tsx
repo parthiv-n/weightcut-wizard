@@ -8,6 +8,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { UserProvider } from "@/contexts/UserContext";
+import { PageTransition } from "@/components/PageTransition";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Onboarding from "./pages/Onboarding";
@@ -26,15 +27,21 @@ const queryClient = new QueryClient();
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => (
   <SidebarProvider>
-    <div className="min-h-screen flex w-full">
+    {/* Mobile-first layout: sidebar is hidden on mobile, shown via trigger */}
+    <div className="min-h-screen-safe flex w-full no-horizontal-scroll">
       <AppSidebar />
-      <div className="flex-1 flex flex-col">
-        <header className="h-14 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex items-center justify-between px-4">
-          <SidebarTrigger />
-          <ThemeToggle />
+      {/* Main content area - responsive padding for mobile */}
+      <div className="flex-1 flex flex-col min-w-0 w-full">
+        {/* Mobile-optimized header with safe area support */}
+        <header className="h-14 sm:h-14 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex items-center justify-between px-3 sm:px-4 safe-area-inset-top touch-target">
+          <SidebarTrigger className="touch-target" />
+          <ThemeToggle className="touch-target" />
         </header>
-        <main className="flex-1 overflow-auto">
-          {children}
+        {/* Main content with mobile-first responsive padding */}
+        <main className="flex-1 overflow-auto relative min-h-0 w-full">
+          <PageTransition>
+            {children}
+          </PageTransition>
         </main>
       </div>
     </div>

@@ -44,34 +44,42 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader>
-        <div className="p-4">
-          <div className="flex items-center gap-3">
-            <img src={wizardLogo} alt="Wizard" className="w-12 h-12" />
-            <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-              Weight Cut Wizard
-            </h1>
-          </div>
+      {/* Mobile-optimized header with responsive sizing */}
+      <SidebarHeader className="p-3 sm:p-4">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <img 
+            src={wizardLogo} 
+            alt="Wizard" 
+            className="w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0" 
+          />
+          <h1 className="text-base sm:text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent truncate">
+            Weight Cut Wizard
+          </h1>
         </div>
       </SidebarHeader>
-      <SidebarContent>
-        
+      <SidebarContent className="px-2 sm:px-4">
         <SidebarGroup>
-          <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+          <SidebarGroupLabel className="px-2 sm:px-0 text-xs sm:text-sm">
+            Navigation
+          </SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
+            <SidebarMenu className="space-y-1">
               {menuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
+                  <SidebarMenuButton asChild className="touch-target min-h-[44px]">
                     <NavLink 
                       to={item.url}
                       onClick={handleNavClick}
                       className={({ isActive }) => 
-                        isActive ? "bg-sidebar-accent text-sidebar-accent-foreground" : ""
+                        `transition-all duration-200 ease-in-out px-3 sm:px-4 py-2.5 sm:py-2 rounded-md ${
+                          isActive 
+                            ? "bg-sidebar-accent text-sidebar-accent-foreground" 
+                            : "hover:bg-sidebar-accent/50 active:bg-sidebar-accent/70"
+                        }`
                       }
                     >
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
+                      <item.icon className="h-5 w-5 sm:h-4 sm:w-4 flex-shrink-0" />
+                      <span className="text-sm sm:text-base">{item.title}</span>
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -80,18 +88,21 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter>
-        <div className="p-4 border-t space-y-3">
+      {/* Mobile-optimized footer with touch-friendly buttons */}
+      <SidebarFooter className="p-3 sm:p-4 border-t safe-area-inset-bottom">
+        <div className="space-y-2 sm:space-y-3">
           <Button
             variant="outline"
             size="sm"
-            className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+            className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 touch-target min-h-[44px] text-sm sm:text-base"
             onClick={() => setResetDialogOpen(true)}
           >
-            <RotateCcw className="h-4 w-4 mr-2" />
-            Reset All Data
+            <RotateCcw className="h-4 w-4 sm:h-4 sm:w-4 mr-2 flex-shrink-0" />
+            <span className="truncate">Reset All Data</span>
           </Button>
-          <ProfileDropdown />
+          <div className="touch-target">
+            <ProfileDropdown />
+          </div>
         </div>
       </SidebarFooter>
       <DataResetDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen} />
