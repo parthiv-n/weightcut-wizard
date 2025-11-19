@@ -1133,6 +1133,113 @@ export default function Nutrition() {
                   </div>
                 </div>
 
+                {/* Ingredients List Display */}
+                {manualMeal.ingredients.length > 0 && (
+                  <div className="p-4 bg-muted/50 rounded-lg border space-y-3">
+                    <Label className="text-sm font-semibold">Ingredients Added</Label>
+                    <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                      {manualMeal.ingredients.map((ingredient, idx) => {
+                        const hasNutritionData = ingredient.calories_per_100g !== undefined;
+                        const ingredientCalories = hasNutritionData ? Math.round((ingredient.calories_per_100g * ingredient.grams) / 100) : null;
+                        const ingredientProtein = hasNutritionData ? Math.round(((ingredient.protein_per_100g || 0) * ingredient.grams) / 100 * 10) / 10 : null;
+                        const ingredientCarbs = hasNutritionData ? Math.round(((ingredient.carbs_per_100g || 0) * ingredient.grams) / 100 * 10) / 10 : null;
+                        const ingredientFats = hasNutritionData ? Math.round(((ingredient.fats_per_100g || 0) * ingredient.grams) / 100 * 10) / 10 : null;
+
+                        return (
+                          <div key={idx} className="p-3 bg-background rounded-md border space-y-2">
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-medium text-sm">{ingredient.name}</span>
+                                  <span className="text-xs text-muted-foreground">{ingredient.grams}g</span>
+                                  {!hasNutritionData && (
+                                    <Badge variant="outline" className="text-xs">
+                                      <AlertCircle className="h-3 w-3 mr-1" />
+                                      No nutrition data
+                                    </Badge>
+                                  )}
+                                  {hasNutritionData && ingredient.source && (
+                                    <Badge variant="outline" className="text-xs text-muted-foreground">
+                                      <span className="text-[10px]">Source: {ingredient.source}</span>
+                                    </Badge>
+                                  )}
+                                </div>
+                                {hasNutritionData && (
+                                  <div className="text-xs text-muted-foreground mt-1 space-x-3">
+                                    <span>Cal: {ingredientCalories}kcal</span>
+                                    <span>P: {ingredientProtein?.toFixed(1)}g</span>
+                                    <span>C: {ingredientCarbs?.toFixed(1)}g</span>
+                                    <span>F: {ingredientFats?.toFixed(1)}g</span>
+                                  </div>
+                                )}
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  const newIngredients = [...manualMeal.ingredients];
+                                  newIngredients.splice(idx, 1);
+                                  setManualMeal({ ...manualMeal, ingredients: newIngredients });
+                                  // Totals will be recalculated automatically by useEffect
+                                }}
+                                className="flex-shrink-0"
+                              >
+                                Remove
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    
+                    {/* Running Totals */}
+                    {manualMeal.ingredients.some(ing => ing.calories_per_100g !== undefined) && (() => {
+                      const totalWeight = manualMeal.ingredients.reduce((sum, ing) => sum + ing.grams, 0);
+                      const totalCalories = manualMeal.ingredients.reduce((sum, ing) => 
+                        sum + ((ing.calories_per_100g || 0) * ing.grams) / 100, 0
+                      );
+                      const totalProtein = manualMeal.ingredients.reduce((sum, ing) => 
+                        sum + ((ing.protein_per_100g || 0) * ing.grams) / 100, 0
+                      );
+                      const totalCarbs = manualMeal.ingredients.reduce((sum, ing) => 
+                        sum + ((ing.carbs_per_100g || 0) * ing.grams) / 100, 0
+                      );
+                      const totalFats = manualMeal.ingredients.reduce((sum, ing) => 
+                        sum + ((ing.fats_per_100g || 0) * ing.grams) / 100, 0
+                      );
+
+                      return (
+                        <div className="pt-3 border-t space-y-2">
+                          <div className="text-sm font-semibold mb-2">Total from Ingredients:</div>
+                          <div className="grid grid-cols-5 gap-2 text-center text-xs sm:text-sm">
+                            <div>
+                              <p className="font-medium text-muted-foreground mb-0.5">Weight</p>
+                              <p className="font-bold">{Math.round(totalWeight)}g</p>
+                            </div>
+                            <div>
+                              <p className="font-medium text-muted-foreground mb-0.5">Calories</p>
+                              <p className="font-bold text-primary">{Math.round(totalCalories)}</p>
+                            </div>
+                            <div>
+                              <p className="font-medium text-muted-foreground mb-0.5">Protein</p>
+                              <p className="font-bold text-blue-600">{totalProtein.toFixed(1)}g</p>
+                            </div>
+                            <div>
+                              <p className="font-medium text-muted-foreground mb-0.5">Carbs</p>
+                              <p className="font-bold text-orange-600">{totalCarbs.toFixed(1)}g</p>
+                            </div>
+                            <div>
+                              <p className="font-medium text-muted-foreground mb-0.5">Fats</p>
+                              <p className="font-bold text-green-600">{totalFats.toFixed(1)}g</p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+
                 {/* Manually input macros button */}
                 <div className="flex justify-center">
                   <Button
