@@ -19,7 +19,8 @@ serve(async (req) => {
       age,
       sex,
       heightCm,
-      tdee
+      tdee,
+      fightNightWeight
     } = await req.json();
     
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -31,11 +32,21 @@ serve(async (req) => {
     const today = new Date();
     const target = new Date(targetDate);
     const daysRemaining = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    const weeksRemaining = daysRemaining / 7;
-    const weightToLose = currentWeight - goalWeight;
-    const requiredWeeklyLoss = weightToLose / weeksRemaining;
+    const weeksRemaining = Math.max(1, daysRemaining / 7); // Prevent division by zero
+    
+    // Detect maintenance mode: when current weight equals or exceeds fight week target
+    const isMaintenanceMode = currentWeight >= goalWeight;
+    const weightToLose = isMaintenanceMode ? 0 : currentWeight - goalWeight;
+    const requiredWeeklyLoss = isMaintenanceMode ? 0 : weightToLose / weeksRemaining;
 
     const systemPrompt = `You are the Weight Cut Wizard, a science-based nutrition and weight loss expert specializing in combat sports athletes.
+
+CRITICAL: UNDERSTANDING THE TARGET WEIGHTS
+- The "goalWeight" parameter is the FIGHT WEEK TARGET (diet goal before dehydration), NOT the final weigh-in weight
+- The fight week target is achieved through diet and fat loss over time
+- The fight night weight (final weigh-in) is achieved through dehydration in the final days, NOT through diet
+- When current weight equals or exceeds fight week target, recommend MAINTENANCE calories (TDEE) to maintain weight
+- No calorie deficit is needed when already at or below fight week target
 
 CRITICAL SAFETY FRAMEWORK FOR WEEKLY WEIGHT LOSS:
 - GREEN (Safe): ≤0.5-1.0kg per week (optimal fat loss, preserves performance)
@@ -44,12 +55,13 @@ CRITICAL SAFETY FRAMEWORK FOR WEEKLY WEIGHT LOSS:
 
 CALORIE CALCULATION PRINCIPLES:
 1. Use TDEE (Total Daily Energy Expenditure) as baseline
-2. Safe deficit: 500-750 kcal/day (creates 0.5-0.75kg/week loss)
-3. Aggressive deficit: 750-1000 kcal/day (creates 0.75-1kg/week loss)
-4. Never recommend >1000 kcal deficit (dangerous)
-5. Minimum calories: Never below 1500 kcal for males, 1200 kcal for females
-6. Protein priority: 2.0-2.5g per kg body weight for muscle preservation
-7. Consider activity level and training demands
+2. When at or below fight week target: Recommend MAINTENANCE calories (TDEE) with no deficit
+3. Safe deficit: 500-750 kcal/day (creates 0.5-0.75kg/week loss)
+4. Aggressive deficit: 750-1000 kcal/day (creates 0.75-1kg/week loss)
+5. Never recommend >1000 kcal deficit (dangerous)
+6. Minimum calories: Never below 1500 kcal for males, 1200 kcal for females
+7. Protein priority: 2.0-2.5g per kg body weight for muscle preservation
+8. Consider activity level and training demands
 
 STRATEGIC GUIDANCE FACTORS:
 - Time available (more time = safer approach)
@@ -83,9 +95,11 @@ OUTPUT FORMAT - You must respond with valid JSON only:
   }
 }`;
 
-    const userPrompt = `Calculate optimal weight loss strategy:
+    // Build user prompt with maintenance mode handling
+    let userPrompt = `Calculate optimal weight management strategy:
 - Current Weight: ${currentWeight}kg
-- Goal Weight: ${goalWeight}kg
+- Goal Weight (Fight Week Target - diet goal before dehydration): ${goalWeight}kg
+${fightNightWeight ? `- Fight Night Weight (final weigh-in after dehydration): ${fightNightWeight}kg (for reference only, not the diet target)` : ''}
 - Weight to Lose: ${weightToLose.toFixed(1)}kg
 - Days Remaining: ${daysRemaining}
 - Weeks Remaining: ${weeksRemaining.toFixed(1)}
@@ -96,15 +110,17 @@ OUTPUT FORMAT - You must respond with valid JSON only:
 - Sex: ${sex}
 - Height: ${heightCm}cm
 
-Provide:
-1. Risk level assessment (green/yellow/red)
-2. Recommended daily calorie intake
-3. Macronutrient breakdown (protein/carbs/fats in grams)
-4. Strategic guidance for achieving goal safely
-5. Weekly plan structure
-6. Training considerations based on deficit
+${isMaintenanceMode ? `\nIMPORTANT: Current weight (${currentWeight}kg) equals or exceeds fight week target (${goalWeight}kg). Recommend MAINTENANCE calories (TDEE: ${tdee}kcal) to maintain weight. No calorie deficit needed. User is already at the diet goal - any further weight loss to reach fight night weight will be achieved through dehydration in the final days, not through diet.` : ''}
 
-Be specific with numbers and practical advice. If the timeline is unrealistic (requires >1.5kg/week), clearly state this and recommend timeline extension.`;
+Provide:
+1. Risk level assessment (green/yellow/red)${isMaintenanceMode ? ' - Should be GREEN (maintenance mode)' : ''}
+2. Recommended daily calorie intake${isMaintenanceMode ? ' - Should be TDEE (maintenance) with no deficit' : ''}
+3. Macronutrient breakdown (protein/carbs/fats in grams)${isMaintenanceMode ? ' - Balanced macros for maintenance' : ''}
+4. Strategic guidance for achieving goal safely${isMaintenanceMode ? ' - Focus on maintaining current weight and preparing for final dehydration phase' : ''}
+5. Weekly plan structure${isMaintenanceMode ? ' - Maintenance nutrition plan' : ''}
+6. Training considerations${isMaintenanceMode ? ' - Training nutrition for maintenance' : ' based on deficit'}
+
+${isMaintenanceMode ? 'Since user is already at fight week target, focus on maintenance nutrition. The fight night weight will be achieved through dehydration protocols in the final days before weigh-in, not through continued dieting.' : 'Be specific with numbers and practical advice. If the timeline is unrealistic (requires >1.5kg/week), clearly state this and recommend timeline extension.'}`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

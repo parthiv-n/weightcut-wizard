@@ -53,12 +53,20 @@ export default function Nutrition() {
   const [aiPrompt, setAiPrompt] = useState("");
   const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
   const [isManualDialogOpen, setIsManualDialogOpen] = useState(false);
+  const [isManualMacrosDialogOpen, setIsManualMacrosDialogOpen] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [dailyCalorieTarget, setDailyCalorieTarget] = useState(2000);
   const [safetyStatus, setSafetyStatus] = useState<"green" | "yellow" | "red">("green");
   const [safetyMessage, setSafetyMessage] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mealToDelete, setMealToDelete] = useState<Meal | null>(null);
+  const [aiMacroGoals, setAiMacroGoals] = useState<{
+    proteinGrams: number;
+    carbsGrams: number;
+    fatsGrams: number;
+    recommendedCalories: number;
+  } | null>(null);
+  const [fetchingMacroGoals, setFetchingMacroGoals] = useState(false);
   const { toast } = useToast();
 
   // Manual meal form
@@ -95,6 +103,12 @@ export default function Nutrition() {
     loadProfile();
     loadMeals();
   }, [selectedDate]);
+
+  useEffect(() => {
+    if (profile) {
+      fetchMacroGoals();
+    }
+  }, [profile]);
 
   const loadProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -139,6 +153,70 @@ export default function Nutrition() {
     }
 
     setDailyCalorieTarget(Math.round(target));
+  };
+
+  const getCurrentWeight = async (profileData: any) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return profileData?.current_weight_kg || 0;
+
+    const { data: weightLogs } = await supabase
+      .from("weight_logs")
+      .select("weight_kg")
+      .eq("user_id", user.id)
+      .order("date", { ascending: false })
+      .limit(1);
+
+    if (weightLogs && weightLogs.length > 0) {
+      return weightLogs[0].weight_kg;
+    }
+    return profileData?.current_weight_kg || 0;
+  };
+
+  const fetchMacroGoals = async () => {
+    if (!profile) return;
+
+    const fightWeekTarget = profile.fight_week_target_kg;
+    if (!fightWeekTarget) {
+      // No fight week target set, clear macro goals
+      setAiMacroGoals(null);
+      return;
+    }
+
+    setFetchingMacroGoals(true);
+    try {
+      const currentWeight = await getCurrentWeight(profile);
+
+      const { data, error } = await supabase.functions.invoke("weight-tracker-analysis", {
+        body: {
+          currentWeight,
+          goalWeight: fightWeekTarget,
+          fightNightWeight: profile.goal_weight_kg,
+          targetDate: profile.target_date,
+          activityLevel: profile.activity_level,
+          age: profile.age,
+          sex: profile.sex,
+          heightCm: profile.height_cm,
+          tdee: profile.tdee
+        }
+      });
+
+      if (error) {
+        // Silently fail - don't show error toast, just don't show goals
+        setAiMacroGoals(null);
+      } else if (data?.analysis) {
+        setAiMacroGoals({
+          proteinGrams: data.analysis.proteinGrams || 0,
+          carbsGrams: data.analysis.carbsGrams || 0,
+          fatsGrams: data.analysis.fatsGrams || 0,
+          recommendedCalories: data.analysis.recommendedCalories || 0,
+        });
+      }
+    } catch (error) {
+      // Silently fail
+      setAiMacroGoals(null);
+    } finally {
+      setFetchingMacroGoals(false);
+    }
   };
 
   const loadMeals = async () => {
@@ -904,6 +982,28 @@ export default function Nutrition() {
   const totalCarbs = meals.reduce((sum, meal) => sum + (meal.carbs_g || 0), 0);
   const totalFats = meals.reduce((sum, meal) => sum + (meal.fats_g || 0), 0);
 
+  // Helper function to calculate difference and color coding
+  const getMacroDifference = (current: number, goal: number) => {
+    const difference = goal - current;
+    const percentDiff = goal > 0 ? Math.abs(difference / goal) * 100 : 0;
+    
+    let colorClass = "text-green-600 dark:text-green-400";
+    if (percentDiff > 20) {
+      colorClass = "text-red-600 dark:text-red-400";
+    } else if (percentDiff > 10) {
+      colorClass = "text-yellow-600 dark:text-yellow-400";
+    }
+
+    return {
+      difference,
+      percentDiff,
+      colorClass,
+      displayText: difference >= 0 
+        ? `${Math.round(difference)} remaining`
+        : `${Math.round(Math.abs(difference))} over`
+    };
+  };
+
   return (
     <div className="space-y-6 p-3 sm:p-6 max-w-7xl mx-auto overflow-x-hidden">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -1033,6 +1133,18 @@ export default function Nutrition() {
                   </div>
                 </div>
 
+                {/* Manually input macros button */}
+                <div className="flex justify-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsManualMacrosDialogOpen(true)}
+                    className="w-full sm:w-auto"
+                  >
+                    Manually input macros
+                  </Button>
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
                     <Label htmlFor="meal_name">Meal Name *</Label>
@@ -1060,8 +1172,46 @@ export default function Nutrition() {
                       </SelectContent>
                     </Select>
                   </div>
+                  <div className="col-span-2">
+                    <Label htmlFor="portion">Portion Description (optional)</Label>
+                    <Input
+                      id="portion"
+                      placeholder="E.g., 1 plate, 2 servings"
+                      value={manualMeal.portion_size}
+                      onChange={(e) => setManualMeal({ ...manualMeal, portion_size: e.target.value })}
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <Label htmlFor="notes">Recipe/Notes (optional)</Label>
+                    <Textarea
+                      id="notes"
+                      placeholder="Preparation notes or recipe details"
+                      value={manualMeal.recipe_notes}
+                      onChange={(e) => setManualMeal({ ...manualMeal, recipe_notes: e.target.value })}
+                      rows={3}
+                    />
+                  </div>
+                </div>
+                <Button onClick={handleAddManualMeal} disabled={loading} className="w-full">
+                  {loading ? "Adding..." : "Add Meal"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          {/* Manual Macros Dialog */}
+          <Dialog open={isManualMacrosDialogOpen} onOpenChange={setIsManualMacrosDialogOpen}>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
+              <DialogHeader>
+                <DialogTitle>Manually Input Macros</DialogTitle>
+                <DialogDescription>
+                  Enter calories, macros, and ingredients for your meal
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="calories" className="flex items-center gap-2">
+                    <Label htmlFor="manual-calories" className="flex items-center gap-2">
                       Calories *
                       {manualMeal.ingredients.some(ing => ing.calories_per_100g !== undefined) && (
                         <Badge variant="outline" className="text-xs">
@@ -1070,7 +1220,7 @@ export default function Nutrition() {
                       )}
                     </Label>
                     <Input
-                      id="calories"
+                      id="manual-calories"
                       type="number"
                       placeholder="400"
                       value={manualMeal.calories}
@@ -1078,7 +1228,7 @@ export default function Nutrition() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="protein" className="flex items-center gap-2">
+                    <Label htmlFor="manual-protein" className="flex items-center gap-2">
                       Protein (g)
                       {manualMeal.ingredients.some(ing => ing.protein_per_100g !== undefined) && (
                         <Badge variant="outline" className="text-xs">
@@ -1087,7 +1237,7 @@ export default function Nutrition() {
                       )}
                     </Label>
                     <Input
-                      id="protein"
+                      id="manual-protein"
                       type="number"
                       step="0.1"
                       placeholder="30"
@@ -1096,7 +1246,7 @@ export default function Nutrition() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="carbs" className="flex items-center gap-2">
+                    <Label htmlFor="manual-carbs" className="flex items-center gap-2">
                       Carbs (g)
                       {manualMeal.ingredients.some(ing => ing.carbs_per_100g !== undefined) && (
                         <Badge variant="outline" className="text-xs">
@@ -1105,7 +1255,7 @@ export default function Nutrition() {
                       )}
                     </Label>
                     <Input
-                      id="carbs"
+                      id="manual-carbs"
                       type="number"
                       step="0.1"
                       placeholder="40"
@@ -1114,7 +1264,7 @@ export default function Nutrition() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="fats" className="flex items-center gap-2">
+                    <Label htmlFor="manual-fats" className="flex items-center gap-2">
                       Fats (g)
                       {manualMeal.ingredients.some(ing => ing.fats_per_100g !== undefined) && (
                         <Badge variant="outline" className="text-xs">
@@ -1123,7 +1273,7 @@ export default function Nutrition() {
                       )}
                     </Label>
                     <Input
-                      id="fats"
+                      id="manual-fats"
                       type="number"
                       step="0.1"
                       placeholder="15"
@@ -1342,29 +1492,16 @@ export default function Nutrition() {
                       )}
                     </div>
                   </div>
-                  <div className="col-span-2">
-                    <Label htmlFor="portion">Portion Description (optional)</Label>
-                    <Input
-                      id="portion"
-                      placeholder="E.g., 1 plate, 2 servings"
-                      value={manualMeal.portion_size}
-                      onChange={(e) => setManualMeal({ ...manualMeal, portion_size: e.target.value })}
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <Label htmlFor="notes">Recipe/Notes</Label>
-                    <Textarea
-                      id="notes"
-                      placeholder="Preparation notes or recipe details"
-                      value={manualMeal.recipe_notes}
-                      onChange={(e) => setManualMeal({ ...manualMeal, recipe_notes: e.target.value })}
-                      rows={3}
-                    />
-                  </div>
                 </div>
-                <Button onClick={handleAddManualMeal} disabled={loading} className="w-full">
-                  {loading ? "Adding..." : "Add Meal"}
-                </Button>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsManualMacrosDialogOpen(false)}
+                  >
+                    Done
+                  </Button>
+                </div>
               </div>
             </DialogContent>
           </Dialog>
@@ -1534,24 +1671,80 @@ export default function Nutrition() {
         <CardContent className="p-3 sm:p-6">
           {/* Horizontal layout on all screen sizes, with responsive sizing for mobile */}
           <div className="grid grid-cols-4 gap-2 sm:gap-4 md:gap-6">
+            {/* Calories */}
             <div className="text-center">
               <p className="text-xs sm:text-sm font-medium text-muted-foreground mb-0.5 sm:mb-1">Total Calories</p>
               <p className="text-xl sm:text-2xl md:text-3xl font-bold text-primary">{totalCalories}</p>
+              {aiMacroGoals && (
+                <>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">Goal: {Math.round(aiMacroGoals.recommendedCalories)}</p>
+                  {(() => {
+                    const diff = getMacroDifference(totalCalories, aiMacroGoals.recommendedCalories);
+                    return (
+                      <p className={`text-[10px] sm:text-xs font-medium mt-0.5 ${diff.colorClass}`}>
+                        {diff.displayText}
+                      </p>
+                    );
+                  })()}
+                </>
+              )}
               <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">kcal</p>
             </div>
+            {/* Protein */}
             <div className="text-center">
               <p className="text-xs sm:text-sm font-medium text-muted-foreground mb-0.5 sm:mb-1">Protein</p>
               <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-600">{totalProtein.toFixed(1)}</p>
+              {aiMacroGoals && (
+                <>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">Goal: {Math.round(aiMacroGoals.proteinGrams)}g</p>
+                  {(() => {
+                    const diff = getMacroDifference(totalProtein, aiMacroGoals.proteinGrams);
+                    return (
+                      <p className={`text-[10px] sm:text-xs font-medium mt-0.5 ${diff.colorClass}`}>
+                        {diff.displayText}
+                      </p>
+                    );
+                  })()}
+                </>
+              )}
               <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">grams</p>
             </div>
+            {/* Carbs */}
             <div className="text-center">
               <p className="text-xs sm:text-sm font-medium text-muted-foreground mb-0.5 sm:mb-1">Carbs</p>
               <p className="text-xl sm:text-2xl md:text-3xl font-bold text-orange-600">{totalCarbs.toFixed(1)}</p>
+              {aiMacroGoals && (
+                <>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">Goal: {Math.round(aiMacroGoals.carbsGrams)}g</p>
+                  {(() => {
+                    const diff = getMacroDifference(totalCarbs, aiMacroGoals.carbsGrams);
+                    return (
+                      <p className={`text-[10px] sm:text-xs font-medium mt-0.5 ${diff.colorClass}`}>
+                        {diff.displayText}
+                      </p>
+                    );
+                  })()}
+                </>
+              )}
               <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">grams</p>
             </div>
+            {/* Fats */}
             <div className="text-center">
               <p className="text-xs sm:text-sm font-medium text-muted-foreground mb-0.5 sm:mb-1">Fats</p>
               <p className="text-xl sm:text-2xl md:text-3xl font-bold text-green-600">{totalFats.toFixed(1)}</p>
+              {aiMacroGoals && (
+                <>
+                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">Goal: {Math.round(aiMacroGoals.fatsGrams)}g</p>
+                  {(() => {
+                    const diff = getMacroDifference(totalFats, aiMacroGoals.fatsGrams);
+                    return (
+                      <p className={`text-[10px] sm:text-xs font-medium mt-0.5 ${diff.colorClass}`}>
+                        {diff.displayText}
+                      </p>
+                    );
+                  })()}
+                </>
+              )}
               <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">grams</p>
             </div>
           </div>
