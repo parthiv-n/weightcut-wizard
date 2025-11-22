@@ -32,13 +32,13 @@ serve(async (req) => {
     }
 
     const { hydrationData, profileData, recentLogs } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const GOOGLE_AI_STUDIO_API_KEY = Deno.env.get("GOOGLE_AI_STUDIO_API_KEY") || "***REDACTED_API_KEY***";
 
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    if (!GOOGLE_AI_STUDIO_API_KEY) {
+      throw new Error("GOOGLE_AI_STUDIO_API_KEY is not configured");
     }
 
-    const systemPrompt = `You are the Weight Cut Wizard, a science-based mystical coach who prioritises fighter safety and performance. You NEVER encourage:
+    const systemPrompt = `You are an expert combat sports nutritionist specializing in hydration strategies for fighters. You prioritize fighter safety and performance above all else. You have deep knowledge of hydration protocols, sodium manipulation, and fluid management specific to combat sports weight cutting. You NEVER encourage:
 - Extreme dehydration (>3% body weight loss)
 - Diuretics or dangerous supplements
 - Plastic suits or excessive sauna use without supervision
@@ -66,14 +66,13 @@ Recent patterns: ${recentLogs || "No recent logs"}
 
 Provide a brief insight on their hydration status and one actionable recommendation.`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${GOOGLE_AI_STUDIO_API_KEY}`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "gemini-2.0-flash-exp",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -88,10 +87,10 @@ Provide a brief insight on their hydration status and one actionable recommendat
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (response.status === 402) {
+      if (response.status === 402 || response.status === 403) {
         return new Response(
-          JSON.stringify({ error: "AI credits depleted. Please add credits to continue." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "API access denied. Please check your API key." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       const errorText = await response.text();
