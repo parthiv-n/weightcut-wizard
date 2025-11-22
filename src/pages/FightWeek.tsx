@@ -80,7 +80,7 @@ export default function FightWeek() {
 
   useEffect(() => {
     if (plan) {
-      updateCurrentWeight();
+      updateLocalCurrentWeight();
     }
   }, [logs, plan, contextCurrentWeight]);
 
@@ -118,7 +118,7 @@ export default function FightWeek() {
     }
   };
 
-  const updateCurrentWeight = async () => {
+  const updateLocalCurrentWeight = async () => {
     if (!plan) return;
     
     // Check fight week logs first (most specific for fight week)
