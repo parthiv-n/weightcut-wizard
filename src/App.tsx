@@ -89,81 +89,81 @@ const App = () => (
           <Route path="/dashboard" element={
             <ProtectedRoute>
               <ProfileCompletionGuard>
-                <AppLayout>
-                  <Dashboard />
-                </AppLayout>
+              <AppLayout>
+                <Dashboard />
+              </AppLayout>
               </ProfileCompletionGuard>
             </ProtectedRoute>
           } />
           <Route path="/goals" element={
             <ProtectedRoute>
               <ProfileCompletionGuard>
-                <AppLayout>
-                  <Goals />
-                </AppLayout>
+              <AppLayout>
+                <Goals />
+              </AppLayout>
               </ProfileCompletionGuard>
             </ProtectedRoute>
           } />
           <Route path="/nutrition" element={
             <ProtectedRoute>
               <ProfileCompletionGuard>
-                <AppLayout>
-                  <Nutrition />
-                </AppLayout>
+              <AppLayout>
+                <Nutrition />
+              </AppLayout>
               </ProfileCompletionGuard>
             </ProtectedRoute>
           } />
           <Route path="/weight" element={
             <ProtectedRoute>
               <ProfileCompletionGuard>
-                <AppLayout>
-                  <WeightTracker />
-                </AppLayout>
+              <AppLayout>
+                <WeightTracker />
+              </AppLayout>
               </ProfileCompletionGuard>
             </ProtectedRoute>
           } />
           <Route path="/hydration" element={
             <ProtectedRoute>
               <ProfileCompletionGuard>
-                <AppLayout>
-                  <Hydration />
-                </AppLayout>
+              <AppLayout>
+                <Hydration />
+              </AppLayout>
               </ProfileCompletionGuard>
             </ProtectedRoute>
           } />
           <Route path="/fight-camps" element={
             <ProtectedRoute>
               <ProfileCompletionGuard>
-                <AppLayout>
-                  <FightCamps />
-                </AppLayout>
+              <AppLayout>
+                <FightCamps />
+              </AppLayout>
               </ProfileCompletionGuard>
             </ProtectedRoute>
           } />
           <Route path="/fight-camps/:id" element={
             <ProtectedRoute>
               <ProfileCompletionGuard>
-                <AppLayout>
-                  <FightCampDetail />
-                </AppLayout>
+              <AppLayout>
+                <FightCampDetail />
+              </AppLayout>
               </ProfileCompletionGuard>
             </ProtectedRoute>
           } />
           <Route path="/fight-week" element={
             <ProtectedRoute>
               <ProfileCompletionGuard>
-                <AppLayout>
-                  <FightWeek />
-                </AppLayout>
+              <AppLayout>
+                <FightWeek />
+              </AppLayout>
               </ProfileCompletionGuard>
             </ProtectedRoute>
           } />
           <Route path="/wizard" element={
             <ProtectedRoute>
               <ProfileCompletionGuard>
-                <AppLayout>
-                  <Wizard />
-                </AppLayout>
+              <AppLayout>
+                <Wizard />
+              </AppLayout>
               </ProfileCompletionGuard>
             </ProtectedRoute>
           } />
