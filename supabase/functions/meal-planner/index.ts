@@ -48,10 +48,10 @@ serve(async (req) => {
     } : null;
 
     const { prompt, action } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const GOOGLE_AI_STUDIO_API_KEY = Deno.env.get("GOOGLE_AI_STUDIO_API_KEY") || "AIzaSyBlmYlZE8yk369foFvuYnzjay3O5oBR8rw";
 
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    if (!GOOGLE_AI_STUDIO_API_KEY) {
+      throw new Error("GOOGLE_AI_STUDIO_API_KEY is not configured");
     }
 
     // Calculate safe calorie target
@@ -77,7 +77,7 @@ serve(async (req) => {
       safetyMessage = "⚠️ CAUTION: Approaching maximum safe weight loss rate";
     }
 
-    const systemPrompt = `You are the Weight Cut Wizard's nutrition AI. Generate safe, nutritious meal plans that help fighters reach their weight goals safely.
+    const systemPrompt = `You are an expert combat sports nutritionist creating meal plans for fighters. You specialize in designing safe, nutritious meal plans that help fighters reach their weight goals while maintaining performance and supporting training demands. Your meal plans are tailored specifically for combat sports athletes and their unique nutritional needs.
 
 CRITICAL SAFETY RULES:
 - NEVER suggest daily calories below ${Math.round(dailyCalorieTarget)}
@@ -138,18 +138,17 @@ Generate meal plans that:
 - Respect any dietary restrictions mentioned
 - Support training and recovery`;
 
-    console.log("Calling Lovable AI for meal planning...");
+    console.log("Calling Google AI Studio for meal planning...");
 
     const response = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
+      `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${GOOGLE_AI_STUDIO_API_KEY}`,
       {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+          model: "gemini-2.0-flash-exp",
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: prompt }
@@ -170,10 +169,10 @@ Generate meal plans that:
         );
       }
 
-      if (response.status === 402) {
+      if (response.status === 402 || response.status === 403) {
         return new Response(
-          JSON.stringify({ error: "Payment required. Please add credits to your Lovable AI workspace." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "API access denied. Please check your API key." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       

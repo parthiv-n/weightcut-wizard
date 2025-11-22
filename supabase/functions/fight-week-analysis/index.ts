@@ -20,13 +20,13 @@ serve(async (req) => {
       isWaterloading 
     } = await req.json();
     
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const GOOGLE_AI_STUDIO_API_KEY = Deno.env.get("GOOGLE_AI_STUDIO_API_KEY") || "AIzaSyBlmYlZE8yk369foFvuYnzjay3O5oBR8rw";
 
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    if (!GOOGLE_AI_STUDIO_API_KEY) {
+      throw new Error("GOOGLE_AI_STUDIO_API_KEY is not configured");
     }
 
-    const systemPrompt = `You are the Weight Cut Wizard, a science-based combat sports weight cutting expert with deep knowledge of physiology and fighter safety.
+    const systemPrompt = `You are an expert combat sports nutritionist specializing in fight week weight cutting protocols. You have deep knowledge of combat sports physiology, dehydration strategies, rehydration protocols, and fighter safety. Your expertise includes understanding the unique demands of weight cutting in combat sports and the critical balance between achieving weight goals and maintaining performance.
 
 CRITICAL SAFETY ASSESSMENT FRAMEWORK:
 - Calculate weight to cut as percentage of body weight
@@ -99,14 +99,13 @@ Provide comprehensive analysis with:
 4. Specific adaptations needed for remaining days
 5. Scientific justification for risk level`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${GOOGLE_AI_STUDIO_API_KEY}`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "gemini-2.0-flash-exp",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -121,10 +120,10 @@ Provide comprehensive analysis with:
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (response.status === 402) {
+      if (response.status === 402 || response.status === 403) {
         return new Response(
-          JSON.stringify({ error: "AI credits depleted. Please add credits to continue." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "API access denied. Please check your API key." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       const errorText = await response.text();

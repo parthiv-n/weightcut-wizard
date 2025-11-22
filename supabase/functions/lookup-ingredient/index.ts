@@ -47,14 +47,14 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const GOOGLE_AI_STUDIO_API_KEY = Deno.env.get("GOOGLE_AI_STUDIO_API_KEY") || "AIzaSyBlmYlZE8yk369foFvuYnzjay3O5oBR8rw";
+    if (!GOOGLE_AI_STUDIO_API_KEY) {
+      throw new Error("GOOGLE_AI_STUDIO_API_KEY is not configured");
     }
 
     console.log("Looking up nutrition for ingredient:", ingredientName);
 
-    const systemPrompt = `You are a nutrition database expert. Look up accurate nutrition information per 100g for food ingredients using web search.
+    const systemPrompt = `You are an expert combat sports nutritionist looking up nutrition data for fighter meal planning. You specialize in finding accurate nutrition information that helps fighters meet their weight cutting and performance goals. Look up accurate nutrition information per 100g for food ingredients using authoritative nutrition databases.
 
 CRITICAL RULES:
 1. Use web search to find reliable nutrition databases (USDA, nutrition websites, food databases)
@@ -76,14 +76,13 @@ Search the web for accurate nutrition data from reliable sources (USDA, nutritio
 
 If the ingredient name is ambiguous, specify what you're looking up (e.g., if "chicken" is given, specify "chicken breast, raw" or similar common preparation).`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${GOOGLE_AI_STUDIO_API_KEY}`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "gemini-2.0-flash-exp",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
@@ -144,10 +143,10 @@ If the ingredient name is ambiguous, specify what you're looking up (e.g., if "c
         );
       }
       
-      if (response.status === 402) {
+      if (response.status === 402 || response.status === 403) {
         return new Response(
-          JSON.stringify({ error: "Payment required. Please add credits to your workspace." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "API access denied. Please check your API key." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       
