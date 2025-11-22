@@ -12,13 +12,13 @@ serve(async (req) => {
 
   try {
     const { weightLostKg, weighInTiming, currentWeightKg, fightTimeHours } = await req.json();
-    const GOOGLE_AI_STUDIO_API_KEY = Deno.env.get("GOOGLE_AI_STUDIO_API_KEY") || "***REDACTED_API_KEY***";
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
-    if (!GOOGLE_AI_STUDIO_API_KEY) {
-      throw new Error("GOOGLE_AI_STUDIO_API_KEY is not configured");
+    if (!LOVABLE_API_KEY) {
+      throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    const systemPrompt = `You are an expert combat sports nutritionist specializing in post-weigh-in rehydration protocols for fighters. You have deep knowledge of combat sports physiology, electrolyte balance, carbohydrate refueling, and the critical timing between weigh-in and competition. You PRIORITIZE fighter safety and performance.
+    const systemPrompt = `You are the Weight Cut Wizard, a science-based combat sports rehydration expert. You PRIORITIZE fighter safety and performance.
 
 CRITICAL SAFETY PRINCIPLES:
 - Never recommend rapid rehydration that could cause hyponatremia
@@ -89,13 +89,14 @@ Provide:
 3. Specific meal suggestions with carb amounts for each time window
 4. Calculate and show total carb intake across all meals`;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${GOOGLE_AI_STUDIO_API_KEY}`, {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gemini-2.0-flash-exp",
+        model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -110,10 +111,10 @@ Provide:
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (response.status === 402 || response.status === 403) {
+      if (response.status === 402) {
         return new Response(
-          JSON.stringify({ error: "API access denied. Please check your API key." }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "AI credits depleted. Please add credits to continue." }),
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       const errorText = await response.text();

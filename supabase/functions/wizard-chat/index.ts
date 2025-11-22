@@ -47,13 +47,13 @@ serve(async (req) => {
     } : null;
 
     const { messages } = await req.json();
-    const GOOGLE_AI_STUDIO_API_KEY = Deno.env.get("GOOGLE_AI_STUDIO_API_KEY") || "***REDACTED_API_KEY***";
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
-    if (!GOOGLE_AI_STUDIO_API_KEY) {
-      throw new Error("GOOGLE_AI_STUDIO_API_KEY is not configured");
+    if (!LOVABLE_API_KEY) {
+      throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    const systemPrompt = `You are an expert combat sports nutritionist and weight cutting coach specializing in helping fighters safely achieve their weight goals. You communicate in a casual, friendly, and conversational style like you're texting a friend, while maintaining your professional expertise in combat sports nutrition.
+    const systemPrompt = `You are the Weight Cut Wizard - a mystical coach who texts with fighters about their weight cut journey. Keep your messages casual, friendly, and conversational like you're texting a friend.
 
 CRITICAL SAFETY RULES - NEVER VIOLATE:
 - REFUSE any request for >1kg per week weight loss
@@ -75,17 +75,18 @@ ${userData ? `Current weight: ${userData.currentWeight}kg, Goal: ${userData.goal
 
 Text Style: Keep it short (2-4 sentences max), friendly, and motivational. Use casual language like you're texting. Add some personality! If a request is unsafe, firmly but kindly decline and suggest safer alternatives.`;
 
-    console.log("Calling Google AI Studio...");
+    console.log("Calling Lovable AI...");
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${GOOGLE_AI_STUDIO_API_KEY}`,
+      "https://ai.gateway.lovable.dev/v1/chat/completions",
       {
         method: "POST",
         headers: {
+          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "gemini-2.0-flash-exp",
+          model: "google/gemini-2.5-flash",
           messages: [
             { role: "system", content: systemPrompt },
             ...messages
@@ -97,7 +98,7 @@ Text Style: Keep it short (2-4 sentences max), friendly, and motivational. Use c
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("Google AI Studio error:", response.status, errorText);
+      console.error("Lovable AI error:", response.status, errorText);
       
       if (response.status === 429) {
         return new Response(
@@ -106,26 +107,15 @@ Text Style: Keep it short (2-4 sentences max), friendly, and motivational. Use c
         );
       }
 
-      if (response.status === 402 || response.status === 403 || response.status === 401) {
+      if (response.status === 402) {
         return new Response(
-          JSON.stringify({ error: "API access denied. Please check your API key." }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "Payment required. Please add credits to your Lovable AI workspace." }),
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       
       return new Response(
-        JSON.stringify({ 
-          error: `AI service error: ${response.status}`,
-          details: errorText.substring(0, 500)
-        }),
-        { status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    if (!response.body) {
-      console.error("No response body from Google AI Studio");
-      return new Response(
-        JSON.stringify({ error: "No response body from AI service" }),
+        JSON.stringify({ error: `AI error: ${response.status}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -142,12 +132,8 @@ Text Style: Keep it short (2-4 sentences max), friendly, and motivational. Use c
   } catch (error) {
     console.error("wizard-chat error:", error);
     return new Response(
-      JSON.stringify({ 
-        error: error instanceof Error ? error.message : "Unknown error",
-        stack: error instanceof Error ? error.stack : undefined
-      }),
+      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
-
