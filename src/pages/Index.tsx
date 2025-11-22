@@ -10,11 +10,27 @@ const Index = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const checkAuthAndProfile = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        navigate("/dashboard");
+        // Check if user has a profile
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("id", session.user.id)
+          .maybeSingle();
+        
+        if (profile) {
+          // User has profile, redirect to dashboard
+          navigate("/dashboard");
+        } else {
+          // User authenticated but no profile, redirect to onboarding
+          navigate("/onboarding");
+        }
       }
-    });
+    };
+    
+    checkAuthAndProfile();
   }, [navigate]);
 
   return (
