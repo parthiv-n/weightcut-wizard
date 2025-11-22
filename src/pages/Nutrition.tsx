@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,6 +69,7 @@ export default function Nutrition() {
   } | null>(null);
   const [fetchingMacroGoals, setFetchingMacroGoals] = useState(false);
   const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Manual meal form
   const [manualMeal, setManualMeal] = useState({
@@ -109,6 +111,22 @@ export default function Nutrition() {
       fetchMacroGoals();
     }
   }, [profile]);
+
+  // Auto-open add meal dialog if URL param is present
+  useEffect(() => {
+    if (searchParams.get("openAddMeal") === "true") {
+      setIsAiDialogOpen(true);
+      // Remove the param from URL
+      searchParams.delete("openAddMeal");
+      setSearchParams(searchParams, { replace: true });
+    }
+    if (searchParams.get("openManualMeal") === "true") {
+      setIsManualDialogOpen(true);
+      // Remove the param from URL
+      searchParams.delete("openManualMeal");
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   // Real-time subscription to profiles table for automatic updates when Weight Tracker saves new recommendations
   useEffect(() => {
