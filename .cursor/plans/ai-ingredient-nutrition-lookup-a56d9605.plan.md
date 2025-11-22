@@ -1,54 +1,56 @@
 <!-- a56d9605-a417-445a-b942-6b6bc0b3522f e2e899c9-b76b-490f-9432-0fc6e01e6abd -->
-# Fix Onboarding Return Flow
+# Rehydration Page Two-Column Mobile Layout
 
-## Problem
+## Overview
 
-When a user exits during onboarding on mobile and returns, they're redirected to dashboard (or other routes) even though they haven't completed onboarding, making it impossible to finish setup.
+Update the Hydration page to show the Oral Rehydration Solution Timeline and Carbohydrate Refuel Strategy side by side on mobile screens instead of stacking vertically. Also display the Electrolyte Solution section in one row on mobile.
 
-## Root Cause
+## Current State
 
-1. Index.tsx redirects authenticated users to `/dashboard` without checking if profile exists
-2. ProtectedRoute only checks authentication, not profile completion
-3. Other routes (dashboard, etc.) don't check for profile before rendering
-4. No mechanism to redirect users without profiles back to onboarding
+- Line 249: Uses `grid grid-cols-1 lg:grid-cols-2` which stacks vertically on mobile and shows 2 columns only on large screens
+- Line 231: Uses `grid grid-cols-1 md:grid-cols-3` which stacks vertically on mobile and shows 3 columns only on medium+ screens
+- The two timeline cards (water reload and carb reload) are in separate cards within this grid
 
-## Solution
+## Changes Required
 
-### 1. Create ProfileCompletionGuard Component
+### 1. Update Grid Layout for Mobile (Rehydration/Carb Timelines)
 
-- New component that checks if user has a profile
-- If authenticated but no profile → redirect to `/onboarding`
-- If authenticated and has profile → allow access
-- If not authenticated → redirect handled by ProtectedRoute
+- Change `grid-cols-1 lg:grid-cols-2` to `grid-cols-2` so both columns appear side by side on mobile
+- Keep responsive behavior but ensure mobile shows 2 columns
+- May need to adjust gap spacing for mobile (`gap-6` might be too large)
 
-### 2. Update ProtectedRoute or Create Wrapper
+### 2. Update Electrolyte Solution Section
 
-- Option A: Enhance ProtectedRoute to also check profile completion
-- Option B: Create a new wrapper component that combines auth + profile checks
-- Apply to all routes that require a profile (dashboard, goals, nutrition, etc.)
-- Exclude `/onboarding` and `/auth` from profile check
+- Change the electrolyte ratios grid from `grid-cols-1 md:grid-cols-3` to `grid-cols-3` (always 3 columns)
+- This will display Sodium, Potassium, and Magnesium in one row on mobile
+- May need to reduce padding/font sizes to fit on mobile screens
 
-### 3. Update Index.tsx
+### 3. Optimize Card Content for Mobile
 
-- Check if user has profile before redirecting
-- If authenticated but no profile → redirect to `/onboarding`
-- If authenticated with profile → redirect to `/dashboard`
-- If not authenticated → stay on index page
+- Reduce padding/spacing in cards on mobile to fit more content
+- Consider smaller font sizes for mobile
+- Make timeline items more compact
+- Ensure badges and text are readable at smaller sizes
 
-### 4. Update Onboarding.tsx
+### 4. Handle Horizontal Scrolling (if needed)
 
-- Keep the existing check that redirects to dashboard if profile exists
-- Ensure it doesn't interfere with users who don't have profiles
+- If content is too wide, consider making the container horizontally scrollable
+- Or use responsive text sizing to fit content
 
-## Implementation
+## Files to Modify
 
-The guard should:
+- `src/pages/Hydration.tsx`: 
+- Update the grid layout on line 249 (rehydration/carb timelines)
+- Update the grid layout on line 231 (electrolyte ratios)
+- Adjust card styling for mobile
 
-- Check profile existence after authentication is confirmed
-- Show loading state while checking
-- Redirect to `/onboarding` if no profile found
-- Allow access if profile exists
-- Work seamlessly with existing ProtectedRoute
+## Implementation Details
+
+- Change rehydration/carb grid from `grid-cols-1 lg:grid-cols-2` to `grid-cols-2` (always 2 columns)
+- Change electrolyte grid from `grid-cols-1 md:grid-cols-3` to `grid-cols-3` (always 3 columns)
+- Add mobile-specific spacing adjustments
+- Ensure timeline items remain readable at smaller widths
+- Test that all columns fit on a typical phone screen (375px-428px width)
 
 ### To-dos
 
