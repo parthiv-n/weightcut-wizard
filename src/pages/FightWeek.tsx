@@ -14,6 +14,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import wizardLogo from "@/assets/wizard-logo.png";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
+import { useUser } from "@/contexts/UserContext";
 
 interface FightWeekPlan {
   id: string;
@@ -70,6 +71,7 @@ export default function FightWeek() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [logToDelete, setLogToDelete] = useState<DailyLog | null>(null);
   const { toast } = useToast();
+  const { currentWeight: contextCurrentWeight, updateCurrentWeight } = useUser();
 
   useEffect(() => {
     fetchProfile();
@@ -80,7 +82,7 @@ export default function FightWeek() {
     if (plan) {
       updateCurrentWeight();
     }
-  }, [logs, plan]);
+  }, [logs, plan, contextCurrentWeight]);
 
   const fetchProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -104,13 +106,13 @@ export default function FightWeek() {
         .limit(1)
         .maybeSingle();
       
-      // Use latest weight log if available, otherwise use profile weight
-      const currentWeight = latestWeightLog?.weight_kg || data.current_weight_kg;
+      // Use centralized currentWeight if available, otherwise use latest weight log or profile weight
+      const currentWeightValue = contextCurrentWeight ?? latestWeightLog?.weight_kg ?? data.current_weight_kg ?? 0;
       
       // Pre-populate the form with latest weight data
       setNewPlan(prev => ({
         ...prev,
-        starting_weight_kg: prev.starting_weight_kg || currentWeight?.toString() || "",
+        starting_weight_kg: prev.starting_weight_kg || currentWeightValue.toString(),
         target_weight_kg: data.goal_weight_kg?.toString() || ""
       }));
     }
@@ -119,24 +121,13 @@ export default function FightWeek() {
   const updateCurrentWeight = async () => {
     if (!plan) return;
     
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    
-    // Check fight week logs first
+    // Check fight week logs first (most specific for fight week)
     const latestFightWeekLog = logs[logs.length - 1];
     let weight = latestFightWeekLog?.weight_kg;
     
-    // If no fight week log with weight, check weight_logs table
+    // If no fight week log with weight, use centralized currentWeight from context
     if (!weight) {
-      const { data: latestWeightLog } = await supabase
-        .from("weight_logs")
-        .select("weight_kg")
-        .eq("user_id", user.id)
-        .order("date", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      
-      weight = latestWeightLog?.weight_kg || plan.starting_weight_kg;
+      weight = contextCurrentWeight ?? plan.starting_weight_kg;
     }
     
     setCurrentWeight(weight);
@@ -221,6 +212,18 @@ export default function FightWeek() {
       setLoading(false);
     } else {
       toast({ title: "Daily log saved!", description: "Your progress has been tracked." });
+      
+      // Update global current weight if weight was logged
+      if (dailyLog.weight_kg) {
+        // Update profile in database
+        await supabase
+          .from("profiles")
+          .update({ current_weight_kg: dailyLog.weight_kg })
+          .eq("id", user.id);
+        
+        // Update centralized current weight
+        await updateCurrentWeight(dailyLog.weight_kg);
+      }
       
       // First refresh the logs display
       await fetchPlanAndLogs();
