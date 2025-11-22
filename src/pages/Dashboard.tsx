@@ -8,6 +8,7 @@ import { WeightProgressRing } from "@/components/dashboard/WeightProgressRing";
 import { CalorieProgressRing } from "@/components/dashboard/CalorieProgressRing";
 import { useUser } from "@/contexts/UserContext";
 import { Button } from "@/components/ui/button";
+import { calculateCalorieTarget } from "@/lib/calorieCalculation";
 
 export default function Dashboard() {
   const [profile, setProfile] = useState<any>(null);
@@ -77,7 +78,8 @@ export default function Dashboard() {
   // Use centralized currentWeight if available, otherwise fall back to profile
   const currentWeightValue = currentWeight ?? profile?.current_weight_kg ?? 0;
   const weightToLose = profile ? (currentWeightValue - (profile.fight_week_target_kg || profile.goal_weight_kg)).toFixed(1) : 0;
-  const dailyCalorieGoal = profile ? Math.round(profile.tdee - 500) : 0;
+  // Use shared calorie calculation function (checks AI recommendations first, then calculates)
+  const dailyCalorieGoal = profile ? calculateCalorieTarget(profile) : 0;
 
   // Generate dynamic wizard wisdom
   const getWizardWisdom = () => {
