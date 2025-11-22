@@ -110,6 +110,36 @@ export default function Nutrition() {
     }
   }, [profile]);
 
+  // Real-time subscription to profiles table for automatic updates when Weight Tracker saves new recommendations
+  useEffect(() => {
+    if (!profile) return;
+
+    const channel = supabase
+      .channel('profile-nutrition-updates')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'profiles',
+        filter: `id=eq.${profile.id}`
+      }, (payload) => {
+        const newData = payload.new as any;
+        if (newData.ai_recommended_calories) {
+          setAiMacroGoals({
+            proteinGrams: newData.ai_recommended_protein_g || 0,
+            carbsGrams: newData.ai_recommended_carbs_g || 0,
+            fatsGrams: newData.ai_recommended_fats_g || 0,
+            recommendedCalories: newData.ai_recommended_calories || 0,
+          });
+          setDailyCalorieTarget(newData.ai_recommended_calories);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile]);
+
   const loadProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -127,6 +157,13 @@ export default function Nutrition() {
   };
 
   const calculateCalorieTarget = (profileData: any) => {
+    // Check if AI recommendations exist first, use them if available
+    if (profileData.ai_recommended_calories) {
+      setDailyCalorieTarget(profileData.ai_recommended_calories);
+      return;
+    }
+
+    // Fallback to calculated target if no AI recommendations
     const currentWeight = profileData.current_weight_kg || 70;
     const goalWeight = profileData.goal_weight_kg || 65;
     const tdee = profileData.tdee || 2000;
@@ -184,32 +221,35 @@ export default function Nutrition() {
 
     setFetchingMacroGoals(true);
     try {
-      const currentWeight = await getCurrentWeight(profile);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setAiMacroGoals(null);
+        setFetchingMacroGoals(false);
+        return;
+      }
 
-      const { data, error } = await supabase.functions.invoke("weight-tracker-analysis", {
-        body: {
-          currentWeight,
-          goalWeight: fightWeekTarget,
-          fightNightWeight: profile.goal_weight_kg,
-          targetDate: profile.target_date,
-          activityLevel: profile.activity_level,
-          age: profile.age,
-          sex: profile.sex,
-          heightCm: profile.height_cm,
-          tdee: profile.tdee
-        }
-      });
+      // Fetch AI recommendations from profiles table
+      const { data: profileData, error } = await supabase
+        .from("profiles")
+        .select("ai_recommended_calories, ai_recommended_protein_g, ai_recommended_carbs_g, ai_recommended_fats_g, ai_recommendations_updated_at")
+        .eq("id", user.id)
+        .single();
 
       if (error) {
         // Silently fail - don't show error toast, just don't show goals
         setAiMacroGoals(null);
-      } else if (data?.analysis) {
+      } else if (profileData?.ai_recommended_calories) {
         setAiMacroGoals({
-          proteinGrams: data.analysis.proteinGrams || 0,
-          carbsGrams: data.analysis.carbsGrams || 0,
-          fatsGrams: data.analysis.fatsGrams || 0,
-          recommendedCalories: data.analysis.recommendedCalories || 0,
+          proteinGrams: profileData.ai_recommended_protein_g || 0,
+          carbsGrams: profileData.ai_recommended_carbs_g || 0,
+          fatsGrams: profileData.ai_recommended_fats_g || 0,
+          recommendedCalories: profileData.ai_recommended_calories || 0,
         });
+        // Also update dailyCalorieTarget
+        setDailyCalorieTarget(profileData.ai_recommended_calories);
+      } else {
+        // Fallback to calculated target if no AI recommendations
+        setAiMacroGoals(null);
       }
     } catch (error) {
       // Silently fail
