@@ -20,6 +20,7 @@ import wizardNutrition from "@/assets/wizard-nutrition.png";
 import { Badge } from "@/components/ui/badge";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { nutritionLogSchema } from "@/lib/validation";
+import { calculateCalorieTarget as calculateCalorieTargetUtil } from "@/lib/calorieCalculation";
 
 interface Ingredient {
   name: string;
@@ -175,25 +176,24 @@ export default function Nutrition() {
   };
 
   const calculateCalorieTarget = (profileData: any) => {
-    // Check if AI recommendations exist first, use them if available
-    if (profileData.ai_recommended_calories) {
-      setDailyCalorieTarget(profileData.ai_recommended_calories);
+    // Use shared utility function for calorie calculation
+    const target = calculateCalorieTargetUtil(profileData);
+    setDailyCalorieTarget(target);
+
+    // Calculate safety status and message (Nutrition page specific)
+    const currentWeight = profileData?.current_weight_kg || 70;
+    const goalWeight = profileData?.goal_weight_kg || 65;
+    const daysToGoal = Math.ceil(
+      (new Date(profileData?.target_date || new Date()).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
+    );
+
+    if (daysToGoal <= 0) {
+      setSafetyStatus("green");
+      setSafetyMessage("✓ Safe and sustainable weight loss pace");
       return;
     }
 
-    // Fallback to calculated target if no AI recommendations
-    const currentWeight = profileData.current_weight_kg || 70;
-    const goalWeight = profileData.goal_weight_kg || 65;
-    const tdee = profileData.tdee || 2000;
-    const daysToGoal = Math.ceil(
-      (new Date(profileData.target_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
-    );
-
     const weeklyWeightLoss = ((currentWeight - goalWeight) / (daysToGoal / 7));
-    const safeWeeklyLoss = Math.min(weeklyWeightLoss, 1);
-    const dailyDeficit = (safeWeeklyLoss * 7700) / 7;
-    const target = Math.max(tdee - dailyDeficit, tdee * 0.8);
-
     const weeklyLossPercent = (weeklyWeightLoss / currentWeight) * 100;
     
     if (weeklyLossPercent > 1.5 || weeklyWeightLoss > 1) {
@@ -206,8 +206,6 @@ export default function Nutrition() {
       setSafetyStatus("green");
       setSafetyMessage("✓ Safe and sustainable weight loss pace");
     }
-
-    setDailyCalorieTarget(Math.round(target));
   };
 
   const getCurrentWeight = async (profileData: any) => {

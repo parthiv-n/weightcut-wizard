@@ -1,4 +1,4 @@
-import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Sparkles, Trophy, Settings, LogOut } from "lucide-react";
+import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Sparkles, Trophy, Settings, LogOut, Droplets, Calendar } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -32,6 +32,8 @@ const moreMenuItems = [
   { title: "Goals", url: "/goals", icon: Target },
   { title: "AI Wizard", url: "/wizard", icon: Sparkles },
   { title: "Fight Camps", url: "/fight-camps", icon: Trophy },
+  { title: "Rehydration", url: "/hydration", icon: Droplets },
+  { title: "Fight Week", url: "/fight-week", icon: Calendar },
 ];
 
 export function BottomNav() {
