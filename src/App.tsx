@@ -10,6 +10,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ProfileCompletionGuard } from "@/components/ProfileCompletionGuard";
 import { UserProvider } from "@/contexts/UserContext";
 import { PageTransition } from "@/components/PageTransition";
+import { BottomNav } from "@/components/BottomNav";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Onboarding from "./pages/Onboarding";
@@ -31,17 +32,13 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
   
   return (
     <>
-      {/* Mobile-first layout: sidebar is hidden on mobile, shown via trigger */}
+      {/* Mobile-first layout: sidebar hidden on mobile, shown on desktop */}
       <div className="min-h-screen-safe flex w-full no-horizontal-scroll">
-        <AppSidebar />
+        <div className="hidden md:block">
+          <AppSidebar />
+        </div>
         {/* Main content area - responsive padding for mobile */}
         <div className="flex-1 flex flex-col min-w-0 w-full">
-          {/* Floating sidebar trigger button - mobile only, highest z-index, hidden when sidebar is open */}
-          {!openMobile && (
-            <div className="fixed top-0 left-0 z-[9999] md:hidden safe-area-inset-top p-2">
-              <SidebarTrigger className="h-12 w-12 rounded-full shadow-lg bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border border-border/50 touch-target hover:bg-background/90 transition-all" />
-            </div>
-          )}
           {/* Floating theme toggle button - right side, mobile only */}
           <div className="fixed top-0 right-0 z-[9999] md:hidden safe-area-inset-top p-2">
             <div className="h-12 w-12 rounded-full shadow-lg bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border border-border/50 flex items-center justify-center touch-target hover:bg-background/90 transition-all overflow-hidden">
@@ -53,14 +50,16 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
             <SidebarTrigger className="touch-target hidden md:flex" />
             <ThemeToggle className="touch-target hidden md:flex" />
           </header>
-          {/* Main content with mobile-first responsive padding */}
-          <main className="flex-1 overflow-auto relative min-h-0 w-full">
+          {/* Main content with mobile-first responsive padding - bottom padding for bottom nav */}
+          <main className="flex-1 overflow-auto relative min-h-0 w-full pb-20 md:pb-0">
             <PageTransition>
               {children}
             </PageTransition>
           </main>
         </div>
       </div>
+      {/* Bottom Navigation - Mobile Only */}
+      <BottomNav />
     </>
   );
 };

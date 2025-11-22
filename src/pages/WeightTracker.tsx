@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -95,6 +96,8 @@ export default function WeightTracker() {
   } | null>(null);
   const { toast } = useToast();
   const { updateCurrentWeight, userId } = useUser();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const weightInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchData();
@@ -1043,6 +1046,7 @@ export default function WeightTracker() {
                   <Label htmlFor="weight">Weight (kg)</Label>
                   <Input
                     id="weight"
+                    ref={weightInputRef}
                     type="number"
                     step="0.1"
                     placeholder="75.5"
