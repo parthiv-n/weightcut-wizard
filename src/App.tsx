@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -25,26 +25,48 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
+  const { openMobile } = useSidebar();
+  
+  return (
+    <>
+      {/* Mobile-first layout: sidebar is hidden on mobile, shown via trigger */}
+      <div className="min-h-screen-safe flex w-full no-horizontal-scroll">
+        <AppSidebar />
+        {/* Main content area - responsive padding for mobile */}
+        <div className="flex-1 flex flex-col min-w-0 w-full">
+          {/* Floating sidebar trigger button - mobile only, highest z-index, hidden when sidebar is open */}
+          {!openMobile && (
+            <div className="fixed top-0 left-0 z-[9999] md:hidden safe-area-inset-top p-2">
+              <SidebarTrigger className="h-12 w-12 rounded-full shadow-lg bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border border-border/50 touch-target hover:bg-background/90 transition-all" />
+            </div>
+          )}
+          {/* Floating theme toggle button - right side, mobile only */}
+          <div className="fixed top-0 right-0 z-[9999] md:hidden safe-area-inset-top p-2">
+            <div className="h-12 w-12 rounded-full shadow-lg bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border border-border/50 flex items-center justify-center touch-target hover:bg-background/90 transition-all overflow-hidden">
+              <ThemeToggle className="touch-target h-full w-full" />
+            </div>
+          </div>
+          {/* Mobile-optimized header with safe area support - desktop shows trigger */}
+          <header className="sticky top-0 z-50 h-14 sm:h-14 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex items-center justify-between px-3 sm:px-4 safe-area-inset-top touch-target md:static md:z-auto">
+            <SidebarTrigger className="touch-target hidden md:flex" />
+            <ThemeToggle className="touch-target hidden md:flex" />
+          </header>
+          {/* Main content with mobile-first responsive padding */}
+          <main className="flex-1 overflow-auto relative min-h-0 w-full">
+            <PageTransition>
+              {children}
+            </PageTransition>
+          </main>
+        </div>
+      </div>
+    </>
+  );
+};
+
 const AppLayout = ({ children }: { children: React.ReactNode }) => (
   <SidebarProvider>
-    {/* Mobile-first layout: sidebar is hidden on mobile, shown via trigger */}
-    <div className="min-h-screen-safe flex w-full no-horizontal-scroll">
-      <AppSidebar />
-      {/* Main content area - responsive padding for mobile */}
-      <div className="flex-1 flex flex-col min-w-0 w-full">
-        {/* Mobile-optimized header with safe area support */}
-        <header className="h-14 sm:h-14 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex items-center justify-between px-3 sm:px-4 safe-area-inset-top touch-target">
-          <SidebarTrigger className="touch-target" />
-          <ThemeToggle className="touch-target" />
-        </header>
-        {/* Main content with mobile-first responsive padding */}
-        <main className="flex-1 overflow-auto relative min-h-0 w-full">
-          <PageTransition>
-            {children}
-          </PageTransition>
-        </main>
-      </div>
-    </div>
+    <AppLayoutContent>{children}</AppLayoutContent>
   </SidebarProvider>
 );
 
