@@ -5,8 +5,10 @@ interface UserContextType {
   userName: string;
   avatarUrl: string;
   userId: string | null;
+  currentWeight: number | null;
   setUserName: (name: string) => void;
   setAvatarUrl: (url: string) => void;
+  updateCurrentWeight: (weight: number) => Promise<void>;
   loadUserData: () => Promise<void>;
 }
 
@@ -16,6 +18,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [userName, setUserName] = useState<string>("");
   const [avatarUrl, setAvatarUrl] = useState<string>("");
   const [userId, setUserId] = useState<string | null>(null);
+  const [currentWeight, setCurrentWeight] = useState<number | null>(null);
 
   const loadUserData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -35,13 +38,38 @@ export function UserProvider({ children }: { children: ReactNode }) {
       // Load avatar from profile
       const { data: profile } = await supabase
         .from("profiles")
-        .select("avatar_url")
+        .select("avatar_url, current_weight_kg")
         .eq("id", user.id)
         .single();
       
       if (profile?.avatar_url) {
         setAvatarUrl(profile.avatar_url);
       }
+
+      // Load current weight from latest weight log
+      const { data: latestWeightLog } = await supabase
+        .from("weight_logs")
+        .select("weight_kg")
+        .eq("user_id", user.id)
+        .order("date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      // Use latest weight log if available, otherwise use profile weight
+      const weight = latestWeightLog?.weight_kg || profile?.current_weight_kg || null;
+      setCurrentWeight(weight);
+    }
+  };
+
+  const updateCurrentWeight = async (weight: number) => {
+    setCurrentWeight(weight);
+    
+    // Update profile in database
+    if (userId) {
+      await supabase
+        .from("profiles")
+        .update({ current_weight_kg: weight })
+        .eq("id", userId);
     }
   };
 
@@ -66,8 +94,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
         userName,
         avatarUrl,
         userId,
+        currentWeight,
         setUserName: updateUserName,
         setAvatarUrl: updateAvatarUrl,
+        updateCurrentWeight,
         loadUserData,
       }}
     >

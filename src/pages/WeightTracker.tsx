@@ -8,12 +8,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { format } from "date-fns";
-import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Sparkles, Activity, Apple, Trash2 } from "lucide-react";
+import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Sparkles, Activity, Apple, Trash2, RefreshCw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import wizardLogo from "@/assets/wizard-logo.png";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { weightLogSchema } from "@/lib/validation";
+import { useUser } from "@/contexts/UserContext";
 
 interface WeightLog {
   id: string;
@@ -61,19 +62,71 @@ export default function WeightTracker() {
   const [loading, setLoading] = useState(false);
   const [analyzingWeight, setAnalyzingWeight] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
+  const [aiAnalysisWeight, setAiAnalysisWeight] = useState<number | null>(null);
+  const [aiAnalysisTarget, setAiAnalysisTarget] = useState<number | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [logToDelete, setLogToDelete] = useState<WeightLog | null>(null);
   const { toast } = useToast();
+  const { updateCurrentWeight, userId } = useUser();
 
   useEffect(() => {
     fetchData();
+    loadPersistedAnalysis();
   }, []);
 
-  useEffect(() => {
-    if (profile) {
-      getAIAnalysis();
+  const loadPersistedAnalysis = async () => {
+    if (!userId) return;
+
+    try {
+      const storageKey = `weight_tracker_ai_analysis_${userId}`;
+      const stored = localStorage.getItem(storageKey);
+      
+      if (!stored) return;
+
+      const parsed = JSON.parse(stored);
+      const { analysis, currentWeight, fightWeekTarget } = parsed;
+
+      // Validate that the stored analysis is still valid
+      // Get current weight and target
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: latestWeightLog } = await supabase
+        .from("weight_logs")
+        .select("weight_kg")
+        .eq("user_id", user.id)
+        .order("date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("current_weight_kg, fight_week_target_kg")
+        .eq("id", user.id)
+        .single();
+
+      if (!profileData) return;
+
+      const actualCurrentWeight = latestWeightLog?.weight_kg || profileData.current_weight_kg;
+      const actualFightWeekTarget = profileData.fight_week_target_kg;
+
+      // Only restore if weight and target match (analysis is still valid)
+      if (
+        actualCurrentWeight === currentWeight &&
+        actualFightWeekTarget === fightWeekTarget &&
+        analysis
+      ) {
+        setAiAnalysis(analysis);
+        setAiAnalysisWeight(currentWeight);
+        setAiAnalysisTarget(fightWeekTarget);
+      } else {
+        // Clear invalid stored analysis
+        localStorage.removeItem(storageKey);
+      }
+    } catch (error) {
+      console.error("Error loading persisted analysis:", error);
     }
-  }, [profile]);
+  };
 
   const fetchData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -138,12 +191,37 @@ export default function WeightTracker() {
         variant: "destructive",
       });
     } else {
+      const loggedWeight = parseFloat(newWeight);
+      
+      // Update profile current weight
+      await supabase
+        .from("profiles")
+        .update({ current_weight_kg: loggedWeight })
+        .eq("id", user.id);
+      
+      // Update centralized current weight
+      await updateCurrentWeight(loggedWeight);
+      
+      // Clear stored AI analysis since weight has changed
+      if (userId) {
+        const storageKey = `weight_tracker_ai_analysis_${userId}`;
+        localStorage.removeItem(storageKey);
+        setAiAnalysis(null);
+        setAiAnalysisWeight(null);
+        setAiAnalysisTarget(null);
+      }
+      
       toast({
         title: "Weight logged",
         description: "Your weight has been recorded",
       });
       setNewWeight("");
       fetchData();
+      
+      // Refresh AI analysis with new weight
+      if (profile) {
+        getAIAnalysis();
+      }
     }
 
     setLoading(false);
@@ -197,7 +275,24 @@ export default function WeightTracker() {
     }
 
     setAnalyzingWeight(true);
-    const currentWeight = getCurrentWeight();
+    
+    // Fetch fresh weight from database to ensure we have the latest
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setAnalyzingWeight(false);
+      return;
+    }
+
+    const { data: latestWeightLog } = await supabase
+      .from("weight_logs")
+      .select("weight_kg")
+      .eq("user_id", user.id)
+      .order("date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    
+    // Use latest weight log if available, otherwise use profile weight
+    const currentWeight = latestWeightLog?.weight_kg || profile.current_weight_kg;
 
     const { data, error } = await supabase.functions.invoke("weight-tracker-analysis", {
       body: {
@@ -222,6 +317,20 @@ export default function WeightTracker() {
       });
     } else if (data?.analysis) {
       setAiAnalysis(data.analysis);
+      setAiAnalysisWeight(currentWeight);
+      setAiAnalysisTarget(fightWeekTarget);
+      
+      // Store in localStorage for persistence
+      if (userId) {
+        const storageKey = `weight_tracker_ai_analysis_${userId}`;
+        const storageData = {
+          analysis: data.analysis,
+          currentWeight,
+          fightWeekTarget,
+          timestamp: Date.now()
+        };
+        localStorage.setItem(storageKey, JSON.stringify(storageData));
+      }
     }
     setAnalyzingWeight(false);
   };
@@ -389,46 +498,44 @@ export default function WeightTracker() {
 
         {/* Stats Overview */}
         {profile && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card className="border-border/50">
-              <CardContent className="pt-6">
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground">Current Weight</p>
-                  <p className="text-3xl font-bold">{getCurrentWeight().toFixed(1)} kg</p>
+          <div className="flex flex-wrap gap-2 md:gap-4">
+            <Card className="border-border/50 flex-1 min-w-[140px]">
+              <CardContent className="pt-4 pb-4">
+                <div className="text-center">
+                  <p className="text-xs md:text-sm font-medium text-muted-foreground mb-1">Current Weight</p>
+                  <p className="text-lg md:text-xl font-bold">{getCurrentWeight().toFixed(1)} kg</p>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-border/50">
-              <CardContent className="pt-6">
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground">Fight Week Target</p>
-                  <p className="text-3xl font-bold">{(profile.fight_week_target_kg || profile.goal_weight_kg).toFixed(1)} kg</p>
-                  <p className="text-xs text-muted-foreground">Diet-down goal</p>
+            <Card className="border-border/50 flex-1 min-w-[140px]">
+              <CardContent className="pt-4 pb-4">
+                <div className="text-center">
+                  <p className="text-xs md:text-sm font-medium text-muted-foreground mb-1">Fight Week Target</p>
+                  <p className="text-lg md:text-xl font-bold">{(profile.fight_week_target_kg || profile.goal_weight_kg).toFixed(1)} kg</p>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-border/50">
-              <CardContent className="pt-6">
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground">Remaining</p>
-                  <p className="text-3xl font-bold text-primary">
+            <Card className="border-border/50 flex-1 min-w-[140px]">
+              <CardContent className="pt-4 pb-4">
+                <div className="text-center">
+                  <p className="text-xs md:text-sm font-medium text-muted-foreground mb-1">Remaining</p>
+                  <p className="text-lg md:text-xl font-bold text-primary">
                     {(getCurrentWeight() - (profile.fight_week_target_kg || profile.goal_weight_kg)).toFixed(1)} kg
                   </p>
-                  <p className="text-xs text-muted-foreground">To fight week target</p>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-border/50">
-              <CardContent className="pt-6">
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
+            <Card className="border-border/50 flex-1 min-w-[140px]">
+              <CardContent className="pt-4 pb-4">
+                <div className="text-center">
+                  <p className="text-xs md:text-sm font-medium text-muted-foreground flex items-center justify-center gap-1 mb-1">
+                    <Calendar className="h-3 w-3" />
                     Deadline
                   </p>
-                  <p className="text-xl font-semibold">{format(new Date(profile.target_date), "MMM dd, yyyy")}</p>
+                  <p className="text-sm md:text-base font-semibold">{format(new Date(profile.target_date), "MMM dd, yyyy")}</p>
                 </div>
               </CardContent>
             </Card>
@@ -480,10 +587,22 @@ export default function WeightTracker() {
               <div className="flex items-start gap-4">
                 <img src={wizardLogo} alt="Wizard" className="w-16 h-16" />
                 <div className="flex-1">
-                  <CardTitle className="flex items-center gap-2">
-                    <Sparkles className="h-5 w-5" />
-                    AI Weight Loss Strategy
-                  </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                      <Sparkles className="h-5 w-5" />
+                      AI Weight Loss Strategy
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={getAIAnalysis}
+                      disabled={analyzingWeight}
+                      className="h-8 w-8"
+                      title="Refresh AI Analysis"
+                    >
+                      <RefreshCw className={`h-4 w-4 ${analyzingWeight ? 'animate-spin' : ''}`} />
+                    </Button>
+                  </div>
                   <div className="flex items-center gap-2 mt-2">
                     <span className={`text-2xl font-bold uppercase ${
                       aiAnalysis.riskLevel === 'green' ? 'text-green-600 dark:text-green-400' :
@@ -501,6 +620,28 @@ export default function WeightTracker() {
               </div>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* Current Weight and Goal Summary */}
+              {aiAnalysisWeight !== null && aiAnalysisTarget !== null && (
+                <div className="mb-4 p-3 bg-muted/50 rounded-lg border border-border/50">
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Current Weight</p>
+                      <p className="text-lg font-bold">{aiAnalysisWeight.toFixed(1)} kg</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">End Goal</p>
+                      <p className="text-lg font-bold">{aiAnalysisTarget.toFixed(1)} kg</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">To Lose</p>
+                      <p className="text-lg font-bold text-primary">
+                        {(aiAnalysisWeight - aiAnalysisTarget).toFixed(1)} kg
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               {/* Calorie & Macro Recommendations */}
               <div className="grid gap-4 md:grid-cols-2">
                 <Card className="bg-background/50">
@@ -635,19 +776,8 @@ export default function WeightTracker() {
           </Card>
         )}
 
-        {!aiAnalysis && profile && (
-          <Card>
-            <CardContent className="pt-6">
-              <Button onClick={getAIAnalysis} disabled={loading} className="w-full">
-                <Sparkles className="h-4 w-4 mr-2" />
-                {loading ? "Analyzing..." : "Get AI Weight Loss Strategy"}
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
+        {/* Weight Input - Moved above AI Strategy */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Weight Input */}
           <Card className="border-border/50 lg:col-span-1">
             <CardHeader>
               <CardTitle>Log Weight</CardTitle>
@@ -786,6 +916,17 @@ export default function WeightTracker() {
             </CardContent>
           </Card>
         </div>
+
+        {!aiAnalysis && profile && (
+          <Card>
+            <CardContent className="pt-6">
+              <Button onClick={getAIAnalysis} disabled={analyzingWeight} className="w-full">
+                <Sparkles className="h-4 w-4 mr-2" />
+                {analyzingWeight ? "Analyzing..." : "Get AI Weight Loss Strategy"}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
 
         <DeleteConfirmDialog
           open={deleteDialogOpen}

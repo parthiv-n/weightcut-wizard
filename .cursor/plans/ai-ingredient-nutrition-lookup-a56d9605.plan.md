@@ -1,56 +1,64 @@
 <!-- a56d9605-a417-445a-b942-6b6bc0b3522f e2e899c9-b76b-490f-9432-0fc6e01e6abd -->
-# Rehydration Page Two-Column Mobile Layout
+# FightWeek Global Weight Update
 
 ## Overview
 
-Update the Hydration page to show the Oral Rehydration Solution Timeline and Carbohydrate Refuel Strategy side by side on mobile screens instead of stacking vertically. Also display the Electrolyte Solution section in one row on mobile.
+Update the FightWeek page to update the centralized currentWeight in UserContext when a weight is logged in the daily log, ensuring consistency across all pages.
 
 ## Current State
 
-- Line 249: Uses `grid grid-cols-1 lg:grid-cols-2` which stacks vertically on mobile and shows 2 columns only on large screens
-- Line 231: Uses `grid grid-cols-1 md:grid-cols-3` which stacks vertically on mobile and shows 3 columns only on medium+ screens
-- The two timeline cards (water reload and carb reload) are in separate cards within this grid
+- FightWeek saves weight to `fight_week_logs` table in `saveDailyLog()` function
+- Weight is saved but does NOT update the global `currentWeight` in UserContext
+- Weight is saved but does NOT update `profile.current_weight_kg` in database
+- This causes inconsistency - weight logged on FightWeek doesn't reflect on other pages
 
 ## Changes Required
 
-### 1. Update Grid Layout for Mobile (Rehydration/Carb Timelines)
+### 1. Import updateCurrentWeight from UserContext
 
-- Change `grid-cols-1 lg:grid-cols-2` to `grid-cols-2` so both columns appear side by side on mobile
-- Keep responsive behavior but ensure mobile shows 2 columns
-- May need to adjust gap spacing for mobile (`gap-6` might be too large)
+- Already imported `useUser` hook, but need to destructure `updateCurrentWeight`
 
-### 2. Update Electrolyte Solution Section
+### 2. Update saveDailyLog Function
 
-- Change the electrolyte ratios grid from `grid-cols-1 md:grid-cols-3` to `grid-cols-3` (always 3 columns)
-- This will display Sodium, Potassium, and Magnesium in one row on mobile
-- May need to reduce padding/font sizes to fit on mobile screens
-
-### 3. Optimize Card Content for Mobile
-
-- Reduce padding/spacing in cards on mobile to fit more content
-- Consider smaller font sizes for mobile
-- Make timeline items more compact
-- Ensure badges and text are readable at smaller sizes
-
-### 4. Handle Horizontal Scrolling (if needed)
-
-- If content is too wide, consider making the container horizontally scrollable
-- Or use responsive text sizing to fit content
+- After successfully saving the daily log with weight:
+  - Check if `dailyLog.weight_kg` exists
+  - Update profile's `current_weight_kg` in database
+  - Call `updateCurrentWeight()` from UserContext to update global state
+- This ensures weight logged on FightWeek page is reflected everywhere
 
 ## Files to Modify
 
-- `src/pages/Hydration.tsx`: 
-- Update the grid layout on line 249 (rehydration/carb timelines)
-- Update the grid layout on line 231 (electrolyte ratios)
-- Adjust card styling for mobile
+- `src/pages/FightWeek.tsx`:
+  - Update `useUser` hook to include `updateCurrentWeight`
+  - Modify `saveDailyLog()` to update profile and global weight when weight is logged
 
 ## Implementation Details
 
-- Change rehydration/carb grid from `grid-cols-1 lg:grid-cols-2` to `grid-cols-2` (always 2 columns)
-- Change electrolyte grid from `grid-cols-1 md:grid-cols-3` to `grid-cols-3` (always 3 columns)
-- Add mobile-specific spacing adjustments
-- Ensure timeline items remain readable at smaller widths
-- Test that all columns fit on a typical phone screen (375px-428px width)
+### Update useUser Hook
+
+```typescript
+const { currentWeight: contextCurrentWeight, updateCurrentWeight } = useUser();
+```
+
+### Update saveDailyLog Function
+
+After successful save (line 214), add:
+
+```typescript
+// Update global current weight if weight was logged
+if (dailyLog.weight_kg) {
+  // Update profile in database
+  await supabase
+    .from("profiles")
+    .update({ current_weight_kg: dailyLog.weight_kg })
+    .eq("id", user.id);
+  
+  // Update centralized current weight
+  await updateCurrentWeight(dailyLog.weight_kg);
+}
+```
+
+This should be added right after the toast success message and before refreshing logs.
 
 ### To-dos
 

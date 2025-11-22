@@ -16,7 +16,7 @@ export default function Dashboard() {
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lb'>('kg');
   const [todayCalories, setTodayCalories] = useState(0);
   const [todayHydration, setTodayHydration] = useState(0);
-  const { userName } = useUser();
+  const { userName, currentWeight } = useUser();
 
   useEffect(() => {
     loadDashboardData();
@@ -74,7 +74,9 @@ export default function Dashboard() {
 
   const daysUntilTarget = profile ? Math.ceil((new Date(profile.target_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : 0;
   // Use fight_week_target for diet calculations, goal_weight is for weigh-in
-  const weightToLose = profile ? (profile.current_weight_kg - (profile.fight_week_target_kg || profile.goal_weight_kg)).toFixed(1) : 0;
+  // Use centralized currentWeight if available, otherwise fall back to profile
+  const currentWeightValue = currentWeight ?? profile?.current_weight_kg ?? 0;
+  const weightToLose = profile ? (currentWeightValue - (profile.fight_week_target_kg || profile.goal_weight_kg)).toFixed(1) : 0;
   const dailyCalorieGoal = profile ? Math.round(profile.tdee - 500) : 0;
 
   // Generate dynamic wizard wisdom
@@ -137,8 +139,8 @@ export default function Dashboard() {
         {profile && (
           <div className="order-1 lg:order-none">
             <WeightProgressRing
-              currentWeight={weightLogs.length > 0 ? parseFloat(weightLogs[weightLogs.length - 1].weight_kg) : profile.current_weight_kg}
-              startingWeight={weightLogs.length > 0 ? parseFloat(weightLogs[0].weight_kg) : profile.current_weight_kg}
+              currentWeight={currentWeightValue}
+              startingWeight={weightLogs.length > 0 ? parseFloat(weightLogs[0].weight_kg) : currentWeightValue}
               goalWeight={profile.goal_weight_kg}
             />
           </div>
