@@ -55,24 +55,25 @@ serve(async (req) => {
       );
     }
 
-    const GOOGLE_AI_STUDIO_API_KEY = Deno.env.get("GOOGLE_AI_STUDIO_API_KEY") || "AIzaSyBlmYlZE8yk369foFvuYnzjay3O5oBR8rw";
-    if (!GOOGLE_AI_STUDIO_API_KEY) {
-      throw new Error("GOOGLE_AI_STUDIO_API_KEY is not configured");
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      throw new Error("LOVABLE_API_KEY is not configured");
     }
 
     console.log("Analyzing meal:", mealDescription);
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${GOOGLE_AI_STUDIO_API_KEY}`, {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gemini-2.0-flash-exp",
+        model: "google/gemini-2.5-flash",
         messages: [
           {
             role: "system",
-            content: `You are an expert combat sports nutritionist analyzing meals for fighters. You specialize in providing accurate nutritional information that helps fighters meet their weight cutting and performance goals. Analyze meal descriptions and return accurate nutritional information.
+            content: `You are a nutrition analysis expert. Analyze meal descriptions and return accurate nutritional information.
 
 CRITICAL RULES:
 1. If the user explicitly mentions calorie amounts, protein, carbs, or fats - USE THOSE EXACT VALUES
@@ -164,10 +165,10 @@ Be realistic and precise with portion sizes.`
         );
       }
       
-      if (response.status === 402 || response.status === 403) {
+      if (response.status === 402) {
         return new Response(
-          JSON.stringify({ error: "API access denied. Please check your API key." }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "Payment required. Please add credits to your workspace." }),
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       

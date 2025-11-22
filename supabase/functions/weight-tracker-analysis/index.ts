@@ -23,10 +23,10 @@ serve(async (req) => {
       fightNightWeight
     } = await req.json();
     
-    const GOOGLE_AI_STUDIO_API_KEY = Deno.env.get("GOOGLE_AI_STUDIO_API_KEY") || "AIzaSyBlmYlZE8yk369foFvuYnzjay3O5oBR8rw";
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
 
-    if (!GOOGLE_AI_STUDIO_API_KEY) {
-      throw new Error("GOOGLE_AI_STUDIO_API_KEY is not configured");
+    if (!LOVABLE_API_KEY) {
+      throw new Error("LOVABLE_API_KEY is not configured");
     }
 
     const today = new Date();
@@ -39,7 +39,7 @@ serve(async (req) => {
     const weightToLose = isMaintenanceMode ? 0 : currentWeight - goalWeight;
     const requiredWeeklyLoss = isMaintenanceMode ? 0 : weightToLose / weeksRemaining;
 
-    const systemPrompt = `You are an expert combat sports nutritionist specializing in weight management and nutrition strategies for fighters. You have deep knowledge of combat sports physiology, training demands, performance optimization, and safe weight cutting protocols.
+    const systemPrompt = `You are the Weight Cut Wizard, a science-based nutrition and weight loss expert specializing in combat sports athletes.
 
 CRITICAL: UNDERSTANDING THE TARGET WEIGHTS
 - The "goalWeight" parameter is the FIGHT WEEK TARGET (diet goal before dehydration), NOT the final weigh-in weight
@@ -122,13 +122,14 @@ Provide:
 
 ${isMaintenanceMode ? 'Since user is already at fight week target, focus on maintenance nutrition. The fight night weight will be achieved through dehydration protocols in the final days before weigh-in, not through continued dieting.' : 'Be specific with numbers and practical advice. If the timeline is unrealistic (requires >1.5kg/week), clearly state this and recommend timeline extension.'}`;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${GOOGLE_AI_STUDIO_API_KEY}`, {
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gemini-2.0-flash-exp",
+        model: "google/gemini-2.5-flash",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
@@ -143,10 +144,10 @@ ${isMaintenanceMode ? 'Since user is already at fight week target, focus on main
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (response.status === 402 || response.status === 403) {
+      if (response.status === 402) {
         return new Response(
-          JSON.stringify({ error: "API access denied. Please check your API key." }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "AI credits depleted. Please add credits to continue." }),
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       const errorText = await response.text();
