@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Sparkles, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
 import { profileSchema } from "@/lib/validation";
+import { useUser } from "@/contexts/UserContext";
 
 const ACTIVITY_MULTIPLIERS = {
   sedentary: 1.2,
@@ -24,6 +25,7 @@ export default function Goals() {
   const [saving, setSaving] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { currentWeight } = useUser();
 
   const [formData, setFormData] = useState({
     age: "",
@@ -61,11 +63,13 @@ export default function Goals() {
       if (error) throw error;
 
       if (profile) {
+        // Use centralized currentWeight if available, otherwise use profile weight
+        const currentWeightValue = currentWeight ?? profile.current_weight_kg ?? 0;
         setFormData({
           age: profile.age?.toString() || "",
           sex: profile.sex || "",
           height_cm: profile.height_cm?.toString() || "",
-          current_weight_kg: profile.current_weight_kg?.toString() || "",
+          current_weight_kg: currentWeightValue.toString(),
           goal_weight_kg: profile.goal_weight_kg?.toString() || "",
           fight_week_target_kg: profile.fight_week_target_kg?.toString() || "",
           target_date: profile.target_date || "",
@@ -283,13 +287,13 @@ export default function Goals() {
         <Card>
           <CardHeader>
             <CardTitle>Weight Targets</CardTitle>
-            <CardDescription>Set your fight night and fight week goals</CardDescription>
+            <CardDescription>Set your weigh-in day and fight week goals</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="goal_weight">
-                Fight Night Weight (kg) 
-                <span className="text-xs text-muted-foreground ml-2">Your competition weight class</span>
+                Weigh In Day Weight (kg) 
+                <span className="text-xs text-muted-foreground ml-2">Day before fight day, your competition weight class</span>
               </Label>
               <Input
                 id="goal_weight"

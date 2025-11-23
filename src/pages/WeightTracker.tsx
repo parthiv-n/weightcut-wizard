@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -8,12 +9,24 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { format } from "date-fns";
-import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Sparkles, Activity, Apple, Trash2 } from "lucide-react";
+import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Sparkles, Activity, Apple, Trash2, RefreshCw, Bug } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import wizardLogo from "@/assets/wizard-logo.png";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { weightLogSchema } from "@/lib/validation";
+import { useUser } from "@/contexts/UserContext";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface WeightLog {
   id: string;
@@ -61,19 +74,89 @@ export default function WeightTracker() {
   const [loading, setLoading] = useState(false);
   const [analyzingWeight, setAnalyzingWeight] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
+  const [aiAnalysisWeight, setAiAnalysisWeight] = useState<number | null>(null);
+  const [aiAnalysisTarget, setAiAnalysisTarget] = useState<number | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [logToDelete, setLogToDelete] = useState<WeightLog | null>(null);
+  const [debugDialogOpen, setDebugDialogOpen] = useState(false);
+  const [debugData, setDebugData] = useState<{
+    requestPayload: any;
+    rawResponse: any;
+    parsedResponse: any;
+    currentWeightSource: string;
+    currentWeightValue: number | null;
+    latestWeightLog: any;
+    profileData: any;
+  } | null>(null);
+  const [unsafeGoalDialogOpen, setUnsafeGoalDialogOpen] = useState(false);
+  const [pendingAICallParams, setPendingAICallParams] = useState<{
+    currentWeight: number;
+    fightWeekTarget: number;
+    requestPayload: any;
+  } | null>(null);
   const { toast } = useToast();
+  const { updateCurrentWeight, userId } = useUser();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const weightInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchData();
+    loadPersistedAnalysis();
   }, []);
 
-  useEffect(() => {
-    if (profile) {
-      getAIAnalysis();
+  const loadPersistedAnalysis = async () => {
+    if (!userId) return;
+
+    try {
+      const storageKey = `weight_tracker_ai_analysis_${userId}`;
+      const stored = localStorage.getItem(storageKey);
+      
+      if (!stored) return;
+
+      const parsed = JSON.parse(stored);
+      const { analysis, currentWeight, fightWeekTarget } = parsed;
+
+      // Validate that the stored analysis is still valid
+      // Get current weight and target
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: latestWeightLog } = await supabase
+        .from("weight_logs")
+        .select("weight_kg")
+        .eq("user_id", user.id)
+        .order("date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("current_weight_kg, fight_week_target_kg")
+        .eq("id", user.id)
+        .single();
+
+      if (!profileData) return;
+
+      const actualCurrentWeight = latestWeightLog?.weight_kg || profileData.current_weight_kg;
+      const actualFightWeekTarget = profileData.fight_week_target_kg;
+
+      // Only restore if weight and target match (analysis is still valid)
+      if (
+        actualCurrentWeight === currentWeight &&
+        actualFightWeekTarget === fightWeekTarget &&
+        analysis
+      ) {
+        setAiAnalysis(analysis);
+        setAiAnalysisWeight(currentWeight);
+        setAiAnalysisTarget(fightWeekTarget);
+      } else {
+        // Clear invalid stored analysis
+        localStorage.removeItem(storageKey);
+      }
+    } catch (error) {
+      console.error("Error loading persisted analysis:", error);
     }
-  }, [profile]);
+  };
 
   const fetchData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -138,12 +221,37 @@ export default function WeightTracker() {
         variant: "destructive",
       });
     } else {
+      const loggedWeight = parseFloat(newWeight);
+      
+      // Update profile current weight
+      await supabase
+        .from("profiles")
+        .update({ current_weight_kg: loggedWeight })
+        .eq("id", user.id);
+      
+      // Update centralized current weight
+      await updateCurrentWeight(loggedWeight);
+      
+      // Clear stored AI analysis since weight has changed
+      if (userId) {
+        const storageKey = `weight_tracker_ai_analysis_${userId}`;
+        localStorage.removeItem(storageKey);
+        setAiAnalysis(null);
+        setAiAnalysisWeight(null);
+        setAiAnalysisTarget(null);
+      }
+      
       toast({
         title: "Weight logged",
         description: "Your weight has been recorded",
       });
       setNewWeight("");
       fetchData();
+      
+      // Refresh AI analysis with new weight
+      if (profile) {
+        getAIAnalysis();
+      }
     }
 
     setLoading(false);
@@ -197,22 +305,94 @@ export default function WeightTracker() {
     }
 
     setAnalyzingWeight(true);
-    const currentWeight = getCurrentWeight();
+    
+    // Fetch fresh weight from database to ensure we have the latest
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      setAnalyzingWeight(false);
+      return;
+    }
 
-    const { data, error } = await supabase.functions.invoke("weight-tracker-analysis", {
-      body: {
+    const { data: latestWeightLog } = await supabase
+      .from("weight_logs")
+      .select("weight_kg, date")
+      .eq("user_id", user.id)
+      .order("date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    
+    // Use latest weight log if available, otherwise use profile weight
+    const currentWeight = latestWeightLog?.weight_kg || profile.current_weight_kg;
+    const currentWeightSource = latestWeightLog?.weight_kg ? "weight_logs (latest log)" : "profile.current_weight_kg";
+
+    // Check if goal is unrealistic (>1.5kg/week)
+    if (isGoalUnrealistic(currentWeight, fightWeekTarget, profile.target_date)) {
+      // Store parameters for later use
+      const requestPayload = {
         currentWeight,
-        // Use fight_week_target_kg as the end goal for weight loss strategy (diet target before dehydration)
         goalWeight: fightWeekTarget,
-        fightNightWeight: profile.goal_weight_kg, // Final weigh-in goal (after dehydration)
+        weighInDayWeight: profile.goal_weight_kg,
         targetDate: profile.target_date,
         activityLevel: profile.activity_level,
         age: profile.age,
         sex: profile.sex,
         heightCm: profile.height_cm,
         tdee: profile.tdee
-      }
+      };
+      
+      setPendingAICallParams({
+        currentWeight,
+        fightWeekTarget,
+        requestPayload
+      });
+      setUnsafeGoalDialogOpen(true);
+      setAnalyzingWeight(false);
+      return;
+    }
+
+    // Prepare request payload for debugging
+    const requestPayload = {
+      currentWeight,
+      // Use fight_week_target_kg as the end goal for weight loss strategy (diet target before dehydration)
+      goalWeight: fightWeekTarget,
+      weighInDayWeight: profile.goal_weight_kg, // Day before fight day, final weigh-in goal (after dehydration)
+      targetDate: profile.target_date,
+      activityLevel: profile.activity_level,
+      age: profile.age,
+      sex: profile.sex,
+      heightCm: profile.height_cm,
+      tdee: profile.tdee,
+      bypassSafety: false
+    };
+
+    const { data, error } = await supabase.functions.invoke("weight-tracker-analysis", {
+      body: requestPayload
     });
+
+    // Capture debug data
+    const debugInfo = {
+      requestPayload,
+      rawResponse: data || error,
+      parsedResponse: data?.analysis || null,
+      currentWeightSource,
+      currentWeightValue: currentWeight,
+      latestWeightLog: latestWeightLog ? {
+        weight_kg: latestWeightLog.weight_kg,
+        date: latestWeightLog.date || "N/A"
+      } : null,
+      profileData: {
+        current_weight_kg: profile.current_weight_kg,
+        goal_weight_kg: profile.goal_weight_kg,
+        fight_week_target_kg: profile.fight_week_target_kg,
+        target_date: profile.target_date,
+        activity_level: profile.activity_level,
+        age: profile.age,
+        sex: profile.sex,
+        height_cm: profile.height_cm,
+        tdee: profile.tdee
+      }
+    };
+    setDebugData(debugInfo);
 
     if (error) {
       toast({ 
@@ -222,8 +402,110 @@ export default function WeightTracker() {
       });
     } else if (data?.analysis) {
       setAiAnalysis(data.analysis);
+      setAiAnalysisWeight(currentWeight);
+      setAiAnalysisTarget(fightWeekTarget);
+      
+      // Save AI recommendations to profiles table for Nutrition page
+      if (user) {
+        await supabase
+          .from("profiles")
+          .update({
+            ai_recommended_calories: data.analysis.recommendedCalories,
+            ai_recommended_protein_g: data.analysis.proteinGrams,
+            ai_recommended_carbs_g: data.analysis.carbsGrams,
+            ai_recommended_fats_g: data.analysis.fatsGrams,
+            ai_recommendations_updated_at: new Date().toISOString()
+          })
+          .eq("id", user.id);
+      }
+      
+      // Store in localStorage for persistence
+      if (userId) {
+        const storageKey = `weight_tracker_ai_analysis_${userId}`;
+        const storageData = {
+          analysis: data.analysis,
+          currentWeight,
+          fightWeekTarget,
+          timestamp: Date.now()
+        };
+        localStorage.setItem(storageKey, JSON.stringify(storageData));
+      }
     }
     setAnalyzingWeight(false);
+  };
+
+  const handleUnsafeGoalConfirm = async () => {
+    if (!pendingAICallParams) return;
+
+    setUnsafeGoalDialogOpen(false);
+    setAnalyzingWeight(true);
+
+    const { currentWeight, fightWeekTarget, requestPayload } = pendingAICallParams;
+
+    // Add bypassSafety flag to request
+    const requestPayloadWithBypass = {
+      ...requestPayload,
+      bypassSafety: true
+    };
+
+    // Get user for saving recommendations
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const { data, error } = await supabase.functions.invoke("weight-tracker-analysis", {
+      body: requestPayloadWithBypass
+    });
+
+    if (error) {
+      toast({ 
+        title: "AI analysis unavailable", 
+        description: error.message, 
+        variant: "destructive" 
+      });
+      setAnalyzingWeight(false);
+    } else if (data?.analysis) {
+      setAiAnalysis(data.analysis);
+      setAiAnalysisWeight(currentWeight);
+      setAiAnalysisTarget(fightWeekTarget);
+      
+      // Save AI recommendations to profiles table for Nutrition page
+      if (user) {
+        await supabase
+          .from("profiles")
+          .update({
+            ai_recommended_calories: data.analysis.recommendedCalories,
+            ai_recommended_protein_g: data.analysis.proteinGrams,
+            ai_recommended_carbs_g: data.analysis.carbsGrams,
+            ai_recommended_fats_g: data.analysis.fatsGrams,
+            ai_recommendations_updated_at: new Date().toISOString()
+          })
+          .eq("id", user.id);
+      }
+      
+      // Store in localStorage for persistence
+      if (userId) {
+        const storageKey = `weight_tracker_ai_analysis_${userId}`;
+        const storageData = {
+          analysis: data.analysis,
+          currentWeight,
+          fightWeekTarget,
+          timestamp: Date.now()
+        };
+        localStorage.setItem(storageKey, JSON.stringify(storageData));
+      }
+    }
+    
+    setPendingAICallParams(null);
+    setAnalyzingWeight(false);
+  };
+
+  const handleUnsafeGoalCancel = () => {
+    setUnsafeGoalDialogOpen(false);
+    setPendingAICallParams(null);
+    toast({
+      title: "Unsafe Goal",
+      description: "Unsafe goals you will have to change weight and consider catch weight",
+      variant: "destructive",
+    });
   };
 
   const getWeeklyLossRequired = () => {
@@ -240,10 +522,20 @@ export default function WeightTracker() {
     return weightRemaining / weeksRemaining;
   };
 
+  const isGoalUnrealistic = (currentWeight: number, fightWeekTarget: number, targetDate: string): boolean => {
+    const target = new Date(targetDate);
+    const today = new Date();
+    const daysRemaining = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const weeksRemaining = Math.max(1, daysRemaining / 7);
+    const weightRemaining = currentWeight - fightWeekTarget;
+    const requiredWeeklyLoss = weightRemaining / weeksRemaining;
+    return requiredWeeklyLoss > 1.5;
+  };
+
   const getChartData = () => {
     if (!weightLogs.length || !profile) return [];
 
-    // Show both fight week target (diet goal) and fight night weight (final weigh-in) on chart
+    // Show both fight week target (diet goal) and weigh-in day weight (final weigh-in) on chart
     // Prioritize fight_week_target_kg as the primary diet goal
     const fightWeekTarget = profile.fight_week_target_kg || profile.goal_weight_kg;
     
@@ -389,46 +681,75 @@ export default function WeightTracker() {
 
         {/* Stats Overview */}
         {profile && (
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card className="border-border/50">
-              <CardContent className="pt-6">
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground">Current Weight</p>
-                  <p className="text-3xl font-bold">{getCurrentWeight().toFixed(1)} kg</p>
+          <div className="flex flex-wrap gap-2 md:gap-4">
+            <Card className="border-border/50 flex-1 min-w-[140px]">
+              <CardContent className="pt-4 pb-4">
+                <div className="text-center">
+                  <p className="text-xs md:text-sm font-medium text-muted-foreground mb-1">Current Weight</p>
+                  <p className="text-lg md:text-xl font-bold">{getCurrentWeight().toFixed(1)} kg</p>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-border/50">
-              <CardContent className="pt-6">
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground">Fight Week Target</p>
-                  <p className="text-3xl font-bold">{(profile.fight_week_target_kg || profile.goal_weight_kg).toFixed(1)} kg</p>
-                  <p className="text-xs text-muted-foreground">Diet-down goal</p>
+            <Card className="border-border/50 flex-1 min-w-[140px]">
+              <CardContent className="pt-4 pb-4">
+                <div className="text-center">
+                  <p className="text-xs md:text-sm font-medium text-muted-foreground mb-1">Fight Week Target</p>
+                  <p className="text-lg md:text-xl font-bold">{(profile.fight_week_target_kg || profile.goal_weight_kg).toFixed(1)} kg</p>
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-border/50">
-              <CardContent className="pt-6">
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground">Remaining</p>
-                  <p className="text-3xl font-bold text-primary">
-                    {(getCurrentWeight() - (profile.fight_week_target_kg || profile.goal_weight_kg)).toFixed(1)} kg
-                  </p>
-                  <p className="text-xs text-muted-foreground">To fight week target</p>
+            <Card className="border-border/50 flex-1 min-w-[140px]">
+              <CardContent className="pt-4 pb-4">
+                <div className="text-center">
+                  {(() => {
+                    const current = getCurrentWeight();
+                    const target = profile.fight_week_target_kg || profile.goal_weight_kg;
+                    const weightDiff = target - current;
+                    const isAtOrBelowTarget = weightDiff >= 0;
+                    
+                    if (weightDiff > 0) {
+                      return (
+                        <>
+                          <p className="text-xs md:text-sm font-medium text-muted-foreground mb-1">To Gain</p>
+                          <p className="text-lg md:text-xl font-bold text-green-600 dark:text-green-400">
+                            +{weightDiff.toFixed(1)} kg
+                          </p>
+                        </>
+                      );
+                    } else if (weightDiff < 0) {
+                      return (
+                        <>
+                          <p className="text-xs md:text-sm font-medium text-muted-foreground mb-1">To Lose</p>
+                          <p className="text-lg md:text-xl font-bold text-primary">
+                            {Math.abs(weightDiff).toFixed(1)} kg
+                          </p>
+                        </>
+                      );
+                    } else {
+                      return (
+                        <>
+                          <p className="text-xs md:text-sm font-medium text-muted-foreground mb-1">Status</p>
+                          <p className="text-lg md:text-xl font-bold text-green-600 dark:text-green-400">
+                            At Target
+                          </p>
+                        </>
+                      );
+                    }
+                  })()}
                 </div>
               </CardContent>
             </Card>
 
-            <Card className="border-border/50">
-              <CardContent className="pt-6">
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
+            <Card className="border-border/50 flex-1 min-w-[140px]">
+              <CardContent className="pt-4 pb-4">
+                <div className="text-center">
+                  <p className="text-xs md:text-sm font-medium text-muted-foreground flex items-center justify-center gap-1 mb-1">
+                    <Calendar className="h-3 w-3" />
                     Deadline
                   </p>
-                  <p className="text-xl font-semibold">{format(new Date(profile.target_date), "MMM dd, yyyy")}</p>
+                  <p className="text-sm md:text-base font-semibold">{format(new Date(profile.target_date), "MMM dd, yyyy")}</p>
                 </div>
               </CardContent>
             </Card>
@@ -470,37 +791,235 @@ export default function WeightTracker() {
         )}
 
         {/* AI-Powered Weight Loss Analysis */}
-        {!analyzingWeight && aiAnalysis && (
-          <Card className={`border-2 animate-fade-in ${
-            aiAnalysis.riskLevel === 'green' ? 'border-green-500/50 bg-green-500/5' :
-            aiAnalysis.riskLevel === 'yellow' ? 'border-yellow-500/50 bg-yellow-500/5' :
-            'border-red-500/50 bg-red-500/5'
-          }`}>
-            <CardHeader>
-              <div className="flex items-start gap-4">
-                <img src={wizardLogo} alt="Wizard" className="w-16 h-16" />
-                <div className="flex-1">
-                  <CardTitle className="flex items-center gap-2">
-                    <Sparkles className="h-5 w-5" />
-                    AI Weight Loss Strategy
-                  </CardTitle>
-                  <div className="flex items-center gap-2 mt-2">
-                    <span className={`text-2xl font-bold uppercase ${
-                      aiAnalysis.riskLevel === 'green' ? 'text-green-600 dark:text-green-400' :
-                      aiAnalysis.riskLevel === 'yellow' ? 'text-yellow-600 dark:text-yellow-400' :
-                      'text-red-600 dark:text-red-400'
-                    }`}>
-                      {aiAnalysis.riskLevel === 'green' ? 'SAFE PACE' : 
-                       aiAnalysis.riskLevel === 'yellow' ? 'MODERATE PACE' : 'AGGRESSIVE PACE'}
-                    </span>
-                    <span className="text-sm text-muted-foreground">
-                      ({aiAnalysis.requiredWeeklyLoss.toFixed(2)} kg/week required)
-                    </span>
+        {!analyzingWeight && aiAnalysis && (() => {
+          // Force green risk level when current weight is at or below target
+          const isAtOrBelowTarget = aiAnalysisWeight !== null && aiAnalysisTarget !== null && 
+                                   aiAnalysisWeight <= aiAnalysisTarget;
+          const displayRiskLevel = isAtOrBelowTarget ? 'green' : aiAnalysis.riskLevel;
+          const weightDiff = aiAnalysisWeight !== null && aiAnalysisTarget !== null 
+                           ? aiAnalysisTarget - aiAnalysisWeight 
+                           : 0;
+          
+          return (
+            <Card className={`border-2 animate-fade-in ${
+              displayRiskLevel === 'green' ? 'border-green-500/50 bg-green-500/5' :
+              displayRiskLevel === 'yellow' ? 'border-yellow-500/50 bg-yellow-500/5' :
+              'border-red-500/50 bg-red-500/5'
+            }`}>
+              <CardHeader>
+                <div className="flex items-start gap-4">
+                  <img src={wizardLogo} alt="Wizard" className="w-16 h-16" />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="flex items-center gap-2">
+                        <Sparkles className="h-5 w-5" />
+                        AI Weight Loss Strategy
+                      </CardTitle>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={getAIAnalysis}
+                        disabled={analyzingWeight}
+                        className="h-8 w-8"
+                        title="Refresh AI Analysis"
+                      >
+                        <RefreshCw className={`h-4 w-4 ${analyzingWeight ? 'animate-spin' : ''}`} />
+                      </Button>
+                    </div>
+                    <div className="flex items-center gap-2 mt-2">
+                      <span className={`text-2xl font-bold uppercase ${
+                        displayRiskLevel === 'green' ? 'text-green-600 dark:text-green-400' :
+                        displayRiskLevel === 'yellow' ? 'text-yellow-600 dark:text-yellow-400' :
+                        'text-red-600 dark:text-red-400'
+                      }`}>
+                        {displayRiskLevel === 'green' ? 'SAFE PACE' : 
+                         displayRiskLevel === 'yellow' ? 'MODERATE PACE' : 'AGGRESSIVE PACE'}
+                      </span>
+                      <span className="text-sm text-muted-foreground">
+                        {isAtOrBelowTarget && weightDiff > 0 
+                          ? '(Maintenance mode - at/below target)'
+                          : isAtOrBelowTarget && weightDiff === 0
+                          ? '(At target - maintenance)'
+                          : `(${aiAnalysis.requiredWeeklyLoss.toFixed(2)} kg/week required)`
+                        }
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </CardHeader>
+              </CardHeader>
             <CardContent className="space-y-6">
+              {/* Current Weight and Goal Summary */}
+              {aiAnalysisWeight !== null && aiAnalysisTarget !== null && (
+                <div className="mb-4 p-3 bg-muted/50 rounded-lg border border-border/50">
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">Current Weight</p>
+                      <p className="text-lg font-bold">{aiAnalysisWeight.toFixed(1)} kg</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground mb-1">End Goal</p>
+                      <p className="text-lg font-bold">{aiAnalysisTarget.toFixed(1)} kg</p>
+                    </div>
+                    <div>
+                      {(() => {
+                        const weightDiff = aiAnalysisTarget - aiAnalysisWeight;
+                        const isAtOrBelowTarget = weightDiff >= 0;
+                        
+                        if (weightDiff > 0) {
+                          return (
+                            <>
+                              <p className="text-xs text-muted-foreground mb-1">To Gain</p>
+                              <p className="text-lg font-bold text-green-600 dark:text-green-400">
+                                +{weightDiff.toFixed(1)} kg
+                              </p>
+                            </>
+                          );
+                        } else if (weightDiff < 0) {
+                          return (
+                            <>
+                              <p className="text-xs text-muted-foreground mb-1">To Lose</p>
+                              <p className="text-lg font-bold text-primary">
+                                {Math.abs(weightDiff).toFixed(1)} kg
+                              </p>
+                            </>
+                          );
+                        } else {
+                          return (
+                            <>
+                              <p className="text-xs text-muted-foreground mb-1">Status</p>
+                              <p className="text-lg font-bold text-green-600 dark:text-green-400">
+                                At Target
+                              </p>
+                            </>
+                          );
+                        }
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Weekly Weight Progress Bar */}
+              {aiAnalysisWeight !== null && aiAnalysisTarget !== null && profile && aiAnalysis && (
+                (() => {
+                  const currentWeight = aiAnalysisWeight;
+                  const targetWeight = aiAnalysisTarget;
+                  const weightDiff = targetWeight - currentWeight;
+                  const isAtOrBelowTarget = weightDiff >= 0;
+                  
+                  // Calculate weeks until target
+                  const targetDate = new Date(profile.target_date);
+                  const today = new Date();
+                  const daysRemaining = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                  const weeksRemaining = Math.max(1, Math.ceil(daysRemaining / 7));
+                  
+                  // Calculate progress percentage
+                  let progressPercent = 0;
+                  if (!isAtOrBelowTarget && weightDiff < 0) {
+                    // Weight loss: progress = (start - current) / (start - target) * 100
+                    const startWeight = currentWeight;
+                    const totalToLose = startWeight - targetWeight;
+                    const lostSoFar = 0; // Currently at start
+                    progressPercent = Math.min(100, Math.max(0, (lostSoFar / totalToLose) * 100));
+                  } else if (isAtOrBelowTarget && weightDiff > 0) {
+                    // Weight gain: progress = (current - start) / (target - start) * 100
+                    const startWeight = currentWeight;
+                    const totalToGain = targetWeight - startWeight;
+                    const gainedSoFar = 0; // Currently at start
+                    progressPercent = Math.min(100, Math.max(0, (gainedSoFar / totalToGain) * 100));
+                  } else {
+                    // At target
+                    progressPercent = 100;
+                  }
+                  
+                  // Calculate weekly milestones for markers
+                  const milestones: Array<{ week: number; expectedWeight: number; position: number }> = [];
+                  
+                  if (!isAtOrBelowTarget && aiAnalysis.requiredWeeklyLoss > 0) {
+                    // Weight loss mode
+                    const startWeight = currentWeight;
+                    const totalToLose = startWeight - targetWeight;
+                    for (let week = 1; week <= Math.min(weeksRemaining, 8); week++) {
+                      const expectedWeight = Math.max(
+                        targetWeight,
+                        currentWeight - (week * aiAnalysis.requiredWeeklyLoss)
+                      );
+                      const weightLost = startWeight - expectedWeight;
+                      const position = Math.min(100, Math.max(0, (weightLost / totalToLose) * 100));
+                      milestones.push({ week, expectedWeight, position });
+                    }
+                  } else if (isAtOrBelowTarget && weightDiff > 0) {
+                    // Weight gain mode
+                    const startWeight = currentWeight;
+                    const totalToGain = targetWeight - startWeight;
+                    const weeklyGain = Math.abs(aiAnalysis.requiredWeeklyLoss) || 0.2;
+                    for (let week = 1; week <= Math.min(weeksRemaining, 8); week++) {
+                      const expectedWeight = Math.min(
+                        targetWeight,
+                        currentWeight + (week * weeklyGain)
+                      );
+                      const weightGained = expectedWeight - startWeight;
+                      const position = Math.min(100, Math.max(0, (weightGained / totalToGain) * 100));
+                      milestones.push({ week, expectedWeight, position });
+                    }
+                  }
+                  
+                  return (
+                    <div className="py-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-semibold text-muted-foreground">
+                          {currentWeight.toFixed(1)} kg
+                        </span>
+                        <span className="text-[9px] text-muted-foreground">
+                          {weeksRemaining} {weeksRemaining === 1 ? 'week' : 'weeks'} remaining
+                        </span>
+                        <span className="text-[10px] font-semibold text-primary">
+                          {targetWeight.toFixed(1)} kg
+                        </span>
+                      </div>
+                      <div className="relative">
+                        {/* Weight labels above milestones */}
+                        <div className="relative h-4 mb-1">
+                          {milestones.map(({ week, expectedWeight, position }) => (
+                            <div
+                              key={`label-${week}`}
+                              className="absolute -translate-x-1/2"
+                              style={{ left: `${position}%` }}
+                            >
+                              <span className="text-[9px] text-muted-foreground whitespace-nowrap">
+                                {expectedWeight.toFixed(1)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        {/* Progress bar */}
+                        <div className="relative h-3 bg-muted rounded-full overflow-visible">
+                          {/* Progress fill */}
+                          <div 
+                            className="h-full bg-gradient-to-r from-primary to-primary/80 rounded-full transition-all duration-500"
+                            style={{ width: `${progressPercent}%` }}
+                          />
+                          {/* Milestone markers */}
+                          {milestones.map(({ week, expectedWeight, position }) => (
+                            <div
+                              key={week}
+                              className="absolute top-0 bottom-0 w-0.5 bg-foreground/30"
+                              style={{ left: `${position}%` }}
+                              title={`Week ${week}: ${expectedWeight.toFixed(1)} kg`}
+                            />
+                          ))}
+                          {/* Current position indicator */}
+                          <div 
+                            className="absolute top-1/2 -translate-y-1/2 w-2 h-2 bg-primary rounded-full border-2 border-background shadow-sm z-10"
+                            style={{ left: `${progressPercent}%`, marginLeft: '-4px' }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()
+              )}
+              
               {/* Calorie & Macro Recommendations */}
               <div className="grid gap-4 md:grid-cols-2">
                 <Card className="bg-background/50">
@@ -633,21 +1152,11 @@ export default function WeightTracker() {
               </div>
             </CardContent>
           </Card>
-        )}
+          );
+        })()}
 
-        {!aiAnalysis && profile && (
-          <Card>
-            <CardContent className="pt-6">
-              <Button onClick={getAIAnalysis} disabled={loading} className="w-full">
-                <Sparkles className="h-4 w-4 mr-2" />
-                {loading ? "Analyzing..." : "Get AI Weight Loss Strategy"}
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
+        {/* Weight Input - Moved above AI Strategy */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Weight Input */}
           <Card className="border-border/50 lg:col-span-1">
             <CardHeader>
               <CardTitle>Log Weight</CardTitle>
@@ -658,6 +1167,7 @@ export default function WeightTracker() {
                   <Label htmlFor="weight">Weight (kg)</Label>
                   <Input
                     id="weight"
+                    ref={weightInputRef}
                     type="number"
                     step="0.1"
                     placeholder="75.5"
@@ -787,6 +1297,17 @@ export default function WeightTracker() {
           </Card>
         </div>
 
+        {!aiAnalysis && profile && (
+          <Card>
+            <CardContent className="pt-6">
+              <Button onClick={getAIAnalysis} disabled={analyzingWeight} className="w-full">
+                <Sparkles className="h-4 w-4 mr-2" />
+                {analyzingWeight ? "Analyzing..." : "Get AI Weight Loss Strategy"}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
         <DeleteConfirmDialog
           open={deleteDialogOpen}
           onOpenChange={setDeleteDialogOpen}
@@ -794,6 +1315,116 @@ export default function WeightTracker() {
           title="Delete Weight Log"
           itemName={logToDelete ? `${logToDelete.weight_kg}kg on ${format(new Date(logToDelete.date), "MMM dd, yyyy")}` : undefined}
         />
+
+        {/* Unrealistic Goal Confirmation Dialog */}
+        <AlertDialog open={unsafeGoalDialogOpen} onOpenChange={setUnsafeGoalDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Unrealistic Weight Loss Goal</AlertDialogTitle>
+              <AlertDialogDescription>
+                This goal requires losing more than 1.5kg per week, which is considered unsafe and can cause severe performance degradation and health risks. Are you sure you want to proceed?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={handleUnsafeGoalCancel}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleUnsafeGoalConfirm}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Yes, proceed
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Debug Button - Only show if debug data exists */}
+        {debugData && (
+          <Card>
+            <CardContent className="pt-6">
+              <Button 
+                onClick={() => setDebugDialogOpen(true)} 
+                variant="outline" 
+                className="w-full"
+              >
+                <Bug className="h-4 w-4 mr-2" />
+                Debug AI Request/Response
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Debug Dialog */}
+        <Dialog open={debugDialogOpen} onOpenChange={setDebugDialogOpen}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>AI Weight Loss Strategy - Debug Info</DialogTitle>
+              <DialogDescription>
+                Debug information for the AI weight loss strategy request and response
+              </DialogDescription>
+            </DialogHeader>
+            
+            {debugData && (
+              <div className="space-y-6 mt-4">
+                {/* Current Weight Info */}
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm">Current Weight Information</h3>
+                  <div className="bg-muted p-3 rounded-md text-sm font-mono">
+                    <div><strong>Source:</strong> {debugData.currentWeightSource}</div>
+                    <div><strong>Value Used:</strong> {debugData.currentWeightValue} kg</div>
+                    {debugData.latestWeightLog && (
+                      <div className="mt-2">
+                        <strong>Latest Weight Log:</strong>
+                        <div className="ml-4">
+                          Weight: {debugData.latestWeightLog.weight_kg} kg
+                          {debugData.latestWeightLog.date && (
+                            <div>Date: {debugData.latestWeightLog.date}</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {!debugData.latestWeightLog && (
+                      <div className="mt-2 text-muted-foreground">No weight log found, using profile weight</div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Profile Data */}
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm">Profile Data</h3>
+                  <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto font-mono">
+                    {JSON.stringify(debugData.profileData, null, 2)}
+                  </pre>
+                </div>
+
+                {/* Request Payload */}
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm">Request Payload (Sent to API)</h3>
+                  <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto font-mono">
+                    {JSON.stringify(debugData.requestPayload, null, 2)}
+                  </pre>
+                </div>
+
+                {/* Raw API Response */}
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-sm">Raw API Response</h3>
+                  <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto font-mono max-h-96 overflow-y-auto">
+                    {JSON.stringify(debugData.rawResponse, null, 2)}
+                  </pre>
+                </div>
+
+                {/* Parsed Response */}
+                {debugData.parsedResponse && (
+                  <div className="space-y-2">
+                    <h3 className="font-semibold text-sm">Parsed Response (Analysis)</h3>
+                    <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto font-mono max-h-96 overflow-y-auto">
+                      {JSON.stringify(debugData.parsedResponse, null, 2)}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
