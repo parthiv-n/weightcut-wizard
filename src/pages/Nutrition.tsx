@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,6 +20,7 @@ import wizardNutrition from "@/assets/wizard-nutrition.png";
 import { Badge } from "@/components/ui/badge";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { nutritionLogSchema } from "@/lib/validation";
+import { calculateCalorieTarget as calculateCalorieTargetUtil } from "@/lib/calorieCalculation";
 
 interface Ingredient {
   name: string;
@@ -68,6 +70,7 @@ export default function Nutrition() {
   } | null>(null);
   const [fetchingMacroGoals, setFetchingMacroGoals] = useState(false);
   const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // Manual meal form
   const [manualMeal, setManualMeal] = useState({
@@ -110,6 +113,52 @@ export default function Nutrition() {
     }
   }, [profile]);
 
+  // Auto-open add meal dialog if URL param is present
+  useEffect(() => {
+    if (searchParams.get("openAddMeal") === "true") {
+      setIsAiDialogOpen(true);
+      // Remove the param from URL
+      searchParams.delete("openAddMeal");
+      setSearchParams(searchParams, { replace: true });
+    }
+    if (searchParams.get("openManualMeal") === "true") {
+      setIsManualDialogOpen(true);
+      // Remove the param from URL
+      searchParams.delete("openManualMeal");
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  // Real-time subscription to profiles table for automatic updates when Weight Tracker saves new recommendations
+  useEffect(() => {
+    if (!profile) return;
+
+    const channel = supabase
+      .channel('profile-nutrition-updates')
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'profiles',
+        filter: `id=eq.${profile.id}`
+      }, (payload) => {
+        const newData = payload.new as any;
+        if (newData.ai_recommended_calories) {
+          setAiMacroGoals({
+            proteinGrams: newData.ai_recommended_protein_g || 0,
+            carbsGrams: newData.ai_recommended_carbs_g || 0,
+            fatsGrams: newData.ai_recommended_fats_g || 0,
+            recommendedCalories: newData.ai_recommended_calories || 0,
+          });
+          setDailyCalorieTarget(newData.ai_recommended_calories);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile]);
+
   const loadProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
@@ -127,18 +176,24 @@ export default function Nutrition() {
   };
 
   const calculateCalorieTarget = (profileData: any) => {
-    const currentWeight = profileData.current_weight_kg || 70;
-    const goalWeight = profileData.goal_weight_kg || 65;
-    const tdee = profileData.tdee || 2000;
+    // Use shared utility function for calorie calculation
+    const target = calculateCalorieTargetUtil(profileData);
+    setDailyCalorieTarget(target);
+
+    // Calculate safety status and message (Nutrition page specific)
+    const currentWeight = profileData?.current_weight_kg || 70;
+    const goalWeight = profileData?.goal_weight_kg || 65;
     const daysToGoal = Math.ceil(
-      (new Date(profileData.target_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
+      (new Date(profileData?.target_date || new Date()).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
     );
 
-    const weeklyWeightLoss = ((currentWeight - goalWeight) / (daysToGoal / 7));
-    const safeWeeklyLoss = Math.min(weeklyWeightLoss, 1);
-    const dailyDeficit = (safeWeeklyLoss * 7700) / 7;
-    const target = Math.max(tdee - dailyDeficit, tdee * 0.8);
+    if (daysToGoal <= 0) {
+      setSafetyStatus("green");
+      setSafetyMessage("✓ Safe and sustainable weight loss pace");
+      return;
+    }
 
+    const weeklyWeightLoss = ((currentWeight - goalWeight) / (daysToGoal / 7));
     const weeklyLossPercent = (weeklyWeightLoss / currentWeight) * 100;
     
     if (weeklyLossPercent > 1.5 || weeklyWeightLoss > 1) {
@@ -151,8 +206,6 @@ export default function Nutrition() {
       setSafetyStatus("green");
       setSafetyMessage("✓ Safe and sustainable weight loss pace");
     }
-
-    setDailyCalorieTarget(Math.round(target));
   };
 
   const getCurrentWeight = async (profileData: any) => {
@@ -184,32 +237,35 @@ export default function Nutrition() {
 
     setFetchingMacroGoals(true);
     try {
-      const currentWeight = await getCurrentWeight(profile);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setAiMacroGoals(null);
+        setFetchingMacroGoals(false);
+        return;
+      }
 
-      const { data, error } = await supabase.functions.invoke("weight-tracker-analysis", {
-        body: {
-          currentWeight,
-          goalWeight: fightWeekTarget,
-          fightNightWeight: profile.goal_weight_kg,
-          targetDate: profile.target_date,
-          activityLevel: profile.activity_level,
-          age: profile.age,
-          sex: profile.sex,
-          heightCm: profile.height_cm,
-          tdee: profile.tdee
-        }
-      });
+      // Fetch AI recommendations from profiles table
+      const { data: profileData, error } = await supabase
+        .from("profiles")
+        .select("ai_recommended_calories, ai_recommended_protein_g, ai_recommended_carbs_g, ai_recommended_fats_g, ai_recommendations_updated_at")
+        .eq("id", user.id)
+        .single();
 
       if (error) {
         // Silently fail - don't show error toast, just don't show goals
         setAiMacroGoals(null);
-      } else if (data?.analysis) {
+      } else if (profileData?.ai_recommended_calories) {
         setAiMacroGoals({
-          proteinGrams: data.analysis.proteinGrams || 0,
-          carbsGrams: data.analysis.carbsGrams || 0,
-          fatsGrams: data.analysis.fatsGrams || 0,
-          recommendedCalories: data.analysis.recommendedCalories || 0,
+          proteinGrams: profileData.ai_recommended_protein_g || 0,
+          carbsGrams: profileData.ai_recommended_carbs_g || 0,
+          fatsGrams: profileData.ai_recommended_fats_g || 0,
+          recommendedCalories: profileData.ai_recommended_calories || 0,
         });
+        // Also update dailyCalorieTarget
+        setDailyCalorieTarget(profileData.ai_recommended_calories);
+      } else {
+        // Fallback to calculated target if no AI recommendations
+        setAiMacroGoals(null);
       }
     } catch (error) {
       // Silently fail

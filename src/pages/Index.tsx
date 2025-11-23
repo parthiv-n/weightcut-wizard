@@ -10,11 +10,27 @@ const Index = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const checkAuthAndProfile = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
-        navigate("/dashboard");
+        // Check if user has a profile
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("id")
+          .eq("id", session.user.id)
+          .maybeSingle();
+        
+        if (profile) {
+          // User has profile, redirect to dashboard
+          navigate("/dashboard");
+        } else {
+          // User authenticated but no profile, redirect to onboarding
+          navigate("/onboarding");
+        }
       }
-    });
+    };
+    
+    checkAuthAndProfile();
   }, [navigate]);
 
   return (
@@ -24,10 +40,10 @@ const Index = () => {
       </div>
       <div className="container mx-auto px-4 py-16">
         <div className="text-center mb-16">
-          <div className="mx-auto mb-6">
-            <img src={wizardHero} alt="Weight Cut Wizard" className="h-64 w-64 mx-auto object-contain" />
+          <div className="mx-auto mb-8 md:mb-10">
+            <img src={wizardHero} alt="Weight Cut Wizard" className="h-48 w-48 md:h-64 md:w-64 mx-auto object-contain" />
           </div>
-          <h1 className="text-5xl md:text-6xl font-title font-bold mb-6 pb-2 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+          <h1 className="text-4xl md:text-5xl lg:text-6xl font-title font-bold mb-6 leading-tight bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
             Weight Cut Wizard
           </h1>
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">

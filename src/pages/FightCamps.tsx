@@ -134,7 +134,7 @@ export default function FightCamps() {
 
   return (
     <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
+      <div className="space-y-4">
         <div className="flex items-center gap-3">
           <Trophy className="w-8 h-8 text-primary" />
           <div>
