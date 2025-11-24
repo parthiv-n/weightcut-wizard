@@ -314,11 +314,6 @@ export type Database = {
         Row: {
           activity_level: string
           age: number
-          ai_recommended_calories: number | null
-          ai_recommended_carbs_g: number | null
-          ai_recommended_fats_g: number | null
-          ai_recommended_protein_g: number | null
-          ai_recommendations_updated_at: string | null
           avatar_url: string | null
           bmr: number | null
           created_at: string | null
@@ -336,11 +331,6 @@ export type Database = {
         Insert: {
           activity_level: string
           age: number
-          ai_recommended_calories?: number | null
-          ai_recommended_carbs_g?: number | null
-          ai_recommended_fats_g?: number | null
-          ai_recommended_protein_g?: number | null
-          ai_recommendations_updated_at?: string | null
           avatar_url?: string | null
           bmr?: number | null
           created_at?: string | null
@@ -358,11 +348,6 @@ export type Database = {
         Update: {
           activity_level?: string
           age?: number
-          ai_recommended_calories?: number | null
-          ai_recommended_carbs_g?: number | null
-          ai_recommended_fats_g?: number | null
-          ai_recommended_protein_g?: number | null
-          ai_recommendations_updated_at?: string | null
           avatar_url?: string | null
           bmr?: number | null
           created_at?: string | null
