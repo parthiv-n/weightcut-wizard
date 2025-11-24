@@ -109,11 +109,12 @@ export const BarcodeScanner = ({ onFoodScanned, disabled }: BarcodeScannerProps)
     },
     onError(error) {
       console.error("Scanner error:", error);
-      if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
+      const errorName = error instanceof Error ? error.name : String(error);
+      if (errorName === "NotAllowedError" || errorName === "PermissionDeniedError") {
         setCameraError("Camera permission denied. Please enable camera access in your browser settings.");
-      } else if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
+      } else if (errorName === "NotFoundError" || errorName === "DevicesNotFoundError") {
         setCameraError("No camera found. Please connect a camera device.");
-      } else if (error.name === "NotReadableError" || error.name === "TrackStartError") {
+      } else if (errorName === "NotReadableError" || errorName === "TrackStartError") {
         setCameraError("Camera is already in use by another application.");
       } else {
         setCameraError("Failed to access camera. Please ensure camera permissions are enabled.");
