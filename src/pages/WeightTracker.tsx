@@ -405,20 +405,6 @@ export default function WeightTracker() {
       setAiAnalysisWeight(currentWeight);
       setAiAnalysisTarget(fightWeekTarget);
       
-      // Save AI recommendations to profiles table for Nutrition page
-      if (user) {
-        await supabase
-          .from("profiles")
-          .update({
-            ai_recommended_calories: data.analysis.recommendedCalories,
-            ai_recommended_protein_g: data.analysis.proteinGrams,
-            ai_recommended_carbs_g: data.analysis.carbsGrams,
-            ai_recommended_fats_g: data.analysis.fatsGrams,
-            ai_recommendations_updated_at: new Date().toISOString()
-          })
-          .eq("id", user.id);
-      }
-      
       // Store in localStorage for persistence
       if (userId) {
         const storageKey = `weight_tracker_ai_analysis_${userId}`;
@@ -466,20 +452,6 @@ export default function WeightTracker() {
       setAiAnalysis(data.analysis);
       setAiAnalysisWeight(currentWeight);
       setAiAnalysisTarget(fightWeekTarget);
-      
-      // Save AI recommendations to profiles table for Nutrition page
-      if (user) {
-        await supabase
-          .from("profiles")
-          .update({
-            ai_recommended_calories: data.analysis.recommendedCalories,
-            ai_recommended_protein_g: data.analysis.proteinGrams,
-            ai_recommended_carbs_g: data.analysis.carbsGrams,
-            ai_recommended_fats_g: data.analysis.fatsGrams,
-            ai_recommendations_updated_at: new Date().toISOString()
-          })
-          .eq("id", user.id);
-      }
       
       // Store in localStorage for persistence
       if (userId) {
