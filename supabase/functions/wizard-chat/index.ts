@@ -47,10 +47,10 @@ serve(async (req) => {
     } : null;
 
     const { messages } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const GOOGLE_AI_API_KEY = Deno.env.get("GOOGLE_AI_API_KEY");
 
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    if (!GOOGLE_AI_API_KEY) {
+      throw new Error("GOOGLE_AI_API_KEY is not configured");
     }
 
     const systemPrompt = `You are the Weight Cut Wizard - a mystical coach who texts with fighters about their weight cut journey. Keep your messages casual, friendly, and conversational like you're texting a friend.
@@ -75,30 +75,33 @@ ${userData ? `Current weight: ${userData.currentWeight}kg, Goal: ${userData.goal
 
 Text Style: Keep it short (2-4 sentences max), friendly, and motivational. Use casual language like you're texting. Add some personality! If a request is unsafe, firmly but kindly decline and suggest safer alternatives.`;
 
-    console.log("Calling Lovable AI...");
+    // Get the latest user message
+    const userMessage = messages[messages.length - 1]?.content || "";
+    const fullPrompt = `${systemPrompt}\n\nUser: ${userMessage}`;
 
-    const response = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            { role: "system", content: systemPrompt },
-            ...messages
-          ],
-          stream: true,
-        }),
-      }
-    );
+    console.log("Calling Google Gemini API...");
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GOOGLE_AI_API_KEY}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: fullPrompt
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 1024,
+        }
+      })
+    });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Lovable AI error:", response.status, errorText);
+      const errorData = await response.json();
+      console.error("Gemini API error:", response.status, errorData);
       
       if (response.status === 429) {
         return new Response(
@@ -107,28 +110,43 @@ Text Style: Keep it short (2-4 sentences max), friendly, and motivational. Use c
         );
       }
 
-      if (response.status === 402) {
+      if (response.status === 403) {
         return new Response(
-          JSON.stringify({ error: "Payment required. Please add credits to your Lovable AI workspace." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "API key invalid or quota exceeded." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       
       return new Response(
-        JSON.stringify({ error: `AI error: ${response.status}` }),
+        JSON.stringify({ error: `Gemini API error: ${errorData.error?.message || 'Unknown error'}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Return the stream directly
-    return new Response(response.body, {
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-      },
-    });
+    const data = await response.json();
+    const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    
+    if (!generatedText) {
+      throw new Error("No response from Gemini API");
+    }
+
+    // Return the response as JSON (not streaming like Lovable)
+    return new Response(
+      JSON.stringify({ 
+        choices: [{ 
+          message: { 
+            content: generatedText,
+            role: "assistant" 
+          } 
+        }] 
+      }),
+      {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      }
+    );
   } catch (error) {
     console.error("wizard-chat error:", error);
     return new Response(

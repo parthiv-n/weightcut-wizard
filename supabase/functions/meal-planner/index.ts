@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
 };
 
 serve(async (req) => {
@@ -47,12 +48,18 @@ serve(async (req) => {
       )
     } : null;
 
-    const { prompt, action } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const { prompt, action, userData } = await req.json();
+    const GOOGLE_AI_API_KEY = Deno.env.get("GOOGLE_AI_API_KEY");
 
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    if (!GOOGLE_AI_API_KEY) {
+      console.error("GOOGLE_AI_API_KEY environment variable is not configured");
+      return new Response(
+        JSON.stringify({ error: "AI service not configured" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
+
+    console.log("Request data:", { prompt: prompt?.substring(0, 100), action, userData });
 
     // Calculate safe calorie target
     const currentWeight = userData?.currentWeight || 70;
@@ -138,30 +145,58 @@ Generate meal plans that:
 - Respect any dietary restrictions mentioned
 - Support training and recovery`;
 
-    console.log("Calling Lovable AI for meal planning...");
+    console.log("Calling Google Gemini API for meal planning...");
 
-    const response = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
-      {
+    const fullPrompt = `${systemPrompt}\n\nUser Request: ${prompt}`;
+
+    // Add timeout to prevent hanging
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+    let response;
+    try {
+      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GOOGLE_AI_API_KEY}`, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.7,
+          contents: [{
+            parts: [{
+              text: fullPrompt
+            }]
+          }],
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 4096,
+          }
         }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+      console.log("Gemini API response status:", response.status);
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      
+      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+        console.error("Gemini API request timed out");
+        return new Response(
+          JSON.stringify({ error: "AI request timed out. Please try again." }),
+          { status: 408, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
-    );
+      
+      console.error("Gemini API fetch error:", fetchError);
+      return new Response(
+        JSON.stringify({ error: "Failed to connect to AI service" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Lovable AI error:", response.status, errorText);
+      const errorData = await response.json();
+      console.error("Gemini API error:", response.status, errorData);
       
       if (response.status === 429) {
         return new Response(
@@ -170,24 +205,24 @@ Generate meal plans that:
         );
       }
 
-      if (response.status === 402) {
+      if (response.status === 403) {
         return new Response(
-          JSON.stringify({ error: "Payment required. Please add credits to your Lovable AI workspace." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "API key invalid or quota exceeded." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       
       return new Response(
-        JSON.stringify({ error: `AI error: ${response.status}` }),
+        JSON.stringify({ error: `Gemini API error: ${errorData.error?.message || 'Unknown error'}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
     if (!content) {
-      throw new Error("No content in AI response");
+      throw new Error("No content in Gemini API response");
     }
 
     // Try to parse JSON from the response
@@ -241,8 +276,13 @@ Generate meal plans that:
     );
   } catch (error) {
     console.error("meal-planner error:", error);
+    console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
+    
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      JSON.stringify({ 
+        error: error instanceof Error ? error.message : "Unknown error occurred",
+        details: error instanceof Error ? error.stack : "No additional details"
+      }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
