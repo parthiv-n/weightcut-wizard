@@ -288,8 +288,8 @@ Provide:
 
 ${isMaintenanceMode ? 'Since user is already at or below fight week target, focus on maintenance nutrition. The weigh-in day weight will be achieved through dehydration protocols in the final days before weigh-in, not through continued dieting. calorieDeficit MUST be 0, recommendedCalories MUST equal TDEE.' : 'Be specific with numbers and practical advice. If the timeline is unrealistic (requires >1.5kg/week), clearly state this and recommend timeline extension.'}`;
 
-    // Try gemini-2.0-flash-exp first, fallback to gemini-2.0-flash, then gemini-1.5-flash
-    let model = "gemini-2.0-flash-exp";
+    // Try gemini-2.5-flash first, fallback to gemini-2.0-flash
+    let model = "gemini-2.5-flash";
     let response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${GOOGLE_AI_API_KEY}`,
       {
@@ -329,10 +329,10 @@ ${isMaintenanceMode ? 'Since user is already at or below fight week target, focu
       );
     }
 
-    // Fallback to gemini-1.5-flash if both fail
+    // Fallback to gemini-2.0-flash if first fails
     if (!response.ok && response.status !== 200) {
-      console.log(`Model ${model} failed, trying gemini-1.5-flash`);
-      model = "gemini-1.5-flash";
+      console.log(`Model ${model} failed, trying gemini-2.0-flash`);
+      model = "gemini-2.0-flash";
       response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${GOOGLE_AI_API_KEY}`,
         {
