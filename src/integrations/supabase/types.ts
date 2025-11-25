@@ -327,6 +327,7 @@ export type Database = {
           goal_weight_kg: number
           height_cm: number
           id: string
+          manual_nutrition_override: boolean | null
           sex: string
           target_date: string
           tdee: number | null
@@ -349,6 +350,7 @@ export type Database = {
           goal_weight_kg: number
           height_cm: number
           id: string
+          manual_nutrition_override?: boolean | null
           sex: string
           target_date: string
           tdee?: number | null
@@ -371,6 +373,7 @@ export type Database = {
           goal_weight_kg?: number
           height_cm?: number
           id?: string
+          manual_nutrition_override?: boolean | null
           sex?: string
           target_date?: string
           tdee?: number | null
