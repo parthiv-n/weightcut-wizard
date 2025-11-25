@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Sparkles, Calendar as CalendarIcon, TrendingUp, Loader2, AlertCircle } from "lucide-react";
+import { Plus, Sparkles, Calendar as CalendarIcon, TrendingUp, Loader2, AlertCircle, Settings, Edit2, X } from "lucide-react";
 import { MealCard } from "@/components/nutrition/MealCard";
 import { CalorieBudgetIndicator } from "@/components/nutrition/CalorieBudgetIndicator";
 import { VoiceInput } from "@/components/nutrition/VoiceInput";
@@ -69,6 +69,13 @@ export default function Nutrition() {
     recommendedCalories: number;
   } | null>(null);
   const [fetchingMacroGoals, setFetchingMacroGoals] = useState(false);
+  const [isEditTargetsDialogOpen, setIsEditTargetsDialogOpen] = useState(false);
+  const [editingTargets, setEditingTargets] = useState({
+    calories: "",
+    protein: "",
+    carbs: "",
+    fats: "",
+  });
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -142,6 +149,8 @@ export default function Nutrition() {
         filter: `id=eq.${profile.id}`
       }, (payload) => {
         const newData = payload.new as any;
+        // Update profile with new data including manual_nutrition_override flag
+        setProfile({ ...profile, ...newData });
         if (newData.ai_recommended_calories) {
           setAiMacroGoals({
             proteinGrams: newData.ai_recommended_protein_g || 0,
@@ -244,10 +253,10 @@ export default function Nutrition() {
         return;
       }
 
-      // Fetch AI recommendations from profiles table
+      // Fetch recommendations/overrides from profiles table
       const { data: profileData, error } = await supabase
         .from("profiles")
-        .select("ai_recommended_calories, ai_recommended_protein_g, ai_recommended_carbs_g, ai_recommended_fats_g, ai_recommendations_updated_at")
+        .select("ai_recommended_calories, ai_recommended_protein_g, ai_recommended_carbs_g, ai_recommended_fats_g, manual_nutrition_override")
         .eq("id", user.id)
         .single();
 
@@ -255,6 +264,7 @@ export default function Nutrition() {
         // Silently fail - don't show error toast, just don't show goals
         setAiMacroGoals(null);
       } else if (profileData?.ai_recommended_calories) {
+        // Use values whether they're manual override or AI recommendations
         setAiMacroGoals({
           proteinGrams: profileData.ai_recommended_protein_g || 0,
           carbsGrams: profileData.ai_recommended_carbs_g || 0,
@@ -263,8 +273,12 @@ export default function Nutrition() {
         });
         // Also update dailyCalorieTarget
         setDailyCalorieTarget(profileData.ai_recommended_calories);
+        // Update profile to include manual_nutrition_override flag
+        if (profile) {
+          setProfile({ ...profile, manual_nutrition_override: profileData.manual_nutrition_override });
+        }
       } else {
-        // Fallback to calculated target if no AI recommendations
+        // Fallback to calculated target if no recommendations or overrides
         setAiMacroGoals(null);
       }
     } catch (error) {
@@ -1782,6 +1796,178 @@ export default function Nutrition() {
               </div>
             </DialogContent>
           </Dialog>
+
+          {/* Edit Nutrition Targets Dialog */}
+          <Dialog open={isEditTargetsDialogOpen} onOpenChange={setIsEditTargetsDialogOpen}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Edit Daily Nutrition Targets</DialogTitle>
+                <DialogDescription>
+                  Set your daily calorie and macro targets. These will override AI recommendations.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div>
+                  <Label htmlFor="edit-calories">Daily Calories *</Label>
+                  <Input
+                    id="edit-calories"
+                    type="number"
+                    placeholder="2000"
+                    value={editingTargets.calories}
+                    onChange={(e) => setEditingTargets({ ...editingTargets, calories: e.target.value })}
+                    min="1"
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Recommended: 1200-4000 kcal/day</p>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label htmlFor="edit-protein">Protein (g)</Label>
+                    <Input
+                      id="edit-protein"
+                      type="number"
+                      step="0.1"
+                      placeholder="150"
+                      value={editingTargets.protein}
+                      onChange={(e) => setEditingTargets({ ...editingTargets, protein: e.target.value })}
+                      min="0"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-carbs">Carbs (g)</Label>
+                    <Input
+                      id="edit-carbs"
+                      type="number"
+                      step="0.1"
+                      placeholder="200"
+                      value={editingTargets.carbs}
+                      onChange={(e) => setEditingTargets({ ...editingTargets, carbs: e.target.value })}
+                      min="0"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-fats">Fats (g)</Label>
+                    <Input
+                      id="edit-fats"
+                      type="number"
+                      step="0.1"
+                      placeholder="65"
+                      value={editingTargets.fats}
+                      onChange={(e) => setEditingTargets({ ...editingTargets, fats: e.target.value })}
+                      min="0"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setIsEditTargetsDialogOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    className="flex-1"
+                    onClick={async () => {
+                      // Validation
+                      const calories = parseFloat(editingTargets.calories);
+                      if (isNaN(calories) || calories <= 0) {
+                        toast({
+                          title: "Invalid calories",
+                          description: "Please enter a valid calorie target (greater than 0)",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+
+                      if (calories < 800 || calories > 5000) {
+                        toast({
+                          title: "Calorie range warning",
+                          description: "Calorie target is outside recommended range (800-5000 kcal/day)",
+                          variant: "destructive",
+                        });
+                        return;
+                      }
+
+                      try {
+                        const { data: { user } } = await supabase.auth.getUser();
+                        if (!user) throw new Error("Not authenticated");
+
+                        // Build update data object with explicit typing
+                        const updateData: {
+                          manual_nutrition_override: boolean;
+                          ai_recommended_calories: number;
+                          ai_recommended_protein_g?: number;
+                          ai_recommended_carbs_g?: number;
+                          ai_recommended_fats_g?: number;
+                        } = {
+                          manual_nutrition_override: true,
+                          ai_recommended_calories: Math.round(calories),
+                        };
+
+                        // Only update macros if provided
+                        if (editingTargets.protein) {
+                          const protein = parseFloat(editingTargets.protein);
+                          if (!isNaN(protein) && protein >= 0) {
+                            updateData.ai_recommended_protein_g = protein;
+                          }
+                        }
+                        if (editingTargets.carbs) {
+                          const carbs = parseFloat(editingTargets.carbs);
+                          if (!isNaN(carbs) && carbs >= 0) {
+                            updateData.ai_recommended_carbs_g = carbs;
+                          }
+                        }
+                        if (editingTargets.fats) {
+                          const fats = parseFloat(editingTargets.fats);
+                          if (!isNaN(fats) && fats >= 0) {
+                            updateData.ai_recommended_fats_g = fats;
+                          }
+                        }
+
+                        const { error } = await supabase
+                          .from("profiles")
+                          .update(updateData)
+                          .eq("id", user.id);
+
+                        if (error) {
+                          console.error("Supabase update error:", error);
+                          // Provide more helpful error message for schema issues
+                          if (error.code === "PGRST204") {
+                            throw new Error(
+                              "Database schema is missing required columns. Please run the migration: " +
+                              "20251122230028_add_ai_nutrition_targets.sql and " +
+                              "20251124213104_add_manual_nutrition_override.sql in your Supabase SQL Editor."
+                            );
+                          }
+                          throw error;
+                        }
+
+                        toast({
+                          title: "Targets updated!",
+                          description: "Your daily nutrition targets have been set.",
+                        });
+
+                        setIsEditTargetsDialogOpen(false);
+                        
+                        // Reload profile to refresh data
+                        await loadProfile();
+                      } catch (error: any) {
+                        console.error("Error updating targets:", error);
+                        toast({
+                          title: "Error",
+                          description: error.message || "Failed to update targets",
+                          variant: "destructive",
+                        });
+                      }
+                    }}
+                  >
+                    Save Targets
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
@@ -1819,6 +2005,122 @@ export default function Nutrition() {
           Today
         </Button>
       </div>
+
+      {/* Nutrition Targets Settings Section */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-base sm:text-lg flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              Daily Nutrition Targets
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              {profile?.manual_nutrition_override && (
+                <Badge variant="outline" className="text-xs">
+                  Manual Override
+                </Badge>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  // Pre-fill dialog with current values
+                  const currentCalories = dailyCalorieTarget;
+                  const currentProtein = aiMacroGoals?.proteinGrams || 0;
+                  const currentCarbs = aiMacroGoals?.carbsGrams || 0;
+                  const currentFats = aiMacroGoals?.fatsGrams || 0;
+                  
+                  setEditingTargets({
+                    calories: currentCalories.toString(),
+                    protein: currentProtein.toString(),
+                    carbs: currentCarbs.toString(),
+                    fats: currentFats.toString(),
+                  });
+                  setIsEditTargetsDialogOpen(true);
+                }}
+                className="flex items-center gap-1"
+              >
+                <Edit2 className="h-3 w-3" />
+                Edit Targets
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            <div>
+              <p className="text-xs text-muted-foreground mb-1">Calories</p>
+              <p className="text-lg font-semibold">{dailyCalorieTarget}</p>
+              <p className="text-xs text-muted-foreground">kcal/day</p>
+            </div>
+            {aiMacroGoals ? (
+              <>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Protein</p>
+                  <p className="text-lg font-semibold">{Math.round(aiMacroGoals.proteinGrams)}</p>
+                  <p className="text-xs text-muted-foreground">g/day</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Carbs</p>
+                  <p className="text-lg font-semibold">{Math.round(aiMacroGoals.carbsGrams)}</p>
+                  <p className="text-xs text-muted-foreground">g/day</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Fats</p>
+                  <p className="text-lg font-semibold">{Math.round(aiMacroGoals.fatsGrams)}</p>
+                  <p className="text-xs text-muted-foreground">g/day</p>
+                </div>
+              </>
+            ) : (
+              <div className="col-span-3 flex items-center">
+                <p className="text-sm text-muted-foreground">No macro targets set</p>
+              </div>
+            )}
+          </div>
+          {profile?.manual_nutrition_override && (
+            <div className="mt-4 pt-4 border-t">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    const { data: { user } } = await supabase.auth.getUser();
+                    if (!user) throw new Error("Not authenticated");
+
+                    const { error } = await supabase
+                      .from("profiles")
+                      .update({
+                        manual_nutrition_override: false,
+                      })
+                      .eq("id", user.id);
+
+                    if (error) throw error;
+
+                    toast({
+                      title: "Manual override cleared",
+                      description: "Nutrition targets will now use AI recommendations or calculated values.",
+                    });
+
+                    // Reload profile to refresh data
+                    await loadProfile();
+                  } catch (error: any) {
+                    console.error("Error clearing manual override:", error);
+                    toast({
+                      title: "Error",
+                      description: error.message || "Failed to clear manual override",
+                      variant: "destructive",
+                    });
+                  }
+                }}
+                className="w-full sm:w-auto"
+              >
+                <X className="h-3 w-3 mr-1" />
+                Clear Manual Override
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <CalorieBudgetIndicator
         dailyTarget={dailyCalorieTarget}
