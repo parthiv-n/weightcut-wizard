@@ -44,10 +44,10 @@ serve(async (req) => {
       bypassSafety = false
     } = await req.json();
     
-    const GOOGLE_AI_STUDIO_API_KEY = Deno.env.get("GOOGLE_AI_STUDIO_API_KEY");
+    const GOOGLE_AI_API_KEY = Deno.env.get("GOOGLE_AI_API_KEY");
 
-    if (!GOOGLE_AI_STUDIO_API_KEY) {
-      throw new Error("GOOGLE_AI_STUDIO_API_KEY is not configured");
+    if (!GOOGLE_AI_API_KEY) {
+      throw new Error("GOOGLE_AI_API_KEY is not configured");
     }
 
     // Fetch weight history for pattern analysis
@@ -291,7 +291,7 @@ ${isMaintenanceMode ? 'Since user is already at or below fight week target, focu
     // Try gemini-2.0-flash-exp first, fallback to gemini-2.0-flash, then gemini-1.5-flash
     let model = "gemini-2.0-flash-exp";
     let response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${GOOGLE_AI_STUDIO_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${GOOGLE_AI_API_KEY}`,
       {
         method: "POST",
         headers: {
@@ -312,7 +312,7 @@ ${isMaintenanceMode ? 'Since user is already at or below fight week target, focu
       console.log(`Model ${model} failed, trying gemini-2.0-flash`);
       model = "gemini-2.0-flash";
       response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${GOOGLE_AI_STUDIO_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${GOOGLE_AI_API_KEY}`,
         {
           method: "POST",
           headers: {
@@ -334,7 +334,7 @@ ${isMaintenanceMode ? 'Since user is already at or below fight week target, focu
       console.log(`Model ${model} failed, trying gemini-1.5-flash`);
       model = "gemini-1.5-flash";
       response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${GOOGLE_AI_STUDIO_API_KEY}`,
+        `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${GOOGLE_AI_API_KEY}`,
         {
           method: "POST",
           headers: {

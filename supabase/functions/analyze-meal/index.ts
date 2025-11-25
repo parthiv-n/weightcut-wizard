@@ -55,25 +55,14 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const GOOGLE_AI_API_KEY = Deno.env.get("GOOGLE_AI_API_KEY");
+    if (!GOOGLE_AI_API_KEY) {
+      throw new Error("GOOGLE_AI_API_KEY is not configured");
     }
 
     console.log("Analyzing meal:", mealDescription);
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          {
-            role: "system",
-            content: `You are a nutrition analysis expert. Analyze meal descriptions and return accurate nutritional information.
+    const systemPrompt = `You are a nutrition analysis expert. Analyze meal descriptions and return accurate nutritional information.
 
 CRITICAL RULES:
 1. If the user explicitly mentions calorie amounts, protein, carbs, or fats - USE THOSE EXACT VALUES
@@ -83,80 +72,51 @@ CRITICAL RULES:
 5. Always indicate the data source for nutrition information (e.g., "USDA Food Database", "Nutrition Database", "Standard Nutrition Values", "Food Composition Database")
 6. Use authoritative sources like USDA, nutrition databases, or established food composition tables
 
-Be realistic and precise with portion sizes.`
-          },
-          {
-            role: "user",
-            content: `Analyze this meal and provide nutritional information: "${mealDescription}"`
-          }
-        ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "analyze_meal",
-              description: "Return nutritional analysis for the meal",
-              parameters: {
-                type: "object",
-                properties: {
-                  meal_name: {
-                    type: "string",
-                    description: "Clean, properly formatted name of the meal"
-                  },
-                  calories: {
-                    type: "number",
-                    description: "Total calories in kcal"
-                  },
-                  protein_g: {
-                    type: "number",
-                    description: "Protein content in grams"
-                  },
-                  carbs_g: {
-                    type: "number",
-                    description: "Carbohydrate content in grams"
-                  },
-                  fats_g: {
-                    type: "number",
-                    description: "Fat content in grams"
-                  },
-                  portion_size: {
-                    type: "string",
-                    description: "Estimated portion size (e.g., '250g', '1 plate', '2 servings')"
-                  },
-                  ingredients: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        name: { type: "string" },
-                        grams: { type: "number" },
-                        source: { 
-                          type: "string",
-                          description: "Data source for nutrition information (e.g., 'USDA Food Database', 'Nutrition Database', 'Standard Nutrition Values')"
-                        }
-                      },
-                      required: ["name", "grams"]
-                    },
-                    description: "List of ingredients with weights in grams"
-                  },
-                  data_source: {
-                    type: "string",
-                    description: "Primary data source for the nutrition information (e.g., 'USDA Food Database', 'Nutrition Database', 'Standard Nutrition Values')"
-                  }
-                },
-                required: ["meal_name", "calories", "protein_g", "carbs_g", "fats_g", "portion_size", "ingredients", "data_source"],
-                additionalProperties: false
-              }
-            }
-          }
-        ],
-        tool_choice: { type: "function", function: { name: "analyze_meal" } }
-      }),
+Be realistic and precise with portion sizes.
+
+Analyze this meal and provide nutritional information: "${mealDescription}"
+
+Respond with a JSON object in this exact format:
+{
+  "meal_name": "Clean, properly formatted name of the meal",
+  "calories": number,
+  "protein_g": number,
+  "carbs_g": number,
+  "fats_g": number,
+  "portion_size": "Estimated portion size (e.g., '250g', '1 plate', '2 servings')",
+  "ingredients": [
+    {
+      "name": "ingredient name",
+      "grams": number,
+      "source": "Data source for nutrition information"
+    }
+  ],
+  "data_source": "Primary data source for the nutrition information"
+}`;
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GOOGLE_AI_API_KEY}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [{
+            text: systemPrompt
+          }]
+        }],
+        generationConfig: {
+          temperature: 0.1,
+          topK: 1,
+          topP: 1,
+          maxOutputTokens: 2048,
+        }
+      })
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
+      const errorData = await response.json();
+      console.error("Gemini API error:", response.status, errorData);
       
       if (response.status === 429) {
         return new Response(
@@ -165,25 +125,32 @@ Be realistic and precise with portion sizes.`
         );
       }
       
-      if (response.status === 402) {
+      if (response.status === 403) {
         return new Response(
-          JSON.stringify({ error: "Payment required. Please add credits to your workspace." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "API key invalid or quota exceeded." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       
-      throw new Error(`AI gateway error: ${response.status}`);
+      throw new Error(`Gemini API error: ${errorData.error?.message || 'Unknown error'}`);
     }
 
     const data = await response.json();
-    console.log("AI response:", JSON.stringify(data));
+    console.log("Gemini response:", JSON.stringify(data));
 
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall) {
-      throw new Error("No tool call in AI response");
+    // Parse Gemini response
+    const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!generatedText) {
+      throw new Error("No response from Gemini API");
     }
 
-    const nutritionData = JSON.parse(toolCall.function.arguments);
+    // Extract JSON from the response
+    const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error("Could not parse nutrition data from AI response");
+    }
+
+    const nutritionData = JSON.parse(jsonMatch[0]);
     console.log("Parsed nutrition data:", nutritionData);
 
     return new Response(
