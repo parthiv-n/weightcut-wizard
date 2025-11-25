@@ -94,7 +94,7 @@ Respond with a JSON object in this exact format:
   "data_source": "Primary data source for the nutrition information"
 }`;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GOOGLE_AI_API_KEY}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_AI_API_KEY}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -106,10 +106,10 @@ Respond with a JSON object in this exact format:
           }]
         }],
         generationConfig: {
-          temperature: 0.1,
-          topK: 1,
-          topP: 1,
-          maxOutputTokens: 2048,
+          temperature: 0.2,
+          topK: 40,
+          topP: 0.95,
+          maxOutputTokens: 1024,
         }
       })
     });
@@ -138,9 +138,20 @@ Respond with a JSON object in this exact format:
     const data = await response.json();
     console.log("Gemini response:", JSON.stringify(data));
 
-    // Parse Gemini response
-    const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    // Parse Gemini response with improved error handling
+    console.log("Gemini response structure:", JSON.stringify(data, null, 2));
+    
+    let generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!generatedText) {
+      // Try alternative structures
+      generatedText = data.candidates?.[0]?.text || data.text;
+    }
+    
+    if (!generatedText) {
+      console.error("No content found in Gemini response");
+      if (data.candidates?.[0]?.finishReason === 'SAFETY') {
+        throw new Error("Content was filtered for safety. Please try a different meal description.");
+      }
       throw new Error("No response from Gemini API");
     }
 
