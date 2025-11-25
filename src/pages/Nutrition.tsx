@@ -129,35 +129,6 @@ export default function Nutrition() {
     }
   }, [searchParams, setSearchParams]);
 
-  // Real-time subscription to profiles table for automatic updates when Weight Tracker saves new recommendations
-  useEffect(() => {
-    if (!profile) return;
-
-    const channel = supabase
-      .channel('profile-nutrition-updates')
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'profiles',
-        filter: `id=eq.${profile.id}`
-      }, (payload) => {
-        const newData = payload.new as any;
-        if (newData.ai_recommended_calories) {
-          setAiMacroGoals({
-            proteinGrams: newData.ai_recommended_protein_g || 0,
-            carbsGrams: newData.ai_recommended_carbs_g || 0,
-            fatsGrams: newData.ai_recommended_fats_g || 0,
-            recommendedCalories: newData.ai_recommended_calories || 0,
-          });
-          setDailyCalorieTarget(newData.ai_recommended_calories);
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [profile]);
 
   const loadProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -235,44 +206,8 @@ export default function Nutrition() {
       return;
     }
 
-    setFetchingMacroGoals(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setAiMacroGoals(null);
-        setFetchingMacroGoals(false);
-        return;
-      }
-
-      // Fetch AI recommendations from profiles table
-      const { data: profileData, error } = await supabase
-        .from("profiles")
-        .select("ai_recommended_calories, ai_recommended_protein_g, ai_recommended_carbs_g, ai_recommended_fats_g, ai_recommendations_updated_at")
-        .eq("id", user.id)
-        .single();
-
-      if (error) {
-        // Silently fail - don't show error toast, just don't show goals
-        setAiMacroGoals(null);
-      } else if (profileData?.ai_recommended_calories) {
-        setAiMacroGoals({
-          proteinGrams: profileData.ai_recommended_protein_g || 0,
-          carbsGrams: profileData.ai_recommended_carbs_g || 0,
-          fatsGrams: profileData.ai_recommended_fats_g || 0,
-          recommendedCalories: profileData.ai_recommended_calories || 0,
-        });
-        // Also update dailyCalorieTarget
-        setDailyCalorieTarget(profileData.ai_recommended_calories);
-      } else {
-        // Fallback to calculated target if no AI recommendations
-        setAiMacroGoals(null);
-      }
-    } catch (error) {
-      // Silently fail
-      setAiMacroGoals(null);
-    } finally {
-      setFetchingMacroGoals(false);
-    }
+    // No AI recommendations available, clear macro goals
+    setAiMacroGoals(null);
   };
 
   const loadMeals = async () => {
