@@ -47,10 +47,10 @@ serve(async (req) => {
     } : null;
 
     const { messages } = await req.json();
-    const GOOGLE_AI_API_KEY = Deno.env.get("GOOGLE_AI_API_KEY");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
-    if (!GOOGLE_AI_API_KEY) {
-      throw new Error("GOOGLE_AI_API_KEY is not configured");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not configured");
     }
 
     const systemPrompt = `You are the Weight Cut Wizard - a mystical coach who texts with fighters about their weight cut journey. Keep your messages casual, friendly, and conversational like you're texting a friend.
@@ -77,38 +77,41 @@ Text Style: Keep it short (2-4 sentences max), friendly, and motivational. Use c
 
     // Get the latest user message
     const userMessage = messages[messages.length - 1]?.content || "";
-    const fullPrompt = `${systemPrompt}\n\nUser: ${userMessage}`;
 
-    console.log("Calling Google Gemini API...");
+    console.log("Calling OpenAI API...");
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_AI_API_KEY}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: fullPrompt
-          }]
-        }],
-        generationConfig: {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userMessage }
+          ],
           temperature: 0.8,
-          maxOutputTokens: 512,
-          topK: 40,
-          topP: 0.95,
-        }
-      })
+          max_tokens: 512
+        })
     });
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error("Gemini API error:", response.status, errorData);
+      console.error("OpenAI API error:", response.status, errorData);
       
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (response.status === 401) {
+        return new Response(
+          JSON.stringify({ error: "Invalid API key." }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
@@ -120,26 +123,23 @@ Text Style: Keep it short (2-4 sentences max), friendly, and motivational. Use c
       }
       
       return new Response(
-        JSON.stringify({ error: `Gemini API error: ${errorData.error?.message || 'Unknown error'}` }),
+        JSON.stringify({ error: `OpenAI API error: ${errorData.error?.message || 'Unknown error'}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const data = await response.json();
-    console.log("Wizard chat Gemini response:", JSON.stringify(data, null, 2));
+    console.log("Wizard chat OpenAI response:", JSON.stringify(data, null, 2));
     
-    let generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!generatedText) {
-      // Try alternative structures
-      generatedText = data.candidates?.[0]?.text || data.text;
-    }
+    let generatedText = data.choices?.[0]?.message?.content;
     
     if (!generatedText) {
       console.error("No content found in wizard chat response");
-      if (data.candidates?.[0]?.finishReason === 'SAFETY') {
+      const finishReason = data.choices?.[0]?.finish_reason;
+      if (finishReason === 'content_filter') {
         generatedText = "I can't provide that specific advice for safety reasons. Let me help you with a safer approach to your weight cut goals.";
       } else {
-        throw new Error("No response from Gemini API");
+        throw new Error("No response from OpenAI API");
       }
     }
 
@@ -154,10 +154,10 @@ Text Style: Keep it short (2-4 sentences max), friendly, and motivational. Use c
         }] 
       }),
       {
-        headers: {
-          ...corsHeaders,
+      headers: {
+        ...corsHeaders,
           "Content-Type": "application/json",
-        },
+      },
       }
     );
   } catch (error) {

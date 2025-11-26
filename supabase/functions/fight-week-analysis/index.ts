@@ -20,10 +20,10 @@ serve(async (req) => {
       isWaterloading 
     } = await req.json();
     
-    const GOOGLE_AI_API_KEY = Deno.env.get("GOOGLE_AI_API_KEY");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
-    if (!GOOGLE_AI_API_KEY) {
-      throw new Error("GOOGLE_AI_API_KEY is not configured");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not configured");
     }
 
     const systemPrompt = `You are the Weight Cut Wizard, a science-based combat sports weight cutting expert with deep knowledge of physiology and fighter safety.
@@ -101,21 +101,23 @@ Provide comprehensive analysis with:
 
     const fullPrompt = `${systemPrompt}\n\nUser: ${userPrompt}`;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_AI_API_KEY}`, {
+    console.log("Calling OpenAI API for fight week analysis...");
+    
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: fullPrompt
-          }]
-        }],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 2048,
-        }
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.1,
+        max_tokens: 2048,
+        response_format: { type: "json_object" }
       })
     });
 
@@ -126,6 +128,12 @@ Provide comprehensive analysis with:
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+      if (response.status === 401) {
+        return new Response(
+          JSON.stringify({ error: "Invalid API key." }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       if (response.status === 403) {
         return new Response(
           JSON.stringify({ error: "API key invalid or quota exceeded." }),
@@ -133,7 +141,7 @@ Provide comprehensive analysis with:
         );
       }
       const errorData = await response.json();
-      console.error("Gemini API error:", response.status, errorData);
+      console.error("OpenAI API error:", response.status, errorData);
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -141,24 +149,25 @@ Provide comprehensive analysis with:
     }
 
     const data = await response.json();
-    let analysisText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    console.log("OpenAI fight week response:", JSON.stringify(data, null, 2));
+    
+    const analysisText = data.choices?.[0]?.message?.content;
 
     if (!analysisText) {
-      throw new Error("No response from Gemini API");
+      console.error("No content found in OpenAI response");
+      const finishReason = data.choices?.[0]?.finish_reason;
+      if (finishReason === 'content_filter') {
+        throw new Error("Content was filtered for safety. Please try a different request.");
+      }
+      throw new Error("No response from OpenAI API");
     }
 
-    // Extract JSON from markdown code blocks if present
-    const jsonMatch = analysisText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
-    if (jsonMatch) {
-      analysisText = jsonMatch[1];
-    }
-
-    // Parse the JSON analysis
+    // Parse the JSON analysis (should be clean JSON due to response_format)
     let analysis;
     try {
       analysis = JSON.parse(analysisText);
     } catch (parseError) {
-      console.error("Failed to parse AI response as JSON:", analysisText);
+      console.error("Failed to parse OpenAI response as JSON:", analysisText);
       return new Response(
         JSON.stringify({ 
           error: "AI returned invalid response format. Please try again.",

@@ -47,9 +47,9 @@ serve(async (req) => {
       );
     }
 
-    const GOOGLE_AI_API_KEY = Deno.env.get("GOOGLE_AI_API_KEY");
-    if (!GOOGLE_AI_API_KEY) {
-      throw new Error("GOOGLE_AI_API_KEY is not configured");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not configured");
     }
 
     console.log("Looking up nutrition for ingredient:", ingredientName);
@@ -66,7 +66,7 @@ CRITICAL RULES:
 7. Use authoritative sources like USDA, nutrition databases, or established food composition tables
 8. If you cannot find reliable data, indicate this clearly
 
-Look up the nutrition information per 100g for: "${ingredientName}"
+You MUST respond with ONLY valid JSON. No markdown, no explanations, no code blocks. The response will be automatically parsed as JSON.
 
 Provide accurate nutrition data from reliable sources (USDA, nutrition databases, etc.) and provide:
 - Calories per 100g (kcal, as integer)
@@ -86,32 +86,41 @@ Respond with a JSON object in this exact format:
   "data_source": "source of nutrition data"
 }`;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_AI_API_KEY}`, {
+    const userPrompt = `Look up the nutrition information per 100g for: "${ingredientName}"`;
+
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: systemPrompt
-          }]
-        }],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 1024,
-        }
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.1,
+        max_tokens: 1024,
+        response_format: { type: "json_object" }
       })
     });
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error("Gemini API error:", response.status, errorData);
+      console.error("OpenAI API error:", response.status, errorData);
       
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      if (response.status === 401) {
+        return new Response(
+          JSON.stringify({ error: "Invalid API key." }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       
@@ -122,56 +131,52 @@ Respond with a JSON object in this exact format:
         );
       }
       
-      throw new Error(`Gemini API error: ${errorData.error?.message || 'Unknown error'}`);
+      throw new Error(`OpenAI API error: ${errorData.error?.message || 'Unknown error'}`);
     }
 
     const data = await response.json();
-    console.log("Gemini response:", JSON.stringify(data));
+    console.log("OpenAI response:", JSON.stringify(data));
 
-    // Parse Gemini response
-    const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    // Parse OpenAI response
+    const generatedText = data.choices?.[0]?.message?.content;
     if (!generatedText) {
-      throw new Error("No response from Gemini API");
-    }
-
-    // Extract JSON from the response
-    const jsonMatch = generatedText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      return new Response(
-        JSON.stringify({ error: "Could not parse nutrition data. Please enter manually." }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    try {
-      const nutritionData = JSON.parse(jsonMatch[0]);
-      console.log("Parsed nutrition data:", nutritionData);
-      
-      // Validate the nutrition data
-      if (!nutritionData.calories_per_100g || nutritionData.calories_per_100g < 0) {
-        return new Response(
-          JSON.stringify({ error: "Invalid nutrition data found. Please enter manually." }),
-          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+      const finishReason = data.choices?.[0]?.finish_reason;
+      if (finishReason === 'content_filter') {
+        throw new Error("Content was filtered for safety. Please try a different ingredient.");
       }
+      throw new Error("No response from OpenAI API");
+    }
 
-      // Ensure all values are present and valid
-      const result = {
-        calories_per_100g: Math.round(nutritionData.calories_per_100g || 0),
-        protein_per_100g: Math.round((nutritionData.protein_per_100g || 0) * 10) / 10,
-        carbs_per_100g: Math.round((nutritionData.carbs_per_100g || 0) * 10) / 10,
-        fats_per_100g: Math.round((nutritionData.fats_per_100g || 0) * 10) / 10,
+    // Parse JSON from OpenAI response (should be clean JSON due to response_format)
+    try {
+      const nutritionData = JSON.parse(generatedText);
+      console.log("Parsed nutrition data:", nutritionData);
+        
+        // Validate the nutrition data
+        if (!nutritionData.calories_per_100g || nutritionData.calories_per_100g < 0) {
+          return new Response(
+            JSON.stringify({ error: "Invalid nutrition data found. Please enter manually." }),
+            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        // Ensure all values are present and valid
+        const result = {
+          calories_per_100g: Math.round(nutritionData.calories_per_100g || 0),
+          protein_per_100g: Math.round((nutritionData.protein_per_100g || 0) * 10) / 10,
+          carbs_per_100g: Math.round((nutritionData.carbs_per_100g || 0) * 10) / 10,
+          fats_per_100g: Math.round((nutritionData.fats_per_100g || 0) * 10) / 10,
         ingredient_specification: nutritionData.ingredient_clarification || ingredientName,
         source: nutritionData.data_source || "Nutrition Database",
-      };
+        };
 
-      console.log("Returning nutrition data:", result);
+        console.log("Returning nutrition data:", result);
 
-      return new Response(
-        JSON.stringify({ nutritionData: result }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    } catch (parseError) {
+        return new Response(
+          JSON.stringify({ nutritionData: result }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } catch (parseError) {
       console.error("Error parsing nutrition data:", parseError);
       return new Response(
         JSON.stringify({ error: "Could not parse nutrition data. Please enter manually." }),

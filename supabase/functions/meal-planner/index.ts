@@ -99,10 +99,10 @@ serve(async (req) => {
     } : null;
 
     const { prompt, action, userData } = await req.json();
-    const GOOGLE_AI_API_KEY = Deno.env.get("GOOGLE_AI_API_KEY");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
-    if (!GOOGLE_AI_API_KEY) {
-      console.error("GOOGLE_AI_API_KEY environment variable is not configured");
+    if (!OPENAI_API_KEY) {
+      console.error("OPENAI_API_KEY environment variable is not configured");
       return new Response(
         JSON.stringify({ error: "AI service not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -149,7 +149,7 @@ Goal weight: ${goalWeight}kg
 TDEE: ${tdee} cal/day
 Days to goal: ${daysToGoal}
 
-CRITICAL: You MUST respond with ONLY valid JSON. No markdown, no explanations, no code blocks.
+CRITICAL: You MUST respond with ONLY valid JSON. No markdown, no explanations, no code blocks. The response will be automatically parsed as JSON.
 
 RESPONSE FORMAT (EXACT JSON STRUCTURE REQUIRED):
 {
@@ -179,7 +179,7 @@ RESPONSE FORMAT (EXACT JSON STRUCTURE REQUIRED):
       "recipe": "Brief preparation notes",
       "type": "lunch",
       "ingredients": []
-    },
+  },
     {
       "name": "Dinner - Meal name",
       "calories": 600,
@@ -223,9 +223,9 @@ Generate meal plans that:
 • Respect any dietary restrictions mentioned
 • Support training and recovery`;
 
-    console.log("Calling Google Gemini API for meal planning...");
+    console.log("Calling OpenAI API for meal planning...");
 
-    const fullPrompt = `${systemPrompt}\n\nUser Request: ${prompt}`;
+    const userPrompt = `User Request: ${prompt}`;
 
     // Add timeout to prevent hanging - reduced for faster responses
     const controller = new AbortController();
@@ -233,29 +233,27 @@ Generate meal plans that:
 
     let response;
     try {
-      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_AI_API_KEY}`, {
+      response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
+          "Authorization": `Bearer ${OPENAI_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          contents: [{
-            parts: [{
-              text: fullPrompt
-            }]
-          }],
-        generationConfig: {
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
           temperature: 0.8,
-          maxOutputTokens: 2048,
-          topK: 40,
-          topP: 0.95,
-        }
+          max_tokens: 2048,
+          response_format: { type: "json_object" }
         }),
         signal: controller.signal
       });
 
       clearTimeout(timeoutId);
-      console.log("Gemini API response status:", response.status);
+      console.log("OpenAI API response status:", response.status);
     } catch (fetchError) {
       clearTimeout(timeoutId);
       
@@ -271,17 +269,24 @@ Generate meal plans that:
       return new Response(
         JSON.stringify({ error: "Failed to connect to AI service" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    );
     }
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error("Gemini API error:", response.status, errorData);
+      console.error("OpenAI API error:", response.status, errorData);
       
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (response.status === 401) {
+        return new Response(
+          JSON.stringify({ error: "Invalid API key." }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
@@ -293,121 +298,90 @@ Generate meal plans that:
       }
       
       return new Response(
-        JSON.stringify({ error: `Gemini API error: ${errorData.error?.message || 'Unknown error'}` }),
+        JSON.stringify({ error: `OpenAI API error: ${errorData.error?.message || 'Unknown error'}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const data = await response.json();
-    console.log("Full Gemini response:", JSON.stringify(data, null, 2));
-    console.log("Candidates:", data.candidates);
-    console.log("Content parts:", data.candidates?.[0]?.content?.parts);
+    console.log("Full OpenAI response:", JSON.stringify(data, null, 2));
     
-    // Try multiple ways to extract content
-    let content = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!content) {
-      // Try alternative structure
-      content = data.candidates?.[0]?.text;
-    }
-    if (!content) {
-      // Try another alternative
-      content = data.text;
-    }
-    if (!content) {
-      // Try direct content field
-      content = data.candidates?.[0]?.content;
-    }
+    // Extract content from OpenAI response
+    const content = data.choices?.[0]?.message?.content;
     
-    // Ensure content is a string
-    if (content && typeof content !== 'string') {
-      content = JSON.stringify(content);
-    }
-
-    console.log("Extracted content:", content ? (typeof content === 'string' ? content.substring(0, 200) + "..." : JSON.stringify(content).substring(0, 200) + "...") : "NO CONTENT FOUND");
-    
-    // DETAILED DEBUGGING: Log the complete content for analysis
-    console.log("=== DETAILED GEMINI RESPONSE DEBUG ===");
-    console.log("Raw Gemini content:", content);
+    console.log("=== OPENAI RESPONSE DEBUG ===");
+    console.log("Raw OpenAI content:", content);
     console.log("Content type:", typeof content);
     console.log("Content length:", content?.length);
-    console.log("Is string?", typeof content === 'string');
-    if (typeof content === 'string') {
-      console.log("First 500 chars:", content.substring(0, 500));
-      console.log("Last 200 chars:", content.substring(Math.max(0, content.length - 200)));
-      console.log("Contains JSON markers?", content.includes('{') && content.includes('}'));
-      console.log("Contains markdown?", content.includes('```'));
-    }
     console.log("=== END DEBUG ===");
 
     if (!content) {
-      console.error("No content found in any expected field");
+      console.error("❌ No content found in OpenAI response");
       console.error("Available fields in response:", Object.keys(data));
-      if (data.candidates?.[0]) {
-        console.error("Available fields in first candidate:", Object.keys(data.candidates[0]));
+      if (data.choices?.[0]) {
+        console.error("Available fields in first choice:", Object.keys(data.choices[0]));
+        console.error("First choice content:", data.choices[0]);
       }
       
-      // Check for safety filter
-      if (data.candidates?.[0]?.finishReason === 'SAFETY') {
-        return new Response(
-          JSON.stringify({ error: "Content was filtered for safety. Please try a different request." }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      
-      throw new Error("No content in Gemini API response");
-    }
-
-    // Try to parse JSON from the response with improved logic
-    let mealPlanData;
-    try {
-      console.log("=== JSON PARSING DEBUG ===");
-      
-      // Clean the content by removing markdown code blocks and extracting JSON
-      let cleanContent = content.trim();
-      console.log("Initial clean content length:", cleanContent.length);
-      
-      // Remove all markdown code block markers (more comprehensive)
-      cleanContent = cleanContent.replace(/```json\s*/gi, '');
-      cleanContent = cleanContent.replace(/```javascript\s*/gi, '');
-      cleanContent = cleanContent.replace(/```\s*/g, '');
-      cleanContent = cleanContent.replace(/^```/gm, '');
-      cleanContent = cleanContent.replace(/```$/gm, '');
-      
-      console.log("After markdown removal:", cleanContent.length);
-      
-      // Try multiple JSON extraction methods
-      let jsonStr = '';
-      
-      // Method 1: Find complete JSON object
-      const firstBrace = cleanContent.indexOf('{');
-      const lastBrace = cleanContent.lastIndexOf('}');
-      
-      if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-        jsonStr = cleanContent.substring(firstBrace, lastBrace + 1);
-        console.log("Method 1 - JSON extraction successful, length:", jsonStr.length);
-      } else {
-        console.log("Method 1 failed - no valid braces found");
+      // Check for specific finish reasons
+      const finishReason = data.choices?.[0]?.finish_reason;
+      if (finishReason) {
+        console.error("Finish reason:", finishReason);
         
-        // Method 2: Try to find JSON in different patterns
-        const jsonMatch = cleanContent.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          jsonStr = jsonMatch[0];
-          console.log("Method 2 - Regex extraction successful, length:", jsonStr.length);
-        } else {
-          console.log("Method 2 failed - no JSON pattern found");
-          
-          // Method 3: Try parsing the entire cleaned content
-          jsonStr = cleanContent;
-          console.log("Method 3 - Using entire content, length:", jsonStr.length);
+        if (finishReason === 'content_filter') {
+          return new Response(
+            JSON.stringify({ error: "Content was filtered for safety. Please try a different prompt." }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        } else if (finishReason === 'length') {
+          return new Response(
+            JSON.stringify({ error: "Response was too long. Please try a shorter prompt." }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
         }
       }
       
-      console.log("Final JSON string preview:", jsonStr.substring(0, 200));
-      console.log("=== END JSON PARSING DEBUG ===");
+      // Try fallback extraction from any available text
+      console.log("🔄 Attempting fallback content extraction...");
+      const fallbackMeals = extractMealsFromText(JSON.stringify(data));
+      if (fallbackMeals.length > 0) {
+        console.log("✅ Fallback extraction found", fallbackMeals.length, "meals");
+        const mealPlanData = {
+          meals: fallbackMeals,
+          totalCalories: fallbackMeals.reduce((sum, meal) => sum + (meal.calories || 0), 0),
+          totalProtein: fallbackMeals.reduce((sum, meal) => sum + (meal.protein || 0), 0),
+          totalCarbs: fallbackMeals.reduce((sum, meal) => sum + (meal.carbs || 0), 0),
+          totalFats: fallbackMeals.reduce((sum, meal) => sum + (meal.fats || 0), 0),
+          note: "Generated from fallback extraction due to API response parsing issue"
+        };
+        
+        return new Response(
+          JSON.stringify({ 
+            mealPlan: mealPlanData,
+            dailyCalorieTarget: Math.round(dailyCalorieTarget),
+            safetyStatus: safetyIndicator,
+            safetyMessage
+          }),
+          { 
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200
+          }
+        );
+      }
       
-      mealPlanData = JSON.parse(jsonStr);
+      throw new Error("No content in OpenAI API response and fallback extraction failed");
+    }
+
+    // Parse JSON from OpenAI response (should be clean JSON due to response_format)
+    let mealPlanData;
+    try {
+      console.log("=== JSON PARSING DEBUG ===");
+      console.log("Parsing OpenAI JSON response...");
       
-      console.log("Successfully parsed AI response");
+      // OpenAI with response_format: json_object should return clean JSON
+      mealPlanData = JSON.parse(content);
+      
+      console.log("Successfully parsed OpenAI response");
       console.log("Meal plan structure:", Object.keys(mealPlanData));
       console.log("Number of meals:", mealPlanData.meals?.length || 0);
     } catch (e) {
@@ -431,15 +405,15 @@ Generate meal plans that:
         console.log("Fallback extraction successful, found", fallbackMeals.length, "meals");
       } catch (fallbackError) {
         console.error("Fallback extraction also failed:", fallbackError);
-        
-        // Return error response that frontend can handle
-        return new Response(
-          JSON.stringify({ 
-            error: "Failed to parse meal plan from AI response. Please try again.",
-            details: e instanceof Error ? e.message : "Unknown parsing error"
-          }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+      
+      // Return error response that frontend can handle
+      return new Response(
+        JSON.stringify({ 
+          error: "Failed to parse meal plan from AI response. Please try again.",
+          details: e instanceof Error ? e.message : "Unknown parsing error"
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
       }
     }
 
@@ -455,16 +429,16 @@ Generate meal plans that:
         status: 200
       }
     );
-  } catch (error) {
-    console.error("meal-planner error:", error);
-    console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
-    
-    return new Response(
-      JSON.stringify({ 
-        error: error instanceof Error ? error.message : "Unknown error occurred",
-        details: error instanceof Error ? error.stack : "No additional details"
-      }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  }
+    } catch (error) {
+      console.error("meal-planner error:", error);
+      console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
+      
+      return new Response(
+        JSON.stringify({ 
+          error: error instanceof Error ? error.message : "Unknown error occurred",
+          details: "OpenAI API integration error"
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 });

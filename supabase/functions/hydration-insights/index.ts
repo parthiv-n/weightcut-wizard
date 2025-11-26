@@ -32,10 +32,10 @@ serve(async (req) => {
     }
 
     const { hydrationData, profileData, recentLogs } = await req.json();
-    const GOOGLE_AI_API_KEY = Deno.env.get("GOOGLE_AI_API_KEY");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
-    if (!GOOGLE_AI_API_KEY) {
-      throw new Error("GOOGLE_AI_API_KEY is not configured");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not configured");
     }
 
     const systemPrompt = `You are the Weight Cut Wizard, a science-based mystical coach who prioritises fighter safety and performance. You NEVER encourage:
@@ -68,21 +68,22 @@ Provide a brief insight on their hydration status and one actionable recommendat
 
     const fullPrompt = `${systemPrompt}\n\nUser: ${userPrompt}`;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_AI_API_KEY}`, {
+    console.log("Calling OpenAI API for hydration insights...");
+    
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: fullPrompt
-          }]
-        }],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 512,
-        }
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 512
       })
     });
 
@@ -93,6 +94,12 @@ Provide a brief insight on their hydration status and one actionable recommendat
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+      if (response.status === 401) {
+        return new Response(
+          JSON.stringify({ error: "Invalid API key." }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       if (response.status === 403) {
         return new Response(
           JSON.stringify({ error: "API key invalid or quota exceeded." }),
@@ -100,7 +107,7 @@ Provide a brief insight on their hydration status and one actionable recommendat
         );
       }
       const errorData = await response.json();
-      console.error("Gemini API error:", response.status, errorData);
+      console.error("OpenAI API error:", response.status, errorData);
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -108,10 +115,17 @@ Provide a brief insight on their hydration status and one actionable recommendat
     }
 
     const data = await response.json();
-    const insight = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    console.log("OpenAI hydration response:", JSON.stringify(data, null, 2));
+    
+    const insight = data.choices?.[0]?.message?.content;
 
     if (!insight) {
-      throw new Error("No response from Gemini API");
+      console.error("No content found in OpenAI response");
+      const finishReason = data.choices?.[0]?.finish_reason;
+      if (finishReason === 'content_filter') {
+        throw new Error("Content was filtered for safety. Please try a different request.");
+      }
+      throw new Error("No response from OpenAI API");
     }
 
     return new Response(JSON.stringify({ insight }), {
