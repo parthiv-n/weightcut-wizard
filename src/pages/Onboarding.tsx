@@ -42,21 +42,27 @@ export default function Onboarding() {
   const [targetSafetyLevel, setTargetSafetyLevel] = useState<"safe" | "moderate" | "risky">("safe");
 
   useEffect(() => {
-    // Check if user already has a profile
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", user.id)
-          .single()
-          .then(({ data }) => {
-            if (data) {
-              navigate("/dashboard");
-            }
-          });
+    // Check if user already has a profile (only once on mount)
+    const checkExistingProfile = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data } = await supabase
+            .from("profiles")
+            .select("id")
+            .eq("id", user.id)
+            .maybeSingle();
+          
+          if (data) {
+            navigate("/dashboard");
+          }
+        }
+      } catch (error) {
+        // Silently fail - user can continue with onboarding
       }
-    });
+    };
+    
+    checkExistingProfile();
   }, [navigate]);
 
   const calculateBMR = () => {
@@ -72,6 +78,9 @@ export default function Onboarding() {
   };
 
   const handleSubmit = async () => {
+    const startTime = performance.now();
+    console.log("🚀 Starting onboarding profile creation...");
+    
     // Validate input
     const validationResult = profileSchema.safeParse({
       age: parseInt(formData.age),
@@ -116,12 +125,24 @@ export default function Onboarding() {
 
       if (error) throw error;
 
+      const endTime = performance.now();
+      const duration = Math.round(endTime - startTime);
+      console.log(`✅ Onboarding completed in ${duration}ms`);
+      
       toast({
         title: "Profile created!",
-        description: "Your weight cut plan is ready.",
+        description: "Your weight cut plan is ready. Redirecting to dashboard...",
       });
-      navigate("/dashboard");
+      
+      // Small delay to show success message before navigation
+      setTimeout(() => {
+        navigate("/dashboard");
+      }, 1000);
     } catch (error: any) {
+      const endTime = performance.now();
+      const duration = Math.round(endTime - startTime);
+      console.error(`❌ Onboarding failed after ${duration}ms:`, error);
+      
       toast({
         variant: "destructive",
         title: "Error",
@@ -191,8 +212,14 @@ export default function Onboarding() {
       <Card className="w-full max-w-2xl">
         <CardHeader>
           <CardTitle className="text-2xl font-title">Set Up Your Weight Cut Plan</CardTitle>
-          <CardDescription>Let's personalize your journey</CardDescription>
+          <CardDescription>Let's personalize your journey ({step}/4)</CardDescription>
           <Progress value={progress} className="mt-4" />
+          <p className="text-xs text-muted-foreground mt-2">
+            {step === 1 && "Basic information"}
+            {step === 2 && "Weight goals"}
+            {step === 3 && "Activity level"}
+            {step === 4 && "Review and create"}
+          </p>
         </CardHeader>
         <CardContent>
           {step === 1 && (
@@ -414,7 +441,14 @@ export default function Onboarding() {
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setStep(3)}>Back</Button>
                 <Button onClick={handleSubmit} disabled={loading} className="flex-1">
-                  {loading ? "Creating..." : "Create Plan"}
+                  {loading ? (
+                    <div className="flex items-center gap-2">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      Creating your plan...
+                    </div>
+                  ) : (
+                    "Create Plan"
+                  )}
                 </Button>
               </div>
             </div>

@@ -30,13 +30,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
       const { data: { session }, error } = await supabase.auth.getSession();
       
       if (error) {
-        console.error("Session check error:", error);
         setIsSessionValid(false);
         return false;
       }
       
       if (!session) {
-        console.log("No active session found");
         setIsSessionValid(false);
         return false;
       }
@@ -48,20 +46,17 @@ export function UserProvider({ children }: { children: ReactNode }) {
       const fiveMinutes = 5 * 60 * 1000;
       
       if (timeUntilExpiry <= 0) {
-        console.log("Session has expired");
         setIsSessionValid(false);
         return false;
       }
       
       if (timeUntilExpiry < fiveMinutes) {
-        console.log("Session expires soon, attempting refresh...");
         return await refreshSession();
       }
       
       setIsSessionValid(true);
       return true;
     } catch (error) {
-      console.error("Error checking session validity:", error);
       setIsSessionValid(false);
       return false;
     }
@@ -70,28 +65,21 @@ export function UserProvider({ children }: { children: ReactNode }) {
   // Step 2: Implement Session Refresh Logic
   const refreshSession = async (): Promise<boolean> => {
     try {
-      console.log("🔄 Attempting to refresh session...");
-      
       const { data, error } = await supabase.auth.refreshSession();
       
       if (error) {
-        console.error("❌ Session refresh failed:", error);
         setIsSessionValid(false);
         return false;
       }
       
       if (data.session) {
-        console.log("✅ Session refreshed successfully");
-        console.log("- New expiry:", new Date(data.session.expires_at! * 1000).toLocaleString());
         setIsSessionValid(true);
         return true;
       }
       
-      console.log("❌ No session returned from refresh");
       setIsSessionValid(false);
       return false;
     } catch (error) {
-      console.error("❌ Exception during session refresh:", error);
       setIsSessionValid(false);
       return false;
     }
@@ -173,32 +161,24 @@ export function UserProvider({ children }: { children: ReactNode }) {
     
     // Set up auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("🔐 Auth state changed:", event);
-      
-      if (event === 'SIGNED_OUT' || event === 'TOKEN_REFRESHED') {
-        if (event === 'SIGNED_OUT') {
-          setIsSessionValid(false);
-          setUserId(null);
-          setUserName("");
-          setAvatarUrl("");
-          setCurrentWeight(null);
-        } else if (event === 'TOKEN_REFRESHED' && session) {
-          console.log("✅ Token refreshed automatically");
-          setIsSessionValid(true);
-        }
-      }
-      
-      if (event === 'SIGNED_IN' && session) {
-        console.log("✅ User signed in");
+      if (event === 'SIGNED_OUT') {
+        setIsSessionValid(false);
+        setUserId(null);
+        setUserName("");
+        setAvatarUrl("");
+        setCurrentWeight(null);
+      } else if (event === 'TOKEN_REFRESHED' && session) {
+        setIsSessionValid(true);
+      } else if (event === 'SIGNED_IN' && session) {
         setIsSessionValid(true);
         await loadUserData();
       }
     });
 
-    // Set up periodic session validity checks (every 5 minutes)
+    // Set up periodic session validity checks (every 30 minutes)
     const sessionCheckInterval = setInterval(async () => {
       await checkSessionValidity();
-    }, 5 * 60 * 1000);
+    }, 30 * 60 * 1000);
 
     return () => {
       subscription.unsubscribe();

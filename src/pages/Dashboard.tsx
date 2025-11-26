@@ -30,32 +30,38 @@ export default function Dashboard() {
 
       const today = new Date().toISOString().split('T')[0];
 
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .maybeSingle();
-
-      const { data: logsData } = await supabase
-        .from("weight_logs")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("date", { ascending: true })
-        .limit(30);
-
-      // Fetch today's nutrition data
-      const { data: nutritionData } = await supabase
-        .from("nutrition_logs")
-        .select("calories")
-        .eq("user_id", user.id)
-        .eq("date", today);
-
-      // Fetch today's hydration data
-      const { data: hydrationData } = await supabase
-        .from("hydration_logs")
-        .select("amount_ml")
-        .eq("user_id", user.id)
-        .eq("date", today);
+      // Parallelize all database queries for faster loading
+      const [
+        { data: profileData },
+        { data: logsData },
+        { data: nutritionData },
+        { data: hydrationData }
+      ] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", user.id)
+          .maybeSingle(),
+        
+        supabase
+          .from("weight_logs")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("date", { ascending: true })
+          .limit(30),
+        
+        supabase
+          .from("nutrition_logs")
+          .select("calories")
+          .eq("user_id", user.id)
+          .eq("date", today),
+        
+        supabase
+          .from("hydration_logs")
+          .select("amount_ml")
+          .eq("user_id", user.id)
+          .eq("date", today)
+      ]);
 
       const totalCalories = nutritionData?.reduce((sum, log) => sum + log.calories, 0) || 0;
       const totalHydration = hydrationData?.reduce((sum, log) => sum + log.amount_ml, 0) || 0;
@@ -64,6 +70,8 @@ export default function Dashboard() {
       setWeightLogs(logsData || []);
       setTodayCalories(totalCalories);
       setTodayHydration(totalHydration);
+    } catch (error) {
+      console.error("Error loading dashboard data:", error);
     } finally {
       setLoading(false);
     }
