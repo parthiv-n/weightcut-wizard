@@ -44,10 +44,10 @@ serve(async (req) => {
       bypassSafety = false
     } = await req.json();
     
-    const GOOGLE_AI_API_KEY = Deno.env.get("GOOGLE_AI_API_KEY");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
-    if (!GOOGLE_AI_API_KEY) {
-      throw new Error("GOOGLE_AI_API_KEY is not configured");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not configured");
     }
 
     // Fetch weight history for pattern analysis
@@ -288,74 +288,37 @@ Provide:
 
 ${isMaintenanceMode ? 'Since user is already at or below fight week target, focus on maintenance nutrition. The weigh-in day weight will be achieved through dehydration protocols in the final days before weigh-in, not through continued dieting. calorieDeficit MUST be 0, recommendedCalories MUST equal TDEE.' : 'Be specific with numbers and practical advice. If the timeline is unrealistic (requires >1.5kg/week), clearly state this and recommend timeline extension.'}`;
 
-    // Try gemini-2.5-flash first, fallback to gemini-2.0-flash
-    let model = "gemini-2.5-flash";
-    let response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${GOOGLE_AI_API_KEY}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: model,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-        }),
-      }
-    );
-
-    // Fallback to gemini-2.0-flash if exp fails
-    if (!response.ok && response.status !== 200) {
-      console.log(`Model ${model} failed, trying gemini-2.0-flash`);
-      model = "gemini-2.0-flash";
-      response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${GOOGLE_AI_API_KEY}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: model,
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userPrompt },
-            ],
-          }),
-        }
-      );
-    }
-
-    // Fallback to gemini-2.0-flash if first fails
-    if (!response.ok && response.status !== 200) {
-      console.log(`Model ${model} failed, trying gemini-2.0-flash`);
-      model = "gemini-2.0-flash";
-      response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions?key=${GOOGLE_AI_API_KEY}`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: model,
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userPrompt },
-            ],
-          }),
-        }
-      );
-    }
+    // Call OpenAI API
+    console.log("Calling OpenAI API for weight tracker analysis...");
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature: 0.1,
+        max_tokens: 2048,
+        response_format: { type: "json_object" }
+      }),
+    });
 
     if (!response.ok) {
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      if (response.status === 401) {
+        return new Response(
+          JSON.stringify({ error: "Invalid API key." }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       if (response.status === 402 || response.status === 403) {
@@ -365,7 +328,7 @@ ${isMaintenanceMode ? 'Since user is already at or below fight week target, focu
         );
       }
       const errorText = await response.text();
-      console.error("Google AI Studio error:", response.status, errorText);
+      console.error("OpenAI API error:", response.status, errorText);
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -373,15 +336,20 @@ ${isMaintenanceMode ? 'Since user is already at or below fight week target, focu
     }
 
     const data = await response.json();
-    let analysisText = data.choices[0].message.content;
-
-    // Extract JSON from markdown code blocks if present
-    const jsonMatch = analysisText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
-    if (jsonMatch) {
-      analysisText = jsonMatch[1];
+    console.log("OpenAI weight tracker response:", JSON.stringify(data, null, 2));
+    
+    const analysisText = data.choices?.[0]?.message?.content;
+    
+    if (!analysisText) {
+      console.error("No content found in OpenAI response");
+      const finishReason = data.choices?.[0]?.finish_reason;
+      if (finishReason === 'content_filter') {
+        throw new Error("Content was filtered for safety. Please try a different request.");
+      }
+      throw new Error("No response from OpenAI API");
     }
 
-    // Parse the JSON analysis
+    // Parse the JSON analysis (should be clean JSON due to response_format)
     const analysis = JSON.parse(analysisText);
 
     // Calculate and store insights

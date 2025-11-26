@@ -12,10 +12,10 @@ serve(async (req) => {
 
   try {
     const { weightLostKg, weighInTiming, currentWeightKg, fightTimeHours } = await req.json();
-    const GOOGLE_AI_API_KEY = Deno.env.get("GOOGLE_AI_API_KEY");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
-    if (!GOOGLE_AI_API_KEY) {
-      throw new Error("GOOGLE_AI_API_KEY is not configured");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not configured");
     }
 
     const systemPrompt = `You are the Weight Cut Wizard, a science-based combat sports rehydration expert. You PRIORITIZE fighter safety and performance.
@@ -91,21 +91,22 @@ Provide:
 
     const fullPrompt = `${systemPrompt}\n\nUser: ${userPrompt}`;
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GOOGLE_AI_API_KEY}`, {
+    console.log("Calling OpenAI API for rehydration protocol...");
+    
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: fullPrompt
-          }]
-        }],
-        generationConfig: {
-          temperature: 0.1,
-          maxOutputTokens: 3072,
-        }
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.1,
+        max_tokens: 3072
       })
     });
 
@@ -116,6 +117,12 @@ Provide:
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+      if (response.status === 401) {
+        return new Response(
+          JSON.stringify({ error: "Invalid API key." }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       if (response.status === 403) {
         return new Response(
           JSON.stringify({ error: "API key invalid or quota exceeded." }),
@@ -123,7 +130,7 @@ Provide:
         );
       }
       const errorData = await response.json();
-      console.error("Gemini API error:", response.status, errorData);
+      console.error("OpenAI API error:", response.status, errorData);
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -131,20 +138,33 @@ Provide:
     }
 
     const data = await response.json();
-    let protocolText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    console.log("OpenAI rehydration response:", JSON.stringify(data, null, 2));
+    
+    const protocolText = data.choices?.[0]?.message?.content;
 
     if (!protocolText) {
-      throw new Error("No response from Gemini API");
+      console.error("No content found in OpenAI response");
+      const finishReason = data.choices?.[0]?.finish_reason;
+      if (finishReason === 'content_filter') {
+        throw new Error("Content was filtered for safety. Please try a different request.");
+      }
+      throw new Error("No response from OpenAI API");
     }
 
-    // Extract JSON from markdown code blocks if present
-    const jsonMatch = protocolText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
-    if (jsonMatch) {
-      protocolText = jsonMatch[1];
+    // Parse the protocol text (may need JSON extraction if not using response_format)
+    let protocol;
+    try {
+      // Try parsing as direct JSON first
+      protocol = JSON.parse(protocolText);
+    } catch (parseError) {
+      // Extract JSON from markdown code blocks if present
+      const jsonMatch = protocolText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+      if (jsonMatch) {
+        protocol = JSON.parse(jsonMatch[1]);
+      } else {
+        throw new Error("Could not parse protocol data from AI response");
+      }
     }
-
-    // Parse the JSON protocol
-    const protocol = JSON.parse(protocolText);
 
     return new Response(JSON.stringify({ protocol }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
