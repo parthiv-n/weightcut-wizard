@@ -330,16 +330,10 @@ export default function Nutrition() {
 
     setLoading(true);
     try {
-      // Step 1: Authentication State Debugging using enhanced UserContext
-      console.log("🔐 Checking authentication state before meal plan generation...");
-      
-      // Use the enhanced session validity check from UserContext
+      // Simple authentication check
       if (!isSessionValid) {
-        console.log("⚠️ Session appears invalid, checking validity...");
         const sessionValid = await checkSessionValidity();
-        
         if (!sessionValid) {
-          console.error("❌ Session validation failed");
           toast({
             title: "Authentication Required",
             description: "Your session has expired. Please refresh the page and log in again.",
@@ -350,65 +344,10 @@ export default function Nutrition() {
         }
       }
       
-      // Double-check session with Supabase directly for debugging
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      
-      if (sessionError) {
-        console.error("❌ Session check error:", sessionError);
-        throw new Error(`Authentication error: ${sessionError.message}`);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error("Authentication required. Please log in again.");
       }
-      
-      if (!session) {
-        console.error("❌ No active session found");
-        // Try to refresh session using UserContext
-        console.log("🔄 Attempting session refresh...");
-        const refreshSuccess = await refreshSession();
-        
-        if (!refreshSuccess) {
-          toast({
-            title: "Authentication Required",
-            description: "Please log in again to generate meal plans",
-            variant: "destructive",
-          });
-          setLoading(false);
-          return;
-        }
-        
-        // Get the refreshed session
-        const { data: { session: newSession } } = await supabase.auth.getSession();
-        if (!newSession) {
-          toast({
-            title: "Authentication Failed",
-            description: "Unable to restore your session. Please log in again.",
-            variant: "destructive",
-          });
-          setLoading(false);
-          return;
-        }
-      }
-      
-      // Log session details for debugging
-      console.log("✅ Active session confirmed:");
-      console.log("- User ID:", session!.user.id);
-      console.log("- Email:", session!.user.email);
-      console.log("- Token expires at:", new Date(session!.expires_at! * 1000).toLocaleString());
-      console.log("- Time until expiry:", Math.round((session!.expires_at! * 1000 - Date.now()) / 1000 / 60), "minutes");
-      
-      // Final user verification
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
-      if (userError || !user) {
-        console.error("❌ User verification failed:", userError);
-        toast({
-          title: "Authentication Failed",
-          description: "Unable to verify your identity. Please refresh the page and try again.",
-          variant: "destructive",
-        });
-        setLoading(false);
-        return;
-      }
-      
-      console.log("✅ User verified successfully:", user.id);
 
       const userData = profile ? {
         currentWeight: profile.current_weight_kg,
@@ -419,9 +358,6 @@ export default function Nutrition() {
         ),
       } : null;
 
-      console.log("🚀 Making authenticated request to meal-planner function...");
-      console.log("- Request body:", { prompt: aiPrompt, userData, action: "generate" });
-
       const response = await supabase.functions.invoke("meal-planner", {
         body: { 
           prompt: aiPrompt,
@@ -430,23 +366,7 @@ export default function Nutrition() {
         },
       });
 
-      console.log("📥 Meal planner response received:");
-      console.log("- Status:", response.status);
-      console.log("- Error:", response.error);
-      console.log("- Data keys:", response.data ? Object.keys(response.data) : "No data");
-
       if (response.error) {
-        // Step 4: Enhanced Error Handling for Authentication Failures
-        if (response.error.message && response.error.message.includes("authorization")) {
-          console.error("❌ Authorization error detected:", response.error);
-          toast({
-            title: "Authentication Error",
-            description: "Your session may have expired. Please refresh the page and try again.",
-            variant: "destructive",
-          });
-          setLoading(false);
-          return;
-        }
         throw response.error;
       }
 
@@ -545,70 +465,35 @@ export default function Nutrition() {
 
       toast({
         title: "Meal plan generated!",
-        description: `${ideasToStore.length} meal ideas created. Click "Log This Meal" to add them to your day.`,
+        description: `${ideasToStore.length} meal ideas created. You can save them individually or all at once.`,
       });
 
       setIsAiDialogOpen(false);
       setAiPrompt("");
     } catch (error: any) {
       console.error("Error generating meal plan:", error);
-      console.error("Error details:", {
-        message: error?.message,
-        error: error?.error,
-        details: error?.details,
-        stack: error?.stack,
-        code: error?.code
-      });
       
       let errorMsg = "Failed to generate meal plan";
-      let shouldRetry = false;
       
-      // Step 4: Enhanced Error Handling for Authentication Failures
-      if (error?.message && error.message.includes("authorization")) {
-        console.log("🔐 Authorization error detected, attempting session recovery...");
-        
+      if (error?.message?.includes("authorization") || error?.code === 401) {
         try {
           const refreshSuccess = await refreshSession();
           if (refreshSuccess) {
-            errorMsg = "Session was refreshed. Please try generating the meal plan again.";
-            shouldRetry = true;
+            errorMsg = "Session refreshed. Please try again.";
           } else {
-            errorMsg = "Your session has expired. Please refresh the page and log in again.";
+            errorMsg = "Session expired. Please refresh the page and log in again.";
           }
-        } catch (refreshError) {
-          console.error("Failed to refresh session:", refreshError);
+        } catch {
           errorMsg = "Authentication failed. Please refresh the page and log in again.";
-        }
-      } else if (error?.code === 401 || (error?.message && error.message.includes("Missing authorization"))) {
-        console.log("🔐 401 error detected, checking session validity...");
-        
-        try {
-          const sessionValid = await checkSessionValidity();
-          if (!sessionValid) {
-            const refreshSuccess = await refreshSession();
-            if (refreshSuccess) {
-              errorMsg = "Session was restored. Please try generating the meal plan again.";
-              shouldRetry = true;
-            } else {
-              errorMsg = "Your session has expired. Please refresh the page and log in again.";
-            }
-          } else {
-            errorMsg = "Authentication error occurred. Please try again or refresh the page.";
-          }
-        } catch (sessionError) {
-          console.error("Session check failed:", sessionError);
-          errorMsg = "Authentication error. Please refresh the page and log in again.";
         }
       } else if (error?.message) {
         errorMsg = error.message;
-      } else if (error?.error) {
-        errorMsg = typeof error.error === 'string' ? error.error : "API error occurred";
       }
       
       toast({
-        title: shouldRetry ? "🔄 Session Restored" : "❌ Error generating meal plan",
+        title: "Error generating meal plan",
         description: errorMsg,
-        variant: shouldRetry ? "default" : "destructive",
+        variant: "destructive",
       });
     } finally {
       setLoading(false);
@@ -649,6 +534,56 @@ export default function Nutrition() {
       toast({
         title: "Error",
         description: "Failed to log meal",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveMealIdeasToDatabase = async (mealIdeas: Meal[]) => {
+    if (mealIdeas.length === 0) return;
+    
+    setLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      // Prepare meals for database insertion
+      const mealsToInsert = mealIdeas.map(meal => ({
+        user_id: user.id,
+        date: selectedDate,
+        meal_name: meal.meal_name,
+        calories: meal.calories,
+        protein_g: meal.protein_g,
+        carbs_g: meal.carbs_g,
+        fats_g: meal.fats_g,
+        meal_type: meal.meal_type,
+        portion_size: meal.portion_size,
+        recipe_notes: meal.recipe_notes,
+        ingredients: meal.ingredients as any, // Cast to Json type for Supabase
+        is_ai_generated: true,
+      }));
+
+      const { error } = await supabase.from("nutrition_logs").insert(mealsToInsert);
+
+      if (error) throw error;
+
+      toast({
+        title: "All meals saved!",
+        description: `${mealIdeas.length} meals added to your day`,
+      });
+
+      // Clear meal ideas after saving all
+      setMealPlanIdeas([]);
+      
+      // Reload meals to show the new entries
+      await loadMeals();
+    } catch (error: any) {
+      console.error("Error saving meal ideas:", error);
+      toast({
+        title: "Error saving meals",
+        description: error.message || "Failed to save meals",
         variant: "destructive",
       });
     } finally {
@@ -2438,8 +2373,30 @@ export default function Nutrition() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {mealPlanIdeas.map((meal) => (
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-semibold">Generated Meal Ideas</h3>
+                <div className="flex gap-2">
+                  <Button 
+                    onClick={() => saveMealIdeasToDatabase(mealPlanIdeas)} 
+                    disabled={loading}
+                    variant="default"
+                  >
+                    <Plus className="mr-2 h-4 w-4" />
+                    Save All Meals
+                  </Button>
+                  <Button 
+                    onClick={() => setMealPlanIdeas([])} 
+                    variant="outline"
+                    size="sm"
+                  >
+                    <X className="mr-2 h-4 w-4" />
+                    Clear Ideas
+                  </Button>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {mealPlanIdeas.map((meal) => (
                 <Card key={meal.id}>
                   <CardContent className="p-6">
                     <div className="flex justify-between items-start mb-4">
@@ -2482,6 +2439,7 @@ export default function Nutrition() {
                   </CardContent>
                 </Card>
               ))}
+              </div>
             </div>
           )}
         </TabsContent>
