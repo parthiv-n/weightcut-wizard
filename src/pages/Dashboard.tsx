@@ -7,6 +7,7 @@ import wizardLogo from "@/assets/wizard-logo.png";
 import { WeightProgressRing } from "@/components/dashboard/WeightProgressRing";
 import { CalorieProgressRing } from "@/components/dashboard/CalorieProgressRing";
 import { useUser } from "@/contexts/UserContext";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import { Button } from "@/components/ui/button";
 import { calculateCalorieTarget } from "@/lib/calorieCalculation";
 
@@ -26,17 +27,15 @@ export default function Dashboard() {
   const loadDashboardData = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        setLoading(false);
+        return;
+      }
 
       const today = new Date().toISOString().split('T')[0];
 
-      // Parallelize all database queries for faster loading
-      const [
-        { data: profileData },
-        { data: logsData },
-        { data: nutritionData },
-        { data: hydrationData }
-      ] = await Promise.all([
+      // Parallelize all database queries for faster loading with individual error handling
+      const results = await Promise.allSettled([
         supabase
           .from("profiles")
           .select("*")
@@ -63,8 +62,21 @@ export default function Dashboard() {
           .eq("date", today)
       ]);
 
-      const totalCalories = nutritionData?.reduce((sum, log) => sum + log.calories, 0) || 0;
-      const totalHydration = hydrationData?.reduce((sum, log) => sum + log.amount_ml, 0) || 0;
+      // Handle each result individually to prevent one failure from breaking everything
+      const profileData = results[0].status === 'fulfilled' ? results[0].value.data : null;
+      const logsData = results[1].status === 'fulfilled' ? results[1].value.data : [];
+      const nutritionData = results[2].status === 'fulfilled' ? results[2].value.data : [];
+      const hydrationData = results[3].status === 'fulfilled' ? results[3].value.data : [];
+
+      // Log any failures for debugging
+      results.forEach((result, index) => {
+        if (result.status === 'rejected') {
+          console.error(`Dashboard query ${index} failed:`, result.reason);
+        }
+      });
+
+      const totalCalories = nutritionData?.reduce((sum, log) => sum + (log?.calories || 0), 0) || 0;
+      const totalHydration = hydrationData?.reduce((sum, log) => sum + (log?.amount_ml || 0), 0) || 0;
 
       setProfile(profileData);
       setWeightLogs(logsData || []);
@@ -72,6 +84,11 @@ export default function Dashboard() {
       setTodayHydration(totalHydration);
     } catch (error) {
       console.error("Error loading dashboard data:", error);
+      // Set default values to prevent UI breaking
+      setProfile(null);
+      setWeightLogs([]);
+      setTodayCalories(0);
+      setTodayHydration(0);
     } finally {
       setLoading(false);
     }
@@ -120,6 +137,7 @@ export default function Dashboard() {
   }));
 
   return (
+    <ErrorBoundary>
     <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6 w-full max-w-7xl mx-auto">
       {/* Mobile-first header with responsive text sizing */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
@@ -306,5 +324,6 @@ export default function Dashboard() {
         </CardContent>
       </Card>
     </div>
+    </ErrorBoundary>
   );
 }

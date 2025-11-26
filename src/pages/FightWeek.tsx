@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import wizardLogo from "@/assets/wizard-logo.png";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { useUser } from "@/contexts/UserContext";
+import { AIPersistence } from "@/lib/aiPersistence";
 
 interface FightWeekPlan {
   id: string;
@@ -76,7 +77,23 @@ export default function FightWeek() {
   useEffect(() => {
     fetchProfile();
     fetchPlanAndLogs();
+    loadPersistedAnalysis();
   }, []);
+
+  const loadPersistedAnalysis = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || aiAnalysis) return;
+
+      const persistedData = AIPersistence.load(user.id, 'fight_week_analysis');
+      if (persistedData) {
+        setAiAnalysis(persistedData);
+      }
+    } catch (error) {
+      console.error("Error loading persisted analysis:", error);
+    }
+  };
+
 
   useEffect(() => {
     if (plan) {
@@ -294,6 +311,12 @@ export default function FightWeek() {
     } else if (data?.analysis) {
       console.log("AI Analysis received:", data.analysis);
       setAiAnalysis(data.analysis);
+      
+      // Save to localStorage for persistence
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        AIPersistence.save(user.id, 'fight_week_analysis', data.analysis, 72); // 3 days expiration
+      }
     }
     setAnalyzingWeight(false);
   };

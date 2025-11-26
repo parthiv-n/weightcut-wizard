@@ -1,64 +1,95 @@
-import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { AlertTriangle, RefreshCw } from 'lucide-react';
+import React, { Component, ErrorInfo, ReactNode } from "react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
-interface ErrorBoundaryState {
+interface Props {
+  children?: ReactNode;
+  fallback?: ReactNode;
+  onError?: (error: Error, errorInfo: ErrorInfo) => void;
+}
+
+interface State {
   hasError: boolean;
-  error?: Error;
+  error: Error | null;
+  errorInfo: ErrorInfo | null;
 }
 
-interface ErrorBoundaryProps {
-  children: React.ReactNode;
-  fallback?: React.ReactNode;
-  onReset?: () => void;
-}
-
-export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = { hasError: false };
-  }
-
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
-  }
-
-  handleReset = () => {
-    this.setState({ hasError: false, error: undefined });
-    if (this.props.onReset) {
-      this.props.onReset();
-    }
+class ErrorBoundary extends Component<Props, State> {
+  public state: State = {
+    hasError: false,
+    error: null,
+    errorInfo: null,
   };
 
-  render() {
+  public static getDerivedStateFromError(error: Error): State {
+    return { hasError: true, error, errorInfo: null };
+  }
+
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("ErrorBoundary caught an error:", error, errorInfo);
+    this.setState({ error, errorInfo });
+    
+    // Call optional error handler
+    if (this.props.onError) {
+      this.props.onError(error, errorInfo);
+    }
+  }
+
+  private handleRetry = () => {
+    this.setState({
+      hasError: false,
+      error: null,
+      errorInfo: null,
+    });
+  };
+
+  public render() {
     if (this.state.hasError) {
+      // Custom fallback UI
       if (this.props.fallback) {
         return this.props.fallback;
       }
 
+      // Default error UI
       return (
-        <Card className="w-full">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-5 w-5" />
-              Something went wrong
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-sm text-muted-foreground">
-              An error occurred while loading this feature. This might be a temporary issue.
-            </p>
-            <Button onClick={this.handleReset} variant="outline" size="sm">
-              <RefreshCw className="mr-2 h-4 w-4" />
+        <div className="p-4 space-y-4">
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Something went wrong</AlertTitle>
+            <AlertDescription>
+              An unexpected error occurred. This might be due to a temporary AI service issue.
+              {this.state.error && (
+                <details className="mt-2 text-xs">
+                  <summary className="cursor-pointer">Error Details</summary>
+                  <pre className="whitespace-pre-wrap break-all mt-1 p-2 bg-muted rounded text-xs">
+                    {this.state.error.toString()}
+                    {this.state.errorInfo?.componentStack && (
+                      <>
+                        {"\n\nComponent Stack:"}
+                        {this.state.errorInfo.componentStack}
+                      </>
+                    )}
+                  </pre>
+                </details>
+              )}
+            </AlertDescription>
+          </Alert>
+          
+          <div className="flex gap-2">
+            <Button onClick={this.handleRetry} variant="outline" size="sm">
+              <RefreshCw className="h-4 w-4 mr-2" />
               Try Again
             </Button>
-          </CardContent>
-        </Card>
+            <Button 
+              onClick={() => window.location.reload()} 
+              variant="outline" 
+              size="sm"
+            >
+              Reload Page
+            </Button>
+          </div>
+        </div>
       );
     }
 
@@ -66,19 +97,4 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 }
 
-// Hook version for functional components
-export const useErrorBoundary = () => {
-  const [error, setError] = React.useState<Error | null>(null);
-
-  const resetError = () => setError(null);
-
-  const captureError = (error: Error) => {
-    setError(error);
-  };
-
-  if (error) {
-    throw error;
-  }
-
-  return { captureError, resetError };
-};
+export default ErrorBoundary;

@@ -22,6 +22,8 @@ import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { nutritionLogSchema } from "@/lib/validation";
 import { calculateCalorieTarget as calculateCalorieTargetUtil } from "@/lib/calorieCalculation";
 import { useUser } from "@/contexts/UserContext";
+import { AIPersistence } from "@/lib/aiPersistence";
+import ErrorBoundary from "@/components/ErrorBoundary";
 
 interface Ingredient {
   name: string;
@@ -116,7 +118,26 @@ export default function Nutrition() {
   useEffect(() => {
     loadProfile();
     loadMeals();
+    loadPersistedMealPlans();
   }, [selectedDate]);
+
+  const loadPersistedMealPlans = async () => {
+    try {
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (!currentUser || mealPlanIdeas.length > 0) return;
+
+      const persistedData = AIPersistence.load(currentUser.id, 'meal_plans');
+      if (persistedData) {
+        setMealPlanIdeas(persistedData.meals || []);
+        if (persistedData.dailyCalorieTarget) setDailyCalorieTarget(persistedData.dailyCalorieTarget);
+        if (persistedData.safetyStatus) setSafetyStatus(persistedData.safetyStatus);
+        if (persistedData.safetyMessage) setSafetyMessage(persistedData.safetyMessage);
+      }
+    } catch (error) {
+      console.error("Error loading persisted meal plans:", error);
+    }
+  };
+
 
   useEffect(() => {
     if (profile) {
@@ -358,19 +379,19 @@ export default function Nutrition() {
         ),
       } : null;
 
-      const response = await supabase.functions.invoke("meal-planner", {
-        body: { 
-          prompt: aiPrompt,
-          userData,
-          action: "generate"
-        },
-      });
+          const response = await supabase.functions.invoke("meal-planner", {
+            body: {
+              prompt: aiPrompt,
+              userData,
+              action: "generate"
+            },
+          });
 
-      if (response.error) {
-        throw response.error;
-      }
+          if (response.error) {
+            throw response.error;
+          }
 
-      const { mealPlan, dailyCalorieTarget: target, safetyStatus: status, safetyMessage: message } = response.data;
+          const { mealPlan, dailyCalorieTarget: target, safetyStatus: status, safetyMessage: message } = response.data;
 
       // Store as meal plan ideas instead of logging them
       const ideasToStore: Meal[] = [];
@@ -463,6 +484,18 @@ export default function Nutrition() {
       setSafetyStatus(status || safetyStatus);
       setSafetyMessage(message || safetyMessage);
 
+      // Save to localStorage for persistence
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (currentUser) {
+        AIPersistence.save(currentUser.id, 'meal_plans', {
+          meals: ideasToStore,
+          dailyCalorieTarget: target || dailyCalorieTarget,
+          safetyStatus: status || safetyStatus,
+          safetyMessage: message || safetyMessage,
+          prompt: aiPrompt
+        }, 24); // 24 hours expiration
+      }
+
       toast({
         title: "Meal plan generated!",
         description: `${ideasToStore.length} meal ideas created. You can save them individually or all at once.`,
@@ -474,12 +507,15 @@ export default function Nutrition() {
       console.error("Error generating meal plan:", error);
       
       let errorMsg = "Failed to generate meal plan";
+      let shouldRetry = false;
       
+      // Handle specific error types with user-friendly messages
       if (error?.message?.includes("authorization") || error?.code === 401) {
         try {
           const refreshSuccess = await refreshSession();
           if (refreshSuccess) {
             errorMsg = "Session refreshed. Please try again.";
+            shouldRetry = true;
           } else {
             errorMsg = "Session expired. Please refresh the page and log in again.";
           }
@@ -487,7 +523,18 @@ export default function Nutrition() {
           errorMsg = "Authentication failed. Please refresh the page and log in again.";
         }
       } else if (error?.message) {
-        errorMsg = error.message;
+        if (error.message.includes('timeout') || error.message.includes('408')) {
+          errorMsg = "The AI service is taking longer than usual. Please try again in a moment.";
+          shouldRetry = true;
+        } else if (error.message.includes('429') || error.message.includes('quota')) {
+          errorMsg = "AI service is temporarily busy. Please try again in a few minutes.";
+          shouldRetry = true;
+        } else if (error.message.includes('404')) {
+          errorMsg = "AI service temporarily unavailable. Please try again later.";
+          shouldRetry = true;
+        } else {
+          errorMsg = error.message;
+        }
       }
       
       toast({
@@ -569,6 +616,7 @@ export default function Nutrition() {
 
       if (error) throw error;
 
+
       toast({
         title: "All meals saved!",
         description: `${mealIdeas.length} meals added to your day`,
@@ -576,6 +624,12 @@ export default function Nutrition() {
 
       // Clear meal ideas after saving all
       setMealPlanIdeas([]);
+      
+      // Clear from localStorage as well
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (currentUser) {
+        AIPersistence.remove(currentUser.id, 'meal_plans');
+      }
       
       // Reload meals to show the new entries
       await loadMeals();
@@ -2359,6 +2413,7 @@ export default function Nutrition() {
         </TabsContent>
 
         <TabsContent value="ideas" className="space-y-4 mt-6">
+          <ErrorBoundary>
           {mealPlanIdeas.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
@@ -2442,6 +2497,7 @@ export default function Nutrition() {
               </div>
             </div>
           )}
+          </ErrorBoundary>
         </TabsContent>
       </Tabs>
       
