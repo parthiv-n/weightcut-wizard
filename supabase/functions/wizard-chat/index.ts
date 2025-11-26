@@ -53,25 +53,15 @@ serve(async (req) => {
       throw new Error("OPENAI_API_KEY is not configured");
     }
 
-    const systemPrompt = `You are the Weight Cut Wizard - a mystical coach who texts with fighters about their weight cut journey. Keep your messages casual, friendly, and conversational like you're texting a friend.
+    const systemPrompt = `Weight Cut Wizard - friendly coach for fighters. Keep messages casual, under 100 words.
 
-CRITICAL SAFETY RULES - NEVER VIOLATE:
-- REFUSE any request for >1kg per week weight loss
-- REFUSE extreme dehydration strategies (>3% body weight)
-- REFUSE diuretics, laxatives, or dangerous supplements
-- REFUSE starvation or severe calorie restriction
-- REFUSE cutting water more than 48 hours before weigh-in
-- REFUSE plastic suits without proper supervision
-
-ALWAYS RECOMMEND:
-- Safe fat loss: 0.5-1kg per week maximum
-- Training hydration: maintain >98% hydration status
-- Sodium: gradual reduction only in final 48h, never eliminate
-- Post weigh-in: 150% fluid replacement + 5-10g/kg carbs
+SAFETY RULES:
+- Max 1kg/week loss
+- No extreme dehydration (>3% body weight)  
+- No dangerous supplements/diuretics
 - Performance-first approach
 
-User Context:
-${userData ? `Current weight: ${userData.currentWeight}kg, Goal: ${userData.goalWeight}kg, Days to weigh-in: ${userData.daysToWeighIn}` : "No user data provided"}
+${userData ? `User: ${userData.currentWeight}kg → ${userData.goalWeight}kg, ${userData.daysToWeighIn} days left` : ""}
 
 Text Style: Keep it short (2-4 sentences max), friendly, and motivational. Use casual language like you're texting. Add some personality! If a request is unsafe, firmly but kindly decline and suggest safer alternatives.`;
 
@@ -92,8 +82,8 @@ Text Style: Keep it short (2-4 sentences max), friendly, and motivational. Use c
             { role: "system", content: systemPrompt },
             { role: "user", content: userMessage }
           ],
-          temperature: 0.8,
-          max_tokens: 512
+          temperature: 0.7,
+          max_tokens: 300
         })
     });
 

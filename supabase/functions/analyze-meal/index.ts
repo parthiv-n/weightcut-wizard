@@ -62,36 +62,24 @@ serve(async (req) => {
 
     console.log("Analyzing meal:", mealDescription);
 
-    const systemPrompt = `You are a nutrition analysis expert. Analyze meal descriptions and return accurate nutritional information.
+    const systemPrompt = `Nutrition analysis expert. Analyze meals and return accurate nutrition data.
 
-CRITICAL RULES:
-1. If the user explicitly mentions calorie amounts, protein, carbs, or fats - USE THOSE EXACT VALUES
-2. If the user says "500 calories" - the meal must be exactly 500 calories, not an estimate
-3. Only estimate nutritional values when the user doesn't provide specific numbers
-4. Always respect user-provided nutritional data over your own calculations
-5. Always indicate the data source for nutrition information (e.g., "USDA Food Database", "Nutrition Database", "Standard Nutrition Values", "Food Composition Database")
-6. Use authoritative sources like USDA, nutrition databases, or established food composition tables
+Rules:
+- Use exact values if user provides calories/macros
+- Estimate only when not specified
+- Use USDA/nutrition databases
+- Realistic portion sizes
 
-Be realistic and precise with portion sizes.
-
-You MUST respond with ONLY valid JSON. No markdown, no explanations, no code blocks. The response will be automatically parsed as JSON.
-
-Respond with a JSON object in this exact format:
+Respond ONLY with JSON:
 {
-  "meal_name": "Clean, properly formatted name of the meal",
+  "meal_name": "Clean meal name",
   "calories": number,
   "protein_g": number,
   "carbs_g": number,
   "fats_g": number,
-  "portion_size": "Estimated portion size (e.g., '250g', '1 plate', '2 servings')",
-  "ingredients": [
-    {
-      "name": "ingredient name",
-      "grams": number,
-      "source": "Data source for nutrition information"
-    }
-  ],
-  "data_source": "Primary data source for the nutrition information"
+  "portion_size": "250g",
+  "ingredients": [{"name": "ingredient", "grams": number, "source": "USDA"}],
+  "data_source": "Primary source"
 }`;
 
     const userPrompt = `Analyze this meal and provide nutritional information: "${mealDescription}"`;
@@ -102,16 +90,16 @@ Respond with a JSON object in this exact format:
         "Authorization": `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ],
-        temperature: 0.2,
-        max_tokens: 1024,
-        response_format: { type: "json_object" }
-      })
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          temperature: 0.1,
+          max_tokens: 512,
+          response_format: { type: "json_object" }
+        })
     });
 
     if (!response.ok) {

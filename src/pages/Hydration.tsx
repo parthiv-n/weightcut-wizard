@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Droplets, Clock, Zap, AlertTriangle, Info, Heart } from "lucide-react";
+import { AIPersistence } from "@/lib/aiPersistence";
+import { Droplets, Clock, Zap, AlertTriangle, Info, Heart, RefreshCw } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -59,7 +60,29 @@ export default function Hydration() {
 
   useEffect(() => {
     fetchProfile();
+    loadPersistedProtocol();
   }, []);
+
+  const loadPersistedProtocol = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || protocol) return;
+
+      const persistedData = AIPersistence.load(user.id, 'rehydration_protocol');
+      if (persistedData) {
+        setProtocol(persistedData.protocol);
+        // Restore input values if available
+        if (persistedData.inputs) {
+          setWeightLost(persistedData.inputs.weightLost || "");
+          setWeighInTiming(persistedData.inputs.weighInTiming || "same-day");
+          setFightTimeHours(persistedData.inputs.fightTimeHours || "");
+        }
+      }
+    } catch (error) {
+      console.error("Error loading persisted protocol:", error);
+    }
+  };
+
 
   const fetchProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -96,6 +119,20 @@ export default function Hydration() {
 
       if (data?.protocol) {
         setProtocol(data.protocol);
+        
+        // Save to localStorage for persistence
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          AIPersistence.save(user.id, 'rehydration_protocol', {
+            protocol: data.protocol,
+            inputs: {
+              weightLost,
+              weighInTiming,
+              fightTimeHours
+            }
+          }, 168); // 7 days expiration
+        }
+        
         toast({
           title: "Protocol Generated",
           description: "Your personalized rehydration plan is ready",
@@ -198,9 +235,23 @@ export default function Hydration() {
             {/* Summary */}
             <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Zap className="h-5 w-5 text-primary" />
-                  Wizard Protocol Summary
+                <CardTitle className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Zap className="h-5 w-5 text-primary" />
+                    Wizard Protocol Summary
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setProtocol(null);
+                      handleGenerateProtocol(new Event('submit') as any);
+                    }}
+                    disabled={loading}
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Regenerate
+                  </Button>
                 </CardTitle>
               </CardHeader>
               <CardContent>

@@ -134,24 +134,12 @@ serve(async (req) => {
       safetyMessage = "⚠️ CAUTION: Approaching maximum safe weight loss rate";
     }
 
-    const systemPrompt = `You are the Weight Cut Wizard's nutrition AI. Generate safe, nutritious meal plans that help fighters reach their weight goals safely.
+    const systemPrompt = `Nutrition AI for fighters. Create safe meal plans.
 
-CRITICAL SAFETY RULES:
-• NEVER suggest daily calories below ${Math.round(dailyCalorieTarget)}
-• NEVER recommend starvation, extreme restriction, or unsafe diets
-• Current safe calorie target: ${Math.round(dailyCalorieTarget)} cal/day
-• Weekly weight loss target: ${safeWeeklyLoss.toFixed(2)} kg (${weeklyLossPercent.toFixed(1)}% body weight)
-• Safety status: ${safetyIndicator.toUpperCase()} ${safetyMessage}
+Target: ${Math.round(dailyCalorieTarget)} cal/day (${currentWeight}kg→${goalWeight}kg, ${daysToGoal} days)
+Safety: ${safetyIndicator} - ${safetyMessage}
 
-User Context:
-Current weight: ${currentWeight}kg
-Goal weight: ${goalWeight}kg
-TDEE: ${tdee} cal/day
-Days to goal: ${daysToGoal}
-
-CRITICAL: You MUST respond with ONLY valid JSON. No markdown, no explanations, no code blocks. The response will be automatically parsed as JSON.
-
-RESPONSE FORMAT (EXACT JSON STRUCTURE REQUIRED):
+Respond ONLY with JSON:
 {
   "meals": [
     {
@@ -160,36 +148,10 @@ RESPONSE FORMAT (EXACT JSON STRUCTURE REQUIRED):
       "protein": 30,
       "carbs": 40,
       "fats": 15,
-      "portion": "Total weight in grams",
-      "recipe": "Brief preparation notes",
+      "portion": "300g",
+      "recipe": "Brief prep",
       "type": "breakfast",
-      "ingredients": [
-        {"name": "Chicken breast", "grams": 200},
-        {"name": "Brown rice", "grams": 150},
-        {"name": "Olive oil", "grams": 10}
-      ]
-    },
-    {
-      "name": "Lunch - Meal name",
-      "calories": 500,
-      "protein": 35,
-      "carbs": 50,
-      "fats": 20,
-      "portion": "Total weight in grams",
-      "recipe": "Brief preparation notes",
-      "type": "lunch",
-      "ingredients": []
-  },
-    {
-      "name": "Dinner - Meal name",
-      "calories": 600,
-      "protein": 40,
-      "carbs": 60,
-      "fats": 25,
-      "portion": "Total weight in grams",
-      "recipe": "Brief preparation notes",
-      "type": "dinner",
-      "ingredients": []
+      "ingredients": [{"name": "Chicken breast", "grams": 200}]
     }
   ],
   "totalCalories": ${Math.round(dailyCalorieTarget)},
@@ -198,38 +160,18 @@ RESPONSE FORMAT (EXACT JSON STRUCTURE REQUIRED):
   "totalFats": 60,
   "safetyStatus": "${safetyIndicator}",
   "safetyMessage": "${safetyMessage}",
-  "tips": "Motivational and practical tips for the day"
+  "tips": "Brief tips"
 }
 
-IMPORTANT RULES:
-• Respond with ONLY the JSON object above
-• NO markdown formatting (no backticks)
-• NO explanatory text before or after
-• Ensure all numeric values are numbers, not strings
-• Include at least 3 meals (breakfast, lunch, dinner)
-• Each meal must have all required fields
-
-CRITICAL: For each meal, you MUST include:
-• An ingredients array with specific foods and their weights in GRAMS
-• Each ingredient must have name and grams properties
-• Ingredient weights should be realistic and add up to a reasonable total meal weight
-• Be specific (e.g. Chicken breast not just Chicken, Brown rice not just Rice)
-
-Generate meal plans that:
-• Stay within daily calorie target
-• Provide adequate protein (1.8-2.2g per kg body weight)
-• Include nutrient-dense whole foods
-• Are practical and easy to prepare
-• Respect any dietary restrictions mentioned
-• Support training and recovery`;
+Rules: 3+ meals, specific ingredients with grams, no markdown, numbers not strings.`;
 
     console.log("Calling OpenAI API for meal planning...");
 
     const userPrompt = `User Request: ${prompt}`;
 
-    // Add timeout to prevent hanging - reduced for faster responses
+    // Add timeout to prevent hanging - increased for more reliable responses
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 second timeout
 
     let response;
     try {
@@ -245,8 +187,8 @@ Generate meal plans that:
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt }
           ],
-          temperature: 0.8,
-          max_tokens: 2048,
+          temperature: 0.3,
+          max_tokens: 1024,
           response_format: { type: "json_object" }
         }),
         signal: controller.signal
@@ -258,14 +200,14 @@ Generate meal plans that:
       clearTimeout(timeoutId);
       
       if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-        console.error("Gemini API request timed out");
+        console.error("OpenAI API request timed out after 25 seconds");
         return new Response(
-          JSON.stringify({ error: "AI request timed out. Please try again." }),
+          JSON.stringify({ error: "AI request timed out after 25 seconds. The service may be busy. Please try again in a moment." }),
           { status: 408, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       
-      console.error("Gemini API fetch error:", fetchError);
+      console.error("OpenAI API fetch error:", fetchError);
       return new Response(
         JSON.stringify({ error: "Failed to connect to AI service" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
