@@ -4,7 +4,58 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS, PUT, DELETE",
 };
+
+// Helper function to extract meals from plain text when JSON parsing fails
+function extractMealsFromText(text: string): any[] {
+  const meals: any[] = [];
+
+  try {
+    // Look for common meal patterns in text
+    const mealPatterns = [
+      /breakfast[:\s]*([^\n]+)/gi,
+      /lunch[:\s]*([^\n]+)/gi,
+      /dinner[:\s]*([^\n]+)/gi,
+      /snack[:\s]*([^\n]+)/gi,
+      /meal\s*\d+[:\s]*([^\n]+)/gi
+    ];
+
+    mealPatterns.forEach((pattern, index) => {
+      const matches = text.matchAll(pattern);
+      for (const match of matches) {
+        if (match[1] && match[1].trim()) {
+          meals.push({
+            name: match[1].trim(),
+            calories: 300 + (index * 100), // Rough estimate
+            protein: 20 + (index * 5),
+            carbs: 30 + (index * 10),
+            fats: 10 + (index * 3),
+            type: ['breakfast', 'lunch', 'dinner', 'snack', 'meal'][index] || 'meal'
+          });
+        }
+      }
+    });
+
+    // If no meals found, create a basic fallback
+    if (meals.length === 0) {
+      meals.push({
+        name: "Basic meal plan (parsing failed)",
+        calories: 400,
+        protein: 25,
+        carbs: 40,
+        fats: 15,
+        type: "meal"
+      });
+    }
+
+  } catch (error) {
+    console.error("Error in extractMealsFromText:", error);
+    // Return empty array if extraction fails completely
+  }
+
+  return meals;
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -15,7 +66,7 @@ serve(async (req) => {
     // Verify authentication
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), 
+      return new Response(JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -27,18 +78,18 @@ serve(async (req) => {
 
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Invalid token' }), 
+      return new Response(JSON.stringify({ error: 'Invalid token' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // Fetch user data from database instead of trusting client
     const { data: profile } = await supabaseClient
       .from('profiles')
-      .select('current_weight_kg, goal_weight_kg, tdee, target_date')
+      .select('current_weight_kg, goal_weight_kg, tdee, target_date, ai_recommended_calories, ai_recommended_protein_g, ai_recommended_carbs_g, ai_recommended_fats_g, manual_nutrition_override')
       .eq('id', user.id)
       .single();
 
-    const userData = profile ? {
+    const profileUserData = profile ? {
       currentWeight: profile.current_weight_kg,
       goalWeight: profile.goal_weight_kg,
       tdee: profile.tdee,
@@ -47,28 +98,34 @@ serve(async (req) => {
       )
     } : null;
 
-    const { prompt, action } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const { prompt, action, userData } = await req.json();
+    const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
 
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    if (!MINIMAX_API_KEY) {
+      console.error("MINIMAX_API_KEY environment variable is not configured");
+      return new Response(
+        JSON.stringify({ error: "AI service not configured" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
+    console.log("Request data:", { prompt: prompt?.substring(0, 100), action, userData });
+
     // Calculate safe calorie target
-    const currentWeight = userData?.currentWeight || 70;
-    const goalWeight = userData?.goalWeight || 65;
-    const tdee = userData?.tdee || 2000;
-    const daysToGoal = userData?.daysToWeighIn || 60;
-    
+    const currentWeight = profileUserData?.currentWeight || 70;
+    const goalWeight = profileUserData?.goalWeight || 65;
+    const tdee = profileUserData?.tdee || 2000;
+    const daysToGoal = profileUserData?.daysToWeighIn || 60;
+
     const weeklyWeightLoss = ((currentWeight - goalWeight) / (daysToGoal / 7));
     const safeWeeklyLoss = Math.min(weeklyWeightLoss, 1); // Max 1kg/week
     const dailyDeficit = (safeWeeklyLoss * 7700) / 7; // 7700 cal = 1kg fat
-    const dailyCalorieTarget = Math.max(tdee - dailyDeficit, tdee * 0.8); // Minimum 80% of TDEE
-    
+    const defaultCalorieTarget = Math.max(tdee - dailyDeficit, tdee * 0.8); // Minimum 80% of TDEE
+
     const weeklyLossPercent = (weeklyWeightLoss / currentWeight) * 100;
     let safetyIndicator = "green";
     let safetyMessage = "Safe and sustainable weight loss pace";
-    
+
     if (weeklyLossPercent > 1.5 || weeklyWeightLoss > 1) {
       safetyIndicator = "red";
       safetyMessage = "⚠️ WARNING: Weight loss rate exceeds safe limits! Reduce calorie deficit.";
@@ -77,92 +134,128 @@ serve(async (req) => {
       safetyMessage = "⚠️ CAUTION: Approaching maximum safe weight loss rate";
     }
 
-    const systemPrompt = `You are the Weight Cut Wizard's nutrition AI. Generate safe, nutritious meal plans that help fighters reach their weight goals safely.
+    // Use user's custom goals when available, otherwise fall back to TDEE-based calculation
+    let dailyCalorieTarget: number;
+    let targetProtein: number;
+    let targetCarbs: number;
+    let targetFats: number;
 
-CRITICAL SAFETY RULES:
-- NEVER suggest daily calories below ${Math.round(dailyCalorieTarget)}
-- NEVER recommend starvation, extreme restriction, or unsafe diets
-- Current safe calorie target: ${Math.round(dailyCalorieTarget)} cal/day
-- Weekly weight loss target: ${safeWeeklyLoss.toFixed(2)} kg (${weeklyLossPercent.toFixed(1)}% body weight)
-- Safety status: ${safetyIndicator.toUpperCase()} - ${safetyMessage}
+    if (profile?.manual_nutrition_override && profile?.ai_recommended_calories) {
+      dailyCalorieTarget = profile.ai_recommended_calories;
+      targetProtein = profile.ai_recommended_protein_g || Math.round(dailyCalorieTarget * 0.40 / 4);
+      targetCarbs = profile.ai_recommended_carbs_g || Math.round(dailyCalorieTarget * 0.30 / 4);
+      targetFats = profile.ai_recommended_fats_g || Math.round(dailyCalorieTarget * 0.30 / 9);
+    } else {
+      dailyCalorieTarget = defaultCalorieTarget;
+      targetProtein = Math.round((dailyCalorieTarget * 0.40) / 4);
+      targetCarbs = Math.round((dailyCalorieTarget * 0.30) / 4);
+      // Fats absorb rounding error
+      targetFats = Math.round((dailyCalorieTarget - targetProtein * 4 - targetCarbs * 4) / 9);
+    }
 
-User Context:
-Current weight: ${currentWeight}kg
-Goal weight: ${goalWeight}kg
-TDEE: ${tdee} cal/day
-Days to goal: ${daysToGoal}
+    const systemPrompt = `Nutrition AI for fighters. Create safe meal plans.
 
-RESPONSE FORMAT (must be valid JSON):
+Target: ${Math.round(dailyCalorieTarget)} cal/day (${currentWeight}kg→${goalWeight}kg, ${daysToGoal} days)
+Safety: ${safetyIndicator} - ${safetyMessage}
+
+MACRO TARGETS: ${targetProtein}g protein, ${targetCarbs}g carbs, ${targetFats}g fat
+
+CRITICAL MATH RULES - YOU MUST FOLLOW THESE EXACTLY:
+1. Each meal's calories MUST equal: (protein × 4) + (carbs × 4) + (fats × 9), within ±20 cal
+2. The sum of ALL meals' protein MUST equal totalProtein (±5g)
+3. The sum of ALL meals' carbs MUST equal totalCarbs (±5g)
+4. The sum of ALL meals' fats MUST equal totalFats (±3g)
+5. The sum of ALL meals' calories MUST equal totalCalories (±30 cal)
+6. totalCalories MUST equal ${Math.round(dailyCalorieTarget)} (±30 cal)
+7. totalProtein MUST equal ${targetProtein} (±5g)
+8. totalCarbs MUST equal ${targetCarbs} (±5g)
+9. totalFats MUST equal ${targetFats} (±3g)
+
+VERIFICATION STEP: Before responding, verify that:
+- Each meal: (protein × 4) + (carbs × 4) + (fats × 9) ≈ calories
+- Sum of all meal proteins ≈ totalProtein
+- Sum of all meal carbs ≈ totalCarbs
+- Sum of all meal fats ≈ totalFats
+- Sum of all meal calories ≈ totalCalories
+
+Respond ONLY with JSON:
 {
-  "mealPlan": {
-    "breakfast": {
-      "name": "Meal name",
+  "meals": [
+    {
+      "name": "Breakfast - Meal name",
       "calories": 400,
-      "protein": 30,
-      "carbs": 40,
-      "fats": 15,
-      "portion": "Total weight in grams",
-      "recipe": "Brief preparation notes",
-      "ingredients": [
-        {"name": "Chicken breast", "grams": 200},
-        {"name": "Brown rice", "grams": 150},
-        {"name": "Olive oil", "grams": 10}
-      ]
-    },
-    "lunch": { ... },
-    "dinner": { ... },
-    "snacks": [{ ... }]
-  },
-  "dailyTotals": {
-    "calories": ${Math.round(dailyCalorieTarget)},
-    "protein": 120,
-    "carbs": 200,
-    "fats": 60
-  },
+      "protein": 40,
+      "carbs": 30,
+      "fats": 12,
+      "portion": "300g",
+      "recipe": "Brief prep",
+      "type": "breakfast",
+      "ingredients": [{"name": "Chicken breast", "grams": 200}]
+    }
+  ],
+  "totalCalories": ${Math.round(dailyCalorieTarget)},
+  "totalProtein": ${targetProtein},
+  "totalCarbs": ${targetCarbs},
+  "totalFats": ${targetFats},
   "safetyStatus": "${safetyIndicator}",
   "safetyMessage": "${safetyMessage}",
-  "tips": "Motivational and practical tips for the day"
+  "tips": "Brief tips"
 }
 
-CRITICAL: For each meal, you MUST include:
-- An "ingredients" array with specific foods and their weights in GRAMS
-- Each ingredient must have "name" and "grams" properties
-- Ingredient weights should be realistic and add up to a reasonable total meal weight
-- Be specific (e.g., "Chicken breast" not just "Chicken", "Brown rice" not just "Rice")
+Rules: 3+ meals, specific ingredients with grams, no markdown, numbers not strings.`;
 
-Generate meal plans that:
-- Stay within daily calorie target
-- Provide adequate protein (1.8-2.2g per kg body weight)
-- Include nutrient-dense whole foods
-- Are practical and easy to prepare
-- Respect any dietary restrictions mentioned
-- Support training and recovery`;
+    console.log("Calling Minimax API for meal planning...");
 
-    console.log("Calling Lovable AI for meal planning...");
+    const userPrompt = `User Request: ${prompt}`;
 
-    const response = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
-      {
+    // Add timeout to prevent hanging - increased for more reliable responses
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 second timeout
+
+    let response;
+    try {
+      response = await fetch("https://api.minimax.io/v1/chat/completions", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+          "Authorization": `Bearer ${MINIMAX_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+          model: "MiniMax-M2.5",
           messages: [
             { role: "system", content: systemPrompt },
-            { role: "user", content: prompt }
+            { role: "user", content: userPrompt }
           ],
-          temperature: 0.7,
+          temperature: 0.3,
+          max_tokens: 1024
         }),
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+      console.log("Minimax API response status:", response.status);
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+
+      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+        console.error("Minimax API request timed out after 25 seconds");
+        return new Response(
+          JSON.stringify({ error: "AI request timed out after 25 seconds. The service may be busy. Please try again in a moment." }),
+          { status: 408, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
-    );
+
+      console.error("Minimax API fetch error:", fetchError);
+      return new Response(
+        JSON.stringify({ error: "Failed to connect to AI service" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Lovable AI error:", response.status, errorText);
-      
+      const errorData = await response.json();
+      console.error("Minimax API error:", response.status, errorData);
+
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
@@ -170,79 +263,211 @@ Generate meal plans that:
         );
       }
 
-      if (response.status === 402) {
+      if (response.status === 401) {
         return new Response(
-          JSON.stringify({ error: "Payment required. Please add credits to your Lovable AI workspace." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "Invalid API key." }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      
+
+      if (response.status === 403) {
+        return new Response(
+          JSON.stringify({ error: "API key invalid or quota exceeded." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       return new Response(
-        JSON.stringify({ error: `AI error: ${response.status}` }),
+        JSON.stringify({ error: `Minimax API error: ${errorData.error?.message || 'Unknown error'}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
+    console.log("Full Minimax response:", JSON.stringify(data, null, 2));
 
-    if (!content) {
-      throw new Error("No content in AI response");
+    // Extract content from Minimax response and strip <think> tags
+    let content = data.choices?.[0]?.message?.content;
+    if (content) {
+      content = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
     }
 
-    // Try to parse JSON from the response
+    console.log("=== MINIMAX RESPONSE DEBUG ===");
+    console.log("Raw Minimax content:", content);
+    console.log("Content type:", typeof content);
+    console.log("Content length:", content?.length);
+    console.log("=== END DEBUG ===");
+
+    if (!content) {
+      console.error("❌ No content found in Minimax response");
+      console.error("Available fields in response:", Object.keys(data));
+      if (data.choices?.[0]) {
+        console.error("Available fields in first choice:", Object.keys(data.choices[0]));
+        console.error("First choice content:", data.choices[0]);
+      }
+
+      // Check for specific finish reasons
+      const finishReason = data.choices?.[0]?.finish_reason;
+      if (finishReason) {
+        console.error("Finish reason:", finishReason);
+
+        if (finishReason === 'content_filter') {
+          return new Response(
+            JSON.stringify({ error: "Content was filtered for safety. Please try a different prompt." }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        } else if (finishReason === 'length') {
+          return new Response(
+            JSON.stringify({ error: "Response was too long. Please try a shorter prompt." }),
+            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+
+      // Try fallback extraction from any available text
+      console.log("🔄 Attempting fallback content extraction...");
+      const fallbackMeals = extractMealsFromText(JSON.stringify(data));
+      if (fallbackMeals.length > 0) {
+        console.log("✅ Fallback extraction found", fallbackMeals.length, "meals");
+        const mealPlanData = {
+          meals: fallbackMeals,
+          totalCalories: fallbackMeals.reduce((sum, meal) => sum + (meal.calories || 0), 0),
+          totalProtein: fallbackMeals.reduce((sum, meal) => sum + (meal.protein || 0), 0),
+          totalCarbs: fallbackMeals.reduce((sum, meal) => sum + (meal.carbs || 0), 0),
+          totalFats: fallbackMeals.reduce((sum, meal) => sum + (meal.fats || 0), 0),
+          note: "Generated from fallback extraction due to API response parsing issue"
+        };
+
+        return new Response(
+          JSON.stringify({
+            mealPlan: mealPlanData,
+            dailyCalorieTarget: Math.round(dailyCalorieTarget),
+            safetyStatus: safetyIndicator,
+            safetyMessage
+          }),
+          {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200
+          }
+        );
+      }
+
+      throw new Error("No content in Minimax API response and fallback extraction failed");
+    }
+
+    // Parse JSON from Minimax response
     let mealPlanData;
     try {
-      // Clean the content by removing markdown code blocks and extracting JSON
-      let cleanContent = content.trim();
-      
-      // Remove all markdown code block markers
-      cleanContent = cleanContent.replace(/```json\s*/g, '');
-      cleanContent = cleanContent.replace(/```\s*/g, '');
-      
-      // Find the first { and last } to extract the complete JSON object
-      const firstBrace = cleanContent.indexOf('{');
-      const lastBrace = cleanContent.lastIndexOf('}');
-      
-      if (firstBrace === -1 || lastBrace === -1) {
-        throw new Error("No valid JSON object found in response");
+      console.log("=== JSON PARSING DEBUG ===");
+      console.log("Parsing Minimax JSON response...");
+
+      // Extract JSON from potential markdown code blocks
+      // Try direct JSON parse first, then try extracting from code blocks
+      try {
+        mealPlanData = JSON.parse(content);
+      } catch {
+        const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (jsonMatch) {
+          mealPlanData = JSON.parse(jsonMatch[1].trim());
+        } else {
+          throw new Error("Could not extract JSON from response");
+        }
       }
-      
-      const jsonStr = cleanContent.substring(firstBrace, lastBrace + 1);
-      mealPlanData = JSON.parse(jsonStr);
-      
-      console.log("Successfully parsed AI response");
+
+      console.log("Successfully parsed Minimax response");
       console.log("Meal plan structure:", Object.keys(mealPlanData));
+      console.log("Number of meals:", mealPlanData.meals?.length || 0);
     } catch (e) {
       console.error("Failed to parse AI response as JSON:", e);
-      console.error("Raw content:", content.substring(0, 500));
-      
-      // Return error response that frontend can handle
-      return new Response(
-        JSON.stringify({ 
-          error: "Failed to parse meal plan from AI response. Please try again.",
-          details: e instanceof Error ? e.message : "Unknown parsing error"
-        }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      console.error("Raw content:", typeof content === 'string' ? content.substring(0, 500) : JSON.stringify(content));
+
+      // Enhanced fallback: try to extract any meal information from text
+      console.log("Attempting fallback meal extraction...");
+
+      try {
+        // Try to extract meal information from plain text
+        const fallbackMeals = extractMealsFromText(content);
+        mealPlanData = {
+          meals: fallbackMeals,
+          totalCalories: fallbackMeals.reduce((sum, meal) => sum + (meal.calories || 0), 0),
+          totalProtein: fallbackMeals.reduce((sum, meal) => sum + (meal.protein || 0), 0),
+          totalCarbs: fallbackMeals.reduce((sum, meal) => sum + (meal.carbs || 0), 0),
+          totalFats: fallbackMeals.reduce((sum, meal) => sum + (meal.fats || 0), 0),
+          note: "Extracted from text due to JSON parsing failure"
+        };
+        console.log("Fallback extraction successful, found", fallbackMeals.length, "meals");
+      } catch (fallbackError) {
+        console.error("Fallback extraction also failed:", fallbackError);
+
+        // Return error response that frontend can handle
+        return new Response(
+          JSON.stringify({
+            error: "Failed to parse meal plan from AI response. Please try again.",
+            details: e instanceof Error ? e.message : "Unknown parsing error"
+          }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // Server-side validation: recalculate each meal's calories and adjust last meal to match targets
+    if (mealPlanData.meals && Array.isArray(mealPlanData.meals) && mealPlanData.meals.length > 0) {
+      // Step 1: Recalculate each meal's calories from its macros
+      for (const meal of mealPlanData.meals) {
+        const p = meal.protein || 0;
+        const c = meal.carbs || 0;
+        const f = meal.fats || 0;
+        meal.calories = p * 4 + c * 4 + f * 9;
+      }
+
+      // Step 2: Sum actual totals
+      let totalP = mealPlanData.meals.reduce((s: number, m: any) => s + (m.protein || 0), 0);
+      let totalC = mealPlanData.meals.reduce((s: number, m: any) => s + (m.carbs || 0), 0);
+      let totalF = mealPlanData.meals.reduce((s: number, m: any) => s + (m.fats || 0), 0);
+      let totalCal = totalP * 4 + totalC * 4 + totalF * 9;
+
+      // Step 3: If off by more than tolerance, adjust the last meal
+      const calOff = Math.abs(totalCal - Math.round(dailyCalorieTarget));
+      const pOff = Math.abs(totalP - targetProtein);
+      const cOff = Math.abs(totalC - targetCarbs);
+      const fOff = Math.abs(totalF - targetFats);
+
+      if (calOff > 30 || pOff > 5 || cOff > 5 || fOff > 3) {
+        const lastMeal = mealPlanData.meals[mealPlanData.meals.length - 1];
+        lastMeal.protein = Math.max(0, (lastMeal.protein || 0) + (targetProtein - totalP));
+        lastMeal.carbs = Math.max(0, (lastMeal.carbs || 0) + (targetCarbs - totalC));
+        lastMeal.fats = Math.max(0, (lastMeal.fats || 0) + (targetFats - totalF));
+        lastMeal.calories = lastMeal.protein * 4 + lastMeal.carbs * 4 + lastMeal.fats * 9;
+      }
+
+      // Step 4: Recalculate totals from corrected meals
+      mealPlanData.totalProtein = mealPlanData.meals.reduce((s: number, m: any) => s + (m.protein || 0), 0);
+      mealPlanData.totalCarbs = mealPlanData.meals.reduce((s: number, m: any) => s + (m.carbs || 0), 0);
+      mealPlanData.totalFats = mealPlanData.meals.reduce((s: number, m: any) => s + (m.fats || 0), 0);
+      mealPlanData.totalCalories = mealPlanData.totalProtein * 4 + mealPlanData.totalCarbs * 4 + mealPlanData.totalFats * 9;
     }
 
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         mealPlan: mealPlanData,
         dailyCalorieTarget: Math.round(dailyCalorieTarget),
         safetyStatus: safetyIndicator,
         safetyMessage
       }),
-      { 
+      {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200
       }
     );
   } catch (error) {
     console.error("meal-planner error:", error);
+    console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
+
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      JSON.stringify({
+        error: error instanceof Error ? error.message : "Unknown error occurred",
+        details: "Minimax API integration error"
+      }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

@@ -15,7 +15,7 @@ serve(async (req) => {
     // Verify authentication
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), 
+      return new Response(JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -27,7 +27,7 @@ serve(async (req) => {
 
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Invalid token' }), 
+      return new Response(JSON.stringify({ error: 'Invalid token' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -47,59 +47,50 @@ serve(async (req) => {
     } : null;
 
     const { messages } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
 
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    if (!MINIMAX_API_KEY) {
+      throw new Error("MINIMAX_API_KEY is not configured");
     }
 
-    const systemPrompt = `You are the Weight Cut Wizard - a mystical coach who texts with fighters about their weight cut journey. Keep your messages casual, friendly, and conversational like you're texting a friend.
+    const systemPrompt = `Weight Cut Wizard - friendly coach for fighters. Keep messages casual, under 100 words.
 
-CRITICAL SAFETY RULES - NEVER VIOLATE:
-- REFUSE any request for >1kg per week weight loss
-- REFUSE extreme dehydration strategies (>3% body weight)
-- REFUSE diuretics, laxatives, or dangerous supplements
-- REFUSE starvation or severe calorie restriction
-- REFUSE cutting water more than 48 hours before weigh-in
-- REFUSE plastic suits without proper supervision
-
-ALWAYS RECOMMEND:
-- Safe fat loss: 0.5-1kg per week maximum
-- Training hydration: maintain >98% hydration status
-- Sodium: gradual reduction only in final 48h, never eliminate
-- Post weigh-in: 150% fluid replacement + 5-10g/kg carbs
+SAFETY RULES:
+- Max 1kg/week loss
+- No extreme dehydration (>3% body weight)  
+- No dangerous supplements/diuretics
 - Performance-first approach
 
-User Context:
-${userData ? `Current weight: ${userData.currentWeight}kg, Goal: ${userData.goalWeight}kg, Days to weigh-in: ${userData.daysToWeighIn}` : "No user data provided"}
+${userData ? `User: ${userData.currentWeight}kg → ${userData.goalWeight}kg, ${userData.daysToWeighIn} days left` : ""}
 
 Text Style: Keep it short (2-4 sentences max), friendly, and motivational. Use casual language like you're texting. Add some personality! If a request is unsafe, firmly but kindly decline and suggest safer alternatives.`;
 
-    console.log("Calling Lovable AI...");
+    // Get the latest user message
+    const userMessage = messages[messages.length - 1]?.content || "";
 
-    const response = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            { role: "system", content: systemPrompt },
-            ...messages
-          ],
-          stream: true,
-        }),
-      }
-    );
+    console.log("Calling Minimax API...");
+
+    const response = await fetch("https://api.minimax.io/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${MINIMAX_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "MiniMax-M2.5",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage }
+        ],
+        temperature: 0.7,
+        max_tokens: 300
+      })
+    });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("Lovable AI error:", response.status, errorText);
-      
+      const errorData = await response.json();
+      console.error("Minimax API error:", response.status, errorData);
+
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
@@ -107,28 +98,62 @@ Text Style: Keep it short (2-4 sentences max), friendly, and motivational. Use c
         );
       }
 
-      if (response.status === 402) {
+      if (response.status === 401) {
         return new Response(
-          JSON.stringify({ error: "Payment required. Please add credits to your Lovable AI workspace." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "Invalid API key." }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      
+
+      if (response.status === 403) {
+        return new Response(
+          JSON.stringify({ error: "API key invalid or quota exceeded." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       return new Response(
-        JSON.stringify({ error: `AI error: ${response.status}` }),
+        JSON.stringify({ error: `Minimax API error: ${errorData.error?.message || 'Unknown error'}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Return the stream directly
-    return new Response(response.body, {
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-      },
-    });
+    const data = await response.json();
+    console.log("Wizard chat Minimax response:", JSON.stringify(data, null, 2));
+
+    let generatedText = data.choices?.[0]?.message?.content;
+    // Strip <think> tags from Minimax response
+    if (generatedText) {
+      generatedText = generatedText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    }
+
+    if (!generatedText) {
+      console.error("No content found in wizard chat response");
+      const finishReason = data.choices?.[0]?.finish_reason;
+      if (finishReason === 'content_filter') {
+        generatedText = "I can't provide that specific advice for safety reasons. Let me help you with a safer approach to your weight cut goals.";
+      } else {
+        throw new Error("No response from Minimax API");
+      }
+    }
+
+    // Return the response as JSON (not streaming like Lovable)
+    return new Response(
+      JSON.stringify({
+        choices: [{
+          message: {
+            content: generatedText,
+            role: "assistant"
+          }
+        }]
+      }),
+      {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      }
+    );
   } catch (error) {
     console.error("wizard-chat error:", error);
     return new Response(

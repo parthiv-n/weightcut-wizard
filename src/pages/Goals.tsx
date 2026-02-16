@@ -60,7 +60,15 @@ export default function Goals() {
         .eq("id", user.id)
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error loading profile:", error);
+        toast({
+          title: "Error",
+          description: "Failed to load profile data",
+          variant: "destructive",
+        });
+        return;
+      }
 
       if (profile) {
         // Use centralized currentWeight if available, otherwise use profile weight
@@ -84,11 +92,12 @@ export default function Goals() {
           setUseAutoTarget(isAutoCalculated);
         }
       }
-    } catch (error: any) {
+    } catch (error) {
+      console.error("Unexpected error loading profile:", error);
       toast({
-        variant: "destructive",
         title: "Error",
-        description: error.message,
+        description: "An unexpected error occurred while loading profile",
+        variant: "destructive",
       });
     } finally {
       setLoading(false);

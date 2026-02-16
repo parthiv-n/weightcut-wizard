@@ -15,7 +15,7 @@ serve(async (req) => {
     // Verify authentication
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), 
+      return new Response(JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -27,12 +27,12 @@ serve(async (req) => {
 
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Invalid token' }), 
+      return new Response(JSON.stringify({ error: 'Invalid token' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const { mealDescription } = await req.json();
-    
+
     // Validate input length
     if (!mealDescription || typeof mealDescription !== 'string') {
       return new Response(
@@ -40,14 +40,14 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    
+
     if (mealDescription.length > 1000) {
       return new Response(
         JSON.stringify({ error: "Meal description too long (max 1000 characters)" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    
+
     if (!mealDescription) {
       return new Response(
         JSON.stringify({ error: "Meal description is required" }),
@@ -55,135 +55,113 @@ serve(async (req) => {
       );
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
+    if (!MINIMAX_API_KEY) {
+      throw new Error("MINIMAX_API_KEY is not configured");
     }
 
     console.log("Analyzing meal:", mealDescription);
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const systemPrompt = `Nutrition analysis expert. Analyze meals and return accurate nutrition data.
+
+Rules:
+- Use exact values if user provides calories/macros
+- Estimate only when not specified
+- Use USDA/nutrition databases
+- Realistic portion sizes
+
+Respond ONLY with JSON:
+{
+  "meal_name": "Clean meal name",
+  "calories": number,
+  "protein_g": number,
+  "carbs_g": number,
+  "fats_g": number,
+  "portion_size": "250g",
+  "ingredients": [{"name": "ingredient", "grams": number, "source": "USDA"}],
+  "data_source": "Primary source"
+}`;
+
+    const userPrompt = `Analyze this meal and provide nutritional information: "${mealDescription}"`;
+
+    const response = await fetch("https://api.minimax.io/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Authorization": `Bearer ${MINIMAX_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "MiniMax-M2.5",
         messages: [
-          {
-            role: "system",
-            content: `You are a nutrition analysis expert. Analyze meal descriptions and return accurate nutritional information.
-
-CRITICAL RULES:
-1. If the user explicitly mentions calorie amounts, protein, carbs, or fats - USE THOSE EXACT VALUES
-2. If the user says "500 calories" - the meal must be exactly 500 calories, not an estimate
-3. Only estimate nutritional values when the user doesn't provide specific numbers
-4. Always respect user-provided nutritional data over your own calculations
-5. Always indicate the data source for nutrition information (e.g., "USDA Food Database", "Nutrition Database", "Standard Nutrition Values", "Food Composition Database")
-6. Use authoritative sources like USDA, nutrition databases, or established food composition tables
-
-Be realistic and precise with portion sizes.`
-          },
-          {
-            role: "user",
-            content: `Analyze this meal and provide nutritional information: "${mealDescription}"`
-          }
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
         ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "analyze_meal",
-              description: "Return nutritional analysis for the meal",
-              parameters: {
-                type: "object",
-                properties: {
-                  meal_name: {
-                    type: "string",
-                    description: "Clean, properly formatted name of the meal"
-                  },
-                  calories: {
-                    type: "number",
-                    description: "Total calories in kcal"
-                  },
-                  protein_g: {
-                    type: "number",
-                    description: "Protein content in grams"
-                  },
-                  carbs_g: {
-                    type: "number",
-                    description: "Carbohydrate content in grams"
-                  },
-                  fats_g: {
-                    type: "number",
-                    description: "Fat content in grams"
-                  },
-                  portion_size: {
-                    type: "string",
-                    description: "Estimated portion size (e.g., '250g', '1 plate', '2 servings')"
-                  },
-                  ingredients: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        name: { type: "string" },
-                        grams: { type: "number" },
-                        source: { 
-                          type: "string",
-                          description: "Data source for nutrition information (e.g., 'USDA Food Database', 'Nutrition Database', 'Standard Nutrition Values')"
-                        }
-                      },
-                      required: ["name", "grams"]
-                    },
-                    description: "List of ingredients with weights in grams"
-                  },
-                  data_source: {
-                    type: "string",
-                    description: "Primary data source for the nutrition information (e.g., 'USDA Food Database', 'Nutrition Database', 'Standard Nutrition Values')"
-                  }
-                },
-                required: ["meal_name", "calories", "protein_g", "carbs_g", "fats_g", "portion_size", "ingredients", "data_source"],
-                additionalProperties: false
-              }
-            }
-          }
-        ],
-        tool_choice: { type: "function", function: { name: "analyze_meal" } }
-      }),
+        temperature: 0.1,
+        max_tokens: 512
+      })
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      
+      const errorData = await response.json();
+      console.error("Minimax API error:", response.status, errorData);
+
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      
-      if (response.status === 402) {
+
+      if (response.status === 401) {
         return new Response(
-          JSON.stringify({ error: "Payment required. Please add credits to your workspace." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "Invalid API key." }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      
-      throw new Error(`AI gateway error: ${response.status}`);
+
+      if (response.status === 403) {
+        return new Response(
+          JSON.stringify({ error: "API key invalid or quota exceeded." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      throw new Error(`OpenAI API error: ${errorData.error?.message || 'Unknown error'}`);
     }
 
     const data = await response.json();
-    console.log("AI response:", JSON.stringify(data));
+    console.log("Minimax response:", JSON.stringify(data));
 
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall) {
-      throw new Error("No tool call in AI response");
+    // Parse Minimax response
+    console.log("Minimax response structure:", JSON.stringify(data, null, 2));
+
+    let generatedText = data.choices?.[0]?.message?.content;
+    // Strip <think> tags from Minimax response
+    if (generatedText) {
+      generatedText = generatedText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
     }
 
-    const nutritionData = JSON.parse(toolCall.function.arguments);
+    if (!generatedText) {
+      console.error("No content found in Minimax response");
+      const finishReason = data.choices?.[0]?.finish_reason;
+      if (finishReason === 'content_filter') {
+        throw new Error("Content was filtered for safety. Please try a different meal description.");
+      }
+      throw new Error("No response from Minimax API");
+    }
+
+    // Parse JSON from Minimax response
+    let nutritionData;
+    try {
+      nutritionData = JSON.parse(generatedText);
+    } catch {
+      const jsonMatch = generatedText.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (jsonMatch) {
+        nutritionData = JSON.parse(jsonMatch[1].trim());
+      } else {
+        throw new Error("Could not parse nutrition data from AI response");
+      }
+    }
     console.log("Parsed nutrition data:", nutritionData);
 
     return new Response(
@@ -194,8 +172,8 @@ Be realistic and precise with portion sizes.`
   } catch (error) {
     console.error("Error in analyze-meal function:", error);
     return new Response(
-      JSON.stringify({ 
-        error: error instanceof Error ? error.message : "Unknown error occurred" 
+      JSON.stringify({
+        error: error instanceof Error ? error.message : "Unknown error occurred"
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
