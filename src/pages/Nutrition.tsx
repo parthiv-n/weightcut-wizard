@@ -57,7 +57,10 @@ export default function Nutrition() {
   const [meals, setMeals] = useState<Meal[]>([]);
   const [mealPlanIdeas, setMealPlanIdeas] = useState<Meal[]>([]);
   const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [loading, setLoading] = useState(false);
+  const [generatingPlan, setGeneratingPlan] = useState(false);
+  const [loggingMeal, setLoggingMeal] = useState<string | null>(null);
+  const [savingAllMeals, setSavingAllMeals] = useState(false);
+  const loading = generatingPlan || loggingMeal !== null || savingAllMeals;
   const [aiPrompt, setAiPrompt] = useState("");
   const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
   const [isManualDialogOpen, setIsManualDialogOpen] = useState(false);
@@ -178,7 +181,7 @@ export default function Nutrition() {
       }, (payload) => {
         const newData = payload.new as any;
         // Update profile with new data including manual_nutrition_override flag
-        setProfile({ ...profile, ...newData });
+        setProfile((prev: any) => prev ? { ...prev, ...newData } : newData);
         if (newData.ai_recommended_calories) {
           setAiMacroGoals({
             proteinGrams: newData.ai_recommended_protein_g || 0,
@@ -194,7 +197,7 @@ export default function Nutrition() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [profile]);
+  }, [profile?.id]);
 
   const loadProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -395,7 +398,7 @@ export default function Nutrition() {
       return;
     }
 
-    setLoading(true);
+    setGeneratingPlan(true);
     try {
       // Simple authentication check
       if (!isSessionValid) {
@@ -406,7 +409,7 @@ export default function Nutrition() {
             description: "Your session has expired. Please refresh the page and log in again.",
             variant: "destructive",
           });
-          setLoading(false);
+          setGeneratingPlan(false);
           return;
         }
       }
@@ -534,16 +537,16 @@ export default function Nutrition() {
         return;
       }
 
-      setMealPlanIdeas(ideasToStore);
+      setMealPlanIdeas(prev => [...prev, ...ideasToStore]);
       setDailyCalorieTarget(target || dailyCalorieTarget);
       setSafetyStatus(status || safetyStatus);
       setSafetyMessage(message || safetyMessage);
 
-      // Save to localStorage for persistence
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (currentUser) {
-        AIPersistence.save(currentUser.id, 'meal_plans', {
-          meals: ideasToStore,
+      // Save accumulated ideas to localStorage for persistence
+      const accumulatedIdeas = [...mealPlanIdeas, ...ideasToStore];
+      if (user) {
+        AIPersistence.save(user.id, 'meal_plans', {
+          meals: accumulatedIdeas,
           dailyCalorieTarget: target || dailyCalorieTarget,
           safetyStatus: status || safetyStatus,
           safetyMessage: message || safetyMessage,
@@ -553,7 +556,7 @@ export default function Nutrition() {
 
       toast({
         title: "Meal plan generated!",
-        description: `${ideasToStore.length} meal ideas created. You can save them individually or all at once.`,
+        description: `${ideasToStore.length} new ideas added (${accumulatedIdeas.length} total)`,
       });
 
       setIsAiDialogOpen(false);
@@ -598,12 +601,12 @@ export default function Nutrition() {
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+      setGeneratingPlan(false);
     }
   };
 
   const handleLogMealIdea = async (mealIdea: Meal) => {
-    setLoading(true);
+    setLoggingMeal(mealIdea.id);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
@@ -642,14 +645,14 @@ export default function Nutrition() {
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+      setLoggingMeal(null);
     }
   };
 
   const saveMealIdeasToDatabase = async (mealIdeas: Meal[]) => {
     if (mealIdeas.length === 0) return;
     
-    setLoading(true);
+    setSavingAllMeals(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
@@ -677,21 +680,15 @@ export default function Nutrition() {
 
       if (error) throw error;
 
-
       toast({
         title: "All meals saved!",
         description: `${mealIdeas.length} meals added to your day`,
       });
 
-      // Clear meal ideas after saving all
+      // Clear meal ideas after saving all + clear localStorage
       setMealPlanIdeas([]);
-      
-      // Clear from localStorage as well
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (currentUser) {
-        AIPersistence.remove(currentUser.id, 'meal_plans');
-      }
-      
+      AIPersistence.remove(user.id, 'meal_plans');
+
       // Reload meals to show the new entries
       await loadMeals();
     } catch (error: any) {
@@ -702,7 +699,17 @@ export default function Nutrition() {
         variant: "destructive",
       });
     } finally {
-      setLoading(false);
+      setSavingAllMeals(false);
+    }
+  };
+
+  const clearMealIdeas = async () => {
+    setMealPlanIdeas([]);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) AIPersistence.remove(user.id, 'meal_plans');
+    } catch (e) {
+      console.warn("Failed to clear persisted meal plans:", e);
     }
   };
 
@@ -819,7 +826,6 @@ export default function Nutrition() {
       return;
     }
 
-    setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
@@ -918,8 +924,6 @@ export default function Nutrition() {
         description: "Failed to add meal",
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -1446,8 +1450,8 @@ export default function Nutrition() {
           </div>
         </div>
         <div className="flex gap-2 flex-wrap w-full sm:w-auto justify-start sm:justify-end">
-          <BarcodeScanner onFoodScanned={handleBarcodeScanned} disabled={loading} />
-          <VoiceInput onTranscription={handleVoiceInput} disabled={loading || aiAnalyzing} />
+          <BarcodeScanner onFoodScanned={handleBarcodeScanned} disabled={generatingPlan || savingAllMeals} />
+          <VoiceInput onTranscription={handleVoiceInput} disabled={generatingPlan || savingAllMeals || aiAnalyzing} />
           <Dialog open={isAiDialogOpen} onOpenChange={setIsAiDialogOpen}>
             <DialogTrigger asChild>
               <Button className="whitespace-nowrap">
@@ -1474,9 +1478,9 @@ export default function Nutrition() {
                     rows={4}
                   />
                 </div>
-                <Button onClick={handleGenerateMealPlan} disabled={loading} className="w-full">
+                <Button onClick={handleGenerateMealPlan} disabled={generatingPlan} className="w-full">
                   <Sparkles className="mr-2 h-4 w-4" />
-                  {loading ? "Generating ideas..." : "Generate Meal Ideas"}
+                  {generatingPlan ? "Generating..." : "Generate Meal Ideas"}
                 </Button>
               </div>
             </DialogContent>
@@ -1730,8 +1734,8 @@ export default function Nutrition() {
                     />
                   </div>
                 </div>
-                <Button onClick={handleAddManualMeal} disabled={loading} className="w-full">
-                  {loading ? "Adding..." : "Add Meal"}
+                <Button onClick={handleAddManualMeal} disabled={savingAllMeals} className="w-full">
+                  {savingAllMeals ? "Adding..." : "Add Meal"}
                 </Button>
               </div>
             </DialogContent>
@@ -2804,15 +2808,15 @@ export default function Nutrition() {
                 <h3 className="text-lg font-semibold">Generated Meal Ideas</h3>
                 <div className="flex gap-2">
                   <Button 
-                    onClick={() => saveMealIdeasToDatabase(mealPlanIdeas)} 
-                    disabled={loading}
+                    onClick={() => saveMealIdeasToDatabase(mealPlanIdeas)}
+                    disabled={savingAllMeals || loggingMeal !== null}
                     variant="default"
                   >
                     <Plus className="mr-2 h-4 w-4" />
                     Save All Meals
                   </Button>
                   <Button 
-                    onClick={() => setMealPlanIdeas([])} 
+                    onClick={clearMealIdeas}
                     variant="outline"
                     size="sm"
                   >
@@ -2858,7 +2862,7 @@ export default function Nutrition() {
                         <p className="text-sm text-muted-foreground">{meal.recipe_notes}</p>
                       </div>
                     )}
-                    <Button onClick={() => handleLogMealIdea(meal)} disabled={loading} className="w-full">
+                    <Button onClick={() => handleLogMealIdea(meal)} disabled={loggingMeal === meal.id || savingAllMeals} className="w-full">
                       <Plus className="mr-2 h-4 w-4" />
                       Log This Meal
                     </Button>
