@@ -15,7 +15,7 @@ serve(async (req) => {
     // Verify authentication
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), 
+      return new Response(JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -27,15 +27,15 @@ serve(async (req) => {
 
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Invalid token' }), 
+      return new Response(JSON.stringify({ error: 'Invalid token' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const { hydrationData, profileData, recentLogs } = await req.json();
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
 
-    if (!OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY is not configured");
+    if (!MINIMAX_API_KEY) {
+      throw new Error("MINIMAX_API_KEY is not configured");
     }
 
     const systemPrompt = `You are the Weight Cut Wizard, a science-based mystical coach who prioritises fighter safety and performance. You NEVER encourage:
@@ -68,16 +68,16 @@ Provide a brief insight on their hydration status and one actionable recommendat
 
     const fullPrompt = `${systemPrompt}\n\nUser: ${userPrompt}`;
 
-    console.log("Calling OpenAI API for hydration insights...");
-    
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    console.log("Calling Minimax API for hydration insights...");
+
+    const response = await fetch("https://api.minimax.io/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${OPENAI_API_KEY}`,
+        "Authorization": `Bearer ${MINIMAX_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "MiniMax-M2.5",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
@@ -107,7 +107,7 @@ Provide a brief insight on their hydration status and one actionable recommendat
         );
       }
       const errorData = await response.json();
-      console.error("OpenAI API error:", response.status, errorData);
+      console.error("Minimax API error:", response.status, errorData);
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -115,17 +115,21 @@ Provide a brief insight on their hydration status and one actionable recommendat
     }
 
     const data = await response.json();
-    console.log("OpenAI hydration response:", JSON.stringify(data, null, 2));
-    
-    const insight = data.choices?.[0]?.message?.content;
+    console.log("Minimax hydration response:", JSON.stringify(data, null, 2));
+
+    let insight = data.choices?.[0]?.message?.content;
+    // Strip <think> tags from Minimax response
+    if (insight) {
+      insight = insight.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    }
 
     if (!insight) {
-      console.error("No content found in OpenAI response");
+      console.error("No content found in Minimax response");
       const finishReason = data.choices?.[0]?.finish_reason;
       if (finishReason === 'content_filter') {
         throw new Error("Content was filtered for safety. Please try a different request.");
       }
-      throw new Error("No response from OpenAI API");
+      throw new Error("No response from Minimax API");
     }
 
     return new Response(JSON.stringify({ insight }), {

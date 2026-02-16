@@ -15,7 +15,7 @@ serve(async (req) => {
     // Verify authentication
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), 
+      return new Response(JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -27,12 +27,12 @@ serve(async (req) => {
 
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Invalid token' }), 
+      return new Response(JSON.stringify({ error: 'Invalid token' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     const { mealDescription } = await req.json();
-    
+
     // Validate input length
     if (!mealDescription || typeof mealDescription !== 'string') {
       return new Response(
@@ -40,14 +40,14 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    
+
     if (mealDescription.length > 1000) {
       return new Response(
         JSON.stringify({ error: "Meal description too long (max 1000 characters)" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-    
+
     if (!mealDescription) {
       return new Response(
         JSON.stringify({ error: "Meal description is required" }),
@@ -55,9 +55,9 @@ serve(async (req) => {
       );
     }
 
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-    if (!OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY is not configured");
+    const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
+    if (!MINIMAX_API_KEY) {
+      throw new Error("MINIMAX_API_KEY is not configured");
     }
 
     console.log("Analyzing meal:", mealDescription);
@@ -84,71 +84,84 @@ Respond ONLY with JSON:
 
     const userPrompt = `Analyze this meal and provide nutritional information: "${mealDescription}"`;
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch("https://api.minimax.io/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${OPENAI_API_KEY}`,
+        "Authorization": `Bearer ${MINIMAX_API_KEY}`,
         "Content-Type": "application/json",
       },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt }
-          ],
-          temperature: 0.1,
-          max_tokens: 512,
-          response_format: { type: "json_object" }
-        })
+      body: JSON.stringify({
+        model: "MiniMax-M2.5",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.1,
+        max_tokens: 512
+      })
     });
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error("OpenAI API error:", response.status, errorData);
-      
+      console.error("Minimax API error:", response.status, errorData);
+
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      
+
       if (response.status === 401) {
         return new Response(
           JSON.stringify({ error: "Invalid API key." }),
           { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      
+
       if (response.status === 403) {
         return new Response(
           JSON.stringify({ error: "API key invalid or quota exceeded." }),
           { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      
+
       throw new Error(`OpenAI API error: ${errorData.error?.message || 'Unknown error'}`);
     }
 
     const data = await response.json();
-    console.log("OpenAI response:", JSON.stringify(data));
+    console.log("Minimax response:", JSON.stringify(data));
 
-    // Parse OpenAI response
-    console.log("OpenAI response structure:", JSON.stringify(data, null, 2));
-    
-    const generatedText = data.choices?.[0]?.message?.content;
-    
+    // Parse Minimax response
+    console.log("Minimax response structure:", JSON.stringify(data, null, 2));
+
+    let generatedText = data.choices?.[0]?.message?.content;
+    // Strip <think> tags from Minimax response
+    if (generatedText) {
+      generatedText = generatedText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    }
+
     if (!generatedText) {
-      console.error("No content found in OpenAI response");
+      console.error("No content found in Minimax response");
       const finishReason = data.choices?.[0]?.finish_reason;
       if (finishReason === 'content_filter') {
         throw new Error("Content was filtered for safety. Please try a different meal description.");
       }
-      throw new Error("No response from OpenAI API");
+      throw new Error("No response from Minimax API");
     }
 
-    // Parse JSON from OpenAI response (should be clean JSON due to response_format)
-    const nutritionData = JSON.parse(generatedText);
+    // Parse JSON from Minimax response
+    let nutritionData;
+    try {
+      nutritionData = JSON.parse(generatedText);
+    } catch {
+      const jsonMatch = generatedText.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (jsonMatch) {
+        nutritionData = JSON.parse(jsonMatch[1].trim());
+      } else {
+        throw new Error("Could not parse nutrition data from AI response");
+      }
+    }
     console.log("Parsed nutrition data:", nutritionData);
 
     return new Response(
@@ -159,8 +172,8 @@ Respond ONLY with JSON:
   } catch (error) {
     console.error("Error in analyze-meal function:", error);
     return new Response(
-      JSON.stringify({ 
-        error: error instanceof Error ? error.message : "Unknown error occurred" 
+      JSON.stringify({
+        error: error instanceof Error ? error.message : "Unknown error occurred"
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

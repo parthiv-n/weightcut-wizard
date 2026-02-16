@@ -15,7 +15,7 @@ serve(async (req) => {
     // Verify authentication
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), 
+      return new Response(JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -27,7 +27,7 @@ serve(async (req) => {
 
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Invalid token' }), 
+      return new Response(JSON.stringify({ error: 'Invalid token' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -47,10 +47,10 @@ serve(async (req) => {
     } : null;
 
     const { messages } = await req.json();
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
 
-    if (!OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY is not configured");
+    if (!MINIMAX_API_KEY) {
+      throw new Error("MINIMAX_API_KEY is not configured");
     }
 
     const systemPrompt = `Weight Cut Wizard - friendly coach for fighters. Keep messages casual, under 100 words.
@@ -68,29 +68,29 @@ Text Style: Keep it short (2-4 sentences max), friendly, and motivational. Use c
     // Get the latest user message
     const userMessage = messages[messages.length - 1]?.content || "";
 
-    console.log("Calling OpenAI API...");
+    console.log("Calling Minimax API...");
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${OPENAI_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userMessage }
-          ],
-          temperature: 0.7,
-          max_tokens: 300
-        })
+    const response = await fetch("https://api.minimax.io/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${MINIMAX_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "MiniMax-M2.5",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userMessage }
+        ],
+        temperature: 0.7,
+        max_tokens: 300
+      })
     });
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error("OpenAI API error:", response.status, errorData);
-      
+      console.error("Minimax API error:", response.status, errorData);
+
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
@@ -111,43 +111,47 @@ Text Style: Keep it short (2-4 sentences max), friendly, and motivational. Use c
           { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      
+
       return new Response(
-        JSON.stringify({ error: `OpenAI API error: ${errorData.error?.message || 'Unknown error'}` }),
+        JSON.stringify({ error: `Minimax API error: ${errorData.error?.message || 'Unknown error'}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const data = await response.json();
-    console.log("Wizard chat OpenAI response:", JSON.stringify(data, null, 2));
-    
+    console.log("Wizard chat Minimax response:", JSON.stringify(data, null, 2));
+
     let generatedText = data.choices?.[0]?.message?.content;
-    
+    // Strip <think> tags from Minimax response
+    if (generatedText) {
+      generatedText = generatedText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    }
+
     if (!generatedText) {
       console.error("No content found in wizard chat response");
       const finishReason = data.choices?.[0]?.finish_reason;
       if (finishReason === 'content_filter') {
         generatedText = "I can't provide that specific advice for safety reasons. Let me help you with a safer approach to your weight cut goals.";
       } else {
-        throw new Error("No response from OpenAI API");
+        throw new Error("No response from Minimax API");
       }
     }
 
     // Return the response as JSON (not streaming like Lovable)
     return new Response(
-      JSON.stringify({ 
-        choices: [{ 
-          message: { 
+      JSON.stringify({
+        choices: [{
+          message: {
             content: generatedText,
-            role: "assistant" 
-          } 
-        }] 
+            role: "assistant"
+          }
+        }]
       }),
       {
-      headers: {
-        ...corsHeaders,
+        headers: {
+          ...corsHeaders,
           "Content-Type": "application/json",
-      },
+        },
       }
     );
   } catch (error) {

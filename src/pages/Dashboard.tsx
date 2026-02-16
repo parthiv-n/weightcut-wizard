@@ -8,6 +8,7 @@ import { WeightProgressRing } from "@/components/dashboard/WeightProgressRing";
 import { CalorieProgressRing } from "@/components/dashboard/CalorieProgressRing";
 import { useUser } from "@/contexts/UserContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { Button } from "@/components/ui/button";
 import { calculateCalorieTarget } from "@/lib/calorieCalculation";
 
@@ -34,32 +35,48 @@ export default function Dashboard() {
 
       const today = new Date().toISOString().split('T')[0];
 
-      // Parallelize all database queries for faster loading with individual error handling
+      // Parallelize all database queries for faster loading with individual error handling and timeouts
       const results = await Promise.allSettled([
-        supabase
-          .from("profiles")
-          .select("*")
-          .eq("id", user.id)
-          .maybeSingle(),
+        withSupabaseTimeout(
+          supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", user.id)
+            .maybeSingle(),
+          8000,
+          "Profile query"
+        ),
         
-        supabase
-          .from("weight_logs")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("date", { ascending: true })
-          .limit(30),
+        withSupabaseTimeout(
+          supabase
+            .from("weight_logs")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("date", { ascending: true })
+            .limit(30),
+          8000,
+          "Weight logs query"
+        ),
         
-        supabase
-          .from("nutrition_logs")
-          .select("calories")
-          .eq("user_id", user.id)
-          .eq("date", today),
+        withSupabaseTimeout(
+          supabase
+            .from("nutrition_logs")
+            .select("calories")
+            .eq("user_id", user.id)
+            .eq("date", today),
+          8000,
+          "Nutrition logs query"
+        ),
         
-        supabase
-          .from("hydration_logs")
-          .select("amount_ml")
-          .eq("user_id", user.id)
-          .eq("date", today)
+        withSupabaseTimeout(
+          supabase
+            .from("hydration_logs")
+            .select("amount_ml")
+            .eq("user_id", user.id)
+            .eq("date", today),
+          8000,
+          "Hydration logs query"
+        )
       ]);
 
       // Handle each result individually to prevent one failure from breaking everything
