@@ -3,12 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { format, differenceInDays, addDays } from "date-fns";
-import { Calendar, Droplets, TrendingDown, AlertTriangle, CheckCircle, Activity, Sparkles, Trash2 } from "lucide-react";
+import { format, differenceInDays } from "date-fns";
+import { Calendar, Droplets, TrendingDown, AlertTriangle, CheckCircle, Activity, Sparkles, Trash2, ChevronDown, Timer } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,6 +15,7 @@ import wizardLogo from "@/assets/wizard-logo.png";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { useUser } from "@/contexts/UserContext";
 import { AIPersistence } from "@/lib/aiPersistence";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 
 interface FightWeekPlan {
   id: string;
@@ -54,18 +54,14 @@ export default function FightWeek() {
   const [logs, setLogs] = useState<DailyLog[]>([]);
   const [profile, setProfile] = useState<any>(null);
   const [currentWeight, setCurrentWeight] = useState<number>(0);
-  const [newPlan, setNewPlan] = useState({ fight_date: "", starting_weight_kg: "", target_weight_kg: "", is_waterloading: false });
-  const [selectedDate, setSelectedDate] = useState<string>("");
+  const [newPlan, setNewPlan] = useState({ fight_date: "", starting_weight_kg: "", target_weight_kg: "" });
   const [isWaterloading, setIsWaterloading] = useState(false);
-  const [dailyLog, setDailyLog] = useState<DailyLog>({
-    log_date: "",
-    weight_kg: undefined,
-    carbs_g: undefined,
-    fluid_intake_ml: undefined,
-    sweat_session_min: undefined,
-    supplements: "",
-    notes: ""
+  const [quickWeightLog, setQuickWeightLog] = useState({
+    log_date: format(new Date(), "yyyy-MM-dd"),
+    weight_kg: undefined as number | undefined,
   });
+  const [timeRemaining, setTimeRemaining] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+  const [settingsExpanded, setSettingsExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [analyzingWeight, setAnalyzingWeight] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
@@ -94,12 +90,39 @@ export default function FightWeek() {
     }
   };
 
-
   useEffect(() => {
     if (plan) {
       updateLocalCurrentWeight();
     }
   }, [logs, plan, contextCurrentWeight]);
+
+  // Countdown timer
+  useEffect(() => {
+    if (!plan) return;
+
+    const updateCountdown = () => {
+      const fightDate = new Date(plan.fight_date);
+      fightDate.setHours(23, 59, 59, 999);
+      const now = Date.now();
+      const diff = fightDate.getTime() - now;
+
+      if (diff <= 0) {
+        setTimeRemaining({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+        return;
+      }
+
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+      setTimeRemaining({ days, hours, minutes, seconds });
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [plan]);
 
   const fetchProfile = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -113,8 +136,7 @@ export default function FightWeek() {
 
     if (data) {
       setProfile(data);
-      
-      // Get the most recent weight from weight_logs
+
       const { data: latestWeightLog } = await supabase
         .from("weight_logs")
         .select("weight_kg")
@@ -122,11 +144,9 @@ export default function FightWeek() {
         .order("date", { ascending: false })
         .limit(1)
         .maybeSingle();
-      
-      // Use centralized currentWeight if available, otherwise use latest weight log or profile weight
+
       const currentWeightValue = contextCurrentWeight ?? latestWeightLog?.weight_kg ?? data.current_weight_kg ?? 0;
-      
-      // Pre-populate the form with latest weight data
+
       setNewPlan(prev => ({
         ...prev,
         starting_weight_kg: prev.starting_weight_kg || currentWeightValue.toString(),
@@ -137,16 +157,14 @@ export default function FightWeek() {
 
   const updateLocalCurrentWeight = async () => {
     if (!plan) return;
-    
-    // Check fight week logs first (most specific for fight week)
+
     const latestFightWeekLog = logs[logs.length - 1];
     let weight = latestFightWeekLog?.weight_kg;
-    
-    // If no fight week log with weight, use centralized currentWeight from context
+
     if (!weight) {
       weight = contextCurrentWeight ?? plan.starting_weight_kg;
     }
-    
+
     setCurrentWeight(weight);
   };
 
@@ -164,16 +182,15 @@ export default function FightWeek() {
 
     if (planData) {
       setPlan(planData);
-      
+
       const { data: logsData } = await supabase
         .from("fight_week_logs")
         .select("*")
         .eq("user_id", user.id)
         .order("log_date", { ascending: true });
-      
+
       setLogs(logsData || []);
-      
-      // Auto-analyze if there are logs with weight data
+
       if (logsData && logsData.some(log => log.weight_kg !== null)) {
         setTimeout(() => getAIAnalysis(), 500);
       }
@@ -185,8 +202,7 @@ export default function FightWeek() {
     if (!user) return;
 
     setLoading(true);
-    setIsWaterloading(newPlan.is_waterloading);
-    
+
     const { error } = await supabase.from("fight_week_plans").insert({
       user_id: user.id,
       fight_date: newPlan.fight_date,
@@ -199,25 +215,25 @@ export default function FightWeek() {
     } else {
       toast({ title: "Fight week plan created!", description: "Your countdown has started." });
       fetchPlanAndLogs();
-      setNewPlan({ fight_date: "", starting_weight_kg: "", target_weight_kg: "", is_waterloading: false });
+      setNewPlan({ fight_date: "", starting_weight_kg: "", target_weight_kg: "" });
     }
     setLoading(false);
   };
 
-  const saveDailyLog = async () => {
+  const saveQuickWeight = async () => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user || !dailyLog.log_date) return;
+    if (!user || !quickWeightLog.log_date || !quickWeightLog.weight_kg) return;
 
     setLoading(true);
     const logData = {
       user_id: user.id,
-      log_date: dailyLog.log_date,
-      weight_kg: dailyLog.weight_kg || null,
-      carbs_g: dailyLog.carbs_g || null,
-      fluid_intake_ml: dailyLog.fluid_intake_ml || null,
-      sweat_session_min: dailyLog.sweat_session_min || null,
-      supplements: dailyLog.supplements || null,
-      notes: dailyLog.notes || null
+      log_date: quickWeightLog.log_date,
+      weight_kg: quickWeightLog.weight_kg,
+      carbs_g: null,
+      fluid_intake_ml: null,
+      sweat_session_min: null,
+      supplements: null,
+      notes: null
     };
 
     const { error } = await supabase
@@ -228,36 +244,23 @@ export default function FightWeek() {
       toast({ title: "Error saving log", description: error.message, variant: "destructive" });
       setLoading(false);
     } else {
-      toast({ title: "Daily log saved!", description: "Your progress has been tracked." });
-      
-      // Update global current weight if weight was logged
-      if (dailyLog.weight_kg) {
-        // Update profile in database
-        await supabase
-          .from("profiles")
-          .update({ current_weight_kg: dailyLog.weight_kg })
-          .eq("id", user.id);
-        
-        // Update centralized current weight
-        await updateCurrentWeight(dailyLog.weight_kg);
-      }
-      
-      // First refresh the logs display
+      toast({ title: "Weight logged!", description: "Your progress has been tracked." });
+
+      await supabase
+        .from("profiles")
+        .update({ current_weight_kg: quickWeightLog.weight_kg })
+        .eq("id", user.id);
+
+      await updateCurrentWeight(quickWeightLog.weight_kg);
       await fetchPlanAndLogs();
-      
-      // Then trigger AI analysis with fresh data if weight was logged
-      if (dailyLog.weight_kg && plan) {
+
+      if (plan) {
         await getAIAnalysis();
       }
-      
-      setDailyLog({
-        log_date: "",
+
+      setQuickWeightLog({
+        log_date: format(new Date(), "yyyy-MM-dd"),
         weight_kg: undefined,
-        carbs_g: undefined,
-        fluid_intake_ml: undefined,
-        sweat_session_min: undefined,
-        supplements: "",
-        notes: ""
       });
       setLoading(false);
     }
@@ -267,8 +270,7 @@ export default function FightWeek() {
     if (!plan) return;
 
     setAnalyzingWeight(true);
-    
-    // Fetch fresh logs from database to ensure we have the latest weight
+
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       setAnalyzingWeight(false);
@@ -286,13 +288,9 @@ export default function FightWeek() {
       return;
     }
 
-    // Get the latest log entry (most recent date with weight)
     const logsWithWeight = freshLogs.filter(log => log.weight_kg !== null);
     const latestLog = logsWithWeight[logsWithWeight.length - 1];
     const currentWeight = latestLog?.weight_kg || plan.starting_weight_kg;
-
-    console.log("AI Analysis - Using current weight:", currentWeight, "from date:", latestLog?.log_date);
-    console.log("Water loading status:", isWaterloading);
 
     const { data, error } = await supabase.functions.invoke("fight-week-analysis", {
       body: {
@@ -309,13 +307,11 @@ export default function FightWeek() {
       console.error("AI analysis error:", error);
       toast({ title: "AI analysis unavailable", description: error.message, variant: "destructive" });
     } else if (data?.analysis) {
-      console.log("AI Analysis received:", data.analysis);
       setAiAnalysis(data.analysis);
-      
-      // Save to localStorage for persistence
+
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        AIPersistence.save(user.id, 'fight_week_analysis', data.analysis, 72); // 3 days expiration
+        AIPersistence.save(user.id, 'fight_week_analysis', data.analysis, 72);
       }
     }
     setAnalyzingWeight(false);
@@ -372,19 +368,18 @@ export default function FightWeek() {
   const getWeightCutBreakdown = () => {
     if (!plan || !currentWeight) return null;
     const totalWeightToCut = currentWeight - plan.target_weight_kg;
-    
-    // Scientific calculations
-    const glycogenWaterWeight = 2.0; // ~2kg from glycogen depletion + water
-    const safeDehydration = currentWeight * 0.03; // 3% max safe dehydration
+
+    const glycogenWaterWeight = 2.0;
+    const safeDehydration = currentWeight * 0.03;
     const maxSafeCut = glycogenWaterWeight + safeDehydration;
-    
+
     const isSafe = totalWeightToCut <= maxSafeCut;
     const percentBodyweight = (totalWeightToCut / currentWeight) * 100;
-    
+
     let status: "safe" | "warning" | "danger";
     let message: string;
     let wizardAdvice: string;
-    
+
     if (percentBodyweight <= 5) {
       status = "safe";
       message = "Safe and manageable weight cut";
@@ -396,9 +391,9 @@ export default function FightWeek() {
     } else {
       status = "danger";
       message = "DANGEROUS - Exceeds safe limits";
-      wizardAdvice = "⚠️ WARNING: This weight cut exceeds safe physiological limits and poses serious health risks including cognitive impairment, reduced performance, and potential medical complications. Strongly recommend reconsidering your target weight or fight timeline.";
+      wizardAdvice = "WARNING: This weight cut exceeds safe physiological limits and poses serious health risks including cognitive impairment, reduced performance, and potential medical complications. Strongly recommend reconsidering your target weight or fight timeline.";
     }
-    
+
     return {
       totalWeightToCut,
       glycogenWaterWeight,
@@ -442,7 +437,7 @@ export default function FightWeek() {
           <Calendar className="w-8 h-8 text-primary" />
           <h1 className="text-3xl font-title font-bold">Fight Week Schedule</h1>
         </div>
-        
+
         <Card>
           <CardHeader>
             <CardTitle>Create Your Fight Week Plan</CardTitle>
@@ -468,30 +463,14 @@ export default function FightWeek() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="target_weight">Fight Night Weigh-in Weight (kg)</Label>
+              <Label htmlFor="target_weight">Target Weigh-in Weight (kg)</Label>
               <Input
                 id="target_weight"
                 type="number"
                 step="0.1"
                 value={newPlan.target_weight_kg}
-                disabled
-                className="bg-muted"
+                onChange={(e) => setNewPlan({ ...newPlan, target_weight_kg: e.target.value })}
               />
-              <p className="text-xs text-muted-foreground">
-                Using your fight night target from Goals (competition weight)
-              </p>
-            </div>
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="waterloading"
-                checked={newPlan.is_waterloading}
-                onChange={(e) => setNewPlan({ ...newPlan, is_waterloading: e.target.checked })}
-                className="rounded"
-              />
-              <Label htmlFor="waterloading" className="cursor-pointer">
-                I will be water loading (increases safe cut capacity by 2-3kg)
-              </Label>
             </div>
             <Button onClick={createPlan} disabled={loading} className="w-full">
               {loading ? "Creating..." : "Start Fight Week"}
@@ -515,6 +494,88 @@ export default function FightWeek() {
           </div>
         </div>
       </div>
+
+      {/* Countdown Timer */}
+      <Card className="border-2 border-primary/30">
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-center gap-4">
+            <Timer className="h-6 w-6 text-primary" />
+            <div className="flex items-baseline gap-3 font-mono text-center">
+              <div className="flex flex-col items-center">
+                <span className="text-4xl font-bold">{timeRemaining.days}</span>
+                <span className="text-xs text-muted-foreground uppercase">days</span>
+              </div>
+              <span className="text-4xl font-bold text-muted-foreground">:</span>
+              <div className="flex flex-col items-center">
+                <span className="text-4xl font-bold">{String(timeRemaining.hours).padStart(2, "0")}</span>
+                <span className="text-xs text-muted-foreground uppercase">hrs</span>
+              </div>
+              <span className="text-4xl font-bold text-muted-foreground">:</span>
+              <div className="flex flex-col items-center">
+                <span className="text-4xl font-bold">{String(timeRemaining.minutes).padStart(2, "0")}</span>
+                <span className="text-xs text-muted-foreground uppercase">min</span>
+              </div>
+              <span className="text-4xl font-bold text-muted-foreground">:</span>
+              <div className="flex flex-col items-center">
+                <span className="text-4xl font-bold">{String(timeRemaining.seconds).padStart(2, "0")}</span>
+                <span className="text-xs text-muted-foreground uppercase">sec</span>
+              </div>
+            </div>
+            <Calendar className="h-6 w-6 text-primary" />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Advanced Protocol Settings */}
+      <Collapsible open={settingsExpanded} onOpenChange={setSettingsExpanded}>
+        <Card>
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium">Advanced Protocol Settings</CardTitle>
+                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${settingsExpanded ? "rotate-180" : ""}`} />
+              </div>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="space-y-4 pt-0">
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="waterload-toggle"
+                  checked={isWaterloading}
+                  onChange={(e) => {
+                    setIsWaterloading(e.target.checked);
+                    toast({
+                      title: e.target.checked ? "Water loading enabled" : "Water loading disabled",
+                      description: e.target.checked
+                        ? "This increases safe dehydration capacity by 2-3kg. Update AI analysis to reflect changes."
+                        : "Standard carb depletion + 3% dehydration protocol."
+                    });
+                  }}
+                  className="rounded"
+                />
+                <Label htmlFor="waterload-toggle" className="cursor-pointer">
+                  I am water loading (increases safe cut by 2-3kg)
+                </Label>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Water loading involves drinking increased amounts of water in the days before cutting to enhance natural diuresis. When enabled, this adjusts your AI analysis to account for the additional 2-3kg safe dehydration capacity.
+              </p>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="bg-muted/50 p-2 rounded">
+                  <p className="font-semibold">Days 7-3 before weigh-in:</p>
+                  <p className="text-muted-foreground">Drink 8-10L water daily</p>
+                </div>
+                <div className="bg-muted/50 p-2 rounded">
+                  <p className="font-semibold">Days 2-1 before weigh-in:</p>
+                  <p className="text-muted-foreground">Reduce to normal intake</p>
+                </div>
+              </div>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       {/* AI Analysis Loading State */}
       {analyzingWeight && (
@@ -571,7 +632,7 @@ export default function FightWeek() {
                     aiAnalysis.riskLevel === 'yellow' ? 'text-yellow-600 dark:text-yellow-400' :
                     'text-red-600 dark:text-red-400'
                   }`}>
-                    {aiAnalysis.riskLevel === 'green' ? 'SAFE' : 
+                    {aiAnalysis.riskLevel === 'green' ? 'SAFE' :
                      aiAnalysis.riskLevel === 'yellow' ? 'MODERATE RISK' : 'HIGH RISK'}
                   </span>
                   <span className="text-sm text-muted-foreground">
@@ -592,19 +653,9 @@ export default function FightWeek() {
                       Water Loading Protocol Active
                     </p>
                     <p className="text-muted-foreground">
-                      Water loading increases your safe dehydration capacity by 2-3kg through enhanced natural diuresis. 
+                      Water loading increases your safe dehydration capacity by 2-3kg through enhanced natural diuresis.
                       This allows for a larger total weight cut while maintaining safety margins.
                     </p>
-                    <div className="grid grid-cols-2 gap-2 mt-2 text-xs">
-                      <div className="bg-background/50 p-2 rounded">
-                        <p className="font-semibold">Days 7-3 before weigh-in:</p>
-                        <p className="text-muted-foreground">Drink 8-10L water daily</p>
-                      </div>
-                      <div className="bg-background/50 p-2 rounded">
-                        <p className="font-semibold">Days 2-1 before weigh-in:</p>
-                        <p className="text-muted-foreground">Reduce to normal intake</p>
-                      </div>
-                    </div>
                   </div>
                 </AlertDescription>
               </Alert>
@@ -615,21 +666,20 @@ export default function FightWeek() {
               <AlertTriangle className="h-4 w-4 text-orange-500" />
               <AlertDescription className="text-sm space-y-2">
                 <p className="font-semibold text-orange-600 dark:text-orange-400">
-                  ⚠️ Individual Response Variability
+                  Individual Response Variability
                 </p>
                 <p className="text-muted-foreground">
-                  Carb depletion estimates (typically 2-2.5kg) can vary significantly based on your individual physiology, 
-                  glycogen storage capacity, training status, and previous diet. If your weight doesn't drop as expected 
-                  from carb depletion alone, <strong>be prepared to increase dehydration</strong> to compensate - but stay 
+                  Carb depletion estimates (typically 2-2.5kg) can vary significantly based on your individual physiology,
+                  glycogen storage capacity, training status, and previous diet. If your weight doesn't drop as expected
+                  from carb depletion alone, <strong>be prepared to increase dehydration</strong> to compensate - but stay
                   within safe limits (max 3% bodyweight, or 5-6% if water loading).
                 </p>
                 <p className="text-muted-foreground">
-                  Monitor your daily weight closely and adjust your protocol early if you're falling behind schedule. 
+                  Monitor your daily weight closely and adjust your protocol early if you're falling behind schedule.
                   Don't wait until the last day to realize you need extra dehydration.
                 </p>
               </AlertDescription>
             </Alert>
-
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
@@ -655,7 +705,7 @@ export default function FightWeek() {
                   </div>
                 )}
               </div>
-              
+
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Progress Status:</span>
@@ -738,7 +788,7 @@ export default function FightWeek() {
       )}
 
       {/* Progress Overview */}
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Current Weight</CardTitle>
@@ -749,21 +799,6 @@ export default function FightWeek() {
             <Progress value={getWeightProgress()} className="mt-2" />
             <p className="text-xs text-muted-foreground mt-2">
               Target: {plan.target_weight_kg}kg
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Today's Hydration</CardTitle>
-            <Droplets className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              {logs.find(l => l.log_date === format(new Date(), "yyyy-MM-dd"))?.fluid_intake_ml || 0}ml
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              Recommended: 2000-3000ml/day
             </p>
           </CardContent>
         </Card>
@@ -826,7 +861,7 @@ export default function FightWeek() {
                 <Line type="monotone" dataKey="weight" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ cursor: "pointer", r: 5 }} activeDot={{ cursor: "pointer", r: 7 }} />
               </LineChart>
             </ResponsiveContainer>
-            
+
             {/* Fight Week Logs List */}
             <div className="mt-6 space-y-2">
               <h4 className="text-sm font-semibold text-muted-foreground">Fight Week Entries</h4>
@@ -839,11 +874,9 @@ export default function FightWeek() {
                     <div className="flex items-center gap-3 flex-1">
                       <div className="text-sm">
                         <p className="font-medium">{format(new Date(log.log_date), "MMM dd, yyyy")}</p>
-                        <div className="text-xs text-muted-foreground space-y-0.5">
-                          {log.weight_kg && <p>Weight: {log.weight_kg}kg</p>}
-                          {log.carbs_g && <p>Carbs: {log.carbs_g}g</p>}
-                          {log.fluid_intake_ml && <p>Fluids: {log.fluid_intake_ml}ml</p>}
-                        </div>
+                        {log.weight_kg && (
+                          <p className="text-xs text-muted-foreground">Weight: {log.weight_kg}kg</p>
+                        )}
                       </div>
                     </div>
                     <Button
@@ -862,11 +895,11 @@ export default function FightWeek() {
         </Card>
       )}
 
-      {/* Daily Log Entry */}
+      {/* Quick Weight Check-in */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Log Daily Progress</CardTitle>
+            <CardTitle>Quick Weight Check-in</CardTitle>
             <Activity className="h-5 w-5 text-muted-foreground" />
           </div>
         </CardHeader>
@@ -877,8 +910,8 @@ export default function FightWeek() {
               <Input
                 id="log_date"
                 type="date"
-                value={dailyLog.log_date}
-                onChange={(e) => setDailyLog({ ...dailyLog, log_date: e.target.value })}
+                value={quickWeightLog.log_date}
+                onChange={(e) => setQuickWeightLog({ ...quickWeightLog, log_date: e.target.value })}
               />
             </div>
             <div className="space-y-2">
@@ -887,95 +920,14 @@ export default function FightWeek() {
                 id="weight"
                 type="number"
                 step="0.1"
-                value={dailyLog.weight_kg || ""}
-                onChange={(e) => setDailyLog({ ...dailyLog, weight_kg: parseFloat(e.target.value) })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="carbs">Carbs (g)</Label>
-              <Input
-                id="carbs"
-                type="number"
-                value={dailyLog.carbs_g || ""}
-                onChange={(e) => setDailyLog({ ...dailyLog, carbs_g: parseFloat(e.target.value) })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="fluid">Fluid Intake (ml)</Label>
-              <Input
-                id="fluid"
-                type="number"
-                value={dailyLog.fluid_intake_ml || ""}
-                onChange={(e) => setDailyLog({ ...dailyLog, fluid_intake_ml: parseInt(e.target.value) })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="sweat">Sweat Session (min)</Label>
-              <Input
-                id="sweat"
-                type="number"
-                value={dailyLog.sweat_session_min || ""}
-                onChange={(e) => setDailyLog({ ...dailyLog, sweat_session_min: parseInt(e.target.value) })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="supplements">Supplements</Label>
-              <Input
-                id="supplements"
-                value={dailyLog.supplements || ""}
-                onChange={(e) => setDailyLog({ ...dailyLog, supplements: e.target.value })}
-                placeholder="Electrolytes, vitamins, etc."
+                value={quickWeightLog.weight_kg || ""}
+                onChange={(e) => setQuickWeightLog({ ...quickWeightLog, weight_kg: parseFloat(e.target.value) })}
               />
             </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="notes">Notes</Label>
-            <Textarea
-              id="notes"
-              value={dailyLog.notes || ""}
-              onChange={(e) => setDailyLog({ ...dailyLog, notes: e.target.value })}
-              placeholder="How are you feeling? Energy levels, hunger, training notes..."
-              rows={3}
-            />
-          </div>
-          <Button onClick={saveDailyLog} disabled={loading || !dailyLog.log_date} className="w-full">
-            {loading ? "Saving..." : "Save Daily Log"}
+          <Button onClick={saveQuickWeight} disabled={loading || !quickWeightLog.log_date || !quickWeightLog.weight_kg} className="w-full">
+            {loading ? "Saving..." : "Log Weight"}
           </Button>
-        </CardContent>
-      </Card>
-
-      {/* Waterload Protocol Toggle */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Water Loading Protocol</CardTitle>
-            <Droplets className="h-5 w-5 text-primary" />
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center space-x-2">
-            <input
-              type="checkbox"
-              id="waterload-toggle"
-              checked={isWaterloading}
-              onChange={(e) => {
-                setIsWaterloading(e.target.checked);
-                toast({ 
-                  title: e.target.checked ? "Water loading enabled" : "Water loading disabled",
-                  description: e.target.checked 
-                    ? "This increases safe dehydration capacity by 2-3kg. Update AI analysis to reflect changes." 
-                    : "Standard carb depletion + 3% dehydration protocol."
-                });
-              }}
-              className="rounded"
-            />
-            <Label htmlFor="waterload-toggle" className="cursor-pointer">
-              I am water loading (increases safe cut by 2-3kg)
-            </Label>
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Water loading involves drinking increased amounts of water in the days before cutting to enhance natural diuresis. When enabled, this adjusts your AI analysis to account for the additional 2-3kg safe dehydration capacity.
-          </p>
         </CardContent>
       </Card>
 
@@ -996,7 +948,7 @@ export default function FightWeek() {
           <p>• Stop immediately if experiencing: dizziness, extreme fatigue, confusion</p>
         </CardContent>
       </Card>
-      
+
       <DeleteConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
