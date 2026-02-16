@@ -10,7 +10,7 @@ const corsHeaders = {
 // Helper function to extract meals from plain text when JSON parsing fails
 function extractMealsFromText(text: string): any[] {
   const meals: any[] = [];
-  
+
   try {
     // Look for common meal patterns in text
     const mealPatterns = [
@@ -20,7 +20,7 @@ function extractMealsFromText(text: string): any[] {
       /snack[:\s]*([^\n]+)/gi,
       /meal\s*\d+[:\s]*([^\n]+)/gi
     ];
-    
+
     mealPatterns.forEach((pattern, index) => {
       const matches = text.matchAll(pattern);
       for (const match of matches) {
@@ -36,7 +36,7 @@ function extractMealsFromText(text: string): any[] {
         }
       }
     });
-    
+
     // If no meals found, create a basic fallback
     if (meals.length === 0) {
       meals.push({
@@ -48,12 +48,12 @@ function extractMealsFromText(text: string): any[] {
         type: "meal"
       });
     }
-    
+
   } catch (error) {
     console.error("Error in extractMealsFromText:", error);
     // Return empty array if extraction fails completely
   }
-  
+
   return meals;
 }
 
@@ -66,7 +66,7 @@ serve(async (req) => {
     // Verify authentication
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), 
+      return new Response(JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -78,14 +78,14 @@ serve(async (req) => {
 
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Invalid token' }), 
+      return new Response(JSON.stringify({ error: 'Invalid token' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     // Fetch user data from database instead of trusting client
     const { data: profile } = await supabaseClient
       .from('profiles')
-      .select('current_weight_kg, goal_weight_kg, tdee, target_date')
+      .select('current_weight_kg, goal_weight_kg, tdee, target_date, ai_recommended_calories, ai_recommended_protein_g, ai_recommended_carbs_g, ai_recommended_fats_g, manual_nutrition_override')
       .eq('id', user.id)
       .single();
 
@@ -116,16 +116,16 @@ serve(async (req) => {
     const goalWeight = profileUserData?.goalWeight || 65;
     const tdee = profileUserData?.tdee || 2000;
     const daysToGoal = profileUserData?.daysToWeighIn || 60;
-    
+
     const weeklyWeightLoss = ((currentWeight - goalWeight) / (daysToGoal / 7));
     const safeWeeklyLoss = Math.min(weeklyWeightLoss, 1); // Max 1kg/week
     const dailyDeficit = (safeWeeklyLoss * 7700) / 7; // 7700 cal = 1kg fat
-    const dailyCalorieTarget = Math.max(tdee - dailyDeficit, tdee * 0.8); // Minimum 80% of TDEE
-    
+    const defaultCalorieTarget = Math.max(tdee - dailyDeficit, tdee * 0.8); // Minimum 80% of TDEE
+
     const weeklyLossPercent = (weeklyWeightLoss / currentWeight) * 100;
     let safetyIndicator = "green";
     let safetyMessage = "Safe and sustainable weight loss pace";
-    
+
     if (weeklyLossPercent > 1.5 || weeklyWeightLoss > 1) {
       safetyIndicator = "red";
       safetyMessage = "⚠️ WARNING: Weight loss rate exceeds safe limits! Reduce calorie deficit.";
@@ -134,10 +134,49 @@ serve(async (req) => {
       safetyMessage = "⚠️ CAUTION: Approaching maximum safe weight loss rate";
     }
 
+    // Use user's custom goals when available, otherwise fall back to TDEE-based calculation
+    let dailyCalorieTarget: number;
+    let targetProtein: number;
+    let targetCarbs: number;
+    let targetFats: number;
+
+    if (profile?.manual_nutrition_override && profile?.ai_recommended_calories) {
+      dailyCalorieTarget = profile.ai_recommended_calories;
+      targetProtein = profile.ai_recommended_protein_g || Math.round(dailyCalorieTarget * 0.40 / 4);
+      targetCarbs = profile.ai_recommended_carbs_g || Math.round(dailyCalorieTarget * 0.30 / 4);
+      targetFats = profile.ai_recommended_fats_g || Math.round(dailyCalorieTarget * 0.30 / 9);
+    } else {
+      dailyCalorieTarget = defaultCalorieTarget;
+      targetProtein = Math.round((dailyCalorieTarget * 0.40) / 4);
+      targetCarbs = Math.round((dailyCalorieTarget * 0.30) / 4);
+      // Fats absorb rounding error
+      targetFats = Math.round((dailyCalorieTarget - targetProtein * 4 - targetCarbs * 4) / 9);
+    }
+
     const systemPrompt = `Nutrition AI for fighters. Create safe meal plans.
 
 Target: ${Math.round(dailyCalorieTarget)} cal/day (${currentWeight}kg→${goalWeight}kg, ${daysToGoal} days)
 Safety: ${safetyIndicator} - ${safetyMessage}
+
+MACRO TARGETS: ${targetProtein}g protein, ${targetCarbs}g carbs, ${targetFats}g fat
+
+CRITICAL MATH RULES - YOU MUST FOLLOW THESE EXACTLY:
+1. Each meal's calories MUST equal: (protein × 4) + (carbs × 4) + (fats × 9), within ±20 cal
+2. The sum of ALL meals' protein MUST equal totalProtein (±5g)
+3. The sum of ALL meals' carbs MUST equal totalCarbs (±5g)
+4. The sum of ALL meals' fats MUST equal totalFats (±3g)
+5. The sum of ALL meals' calories MUST equal totalCalories (±30 cal)
+6. totalCalories MUST equal ${Math.round(dailyCalorieTarget)} (±30 cal)
+7. totalProtein MUST equal ${targetProtein} (±5g)
+8. totalCarbs MUST equal ${targetCarbs} (±5g)
+9. totalFats MUST equal ${targetFats} (±3g)
+
+VERIFICATION STEP: Before responding, verify that:
+- Each meal: (protein × 4) + (carbs × 4) + (fats × 9) ≈ calories
+- Sum of all meal proteins ≈ totalProtein
+- Sum of all meal carbs ≈ totalCarbs
+- Sum of all meal fats ≈ totalFats
+- Sum of all meal calories ≈ totalCalories
 
 Respond ONLY with JSON:
 {
@@ -145,9 +184,9 @@ Respond ONLY with JSON:
     {
       "name": "Breakfast - Meal name",
       "calories": 400,
-      "protein": 30,
-      "carbs": 40,
-      "fats": 15,
+      "protein": 40,
+      "carbs": 30,
+      "fats": 12,
       "portion": "300g",
       "recipe": "Brief prep",
       "type": "breakfast",
@@ -155,9 +194,9 @@ Respond ONLY with JSON:
     }
   ],
   "totalCalories": ${Math.round(dailyCalorieTarget)},
-  "totalProtein": 120,
-  "totalCarbs": 200,
-  "totalFats": 60,
+  "totalProtein": ${targetProtein},
+  "totalCarbs": ${targetCarbs},
+  "totalFats": ${targetFats},
   "safetyStatus": "${safetyIndicator}",
   "safetyMessage": "${safetyMessage}",
   "tips": "Brief tips"
@@ -197,7 +236,7 @@ Rules: 3+ meals, specific ingredients with grams, no markdown, numbers not strin
       console.log("Minimax API response status:", response.status);
     } catch (fetchError) {
       clearTimeout(timeoutId);
-      
+
       if (fetchError instanceof Error && fetchError.name === 'AbortError') {
         console.error("Minimax API request timed out after 25 seconds");
         return new Response(
@@ -205,18 +244,18 @@ Rules: 3+ meals, specific ingredients with grams, no markdown, numbers not strin
           { status: 408, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      
+
       console.error("Minimax API fetch error:", fetchError);
       return new Response(
         JSON.stringify({ error: "Failed to connect to AI service" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+      );
     }
 
     if (!response.ok) {
       const errorData = await response.json();
       console.error("Minimax API error:", response.status, errorData);
-      
+
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
@@ -237,7 +276,7 @@ Rules: 3+ meals, specific ingredients with grams, no markdown, numbers not strin
           { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      
+
       return new Response(
         JSON.stringify({ error: `Minimax API error: ${errorData.error?.message || 'Unknown error'}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -246,13 +285,13 @@ Rules: 3+ meals, specific ingredients with grams, no markdown, numbers not strin
 
     const data = await response.json();
     console.log("Full Minimax response:", JSON.stringify(data, null, 2));
-    
+
     // Extract content from Minimax response and strip <think> tags
     let content = data.choices?.[0]?.message?.content;
     if (content) {
       content = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
     }
-    
+
     console.log("=== MINIMAX RESPONSE DEBUG ===");
     console.log("Raw Minimax content:", content);
     console.log("Content type:", typeof content);
@@ -266,12 +305,12 @@ Rules: 3+ meals, specific ingredients with grams, no markdown, numbers not strin
         console.error("Available fields in first choice:", Object.keys(data.choices[0]));
         console.error("First choice content:", data.choices[0]);
       }
-      
+
       // Check for specific finish reasons
       const finishReason = data.choices?.[0]?.finish_reason;
       if (finishReason) {
         console.error("Finish reason:", finishReason);
-        
+
         if (finishReason === 'content_filter') {
           return new Response(
             JSON.stringify({ error: "Content was filtered for safety. Please try a different prompt." }),
@@ -284,7 +323,7 @@ Rules: 3+ meals, specific ingredients with grams, no markdown, numbers not strin
           );
         }
       }
-      
+
       // Try fallback extraction from any available text
       console.log("🔄 Attempting fallback content extraction...");
       const fallbackMeals = extractMealsFromText(JSON.stringify(data));
@@ -298,21 +337,21 @@ Rules: 3+ meals, specific ingredients with grams, no markdown, numbers not strin
           totalFats: fallbackMeals.reduce((sum, meal) => sum + (meal.fats || 0), 0),
           note: "Generated from fallback extraction due to API response parsing issue"
         };
-        
+
         return new Response(
-          JSON.stringify({ 
+          JSON.stringify({
             mealPlan: mealPlanData,
             dailyCalorieTarget: Math.round(dailyCalorieTarget),
             safetyStatus: safetyIndicator,
             safetyMessage
           }),
-          { 
+          {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
             status: 200
           }
         );
       }
-      
+
       throw new Error("No content in Minimax API response and fallback extraction failed");
     }
 
@@ -321,7 +360,7 @@ Rules: 3+ meals, specific ingredients with grams, no markdown, numbers not strin
     try {
       console.log("=== JSON PARSING DEBUG ===");
       console.log("Parsing Minimax JSON response...");
-      
+
       // Extract JSON from potential markdown code blocks
       // Try direct JSON parse first, then try extracting from code blocks
       try {
@@ -334,17 +373,17 @@ Rules: 3+ meals, specific ingredients with grams, no markdown, numbers not strin
           throw new Error("Could not extract JSON from response");
         }
       }
-      
+
       console.log("Successfully parsed Minimax response");
       console.log("Meal plan structure:", Object.keys(mealPlanData));
       console.log("Number of meals:", mealPlanData.meals?.length || 0);
     } catch (e) {
       console.error("Failed to parse AI response as JSON:", e);
       console.error("Raw content:", typeof content === 'string' ? content.substring(0, 500) : JSON.stringify(content));
-      
+
       // Enhanced fallback: try to extract any meal information from text
       console.log("Attempting fallback meal extraction...");
-      
+
       try {
         // Try to extract meal information from plain text
         const fallbackMeals = extractMealsFromText(content);
@@ -359,40 +398,77 @@ Rules: 3+ meals, specific ingredients with grams, no markdown, numbers not strin
         console.log("Fallback extraction successful, found", fallbackMeals.length, "meals");
       } catch (fallbackError) {
         console.error("Fallback extraction also failed:", fallbackError);
-      
-      // Return error response that frontend can handle
-      return new Response(
-        JSON.stringify({ 
-          error: "Failed to parse meal plan from AI response. Please try again.",
-          details: e instanceof Error ? e.message : "Unknown parsing error"
-        }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+
+        // Return error response that frontend can handle
+        return new Response(
+          JSON.stringify({
+            error: "Failed to parse meal plan from AI response. Please try again.",
+            details: e instanceof Error ? e.message : "Unknown parsing error"
+          }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
     }
 
+    // Server-side validation: recalculate each meal's calories and adjust last meal to match targets
+    if (mealPlanData.meals && Array.isArray(mealPlanData.meals) && mealPlanData.meals.length > 0) {
+      // Step 1: Recalculate each meal's calories from its macros
+      for (const meal of mealPlanData.meals) {
+        const p = meal.protein || 0;
+        const c = meal.carbs || 0;
+        const f = meal.fats || 0;
+        meal.calories = p * 4 + c * 4 + f * 9;
+      }
+
+      // Step 2: Sum actual totals
+      let totalP = mealPlanData.meals.reduce((s: number, m: any) => s + (m.protein || 0), 0);
+      let totalC = mealPlanData.meals.reduce((s: number, m: any) => s + (m.carbs || 0), 0);
+      let totalF = mealPlanData.meals.reduce((s: number, m: any) => s + (m.fats || 0), 0);
+      let totalCal = totalP * 4 + totalC * 4 + totalF * 9;
+
+      // Step 3: If off by more than tolerance, adjust the last meal
+      const calOff = Math.abs(totalCal - Math.round(dailyCalorieTarget));
+      const pOff = Math.abs(totalP - targetProtein);
+      const cOff = Math.abs(totalC - targetCarbs);
+      const fOff = Math.abs(totalF - targetFats);
+
+      if (calOff > 30 || pOff > 5 || cOff > 5 || fOff > 3) {
+        const lastMeal = mealPlanData.meals[mealPlanData.meals.length - 1];
+        lastMeal.protein = Math.max(0, (lastMeal.protein || 0) + (targetProtein - totalP));
+        lastMeal.carbs = Math.max(0, (lastMeal.carbs || 0) + (targetCarbs - totalC));
+        lastMeal.fats = Math.max(0, (lastMeal.fats || 0) + (targetFats - totalF));
+        lastMeal.calories = lastMeal.protein * 4 + lastMeal.carbs * 4 + lastMeal.fats * 9;
+      }
+
+      // Step 4: Recalculate totals from corrected meals
+      mealPlanData.totalProtein = mealPlanData.meals.reduce((s: number, m: any) => s + (m.protein || 0), 0);
+      mealPlanData.totalCarbs = mealPlanData.meals.reduce((s: number, m: any) => s + (m.carbs || 0), 0);
+      mealPlanData.totalFats = mealPlanData.meals.reduce((s: number, m: any) => s + (m.fats || 0), 0);
+      mealPlanData.totalCalories = mealPlanData.totalProtein * 4 + mealPlanData.totalCarbs * 4 + mealPlanData.totalFats * 9;
+    }
+
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         mealPlan: mealPlanData,
         dailyCalorieTarget: Math.round(dailyCalorieTarget),
         safetyStatus: safetyIndicator,
         safetyMessage
       }),
-      { 
+      {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200
       }
     );
-    } catch (error) {
-      console.error("meal-planner error:", error);
-      console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
-      
-      return new Response(
-        JSON.stringify({ 
-          error: error instanceof Error ? error.message : "Unknown error occurred",
-          details: "Minimax API integration error"
-        }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+  } catch (error) {
+    console.error("meal-planner error:", error);
+    console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
+
+    return new Response(
+      JSON.stringify({
+        error: error instanceof Error ? error.message : "Unknown error occurred",
+        details: "Minimax API integration error"
+      }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
 });

@@ -451,14 +451,17 @@ export default function Nutrition() {
         mealPlan.meals.forEach((meal: any, idx: number) => {
           const mealType = meal.type || "meal";
           const timestamp = Date.now() + idx; // Ensure unique IDs
-          
+          const mealProtein = meal.protein || 0;
+          const mealCarbs = meal.carbs || 0;
+          const mealFats = meal.fats || 0;
+
           ideasToStore.push({
             id: `idea-${mealType}-${timestamp}`,
             meal_name: meal.name || `${mealType} meal`,
-            calories: meal.calories || 0,
-            protein_g: meal.protein || 0,
-            carbs_g: meal.carbs || 0,
-            fats_g: meal.fats || 0,
+            calories: mealProtein * 4 + mealCarbs * 4 + mealFats * 9,
+            protein_g: mealProtein,
+            carbs_g: mealCarbs,
+            fats_g: mealFats,
             meal_type: mealType as "breakfast" | "lunch" | "dinner" | "snack",
             portion_size: meal.portion || "1 serving",
             recipe_notes: meal.recipe || "",
@@ -475,13 +478,16 @@ export default function Nutrition() {
         mealTypes.forEach(mealType => {
           if (mealPlan[mealType]) {
             const meal = mealPlan[mealType];
+            const mp = meal.protein || 0;
+            const mc = meal.carbs || 0;
+            const mf = meal.fats || 0;
             ideasToStore.push({
               id: `idea-${mealType}-${Date.now()}`,
               meal_name: meal.name || `${mealType} meal`,
-              calories: meal.calories || 0,
-              protein_g: meal.protein || 0,
-              carbs_g: meal.carbs || 0,
-              fats_g: meal.fats || 0,
+              calories: mp * 4 + mc * 4 + mf * 9,
+              protein_g: mp,
+              carbs_g: mc,
+              fats_g: mf,
               meal_type: mealType as "breakfast" | "lunch" | "dinner",
               portion_size: meal.portion || "1 serving",
               recipe_notes: meal.recipe || "",
@@ -495,13 +501,16 @@ export default function Nutrition() {
         // Handle snacks array if present
         if (mealPlan.snacks && Array.isArray(mealPlan.snacks)) {
           mealPlan.snacks.forEach((snack: any, idx: number) => {
+            const sp = snack.protein || 0;
+            const sc = snack.carbs || 0;
+            const sf = snack.fats || 0;
             ideasToStore.push({
               id: `idea-snack-${idx}-${Date.now()}`,
               meal_name: snack.name || "Snack",
-              calories: snack.calories || 0,
-              protein_g: snack.protein || 0,
-              carbs_g: snack.carbs || 0,
-              fats_g: snack.fats || 0,
+              calories: sp * 4 + sc * 4 + sf * 9,
+              protein_g: sp,
+              carbs_g: sc,
+              fats_g: sf,
               meal_type: "snack",
               portion_size: snack.portion || "1 serving",
               recipe_notes: snack.recipe || "",
@@ -599,11 +608,14 @@ export default function Nutrition() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
+      // Recalculate calories from macros to ensure consistency
+      const consistentCalories = (mealIdea.protein_g || 0) * 4 + (mealIdea.carbs_g || 0) * 4 + (mealIdea.fats_g || 0) * 9;
+
       const { error } = await supabase.from("nutrition_logs").insert({
         user_id: user.id,
         date: selectedDate,
         meal_name: mealIdea.meal_name,
-        calories: mealIdea.calories,
+        calories: consistentCalories || mealIdea.calories,
         protein_g: mealIdea.protein_g,
         carbs_g: mealIdea.carbs_g,
         fats_g: mealIdea.fats_g,
@@ -642,12 +654,14 @@ export default function Nutrition() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      // Prepare meals for database insertion
-      const mealsToInsert = mealIdeas.map(meal => ({
+      // Prepare meals for database insertion (recalculate calories from macros for consistency)
+      const mealsToInsert = mealIdeas.map(meal => {
+        const recalcCal = (meal.protein_g || 0) * 4 + (meal.carbs_g || 0) * 4 + (meal.fats_g || 0) * 9;
+        return {
         user_id: user.id,
         date: selectedDate,
         meal_name: meal.meal_name,
-        calories: meal.calories,
+        calories: recalcCal || meal.calories,
         protein_g: meal.protein_g,
         carbs_g: meal.carbs_g,
         fats_g: meal.fats_g,
@@ -656,7 +670,8 @@ export default function Nutrition() {
         recipe_notes: meal.recipe_notes,
         ingredients: meal.ingredients as any, // Cast to Json type for Supabase
         is_ai_generated: true,
-      }));
+      };
+      });
 
       const { error } = await supabase.from("nutrition_logs").insert(mealsToInsert);
 
@@ -693,21 +708,71 @@ export default function Nutrition() {
 
   // Function to automatically calculate macros based on calories
   const calculateMacrosFromCalories = (calories: number) => {
-    // Standard macro distribution: 30% protein, 40% carbs, 30% fats
-    const proteinCalories = calories * 0.30;
-    const carbsCalories = calories * 0.40;
-    const fatsCalories = calories * 0.30;
-    
-    // Convert calories to grams (protein: 4 cal/g, carbs: 4 cal/g, fats: 9 cal/g)
-    const proteinGrams = Math.round(proteinCalories / 4);
-    const carbsGrams = Math.round(carbsCalories / 4);
-    const fatsGrams = Math.round(fatsCalories / 9);
-    
+    // Fighter macro distribution: 40% protein, 30% carbs, 30% fats
+    const proteinGrams = Math.round(calories * 0.40 / 4);
+    const carbsGrams = Math.round(calories * 0.30 / 4);
+    // Fats absorb rounding error so macros always sum to calorie target
+    const fatsGrams = Math.round((calories - proteinGrams * 4 - carbsGrams * 4) / 9);
+
     return {
       protein_g: proteinGrams.toString(),
       carbs_g: carbsGrams.toString(),
       fats_g: fatsGrams.toString()
     };
+  };
+
+  // Auto-adjust other macros when one is manually changed, to maintain calorie match
+  const adjustMacrosToMatchCalories = (
+    changedMacro: 'protein' | 'carbs' | 'fats',
+    newValue: number,
+    currentMacros: { protein: number; carbs: number; fats: number },
+    calorieGoal: number
+  ) => {
+    const MACRO_FLOOR = 10; // minimum grams per macro
+    const calPerGram = { protein: 4, carbs: 4, fats: 9 };
+
+    const changedCalories = newValue * calPerGram[changedMacro];
+    const remainingCalories = calorieGoal - changedCalories;
+
+    // Determine the other two macros
+    const others = (['protein', 'carbs', 'fats'] as const).filter(m => m !== changedMacro);
+    const [a, b] = others;
+
+    const currentA = currentMacros[a];
+    const currentB = currentMacros[b];
+    const currentOtherTotal = currentA + currentB;
+
+    let newA: number, newB: number;
+
+    if (currentOtherTotal > 0) {
+      // Distribute proportionally based on current ratio
+      const ratioA = currentA / currentOtherTotal;
+      newA = Math.round((remainingCalories * ratioA) / calPerGram[a]);
+      newB = Math.round((remainingCalories - newA * calPerGram[a]) / calPerGram[b]);
+    } else {
+      // Equal split if both are zero
+      newA = Math.round((remainingCalories / 2) / calPerGram[a]);
+      newB = Math.round((remainingCalories - newA * calPerGram[a]) / calPerGram[b]);
+    }
+
+    // Enforce minimum floor
+    if (newA < MACRO_FLOOR) {
+      newA = MACRO_FLOOR;
+      newB = Math.round((remainingCalories - newA * calPerGram[a]) / calPerGram[b]);
+    }
+    if (newB < MACRO_FLOOR) {
+      newB = MACRO_FLOOR;
+      newA = Math.round((remainingCalories - newB * calPerGram[b]) / calPerGram[a]);
+    }
+    // Final clamp
+    newA = Math.max(newA, MACRO_FLOOR);
+    newB = Math.max(newB, MACRO_FLOOR);
+
+    return {
+      [changedMacro]: newValue,
+      [a]: newA,
+      [b]: newB,
+    } as { protein: number; carbs: number; fats: number };
   };
 
   // Debounced macro calculation to prevent excessive recalculations during typing
@@ -2133,22 +2198,18 @@ export default function Nutrition() {
                     value={editingTargets.calories}
                     onChange={(e) => {
                       const calories = e.target.value;
-                      
-                      // Update calories immediately
-                      setEditingTargets({
-                        ...editingTargets,
+                      const calorieValue = parseInt(calories) || 0;
+                      const macros = calorieValue > 0 ? calculateMacrosFromCalories(calorieValue) : null;
+
+                      setEditingTargets(prev => ({
+                        ...prev,
                         calories,
-                      });
-                      
-                      // Debounce macro calculation
-                      debouncedMacroCalculation(calories, (macros) => {
-                        setEditingTargets(prev => ({
-                          ...prev,
+                        ...(macros ? {
                           protein: macros.protein_g,
                           carbs: macros.carbs_g,
-                          fats: macros.fats_g
-                        }));
-                      });
+                          fats: macros.fats_g,
+                        } : {}),
+                      }));
                     }}
                     min="1"
                     required
@@ -2161,10 +2222,28 @@ export default function Nutrition() {
                     <Input
                       id="edit-protein"
                       type="number"
-                      step="0.1"
+                      step="1"
                       placeholder="150"
                       value={editingTargets.protein}
-                      onChange={(e) => setEditingTargets({ ...editingTargets, protein: e.target.value })}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        const calGoal = parseFloat(editingTargets.calories) || 0;
+                        if (calGoal > 0) {
+                          const adjusted = adjustMacrosToMatchCalories('protein', val, {
+                            protein: parseFloat(editingTargets.protein) || 0,
+                            carbs: parseFloat(editingTargets.carbs) || 0,
+                            fats: parseFloat(editingTargets.fats) || 0,
+                          }, calGoal);
+                          setEditingTargets(prev => ({
+                            ...prev,
+                            protein: adjusted.protein.toString(),
+                            carbs: adjusted.carbs.toString(),
+                            fats: adjusted.fats.toString(),
+                          }));
+                        } else {
+                          setEditingTargets(prev => ({ ...prev, protein: e.target.value }));
+                        }
+                      }}
                       min="0"
                     />
                   </div>
@@ -2173,10 +2252,28 @@ export default function Nutrition() {
                     <Input
                       id="edit-carbs"
                       type="number"
-                      step="0.1"
+                      step="1"
                       placeholder="200"
                       value={editingTargets.carbs}
-                      onChange={(e) => setEditingTargets({ ...editingTargets, carbs: e.target.value })}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        const calGoal = parseFloat(editingTargets.calories) || 0;
+                        if (calGoal > 0) {
+                          const adjusted = adjustMacrosToMatchCalories('carbs', val, {
+                            protein: parseFloat(editingTargets.protein) || 0,
+                            carbs: parseFloat(editingTargets.carbs) || 0,
+                            fats: parseFloat(editingTargets.fats) || 0,
+                          }, calGoal);
+                          setEditingTargets(prev => ({
+                            ...prev,
+                            protein: adjusted.protein.toString(),
+                            carbs: adjusted.carbs.toString(),
+                            fats: adjusted.fats.toString(),
+                          }));
+                        } else {
+                          setEditingTargets(prev => ({ ...prev, carbs: e.target.value }));
+                        }
+                      }}
                       min="0"
                     />
                   </div>
@@ -2185,14 +2282,51 @@ export default function Nutrition() {
                     <Input
                       id="edit-fats"
                       type="number"
-                      step="0.1"
+                      step="1"
                       placeholder="65"
                       value={editingTargets.fats}
-                      onChange={(e) => setEditingTargets({ ...editingTargets, fats: e.target.value })}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        const calGoal = parseFloat(editingTargets.calories) || 0;
+                        if (calGoal > 0) {
+                          const adjusted = adjustMacrosToMatchCalories('fats', val, {
+                            protein: parseFloat(editingTargets.protein) || 0,
+                            carbs: parseFloat(editingTargets.carbs) || 0,
+                            fats: parseFloat(editingTargets.fats) || 0,
+                          }, calGoal);
+                          setEditingTargets(prev => ({
+                            ...prev,
+                            protein: adjusted.protein.toString(),
+                            carbs: adjusted.carbs.toString(),
+                            fats: adjusted.fats.toString(),
+                          }));
+                        } else {
+                          setEditingTargets(prev => ({ ...prev, fats: e.target.value }));
+                        }
+                      }}
                       min="0"
                     />
                   </div>
                 </div>
+                {/* Live macro-calorie summary */}
+                {(() => {
+                  const p = parseFloat(editingTargets.protein) || 0;
+                  const c = parseFloat(editingTargets.carbs) || 0;
+                  const f = parseFloat(editingTargets.fats) || 0;
+                  const calGoal = parseFloat(editingTargets.calories) || 0;
+                  const macroTotal = p * 4 + c * 4 + f * 9;
+                  const diff = Math.abs(macroTotal - calGoal);
+                  const totalMacroG = p + c + f;
+                  const pPct = totalMacroG > 0 ? Math.round((p / totalMacroG) * 100) : 0;
+                  const cPct = totalMacroG > 0 ? Math.round((c / totalMacroG) * 100) : 0;
+                  const fPct = totalMacroG > 0 ? 100 - pPct - cPct : 0;
+                  const color = calGoal === 0 ? 'text-muted-foreground' : diff <= 20 ? 'text-green-600' : diff <= 50 ? 'text-yellow-600' : 'text-red-600';
+                  return calGoal > 0 ? (
+                    <p className={`text-xs font-medium ${color}`}>
+                      Macro total: {Math.round(macroTotal)} / {Math.round(calGoal)} kcal &bull; {pPct}% P / {cPct}% C / {fPct}% F
+                    </p>
+                  ) : null;
+                })()}
                 <div className="flex gap-2 pt-2">
                   <Button
                     variant="outline"
@@ -2222,6 +2356,18 @@ export default function Nutrition() {
                           variant: "destructive",
                         });
                         return;
+                      }
+
+                      // Soft macro-calorie mismatch warning (does not block save)
+                      const macroCalories = (parseFloat(editingTargets.protein) || 0) * 4
+                        + (parseFloat(editingTargets.carbs) || 0) * 4
+                        + (parseFloat(editingTargets.fats) || 0) * 9;
+                      const macroDiff = Math.abs(macroCalories - calories);
+                      if (macroDiff > 50) {
+                        toast({
+                          title: "Macro-calorie mismatch",
+                          description: `Your macros add up to ${Math.round(macroCalories)} kcal, which is ${Math.round(macroDiff)} kcal ${macroCalories > calories ? 'over' : 'under'} your calorie goal. Saving anyway.`,
+                        });
                       }
 
                       try {
