@@ -24,6 +24,9 @@ import { calculateCalorieTarget as calculateCalorieTargetUtil } from "@/lib/calo
 import { useUser } from "@/contexts/UserContext";
 import { AIPersistence } from "@/lib/aiPersistence";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { optimisticUpdateManager, createNutritionTargetUpdate, createMealLogUpdate } from "@/lib/optimisticUpdates";
+import { useDebouncedCallback } from "@/hooks/useDebounce";
+import { nutritionCache, cacheHelpers } from "@/lib/nutritionCache";
 
 interface Ingredient {
   name: string;
@@ -197,6 +200,15 @@ export default function Nutrition() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
+    // Check cache first
+    const cachedProfile = nutritionCache.getProfile(user.id);
+    if (cachedProfile) {
+      setProfile(cachedProfile);
+      calculateCalorieTarget(cachedProfile);
+      return;
+    }
+
+    // Fetch from database if not cached
     const { data } = await supabase
       .from("profiles")
       .select("*")
@@ -206,6 +218,8 @@ export default function Nutrition() {
     if (data) {
       setProfile(data);
       calculateCalorieTarget(data);
+      // Cache the profile data
+      nutritionCache.setProfile(user.id, data);
     }
   };
 
@@ -278,6 +292,20 @@ export default function Nutrition() {
         return;
       }
 
+      // Check cache first
+      const cachedMacroGoals = nutritionCache.getMacroGoals(user.id);
+      if (cachedMacroGoals) {
+        setAiMacroGoals(cachedMacroGoals.macroGoals);
+        if (cachedMacroGoals.dailyCalorieTarget) {
+          setDailyCalorieTarget(cachedMacroGoals.dailyCalorieTarget);
+        }
+        if (cachedMacroGoals.profileUpdate && profile) {
+          setProfile({ ...profile, manual_nutrition_override: cachedMacroGoals.profileUpdate.manual_nutrition_override });
+        }
+        setFetchingMacroGoals(false);
+        return;
+      }
+
       // Fetch recommendations/overrides from profiles table
       const { data: profileData, error } = await supabase
         .from("profiles")
@@ -290,18 +318,27 @@ export default function Nutrition() {
         setAiMacroGoals(null);
       } else if (profileData?.ai_recommended_calories) {
         // Use values whether they're manual override or AI recommendations
-        setAiMacroGoals({
+        const macroGoals = {
           proteinGrams: profileData.ai_recommended_protein_g || 0,
           carbsGrams: profileData.ai_recommended_carbs_g || 0,
           fatsGrams: profileData.ai_recommended_fats_g || 0,
           recommendedCalories: profileData.ai_recommended_calories || 0,
-        });
+        };
+        
+        setAiMacroGoals(macroGoals);
         // Also update dailyCalorieTarget
         setDailyCalorieTarget(profileData.ai_recommended_calories);
         // Update profile to include manual_nutrition_override flag
         if (profile) {
           setProfile({ ...profile, manual_nutrition_override: profileData.manual_nutrition_override });
         }
+
+        // Cache the macro goals data
+        nutritionCache.setMacroGoals(user.id, {
+          macroGoals,
+          dailyCalorieTarget: profileData.ai_recommended_calories,
+          profileUpdate: { manual_nutrition_override: profileData.manual_nutrition_override }
+        });
       } else {
         // Fallback to calculated target if no recommendations or overrides
         setAiMacroGoals(null);
@@ -317,6 +354,13 @@ export default function Nutrition() {
   const loadMeals = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
+
+    // Check cache first
+    const cachedMeals = nutritionCache.getMeals(user.id, selectedDate);
+    if (cachedMeals) {
+      setMeals(cachedMeals);
+      return;
+    }
 
     const { data, error } = await supabase
       .from("nutrition_logs")
@@ -337,6 +381,8 @@ export default function Nutrition() {
     }));
 
     setMeals(typedMeals as Meal[]);
+    // Cache the meals data
+    nutritionCache.setMeals(user.id, selectedDate, typedMeals as Meal[]);
   };
 
   const handleGenerateMealPlan = async () => {
@@ -645,6 +691,47 @@ export default function Nutrition() {
     }
   };
 
+  // Function to automatically calculate macros based on calories
+  const calculateMacrosFromCalories = (calories: number) => {
+    // Standard macro distribution: 30% protein, 40% carbs, 30% fats
+    const proteinCalories = calories * 0.30;
+    const carbsCalories = calories * 0.40;
+    const fatsCalories = calories * 0.30;
+    
+    // Convert calories to grams (protein: 4 cal/g, carbs: 4 cal/g, fats: 9 cal/g)
+    const proteinGrams = Math.round(proteinCalories / 4);
+    const carbsGrams = Math.round(carbsCalories / 4);
+    const fatsGrams = Math.round(fatsCalories / 9);
+    
+    return {
+      protein_g: proteinGrams.toString(),
+      carbs_g: carbsGrams.toString(),
+      fats_g: fatsGrams.toString()
+    };
+  };
+
+  // Debounced macro calculation to prevent excessive recalculations during typing
+  const debouncedMacroCalculation = useDebouncedCallback((calories: string, updateFunction: (meal: any) => void) => {
+    const calorieValue = parseInt(calories) || 0;
+    const macros = calculateMacrosFromCalories(calorieValue);
+    
+    updateFunction((prev: any) => ({
+      ...prev,
+      ...macros
+    }));
+  }, 300); // 300ms debounce delay
+
+  const handleCalorieChange = (calories: string, updateFunction: (meal: any) => void) => {
+    // Update calories immediately for responsive UI
+    updateFunction((prev: any) => ({
+      ...prev,
+      calories,
+    }));
+    
+    // Debounce the macro calculation
+    debouncedMacroCalculation(calories, updateFunction);
+  };
+
   const handleAddManualMeal = async () => {
     // Validate input
     const validationResult = nutritionLogSchema.safeParse({
@@ -672,7 +759,9 @@ export default function Nutrition() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      const { error } = await supabase.from("nutrition_logs").insert({
+      // Create optimistic meal data
+      const optimisticMeal = {
+        id: `temp-${Date.now()}`, // Temporary ID for optimistic update
         user_id: user.id,
         date: selectedDate,
         meal_name: manualMeal.meal_name,
@@ -685,11 +774,13 @@ export default function Nutrition() {
         recipe_notes: manualMeal.recipe_notes || null,
         ingredients: manualMeal.ingredients.length > 0 ? manualMeal.ingredients : null,
         is_ai_generated: false,
-      } as any);
+        created_at: new Date().toISOString(),
+      };
 
-      if (error) throw error;
-
-      toast({ title: "Meal added successfully" });
+      // Add meal to UI immediately
+      setMeals(prevMeals => [...prevMeals, optimisticMeal]);
+      
+      // Close dialog and reset form immediately
       setIsManualDialogOpen(false);
       setManualMeal({
         meal_name: "",
@@ -704,9 +795,59 @@ export default function Nutrition() {
       });
       setAiMealDescription("");
       setNewIngredient({ name: "", grams: "" });
-      loadMeals();
+
+      // Show immediate success feedback
+      toast({ title: "Meal added successfully" });
+
+      // Create the database insert operation
+      const insertOperation = async () => {
+        const { error } = await supabase.from("nutrition_logs").insert({
+          user_id: user.id,
+          date: selectedDate,
+          meal_name: manualMeal.meal_name,
+          calories: parseInt(manualMeal.calories),
+          protein_g: manualMeal.protein_g ? parseFloat(manualMeal.protein_g) : null,
+          carbs_g: manualMeal.carbs_g ? parseFloat(manualMeal.carbs_g) : null,
+          fats_g: manualMeal.fats_g ? parseFloat(manualMeal.fats_g) : null,
+          meal_type: manualMeal.meal_type,
+          portion_size: manualMeal.portion_size || null,
+          recipe_notes: manualMeal.recipe_notes || null,
+          ingredients: manualMeal.ingredients.length > 0 ? manualMeal.ingredients : null,
+          is_ai_generated: false,
+        } as any);
+
+        if (error) throw error;
+      };
+
+      // Execute optimistic update
+      const update = createMealLogUpdate(
+        optimisticMeal.id,
+        optimisticMeal,
+        insertOperation
+      );
+
+      update.onSuccess = () => {
+        // Invalidate cache and reload meals to get the real data with proper ID
+        nutritionCache.invalidateNutritionData(user.id, selectedDate);
+        loadMeals();
+      };
+
+      update.onError = (error: any) => {
+        // Remove the optimistic meal on error
+        setMeals(prevMeals => prevMeals.filter(meal => meal.id !== optimisticMeal.id));
+        console.error("Error adding meal:", error);
+        toast({
+          title: "Error",
+          description: "Failed to add meal. Please try again.",
+          variant: "destructive",
+        });
+      };
+
+      // Execute the background update
+      await optimisticUpdateManager.executeOptimisticUpdate(update);
+
     } catch (error) {
-      console.error("Error adding meal:", error);
+      console.error("Error in optimistic meal update setup:", error);
       toast({
         title: "Error",
         description: "Failed to add meal",
@@ -1556,8 +1697,11 @@ export default function Nutrition() {
                       type="number"
                       placeholder="400"
                       value={manualMeal.calories}
-                      onChange={(e) => setManualMeal({ ...manualMeal, calories: e.target.value })}
+                      onChange={(e) => handleCalorieChange(e.target.value, setManualMeal)}
                     />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Macros will be automatically calculated (30% protein, 40% carbs, 30% fats)
+                    </p>
                   </div>
                   <div>
                     <Label htmlFor="manual-protein" className="flex items-center gap-2">
@@ -1872,11 +2016,29 @@ export default function Nutrition() {
                     type="number"
                     placeholder="165"
                     value={manualNutritionDialog.calories_per_100g}
-                    onChange={(e) => setManualNutritionDialog({
-                      ...manualNutritionDialog,
-                      calories_per_100g: e.target.value
-                    })}
+                    onChange={(e) => {
+                      const calories = e.target.value;
+                      
+                      // Update calories immediately
+                      setManualNutritionDialog({
+                        ...manualNutritionDialog,
+                        calories_per_100g: calories,
+                      });
+                      
+                      // Debounce macro calculation
+                      debouncedMacroCalculation(calories, (macros) => {
+                        setManualNutritionDialog(prev => ({
+                          ...prev,
+                          protein_per_100g: macros.protein_g,
+                          carbs_per_100g: macros.carbs_g,
+                          fats_per_100g: macros.fats_g
+                        }));
+                      });
+                    }}
                   />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Macros will be automatically calculated based on calories
+                  </p>
                 </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div>
@@ -1969,11 +2131,29 @@ export default function Nutrition() {
                     type="number"
                     placeholder="2000"
                     value={editingTargets.calories}
-                    onChange={(e) => setEditingTargets({ ...editingTargets, calories: e.target.value })}
+                    onChange={(e) => {
+                      const calories = e.target.value;
+                      
+                      // Update calories immediately
+                      setEditingTargets({
+                        ...editingTargets,
+                        calories,
+                      });
+                      
+                      // Debounce macro calculation
+                      debouncedMacroCalculation(calories, (macros) => {
+                        setEditingTargets(prev => ({
+                          ...prev,
+                          protein: macros.protein_g,
+                          carbs: macros.carbs_g,
+                          fats: macros.fats_g
+                        }));
+                      });
+                    }}
                     min="1"
                     required
                   />
-                  <p className="text-xs text-muted-foreground mt-1">Recommended: 1200-4000 kcal/day</p>
+                  <p className="text-xs text-muted-foreground mt-1">Macro targets will be automatically calculated (Recommended: 1200-4000 kcal/day)</p>
         </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div>
@@ -2048,70 +2228,115 @@ export default function Nutrition() {
                         const { data: { user } } = await supabase.auth.getUser();
                         if (!user) throw new Error("Not authenticated");
 
-                        // Build update data object with explicit typing
-                        const updateData: {
-                          manual_nutrition_override: boolean;
-                          ai_recommended_calories: number;
-                          ai_recommended_protein_g?: number;
-                          ai_recommended_carbs_g?: number;
-                          ai_recommended_fats_g?: number;
-                        } = {
+                        // Store original profile data for rollback
+                        const originalProfile = { ...profile };
+
+                        // Create optimistic update data
+                        const optimisticProfile = {
+                          ...profile,
                           manual_nutrition_override: true,
                           ai_recommended_calories: Math.round(calories),
+                          ai_recommended_protein_g: editingTargets.protein ? parseFloat(editingTargets.protein) : profile?.ai_recommended_protein_g,
+                          ai_recommended_carbs_g: editingTargets.carbs ? parseFloat(editingTargets.carbs) : profile?.ai_recommended_carbs_g,
+                          ai_recommended_fats_g: editingTargets.fats ? parseFloat(editingTargets.fats) : profile?.ai_recommended_fats_g,
                         };
 
-                        // Only update macros if provided
-                        if (editingTargets.protein) {
-                          const protein = parseFloat(editingTargets.protein);
-                          if (!isNaN(protein) && protein >= 0) {
-                            updateData.ai_recommended_protein_g = protein;
-                          }
-                        }
-                        if (editingTargets.carbs) {
-                          const carbs = parseFloat(editingTargets.carbs);
-                          if (!isNaN(carbs) && carbs >= 0) {
-                            updateData.ai_recommended_carbs_g = carbs;
-                          }
-                        }
-                        if (editingTargets.fats) {
-                          const fats = parseFloat(editingTargets.fats);
-                          if (!isNaN(fats) && fats >= 0) {
-                            updateData.ai_recommended_fats_g = fats;
-                          }
-                        }
-
-                        const { error } = await supabase
-                          .from("profiles")
-                          .update(updateData)
-                          .eq("id", user.id);
-
-                        if (error) {
-                          console.error("Supabase update error:", error);
-                          // Provide more helpful error message for schema issues
-                          if (error.code === "PGRST204") {
-                            throw new Error(
-                              "Database schema is missing required columns. Please run the migration: " +
-                              "20251122230028_add_ai_nutrition_targets.sql and " +
-                              "20251124213104_add_manual_nutrition_override.sql in your Supabase SQL Editor."
-                            );
-                          }
-                          throw error;
-                        }
-
+                        // Apply optimistic update immediately
+                        setProfile(optimisticProfile);
+                        setIsEditTargetsDialogOpen(false);
+                        
+                        // Show immediate success feedback
                         toast({
                           title: "Targets updated!",
                           description: "Your daily nutrition targets have been set.",
                         });
 
-                        setIsEditTargetsDialogOpen(false);
+                        // Create the database update operation
+                        const updateOperation = async () => {
+                          // Build update data object with explicit typing
+                          const updateData: {
+                            manual_nutrition_override: boolean;
+                            ai_recommended_calories: number;
+                            ai_recommended_protein_g?: number;
+                            ai_recommended_carbs_g?: number;
+                            ai_recommended_fats_g?: number;
+                          } = {
+                            manual_nutrition_override: true,
+                            ai_recommended_calories: Math.round(calories),
+                          };
+
+                          // Only update macros if provided
+                          if (editingTargets.protein) {
+                            const protein = parseFloat(editingTargets.protein);
+                            if (!isNaN(protein) && protein >= 0) {
+                              updateData.ai_recommended_protein_g = protein;
+                            }
+                          }
+                          if (editingTargets.carbs) {
+                            const carbs = parseFloat(editingTargets.carbs);
+                            if (!isNaN(carbs) && carbs >= 0) {
+                              updateData.ai_recommended_carbs_g = carbs;
+                            }
+                          }
+                          if (editingTargets.fats) {
+                            const fats = parseFloat(editingTargets.fats);
+                            if (!isNaN(fats) && fats >= 0) {
+                              updateData.ai_recommended_fats_g = fats;
+                            }
+                          }
+
+                          const { error } = await supabase
+                            .from("profiles")
+                            .update(updateData)
+                            .eq("id", user.id);
+
+                          if (error) {
+                            console.error("Supabase update error:", error);
+                            // Provide more helpful error message for schema issues
+                            if (error.code === "PGRST204") {
+                              throw new Error(
+                                "Database schema is missing required columns. Please run the migration: " +
+                                "20251122230028_add_ai_nutrition_targets.sql and " +
+                                "20251124213104_add_manual_nutrition_override.sql in your Supabase SQL Editor."
+                              );
+                            }
+                            throw error;
+                          }
+                        };
+
+                        // Execute optimistic update
+                        const update = createNutritionTargetUpdate(
+                          user.id,
+                          optimisticProfile,
+                          originalProfile,
+                          updateOperation
+                        );
+
+                        update.onError = (error: any, rollbackData: any) => {
+                          // Rollback on error
+                          setProfile(rollbackData);
+                          console.error("Error updating targets:", error);
+                          toast({
+                            title: "Error",
+                            description: error.message || "Failed to update nutrition targets. Changes have been reverted.",
+                            variant: "destructive",
+                          });
+                        };
+
+                        // Execute the background update
+                        const success = await optimisticUpdateManager.executeOptimisticUpdate(update);
                         
-                        // Reload profile to refresh data
-                        await loadProfile();
+                        if (success) {
+                          // Invalidate related caches on successful update
+                          nutritionCache.remove(user.id, 'profile');
+                          nutritionCache.remove(user.id, 'macroGoals');
+                        }
+
                       } catch (error: any) {
-                        console.error("Error updating targets:", error);
+                        console.error("Error in optimistic update setup:", error);
                         toast({
                           title: "Error",
-                          description: error.message || "Failed to update targets",
+                          description: error.message || "Failed to update nutrition targets",
                           variant: "destructive",
                         });
                       }

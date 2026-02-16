@@ -15,7 +15,7 @@ serve(async (req) => {
     // Verify authentication
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Unauthorized' }), 
+      return new Response(JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -27,13 +27,13 @@ serve(async (req) => {
 
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
     if (userError || !user) {
-      return new Response(JSON.stringify({ error: 'Invalid token' }), 
+      return new Response(JSON.stringify({ error: 'Invalid token' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const { 
-      currentWeight, 
-      goalWeight, 
+    const {
+      currentWeight,
+      goalWeight,
       targetDate,
       activityLevel,
       age,
@@ -43,11 +43,11 @@ serve(async (req) => {
       weighInDayWeight,
       bypassSafety = false
     } = await req.json();
-    
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
-    if (!OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY is not configured");
+    const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
+
+    if (!MINIMAX_API_KEY) {
+      throw new Error("MINIMAX_API_KEY is not configured");
     }
 
     // Fetch weight history for pattern analysis
@@ -68,15 +68,15 @@ serve(async (req) => {
     const calculatePatterns = (history: any[]) => {
       if (!history || history.length < 2) return null;
 
-      const sorted = [...history].sort((a, b) => 
+      const sorted = [...history].sort((a, b) =>
         new Date(a.date).getTime() - new Date(b.date).getTime()
       );
 
       // Calculate average weekly loss rate
       const firstWeight = parseFloat(sorted[0].weight_kg);
       const lastWeight = parseFloat(sorted[sorted.length - 1].weight_kg);
-      const daysDiff = (new Date(sorted[sorted.length - 1].date).getTime() - 
-                       new Date(sorted[0].date).getTime()) / (1000 * 60 * 60 * 24);
+      const daysDiff = (new Date(sorted[sorted.length - 1].date).getTime() -
+        new Date(sorted[0].date).getTime()) / (1000 * 60 * 60 * 24);
       const weeksDiff = daysDiff / 7;
       const avgWeeklyLoss = weeksDiff > 0 ? (firstWeight - lastWeight) / weeksDiff : 0;
 
@@ -118,18 +118,18 @@ serve(async (req) => {
     const target = new Date(targetDate);
     const daysRemaining = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     const weeksRemaining = Math.max(1, daysRemaining / 7); // Prevent division by zero
-    
+
     // Calculate weight difference: positive if need to gain, negative if need to lose
     const weightDifference = goalWeight - currentWeight;
-    
+
     // Detect maintenance mode: when current weight is AT OR BELOW fight week target
     // If current weight is below target, user is already under their diet goal - use maintenance, not deficit
     const isMaintenanceMode = currentWeight <= goalWeight;
-    
+
     // Calculate weight to gain (positive) or weight to lose (positive)
     const weightToGain = isMaintenanceMode && weightDifference > 0 ? weightDifference : 0;
     const weightToLose = !isMaintenanceMode && weightDifference < 0 ? Math.abs(weightDifference) : 0;
-    
+
     // Calculate required weekly change (positive for loss, positive for gain)
     const requiredWeeklyLoss = weightToLose > 0 ? weightToLose / weeksRemaining : 0;
     const requiredWeeklyGain = weightToGain > 0 ? weightToGain / weeksRemaining : 0;
@@ -262,16 +262,16 @@ Use this historical pattern to inform calorie recommendations and predict body r
 
 ${storedInsights && storedInsights.length > 0 ? `\nSTORED BODY INSIGHTS (learned from previous analyses):
 ${storedInsights.map((insight: any) => {
-  const data = insight.insight_data;
-  if (insight.insight_type === 'metabolism_rate') {
-    return `- Metabolism Rate: ${data.estimatedRate || 'N/A'} (confidence: ${(insight.confidence_score * 100).toFixed(0)}%)`;
-  } else if (insight.insight_type === 'deficit_response') {
-    return `- Deficit Response: ${data.response || 'N/A'} (confidence: ${(insight.confidence_score * 100).toFixed(0)}%)`;
-  } else if (insight.insight_type === 'weekly_loss_rate') {
-    return `- Weekly Loss Rate: ${data.rate || 'N/A'} kg/week (confidence: ${(insight.confidence_score * 100).toFixed(0)}%)`;
-  }
-  return null;
-}).filter(Boolean).join('\n')}
+      const data = insight.insight_data;
+      if (insight.insight_type === 'metabolism_rate') {
+        return `- Metabolism Rate: ${data.estimatedRate || 'N/A'} (confidence: ${(insight.confidence_score * 100).toFixed(0)}%)`;
+      } else if (insight.insight_type === 'deficit_response') {
+        return `- Deficit Response: ${data.response || 'N/A'} (confidence: ${(insight.confidence_score * 100).toFixed(0)}%)`;
+      } else if (insight.insight_type === 'weekly_loss_rate') {
+        return `- Weekly Loss Rate: ${data.rate || 'N/A'} kg/week (confidence: ${(insight.confidence_score * 100).toFixed(0)}%)`;
+      }
+      return null;
+    }).filter(Boolean).join('\n')}
 Use these insights to personalize recommendations.` : ''}
 
 ${bypassSafety ? `\nWARNING: User has confirmed they want to proceed despite unrealistic goal. Generate plan ignoring all safety limits. Still include health risk warnings.` : ''}
@@ -288,23 +288,22 @@ Provide:
 
 ${isMaintenanceMode ? 'Since user is already at or below fight week target, focus on maintenance nutrition. The weigh-in day weight will be achieved through dehydration protocols in the final days before weigh-in, not through continued dieting. calorieDeficit MUST be 0, recommendedCalories MUST equal TDEE.' : 'Be specific with numbers and practical advice. If the timeline is unrealistic (requires >1.5kg/week), clearly state this and recommend timeline extension.'}`;
 
-    // Call OpenAI API
-    console.log("Calling OpenAI API for weight tracker analysis...");
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    // Call Minimax API
+    console.log("Calling Minimax API for weight tracker analysis...");
+    const response = await fetch("https://api.minimax.io/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${OPENAI_API_KEY}`,
+        "Authorization": `Bearer ${MINIMAX_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "MiniMax-M2.5",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
         temperature: 0.1,
-        max_tokens: 2048,
-        response_format: { type: "json_object" }
+        max_tokens: 2048
       }),
     });
 
@@ -328,7 +327,7 @@ ${isMaintenanceMode ? 'Since user is already at or below fight week target, focu
         );
       }
       const errorText = await response.text();
-      console.error("OpenAI API error:", response.status, errorText);
+      console.error("Minimax API error:", response.status, errorText);
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -336,21 +335,35 @@ ${isMaintenanceMode ? 'Since user is already at or below fight week target, focu
     }
 
     const data = await response.json();
-    console.log("OpenAI weight tracker response:", JSON.stringify(data, null, 2));
-    
-    const analysisText = data.choices?.[0]?.message?.content;
-    
+    console.log("Minimax weight tracker response:", JSON.stringify(data, null, 2));
+
+    let analysisText = data.choices?.[0]?.message?.content;
+    // Strip <think> tags from Minimax response
+    if (analysisText) {
+      analysisText = analysisText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    }
+
     if (!analysisText) {
-      console.error("No content found in OpenAI response");
+      console.error("No content found in Minimax response");
       const finishReason = data.choices?.[0]?.finish_reason;
       if (finishReason === 'content_filter') {
         throw new Error("Content was filtered for safety. Please try a different request.");
       }
-      throw new Error("No response from OpenAI API");
+      throw new Error("No response from Minimax API");
     }
 
-    // Parse the JSON analysis (should be clean JSON due to response_format)
-    const analysis = JSON.parse(analysisText);
+    // Parse the JSON analysis
+    let analysis;
+    try {
+      analysis = JSON.parse(analysisText);
+    } catch {
+      const jsonMatch = analysisText.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (jsonMatch) {
+        analysis = JSON.parse(jsonMatch[1].trim());
+      } else {
+        throw new Error("Could not parse analysis data from AI response");
+      }
+    }
 
     // Calculate and store insights
     const insightsToStore: Array<{
@@ -359,7 +372,7 @@ ${isMaintenanceMode ? 'Since user is already at or below fight week target, focu
       insight_data: Record<string, any>;
       confidence_score: number;
     }> = [];
-    
+
     // Store weekly loss rate insight
     if (patterns && parseFloat(patterns.avgWeeklyLoss) !== 0) {
       insightsToStore.push({

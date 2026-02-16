@@ -11,19 +11,19 @@ serve(async (req) => {
   }
 
   try {
-    const { 
-      currentWeight, 
-      targetWeight, 
-      daysUntilFight, 
-      dailyLogs, 
+    const {
+      currentWeight,
+      targetWeight,
+      daysUntilFight,
+      dailyLogs,
       startingWeight,
-      isWaterloading 
+      isWaterloading
     } = await req.json();
-    
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
-    if (!OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY is not configured");
+    const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
+
+    if (!MINIMAX_API_KEY) {
+      throw new Error("MINIMAX_API_KEY is not configured");
     }
 
     const systemPrompt = `You are the Weight Cut Wizard, a science-based combat sports weight cutting expert with deep knowledge of physiology and fighter safety.
@@ -77,10 +77,10 @@ OUTPUT FORMAT - You must respond with valid JSON only:
   "recommendation": "Overall strategic guidance for completing the cut safely"
 }`;
 
-    const logsContext = dailyLogs && dailyLogs.length > 0 
-      ? `Daily logs:\n${dailyLogs.map((log: any) => 
-          `Date: ${log.log_date}, Weight: ${log.weight_kg}kg, Carbs: ${log.carbs_g || 'N/A'}g, Fluids: ${log.fluid_intake_ml || 'N/A'}ml`
-        ).join('\n')}`
+    const logsContext = dailyLogs && dailyLogs.length > 0
+      ? `Daily logs:\n${dailyLogs.map((log: any) =>
+        `Date: ${log.log_date}, Weight: ${log.weight_kg}kg, Carbs: ${log.carbs_g || 'N/A'}g, Fluids: ${log.fluid_intake_ml || 'N/A'}ml`
+      ).join('\n')}`
       : 'No daily logs yet';
 
     const userPrompt = `Analyze this fight week weight cut:
@@ -101,23 +101,22 @@ Provide comprehensive analysis with:
 
     const fullPrompt = `${systemPrompt}\n\nUser: ${userPrompt}`;
 
-    console.log("Calling OpenAI API for fight week analysis...");
-    
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    console.log("Calling Minimax API for fight week analysis...");
+
+    const response = await fetch("https://api.minimax.io/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${OPENAI_API_KEY}`,
+        "Authorization": `Bearer ${MINIMAX_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "MiniMax-M2.5",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
         ],
         temperature: 0.1,
-        max_tokens: 2048,
-        response_format: { type: "json_object" }
+        max_tokens: 2048
       })
     });
 
@@ -141,7 +140,7 @@ Provide comprehensive analysis with:
         );
       }
       const errorData = await response.json();
-      console.error("OpenAI API error:", response.status, errorData);
+      console.error("Minimax API error:", response.status, errorData);
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -149,32 +148,47 @@ Provide comprehensive analysis with:
     }
 
     const data = await response.json();
-    console.log("OpenAI fight week response:", JSON.stringify(data, null, 2));
-    
-    const analysisText = data.choices?.[0]?.message?.content;
+    console.log("Minimax fight week response:", JSON.stringify(data, null, 2));
+
+    let analysisText = data.choices?.[0]?.message?.content;
+    // Strip <think> tags from Minimax response
+    if (analysisText) {
+      analysisText = analysisText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    }
 
     if (!analysisText) {
-      console.error("No content found in OpenAI response");
+      console.error("No content found in Minimax response");
       const finishReason = data.choices?.[0]?.finish_reason;
       if (finishReason === 'content_filter') {
         throw new Error("Content was filtered for safety. Please try a different request.");
       }
-      throw new Error("No response from OpenAI API");
+      throw new Error("No response from Minimax API");
     }
 
-    // Parse the JSON analysis (should be clean JSON due to response_format)
+    // Parse the JSON analysis
     let analysis;
     try {
       analysis = JSON.parse(analysisText);
     } catch (parseError) {
-      console.error("Failed to parse OpenAI response as JSON:", analysisText);
-      return new Response(
-        JSON.stringify({ 
-          error: "AI returned invalid response format. Please try again.",
-          details: analysisText.substring(0, 200) 
-        }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      // Try extracting JSON from markdown code blocks
+      const jsonMatch = analysisText.match(/```(?:json)?\s*([\s\S]*?)```/);
+      if (jsonMatch) {
+        try {
+          analysis = JSON.parse(jsonMatch[1].trim());
+        } catch {
+          console.error("Failed to parse extracted JSON:", jsonMatch[1]);
+        }
+      }
+      if (!analysis) {
+        console.error("Failed to parse Minimax response as JSON:", analysisText);
+        return new Response(
+          JSON.stringify({
+            error: "AI returned invalid response format. Please try again.",
+            details: analysisText.substring(0, 200)
+          }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     return new Response(JSON.stringify({ analysis }), {

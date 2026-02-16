@@ -99,10 +99,10 @@ serve(async (req) => {
     } : null;
 
     const { prompt, action, userData } = await req.json();
-    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
 
-    if (!OPENAI_API_KEY) {
-      console.error("OPENAI_API_KEY environment variable is not configured");
+    if (!MINIMAX_API_KEY) {
+      console.error("MINIMAX_API_KEY environment variable is not configured");
       return new Response(
         JSON.stringify({ error: "AI service not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -165,7 +165,7 @@ Respond ONLY with JSON:
 
 Rules: 3+ meals, specific ingredients with grams, no markdown, numbers not strings.`;
 
-    console.log("Calling OpenAI API for meal planning...");
+    console.log("Calling Minimax API for meal planning...");
 
     const userPrompt = `User Request: ${prompt}`;
 
@@ -175,39 +175,38 @@ Rules: 3+ meals, specific ingredients with grams, no markdown, numbers not strin
 
     let response;
     try {
-      response = await fetch("https://api.openai.com/v1/chat/completions", {
+      response = await fetch("https://api.minimax.io/v1/chat/completions", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${OPENAI_API_KEY}`,
+          "Authorization": `Bearer ${MINIMAX_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "gpt-4o-mini",
+          model: "MiniMax-M2.5",
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt }
           ],
           temperature: 0.3,
-          max_tokens: 1024,
-          response_format: { type: "json_object" }
+          max_tokens: 1024
         }),
         signal: controller.signal
       });
 
       clearTimeout(timeoutId);
-      console.log("OpenAI API response status:", response.status);
+      console.log("Minimax API response status:", response.status);
     } catch (fetchError) {
       clearTimeout(timeoutId);
       
       if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-        console.error("OpenAI API request timed out after 25 seconds");
+        console.error("Minimax API request timed out after 25 seconds");
         return new Response(
           JSON.stringify({ error: "AI request timed out after 25 seconds. The service may be busy. Please try again in a moment." }),
           { status: 408, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       
-      console.error("OpenAI API fetch error:", fetchError);
+      console.error("Minimax API fetch error:", fetchError);
       return new Response(
         JSON.stringify({ error: "Failed to connect to AI service" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -216,7 +215,7 @@ Rules: 3+ meals, specific ingredients with grams, no markdown, numbers not strin
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error("OpenAI API error:", response.status, errorData);
+      console.error("Minimax API error:", response.status, errorData);
       
       if (response.status === 429) {
         return new Response(
@@ -240,25 +239,28 @@ Rules: 3+ meals, specific ingredients with grams, no markdown, numbers not strin
       }
       
       return new Response(
-        JSON.stringify({ error: `OpenAI API error: ${errorData.error?.message || 'Unknown error'}` }),
+        JSON.stringify({ error: `Minimax API error: ${errorData.error?.message || 'Unknown error'}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const data = await response.json();
-    console.log("Full OpenAI response:", JSON.stringify(data, null, 2));
+    console.log("Full Minimax response:", JSON.stringify(data, null, 2));
     
-    // Extract content from OpenAI response
-    const content = data.choices?.[0]?.message?.content;
+    // Extract content from Minimax response and strip <think> tags
+    let content = data.choices?.[0]?.message?.content;
+    if (content) {
+      content = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    }
     
-    console.log("=== OPENAI RESPONSE DEBUG ===");
-    console.log("Raw OpenAI content:", content);
+    console.log("=== MINIMAX RESPONSE DEBUG ===");
+    console.log("Raw Minimax content:", content);
     console.log("Content type:", typeof content);
     console.log("Content length:", content?.length);
     console.log("=== END DEBUG ===");
 
     if (!content) {
-      console.error("❌ No content found in OpenAI response");
+      console.error("❌ No content found in Minimax response");
       console.error("Available fields in response:", Object.keys(data));
       if (data.choices?.[0]) {
         console.error("Available fields in first choice:", Object.keys(data.choices[0]));
@@ -311,19 +313,29 @@ Rules: 3+ meals, specific ingredients with grams, no markdown, numbers not strin
         );
       }
       
-      throw new Error("No content in OpenAI API response and fallback extraction failed");
+      throw new Error("No content in Minimax API response and fallback extraction failed");
     }
 
-    // Parse JSON from OpenAI response (should be clean JSON due to response_format)
+    // Parse JSON from Minimax response
     let mealPlanData;
     try {
       console.log("=== JSON PARSING DEBUG ===");
-      console.log("Parsing OpenAI JSON response...");
+      console.log("Parsing Minimax JSON response...");
       
-      // OpenAI with response_format: json_object should return clean JSON
-      mealPlanData = JSON.parse(content);
+      // Extract JSON from potential markdown code blocks
+      // Try direct JSON parse first, then try extracting from code blocks
+      try {
+        mealPlanData = JSON.parse(content);
+      } catch {
+        const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (jsonMatch) {
+          mealPlanData = JSON.parse(jsonMatch[1].trim());
+        } else {
+          throw new Error("Could not extract JSON from response");
+        }
+      }
       
-      console.log("Successfully parsed OpenAI response");
+      console.log("Successfully parsed Minimax response");
       console.log("Meal plan structure:", Object.keys(mealPlanData));
       console.log("Number of meals:", mealPlanData.meals?.length || 0);
     } catch (e) {
@@ -378,7 +390,7 @@ Rules: 3+ meals, specific ingredients with grams, no markdown, numbers not strin
       return new Response(
         JSON.stringify({ 
           error: error instanceof Error ? error.message : "Unknown error occurred",
-          details: "OpenAI API integration error"
+          details: "Minimax API integration error"
         }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
