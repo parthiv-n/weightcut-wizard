@@ -12,10 +12,10 @@ serve(async (req) => {
 
   try {
     const { weightLostKg, weighInTiming, currentWeightKg, fightTimeHours } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
 
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    if (!MINIMAX_API_KEY) {
+      throw new Error("MINIMAX_API_KEY is not configured");
     }
 
     const systemPrompt = `You are the Weight Cut Wizard, a science-based combat sports rehydration expert. You PRIORITIZE fighter safety and performance.
@@ -89,19 +89,25 @@ Provide:
 3. Specific meal suggestions with carb amounts for each time window
 4. Calculate and show total carb intake across all meals`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const fullPrompt = `${systemPrompt}\n\nUser: ${userPrompt}`;
+
+    console.log("Calling Minimax API for rehydration protocol...");
+
+    const response = await fetch("https://api.minimax.io/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Authorization": `Bearer ${MINIMAX_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "MiniMax-M2.5",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
+          { role: "user", content: userPrompt }
         ],
-      }),
+        temperature: 0.1,
+        max_tokens: 3072
+      })
     });
 
     if (!response.ok) {
@@ -111,14 +117,20 @@ Provide:
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (response.status === 402) {
+      if (response.status === 401) {
         return new Response(
-          JSON.stringify({ error: "AI credits depleted. Please add credits to continue." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "Invalid API key." }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
+      if (response.status === 403) {
+        return new Response(
+          JSON.stringify({ error: "API key invalid or quota exceeded." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      const errorData = await response.json();
+      console.error("Minimax API error:", response.status, errorData);
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -126,16 +138,37 @@ Provide:
     }
 
     const data = await response.json();
-    let protocolText = data.choices[0].message.content;
+    console.log("Minimax rehydration response:", JSON.stringify(data, null, 2));
 
-    // Extract JSON from markdown code blocks if present
-    const jsonMatch = protocolText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
-    if (jsonMatch) {
-      protocolText = jsonMatch[1];
+    let protocolText = data.choices?.[0]?.message?.content;
+    // Strip <think> tags from Minimax response
+    if (protocolText) {
+      protocolText = protocolText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
     }
 
-    // Parse the JSON protocol
-    const protocol = JSON.parse(protocolText);
+    if (!protocolText) {
+      console.error("No content found in Minimax response");
+      const finishReason = data.choices?.[0]?.finish_reason;
+      if (finishReason === 'content_filter') {
+        throw new Error("Content was filtered for safety. Please try a different request.");
+      }
+      throw new Error("No response from Minimax API");
+    }
+
+    // Parse the protocol text (may need JSON extraction)
+    let protocol;
+    try {
+      // Try parsing as direct JSON first
+      protocol = JSON.parse(protocolText);
+    } catch (parseError) {
+      // Extract JSON from markdown code blocks if present
+      const jsonMatch = protocolText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+      if (jsonMatch) {
+        protocol = JSON.parse(jsonMatch[1]);
+      } else {
+        throw new Error("Could not parse protocol data from AI response");
+      }
+    }
 
     return new Response(JSON.stringify({ protocol }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

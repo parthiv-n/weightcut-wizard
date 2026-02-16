@@ -47,25 +47,34 @@ export default function FightCamps() {
   }, []);
 
   const fetchCamps = async () => {
-    setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      navigate("/auth");
-      return;
-    }
+    try {
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        navigate("/auth");
+        return;
+      }
 
-    const { data, error } = await supabase
-      .from("fight_camps")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("fight_date", { ascending: false });
+      const { data, error } = await supabase
+        .from("fight_camps")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("fight_date", { ascending: false });
 
-    if (error) {
-      toast({ title: "Error", description: "Failed to load fight camps", variant: "destructive" });
-    } else {
-      setCamps(data || []);
+      if (error) {
+        console.error("Error loading fight camps:", error);
+        toast({ title: "Error", description: "Failed to load fight camps", variant: "destructive" });
+        setCamps([]); // Set empty array on error to prevent infinite loading
+      } else {
+        setCamps(data || []);
+      }
+    } catch (error) {
+      console.error("Unexpected error loading fight camps:", error);
+      toast({ title: "Error", description: "An unexpected error occurred", variant: "destructive" });
+      setCamps([]); // Set empty array on error to prevent infinite loading
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleCreateCamp = async () => {

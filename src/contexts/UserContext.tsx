@@ -6,10 +6,13 @@ interface UserContextType {
   avatarUrl: string;
   userId: string | null;
   currentWeight: number | null;
+  isSessionValid: boolean;
   setUserName: (name: string) => void;
   setAvatarUrl: (url: string) => void;
   updateCurrentWeight: (weight: number) => Promise<void>;
   loadUserData: () => Promise<void>;
+  refreshSession: () => Promise<boolean>;
+  checkSessionValidity: () => Promise<boolean>;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -19,8 +22,77 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [avatarUrl, setAvatarUrl] = useState<string>("");
   const [userId, setUserId] = useState<string | null>(null);
   const [currentWeight, setCurrentWeight] = useState<number | null>(null);
+  const [isSessionValid, setIsSessionValid] = useState<boolean>(false);
+
+  // Step 3: Add Auth State Monitoring
+  const checkSessionValidity = async (): Promise<boolean> => {
+    try {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        setIsSessionValid(false);
+        return false;
+      }
+      
+      if (!session) {
+        setIsSessionValid(false);
+        return false;
+      }
+      
+      // Check if session is expired or close to expiry
+      const now = Date.now();
+      const expiresAt = session.expires_at! * 1000;
+      const timeUntilExpiry = expiresAt - now;
+      const fiveMinutes = 5 * 60 * 1000;
+      
+      if (timeUntilExpiry <= 0) {
+        setIsSessionValid(false);
+        return false;
+      }
+      
+      if (timeUntilExpiry < fiveMinutes) {
+        return await refreshSession();
+      }
+      
+      setIsSessionValid(true);
+      return true;
+    } catch (error) {
+      setIsSessionValid(false);
+      return false;
+    }
+  };
+
+  // Step 2: Implement Session Refresh Logic
+  const refreshSession = async (): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase.auth.refreshSession();
+      
+      if (error) {
+        setIsSessionValid(false);
+        return false;
+      }
+      
+      if (data.session) {
+        setIsSessionValid(true);
+        return true;
+      }
+      
+      setIsSessionValid(false);
+      return false;
+    } catch (error) {
+      setIsSessionValid(false);
+      return false;
+    }
+  };
 
   const loadUserData = async () => {
+    // First check if we have a valid session
+    const sessionValid = await checkSessionValidity();
+    if (!sessionValid) {
+      console.log("Invalid session, cannot load user data");
+      return;
+    }
+
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       setUserId(user.id);
@@ -86,6 +158,32 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     loadUserData();
+    
+    // Set up auth state change listener
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setIsSessionValid(false);
+        setUserId(null);
+        setUserName("");
+        setAvatarUrl("");
+        setCurrentWeight(null);
+      } else if (event === 'TOKEN_REFRESHED' && session) {
+        setIsSessionValid(true);
+      } else if (event === 'SIGNED_IN' && session) {
+        setIsSessionValid(true);
+        await loadUserData();
+      }
+    });
+
+    // Set up periodic session validity checks (every 30 minutes)
+    const sessionCheckInterval = setInterval(async () => {
+      await checkSessionValidity();
+    }, 30 * 60 * 1000);
+
+    return () => {
+      subscription.unsubscribe();
+      clearInterval(sessionCheckInterval);
+    };
   }, []);
 
   return (
@@ -95,10 +193,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
         avatarUrl,
         userId,
         currentWeight,
+        isSessionValid,
         setUserName: updateUserName,
         setAvatarUrl: updateAvatarUrl,
         updateCurrentWeight,
         loadUserData,
+        refreshSession,
+        checkSessionValidity,
       }}
     >
       {children}

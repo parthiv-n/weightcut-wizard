@@ -1,14 +1,19 @@
 /**
  * Calculate daily calorie target based on profile data
- * Prioritizes AI recommendations, then calculates based on weight loss goals
+ * Priority order: Manual Override > AI Recommended > Calculated
  */
 export function calculateCalorieTarget(profileData: any): number {
-  // Check if AI recommendations exist first, use them if available
+  // Check if manual override is active - manual values are stored in ai_recommended_* fields
+  if (profileData?.manual_nutrition_override && profileData?.ai_recommended_calories) {
+    return profileData.ai_recommended_calories;
+  }
+
+  // Check if AI recommendations exist (when override is false), use them if available
   if (profileData?.ai_recommended_calories) {
     return profileData.ai_recommended_calories;
   }
 
-  // Fallback to calculated target if no AI recommendations
+  // Fallback to calculated target if no manual override or AI recommendations
   const currentWeight = profileData?.current_weight_kg || 70;
   const goalWeight = profileData?.goal_weight_kg || 65;
   const tdee = profileData?.tdee || 2000;
