@@ -73,7 +73,7 @@ export default function Nutrition() {
   const [mealToDelete, setMealToDelete] = useState<Meal | null>(null);
 
   // Enhanced authentication state management
-  const { isSessionValid, checkSessionValidity, refreshSession } = useUser();
+  const { isSessionValid, checkSessionValidity, refreshSession, userId } = useUser();
   const [aiMacroGoals, setAiMacroGoals] = useState<{
     proteinGrams: number;
     carbsGrams: number;
@@ -354,21 +354,22 @@ export default function Nutrition() {
     }
   };
 
-  const loadMeals = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+  const loadMeals = async (skipCache = false) => {
+    if (!userId) return;
 
-    // Check cache first
-    const cachedMeals = nutritionCache.getMeals(user.id, selectedDate);
-    if (cachedMeals) {
-      setMeals(cachedMeals);
-      return;
+    // Check cache first (unless explicitly skipped after mutations)
+    if (!skipCache) {
+      const cachedMeals = nutritionCache.getMeals(userId, selectedDate);
+      if (cachedMeals) {
+        setMeals(cachedMeals);
+        return;
+      }
     }
 
     const { data, error } = await supabase
       .from("nutrition_logs")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .eq("date", selectedDate)
       .order("created_at", { ascending: true });
 
@@ -385,7 +386,7 @@ export default function Nutrition() {
 
     setMeals(typedMeals as Meal[]);
     // Cache the meals data
-    nutritionCache.setMeals(user.id, selectedDate, typedMeals as Meal[]);
+    nutritionCache.setMeals(userId, selectedDate, typedMeals as Meal[]);
   };
 
   const handleGenerateMealPlan = async () => {
@@ -636,7 +637,7 @@ export default function Nutrition() {
         description: `${mealIdea.meal_name} added to your day`,
       });
 
-      await loadMeals();
+      await loadMeals(true);
     } catch (error) {
       console.error("Error logging meal:", error);
       toast({
@@ -690,7 +691,7 @@ export default function Nutrition() {
       AIPersistence.remove(user.id, 'meal_plans');
 
       // Reload meals to show the new entries
-      await loadMeals();
+      await loadMeals(true);
     } catch (error: any) {
       console.error("Error saving meal ideas:", error);
       toast({
@@ -898,9 +899,8 @@ export default function Nutrition() {
       );
 
       update.onSuccess = () => {
-        // Invalidate cache and reload meals to get the real data with proper ID
-        nutritionCache.invalidateNutritionData(user.id, selectedDate);
-        loadMeals();
+        // Reload meals to get the real data with proper ID (skip cache)
+        loadMeals(true);
       };
 
       update.onError = (error: any) => {
@@ -1182,7 +1182,7 @@ export default function Nutrition() {
         description: `${nutritionData.meal_name} (${nutritionData.calories} cal) logged successfully`,
       });
 
-      await loadMeals();
+      await loadMeals(true);
     } catch (error: any) {
       console.error("Error processing voice input:", error);
       toast({
@@ -1399,7 +1399,7 @@ export default function Nutrition() {
       if (error) throw error;
 
       toast({ title: "Meal deleted" });
-      loadMeals();
+      await loadMeals(true);
       setDeleteDialogOpen(false);
       setMealToDelete(null);
     } catch (error) {
@@ -1440,7 +1440,7 @@ export default function Nutrition() {
   };
 
   return (
-    <div className="space-y-6 p-3 sm:p-6 max-w-7xl mx-auto overflow-x-hidden">
+    <div className="space-y-6 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto overflow-x-hidden">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3 sm:gap-4">
           <img src={wizardNutrition} alt="Wizard" className="w-20 h-20 sm:w-28 sm:h-28 lg:w-32 lg:h-32 flex-shrink-0" />

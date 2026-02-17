@@ -27,6 +27,17 @@ export default function Dashboard() {
     }
   }, [userId]);
 
+  // Refetch when user navigates back to this page
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && userId) {
+        loadDashboardData();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [userId]);
+
   const loadDashboardData = async () => {
     if (!userId) {
       setLoading(false);
@@ -156,7 +167,7 @@ export default function Dashboard() {
 
   return (
     <ErrorBoundary>
-    <div className="space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6 w-full max-w-7xl mx-auto">
+    <div className="space-y-5 sm:space-y-6 p-4 sm:p-5 md:p-6 w-full max-w-7xl mx-auto">
       {/* Mobile-first header with responsive text sizing */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
         <div>

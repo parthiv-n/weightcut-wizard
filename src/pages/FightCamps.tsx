@@ -130,7 +130,7 @@ export default function FightCamps() {
 
   if (loading) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-5 md:p-6">
         <Skeleton className="h-10 w-64" />
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {[1, 2, 3].map((i) => (
@@ -142,7 +142,7 @@ export default function FightCamps() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-5 md:p-6">
       <div className="space-y-4">
         <div className="flex items-center gap-3">
           <Trophy className="w-8 h-8 text-primary" />

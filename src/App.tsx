@@ -11,6 +11,7 @@ import { ProfileCompletionGuard } from "@/components/ProfileCompletionGuard";
 import { UserProvider } from "@/contexts/UserContext";
 import { PageTransition } from "@/components/PageTransition";
 import { BottomNav } from "@/components/BottomNav";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Onboarding from "./pages/Onboarding";
@@ -73,6 +74,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => (
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
+      <ErrorBoundary>
       <UserProvider>
         <Toaster />
         <Sonner />
@@ -170,6 +172,7 @@ const App = () => (
           </Routes>
         </BrowserRouter>
       </UserProvider>
+      </ErrorBoundary>
     </TooltipProvider>
   </QueryClientProvider>
 );

@@ -3,7 +3,7 @@ import wizardAvatar from "@/assets/wizard-logo.png";
 
 export default function Wizard() {
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8 flex items-center justify-center">
+    <div className="min-h-screen bg-background p-4 sm:p-5 md:p-8 flex items-center justify-center">
       <div className="max-w-2xl mx-auto text-center space-y-8">
         {/* Wizard Image */}
         <div className="relative flex justify-center">

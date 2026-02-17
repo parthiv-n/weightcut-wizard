@@ -210,11 +210,11 @@ export function BottomNav() {
 
       {/* More Menu Sheet */}
       <Sheet open={moreMenuOpen} onOpenChange={setMoreMenuOpen}>
-        <SheetContent side="bottom" className="h-[60vh] rounded-t-2xl">
+        <SheetContent side="bottom" className="h-[60vh] rounded-t-2xl flex flex-col">
           <SheetHeader>
             <SheetTitle>More</SheetTitle>
           </SheetHeader>
-          <div className="mt-6 space-y-2">
+          <div className="mt-6 space-y-2 overflow-y-auto flex-1 pb-4">
             {moreMenuItems.map((item) => (
               <button
                 key={item.url}
@@ -246,7 +246,7 @@ export function BottomNav() {
 
       {/* Settings Dialog */}
       <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Profile Settings</DialogTitle>
           </DialogHeader>

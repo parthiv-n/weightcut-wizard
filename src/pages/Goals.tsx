@@ -231,7 +231,7 @@ export default function Goals() {
   }
 
   return (
-    <div className="container max-w-4xl py-8">
+    <div className="p-4 sm:p-5 md:p-6 max-w-4xl mx-auto">
       <div className="mb-6">
         <h1 className="text-3xl font-bold mb-2">Edit Your Goals</h1>
         <p className="text-muted-foreground">Update your profile settings and weight targets</p>
