@@ -1,37 +1,26 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Shield, TrendingDown, Brain } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import wizardHero from "@/assets/wizard-hero.png";
+import { useUser } from "@/contexts/UserContext";
 
 const Index = () => {
   const navigate = useNavigate();
+  const { userId, hasProfile, isLoading } = useUser();
 
   useEffect(() => {
-    const checkAuthAndProfile = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        // Check if user has a profile
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("id")
-          .eq("id", session.user.id)
-          .maybeSingle();
-        
-        if (profile) {
-          // User has profile, redirect to dashboard
-          navigate("/dashboard");
-        } else {
-          // User authenticated but no profile, redirect to onboarding
-          navigate("/onboarding");
-        }
+    if (isLoading) return;
+
+    if (userId) {
+      if (hasProfile) {
+        navigate("/dashboard");
+      } else {
+        navigate("/onboarding");
       }
-    };
-    
-    checkAuthAndProfile();
-  }, [navigate]);
+    }
+  }, [userId, hasProfile, isLoading, navigate]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-card">
@@ -47,7 +36,7 @@ const Index = () => {
             Weight Cut Wizard
           </h1>
           <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-            Safe, science-based weight cutting for combat sports athletes. 
+            Safe, science-based weight cutting for combat sports athletes.
             AI-powered guidance to reach your weight class safely.
           </p>
           <div className="flex gap-4 justify-center">

@@ -19,20 +19,21 @@ export default function Dashboard() {
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lb'>('kg');
   const [todayCalories, setTodayCalories] = useState(0);
   const [todayHydration, setTodayHydration] = useState(0);
-  const { userName, currentWeight } = useUser();
+  const { userName, currentWeight, userId } = useUser();
 
   useEffect(() => {
-    loadDashboardData();
-  }, []);
+    if (userId) {
+      loadDashboardData();
+    }
+  }, [userId]);
 
   const loadDashboardData = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setLoading(false);
-        return;
-      }
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
 
+    try {
       const today = new Date().toISOString().split('T')[0];
 
       // Parallelize all database queries for faster loading with individual error handling and timeouts
@@ -41,38 +42,38 @@ export default function Dashboard() {
           supabase
             .from("profiles")
             .select("*")
-            .eq("id", user.id)
+            .eq("id", userId)
             .maybeSingle(),
           8000,
           "Profile query"
         ),
-        
+
         withSupabaseTimeout(
           supabase
             .from("weight_logs")
             .select("*")
-            .eq("user_id", user.id)
+            .eq("user_id", userId)
             .order("date", { ascending: true })
             .limit(30),
           8000,
           "Weight logs query"
         ),
-        
+
         withSupabaseTimeout(
           supabase
             .from("nutrition_logs")
             .select("calories")
-            .eq("user_id", user.id)
+            .eq("user_id", userId)
             .eq("date", today),
           8000,
           "Nutrition logs query"
         ),
-        
+
         withSupabaseTimeout(
           supabase
             .from("hydration_logs")
             .select("amount_ml")
-            .eq("user_id", user.id)
+            .eq("user_id", userId)
             .eq("date", today),
           8000,
           "Hydration logs query"
