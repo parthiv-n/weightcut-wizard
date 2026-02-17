@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { withAuthTimeout, withSupabaseTimeout } from "@/lib/timeoutWrapper";
 
 interface UserContextType {
   userName: string;
@@ -7,6 +8,8 @@ interface UserContextType {
   userId: string | null;
   currentWeight: number | null;
   isSessionValid: boolean;
+  isLoading: boolean;
+  hasProfile: boolean;
   setUserName: (name: string) => void;
   setAvatarUrl: (url: string) => void;
   updateCurrentWeight: (weight: number) => Promise<void>;
@@ -23,37 +26,34 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [userId, setUserId] = useState<string | null>(null);
   const [currentWeight, setCurrentWeight] = useState<number | null>(null);
   const [isSessionValid, setIsSessionValid] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [hasProfile, setHasProfile] = useState<boolean>(false);
 
-  // Step 3: Add Auth State Monitoring
   const checkSessionValidity = async (): Promise<boolean> => {
     try {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      if (error) {
+      const { data: { session }, error } = await withAuthTimeout(
+        supabase.auth.getSession()
+      );
+
+      if (error || !session) {
         setIsSessionValid(false);
         return false;
       }
-      
-      if (!session) {
-        setIsSessionValid(false);
-        return false;
-      }
-      
-      // Check if session is expired or close to expiry
+
       const now = Date.now();
       const expiresAt = session.expires_at! * 1000;
       const timeUntilExpiry = expiresAt - now;
       const fiveMinutes = 5 * 60 * 1000;
-      
+
       if (timeUntilExpiry <= 0) {
         setIsSessionValid(false);
         return false;
       }
-      
+
       if (timeUntilExpiry < fiveMinutes) {
         return await refreshSession();
       }
-      
+
       setIsSessionValid(true);
       return true;
     } catch (error) {
@@ -62,23 +62,19 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Step 2: Implement Session Refresh Logic
   const refreshSession = async (): Promise<boolean> => {
     try {
-      const { data, error } = await supabase.auth.refreshSession();
-      
-      if (error) {
+      const { data, error } = await withAuthTimeout(
+        supabase.auth.refreshSession()
+      );
+
+      if (error || !data.session) {
         setIsSessionValid(false);
         return false;
       }
-      
-      if (data.session) {
-        setIsSessionValid(true);
-        return true;
-      }
-      
-      setIsSessionValid(false);
-      return false;
+
+      setIsSessionValid(true);
+      return true;
     } catch (error) {
       setIsSessionValid(false);
       return false;
@@ -86,17 +82,23 @@ export function UserProvider({ children }: { children: ReactNode }) {
   };
 
   const loadUserData = async () => {
-    // First check if we have a valid session
-    const sessionValid = await checkSessionValidity();
-    if (!sessionValid) {
-      console.log("Invalid session, cannot load user data");
-      return;
-    }
+    try {
+      const { data: { session } } = await withAuthTimeout(
+        supabase.auth.getSession()
+      );
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
+      if (!session?.user) {
+        setIsSessionValid(false);
+        setUserId(null);
+        setHasProfile(false);
+        setIsLoading(false);
+        return;
+      }
+
+      const user = session.user;
+      setIsSessionValid(true);
       setUserId(user.id);
-      
+
       // Load name from localStorage first for instant display
       const savedName = localStorage.getItem(`user_name_${user.id}`);
       if (savedName) {
@@ -107,36 +109,54 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setUserName(formattedName);
       }
 
-      // Load avatar from profile
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("avatar_url, current_weight_kg")
-        .eq("id", user.id)
-        .single();
-      
+      // Parallelize profile + weight queries
+      const [profileResult, weightResult] = await Promise.allSettled([
+        withSupabaseTimeout(
+          supabase
+            .from("profiles")
+            .select("avatar_url, current_weight_kg")
+            .eq("id", user.id)
+            .maybeSingle(),
+          8000,
+          "Profile query"
+        ),
+        withSupabaseTimeout(
+          supabase
+            .from("weight_logs")
+            .select("weight_kg")
+            .eq("user_id", user.id)
+            .order("date", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          8000,
+          "Weight log query"
+        ),
+      ]);
+
+      const profile = profileResult.status === "fulfilled" ? profileResult.value.data : null;
+      const latestWeightLog = weightResult.status === "fulfilled" ? weightResult.value.data : null;
+
+      setHasProfile(!!profile);
+
       if (profile?.avatar_url) {
         setAvatarUrl(profile.avatar_url);
       }
 
-      // Load current weight from latest weight log
-      const { data: latestWeightLog } = await supabase
-        .from("weight_logs")
-        .select("weight_kg")
-        .eq("user_id", user.id)
-        .order("date", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      
-      // Use latest weight log if available, otherwise use profile weight
       const weight = latestWeightLog?.weight_kg || profile?.current_weight_kg || null;
       setCurrentWeight(weight);
+    } catch (error) {
+      console.error("Error loading user data:", error);
+      setIsSessionValid(false);
+      setUserId(null);
+      setHasProfile(false);
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const updateCurrentWeight = async (weight: number) => {
     setCurrentWeight(weight);
-    
-    // Update profile in database
+
     if (userId) {
       await supabase
         .from("profiles")
@@ -158,8 +178,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     loadUserData();
-    
-    // Set up auth state change listener
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_OUT') {
         setIsSessionValid(false);
@@ -167,15 +186,18 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setUserName("");
         setAvatarUrl("");
         setCurrentWeight(null);
+        setHasProfile(false);
+        setIsLoading(false);
       } else if (event === 'TOKEN_REFRESHED' && session) {
         setIsSessionValid(true);
       } else if (event === 'SIGNED_IN' && session) {
         setIsSessionValid(true);
+        setIsLoading(true);
         await loadUserData();
       }
     });
 
-    // Set up periodic session validity checks (every 30 minutes)
+    // Periodic session validity checks (every 30 minutes)
     const sessionCheckInterval = setInterval(async () => {
       await checkSessionValidity();
     }, 30 * 60 * 1000);
@@ -194,6 +216,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
         userId,
         currentWeight,
         isSessionValid,
+        isLoading,
+        hasProfile,
         setUserName: updateUserName,
         setAvatarUrl: updateAvatarUrl,
         updateCurrentWeight,

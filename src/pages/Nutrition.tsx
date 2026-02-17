@@ -71,7 +71,7 @@ export default function Nutrition() {
   const [safetyMessage, setSafetyMessage] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mealToDelete, setMealToDelete] = useState<Meal | null>(null);
-  
+
   // Enhanced authentication state management
   const { isSessionValid, checkSessionValidity, refreshSession } = useUser();
   const [aiMacroGoals, setAiMacroGoals] = useState<{
@@ -246,7 +246,7 @@ export default function Nutrition() {
 
     const weeklyWeightLoss = ((currentWeight - goalWeight) / (daysToGoal / 7));
     const weeklyLossPercent = (weeklyWeightLoss / currentWeight) * 100;
-    
+
     if (weeklyLossPercent > 1.5 || weeklyWeightLoss > 1) {
       setSafetyStatus("red");
       setSafetyMessage("⚠️ WARNING: Weight loss rate exceeds safe limits! Increase calorie intake.");
@@ -413,7 +413,7 @@ export default function Nutrition() {
           return;
         }
       }
-      
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         throw new Error("Authentication required. Please log in again.");
@@ -428,29 +428,29 @@ export default function Nutrition() {
         ),
       } : null;
 
-          const response = await supabase.functions.invoke("meal-planner", {
-            body: {
-              prompt: aiPrompt,
-              userData,
-              action: "generate"
-            },
-          });
+      const response = await supabase.functions.invoke("meal-planner", {
+        body: {
+          prompt: aiPrompt,
+          userData,
+          action: "generate"
+        },
+      });
 
-          if (response.error) {
-            throw response.error;
-          }
+      if (response.error) {
+        throw response.error;
+      }
 
-          const { mealPlan, dailyCalorieTarget: target, safetyStatus: status, safetyMessage: message } = response.data;
+      const { mealPlan, dailyCalorieTarget: target, safetyStatus: status, safetyMessage: message } = response.data;
 
       // Store as meal plan ideas instead of logging them
       const ideasToStore: Meal[] = [];
-      
+
       console.log("Meal plan response structure:", { mealPlan, target, status, message });
-      
+
       // Handle the actual response structure: mealPlan contains meals array
       if (mealPlan && mealPlan.meals && Array.isArray(mealPlan.meals)) {
         console.log("Processing meals array:", mealPlan.meals.length, "meals found");
-        
+
         mealPlan.meals.forEach((meal: any, idx: number) => {
           const mealType = meal.type || "meal";
           const timestamp = Date.now() + idx; // Ensure unique IDs
@@ -476,7 +476,7 @@ export default function Nutrition() {
       } else if (mealPlan && typeof mealPlan === 'object') {
         // Fallback: check if it's the old structure with individual meal objects
         console.log("Checking for fallback structure...");
-        
+
         const mealTypes = ['breakfast', 'lunch', 'dinner'];
         mealTypes.forEach(mealType => {
           if (mealPlan[mealType]) {
@@ -500,7 +500,7 @@ export default function Nutrition() {
             });
           }
         });
-        
+
         // Handle snacks array if present
         if (mealPlan.snacks && Array.isArray(mealPlan.snacks)) {
           mealPlan.snacks.forEach((snack: any, idx: number) => {
@@ -526,7 +526,7 @@ export default function Nutrition() {
       }
 
       console.log("Final meal ideas to store:", ideasToStore.length);
-      
+
       if (ideasToStore.length === 0) {
         console.warn("No meals were parsed from the response");
         toast({
@@ -563,10 +563,10 @@ export default function Nutrition() {
       setAiPrompt("");
     } catch (error: any) {
       console.error("Error generating meal plan:", error);
-      
+
       let errorMsg = "Failed to generate meal plan";
       let shouldRetry = false;
-      
+
       // Handle specific error types with user-friendly messages
       if (error?.message?.includes("authorization") || error?.code === 401) {
         try {
@@ -594,7 +594,7 @@ export default function Nutrition() {
           errorMsg = error.message;
         }
       }
-      
+
       toast({
         title: "Error generating meal plan",
         description: errorMsg,
@@ -651,7 +651,7 @@ export default function Nutrition() {
 
   const saveMealIdeasToDatabase = async (mealIdeas: Meal[]) => {
     if (mealIdeas.length === 0) return;
-    
+
     setSavingAllMeals(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -661,19 +661,19 @@ export default function Nutrition() {
       const mealsToInsert = mealIdeas.map(meal => {
         const recalcCal = (meal.protein_g || 0) * 4 + (meal.carbs_g || 0) * 4 + (meal.fats_g || 0) * 9;
         return {
-        user_id: user.id,
-        date: selectedDate,
-        meal_name: meal.meal_name,
-        calories: recalcCal || meal.calories,
-        protein_g: meal.protein_g,
-        carbs_g: meal.carbs_g,
-        fats_g: meal.fats_g,
-        meal_type: meal.meal_type,
-        portion_size: meal.portion_size,
-        recipe_notes: meal.recipe_notes,
-        ingredients: meal.ingredients as any, // Cast to Json type for Supabase
-        is_ai_generated: true,
-      };
+          user_id: user.id,
+          date: selectedDate,
+          meal_name: meal.meal_name,
+          calories: recalcCal || meal.calories,
+          protein_g: meal.protein_g,
+          carbs_g: meal.carbs_g,
+          fats_g: meal.fats_g,
+          meal_type: meal.meal_type,
+          portion_size: meal.portion_size,
+          recipe_notes: meal.recipe_notes,
+          ingredients: meal.ingredients as any, // Cast to Json type for Supabase
+          is_ai_generated: true,
+        };
       });
 
       const { error } = await supabase.from("nutrition_logs").insert(mealsToInsert);
@@ -786,7 +786,7 @@ export default function Nutrition() {
   const debouncedMacroCalculation = useDebouncedCallback((calories: string, updateFunction: (meal: any) => void) => {
     const calorieValue = parseInt(calories) || 0;
     const macros = calculateMacrosFromCalories(calorieValue);
-    
+
     updateFunction((prev: any) => ({
       ...prev,
       ...macros
@@ -799,7 +799,7 @@ export default function Nutrition() {
       ...prev,
       calories,
     }));
-    
+
     // Debounce the macro calculation
     debouncedMacroCalculation(calories, updateFunction);
   };
@@ -850,7 +850,7 @@ export default function Nutrition() {
 
       // Add meal to UI immediately
       setMeals(prevMeals => [...prevMeals, optimisticMeal]);
-      
+
       // Close dialog and reset form immediately
       setIsManualDialogOpen(false);
       setManualMeal({
@@ -946,7 +946,7 @@ export default function Nutrition() {
       if (error) throw error;
 
       const { nutritionData } = data;
-      
+
       setManualMeal({
         meal_name: nutritionData.meal_name,
         calories: nutritionData.calories.toString(),
@@ -978,24 +978,24 @@ export default function Nutrition() {
   // Helper function to extract ingredient name from user input
   const extractIngredientName = (userInput: string): string => {
     let cleaned = userInput.trim();
-    
+
     // Remove weight/quantity patterns (e.g., "250g", "1 cup", "2 tbsp")
     cleaned = cleaned.replace(/(\d+(?:\.\d+)?)\s*(g|kg|oz|lb|cup|cups|tbsp|tsp|tablespoon|teaspoon|ml|l|gram|grams|kilogram|kilograms|ounce|ounces|pound|pounds)/gi, "");
-    
+
     // Remove quantity words at the start
     cleaned = cleaned.replace(/^(one|two|three|four|five|six|seven|eight|nine|ten|\d+|a|an)\s+/i, "");
-    
+
     // Remove common prefixes
     cleaned = cleaned.replace(/^(about|approximately|around|roughly)\s+/i, "");
-    
+
     // Clean up extra whitespace
     cleaned = cleaned.replace(/\s+/g, " ").trim();
-    
+
     // Capitalize first letter of each word for better presentation
-    cleaned = cleaned.split(" ").map(word => 
+    cleaned = cleaned.split(" ").map(word =>
       word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
     ).join(" ");
-    
+
     return cleaned || userInput; // Fallback to original if cleaning removes everything
   };
 
@@ -1018,7 +1018,7 @@ export default function Nutrition() {
       if (error) throw error;
 
       const { nutritionData } = data;
-      
+
       // Extract ingredient information
       let ingredientName = "";
       let ingredientGrams = 0;
@@ -1047,7 +1047,7 @@ export default function Nutrition() {
           ingredientName = nutritionData.meal_name;
         }
         ingredientSource = nutritionData.data_source || "AI Analysis";
-        
+
         // Try to extract grams from portion_size (e.g., "250g", "1 cup (200g)")
         const portionSize = nutritionData.portion_size || "";
         const gramsMatch = portionSize.match(/(\d+(?:\.\d+)?)\s*g/i);
@@ -1100,16 +1100,16 @@ export default function Nutrition() {
       ];
 
       // Calculate new meal totals
-      const totalCalories = newIngredients.reduce((sum, ing) => 
+      const totalCalories = newIngredients.reduce((sum, ing) =>
         sum + (ing.calories_per_100g || 0) * ing.grams / 100, 0
       );
-      const totalProtein = newIngredients.reduce((sum, ing) => 
+      const totalProtein = newIngredients.reduce((sum, ing) =>
         sum + (ing.protein_per_100g || 0) * ing.grams / 100, 0
       );
-      const totalCarbs = newIngredients.reduce((sum, ing) => 
+      const totalCarbs = newIngredients.reduce((sum, ing) =>
         sum + (ing.carbs_per_100g || 0) * ing.grams / 100, 0
       );
-      const totalFats = newIngredients.reduce((sum, ing) => 
+      const totalFats = newIngredients.reduce((sum, ing) =>
         sum + (ing.fats_per_100g || 0) * ing.grams / 100, 0
       );
 
@@ -1144,7 +1144,7 @@ export default function Nutrition() {
 
   const handleVoiceInput = async (transcribedText: string) => {
     setAiMealDescription(transcribedText);
-    
+
     // Automatically analyze the meal
     setAiAnalyzing(true);
     try {
@@ -1155,7 +1155,7 @@ export default function Nutrition() {
       if (error) throw error;
 
       const { nutritionData } = data;
-      
+
       // Auto-add the meal directly
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
@@ -1338,21 +1338,21 @@ export default function Nutrition() {
         ...nutritionData,
       }
     ];
-    
+
     // Calculate totals immediately
-    const totalCalories = newIngredients.reduce((sum, ing) => 
+    const totalCalories = newIngredients.reduce((sum, ing) =>
       sum + (ing.calories_per_100g || 0) * ing.grams / 100, 0
     );
-    const totalProtein = newIngredients.reduce((sum, ing) => 
+    const totalProtein = newIngredients.reduce((sum, ing) =>
       sum + (ing.protein_per_100g || 0) * ing.grams / 100, 0
     );
-    const totalCarbs = newIngredients.reduce((sum, ing) => 
+    const totalCarbs = newIngredients.reduce((sum, ing) =>
       sum + (ing.carbs_per_100g || 0) * ing.grams / 100, 0
     );
-    const totalFats = newIngredients.reduce((sum, ing) => 
+    const totalFats = newIngredients.reduce((sum, ing) =>
       sum + (ing.fats_per_100g || 0) * ing.grams / 100, 0
     );
-    
+
     // Update meal with ingredients and calculated totals
     setManualMeal({
       ...manualMeal,
@@ -1421,7 +1421,7 @@ export default function Nutrition() {
   const getMacroDifference = (current: number, goal: number) => {
     const difference = goal - current;
     const percentDiff = goal > 0 ? Math.abs(difference / goal) * 100 : 0;
-    
+
     let colorClass = "text-green-600 dark:text-green-400";
     if (percentDiff > 20) {
       colorClass = "text-red-600 dark:text-red-400";
@@ -1433,7 +1433,7 @@ export default function Nutrition() {
       difference,
       percentDiff,
       colorClass,
-      displayText: difference >= 0 
+      displayText: difference >= 0
         ? `${Math.round(difference)} remaining`
         : `${Math.round(Math.abs(difference))} over`
     };
@@ -1627,20 +1627,20 @@ export default function Nutrition() {
                         );
                       })}
                     </div>
-                    
+
                     {/* Running Totals */}
                     {manualMeal.ingredients.some(ing => ing.calories_per_100g !== undefined) && (() => {
                       const totalWeight = manualMeal.ingredients.reduce((sum, ing) => sum + ing.grams, 0);
-                      const totalCalories = manualMeal.ingredients.reduce((sum, ing) => 
+                      const totalCalories = manualMeal.ingredients.reduce((sum, ing) =>
                         sum + ((ing.calories_per_100g || 0) * ing.grams) / 100, 0
                       );
-                      const totalProtein = manualMeal.ingredients.reduce((sum, ing) => 
+                      const totalProtein = manualMeal.ingredients.reduce((sum, ing) =>
                         sum + ((ing.protein_per_100g || 0) * ing.grams) / 100, 0
                       );
-                      const totalCarbs = manualMeal.ingredients.reduce((sum, ing) => 
+                      const totalCarbs = manualMeal.ingredients.reduce((sum, ing) =>
                         sum + ((ing.carbs_per_100g || 0) * ing.grams) / 100, 0
                       );
-                      const totalFats = manualMeal.ingredients.reduce((sum, ing) => 
+                      const totalFats = manualMeal.ingredients.reduce((sum, ing) =>
                         sum + ((ing.fats_per_100g || 0) * ing.grams) / 100, 0
                       );
 
@@ -1941,21 +1941,21 @@ export default function Nutrition() {
                                     source: nutritionData.source,
                                   }
                                 ];
-                                
+
                                 // Calculate totals immediately
-                                const totalCalories = newIngredients.reduce((sum, ing) => 
+                                const totalCalories = newIngredients.reduce((sum, ing) =>
                                   sum + (ing.calories_per_100g || 0) * ing.grams / 100, 0
                                 );
-                                const totalProtein = newIngredients.reduce((sum, ing) => 
+                                const totalProtein = newIngredients.reduce((sum, ing) =>
                                   sum + (ing.protein_per_100g || 0) * ing.grams / 100, 0
                                 );
-                                const totalCarbs = newIngredients.reduce((sum, ing) => 
+                                const totalCarbs = newIngredients.reduce((sum, ing) =>
                                   sum + (ing.carbs_per_100g || 0) * ing.grams / 100, 0
                                 );
-                                const totalFats = newIngredients.reduce((sum, ing) => 
+                                const totalFats = newIngredients.reduce((sum, ing) =>
                                   sum + (ing.fats_per_100g || 0) * ing.grams / 100, 0
                                 );
-                                
+
                                 // Update meal with ingredients and calculated totals in one call
                                 setManualMeal({
                                   ...manualMeal,
@@ -1965,7 +1965,7 @@ export default function Nutrition() {
                                   carbs_g: Math.round(totalCarbs * 10) / 10 !== 0 ? (Math.round(totalCarbs * 10) / 10).toString() : "",
                                   fats_g: Math.round(totalFats * 10) / 10 !== 0 ? (Math.round(totalFats * 10) / 10).toString() : "",
                                 });
-                                
+
                                 setNewIngredient({ name: "", grams: "" });
                                 toast({
                                   title: "Ingredient Added",
@@ -2087,13 +2087,13 @@ export default function Nutrition() {
                     value={manualNutritionDialog.calories_per_100g}
                     onChange={(e) => {
                       const calories = e.target.value;
-                      
+
                       // Update calories immediately
                       setManualNutritionDialog({
                         ...manualNutritionDialog,
                         calories_per_100g: calories,
                       });
-                      
+
                       // Debounce macro calculation
                       debouncedMacroCalculation(calories, (macros) => {
                         setManualNutritionDialog(prev => ({
@@ -2219,7 +2219,7 @@ export default function Nutrition() {
                     required
                   />
                   <p className="text-xs text-muted-foreground mt-1">Macro targets will be automatically calculated (Recommended: 1200-4000 kcal/day)</p>
-        </div>
+                </div>
                 <div className="grid grid-cols-3 gap-3">
                   <div>
                     <Label htmlFor="edit-protein">Protein (g)</Label>
@@ -2394,7 +2394,7 @@ export default function Nutrition() {
                         // Apply optimistic update immediately
                         setProfile(optimisticProfile);
                         setIsEditTargetsDialogOpen(false);
-                        
+
                         // Show immediate success feedback
                         toast({
                           title: "Targets updated!",
@@ -2475,7 +2475,7 @@ export default function Nutrition() {
 
                         // Execute the background update
                         const success = await optimisticUpdateManager.executeOptimisticUpdate(update);
-                        
+
                         if (success) {
                           // Invalidate related caches on successful update
                           nutritionCache.remove(user.id, 'profile');
@@ -2559,7 +2559,7 @@ export default function Nutrition() {
                   const currentProtein = aiMacroGoals?.proteinGrams || 0;
                   const currentCarbs = aiMacroGoals?.carbsGrams || 0;
                   const currentFats = aiMacroGoals?.fatsGrams || 0;
-                  
+
                   setEditingTargets({
                     calories: currentCalories.toString(),
                     protein: currentProtein.toString(),
@@ -2660,87 +2660,83 @@ export default function Nutrition() {
       />
 
       <Card className="bg-gradient-to-r from-primary/5 to-secondary/5 border-2">
-        <CardHeader>
-          <CardTitle className="text-center text-base sm:text-lg">Daily Macronutrient Totals</CardTitle>
+        <CardHeader className="pb-2 sm:pb-6">
+          <CardTitle className="text-center text-sm sm:text-lg">Daily Macronutrient Totals</CardTitle>
         </CardHeader>
-        <CardContent className="p-3 sm:p-6">
+        <CardContent className="p-2 sm:p-6">
           {/* Horizontal layout on all screen sizes, with responsive sizing for mobile */}
-          <div className="grid grid-cols-4 gap-2 sm:gap-4 md:gap-6">
+          <div className="grid grid-cols-4 gap-1 sm:gap-4 md:gap-6">
             {/* Calories */}
             <div className="text-center">
-              <p className="text-xs sm:text-sm font-medium text-muted-foreground mb-0.5 sm:mb-1">Total Calories</p>
-              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-primary">{totalCalories}</p>
+              <p className="text-[10px] sm:text-sm font-medium text-muted-foreground mb-0.5">Calories</p>
+              <p className="text-lg sm:text-2xl md:text-3xl font-bold text-primary leading-none">{totalCalories}</p>
               {aiMacroGoals && (
                 <>
-                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">Goal: {Math.round(aiMacroGoals.recommendedCalories)}</p>
+                  <p className="text-[9px] sm:text-xs text-muted-foreground mt-0.5">/{Math.round(aiMacroGoals.recommendedCalories)}</p>
                   {(() => {
                     const diff = getMacroDifference(totalCalories, aiMacroGoals.recommendedCalories);
                     return (
-                      <p className={`text-[10px] sm:text-xs font-medium mt-0.5 ${diff.colorClass}`}>
+                      <p className={`text-[9px] sm:text-xs font-medium ${diff.colorClass}`}>
                         {diff.displayText}
                       </p>
                     );
                   })()}
                 </>
               )}
-              <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">kcal</p>
             </div>
             {/* Protein */}
             <div className="text-center">
-              <p className="text-xs sm:text-sm font-medium text-muted-foreground mb-0.5 sm:mb-1">Protein</p>
-              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-600">{totalProtein.toFixed(1)}</p>
+              <p className="text-[10px] sm:text-sm font-medium text-muted-foreground mb-0.5">Protein</p>
+              <p className="text-lg sm:text-2xl md:text-3xl font-bold text-blue-600 leading-none">{totalProtein.toFixed(0)}<span className="text-[10px] sm:text-base font-normal ml-0.5">g</span></p>
               {aiMacroGoals && (
                 <>
-                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">Goal: {Math.round(aiMacroGoals.proteinGrams)}g</p>
+                  <p className="text-[9px] sm:text-xs text-muted-foreground mt-0.5">/{Math.round(aiMacroGoals.proteinGrams)}g</p>
                   {(() => {
                     const diff = getMacroDifference(totalProtein, aiMacroGoals.proteinGrams);
                     return (
-                      <p className={`text-[10px] sm:text-xs font-medium mt-0.5 ${diff.colorClass}`}>
+                      <p className={`text-[9px] sm:text-xs font-medium ${diff.colorClass}`}>
                         {diff.displayText}
                       </p>
                     );
                   })()}
                 </>
               )}
-              <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">grams</p>
             </div>
             {/* Carbs */}
             <div className="text-center">
-              <p className="text-xs sm:text-sm font-medium text-muted-foreground mb-0.5 sm:mb-1">Carbs</p>
-              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-orange-600">{totalCarbs.toFixed(1)}</p>
+              <p className="text-[10px] sm:text-sm font-medium text-muted-foreground mb-0.5">Carbs</p>
+              <p className="text-lg sm:text-2xl md:text-3xl font-bold text-orange-600 leading-none">{totalCarbs.toFixed(0)}<span className="text-[10px] sm:text-base font-normal ml-0.5">g</span></p>
               {aiMacroGoals && (
                 <>
-                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">Goal: {Math.round(aiMacroGoals.carbsGrams)}g</p>
+                  <p className="text-[9px] sm:text-xs text-muted-foreground mt-0.5">/{Math.round(aiMacroGoals.carbsGrams)}g</p>
                   {(() => {
                     const diff = getMacroDifference(totalCarbs, aiMacroGoals.carbsGrams);
                     return (
-                      <p className={`text-[10px] sm:text-xs font-medium mt-0.5 ${diff.colorClass}`}>
+                      <p className={`text-[9px] sm:text-xs font-medium ${diff.colorClass}`}>
                         {diff.displayText}
                       </p>
                     );
                   })()}
                 </>
               )}
-              <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">grams</p>
             </div>
             {/* Fats */}
             <div className="text-center">
-              <p className="text-xs sm:text-sm font-medium text-muted-foreground mb-0.5 sm:mb-1">Fats</p>
-              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-green-600">{totalFats.toFixed(1)}</p>
+              <p className="text-[10px] sm:text-sm font-medium text-muted-foreground mb-0.5">Fats</p>
+              <p className="text-lg sm:text-2xl md:text-3xl font-bold text-green-600 leading-none">{totalFats.toFixed(0)}<span className="text-[10px] sm:text-base font-normal ml-0.5">g</span></p>
               {aiMacroGoals && (
                 <>
-                  <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5">Goal: {Math.round(aiMacroGoals.fatsGrams)}g</p>
+                  <p className="text-[9px] sm:text-xs text-muted-foreground mt-0.5">/{Math.round(aiMacroGoals.fatsGrams)}g</p>
                   {(() => {
                     const diff = getMacroDifference(totalFats, aiMacroGoals.fatsGrams);
                     return (
-                      <p className={`text-[10px] sm:text-xs font-medium mt-0.5 ${diff.colorClass}`}>
+                      <p className={`text-[9px] sm:text-xs font-medium ${diff.colorClass}`}>
                         {diff.displayText}
                       </p>
                     );
                   })()}
                 </>
               )}
-              <p className="text-[10px] sm:text-xs text-muted-foreground mt-0.5 sm:mt-1">grams</p>
             </div>
           </div>
         </CardContent>
@@ -2789,93 +2785,93 @@ export default function Nutrition() {
 
         <TabsContent value="ideas" className="space-y-4 mt-6">
           <ErrorBoundary>
-          {mealPlanIdeas.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <p className="text-muted-foreground mb-4">No meal plan ideas generated yet</p>
-                <p className="text-sm text-muted-foreground mb-4">
-                  Click "AI Meal Plan" to generate personalized meal suggestions
-                </p>
-                <Button onClick={() => setIsAiDialogOpen(true)}>
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Generate Meal Ideas
-                </Button>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-lg font-semibold">Generated Meal Ideas</h3>
-                <div className="flex gap-2">
-                  <Button 
-                    onClick={() => saveMealIdeasToDatabase(mealPlanIdeas)}
-                    disabled={savingAllMeals || loggingMeal !== null}
-                    variant="default"
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    Save All Meals
+            {mealPlanIdeas.length === 0 ? (
+              <Card>
+                <CardContent className="py-12 text-center">
+                  <p className="text-muted-foreground mb-4">No meal plan ideas generated yet</p>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Click "AI Meal Plan" to generate personalized meal suggestions
+                  </p>
+                  <Button onClick={() => setIsAiDialogOpen(true)}>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Generate Meal Ideas
                   </Button>
-                  <Button 
-                    onClick={clearMealIdeas}
-                    variant="outline"
-                    size="sm"
-                  >
-                    <X className="mr-2 h-4 w-4" />
-                    Clear Ideas
-                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-lg font-semibold">Generated Meal Ideas</h3>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => saveMealIdeasToDatabase(mealPlanIdeas)}
+                      disabled={savingAllMeals || loggingMeal !== null}
+                      variant="default"
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Save All Meals
+                    </Button>
+                    <Button
+                      onClick={clearMealIdeas}
+                      variant="outline"
+                      size="sm"
+                    >
+                      <X className="mr-2 h-4 w-4" />
+                      Clear Ideas
+                    </Button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {mealPlanIdeas.map((meal) => (
+                    <Card key={meal.id}>
+                      <CardContent className="p-6">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                            <h3 className="text-xl font-semibold">{meal.meal_name}</h3>
+                            <div className="flex gap-2 mt-2 flex-wrap">
+                              <Badge variant="outline">{meal.calories} cal</Badge>
+                              <Badge variant="outline">{meal.protein_g}g protein</Badge>
+                              <Badge variant="outline">{meal.carbs_g}g carbs</Badge>
+                              <Badge variant="outline">{meal.fats_g}g fats</Badge>
+                              <Badge>{meal.meal_type}</Badge>
+                            </div>
+                          </div>
+                        </div>
+                        {meal.portion_size && (
+                          <p className="text-sm text-muted-foreground mb-2">
+                            <strong>Portion:</strong> {meal.portion_size}
+                          </p>
+                        )}
+                        {meal.ingredients && Array.isArray(meal.ingredients) && meal.ingredients.length > 0 && (
+                          <div className="mb-2">
+                            <p className="text-sm font-medium mb-1">Ingredients:</p>
+                            <ul className="text-sm text-muted-foreground list-disc list-inside">
+                              {meal.ingredients.map((ing: Ingredient, idx: number) => (
+                                <li key={idx}>{ing.name} - {ing.grams}g</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {meal.recipe_notes && (
+                          <div className="mb-4">
+                            <p className="text-sm font-medium mb-1">Recipe:</p>
+                            <p className="text-sm text-muted-foreground">{meal.recipe_notes}</p>
+                          </div>
+                        )}
+                        <Button onClick={() => handleLogMealIdea(meal)} disabled={loggingMeal === meal.id || savingAllMeals} className="w-full">
+                          <Plus className="mr-2 h-4 w-4" />
+                          Log This Meal
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
                 </div>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {mealPlanIdeas.map((meal) => (
-                <Card key={meal.id}>
-                  <CardContent className="p-6">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <h3 className="text-xl font-semibold">{meal.meal_name}</h3>
-                        <div className="flex gap-2 mt-2 flex-wrap">
-                          <Badge variant="outline">{meal.calories} cal</Badge>
-                          <Badge variant="outline">{meal.protein_g}g protein</Badge>
-                          <Badge variant="outline">{meal.carbs_g}g carbs</Badge>
-                          <Badge variant="outline">{meal.fats_g}g fats</Badge>
-                          <Badge>{meal.meal_type}</Badge>
-                        </div>
-                      </div>
-                    </div>
-                    {meal.portion_size && (
-                      <p className="text-sm text-muted-foreground mb-2">
-                        <strong>Portion:</strong> {meal.portion_size}
-                      </p>
-                    )}
-                    {meal.ingredients && Array.isArray(meal.ingredients) && meal.ingredients.length > 0 && (
-                      <div className="mb-2">
-                        <p className="text-sm font-medium mb-1">Ingredients:</p>
-                        <ul className="text-sm text-muted-foreground list-disc list-inside">
-                          {meal.ingredients.map((ing: Ingredient, idx: number) => (
-                            <li key={idx}>{ing.name} - {ing.grams}g</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {meal.recipe_notes && (
-                      <div className="mb-4">
-                        <p className="text-sm font-medium mb-1">Recipe:</p>
-                        <p className="text-sm text-muted-foreground">{meal.recipe_notes}</p>
-                      </div>
-                    )}
-                    <Button onClick={() => handleLogMealIdea(meal)} disabled={loggingMeal === meal.id || savingAllMeals} className="w-full">
-                      <Plus className="mr-2 h-4 w-4" />
-                      Log This Meal
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))}
-              </div>
-            </div>
-          )}
+            )}
           </ErrorBoundary>
         </TabsContent>
       </Tabs>
-      
+
       <DeleteConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
