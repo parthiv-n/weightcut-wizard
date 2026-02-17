@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Sparkles, Calendar as CalendarIcon, TrendingUp, Loader2, AlertCircle, Settings, Edit2, X } from "lucide-react";
+import { Plus, Sparkles, Calendar as CalendarIcon, TrendingUp, Loader2, AlertCircle, Settings, Edit2, X, Lock } from "lucide-react";
 import { MealCard } from "@/components/nutrition/MealCard";
 import { CalorieBudgetIndicator } from "@/components/nutrition/CalorieBudgetIndicator";
 import { VoiceInput } from "@/components/nutrition/VoiceInput";
@@ -90,6 +90,17 @@ export default function Nutrition() {
   });
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
+
+  // AI meal plan rate limiting
+  const DAILY_LIMIT = 5;
+  const DEV_PASSWORD = "ben10boy";
+  const [mealPlanUsageCount, setMealPlanUsageCount] = useState(() => {
+    const key = `meal_plan_usage_${format(new Date(), "yyyy-MM-dd")}`;
+    return parseInt(localStorage.getItem(key) || "0", 10);
+  });
+  const [devUnlocked, setDevUnlocked] = useState(false);
+  const [showDevInput, setShowDevInput] = useState(false);
+  const [devPasswordInput, setDevPasswordInput] = useState("");
 
   // Manual meal form
   const [manualMeal, setManualMeal] = useState({
@@ -399,6 +410,16 @@ export default function Nutrition() {
       return;
     }
 
+    // Rate limit check
+    if (mealPlanUsageCount >= DAILY_LIMIT && !devUnlocked) {
+      toast({
+        title: "Daily limit reached",
+        description: "You've used all 5 meal plan generations for today. Try again after 11:59 PM.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setGeneratingPlan(true);
     try {
       // Simple authentication check
@@ -542,6 +563,12 @@ export default function Nutrition() {
       setDailyCalorieTarget(target || dailyCalorieTarget);
       setSafetyStatus(status || safetyStatus);
       setSafetyMessage(message || safetyMessage);
+
+      // Increment rate limit counter
+      const newCount = mealPlanUsageCount + 1;
+      setMealPlanUsageCount(newCount);
+      const usageKey = `meal_plan_usage_${format(new Date(), "yyyy-MM-dd")}`;
+      localStorage.setItem(usageKey, newCount.toString());
 
       // Save accumulated ideas to localStorage for persistence
       const accumulatedIdeas = [...mealPlanIdeas, ...ideasToStore];
@@ -1449,57 +1476,24 @@ export default function Nutrition() {
             <p className="text-muted-foreground mt-1 text-sm sm:text-base">AI-powered meal planning</p>
           </div>
         </div>
-        <div className="flex gap-2 flex-wrap w-full sm:w-auto justify-start sm:justify-end">
-          <BarcodeScanner onFoodScanned={handleBarcodeScanned} disabled={generatingPlan || savingAllMeals} />
-          <VoiceInput onTranscription={handleVoiceInput} disabled={generatingPlan || savingAllMeals || aiAnalyzing} />
-          <Dialog open={isAiDialogOpen} onOpenChange={setIsAiDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="whitespace-nowrap">
-                <Sparkles className="mr-2 h-4 w-4" />
-                <span className="hidden sm:inline">AI Meal Plan</span>
-                <span className="sm:hidden">AI Plan</span>
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl w-[95vw] sm:w-full">
-              <DialogHeader>
-                <DialogTitle>Generate Meal Plan Ideas for {format(new Date(selectedDate), "MMM d, yyyy")}</DialogTitle>
-                <DialogDescription>
-                  Describe what kind of meals you'd like. These will be created as suggestions that you can log to your day.
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="aiPrompt">What would you like to eat?</Label>
-                  <Textarea
-                    id="aiPrompt"
-                    placeholder="E.g., 'I want high-protein meals with chicken and vegetables, no dairy' or 'Mediterranean diet with fish'"
-                    value={aiPrompt}
-                    onChange={(e) => setAiPrompt(e.target.value)}
-                    rows={4}
-                  />
-                </div>
-                <Button onClick={handleGenerateMealPlan} disabled={generatingPlan} className="w-full">
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  {generatingPlan ? "Generating..." : "Generate Meal Ideas"}
+        <div className="flex flex-col gap-2 w-full sm:w-auto">
+          {/* Row 1: Scan, Voice, Add Meal */}
+          <div className="flex gap-2 justify-start sm:justify-end">
+            <BarcodeScanner onFoodScanned={handleBarcodeScanned} disabled={generatingPlan || savingAllMeals} />
+            <VoiceInput onTranscription={handleVoiceInput} disabled={generatingPlan || savingAllMeals || aiAnalyzing} />
+            <Dialog open={isManualDialogOpen} onOpenChange={(open) => {
+              setIsManualDialogOpen(open);
+              if (!open) {
+                setIngredientLookupError(null);
+              }
+            }}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="whitespace-nowrap">
+                  <Plus className="mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">Add Meal</span>
+                  <span className="sm:hidden">Add</span>
                 </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          <Dialog open={isManualDialogOpen} onOpenChange={(open) => {
-            setIsManualDialogOpen(open);
-            if (!open) {
-              // Reset ingredient lookup error when dialog closes
-              setIngredientLookupError(null);
-            }
-          }}>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="whitespace-nowrap">
-                <Plus className="mr-2 h-4 w-4" />
-                <span className="hidden sm:inline">Add Meal</span>
-                <span className="sm:hidden">Add</span>
-              </Button>
-            </DialogTrigger>
+              </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
               <DialogHeader>
                 <DialogTitle>Add Manual Meal</DialogTitle>
@@ -1740,6 +1734,75 @@ export default function Nutrition() {
               </div>
             </DialogContent>
           </Dialog>
+          </div>
+          {/* Row 2: AI Meal Plan - full width */}
+          <Dialog open={isAiDialogOpen} onOpenChange={setIsAiDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="w-full whitespace-nowrap">
+                <Sparkles className="mr-2 h-4 w-4" />
+                AI Meal Plan
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl w-[95vw] sm:w-full">
+              <DialogHeader>
+                <div className="flex items-center justify-between">
+                  <DialogTitle>Generate Meal Plan Ideas for {format(new Date(selectedDate), "MMM d, yyyy")}</DialogTitle>
+                  <button onClick={() => setShowDevInput(!showDevInput)} className="opacity-30 hover:opacity-60 transition-opacity p-1">
+                    <Lock className="h-3 w-3" />
+                  </button>
+                </div>
+                <DialogDescription>
+                  Describe what kind of meals you'd like. These will be created as suggestions that you can log to your day.
+                </DialogDescription>
+              </DialogHeader>
+              {showDevInput && (
+                <div className="flex gap-2 items-center">
+                  <Input
+                    type="password"
+                    placeholder="Dev password"
+                    value={devPasswordInput}
+                    onChange={(e) => setDevPasswordInput(e.target.value)}
+                    className="h-8 text-xs flex-1"
+                  />
+                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => {
+                    if (devPasswordInput === DEV_PASSWORD) {
+                      setDevUnlocked(true);
+                      setShowDevInput(false);
+                      toast({ title: "Dev mode unlocked" });
+                    } else {
+                      toast({ title: "Wrong password", variant: "destructive" });
+                    }
+                  }}>
+                    Unlock
+                  </Button>
+                </div>
+              )}
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="aiPrompt">What would you like to eat?</Label>
+                  <Textarea
+                    id="aiPrompt"
+                    placeholder="E.g., 'I want high-protein meals with chicken and vegetables, no dairy' or 'Mediterranean diet with fish'"
+                    value={aiPrompt}
+                    onChange={(e) => setAiPrompt(e.target.value)}
+                    rows={4}
+                  />
+                </div>
+                {!devUnlocked && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    {DAILY_LIMIT - mealPlanUsageCount > 0
+                      ? `${DAILY_LIMIT - mealPlanUsageCount} generation${DAILY_LIMIT - mealPlanUsageCount === 1 ? '' : 's'} remaining today`
+                      : "Daily limit reached. Try again after 11:59 PM."}
+                  </p>
+                )}
+                <Button onClick={handleGenerateMealPlan} disabled={generatingPlan || (!devUnlocked && mealPlanUsageCount >= DAILY_LIMIT)} className="w-full">
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  {generatingPlan ? "Generating..." : "Generate Meal Ideas"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
 
           {/* Manual Macros Dialog */}
           <Dialog open={isManualMacrosDialogOpen} onOpenChange={setIsManualMacrosDialogOpen}>
@@ -2498,7 +2561,6 @@ export default function Nutrition() {
               </div>
             </DialogContent>
           </Dialog>
-        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 sm:gap-4">
@@ -2544,111 +2606,60 @@ export default function Nutrition() {
               <Settings className="h-4 w-4" />
               Daily Nutrition Targets
             </CardTitle>
-            <div className="flex items-center gap-2">
-              {profile?.manual_nutrition_override && (
-                <Badge variant="outline" className="text-xs">
-                  Manual Override
-                </Badge>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  // Pre-fill dialog with current values
-                  const currentCalories = dailyCalorieTarget;
-                  const currentProtein = aiMacroGoals?.proteinGrams || 0;
-                  const currentCarbs = aiMacroGoals?.carbsGrams || 0;
-                  const currentFats = aiMacroGoals?.fatsGrams || 0;
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const currentCalories = dailyCalorieTarget;
+                const currentProtein = aiMacroGoals?.proteinGrams || 0;
+                const currentCarbs = aiMacroGoals?.carbsGrams || 0;
+                const currentFats = aiMacroGoals?.fatsGrams || 0;
 
-                  setEditingTargets({
-                    calories: currentCalories.toString(),
-                    protein: currentProtein.toString(),
-                    carbs: currentCarbs.toString(),
-                    fats: currentFats.toString(),
-                  });
-                  setIsEditTargetsDialogOpen(true);
-                }}
-                className="flex items-center gap-1"
-              >
-                <Edit2 className="h-3 w-3" />
-                Edit Targets
-              </Button>
-            </div>
+                setEditingTargets({
+                  calories: currentCalories.toString(),
+                  protein: currentProtein.toString(),
+                  carbs: currentCarbs.toString(),
+                  fats: currentFats.toString(),
+                });
+                setIsEditTargetsDialogOpen(true);
+              }}
+              className="flex items-center gap-1"
+            >
+              <Edit2 className="h-3 w-3" />
+              Edit Targets
+            </Button>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div>
+          <div className="space-y-3">
+            {/* Calories - prominent top row */}
+            <div className="text-center p-3 rounded-lg bg-primary/5">
               <p className="text-xs text-muted-foreground mb-1">Calories</p>
-              <p className="text-lg font-semibold">{dailyCalorieTarget}</p>
+              <p className="text-2xl font-bold">{dailyCalorieTarget}</p>
               <p className="text-xs text-muted-foreground">kcal/day</p>
             </div>
+            {/* Macros - 3 columns */}
             {aiMacroGoals ? (
-              <>
-                <div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="text-center">
                   <p className="text-xs text-muted-foreground mb-1">Protein</p>
-                  <p className="text-lg font-semibold">{Math.round(aiMacroGoals.proteinGrams)}</p>
-                  <p className="text-xs text-muted-foreground">g/day</p>
+                  <p className="text-lg font-semibold">{Math.round(aiMacroGoals.proteinGrams)}g</p>
                 </div>
-                <div>
+                <div className="text-center">
                   <p className="text-xs text-muted-foreground mb-1">Carbs</p>
-                  <p className="text-lg font-semibold">{Math.round(aiMacroGoals.carbsGrams)}</p>
-                  <p className="text-xs text-muted-foreground">g/day</p>
+                  <p className="text-lg font-semibold">{Math.round(aiMacroGoals.carbsGrams)}g</p>
                 </div>
-                <div>
+                <div className="text-center">
                   <p className="text-xs text-muted-foreground mb-1">Fats</p>
-                  <p className="text-lg font-semibold">{Math.round(aiMacroGoals.fatsGrams)}</p>
-                  <p className="text-xs text-muted-foreground">g/day</p>
+                  <p className="text-lg font-semibold">{Math.round(aiMacroGoals.fatsGrams)}g</p>
                 </div>
-              </>
+              </div>
             ) : (
-              <div className="col-span-3 flex items-center">
+              <div className="flex items-center justify-center">
                 <p className="text-sm text-muted-foreground">No macro targets set</p>
               </div>
             )}
           </div>
-          {profile?.manual_nutrition_override && (
-            <div className="mt-4 pt-4 border-t">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  try {
-                    const { data: { user } } = await supabase.auth.getUser();
-                    if (!user) throw new Error("Not authenticated");
-
-                    const { error } = await supabase
-                      .from("profiles")
-                      .update({
-                        manual_nutrition_override: false,
-                      })
-                      .eq("id", user.id);
-
-                    if (error) throw error;
-
-                    toast({
-                      title: "Manual override cleared",
-                      description: "Nutrition targets will now use AI recommendations or calculated values.",
-                    });
-
-                    // Reload profile to refresh data
-                    await loadProfile();
-                  } catch (error: any) {
-                    console.error("Error clearing manual override:", error);
-                    toast({
-                      title: "Error",
-                      description: error.message || "Failed to clear manual override",
-                      variant: "destructive",
-                    });
-                  }
-                }}
-                className="w-full sm:w-auto"
-              >
-                <X className="h-3 w-3 mr-1" />
-                Clear Manual Override
-              </Button>
-            </div>
-          )}
         </CardContent>
       </Card>
 

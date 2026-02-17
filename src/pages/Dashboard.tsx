@@ -168,12 +168,10 @@ export default function Dashboard() {
   return (
     <ErrorBoundary>
     <div className="space-y-5 sm:space-y-6 p-4 sm:p-5 md:p-6 w-full max-w-7xl mx-auto">
-      {/* Mobile-first header with responsive text sizing */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold">Welcome back, {userName || "Fighter"}!</h1>
-          <p className="text-sm sm:text-base text-muted-foreground">Your weight cut journey dashboard</p>
-        </div>
+      {/* Centered welcome header */}
+      <div className="text-center dashboard-card-enter dashboard-stagger-1">
+        <h1 className="text-2xl sm:text-3xl font-bold">Welcome back, {userName || "Fighter"}!</h1>
+        <p className="text-sm sm:text-base text-muted-foreground">Your weight cut journey dashboard</p>
       </div>
 
       {/* Mobile-optimized wizard wisdom card */}
@@ -334,10 +332,10 @@ export default function Dashboard() {
                   fill="url(#weightGradient)"
                   animationDuration={1000}
                 />
-                <Line 
-                  type="monotone" 
-                  dataKey="weight" 
-                  stroke="hsl(var(--primary))" 
+                <Line
+                  type="monotone"
+                  dataKey="weight"
+                  stroke="hsl(var(--secondary))"
                   strokeWidth={3}
                   dot={{ fill: "hsl(var(--primary))", r: 4, strokeWidth: 2, stroke: "hsl(var(--background))" }}
                   activeDot={{ r: 6, strokeWidth: 2 }}
