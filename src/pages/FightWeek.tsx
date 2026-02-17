@@ -432,7 +432,7 @@ export default function FightWeek() {
 
   if (!plan) {
     return (
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-5 md:p-6">
         <div className="flex items-center gap-3">
           <Calendar className="w-8 h-8 text-primary" />
           <h1 className="text-3xl font-title font-bold">Fight Week Schedule</h1>
@@ -482,7 +482,7 @@ export default function FightWeek() {
   }
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-6 p-4 sm:p-5 md:p-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Calendar className="w-8 h-8 text-primary" />

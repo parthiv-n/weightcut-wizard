@@ -10,12 +10,14 @@ interface UserContextType {
   isSessionValid: boolean;
   isLoading: boolean;
   hasProfile: boolean;
+  authError: boolean;
   setUserName: (name: string) => void;
   setAvatarUrl: (url: string) => void;
   updateCurrentWeight: (weight: number) => Promise<void>;
   loadUserData: () => Promise<void>;
   refreshSession: () => Promise<boolean>;
   checkSessionValidity: () => Promise<boolean>;
+  retryAuth: () => Promise<void>;
 }
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
@@ -28,6 +30,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [isSessionValid, setIsSessionValid] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [hasProfile, setHasProfile] = useState<boolean>(false);
+  const [authError, setAuthError] = useState<boolean>(false);
 
   const checkSessionValidity = async (): Promise<boolean> => {
     try {
@@ -82,6 +85,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   };
 
   const loadUserData = async () => {
+    setAuthError(false);
     try {
       const { data: { session } } = await withAuthTimeout(
         supabase.auth.getSession()
@@ -146,12 +150,19 @@ export function UserProvider({ children }: { children: ReactNode }) {
       setCurrentWeight(weight);
     } catch (error) {
       console.error("Error loading user data:", error);
+      setAuthError(true);
       setIsSessionValid(false);
       setUserId(null);
       setHasProfile(false);
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const retryAuth = async () => {
+    setAuthError(false);
+    setIsLoading(true);
+    await loadUserData();
   };
 
   const updateCurrentWeight = async (weight: number) => {
@@ -218,12 +229,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
         isSessionValid,
         isLoading,
         hasProfile,
+        authError,
         setUserName: updateUserName,
         setAvatarUrl: updateAvatarUrl,
         updateCurrentWeight,
         loadUserData,
         refreshSession,
         checkSessionValidity,
+        retryAuth,
       }}
     >
       {children}
