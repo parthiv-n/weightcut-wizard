@@ -261,14 +261,39 @@ All colors MUST be HSL.
     }
   }
 
+  /* Dashboard card stagger entrance */
+  @keyframes dashboardCardEnter {
+    from {
+      opacity: 0;
+      transform: translateY(20px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .dashboard-card-enter {
+    animation: dashboardCardEnter 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+    will-change: transform, opacity;
+  }
+
+  .dashboard-stagger-1 { animation-delay: 0.05s; }
+  .dashboard-stagger-2 { animation-delay: 0.1s; }
+  .dashboard-stagger-3 { animation-delay: 0.15s; }
+  .dashboard-stagger-4 { animation-delay: 0.2s; }
+  .dashboard-stagger-5 { animation-delay: 0.25s; }
+  .dashboard-stagger-6 { animation-delay: 0.3s; }
+
   /* Optimize animations for reduced motion preferences */
   @media (prefers-reduced-motion: reduce) {
     .page-transition-wrapper {
       animation: none !important;
     }
-    
+
     .page-enter,
-    .page-exit {
+    .page-exit,
+    .dashboard-card-enter {
       animation: none !important;
       opacity: 1;
       transform: none;

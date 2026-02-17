@@ -505,12 +505,27 @@ export default function WeightTracker() {
   };
 
   const getChartData = () => {
-    if (!weightLogs.length || !profile) return [];
+    if (!profile) return [];
 
     // Show both fight week target (diet goal) and weigh-in day weight (final weigh-in) on chart
     // Prioritize fight_week_target_kg as the primary diet goal
     const fightWeekTarget = profile.fight_week_target_kg || profile.goal_weight_kg;
-    
+
+    // If no weight logs, show onboarding weight as a starting point
+    if (!weightLogs.length) {
+      if (profile.current_weight_kg) {
+        return [{
+          date: "Start",
+          weight: profile.current_weight_kg,
+          fightWeekGoal: fightWeekTarget,
+          fightNightGoal: profile.goal_weight_kg,
+          logId: null,
+          fullDate: "Onboarding weight",
+        }];
+      }
+      return [];
+    }
+
     const data = weightLogs.map((log) => ({
       date: format(new Date(log.date), "MMM dd"),
       weight: log.weight_kg,
@@ -1224,7 +1239,7 @@ export default function WeightTracker() {
                       <Line
                         type="monotone"
                         dataKey="weight"
-                        stroke="hsl(var(--chart-1))"
+                        stroke="hsl(var(--secondary))"
                         strokeWidth={3}
                         dot={{ fill: "hsl(var(--chart-1))", r: 5, cursor: "pointer" }}
                         activeDot={{ r: 8, cursor: "pointer" }}
