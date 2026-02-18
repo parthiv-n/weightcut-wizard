@@ -84,17 +84,34 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const loadUserData = async () => {
-    setAuthError(false);
+  const loadUserData = async (retryCount = 0) => {
+    // Only clear error on first attempt
+    if (retryCount === 0) setAuthError(false);
+
     try {
-      const { data: { session } } = await withAuthTimeout(
+      const { data: { session }, error } = await withAuthTimeout(
         supabase.auth.getSession()
       );
 
-      if (!session?.user) {
+      if (error || !session?.user) {
+        // If we have retries left and it's likely a temporary issue (null session or timeout)
+        if (retryCount < 2) {
+          console.log(`Auth check failed, retrying (${retryCount + 1}/2)...`);
+          setTimeout(() => loadUserData(retryCount + 1), 1000);
+          return;
+        }
+
         setIsSessionValid(false);
         setUserId(null);
         setHasProfile(false);
+
+        // Only set error if we've exhausted retries and it wasn't just a "not logged in" state
+        // If error exists, it's a real error. If !session, it's just unauthenticated.
+        if (error) {
+          console.error("Auth session error after retries:", error);
+          setAuthError(true);
+        }
+
         setIsLoading(false);
         return;
       }

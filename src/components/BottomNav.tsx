@@ -114,10 +114,9 @@ export function BottomNav() {
           <NavLink
             to={mainNavItems[0].url}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-all duration-200 ${
-                isActive
-                  ? "text-primary"
-                  : "text-muted-foreground active:scale-95"
+              `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-all duration-200 ${isActive
+                ? "text-primary"
+                : "text-muted-foreground active:scale-95"
               }`
             }
           >
@@ -129,17 +128,16 @@ export function BottomNav() {
           <NavLink
             to={mainNavItems[1].url}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-all duration-200 ${
-                isActive
-                  ? "text-primary"
-                  : "text-muted-foreground active:scale-95"
+              `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-all duration-200 ${isActive
+                ? "text-primary"
+                : "text-muted-foreground active:scale-95"
               }`
             }
           >
             <NutritionIcon className="h-6 w-6" />
             <span className="text-[10px] font-medium leading-tight">{mainNavItems[1].title}</span>
           </NavLink>
-          
+
           {/* Center plus button - inline with other buttons */}
           <button
             onClick={() => setQuickLogOpen(true)}
@@ -156,10 +154,9 @@ export function BottomNav() {
           <NavLink
             to={mainNavItems[2].url}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-all duration-200 ${
-                isActive
-                  ? "text-primary"
-                  : "text-muted-foreground active:scale-95"
+              `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-all duration-200 ${isActive
+                ? "text-primary"
+                : "text-muted-foreground active:scale-95"
               }`
             }
           >
@@ -214,7 +211,7 @@ export function BottomNav() {
           <SheetHeader>
             <SheetTitle>More</SheetTitle>
           </SheetHeader>
-          <div className="mt-6 space-y-2 overflow-y-auto flex-1 pb-4">
+          <div className="mt-6 space-y-2 overflow-y-auto flex-1 pb-24">
             {moreMenuItems.map((item) => (
               <button
                 key={item.url}

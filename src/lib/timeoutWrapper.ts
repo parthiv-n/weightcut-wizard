@@ -28,7 +28,7 @@ export function withSupabaseTimeout<T>(
 // Wrapper for authentication operations
 export function withAuthTimeout<T>(
   authOperation: Promise<T>,
-  timeoutMs: number = 5000 // 5 second timeout for auth
+  timeoutMs: number = 10000 // 10 second timeout for auth, increased for mobile stability
 ): Promise<T> {
   return withTimeout(
     authOperation,
