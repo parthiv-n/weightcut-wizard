@@ -15,12 +15,21 @@ const Index = () => {
 
     if (userId) {
       if (hasProfile) {
-        navigate("/dashboard");
+        const lastRoute = localStorage.getItem('lastRoute');
+        navigate(lastRoute || '/dashboard');
       } else {
         navigate("/onboarding");
       }
     }
   }, [userId, hasProfile, isLoading, navigate]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-card">

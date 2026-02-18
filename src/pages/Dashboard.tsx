@@ -21,6 +21,13 @@ export default function Dashboard() {
   const [todayHydration, setTodayHydration] = useState(0);
   const { userName, currentWeight, userId } = useUser();
 
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good morning";
+    if (hour < 17) return "Good afternoon";
+    return "Good evening";
+  };
+
   useEffect(() => {
     if (userId) {
       loadDashboardData();
@@ -168,10 +175,10 @@ export default function Dashboard() {
   return (
     <ErrorBoundary>
     <div className="space-y-5 sm:space-y-6 p-4 sm:p-5 md:p-6 w-full max-w-7xl mx-auto">
-      {/* Centered welcome header */}
-      <div className="text-center dashboard-card-enter dashboard-stagger-1">
-        <h1 className="text-2xl sm:text-3xl font-bold">Welcome back, {userName || "Fighter"}!</h1>
-        <p className="text-sm sm:text-base text-muted-foreground">Your weight cut journey dashboard</p>
+      {/* Greeting header */}
+      <div className="dashboard-card-enter dashboard-stagger-1">
+        <h1 className="text-2xl font-bold">{getGreeting()}, {userName || "Fighter"}</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">Your weight cut journey dashboard</p>
       </div>
 
       {/* Mobile-optimized wizard wisdom card */}
@@ -225,8 +232,8 @@ export default function Dashboard() {
               <Calendar className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent className="p-4 sm:p-6">
-              <div className="text-3xl sm:text-4xl font-bold">{daysUntilTarget}</div>
-              <p className="text-xs sm:text-sm text-muted-foreground mt-1">days remaining</p>
+              <div className="text-3xl sm:text-4xl font-bold display-number">{daysUntilTarget}</div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mt-1">days remaining</p>
             </CardContent>
           </Card>
 
@@ -236,8 +243,8 @@ export default function Dashboard() {
               <Droplets className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent className="p-4 sm:p-6">
-              <div className="text-3xl sm:text-4xl font-bold">{(todayHydration / 1000).toFixed(1)}L</div>
-              <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+              <div className="text-3xl sm:text-4xl font-bold display-number">{(todayHydration / 1000).toFixed(1)}L</div>
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mt-1">
                 {todayHydration >= 3000 ? "Great job!" : `${((3000 - todayHydration) / 1000).toFixed(1)}L to go`}
               </p>
             </CardContent>
@@ -274,7 +281,7 @@ export default function Dashboard() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
-            <CardTitle>Weight History</CardTitle>
+            <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Weight History</CardTitle>
             <div className="flex gap-1 bg-muted rounded-lg p-1">
               <Button
                 variant={weightUnit === 'kg' ? 'default' : 'ghost'}

@@ -108,70 +108,81 @@ export function BottomNav() {
 
   return (
     <>
-      <nav className="fixed bottom-0 left-0 right-0 z-[9999] md:hidden bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border-t border-border safe-area-inset-bottom">
+      <nav className="fixed bottom-0 left-0 right-0 z-[9999] md:hidden bg-background/80 backdrop-blur-2xl border-t border-border/40 safe-area-inset-bottom">
         <div className="flex items-center justify-around h-16 px-2 relative">
           {/* Dashboard */}
           <NavLink
             to={mainNavItems[0].url}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-all duration-200 ${isActive
+              `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 ${isActive
                 ? "text-primary"
                 : "text-muted-foreground active:scale-95"
               }`
             }
           >
-            <DashboardIcon className="h-6 w-6" />
-            <span className="text-[10px] font-medium leading-tight">{mainNavItems[0].title}</span>
+            {({ isActive }) => (
+              <>
+                <DashboardIcon className="h-6 w-6" />
+                <span className={`text-[10px] tracking-wide leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[0].title}</span>
+              </>
+            )}
           </NavLink>
 
           {/* Nutrition */}
           <NavLink
             to={mainNavItems[1].url}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-all duration-200 ${isActive
+              `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 ${isActive
                 ? "text-primary"
                 : "text-muted-foreground active:scale-95"
               }`
             }
           >
-            <NutritionIcon className="h-6 w-6" />
-            <span className="text-[10px] font-medium leading-tight">{mainNavItems[1].title}</span>
+            {({ isActive }) => (
+              <>
+                <NutritionIcon className="h-6 w-6" />
+                <span className={`text-[10px] tracking-wide leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[1].title}</span>
+              </>
+            )}
           </NavLink>
 
-          {/* Center plus button - inline with other buttons */}
+          {/* Center plus button - floating FAB */}
           <button
             onClick={() => setQuickLogOpen(true)}
-            className="flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-all duration-200"
+            className="flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target"
             aria-label="Quick Log"
           >
-            <div className="w-12 h-12 rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 active:scale-95 transition-all duration-200 flex items-center justify-center">
-              <Plus className="h-6 w-6" strokeWidth={2.5} />
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/30 active:scale-95 transition-transform duration-150 flex items-center justify-center">
+              <Plus className="h-7 w-7" strokeWidth={2.5} />
             </div>
-            <span className="text-[10px] font-medium leading-tight text-muted-foreground">Log</span>
           </button>
 
           {/* Weight */}
           <NavLink
             to={mainNavItems[2].url}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-all duration-200 ${isActive
+              `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 ${isActive
                 ? "text-primary"
                 : "text-muted-foreground active:scale-95"
               }`
             }
           >
-            <WeightIcon className="h-6 w-6" />
-            <span className="text-[10px] font-medium leading-tight">{mainNavItems[2].title}</span>
+            {({ isActive }) => (
+              <>
+                <WeightIcon className="h-6 w-6" />
+                <span className={`text-[10px] tracking-wide leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[2].title}</span>
+              </>
+            )}
           </NavLink>
 
           {/* More button */}
           <button
             onClick={() => setMoreMenuOpen(true)}
-            className="flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-all duration-200 text-muted-foreground active:scale-95"
+            className="flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 text-muted-foreground active:scale-95"
             aria-label="More"
           >
             <MoreHorizontal className="h-6 w-6" />
-            <span className="text-[10px] font-medium leading-tight">More</span>
+            <span className="text-[10px] font-medium tracking-wide leading-tight">More</span>
           </button>
         </div>
       </nav>
