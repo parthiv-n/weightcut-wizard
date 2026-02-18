@@ -13,10 +13,10 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Sparkles, Calendar as CalendarIcon, TrendingUp, Loader2, AlertCircle, Settings, Edit2, X, Lock } from "lucide-react";
 import { MealCard } from "@/components/nutrition/MealCard";
 import { CalorieBudgetIndicator } from "@/components/nutrition/CalorieBudgetIndicator";
+import { MacroRings } from "@/components/nutrition/MacroRings";
 import { VoiceInput } from "@/components/nutrition/VoiceInput";
 import { BarcodeScanner } from "@/components/nutrition/BarcodeScanner";
 import { format, subDays, addDays } from "date-fns";
-import wizardNutrition from "@/assets/wizard-nutrition.png";
 import { Badge } from "@/components/ui/badge";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { nutritionLogSchema } from "@/lib/validation";
@@ -1437,43 +1437,13 @@ export default function Nutrition() {
   const totalCarbs = meals.reduce((sum, meal) => sum + (meal.carbs_g || 0), 0);
   const totalFats = meals.reduce((sum, meal) => sum + (meal.fats_g || 0), 0);
 
-  // Helper function to calculate difference and color coding
-  const getMacroDifference = (current: number, goal: number) => {
-    const difference = goal - current;
-    const percentDiff = goal > 0 ? Math.abs(difference / goal) * 100 : 0;
-
-    let colorClass = "text-green-600 dark:text-green-400";
-    if (percentDiff > 20) {
-      colorClass = "text-red-600 dark:text-red-400";
-    } else if (percentDiff > 10) {
-      colorClass = "text-yellow-600 dark:text-yellow-400";
-    }
-
-    return {
-      difference,
-      percentDiff,
-      colorClass,
-      displayText: difference >= 0
-        ? `${Math.round(difference)} remaining`
-        : `${Math.round(Math.abs(difference))} over`
-    };
-  };
-
   return (
     <div className="space-y-6 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto overflow-x-hidden">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3 sm:gap-4">
-          <img src={wizardNutrition} alt="Wizard" className="w-20 h-20 sm:w-28 sm:h-28 lg:w-32 lg:h-32 flex-shrink-0" />
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold">Nutrition</h1>
-            <p className="text-muted-foreground mt-1 text-sm sm:text-base">AI-powered meal planning</p>
-          </div>
-        </div>
-        <div className="flex flex-col gap-2 w-full sm:w-auto">
-          {/* Row 1: Scan, Voice, Add Meal */}
-          <div className="flex gap-2 justify-start sm:justify-end">
-            <BarcodeScanner onFoodScanned={handleBarcodeScanned} disabled={generatingPlan || savingAllMeals} />
-            <VoiceInput onTranscription={handleVoiceInput} disabled={generatingPlan || savingAllMeals || aiAnalyzing} />
+      <div className="flex flex-col gap-3">
+        <h1 className="text-xl font-bold">Nutrition</h1>
+        <div className="flex gap-2">
+            <BarcodeScanner onFoodScanned={handleBarcodeScanned} disabled={generatingPlan || savingAllMeals} className="flex-1 h-10" />
+            <VoiceInput onTranscription={handleVoiceInput} disabled={generatingPlan || savingAllMeals || aiAnalyzing} className="flex-1 h-10" />
             <Dialog open={isManualDialogOpen} onOpenChange={(open) => {
               setIsManualDialogOpen(open);
               if (!open) {
@@ -1481,259 +1451,270 @@ export default function Nutrition() {
               }
             }}>
               <DialogTrigger asChild>
-                <Button variant="outline" className="whitespace-nowrap">
-                  <Plus className="mr-2 h-4 w-4" />
-                  <span className="hidden sm:inline">Add Meal</span>
-                  <span className="sm:hidden">Add</span>
+                <Button variant="outline" className="flex-1 h-10" title="Add Meal">
+                  <Plus className="h-4 w-4" />
+                  <span className="sr-only">Add Meal</span>
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
+              <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto w-[95vw] sm:w-full">
                 <DialogHeader>
-                  <DialogTitle>Add Manual Meal</DialogTitle>
-                  <DialogDescription>
-                    Log a meal manually with nutritional information or let AI analyze it
-                  </DialogDescription>
+                  <DialogTitle>Add Meal</DialogTitle>
                 </DialogHeader>
-                <div className="space-y-4">
-                  {/* AI Quick Fill Section */}
-                  <div className="p-4 bg-primary/5 rounded-lg border border-primary/20 space-y-3">
-                    <Label htmlFor="ai-description" className="flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-primary" />
-                      AI Quick Fill (Optional)
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      Describe your meal and AI will estimate nutritional values
-                    </p>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <Input
-                        id="ai-description"
-                        placeholder="E.g., 250g grilled chicken salad with olive oil"
-                        value={aiMealDescription}
-                        onChange={(e) => setAiMealDescription(e.target.value)}
-                        disabled={aiAnalyzing}
-                        className="flex-1"
-                      />
-                      <Button
-                        type="button"
-                        onClick={handleAiAnalyzeMeal}
-                        disabled={aiAnalyzing || !aiMealDescription.trim()}
-                        className="whitespace-nowrap flex-shrink-0"
-                      >
-                        <Sparkles className="h-4 w-4 mr-2" />
-                        {aiAnalyzing ? "Analyzing..." : "Analyze"}
-                      </Button>
-                    </div>
-                  </div>
+                <div className="space-y-3 pt-1">
 
-                  {/* AI Quick Fill Ingredients Section */}
-                  <div className="p-4 bg-primary/5 rounded-lg border border-primary/20 space-y-3">
-                    <Label htmlFor="ai-ingredient-description" className="flex items-center gap-2">
-                      <Sparkles className="h-4 w-4 text-primary" />
-                      AI Quick Fill Ingredients
-                    </Label>
-                    <p className="text-xs text-muted-foreground">
-                      Describe a single ingredient with weight and AI will add it to your ingredients list
-                    </p>
-                    <div className="flex flex-col sm:flex-row gap-2">
-                      <Input
-                        id="ai-ingredient-description"
-                        placeholder="E.g., 250g chicken breast, 1 cup rice, 100g salmon"
-                        value={aiIngredientDescription}
-                        onChange={(e) => setAiIngredientDescription(e.target.value)}
-                        disabled={aiAnalyzingIngredient}
-                        className="flex-1"
-                      />
-                      <Button
-                        type="button"
-                        onClick={handleAiAnalyzeIngredient}
-                        disabled={aiAnalyzingIngredient || !aiIngredientDescription.trim()}
-                        className="whitespace-nowrap flex-shrink-0"
-                      >
-                        <Sparkles className="h-4 w-4 mr-2" />
-                        {aiAnalyzingIngredient ? "Analyzing..." : "Add Ingredient"}
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Ingredients List Display */}
-                  {manualMeal.ingredients.length > 0 && (
-                    <div className="p-4 bg-muted/50 rounded-lg border space-y-3">
-                      <Label className="text-sm font-semibold">Ingredients Added</Label>
-                      <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                        {manualMeal.ingredients.map((ingredient, idx) => {
-                          const hasNutritionData = ingredient.calories_per_100g !== undefined;
-                          const ingredientCalories = hasNutritionData ? Math.round((ingredient.calories_per_100g * ingredient.grams) / 100) : null;
-                          const ingredientProtein = hasNutritionData ? Math.round(((ingredient.protein_per_100g || 0) * ingredient.grams) / 100 * 10) / 10 : null;
-                          const ingredientCarbs = hasNutritionData ? Math.round(((ingredient.carbs_per_100g || 0) * ingredient.grams) / 100 * 10) / 10 : null;
-                          const ingredientFats = hasNutritionData ? Math.round(((ingredient.fats_per_100g || 0) * ingredient.grams) / 100 * 10) / 10 : null;
-
-                          return (
-                            <div key={idx} className="p-3 bg-background rounded-md border space-y-2">
-                              <div className="flex items-center justify-between">
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="font-medium text-sm">{ingredient.name}</span>
-                                    <span className="text-xs text-muted-foreground">{ingredient.grams}g</span>
-                                    {!hasNutritionData && (
-                                      <Badge variant="outline" className="text-xs">
-                                        <AlertCircle className="h-3 w-3 mr-1" />
-                                        No nutrition data
-                                      </Badge>
-                                    )}
-                                    {hasNutritionData && ingredient.source && (
-                                      <Badge variant="outline" className="text-xs text-muted-foreground">
-                                        <span className="text-[10px]">Source: {ingredient.source}</span>
-                                      </Badge>
-                                    )}
-                                  </div>
-                                  {hasNutritionData && (
-                                    <div className="text-xs text-muted-foreground mt-1 space-x-3">
-                                      <span>Cal: {ingredientCalories}kcal</span>
-                                      <span>P: {ingredientProtein?.toFixed(1)}g</span>
-                                      <span>C: {ingredientCarbs?.toFixed(1)}g</span>
-                                      <span>F: {ingredientFats?.toFixed(1)}g</span>
-                                    </div>
-                                  )}
-                                </div>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => {
-                                    const newIngredients = [...manualMeal.ingredients];
-                                    newIngredients.splice(idx, 1);
-                                    setManualMeal({ ...manualMeal, ingredients: newIngredients });
-                                    // Totals will be recalculated automatically by useEffect
-                                  }}
-                                  className="flex-shrink-0"
-                                >
-                                  Remove
-                                </Button>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {/* Running Totals */}
-                      {manualMeal.ingredients.some(ing => ing.calories_per_100g !== undefined) && (() => {
-                        const totalWeight = manualMeal.ingredients.reduce((sum, ing) => sum + ing.grams, 0);
-                        const totalCalories = manualMeal.ingredients.reduce((sum, ing) =>
-                          sum + ((ing.calories_per_100g || 0) * ing.grams) / 100, 0
-                        );
-                        const totalProtein = manualMeal.ingredients.reduce((sum, ing) =>
-                          sum + ((ing.protein_per_100g || 0) * ing.grams) / 100, 0
-                        );
-                        const totalCarbs = manualMeal.ingredients.reduce((sum, ing) =>
-                          sum + ((ing.carbs_per_100g || 0) * ing.grams) / 100, 0
-                        );
-                        const totalFats = manualMeal.ingredients.reduce((sum, ing) =>
-                          sum + ((ing.fats_per_100g || 0) * ing.grams) / 100, 0
-                        );
-
-                        return (
-                          <div className="pt-3 border-t space-y-2">
-                            <div className="text-sm font-semibold mb-2">Total from Ingredients:</div>
-                            <div className="grid grid-cols-5 gap-2 text-center text-xs sm:text-sm">
-                              <div>
-                                <p className="font-medium text-muted-foreground mb-0.5">Weight</p>
-                                <p className="font-bold">{Math.round(totalWeight)}g</p>
-                              </div>
-                              <div>
-                                <p className="font-medium text-muted-foreground mb-0.5">Calories</p>
-                                <p className="font-bold text-primary">{Math.round(totalCalories)}</p>
-                              </div>
-                              <div>
-                                <p className="font-medium text-muted-foreground mb-0.5">Protein</p>
-                                <p className="font-bold text-blue-600">{totalProtein.toFixed(1)}g</p>
-                              </div>
-                              <div>
-                                <p className="font-medium text-muted-foreground mb-0.5">Carbs</p>
-                                <p className="font-bold text-orange-600">{totalCarbs.toFixed(1)}g</p>
-                              </div>
-                              <div>
-                                <p className="font-medium text-muted-foreground mb-0.5">Fats</p>
-                                <p className="font-bold text-green-600">{totalFats.toFixed(1)}g</p>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })()}
-                    </div>
-                  )}
-
-                  {/* Manually input macros button */}
-                  <div className="flex justify-center">
+                  {/* AI Quick Fill — full meal */}
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Describe your meal for AI fill…"
+                      value={aiMealDescription}
+                      onChange={(e) => setAiMealDescription(e.target.value)}
+                      disabled={aiAnalyzing}
+                      className="flex-1 text-sm"
+                    />
                     <Button
                       type="button"
-                      variant="outline"
-                      onClick={() => setIsManualMacrosDialogOpen(true)}
-                      className="w-full sm:w-auto"
+                      size="sm"
+                      onClick={handleAiAnalyzeMeal}
+                      disabled={aiAnalyzing || !aiMealDescription.trim()}
+                      className="shrink-0"
                     >
-                      Manually input macros
+                      <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                      {aiAnalyzing ? "Analyzing…" : "Fill"}
                     </Button>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="col-span-2">
-                      <Label htmlFor="meal_name">Meal Name *</Label>
-                      <Input
-                        id="meal_name"
-                        placeholder="E.g., Grilled Chicken Salad"
-                        value={manualMeal.meal_name}
-                        onChange={(e) => setManualMeal({ ...manualMeal, meal_name: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="meal_type">Meal Type</Label>
-                      <Select
-                        value={manualMeal.meal_type}
-                        onValueChange={(value) => setManualMeal({ ...manualMeal, meal_type: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="breakfast">Breakfast</SelectItem>
-                          <SelectItem value="lunch">Lunch</SelectItem>
-                          <SelectItem value="dinner">Dinner</SelectItem>
-                          <SelectItem value="snack">Snack</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="col-span-2">
-                      <Label htmlFor="portion">Portion Description (optional)</Label>
-                      <Input
-                        id="portion"
-                        placeholder="E.g., 1 plate, 2 servings"
-                        value={manualMeal.portion_size}
-                        onChange={(e) => setManualMeal({ ...manualMeal, portion_size: e.target.value })}
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <Label htmlFor="notes">Recipe/Notes (optional)</Label>
-                      <Textarea
-                        id="notes"
-                        placeholder="Preparation notes or recipe details"
-                        value={manualMeal.recipe_notes}
-                        onChange={(e) => setManualMeal({ ...manualMeal, recipe_notes: e.target.value })}
-                        rows={3}
-                      />
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 border-t border-border/40" />
+                    <span className="text-[10px] uppercase tracking-widest text-muted-foreground">or enter manually</span>
+                    <div className="flex-1 border-t border-border/40" />
                   </div>
-                  <Button onClick={handleAddManualMeal} disabled={savingAllMeals} className="w-full">
-                    {savingAllMeals ? "Adding..." : "Add Meal"}
+
+                  {/* Name + Type */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      placeholder="Meal name *"
+                      value={manualMeal.meal_name}
+                      onChange={(e) => setManualMeal({ ...manualMeal, meal_name: e.target.value })}
+                      className="text-sm"
+                    />
+                    <Select
+                      value={manualMeal.meal_type}
+                      onValueChange={(v) => setManualMeal({ ...manualMeal, meal_type: v })}
+                    >
+                      <SelectTrigger className="text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="breakfast">Breakfast</SelectItem>
+                        <SelectItem value="lunch">Lunch</SelectItem>
+                        <SelectItem value="dinner">Dinner</SelectItem>
+                        <SelectItem value="snack">Snack</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Calories */}
+                  <div>
+                    <Input
+                      type="number"
+                      placeholder="Calories *"
+                      value={manualMeal.calories}
+                      onChange={(e) => handleCalorieChange(e.target.value, setManualMeal)}
+                      className="text-sm"
+                    />
+                    {manualMeal.ingredients.some(ing => ing.calories_per_100g !== undefined) && (
+                      <p className="text-[10px] text-muted-foreground mt-1">Auto-calculated from ingredients</p>
+                    )}
+                  </div>
+
+                  {/* P / C / F */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <Input
+                      type="number"
+                      step="0.1"
+                      placeholder="Protein g"
+                      value={manualMeal.protein_g}
+                      onChange={(e) => setManualMeal({ ...manualMeal, protein_g: e.target.value })}
+                      className="text-sm"
+                    />
+                    <Input
+                      type="number"
+                      step="0.1"
+                      placeholder="Carbs g"
+                      value={manualMeal.carbs_g}
+                      onChange={(e) => setManualMeal({ ...manualMeal, carbs_g: e.target.value })}
+                      className="text-sm"
+                    />
+                    <Input
+                      type="number"
+                      step="0.1"
+                      placeholder="Fats g"
+                      value={manualMeal.fats_g}
+                      onChange={(e) => setManualMeal({ ...manualMeal, fats_g: e.target.value })}
+                      className="text-sm"
+                    />
+                  </div>
+
+                  {/* Ingredients */}
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground pt-1">
+                    Ingredients (optional)
+                  </p>
+
+                  {/* AI ingredient fill */}
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="e.g. 250g chicken breast"
+                      value={aiIngredientDescription}
+                      onChange={(e) => setAiIngredientDescription(e.target.value)}
+                      disabled={aiAnalyzingIngredient}
+                      className="flex-1 text-sm"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleAiAnalyzeIngredient}
+                      disabled={aiAnalyzingIngredient || !aiIngredientDescription.trim()}
+                      className="shrink-0"
+                    >
+                      <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                      {aiAnalyzingIngredient ? "…" : "AI Add"}
+                    </Button>
+                  </div>
+
+                  {/* Manual ingredient add */}
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Ingredient name"
+                      value={newIngredient.name}
+                      onChange={(e) => setNewIngredient({ ...newIngredient, name: e.target.value })}
+                      className="flex-1 text-sm"
+                    />
+                    <Input
+                      type="number"
+                      placeholder="g"
+                      value={newIngredient.grams}
+                      onChange={(e) => setNewIngredient({ ...newIngredient, grams: e.target.value })}
+                      className="w-16 text-sm"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        if (!newIngredient.name.trim() || !newIngredient.grams) {
+                          toast({ title: "Missing Information", description: "Please enter ingredient name and grams", variant: "destructive" });
+                          return;
+                        }
+                        const ingredientName = newIngredient.name.trim();
+                        const grams = parseFloat(newIngredient.grams);
+                        if (isNaN(grams) || grams <= 0) {
+                          toast({ title: "Invalid Amount", description: "Please enter a valid number of grams", variant: "destructive" });
+                          return;
+                        }
+                        setLookingUpIngredient(true);
+                        setIngredientLookupError(null);
+                        try {
+                          const nutritionData = await lookupIngredientNutrition(ingredientName);
+                          if (nutritionData) {
+                            const newIngredients = [
+                              ...manualMeal.ingredients,
+                              {
+                                name: ingredientName,
+                                grams,
+                                calories_per_100g: nutritionData.calories_per_100g,
+                                protein_per_100g: nutritionData.protein_per_100g,
+                                carbs_per_100g: nutritionData.carbs_per_100g,
+                                fats_per_100g: nutritionData.fats_per_100g,
+                                source: nutritionData.source,
+                              }
+                            ];
+                            const tc = newIngredients.reduce((s, i) => s + (i.calories_per_100g || 0) * i.grams / 100, 0);
+                            const tp = newIngredients.reduce((s, i) => s + (i.protein_per_100g || 0) * i.grams / 100, 0);
+                            const tcarb = newIngredients.reduce((s, i) => s + (i.carbs_per_100g || 0) * i.grams / 100, 0);
+                            const tf = newIngredients.reduce((s, i) => s + (i.fats_per_100g || 0) * i.grams / 100, 0);
+                            setManualMeal({
+                              ...manualMeal,
+                              ingredients: newIngredients,
+                              calories: Math.round(tc).toString(),
+                              protein_g: tp > 0 ? (Math.round(tp * 10) / 10).toString() : "",
+                              carbs_g: tcarb > 0 ? (Math.round(tcarb * 10) / 10).toString() : "",
+                              fats_g: tf > 0 ? (Math.round(tf * 10) / 10).toString() : "",
+                            });
+                            setNewIngredient({ name: "", grams: "" });
+                            toast({ title: "Ingredient added", description: `Found nutrition data for ${ingredientName}` });
+                          } else {
+                            setManualNutritionDialog({ open: true, ingredientName, grams, calories_per_100g: "", protein_per_100g: "", carbs_per_100g: "", fats_per_100g: "" });
+                          }
+                        } catch {
+                          setManualNutritionDialog({ open: true, ingredientName, grams, calories_per_100g: "", protein_per_100g: "", carbs_per_100g: "", fats_per_100g: "" });
+                        } finally {
+                          setLookingUpIngredient(false);
+                        }
+                      }}
+                      disabled={lookingUpIngredient || !newIngredient.name.trim() || !newIngredient.grams}
+                      className="shrink-0"
+                    >
+                      {lookingUpIngredient
+                        ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        : <Plus className="h-3.5 w-3.5" />}
+                    </Button>
+                  </div>
+
+                  {ingredientLookupError && (
+                    <p className="text-xs text-destructive">{ingredientLookupError}</p>
+                  )}
+
+                  {/* Ingredients list */}
+                  {manualMeal.ingredients.length > 0 && (
+                    <div className="rounded-md border border-border/40 divide-y divide-border/30 overflow-hidden">
+                      {manualMeal.ingredients.map((ingredient, idx) => {
+                        const cal = ingredient.calories_per_100g !== undefined
+                          ? Math.round(ingredient.calories_per_100g * ingredient.grams / 100)
+                          : null;
+                        return (
+                          <div key={idx} className="flex items-center gap-2 px-3 py-2 text-sm">
+                            <span className="flex-1 truncate">{ingredient.name}</span>
+                            <span className="text-xs text-muted-foreground shrink-0">{ingredient.grams}g</span>
+                            {cal !== null && (
+                              <span className="text-xs text-muted-foreground shrink-0">{cal} kcal</span>
+                            )}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 shrink-0 text-muted-foreground hover:text-destructive"
+                              onClick={() => {
+                                const updated = [...manualMeal.ingredients];
+                                updated.splice(idx, 1);
+                                setManualMeal({ ...manualMeal, ingredients: updated });
+                              }}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        );
+                      })}
+                      {manualMeal.ingredients.some(ing => ing.calories_per_100g !== undefined) && (
+                        <div className="flex justify-between px-3 py-1.5 text-xs text-muted-foreground bg-muted/30">
+                          <span>Total</span>
+                          <span>{manualMeal.ingredients.reduce((s, i) => s + i.grams, 0)}g</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <Button onClick={handleAddManualMeal} disabled={savingAllMeals} className="w-full mt-1">
+                    {savingAllMeals ? "Adding…" : "Add Meal"}
                   </Button>
                 </div>
               </DialogContent>
             </Dialog>
-          </div>
-          {/* Row 2: AI Meal Plan - full width */}
           <Dialog open={isAiDialogOpen} onOpenChange={setIsAiDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="w-full whitespace-nowrap">
-                <Sparkles className="mr-2 h-4 w-4" />
-                AI Meal Plan
+              <Button className="flex-1 h-10" title="AI Meal Plan">
+                <Sparkles className="h-4 w-4" />
+                <span className="sr-only">AI Meal Plan</span>
               </Button>
             </DialogTrigger>
             <DialogContent className="max-w-2xl w-[95vw] sm:w-full">
@@ -2663,88 +2644,14 @@ export default function Nutrition() {
         safetyMessage={safetyMessage}
       />
 
-      <Card className="bg-gradient-to-r from-primary/5 to-secondary/5 border-2">
-        <CardHeader className="pb-2 sm:pb-6">
-          <CardTitle className="text-center text-sm sm:text-lg">Daily Macronutrient Totals</CardTitle>
-        </CardHeader>
-        <CardContent className="p-2 sm:p-6">
-          {/* Horizontal layout on all screen sizes, with responsive sizing for mobile */}
-          <div className="grid grid-cols-4 gap-1 sm:gap-4 md:gap-6">
-            {/* Calories */}
-            <div className="text-center">
-              <p className="text-[10px] sm:text-sm font-medium text-muted-foreground mb-0.5">Calories</p>
-              <p className="text-lg sm:text-2xl md:text-3xl font-bold text-primary leading-none">{totalCalories}</p>
-              {aiMacroGoals && (
-                <>
-                  <p className="text-[9px] sm:text-xs text-muted-foreground mt-0.5">/{Math.round(aiMacroGoals.recommendedCalories)}</p>
-                  {(() => {
-                    const diff = getMacroDifference(totalCalories, aiMacroGoals.recommendedCalories);
-                    return (
-                      <p className={`text-[9px] sm:text-xs font-medium ${diff.colorClass}`}>
-                        {diff.displayText}
-                      </p>
-                    );
-                  })()}
-                </>
-              )}
-            </div>
-            {/* Protein */}
-            <div className="text-center">
-              <p className="text-[10px] sm:text-sm font-medium text-muted-foreground mb-0.5">Protein</p>
-              <p className="text-lg sm:text-2xl md:text-3xl font-bold text-blue-600 leading-none">{totalProtein.toFixed(0)}<span className="text-[10px] sm:text-base font-normal ml-0.5">g</span></p>
-              {aiMacroGoals && (
-                <>
-                  <p className="text-[9px] sm:text-xs text-muted-foreground mt-0.5">/{Math.round(aiMacroGoals.proteinGrams)}g</p>
-                  {(() => {
-                    const diff = getMacroDifference(totalProtein, aiMacroGoals.proteinGrams);
-                    return (
-                      <p className={`text-[9px] sm:text-xs font-medium ${diff.colorClass}`}>
-                        {diff.displayText}
-                      </p>
-                    );
-                  })()}
-                </>
-              )}
-            </div>
-            {/* Carbs */}
-            <div className="text-center">
-              <p className="text-[10px] sm:text-sm font-medium text-muted-foreground mb-0.5">Carbs</p>
-              <p className="text-lg sm:text-2xl md:text-3xl font-bold text-orange-600 leading-none">{totalCarbs.toFixed(0)}<span className="text-[10px] sm:text-base font-normal ml-0.5">g</span></p>
-              {aiMacroGoals && (
-                <>
-                  <p className="text-[9px] sm:text-xs text-muted-foreground mt-0.5">/{Math.round(aiMacroGoals.carbsGrams)}g</p>
-                  {(() => {
-                    const diff = getMacroDifference(totalCarbs, aiMacroGoals.carbsGrams);
-                    return (
-                      <p className={`text-[9px] sm:text-xs font-medium ${diff.colorClass}`}>
-                        {diff.displayText}
-                      </p>
-                    );
-                  })()}
-                </>
-              )}
-            </div>
-            {/* Fats */}
-            <div className="text-center">
-              <p className="text-[10px] sm:text-sm font-medium text-muted-foreground mb-0.5">Fats</p>
-              <p className="text-lg sm:text-2xl md:text-3xl font-bold text-green-600 leading-none">{totalFats.toFixed(0)}<span className="text-[10px] sm:text-base font-normal ml-0.5">g</span></p>
-              {aiMacroGoals && (
-                <>
-                  <p className="text-[9px] sm:text-xs text-muted-foreground mt-0.5">/{Math.round(aiMacroGoals.fatsGrams)}g</p>
-                  {(() => {
-                    const diff = getMacroDifference(totalFats, aiMacroGoals.fatsGrams);
-                    return (
-                      <p className={`text-[9px] sm:text-xs font-medium ${diff.colorClass}`}>
-                        {diff.displayText}
-                      </p>
-                    );
-                  })()}
-                </>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <MacroRings
+        protein={totalProtein}
+        carbs={totalCarbs}
+        fats={totalFats}
+        proteinGoal={aiMacroGoals?.proteinGrams}
+        carbsGoal={aiMacroGoals?.carbsGrams}
+        fatsGoal={aiMacroGoals?.fatsGrams}
+      />
 
       {/* Grouped Meals Display */}
       <Tabs defaultValue="logged" className="w-full">
@@ -2782,19 +2689,17 @@ export default function Nutrition() {
                 const groupFats = groupMeals.reduce((sum, m) => sum + (m.fats_g || 0), 0);
 
                 return (
-                  <div key={type} className="space-y-3">
-                    <div className="flex items-center justify-between bg-secondary/20 p-3 rounded-md">
-                      <h3 className="capitalize font-semibold text-lg">{type}</h3>
-                      <div className="text-xs sm:text-sm text-muted-foreground flex gap-3">
+                  <div key={type} className="space-y-1">
+                    <div className="flex items-center justify-between py-2 px-1">
+                      <h3 className="capitalize text-xs font-semibold uppercase tracking-widest text-muted-foreground">{type}</h3>
+                      <div className="text-xs text-muted-foreground flex gap-2">
                         <span className="font-medium text-primary">{Math.round(groupCalories)} kcal</span>
-                        <div className="flex gap-2">
-                          <span className="text-blue-600">{Math.round(groupProtein)}p</span>
-                          <span className="text-orange-600">{Math.round(groupCarbs)}c</span>
-                          <span className="text-green-600">{Math.round(groupFats)}f</span>
-                        </div>
+                        <span className="text-blue-500">{Math.round(groupProtein)}p</span>
+                        <span className="text-orange-500">{Math.round(groupCarbs)}c</span>
+                        <span className="text-purple-500">{Math.round(groupFats)}f</span>
                       </div>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
                       {groupMeals.map((meal) => (
                         <MealCard
                           key={meal.id}
@@ -2809,11 +2714,11 @@ export default function Nutrition() {
 
               {/* Fallback for any meals with unknown types */}
               {meals.filter(m => !["breakfast", "lunch", "dinner", "snack"].includes((m.meal_type || "").toLowerCase())).length > 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between bg-secondary/20 p-3 rounded-md">
-                    <h3 className="capitalize font-semibold text-lg">Other</h3>
+                <div className="space-y-1">
+                  <div className="flex items-center py-2 px-1">
+                    <h3 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Other</h3>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
                     {meals.filter(m => !["breakfast", "lunch", "dinner", "snack"].includes((m.meal_type || "").toLowerCase())).map((meal) => (
                       <MealCard
                         key={meal.id}
