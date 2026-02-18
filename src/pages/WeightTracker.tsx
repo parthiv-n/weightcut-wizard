@@ -106,7 +106,7 @@ export default function WeightTracker() {
     try {
       const storageKey = `weight_tracker_ai_analysis_${userId}`;
       const stored = localStorage.getItem(storageKey);
-      
+
       if (!stored) return;
 
       const parsed = JSON.parse(stored);
@@ -183,7 +183,7 @@ export default function WeightTracker() {
 
   const handleAddWeight = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Validate input
     const validationResult = weightLogSchema.safeParse({
       weight_kg: parseFloat(newWeight),
@@ -218,16 +218,16 @@ export default function WeightTracker() {
       });
     } else {
       const loggedWeight = parseFloat(newWeight);
-      
+
       // Update profile current weight
       await supabase
         .from("profiles")
         .update({ current_weight_kg: loggedWeight })
         .eq("id", user.id);
-      
+
       // Update centralized current weight
       await updateCurrentWeight(loggedWeight);
-      
+
       // Clear stored AI analysis since weight has changed
       if (userId) {
         const storageKey = `weight_tracker_ai_analysis_${userId}`;
@@ -236,14 +236,14 @@ export default function WeightTracker() {
         setAiAnalysisWeight(null);
         setAiAnalysisTarget(null);
       }
-      
+
       toast({
         title: "Weight logged",
         description: "Your weight has been recorded",
       });
       setNewWeight("");
       fetchData();
-      
+
       // Refresh AI analysis with new weight
       if (profile) {
         getAIAnalysis();
@@ -301,7 +301,7 @@ export default function WeightTracker() {
     }
 
     setAnalyzingWeight(true);
-    
+
     // Fetch fresh weight from database to ensure we have the latest
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -316,7 +316,7 @@ export default function WeightTracker() {
       .order("date", { ascending: false })
       .limit(1)
       .maybeSingle();
-    
+
     // Use latest weight log if available, otherwise use profile weight
     const currentWeight = latestWeightLog?.weight_kg || profile.current_weight_kg;
     const currentWeightSource = latestWeightLog?.weight_kg ? "weight_logs (latest log)" : "profile.current_weight_kg";
@@ -335,7 +335,7 @@ export default function WeightTracker() {
         heightCm: profile.height_cm,
         tdee: profile.tdee
       };
-      
+
       setPendingAICallParams({
         currentWeight,
         fightWeekTarget,
@@ -391,16 +391,16 @@ export default function WeightTracker() {
     setDebugData(debugInfo);
 
     if (error) {
-      toast({ 
-        title: "AI analysis unavailable", 
-        description: error.message, 
-        variant: "destructive" 
+      toast({
+        title: "AI analysis unavailable",
+        description: error.message,
+        variant: "destructive"
       });
     } else if (data?.analysis) {
       setAiAnalysis(data.analysis);
       setAiAnalysisWeight(currentWeight);
       setAiAnalysisTarget(fightWeekTarget);
-      
+
       // Store in localStorage for persistence
       if (userId) {
         const storageKey = `weight_tracker_ai_analysis_${userId}`;
@@ -438,17 +438,17 @@ export default function WeightTracker() {
     });
 
     if (error) {
-      toast({ 
-        title: "AI analysis unavailable", 
-        description: error.message, 
-        variant: "destructive" 
+      toast({
+        title: "AI analysis unavailable",
+        description: error.message,
+        variant: "destructive"
       });
       setAnalyzingWeight(false);
     } else if (data?.analysis) {
       setAiAnalysis(data.analysis);
       setAiAnalysisWeight(currentWeight);
       setAiAnalysisTarget(fightWeekTarget);
-      
+
       // Store in localStorage for persistence
       if (userId) {
         const storageKey = `weight_tracker_ai_analysis_${userId}`;
@@ -461,7 +461,7 @@ export default function WeightTracker() {
         localStorage.setItem(storageKey, JSON.stringify(storageData));
       }
     }
-    
+
     setPendingAICallParams(null);
     setAnalyzingWeight(false);
   };
@@ -653,7 +653,7 @@ export default function WeightTracker() {
   const insight = getInsight();
 
   return (
-    <div className="space-y-5 p-4 sm:p-5 max-w-2xl mx-auto">
+    <div className="space-y-5 px-4 pb-4 pt-16 sm:p-5 sm:pt-16 max-w-2xl mx-auto">
       {/* Header + Inline Log Form */}
       <div className="flex flex-col gap-3">
         <h1 className="text-xl font-bold">Weight</h1>
@@ -850,11 +850,11 @@ export default function WeightTracker() {
       {/* AI Analysis */}
       {!analyzingWeight && aiAnalysis && (() => {
         const isAtOrBelowTarget = aiAnalysisWeight !== null && aiAnalysisTarget !== null &&
-                                  aiAnalysisWeight <= aiAnalysisTarget;
+          aiAnalysisWeight <= aiAnalysisTarget;
         const displayRiskLevel = isAtOrBelowTarget ? 'green' : aiAnalysis.riskLevel;
         const weightDiff = aiAnalysisWeight !== null && aiAnalysisTarget !== null
-                         ? aiAnalysisTarget - aiAnalysisWeight
-                         : 0;
+          ? aiAnalysisTarget - aiAnalysisWeight
+          : 0;
 
         return (
           <div className="glass-card p-4 space-y-5 animate-fade-in">
@@ -862,11 +862,10 @@ export default function WeightTracker() {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-[10px] uppercase tracking-widest text-muted-foreground">AI Strategy</p>
-                <p className={`text-lg font-bold mt-0.5 ${
-                  displayRiskLevel === 'green' ? 'text-green-500' :
-                  displayRiskLevel === 'yellow' ? 'text-yellow-500' :
-                  'text-red-500'
-                }`}>
+                <p className={`text-lg font-bold mt-0.5 ${displayRiskLevel === 'green' ? 'text-green-500' :
+                    displayRiskLevel === 'yellow' ? 'text-yellow-500' :
+                      'text-red-500'
+                  }`}>
                   {displayRiskLevel === 'green' ? 'Safe Pace' :
                     displayRiskLevel === 'yellow' ? 'Moderate Pace' : 'Aggressive Pace'}
                 </p>
@@ -932,125 +931,125 @@ export default function WeightTracker() {
 
             {/* Weekly Progress Bar */}
             {aiAnalysisWeight !== null && aiAnalysisTarget !== null && profile && aiAnalysis && (
-                (() => {
-                  const currentWeight = aiAnalysisWeight;
-                  const targetWeight = aiAnalysisTarget;
-                  const weightDiff = targetWeight - currentWeight;
-                  const isAtOrBelowTarget = weightDiff >= 0;
-                  
-                  // Calculate weeks until target
-                  const targetDate = new Date(profile.target_date);
-                  const today = new Date();
-                  const daysRemaining = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                  const weeksRemaining = Math.max(1, Math.ceil(daysRemaining / 7));
-                  
-                  // Calculate progress percentage
-                  let progressPercent = 0;
-                  if (!isAtOrBelowTarget && weightDiff < 0) {
-                    // Weight loss: progress = (start - current) / (start - target) * 100
-                    const startWeight = currentWeight;
-                    const totalToLose = startWeight - targetWeight;
-                    const lostSoFar = 0; // Currently at start
-                    progressPercent = Math.min(100, Math.max(0, (lostSoFar / totalToLose) * 100));
-                  } else if (isAtOrBelowTarget && weightDiff > 0) {
-                    // Weight gain: progress = (current - start) / (target - start) * 100
-                    const startWeight = currentWeight;
-                    const totalToGain = targetWeight - startWeight;
-                    const gainedSoFar = 0; // Currently at start
-                    progressPercent = Math.min(100, Math.max(0, (gainedSoFar / totalToGain) * 100));
-                  } else {
-                    // At target
-                    progressPercent = 100;
+              (() => {
+                const currentWeight = aiAnalysisWeight;
+                const targetWeight = aiAnalysisTarget;
+                const weightDiff = targetWeight - currentWeight;
+                const isAtOrBelowTarget = weightDiff >= 0;
+
+                // Calculate weeks until target
+                const targetDate = new Date(profile.target_date);
+                const today = new Date();
+                const daysRemaining = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                const weeksRemaining = Math.max(1, Math.ceil(daysRemaining / 7));
+
+                // Calculate progress percentage
+                let progressPercent = 0;
+                if (!isAtOrBelowTarget && weightDiff < 0) {
+                  // Weight loss: progress = (start - current) / (start - target) * 100
+                  const startWeight = currentWeight;
+                  const totalToLose = startWeight - targetWeight;
+                  const lostSoFar = 0; // Currently at start
+                  progressPercent = Math.min(100, Math.max(0, (lostSoFar / totalToLose) * 100));
+                } else if (isAtOrBelowTarget && weightDiff > 0) {
+                  // Weight gain: progress = (current - start) / (target - start) * 100
+                  const startWeight = currentWeight;
+                  const totalToGain = targetWeight - startWeight;
+                  const gainedSoFar = 0; // Currently at start
+                  progressPercent = Math.min(100, Math.max(0, (gainedSoFar / totalToGain) * 100));
+                } else {
+                  // At target
+                  progressPercent = 100;
+                }
+
+                // Calculate weekly milestones for markers
+                const milestones: Array<{ week: number; expectedWeight: number; position: number }> = [];
+
+                if (!isAtOrBelowTarget && aiAnalysis.requiredWeeklyLoss > 0) {
+                  // Weight loss mode
+                  const startWeight = currentWeight;
+                  const totalToLose = startWeight - targetWeight;
+                  for (let week = 1; week <= Math.min(weeksRemaining, 8); week++) {
+                    const expectedWeight = Math.max(
+                      targetWeight,
+                      currentWeight - (week * aiAnalysis.requiredWeeklyLoss)
+                    );
+                    const weightLost = startWeight - expectedWeight;
+                    const position = Math.min(100, Math.max(0, (weightLost / totalToLose) * 100));
+                    milestones.push({ week, expectedWeight, position });
                   }
-                  
-                  // Calculate weekly milestones for markers
-                  const milestones: Array<{ week: number; expectedWeight: number; position: number }> = [];
-                  
-                  if (!isAtOrBelowTarget && aiAnalysis.requiredWeeklyLoss > 0) {
-                    // Weight loss mode
-                    const startWeight = currentWeight;
-                    const totalToLose = startWeight - targetWeight;
-                    for (let week = 1; week <= Math.min(weeksRemaining, 8); week++) {
-                      const expectedWeight = Math.max(
-                        targetWeight,
-                        currentWeight - (week * aiAnalysis.requiredWeeklyLoss)
-                      );
-                      const weightLost = startWeight - expectedWeight;
-                      const position = Math.min(100, Math.max(0, (weightLost / totalToLose) * 100));
-                      milestones.push({ week, expectedWeight, position });
-                    }
-                  } else if (isAtOrBelowTarget && weightDiff > 0) {
-                    // Weight gain mode
-                    const startWeight = currentWeight;
-                    const totalToGain = targetWeight - startWeight;
-                    const weeklyGain = Math.abs(aiAnalysis.requiredWeeklyLoss) || 0.2;
-                    for (let week = 1; week <= Math.min(weeksRemaining, 8); week++) {
-                      const expectedWeight = Math.min(
-                        targetWeight,
-                        currentWeight + (week * weeklyGain)
-                      );
-                      const weightGained = expectedWeight - startWeight;
-                      const position = Math.min(100, Math.max(0, (weightGained / totalToGain) * 100));
-                      milestones.push({ week, expectedWeight, position });
-                    }
+                } else if (isAtOrBelowTarget && weightDiff > 0) {
+                  // Weight gain mode
+                  const startWeight = currentWeight;
+                  const totalToGain = targetWeight - startWeight;
+                  const weeklyGain = Math.abs(aiAnalysis.requiredWeeklyLoss) || 0.2;
+                  for (let week = 1; week <= Math.min(weeksRemaining, 8); week++) {
+                    const expectedWeight = Math.min(
+                      targetWeight,
+                      currentWeight + (week * weeklyGain)
+                    );
+                    const weightGained = expectedWeight - startWeight;
+                    const position = Math.min(100, Math.max(0, (weightGained / totalToGain) * 100));
+                    milestones.push({ week, expectedWeight, position });
                   }
-                  
-                  return (
-                    <div className="py-2">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-semibold text-muted-foreground">
-                          {currentWeight.toFixed(1)} kg
-                        </span>
-                        <span className="text-[9px] text-muted-foreground">
-                          {weeksRemaining} {weeksRemaining === 1 ? 'week' : 'weeks'} remaining
-                        </span>
-                        <span className="text-[10px] font-semibold text-primary">
-                          {targetWeight.toFixed(1)} kg
-                        </span>
+                }
+
+                return (
+                  <div className="py-2">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] font-semibold text-muted-foreground">
+                        {currentWeight.toFixed(1)} kg
+                      </span>
+                      <span className="text-[9px] text-muted-foreground">
+                        {weeksRemaining} {weeksRemaining === 1 ? 'week' : 'weeks'} remaining
+                      </span>
+                      <span className="text-[10px] font-semibold text-primary">
+                        {targetWeight.toFixed(1)} kg
+                      </span>
+                    </div>
+                    <div className="relative">
+                      {/* Weight labels above milestones */}
+                      <div className="relative h-4 mb-1">
+                        {milestones.map(({ week, expectedWeight, position }) => (
+                          <div
+                            key={`label-${week}`}
+                            className="absolute -translate-x-1/2"
+                            style={{ left: `${position}%` }}
+                          >
+                            <span className="text-[9px] text-muted-foreground whitespace-nowrap">
+                              {expectedWeight.toFixed(1)}
+                            </span>
+                          </div>
+                        ))}
                       </div>
-                      <div className="relative">
-                        {/* Weight labels above milestones */}
-                        <div className="relative h-4 mb-1">
-                          {milestones.map(({ week, expectedWeight, position }) => (
-                            <div
-                              key={`label-${week}`}
-                              className="absolute -translate-x-1/2"
-                              style={{ left: `${position}%` }}
-                            >
-                              <span className="text-[9px] text-muted-foreground whitespace-nowrap">
-                                {expectedWeight.toFixed(1)}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                        {/* Progress bar */}
-                        <div className="relative h-3 bg-muted rounded-full overflow-visible">
-                          {/* Progress fill */}
-                          <div 
-                            className="h-full bg-gradient-to-r from-primary to-primary/80 rounded-full transition-all duration-500"
-                            style={{ width: `${progressPercent}%` }}
+                      {/* Progress bar */}
+                      <div className="relative h-3 bg-muted rounded-full overflow-visible">
+                        {/* Progress fill */}
+                        <div
+                          className="h-full bg-gradient-to-r from-primary to-primary/80 rounded-full transition-all duration-500"
+                          style={{ width: `${progressPercent}%` }}
+                        />
+                        {/* Milestone markers */}
+                        {milestones.map(({ week, expectedWeight, position }) => (
+                          <div
+                            key={week}
+                            className="absolute top-0 bottom-0 w-0.5 bg-foreground/30"
+                            style={{ left: `${position}%` }}
+                            title={`Week ${week}: ${expectedWeight.toFixed(1)} kg`}
                           />
-                          {/* Milestone markers */}
-                          {milestones.map(({ week, expectedWeight, position }) => (
-                            <div
-                              key={week}
-                              className="absolute top-0 bottom-0 w-0.5 bg-foreground/30"
-                              style={{ left: `${position}%` }}
-                              title={`Week ${week}: ${expectedWeight.toFixed(1)} kg`}
-                            />
-                          ))}
-                          {/* Current position indicator */}
-                          <div 
-                            className="absolute top-1/2 -translate-y-1/2 w-2 h-2 bg-primary rounded-full border-2 border-background shadow-sm z-10"
-                            style={{ left: `${progressPercent}%`, marginLeft: '-4px' }}
-                          />
-                        </div>
+                        ))}
+                        {/* Current position indicator */}
+                        <div
+                          className="absolute top-1/2 -translate-y-1/2 w-2 h-2 bg-primary rounded-full border-2 border-background shadow-sm z-10"
+                          style={{ left: `${progressPercent}%`, marginLeft: '-4px' }}
+                        />
                       </div>
                     </div>
-                  );
-                })()
-              )}
-              
+                  </div>
+                );
+              })()
+            )}
+
             {/* Calories + Macros */}
             <div className="grid grid-cols-4 gap-3 text-center">
               <div>
