@@ -84,31 +84,19 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const loadUserData = async (retryCount = 0) => {
-    // Only clear error on first attempt
-    if (retryCount === 0) setAuthError(false);
+  const loadUserData = async () => {
+    setAuthError(false);
 
     try {
-      const { data: { session }, error } = await withAuthTimeout(
-        supabase.auth.getSession()
-      );
+      const { data: { session }, error } = await supabase.auth.getSession();
 
       if (error || !session?.user) {
-        // If we have retries left and it's likely a temporary issue (null session or timeout)
-        if (retryCount < 2) {
-          console.log(`Auth check failed, retrying (${retryCount + 1}/2)...`);
-          setTimeout(() => loadUserData(retryCount + 1), 1000);
-          return;
-        }
-
         setIsSessionValid(false);
         setUserId(null);
         setHasProfile(false);
 
-        // Only set error if we've exhausted retries and it wasn't just a "not logged in" state
-        // If error exists, it's a real error. If !session, it's just unauthenticated.
         if (error) {
-          console.error("Auth session error after retries:", error);
+          console.error("Auth session error:", error);
           setAuthError(true);
         }
 
@@ -205,10 +193,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    loadUserData();
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_OUT') {
+      if (event === 'INITIAL_SESSION') {
+        if (session?.user) {
+          await loadUserData();
+        } else {
+          setIsLoading(false);
+        }
+      } else if (event === 'SIGNED_OUT') {
         setIsSessionValid(false);
         setUserId(null);
         setUserName("");

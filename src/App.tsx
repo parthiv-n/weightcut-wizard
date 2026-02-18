@@ -1,8 +1,9 @@
+import { useEffect } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -28,6 +29,18 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+const SKIP_ROUTES = ['/', '/auth', '/onboarding'];
+
+function RouteTracker() {
+  const location = useLocation();
+  useEffect(() => {
+    if (!SKIP_ROUTES.includes(location.pathname)) {
+      localStorage.setItem('lastRoute', location.pathname);
+    }
+  }, [location.pathname]);
+  return null;
+}
+
 const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
   const { openMobile } = useSidebar();
   
@@ -46,10 +59,10 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
               <ThemeToggle className="touch-target h-full w-full" />
             </div>
           </div>
-          {/* Mobile-optimized header with safe area support - desktop shows trigger */}
-          <header className="sticky top-0 z-50 h-14 sm:h-14 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 flex items-center justify-between px-3 sm:px-4 safe-area-inset-top touch-target md:static md:z-auto">
-            <SidebarTrigger className="touch-target hidden md:flex" />
-            <ThemeToggle className="touch-target hidden md:flex" />
+          {/* Desktop-only header with sidebar trigger and theme toggle */}
+          <header className="hidden md:flex sticky top-0 z-50 h-14 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 items-center justify-between px-4 md:static md:z-auto">
+            <SidebarTrigger className="touch-target" />
+            <ThemeToggle className="touch-target" />
           </header>
           {/* Main content with mobile-first responsive padding - bottom padding for bottom nav */}
           <main className="flex-1 overflow-auto relative min-h-0 w-full pb-20 md:pb-0">
@@ -79,6 +92,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <RouteTracker />
           <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />

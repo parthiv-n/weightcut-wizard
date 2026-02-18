@@ -8,42 +8,42 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    /* Light mode - Fantasy modern performance theme */
-    --background: 218 18% 98%;
+    /* Light mode - Apple Fitness clean aesthetic */
+    --background: 0 0% 98%;
     --foreground: 240 10% 11%;
-    
-    --card: 257 100% 95%;
+
+    --card: 0 0% 100%;
     --card-foreground: 240 10% 11%;
-    
+
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 11%;
-    
+
     --primary: 228 77% 62%;
     --primary-foreground: 0 0% 100%;
-    
+
     --secondary: 260 85% 75%;
     --secondary-foreground: 0 0% 100%;
-    
+
     --muted: 220 14% 96%;
     --muted-foreground: 220 9% 46%;
-    
+
     --accent: 222 75% 70%;
     --accent-foreground: 240 10% 11%;
-    
+
     --success: 165 100% 69%;
     --success-foreground: 240 10% 11%;
-    
+
     --warning: 48 100% 67%;
     --warning-foreground: 240 10% 11%;
-    
+
     --destructive: 0 84% 70%;
     --destructive-foreground: 0 0% 100%;
-    
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
+
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
     --ring: 228 77% 62%;
-    
-    --radius: 0.75rem;
+
+    --radius: 1rem;
     
     --chart-1: 194 100% 75%;
     --chart-2: 228 77% 62%;
@@ -60,53 +60,53 @@ All colors MUST be HSL.
   }
 
   .dark {
-    /* Dark mode - Deep space with mystical accents */
-    --background: 240 20% 5%;
+    /* Dark mode - Apple Fitness near-black aesthetic */
+    --background: 0 0% 2%;
     --foreground: 0 0% 100%;
-    
-    --card: 240 15% 9%;
+
+    --card: 0 0% 8%;
     --card-foreground: 0 0% 100%;
-    
-    --popover: 240 15% 9%;
+
+    --popover: 0 0% 8%;
     --popover-foreground: 0 0% 100%;
-    
-    --primary: 228 91% 60%;
+
+    --primary: 228 100% 66%;
     --primary-foreground: 0 0% 100%;
-    
+
     --secondary: 260 76% 70%;
     --secondary-foreground: 0 0% 100%;
-    
-    --muted: 240 10% 15%;
+
+    --muted: 0 0% 12%;
     --muted-foreground: 240 5% 64%;
-    
-    --accent: 252 39% 30%;
+
+    --accent: 0 0% 12%;
     --accent-foreground: 0 0% 100%;
-    
+
     --success: 280 54% 70%;
     --success-foreground: 0 0% 100%;
-    
+
     --warning: 48 100% 67%;
     --warning-foreground: 240 10% 11%;
-    
+
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    
-    --border: 240 10% 15%;
-    --input: 240 10% 15%;
-    --ring: 228 91% 60%;
-    
+
+    --border: 0 0% 16%;
+    --input: 0 0% 16%;
+    --ring: 228 100% 66%;
+
     --chart-1: 194 100% 50%;
-    --chart-2: 228 91% 60%;
+    --chart-2: 228 100% 66%;
     --chart-3: 260 76% 54%;
-    
-    --sidebar-background: 240 20% 5%;
+
+    --sidebar-background: 0 0% 2%;
     --sidebar-foreground: 240 5% 84%;
-    --sidebar-primary: 228 91% 60%;
+    --sidebar-primary: 228 100% 66%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 15% 12%;
-    --sidebar-accent-foreground: 228 91% 60%;
-    --sidebar-border: 240 10% 15%;
-    --sidebar-ring: 228 91% 60%;
+    --sidebar-accent: 0 0% 10%;
+    --sidebar-accent-foreground: 228 100% 66%;
+    --sidebar-border: 0 0% 16%;
+    --sidebar-ring: 228 100% 66%;
   }
 }
 
@@ -172,6 +172,22 @@ All colors MUST be HSL.
   select {
     -webkit-appearance: none;
     appearance: none;
+  }
+}
+
+@layer components {
+  .glass-card {
+    background: hsl(var(--card) / 0.8);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid hsl(var(--border) / 0.5);
+    border-radius: 1rem;
+  }
+
+  .display-number {
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    letter-spacing: -0.02em;
   }
 }
 

@@ -30,61 +30,65 @@ export function WeightProgressRing({ currentWeight, startingWeight, goalWeight }
       <CardContent className="flex flex-col items-center justify-center py-6">
         <div className="relative w-48 h-48 animate-scale-in">
           <svg className="w-full h-full transform -rotate-90" viewBox="0 0 160 160">
-            {/* Background circle */}
+            <defs>
+              <linearGradient id="weightGradientArc" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="hsl(var(--primary))" />
+                <stop offset="50%" stopColor="hsl(var(--secondary))" />
+                <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity="0.8" />
+              </linearGradient>
+              <filter id="weightGlow">
+                <feDropShadow dx="0" dy="0" stdDeviation="3" floodColor="hsl(var(--primary))" floodOpacity="0.5" />
+              </filter>
+            </defs>
+            {/* Background track */}
             <circle
               cx="80"
               cy="80"
               r={radius}
               fill="none"
-              stroke="hsl(var(--secondary))"
-              strokeWidth="12"
-              opacity="0.2"
+              stroke="hsl(var(--primary))"
+              strokeWidth="11"
+              opacity="0.15"
             />
-            {/* Progress circle */}
+            {/* Progress arc */}
             <circle
               cx="80"
               cy="80"
               r={radius}
               fill="none"
-              stroke="url(#gradient)"
-              strokeWidth="12"
+              stroke="url(#weightGradientArc)"
+              strokeWidth="11"
               strokeLinecap="round"
               strokeDasharray={circumference}
               strokeDashoffset={strokeDashoffset}
               className="transition-all duration-1000 ease-out"
+              filter="url(#weightGlow)"
             />
-            {/* Gradient definition */}
-            <defs>
-              <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="hsl(var(--primary))" />
-                <stop offset="100%" stopColor="hsl(var(--chart-2))" />
-              </linearGradient>
-            </defs>
           </svg>
-          
+
           {/* Center content */}
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <div className="text-4xl font-bold bg-gradient-to-br from-primary to-secondary bg-clip-text text-transparent">
+            <div className="text-3xl font-bold display-number bg-gradient-to-br from-primary to-secondary bg-clip-text text-transparent">
               {displayProgress.toFixed(0)}%
             </div>
-            <div className="text-xs text-muted-foreground mt-1">Complete</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wider mt-1">Complete</div>
           </div>
         </div>
-        
+
         {/* Stats below the ring */}
         <div className="grid grid-cols-2 gap-4 w-full mt-6">
-          <div className="text-center p-3 rounded-lg bg-primary/10">
-            <div className="text-lg font-bold text-primary">{weightLost.toFixed(1)}kg</div>
-            <div className="text-xs text-muted-foreground">Lost</div>
+          <div className="text-center p-3 rounded-xl bg-primary/10">
+            <div className="text-lg font-bold display-number text-primary">{weightLost.toFixed(1)}kg</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wider">Lost</div>
           </div>
-          <div className="text-center p-3 rounded-lg bg-secondary/10">
-            <div className="text-lg font-bold text-secondary">{Math.max(0, weightRemaining).toFixed(1)}kg</div>
-            <div className="text-xs text-muted-foreground">To Go</div>
+          <div className="text-center p-3 rounded-xl bg-secondary/10">
+            <div className="text-lg font-bold display-number text-secondary">{Math.max(0, weightRemaining).toFixed(1)}kg</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-wider">To Go</div>
           </div>
         </div>
-        
+
         <div className="text-xs text-muted-foreground mt-4 text-center">
-          Current: <span className="font-semibold">{currentWeight.toFixed(1)}kg</span> • 
+          Current: <span className="font-semibold">{currentWeight.toFixed(1)}kg</span> •{" "}
           Target: <span className="font-semibold">{goalWeight.toFixed(1)}kg</span>
         </div>
       </CardContent>
