@@ -1,6 +1,8 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { withAuthTimeout, withSupabaseTimeout } from "@/lib/timeoutWrapper";
+import { Capacitor } from "@capacitor/core";
+import { App as CapacitorApp } from "@capacitor/app";
 
 interface UserContextType {
   userName: string;
@@ -31,6 +33,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [hasProfile, setHasProfile] = useState<boolean>(false);
   const [authError, setAuthError] = useState<boolean>(false);
+  const isUserLoadedRef = useRef(false);
 
   const checkSessionValidity = async (): Promise<boolean> => {
     try {
@@ -88,7 +91,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
     setAuthError(false);
 
     try {
-      const { data: { session }, error } = await supabase.auth.getSession();
+      const { data: { session }, error } = await withAuthTimeout(
+        supabase.auth.getSession()
+      );
 
       if (error || !session?.user) {
         setIsSessionValid(false);
@@ -161,6 +166,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       setHasProfile(false);
     } finally {
       setIsLoading(false);
+      isUserLoadedRef.current = true;
     }
   };
 
@@ -201,6 +207,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           setIsLoading(false);
         }
       } else if (event === 'SIGNED_OUT') {
+        isUserLoadedRef.current = false;
         setIsSessionValid(false);
         setUserId(null);
         setUserName("");
@@ -212,7 +219,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setIsSessionValid(true);
       } else if (event === 'SIGNED_IN' && session) {
         setIsSessionValid(true);
-        setIsLoading(true);
+        if (!isUserLoadedRef.current) {
+          setIsLoading(true); // only for fresh logins, not token refreshes
+        }
         await loadUserData();
       }
     });
@@ -222,9 +231,28 @@ export function UserProvider({ children }: { children: ReactNode }) {
       await checkSessionValidity();
     }, 30 * 60 * 1000);
 
+    // Proactive session refresh on app resume (Fix 3)
+    let appResumeHandle: { remove: () => void } | null = null;
+    let visibilityHandler: (() => void) | null = null;
+
+    if (Capacitor.isNativePlatform()) {
+      CapacitorApp.addListener('appStateChange', ({ isActive }) => {
+        if (isActive) checkSessionValidity();
+      }).then(h => { appResumeHandle = h; });
+    } else {
+      visibilityHandler = () => {
+        if (document.visibilityState === 'visible') checkSessionValidity();
+      };
+      document.addEventListener('visibilitychange', visibilityHandler);
+    }
+
     return () => {
       subscription.unsubscribe();
       clearInterval(sessionCheckInterval);
+      appResumeHandle?.remove();
+      if (visibilityHandler) {
+        document.removeEventListener('visibilitychange', visibilityHandler);
+      }
     };
   }, []);
 

@@ -149,136 +149,141 @@ export default function Auth() {
   }, [password, confirmPassword, isLogin]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-background to-card p-4">
-      <div className="fixed top-4 left-4 z-50">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => navigate("/")}
-          className="h-12 w-12 rounded-full shadow-lg bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border border-border/50 hover:bg-background/90 transition-all"
-        >
-          <ArrowLeft className="h-5 w-5" />
-          <span className="sr-only">Back to home</span>
-        </Button>
-      </div>
-      <div className="fixed top-4 right-4 z-50">
-        <ThemeToggle />
-      </div>
-      <Card className="w-full max-w-md shadow-xl">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-4">
-            <img src={wizardLogo} alt="Weight Cut Wizard" className="h-24 w-24 object-contain" />
+    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
+      {/* Background decorations for "Watch" feel */}
+      <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-primary/20 rounded-full blur-[120px] pointer-events-none opacity-30" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[400px] h-[400px] bg-blue-600/20 rounded-full blur-[100px] pointer-events-none opacity-20" />
+
+      <div className="w-full max-w-sm z-10 flex flex-col gap-8">
+        {/* Header */}
+        <div className="flex flex-col items-center text-center space-y-4">
+          <div className="relative">
+            <div className="absolute inset-0 bg-white/20 blur-xl rounded-full" />
+            <img
+              src={wizardLogo}
+              alt="Weight Cut Wizard"
+              className="relative h-28 w-28 object-contain drop-shadow-2xl"
+            />
           </div>
-          <CardTitle className="text-3xl font-title">Weight Cut Wizard</CardTitle>
-          <CardDescription>
+          <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-br from-white to-zinc-400 bg-clip-text text-transparent">
+            Weight Cut Wizard
+          </h1>
+          <p className="text-zinc-400 text-lg">
             {showForgotPassword
-              ? "Reset your password"
+              ? "Reset Password"
               : isLogin
-              ? "Sign in to your account"
-              : "Create your account"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
+                ? "Welcome Back"
+                : "Start Your Journey"}
+          </p>
+        </div>
+
+        {/* Form */}
+        <div className="w-full space-y-5">
           {showForgotPassword ? (
-            <form onSubmit={handleForgotPassword} className="space-y-4">
+            <form onSubmit={handleForgotPassword} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="reset-email">Email</Label>
                 <Input
                   id="reset-email"
                   type="email"
-                  placeholder="your@email.com"
+                  placeholder="Email Address"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  className="h-14 rounded-full bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-500 px-6 text-lg focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
                 />
               </div>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Sending..." : "Send Reset Email"}
+              <Button
+                type="submit"
+                className="w-full h-14 rounded-full text-lg font-bold bg-white text-black hover:bg-zinc-200 transition-transform active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+                disabled={loading}
+              >
+                {loading ? "Sending..." : "Send Reset Link"}
               </Button>
-              <div className="mt-4 text-center text-sm">
-                <button
-                  type="button"
-                  onClick={handleToggleForgotPassword}
-                  className="text-primary hover:underline"
-                >
-                  Back to sign in
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={handleToggleForgotPassword}
+                className="w-full text-center text-zinc-500 hover:text-white transition-colors py-2"
+              >
+                Back to Sign In
+              </button>
             </form>
           ) : (
             <form onSubmit={handleAuth} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+              <div className="space-y-4">
                 <Input
                   id="email"
                   type="email"
-                  placeholder="your@email.com"
+                  placeholder="Email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
+                  className="h-14 rounded-full bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-500 px-6 text-lg focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all"
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
                 <Input
                   id="password"
                   type="password"
-                  placeholder="••••••••"
+                  placeholder="Password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   minLength={6}
-                  className={passwordError ? "border-destructive" : ""}
+                  className={`h-14 rounded-full bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-500 px-6 text-lg focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all ${passwordError ? "border-red-500 focus:ring-red-500/50" : ""
+                    }`}
                 />
-                <p className="text-sm text-muted-foreground">
-                  Password must be at least 6 characters long
-                </p>
-              </div>
-              {!isLogin && (
-                <div className="space-y-2">
-                  <Label htmlFor="confirmPassword">Confirm Password</Label>
+                {!isLogin && (
                   <Input
                     id="confirmPassword"
                     type="password"
-                    placeholder="••••••••"
+                    placeholder="Confirm Password"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     required
                     minLength={6}
-                    className={passwordError ? "border-destructive" : ""}
+                    className={`h-14 rounded-full bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-500 px-6 text-lg focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all ${passwordError ? "border-red-500 focus:ring-red-500/50" : ""
+                      }`}
                   />
-                  {passwordError && (
-                    <p className="text-sm text-destructive">{passwordError}</p>
-                  )}
-                </div>
-              )}
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? "Loading..." : isLogin ? "Sign In" : "Sign Up"}
-              </Button>
+                )}
+                {passwordError && (
+                  <p className="text-sm text-red-500 text-center px-4 font-medium">{passwordError}</p>
+                )}
+              </div>
+
+              <div className="pt-2">
+                <Button
+                  type="submit"
+                  className="w-full h-14 rounded-full text-lg font-bold bg-white text-black hover:bg-zinc-200 transition-transform active:scale-95 shadow-[0_0_20px_rgba(255,255,255,0.15)]"
+                  disabled={loading}
+                >
+                  {loading ? "Please wait..." : isLogin ? "Sign In" : "Sign Up"}
+                </Button>
+              </div>
             </form>
           )}
+
           {!showForgotPassword && (
-            <div className="mt-4 space-y-2 text-center text-sm">
+            <div className="space-y-4 text-center mt-6">
               {isLogin && (
                 <button
                   type="button"
                   onClick={handleToggleForgotPassword}
-                  className="block w-full text-primary hover:underline"
+                  className="text-sm text-zinc-500 hover:text-white transition-colors"
                 >
-                  Forgot password?
+                  Forgot your password?
                 </button>
               )}
-              <button
-                type="button"
-                onClick={handleToggleMode}
-                className="text-primary hover:underline"
-              >
-                {isLogin ? "Need an account? Sign up" : "Already have an account? Sign in"}
-              </button>
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={handleToggleMode}
+                  className="text-primary font-medium hover:text-primary/80 transition-colors text-lg"
+                >
+                  {isLogin ? "New here? Create Account" : "Have an account? Sign In"}
+                </button>
+              </div>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
