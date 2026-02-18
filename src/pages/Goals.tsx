@@ -155,7 +155,7 @@ export default function Goals() {
 
   const getSafetyFeedback = () => {
     if (!formData.goal_weight_kg || !formData.fight_week_target_kg) return null;
-    
+
     return assessTargetSafety(
       parseFloat(formData.goal_weight_kg),
       parseFloat(formData.fight_week_target_kg)
@@ -231,218 +231,218 @@ export default function Goals() {
   }
 
   return (
-    <div className="p-4 sm:p-5 md:p-6 max-w-4xl mx-auto">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">Edit Your Goals</h1>
-        <p className="text-muted-foreground">Update your profile settings and weight targets</p>
-      </div>
+    <div className="min-h-screen bg-muted/30 pb-24 md:pb-10">
+      <div className="max-w-2xl mx-auto">
+        {/* Header */}
+        <div className="px-4 py-6 md:py-8">
+          <h1 className="text-3xl font-bold tracking-tight">Goals</h1>
+          <p className="text-muted-foreground mt-1 text-sm">Update your profile and targets</p>
+        </div>
 
-      <div className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Personal Information</CardTitle>
-            <CardDescription>Basic details used for calculations</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="age">Age</Label>
+        <div className="space-y-6 px-4">
+          {/* Section: Personal Details */}
+          <div className="space-y-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Personal Details</h2>
+            <div className="bg-background rounded-xl border shadow-sm overflow-hidden divide-y">
+              <div className="flex items-center justify-between p-3 sm:p-4">
+                <Label htmlFor="age" className="text-base font-medium">Age</Label>
                 <Input
                   id="age"
                   type="number"
                   value={formData.age}
                   onChange={(e) => setFormData({ ...formData, age: e.target.value })}
-                  required
+                  className="w-20 text-right h-8 border-transparent focus-visible:ring-0 bg-transparent p-0 text-base"
+                  placeholder="-"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="sex">Sex</Label>
+              <div className="flex items-center justify-between p-3 sm:p-4">
+                <Label htmlFor="sex" className="text-base font-medium">Sex</Label>
                 <Select value={formData.sex} onValueChange={(value) => setFormData({ ...formData, sex: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select sex" />
+                  <SelectTrigger className="w-28 h-8 border-transparent focus:ring-0 shadow-none justify-end gap-2 p-0 text-base">
+                    <SelectValue placeholder="Select" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent align="end">
                     <SelectItem value="male">Male</SelectItem>
                     <SelectItem value="female">Female</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="height">Height (cm)</Label>
-                <Input
-                  id="height"
-                  type="number"
-                  step="0.1"
-                  value={formData.height_cm}
-                  onChange={(e) => setFormData({ ...formData, height_cm: e.target.value })}
-                  required
-                />
+              <div className="flex items-center justify-between p-3 sm:p-4">
+                <Label htmlFor="height" className="text-base font-medium">Height</Label>
+                <div className="flex items-center gap-1">
+                  <Input
+                    id="height"
+                    type="number"
+                    value={formData.height_cm}
+                    onChange={(e) => setFormData({ ...formData, height_cm: e.target.value })}
+                    className="w-20 text-right h-8 border-transparent focus-visible:ring-0 bg-transparent p-0 text-base"
+                    placeholder="-"
+                  />
+                  <span className="text-muted-foreground text-sm">cm</span>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="current_weight">Current Weight (kg)</Label>
-                <Input
-                  id="current_weight"
-                  type="number"
-                  step="0.1"
-                  value={formData.current_weight_kg}
-                  onChange={(e) => setFormData({ ...formData, current_weight_kg: e.target.value })}
-                  required
-                />
+              <div className="flex items-center justify-between p-3 sm:p-4">
+                <Label htmlFor="current_weight" className="text-base font-medium">Current Weight</Label>
+                <div className="flex items-center gap-1">
+                  <Input
+                    id="current_weight"
+                    type="number"
+                    step="0.1"
+                    value={formData.current_weight_kg}
+                    onChange={(e) => setFormData({ ...formData, current_weight_kg: e.target.value })}
+                    className="w-20 text-right h-8 border-transparent focus-visible:ring-0 bg-transparent p-0 text-base"
+                    placeholder="-"
+                  />
+                  <span className="text-muted-foreground text-sm">kg</span>
+                </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Weight Targets</CardTitle>
-            <CardDescription>Set your weigh-in day and fight week goals</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="goal_weight">
-                Weigh In Day Weight (kg) 
-                <span className="text-xs text-muted-foreground ml-2">Day before fight day, your competition weight class</span>
-              </Label>
-              <Input
-                id="goal_weight"
-                type="number"
-                step="0.1"
-                placeholder="e.g., 70"
-                value={formData.goal_weight_kg}
-                onChange={(e) => setFormData({ ...formData, goal_weight_kg: e.target.value })}
-                required
-              />
-            </div>
-            
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="fight_week_target">
-                  Fight Week Target (kg)
-                  <span className="text-xs text-muted-foreground ml-2">Weight before dehydration</span>
-                </Label>
-                <Button
-                  type="button"
-                  variant={useAutoTarget ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setUseAutoTarget(!useAutoTarget)}
-                  className="gap-2"
-                >
-                  <Sparkles className="h-3 w-3" />
-                  {useAutoTarget ? "AI Auto" : "Manual"}
-                </Button>
+          {/* Section: Targets */}
+          <div className="space-y-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Targets</h2>
+            <div className="bg-background rounded-xl border shadow-sm overflow-hidden divide-y">
+              {/* Weigh-in Goal */}
+              <div className="p-3 sm:p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="goal_weight" className="text-base font-medium">Weigh In Goal</Label>
+                  <div className="flex items-center gap-1">
+                    <Input
+                      id="goal_weight"
+                      type="number"
+                      step="0.1"
+                      value={formData.goal_weight_kg}
+                      onChange={(e) => setFormData({ ...formData, goal_weight_kg: e.target.value })}
+                      className="w-20 text-right h-8 border-transparent focus-visible:ring-0 bg-transparent p-0 text-base font-semibold text-primary"
+                      placeholder="-"
+                    />
+                    <span className="text-muted-foreground text-sm">kg</span>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">This is your final competition weight class (day before fight).</p>
               </div>
-              
-              <Input
-                id="fight_week_target"
-                type="number"
-                step="0.1"
-                placeholder="e.g., 77"
-                value={formData.fight_week_target_kg}
-                onChange={(e) => {
-                  setFormData({ ...formData, fight_week_target_kg: e.target.value });
-                  setUseAutoTarget(false);
-                }}
-                disabled={useAutoTarget}
-                required
-              />
-              
-              {useAutoTarget ? (
-                <Alert className="border-primary/50 bg-primary/5">
-                  <Sparkles className="h-4 w-4 text-primary" />
-                  <AlertDescription className="text-sm">
-                    AI calculated safe target based on 5.5% dehydration capacity with water loading protocol
-                  </AlertDescription>
-                </Alert>
+
+              {/* Fight Week Target */}
+              <div className="p-3 sm:p-4 space-y-3 bg-muted/10">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor="fight_week_target" className="text-base font-medium">Diet Target</Label>
+                    <button
+                      type="button"
+                      onClick={() => setUseAutoTarget(!useAutoTarget)}
+                      className={`text-[10px] px-2 py-0.5 rounded-full border transition-colors ${useAutoTarget ? "bg-primary text-primary-foreground border-primary" : "bg-transparent text-muted-foreground border-border"}`}
+                    >
+                      {useAutoTarget ? "AI AUTO" : "MANUAL"}
+                    </button>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Input
+                      id="fight_week_target"
+                      type="number"
+                      step="0.1"
+                      value={formData.fight_week_target_kg}
+                      onChange={(e) => {
+                        setFormData({ ...formData, fight_week_target_kg: e.target.value });
+                        setUseAutoTarget(false);
+                      }}
+                      disabled={useAutoTarget}
+                      className="w-20 text-right h-8 border-transparent focus-visible:ring-0 bg-transparent p-0 text-base disabled:opacity-70"
+                      placeholder="-"
+                    />
+                    <span className="text-muted-foreground text-sm">kg</span>
+                  </div>
+                </div>
+
+                {useAutoTarget ? (
+                  <div className="flex items-start gap-2 text-xs text-muted-foreground bg-primary/5 p-2 rounded-lg">
+                    <Sparkles className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+                    <span>AI computed safe pre-cut weight (5.5% dehydration buffer).</span>
+                  </div>
+                ) : (
+                  getSafetyFeedback() && (
+                    <div className={`flex items-start gap-2 text-xs p-2 rounded-lg ${targetSafetyLevel === "safe" ? "bg-green-500/10 text-green-700 dark:text-green-400" :
+                        targetSafetyLevel === "moderate" ? "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400" :
+                          "bg-red-500/10 text-red-700 dark:text-red-400"
+                      }`}>
+                      <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                      <div>
+                        <span className="font-medium">{getSafetyFeedback()?.message}</span>
+                        {formData.goal_weight_kg && formData.fight_week_target_kg && (
+                          <div className="mt-0.5 opacity-80">
+                            Cut: {(parseFloat(formData.fight_week_target_kg) - parseFloat(formData.goal_weight_kg)).toFixed(1)}kg
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                )}
+              </div>
+
+              {/* Date */}
+              <div className="flex items-center justify-between p-3 sm:p-4">
+                <Label htmlFor="target_date" className="text-base font-medium">Target Date</Label>
+                <Input
+                  id="target_date"
+                  type="date"
+                  value={formData.target_date}
+                  onChange={(e) => setFormData({ ...formData, target_date: e.target.value })}
+                  className="w-auto h-8 border-transparent focus-visible:ring-0 bg-transparent p-0 text-base text-right"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section: Activity */}
+          <div className="space-y-2">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Activity</h2>
+            <div className="bg-background rounded-xl border shadow-sm overflow-hidden divide-y">
+              <div className="p-3 sm:p-4 flex flex-col gap-2">
+                <Label htmlFor="activity_level" className="text-base font-medium">Activity Level</Label>
+                <Select value={formData.activity_level} onValueChange={(value) => setFormData({ ...formData, activity_level: value })}>
+                  <SelectTrigger className="w-full h-10 border-input bg-muted/20">
+                    <SelectValue placeholder="Select activity level" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sedentary">Sedentary</SelectItem>
+                    <SelectItem value="lightly_active">Lightly Active</SelectItem>
+                    <SelectItem value="moderately_active">Moderately Active</SelectItem>
+                    <SelectItem value="very_active">Very Active</SelectItem>
+                    <SelectItem value="extra_active">Extra Active</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center justify-between p-3 sm:p-4">
+                <Label htmlFor="training_frequency" className="text-base font-medium">Training Frequency</Label>
+                <div className="flex items-center gap-1">
+                  <Input
+                    id="training_frequency"
+                    type="number"
+                    value={formData.training_frequency}
+                    onChange={(e) => setFormData({ ...formData, training_frequency: e.target.value })}
+                    className="w-16 text-right h-8 border-transparent focus-visible:ring-0 bg-transparent p-0 text-base"
+                    placeholder="-"
+                  />
+                  <span className="text-muted-foreground text-sm">/wk</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Save Button */}
+          <div className="pt-4 pb-8">
+            <Button onClick={handleSubmit} disabled={saving} className="w-full h-12 text-lg font-semibold rounded-xl shadow-md">
+              {saving ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Saving...
+                </>
               ) : (
-                getSafetyFeedback() && (
-                  <Alert className={`${
-                    targetSafetyLevel === "safe" ? "border-green-500/50 bg-green-500/5" :
-                    targetSafetyLevel === "moderate" ? "border-yellow-500/50 bg-yellow-500/5" :
-                    "border-red-500/50 bg-red-500/5"
-                  }`}>
-                    {targetSafetyLevel === "safe" ? (
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <AlertTriangle className={`h-4 w-4 ${
-                        targetSafetyLevel === "moderate" ? "text-yellow-500" : "text-red-500"
-                      }`} />
-                    )}
-                    <AlertDescription className={`text-sm ${getSafetyFeedback()?.color}`}>
-                      {getSafetyFeedback()?.message}
-                      {formData.goal_weight_kg && formData.fight_week_target_kg && (
-                        <span className="block mt-1">
-                          Dehydration cut: {(parseFloat(formData.fight_week_target_kg) - parseFloat(formData.goal_weight_kg)).toFixed(1)}kg 
-                          ({((parseFloat(formData.fight_week_target_kg) - parseFloat(formData.goal_weight_kg)) / parseFloat(formData.goal_weight_kg) * 100).toFixed(1)}% of body weight)
-                        </span>
-                      )}
-                    </AlertDescription>
-                  </Alert>
-                )
+                "Save Updates"
               )}
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="target_date">Target Date</Label>
-              <Input
-                id="target_date"
-                type="date"
-                value={formData.target_date}
-                onChange={(e) => setFormData({ ...formData, target_date: e.target.value })}
-                required
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Activity Level</CardTitle>
-            <CardDescription>Your typical training and activity schedule</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="activity_level">Activity Level</Label>
-              <Select value={formData.activity_level} onValueChange={(value) => setFormData({ ...formData, activity_level: value })}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select activity level" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="sedentary">Sedentary (little or no exercise)</SelectItem>
-                  <SelectItem value="lightly_active">Lightly Active (1-3 days/week)</SelectItem>
-                  <SelectItem value="moderately_active">Moderately Active (3-5 days/week)</SelectItem>
-                  <SelectItem value="very_active">Very Active (6-7 days/week)</SelectItem>
-                  <SelectItem value="extra_active">Extra Active (2x per day)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="training_frequency">Training Frequency (sessions per week)</Label>
-              <Input
-                id="training_frequency"
-                type="number"
-                value={formData.training_frequency}
-                onChange={(e) => setFormData({ ...formData, training_frequency: e.target.value })}
-                required
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="flex gap-3">
-          <Button variant="outline" onClick={() => navigate("/dashboard")} className="flex-1">
-            Cancel
-          </Button>
-          <Button onClick={handleSubmit} disabled={saving} className="flex-1">
-            {saving ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              "Save Changes"
-            )}
-          </Button>
+            </Button>
+          </div>
         </div>
       </div>
     </div>
