@@ -1,5 +1,3 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Edit2, Trash2, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
 import { useState } from "react";
@@ -29,118 +27,116 @@ interface MealCardProps {
 
 export function MealCard({ meal, onEdit, onDelete }: MealCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const hasDetails = !!(meal.ingredients?.length || meal.portion_size || meal.recipe_notes);
 
-  const getMealTypeColor = (type?: string) => {
+  const getMealTypeDotColor = (type?: string) => {
     switch (type) {
-      case "breakfast": return "bg-orange-500/10 text-orange-600";
-      case "lunch": return "bg-blue-500/10 text-blue-600";
-      case "dinner": return "bg-purple-500/10 text-purple-600";
-      case "snack": return "bg-green-500/10 text-green-600";
-      default: return "bg-muted text-muted-foreground";
+      case "breakfast": return "bg-orange-500";
+      case "lunch": return "bg-blue-500";
+      case "dinner": return "bg-purple-500";
+      case "snack": return "bg-green-500";
+      default: return "bg-muted-foreground";
     }
   };
 
   return (
-    <Card className="hover:shadow-md transition-shadow animate-fade-in">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <CardTitle className="text-lg">{meal.meal_name}</CardTitle>
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-              {meal.is_ai_generated && (
-                <Badge variant="default" className="bg-primary/20 text-primary border-primary/30">
-                  <Sparkles className="h-3 w-3 mr-1" />
-                  AI Generated
-                </Badge>
+    <div className="animate-fade-in">
+      {/* Main row */}
+      <div className="flex items-center gap-3 py-3 border-b border-border/30">
+        {/* Meal type dot */}
+        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${getMealTypeDotColor(meal.meal_type)}`} />
+
+        {/* Name + macros */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5">
+            <span className="text-sm font-medium truncate">{meal.meal_name}</span>
+            {meal.is_ai_generated && (
+              <Sparkles className="h-3 w-3 text-primary flex-shrink-0" />
+            )}
+          </div>
+          {(meal.protein_g || meal.carbs_g || meal.fats_g) && (
+            <p className="text-xs text-muted-foreground mt-0.5 leading-none">
+              {[
+                meal.protein_g ? `P ${Math.round(meal.protein_g)}g` : null,
+                meal.carbs_g ? `C ${Math.round(meal.carbs_g)}g` : null,
+                meal.fats_g ? `F ${Math.round(meal.fats_g)}g` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          )}
+        </div>
+
+        {/* Calories */}
+        <span className="text-sm font-semibold text-primary flex-shrink-0">
+          {meal.calories} kcal
+        </span>
+
+        {/* Expand chevron (when details exist) or inline delete (no details) */}
+        {hasDetails ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 flex-shrink-0 text-muted-foreground"
+            onClick={() => setExpanded(!expanded)}
+          >
+            {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+          </Button>
+        ) : onDelete ? (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 flex-shrink-0 text-muted-foreground hover:text-destructive"
+            onClick={onDelete}
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        ) : null}
+      </div>
+
+      {/* Expanded details */}
+      {expanded && (
+        <div className="pl-4 pb-3 pt-2 space-y-2 animate-fade-in border-b border-border/20">
+          {meal.ingredients && meal.ingredients.length > 0 && (
+            <div className="space-y-1">
+              {meal.ingredients.map((ingredient, idx) => (
+                <div key={idx} className="flex justify-between text-xs text-muted-foreground">
+                  <span>{ingredient.name}</span>
+                  <span>{ingredient.grams}g</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {meal.portion_size && !meal.ingredients?.length && (
+            <p className="text-xs text-muted-foreground">Portion: {meal.portion_size}</p>
+          )}
+          {meal.recipe_notes && (
+            <p className="text-xs text-muted-foreground whitespace-pre-wrap">{meal.recipe_notes}</p>
+          )}
+          {(onEdit || onDelete) && (
+            <div className="flex gap-1 pt-1">
+              {onEdit && (
+                <Button variant="ghost" size="sm" onClick={onEdit} className="h-7 px-2 text-xs gap-1">
+                  <Edit2 className="h-3 w-3" />
+                  Edit
+                </Button>
               )}
-              {meal.meal_type && (
-                <Badge variant="outline" className={getMealTypeColor(meal.meal_type)}>
-                  {meal.meal_type}
-                </Badge>
-              )}
-              <Badge variant="secondary">{meal.calories} cal</Badge>
-              {meal.protein_g && (
-                <span className="text-xs text-muted-foreground">
-                  P: {meal.protein_g}g
-                </span>
-              )}
-              {meal.carbs_g && (
-                <span className="text-xs text-muted-foreground">
-                  C: {meal.carbs_g}g
-                </span>
-              )}
-              {meal.fats_g && (
-                <span className="text-xs text-muted-foreground">
-                  F: {meal.fats_g}g
-                </span>
+              {onDelete && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onDelete}
+                  className="h-7 px-2 text-xs gap-1 text-destructive hover:text-destructive"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Delete
+                </Button>
               )}
             </div>
-          </div>
-          <div className="flex gap-1">
-            {onEdit && (
-              <Button variant="ghost" size="icon" onClick={onEdit}>
-                <Edit2 className="h-4 w-4" />
-              </Button>
-            )}
-            {onDelete && (
-              <Button variant="ghost" size="icon" onClick={onDelete}>
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
+          )}
         </div>
-      </CardHeader>
-      {(meal.ingredients || meal.portion_size || meal.recipe_notes) && (
-        <>
-          <CardContent className="pt-0">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setExpanded(!expanded)}
-              className="w-full justify-between"
-            >
-              <span>Details</span>
-              {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </Button>
-            {expanded && (
-              <div className="mt-3 space-y-3 text-sm animate-fade-in">
-                {meal.ingredients && meal.ingredients.length > 0 && (
-                  <div>
-                    <span className="font-semibold block mb-2">Ingredients:</span>
-                    <div className="space-y-1 pl-2">
-                      {meal.ingredients.map((ingredient, idx) => (
-                        <div key={idx} className="flex justify-between items-center">
-                          <span className="text-muted-foreground">{ingredient.name}</span>
-                          <span className="font-medium">{ingredient.grams}g</span>
-                        </div>
-                      ))}
-                      <div className="flex justify-between items-center pt-2 border-t mt-2">
-                        <span className="font-semibold">Total weight:</span>
-                        <span className="font-semibold">
-                          {meal.ingredients.reduce((sum, ing) => sum + ing.grams, 0)}g
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                {meal.portion_size && !meal.ingredients && (
-                  <div>
-                    <span className="font-semibold">Portion:</span> {meal.portion_size}
-                  </div>
-                )}
-                {meal.recipe_notes && (
-                  <div>
-                    <span className="font-semibold">Recipe:</span>
-                    <p className="mt-1 text-muted-foreground whitespace-pre-wrap">{meal.recipe_notes}</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </>
       )}
-    </Card>
+
+    </div>
   );
 }

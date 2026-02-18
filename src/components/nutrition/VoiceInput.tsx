@@ -7,9 +7,10 @@ import { pipeline } from "@huggingface/transformers";
 interface VoiceInputProps {
   onTranscription: (text: string) => void;
   disabled?: boolean;
+  className?: string;
 }
 
-export function VoiceInput({ onTranscription, disabled }: VoiceInputProps) {
+export function VoiceInput({ onTranscription, disabled, className }: VoiceInputProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isModelLoading, setIsModelLoading] = useState(false);
@@ -168,55 +169,59 @@ export function VoiceInput({ onTranscription, disabled }: VoiceInputProps) {
   };
 
   return (
-    <div className="flex items-center gap-2">
+    <>
       {!isRecording && !isProcessing && !isModelLoading && (
         <Button
           type="button"
           variant="outline"
           onClick={startRecording}
           disabled={disabled}
-          className="gap-2"
+          className={className}
+          title="Voice Input"
         >
           <Mic className="h-4 w-4" />
-          Voice Input
+          <span className="sr-only">Voice Input</span>
         </Button>
       )}
-      
+
       {isModelLoading && (
         <Button
           type="button"
           variant="outline"
           disabled
-          className="gap-2"
+          className={className}
+          title="Loading model..."
         >
           <Loader2 className="h-4 w-4 animate-spin" />
-          Loading Model...
+          <span className="sr-only">Loading Model</span>
         </Button>
       )}
-      
+
       {isRecording && (
         <Button
           type="button"
           variant="destructive"
           onClick={stopRecording}
-          className="gap-2 animate-pulse"
+          className={`${className} animate-pulse`}
+          title="Stop Recording"
         >
           <Square className="h-4 w-4" />
-          Stop Recording
+          <span className="sr-only">Stop Recording</span>
         </Button>
       )}
-      
+
       {isProcessing && (
         <Button
           type="button"
           variant="outline"
           disabled
-          className="gap-2"
+          className={className}
+          title="Processing..."
         >
           <Loader2 className="h-4 w-4 animate-spin" />
-          Processing...
+          <span className="sr-only">Processing</span>
         </Button>
       )}
-    </div>
+    </>
   );
 }

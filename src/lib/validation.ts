@@ -4,9 +4,9 @@ import { z } from "zod";
 export const nutritionLogSchema = z.object({
   meal_name: z.string().trim().min(1, "Meal name is required").max(200, "Meal name too long"),
   calories: z.number().int().positive("Calories must be positive").min(1).max(10000, "Calories must be less than 10,000"),
-  protein_g: z.number().positive("Protein must be positive").max(500, "Protein must be less than 500g").optional().nullable(),
-  carbs_g: z.number().positive("Carbs must be positive").max(1000, "Carbs must be less than 1000g").optional().nullable(),
-  fats_g: z.number().positive("Fats must be positive").max(500, "Fats must be less than 500g").optional().nullable(),
+  protein_g: z.number().nonnegative("Protein cannot be negative").max(500, "Protein must be less than 500g").optional().nullable(),
+  carbs_g: z.number().nonnegative("Carbs cannot be negative").max(1000, "Carbs must be less than 1000g").optional().nullable(),
+  fats_g: z.number().nonnegative("Fats cannot be negative").max(500, "Fats must be less than 500g").optional().nullable(),
   meal_type: z.string().optional().nullable(),
   portion_size: z.string().max(100, "Portion size too long").optional().nullable(),
   recipe_notes: z.string().max(1000, "Recipe notes too long").optional().nullable(),
