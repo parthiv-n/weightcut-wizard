@@ -432,529 +432,346 @@ export default function FightWeek() {
 
   if (!plan) {
     return (
-      <div className="space-y-6 p-4 sm:p-5 md:p-6">
-        <div className="flex items-center gap-3">
-          <Calendar className="w-8 h-8 text-primary" />
-          <h1 className="text-3xl font-title font-bold">Fight Week Schedule</h1>
-        </div>
+      <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
+        {/* Background decorations */}
+        <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-primary/20 rounded-full blur-[120px] pointer-events-none opacity-30" />
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Create Your Fight Week Plan</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        <div className="w-full max-w-sm z-10 space-y-8">
+          <div className="text-center space-y-2">
+            <h1 className="text-3xl font-bold tracking-tight">Fight Week Plan</h1>
+            <p className="text-zinc-400">Set your targets to start the countdown.</p>
+          </div>
+
+          <div className="space-y-4 bg-zinc-900 p-6 rounded-3xl border border-zinc-800">
             <div className="space-y-2">
-              <Label htmlFor="fight_date">Fight Date</Label>
+              <Label htmlFor="fight_date" className="text-zinc-300">Fight Date</Label>
               <Input
                 id="fight_date"
                 type="date"
                 value={newPlan.fight_date}
                 onChange={(e) => setNewPlan({ ...newPlan, fight_date: e.target.value })}
+                className="bg-black border-zinc-800 text-white h-12 rounded-xl focus:border-primary"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="starting_weight">Current Weight (kg)</Label>
+              <Label htmlFor="starting_weight" className="text-zinc-300">Current Weight (kg)</Label>
               <Input
                 id="starting_weight"
                 type="number"
                 step="0.1"
                 value={newPlan.starting_weight_kg}
                 onChange={(e) => setNewPlan({ ...newPlan, starting_weight_kg: e.target.value })}
+                className="bg-black border-zinc-800 text-white h-12 rounded-xl focus:border-primary"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="target_weight">Target Weigh-in Weight (kg)</Label>
+              <Label htmlFor="target_weight" className="text-zinc-300">Target Weight (kg)</Label>
               <Input
                 id="target_weight"
                 type="number"
                 step="0.1"
                 value={newPlan.target_weight_kg}
                 onChange={(e) => setNewPlan({ ...newPlan, target_weight_kg: e.target.value })}
+                className="bg-black border-zinc-800 text-white h-12 rounded-xl focus:border-primary"
               />
             </div>
-            <Button onClick={createPlan} disabled={loading} className="w-full">
-              {loading ? "Creating..." : "Start Fight Week"}
+            <Button
+              onClick={createPlan}
+              disabled={loading}
+              className="w-full h-12 rounded-xl text-lg font-bold bg-white text-black hover:bg-zinc-200 transition-all mt-2"
+            >
+              {loading ? "Creating..." : "Start Protocol"}
             </Button>
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 p-4 sm:p-5 md:p-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Calendar className="w-8 h-8 text-primary" />
-          <div>
-            <h1 className="text-3xl font-title font-bold">Fight Week</h1>
-            <p className="text-muted-foreground">
-              {daysUntilFight} days until {format(new Date(plan.fight_date), "MMMM dd, yyyy")}
-            </p>
+    <div className="min-h-screen bg-black text-white pb-32 md:pb-10 pt-safe-top">
+      {/* Dynamic Background */}
+      <div className="fixed inset-0 pointer-events-none z-0">
+        <div className="absolute top-[-10%] right-[-10%] w-[400px] h-[400px] bg-primary/10 rounded-full blur-[100px] opacity-40" />
+      </div>
+
+      <div className="relative z-10 max-w-2xl mx-auto px-6 py-6 space-y-8">
+        {/* Header & Countdown */}
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Fight Week</h1>
+              <p className="text-zinc-400 text-sm font-medium">
+                {format(new Date(plan.fight_date), "MMMM dd, yyyy")}
+              </p>
+            </div>
+            <div className={`px-3 py-1 rounded-full text-xs font-bold border ${weightCutInfo?.status === 'safe' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+              weightCutInfo?.status === 'warning' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
+                'bg-red-500/10 text-red-400 border-red-500/20'
+              }`}>
+              {weightCutInfo?.status === 'safe' ? 'ON TRACK' : weightCutInfo?.status === 'warning' ? 'CAUTION' : 'CRITICAL'}
+            </div>
+          </div>
+
+          {/* Hero Countdown & Weight */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-zinc-900 rounded-3xl p-5 border border-zinc-800/50 flex flex-col justify-between h-32 relative overflow-hidden group">
+              <div className="absolute top-3 right-3 text-zinc-600 group-hover:text-zinc-500 transition-colors">
+                <Timer className="h-5 w-5" />
+              </div>
+              <span className="text-sm font-medium text-zinc-400">Time Left</span>
+              <div className="space-y-1">
+                <span className="text-4xl font-bold tracking-tight block">
+                  {timeRemaining.days}<span className="text-lg text-zinc-500 font-normal ml-1">d</span>
+                </span>
+                <span className="text-sm text-zinc-500 font-mono">
+                  {String(timeRemaining.hours).padStart(2, '0')}:{String(timeRemaining.minutes).padStart(2, '0')}
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-zinc-900 rounded-3xl p-5 border border-zinc-800/50 flex flex-col justify-between h-32 relative overflow-hidden group">
+              <div className="absolute top-3 right-3 text-zinc-600 group-hover:text-zinc-500 transition-colors">
+                <Activity className="h-5 w-5" />
+              </div>
+              <span className="text-sm font-medium text-zinc-400">Weight Left</span>
+              <div>
+                <span className="text-4xl font-bold tracking-tight text-white block">
+                  {(currentWeight - plan.target_weight_kg).toFixed(1)}<span className="text-lg text-zinc-500 font-normal ml-1">kg</span>
+                </span>
+                <div className="flex items-center gap-2 mt-1">
+                  <Progress value={getWeightProgress()} className="h-1.5 bg-zinc-800" indicatorClassName="bg-primary" />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Countdown Timer */}
-      <Card className="border-2 border-primary/30">
-        <CardContent className="pt-6">
-          <div className="flex items-center justify-center gap-4">
-            <Timer className="h-6 w-6 text-primary" />
-            <div className="flex items-baseline gap-3 font-mono text-center">
-              <div className="flex flex-col items-center">
-                <span className="text-4xl font-bold">{timeRemaining.days}</span>
-                <span className="text-xs text-muted-foreground uppercase">days</span>
-              </div>
-              <span className="text-4xl font-bold text-muted-foreground">:</span>
-              <div className="flex flex-col items-center">
-                <span className="text-4xl font-bold">{String(timeRemaining.hours).padStart(2, "0")}</span>
-                <span className="text-xs text-muted-foreground uppercase">hrs</span>
-              </div>
-              <span className="text-4xl font-bold text-muted-foreground">:</span>
-              <div className="flex flex-col items-center">
-                <span className="text-4xl font-bold">{String(timeRemaining.minutes).padStart(2, "0")}</span>
-                <span className="text-xs text-muted-foreground uppercase">min</span>
-              </div>
-              <span className="text-4xl font-bold text-muted-foreground">:</span>
-              <div className="flex flex-col items-center">
-                <span className="text-4xl font-bold">{String(timeRemaining.seconds).padStart(2, "0")}</span>
-                <span className="text-xs text-muted-foreground uppercase">sec</span>
-              </div>
-            </div>
-            <Calendar className="h-6 w-6 text-primary" />
+        {/* Quick Log Action */}
+        <div className="bg-zinc-900 rounded-3xl p-5 border border-zinc-800/50 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold">Log Weight</h3>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Advanced Protocol Settings */}
-      <Collapsible open={settingsExpanded} onOpenChange={setSettingsExpanded}>
-        <Card>
-          <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium">Advanced Protocol Settings</CardTitle>
-                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-200 ${settingsExpanded ? "rotate-180" : ""}`} />
-              </div>
-            </CardHeader>
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <CardContent className="space-y-4 pt-0">
-              <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
-                  id="waterload-toggle"
-                  checked={isWaterloading}
-                  onChange={(e) => {
-                    setIsWaterloading(e.target.checked);
-                    toast({
-                      title: e.target.checked ? "Water loading enabled" : "Water loading disabled",
-                      description: e.target.checked
-                        ? "This increases safe dehydration capacity by 2-3kg. Update AI analysis to reflect changes."
-                        : "Standard carb depletion + 3% dehydration protocol."
-                    });
-                  }}
-                  className="rounded"
-                />
-                <Label htmlFor="waterload-toggle" className="cursor-pointer">
-                  I am water loading (increases safe cut by 2-3kg)
-                </Label>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Water loading involves drinking increased amounts of water in the days before cutting to enhance natural diuresis. When enabled, this adjusts your AI analysis to account for the additional 2-3kg safe dehydration capacity.
-              </p>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="bg-muted/50 p-2 rounded">
-                  <p className="font-semibold">Days 7-3 before weigh-in:</p>
-                  <p className="text-muted-foreground">Drink 8-10L water daily</p>
-                </div>
-                <div className="bg-muted/50 p-2 rounded">
-                  <p className="font-semibold">Days 2-1 before weigh-in:</p>
-                  <p className="text-muted-foreground">Reduce to normal intake</p>
-                </div>
-              </div>
-            </CardContent>
-          </CollapsibleContent>
-        </Card>
-      </Collapsible>
-
-      {/* AI Analysis Loading State */}
-      {analyzingWeight && (
-        <Card className="border-2 border-primary/30 animate-pulse">
-          <CardHeader>
-            <div className="flex items-start gap-4">
-              <Skeleton className="w-16 h-16 rounded-full" />
-              <div className="flex-1 space-y-2">
-                <Skeleton className="h-6 w-48" />
-                <Skeleton className="h-8 w-64" />
-              </div>
+          <div className="flex gap-3">
+            <div className="w-1/3">
+              <Input
+                type="date"
+                value={quickWeightLog.log_date}
+                onChange={(e) => setQuickWeightLog({ ...quickWeightLog, log_date: e.target.value })}
+                className="bg-black border-zinc-800 text-white h-12 rounded-xl focus:border-primary text-sm font-medium text-center"
+              />
             </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-3">
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-full" />
-              </div>
-              <div className="space-y-3">
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-full" />
-              </div>
+            <div className="flex-1">
+              <Input
+                type="number"
+                step="0.1"
+                placeholder="0.0"
+                value={quickWeightLog.weight_kg || ""}
+                onChange={(e) => setQuickWeightLog({ ...quickWeightLog, weight_kg: parseFloat(e.target.value) })}
+                className="bg-black border-zinc-800 text-white h-12 rounded-xl focus:border-primary text-lg font-medium text-center"
+              />
             </div>
-            <Skeleton className="h-24 w-full rounded-lg" />
-            <Skeleton className="h-20 w-full rounded-lg" />
-            <div className="text-center py-4">
-              <Sparkles className="h-8 w-8 mx-auto text-primary animate-spin" />
-              <p className="text-sm text-muted-foreground mt-2">Analyzing your weight cut strategy...</p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* AI-Powered Adaptive Analysis */}
-      {!analyzingWeight && aiAnalysis && (
-        <Card className={`border-2 animate-fade-in ${
-          aiAnalysis.riskLevel === 'green' ? 'border-green-500/50 bg-green-500/5' :
-          aiAnalysis.riskLevel === 'yellow' ? 'border-yellow-500/50 bg-yellow-500/5' :
-          'border-red-500/50 bg-red-500/5'
-        }`}>
-          <CardHeader>
-            <div className="flex items-start gap-4">
-              <img src={wizardLogo} alt="Wizard" className="w-16 h-16" />
-              <div className="flex-1">
-                <CardTitle className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5" />
-                  AI Weight Cut Analysis
-                </CardTitle>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className={`text-2xl font-bold uppercase ${
-                    aiAnalysis.riskLevel === 'green' ? 'text-green-600 dark:text-green-400' :
-                    aiAnalysis.riskLevel === 'yellow' ? 'text-yellow-600 dark:text-yellow-400' :
-                    'text-red-600 dark:text-red-400'
-                  }`}>
-                    {aiAnalysis.riskLevel === 'green' ? 'SAFE' :
-                     aiAnalysis.riskLevel === 'yellow' ? 'MODERATE RISK' : 'HIGH RISK'}
-                  </span>
-                  <span className="text-sm text-muted-foreground">
-                    ({aiAnalysis.riskPercentage.toFixed(1)}% of body weight)
-                  </span>
-                </div>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Water Loading Section */}
-            {isWaterloading && (
-              <Alert className="border-blue-500/50 bg-blue-500/5 animate-fade-in">
-                <Droplets className="h-4 w-4 text-blue-500" />
-                <AlertDescription className="text-sm">
-                  <div className="space-y-2">
-                    <p className="font-semibold text-blue-600 dark:text-blue-400">
-                      Water Loading Protocol Active
-                    </p>
-                    <p className="text-muted-foreground">
-                      Water loading increases your safe dehydration capacity by 2-3kg through enhanced natural diuresis.
-                      This allows for a larger total weight cut while maintaining safety margins.
-                    </p>
-                  </div>
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {/* Carb Depletion Warning */}
-            <Alert className="border-orange-500/50 bg-orange-500/5">
-              <AlertTriangle className="h-4 w-4 text-orange-500" />
-              <AlertDescription className="text-sm space-y-2">
-                <p className="font-semibold text-orange-600 dark:text-orange-400">
-                  Individual Response Variability
-                </p>
-                <p className="text-muted-foreground">
-                  Carb depletion estimates (typically 2-2.5kg) can vary significantly based on your individual physiology,
-                  glycogen storage capacity, training status, and previous diet. If your weight doesn't drop as expected
-                  from carb depletion alone, <strong>be prepared to increase dehydration</strong> to compensate - but stay
-                  within safe limits (max 3% bodyweight, or 5-6% if water loading).
-                </p>
-                <p className="text-muted-foreground">
-                  Monitor your daily weight closely and adjust your protocol early if you're falling behind schedule.
-                  Don't wait until the last day to realize you need extra dehydration.
-                </p>
-              </AlertDescription>
-            </Alert>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Weight Remaining:</span>
-                  <span className="font-semibold">{aiAnalysis.weightRemaining.toFixed(1)} kg</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Via Carb Depletion:</span>
-                  <span className="font-semibold">~{aiAnalysis.carbDepletionEstimate.toFixed(1)} kg</span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Via Dehydration:</span>
-                  <span className="font-semibold">~{aiAnalysis.dehydrationRequired.toFixed(1)} kg</span>
-                </div>
-                {isWaterloading && (
-                  <div className="flex justify-between text-sm pt-2 border-t">
-                    <span className="text-muted-foreground flex items-center gap-1">
-                      <Droplets className="h-3 w-3 text-blue-500" />
-                      Water Load Bonus:
-                    </span>
-                    <span className="font-semibold text-blue-600 dark:text-blue-400">+2-3 kg capacity</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Progress Status:</span>
-                  <span className={`font-semibold ${
-                    aiAnalysis.isOnTrack ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'
-                  }`}>
-                    {aiAnalysis.progressStatus}
-                  </span>
-                </div>
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Protocol:</span>
-                  <span className={`font-semibold ${isWaterloading ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground'}`}>
-                    {isWaterloading ? 'Water Loading + Dehydration' : 'Standard Dehydration'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <Alert className={
-              aiAnalysis.riskLevel === 'green' ? 'border-green-500/50' :
-              aiAnalysis.riskLevel === 'yellow' ? 'border-yellow-500/50' :
-              'border-red-500/50'
-            }>
-              <Sparkles className="h-4 w-4" />
-              <AlertDescription className="text-sm space-y-2">
-                <p><strong>Risk Assessment:</strong> {aiAnalysis.riskExplanation}</p>
-                <p><strong>Daily Analysis:</strong> {aiAnalysis.dailyAnalysis}</p>
-              </AlertDescription>
-            </Alert>
-
-            {aiAnalysis.adaptations.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="font-semibold text-sm">Recommended Adaptations:</h4>
-                <ul className="space-y-1">
-                  {aiAnalysis.adaptations.map((adaptation, idx) => (
-                    <li key={idx} className="text-sm flex items-start gap-2">
-                      <CheckCircle className="h-4 w-4 mt-0.5 text-primary flex-shrink-0" />
-                      <span>{adaptation}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            <Alert>
-              <Activity className="h-4 w-4" />
-              <AlertDescription className="text-sm">
-                <strong>Strategic Recommendation:</strong> {aiAnalysis.recommendation}
-              </AlertDescription>
-            </Alert>
-          </CardContent>
-        </Card>
-      )}
-
-      {!analyzingWeight && !aiAnalysis && logs.length > 0 && (
-        <Card>
-          <CardContent className="pt-6">
-            <Button onClick={getAIAnalysis} disabled={analyzingWeight} className="w-full">
-              <Sparkles className="h-4 w-4 mr-2" />
-              {analyzingWeight ? "Analyzing..." : "Get AI Analysis"}
+            <Button
+              onClick={saveQuickWeight}
+              disabled={loading || !quickWeightLog.weight_kg}
+              className="h-12 w-24 rounded-xl bg-white text-black hover:bg-zinc-200 font-bold text-base transition-transform active:scale-95"
+            >
+              {loading ? "..." : "Save"}
             </Button>
-          </CardContent>
-        </Card>
-      )}
+          </div>
+        </div>
 
-      {!analyzingWeight && aiAnalysis && logs.length > 0 && (
-        <Card className="border-primary/30 animate-fade-in">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between gap-4">
-              <p className="text-sm text-muted-foreground">
-                Get fresh analysis with your latest weight data and water loading status
-              </p>
-              <Button onClick={getAIAnalysis} disabled={analyzingWeight} variant="outline" size="sm">
-                <Sparkles className="h-4 w-4 mr-2" />
-                {analyzingWeight ? "Re-analyzing..." : "Re-analyze Weight Cut"}
-              </Button>
+        {/* AI Insight Section */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between px-1">
+            <h2 className="text-xl font-bold flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              AI Insight
+            </h2>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-8 text-xs text-zinc-400 hover:text-white"
+              onClick={getAIAnalysis}
+              disabled={analyzingWeight}
+            >
+              {analyzingWeight ? "Analyzing..." : "Refresh"}
+            </Button>
+          </div>
+
+          {analyzingWeight ? (
+            <div className="bg-zinc-900 rounded-3xl p-8 border border-zinc-800/50 flex flex-col items-center justify-center space-y-4 min-h-[200px]">
+              <Sparkles className="h-8 w-8 text-primary animate-spin" />
+              <p className="text-zinc-400 animate-pulse text-sm">Analyzing protocol...</p>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          ) : aiAnalysis ? (
+            <div className="bg-zinc-900 rounded-3xl border border-zinc-800/50 overflow-hidden">
+              <div className="p-5 space-y-4">
+                {/* Risk Header */}
+                <div className="flex items-center gap-3 pb-4 border-b border-zinc-800">
+                  <div className={`h-10 w-10 rounded-full flex items-center justify-center ${aiAnalysis.riskLevel === 'green' ? 'bg-green-500/20 text-green-400' :
+                    aiAnalysis.riskLevel === 'yellow' ? 'bg-yellow-500/20 text-yellow-400' :
+                      'bg-red-500/20 text-red-400'
+                    }`}>
+                    {aiAnalysis.riskLevel === 'green' ? <CheckCircle className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg leading-tight">
+                      {aiAnalysis.riskLevel === 'green' ? 'Protocol Safe' : aiAnalysis.riskLevel === 'yellow' ? 'Moderate adjustments needed' : 'Immediate action required'}
+                    </h3>
+                    <p className="text-sm text-zinc-400">{aiAnalysis.progressStatus}</p>
+                  </div>
+                </div>
 
-      {/* Progress Overview */}
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Current Weight</CardTitle>
-            <TrendingDown className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{currentWeight || plan.starting_weight_kg}kg</div>
-            <Progress value={getWeightProgress()} className="mt-2" />
-            <p className="text-xs text-muted-foreground mt-2">
-              Target: {plan.target_weight_kg}kg
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Safety Status</CardTitle>
-            {weightCutInfo && (
-              weightCutInfo.status === "safe" ? (
-                <CheckCircle className="h-4 w-4 text-green-500" />
-              ) : weightCutInfo.status === "warning" ? (
-                <AlertTriangle className="h-4 w-4 text-yellow-500" />
-              ) : (
-                <AlertTriangle className="h-4 w-4 text-red-500" />
-              )
-            )}
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold capitalize ${
-              weightCutInfo?.status === 'safe' ? 'text-green-600 dark:text-green-400' :
-              weightCutInfo?.status === 'warning' ? 'text-yellow-600 dark:text-yellow-400' :
-              'text-red-600 dark:text-red-400'
-            }`}>
-              {weightCutInfo?.status}
-            </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              {weightCutInfo?.isSafe ? 'Within safe limits' : 'Exceeds safe guidelines'}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Weight Trend Chart */}
-      {logs.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Weight Trend</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={getChartData()} onClick={handleChartClick}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis domain={['dataMin - 1', 'dataMax + 1']} />
-                <Tooltip
-                  content={({ active, payload }) => {
-                    if (active && payload && payload.length) {
-                      return (
-                        <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
-                          <p className="text-sm font-medium">{payload[0].payload.fullDate}</p>
-                          <p className="text-lg font-bold text-primary">{payload[0].value}kg</p>
-                          <p className="text-xs text-muted-foreground mt-1">Click to delete</p>
-                        </div>
-                      );
-                    }
-                    return null;
-                  }}
-                />
-                <ReferenceLine y={plan.target_weight_kg} stroke="hsl(var(--primary))" strokeDasharray="3 3" label="Target" />
-                <Line type="monotone" dataKey="weight" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ cursor: "pointer", r: 5 }} activeDot={{ cursor: "pointer", r: 7 }} />
-              </LineChart>
-            </ResponsiveContainer>
-
-            {/* Fight Week Logs List */}
-            <div className="mt-6 space-y-2">
-              <h4 className="text-sm font-semibold text-muted-foreground">Fight Week Entries</h4>
-              <div className="max-h-48 overflow-y-auto space-y-2">
-                {logs.slice().reverse().map((log) => (
-                  <div
-                    key={log.id}
-                    className="flex items-center justify-between p-3 rounded-md bg-muted/30 hover:bg-muted/50 transition-colors"
-                  >
-                    <div className="flex items-center gap-3 flex-1">
-                      <div className="text-sm">
-                        <p className="font-medium">{format(new Date(log.log_date), "MMM dd, yyyy")}</p>
-                        {log.weight_kg && (
-                          <p className="text-xs text-muted-foreground">Weight: {log.weight_kg}kg</p>
-                        )}
+                {/* Cut Composition Visualization */}
+                <div className="space-y-3">
+                  <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Estimated Cut Composition</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Activity className="h-3.5 w-3.5 text-orange-400" />
+                        <span className="text-xs text-zinc-400">Carb/Gut Depletion</span>
+                      </div>
+                      <span className="text-xl font-bold text-white block">
+                        ~{aiAnalysis.carbDepletionEstimate.toFixed(1)}<span className="text-sm text-zinc-500 font-normal ml-0.5">kg</span>
+                      </span>
+                    </div>
+                    <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Droplets className="h-3.5 w-3.5 text-blue-400" />
+                        <span className="text-xs text-zinc-400">Water Loss Required</span>
+                      </div>
+                      <span className="text-xl font-bold text-white block">
+                        ~{aiAnalysis.dehydrationRequired.toFixed(1)}<span className="text-sm text-zinc-500 font-normal ml-0.5">kg</span>
+                      </span>
+                    </div>
+                  </div>
+                  {isWaterloading && (
+                    <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 flex items-start gap-3">
+                      <Droplets className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-blue-400">Water Loading Active</p>
+                        <p className="text-xs text-blue-300/70 mt-0.5">Bonus 2-3kg safe dehydration capacity added.</p>
                       </div>
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => initiateDelete(log)}
-                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                  )}
+                </div>
+
+                {/* Analysis Text */}
+                <div className="space-y-3 border-t border-zinc-800 pt-3">
+                  <p className="text-sm text-zinc-300 leading-relaxed">
+                    "{aiAnalysis.dailyAnalysis}"
+                  </p>
+                  {aiAnalysis.adaptations.length > 0 && (
+                    <div className="bg-zinc-950/50 rounded-xl p-3 space-y-2">
+                      <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Adaptations</span>
+                      <ul className="space-y-2">
+                        {aiAnalysis.adaptations.map((item, i) => (
+                          <li key={i} className="text-sm flex gap-2 text-zinc-300">
+                            <span className="text-primary mt-1">•</span>
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Protocol Toggle footer */}
+              <div className="bg-zinc-950 p-4 border-t border-zinc-800 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Droplets className={`h-4 w-4 ${isWaterloading ? 'text-blue-500' : 'text-zinc-600'}`} />
+                  <span className="text-sm font-medium text-zinc-400">Water Loading</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-500">{isWaterloading ? "On" : "Off"}</span>
+                  <input
+                    type="checkbox"
+                    checked={isWaterloading}
+                    onChange={(e) => setIsWaterloading(e.target.checked)}
+                    className="toggle-checkbox h-5 w-9 rounded-full bg-zinc-800 border-transparent appearance-none transition-colors checked:bg-blue-600 relative cursor-pointer
+                      after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-transform checked:after:translate-x-4"
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-zinc-900 rounded-3xl p-8 border border-zinc-800/50 text-center space-y-4">
+              <p className="text-zinc-400">No analysis available. Log your weight to get started.</p>
+              <Button onClick={getAIAnalysis} variant="outline" className="text-white border-zinc-700 hover:bg-zinc-800">
+                Generate Analysis
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Chart & History */}
+        {logs.length > 0 && (
+          <div className="space-y-4">
+            <h2 className="text-xl font-bold px-1">History</h2>
+            <div className="bg-zinc-900 rounded-3xl p-5 border border-zinc-800/50 overflow-hidden">
+              <div className="h-48 w-full -ml-2">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={getChartData()}>
+                    <XAxis
+                      dataKey="date"
+                      stroke="#52525b"
+                      fontSize={12}
+                      tickLine={false}
+                      axisLine={false}
+                      tickMargin={10}
+                    />
+                    <Tooltip
+                      contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '12px' }}
+                      itemStyle={{ color: '#fff' }}
+                      labelStyle={{ color: '#a1a1aa' }}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="weight"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={3}
+                      dot={false}
+                      activeDot={{ r: 6, fill: "#fff", strokeWidth: 0 }}
+                    />
+                    <ReferenceLine y={plan.target_weight_kg} stroke="#3f3f46" strokeDasharray="3 3" />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div className="mt-4 space-y-px bg-zinc-800 rounded-xl overflow-hidden border border-zinc-800">
+                {logs.slice().reverse().map((log) => (
+                  <div key={log.id} className="flex items-center justify-between p-4 bg-zinc-900 hover:bg-zinc-800/80 transition-colors group">
+                    <div className="flex items-center gap-4">
+                      <div className="h-2 w-2 rounded-full bg-primary/50"></div>
+                      <div>
+                        <p className="font-semibold text-sm text-white">{format(new Date(log.log_date), "MMM dd")}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="font-mono font-bold text-white">{log.weight_kg}kg</span>
+                      <button
+                        onClick={() => initiateDelete(log)}
+                        className="text-zinc-600 hover:text-red-500 transition-colors p-1"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Quick Weight Check-in */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Quick Weight Check-in</CardTitle>
-            <Activity className="h-5 w-5 text-muted-foreground" />
           </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="log_date">Date</Label>
-              <Input
-                id="log_date"
-                type="date"
-                value={quickWeightLog.log_date}
-                onChange={(e) => setQuickWeightLog({ ...quickWeightLog, log_date: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="weight">Weight (kg)</Label>
-              <Input
-                id="weight"
-                type="number"
-                step="0.1"
-                value={quickWeightLog.weight_kg || ""}
-                onChange={(e) => setQuickWeightLog({ ...quickWeightLog, weight_kg: parseFloat(e.target.value) })}
-              />
-            </div>
-          </div>
-          <Button onClick={saveQuickWeight} disabled={loading || !quickWeightLog.log_date || !quickWeightLog.weight_kg} className="w-full">
-            {loading ? "Saving..." : "Log Weight"}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Safety Guidelines */}
-      <Card className="border-yellow-500/50 bg-yellow-500/5">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <AlertTriangle className="h-5 w-5 text-yellow-500" />
-            Safety Guidelines
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          <p>• Maximum safe weight loss: 1kg/week or 1.5% bodyweight/week</p>
-          <p>• Dehydration limits: &lt;2% in training, &lt;3% in single sweat session</p>
-          <p>• Post weigh-in: Replace 150% fluid lost, electrolytes essential</p>
-          <p>• Carb refeeding: 5-10g/kg/day, small frequent meals</p>
-          <p>• Never use diuretics, plastics, or extreme caloric restriction</p>
-          <p>• Stop immediately if experiencing: dizziness, extreme fatigue, confusion</p>
-        </CardContent>
-      </Card>
+        )}
+      </div>
 
       <DeleteConfirmDialog
         open={deleteDialogOpen}
         onOpenChange={setDeleteDialogOpen}
         onConfirm={handleDeleteLog}
-        title="Delete Fight Week Log"
-        itemName={logToDelete ? `Log from ${format(new Date(logToDelete.log_date), "MMM dd, yyyy")}` : undefined}
+        title="Delete Log"
+        itemName={logToDelete ? `entry from ${format(new Date(logToDelete.log_date), "MMM dd")}` : undefined}
       />
     </div>
   );
