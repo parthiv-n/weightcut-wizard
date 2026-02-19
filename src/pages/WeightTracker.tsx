@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { weightLogSchema } from "@/lib/validation";
 import { useUser } from "@/contexts/UserContext";
+import { AIPersistence } from "@/lib/aiPersistence";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   AlertDialog,
@@ -91,95 +92,75 @@ export default function WeightTracker() {
     requestPayload: any;
   } | null>(null);
   const { toast } = useToast();
-  const { updateCurrentWeight, userId } = useUser();
+  const { updateCurrentWeight, userId, profile: contextProfile } = useUser();
   const [searchParams, setSearchParams] = useSearchParams();
   const weightInputRef = useRef<HTMLInputElement>(null);
 
+  // Sync profile from context
   useEffect(() => {
-    fetchData();
-    loadPersistedAnalysis();
-  }, []);
+    if (contextProfile) {
+      setProfile(contextProfile as Profile);
+    }
+  }, [contextProfile]);
 
-  const loadPersistedAnalysis = async () => {
+  useEffect(() => {
+    if (userId) {
+      fetchWeightLogs();
+      loadPersistedAnalysis();
+    }
+  }, [userId]);
+
+  // Warmup edge function 2s after mount
+  useEffect(() => {
     if (!userId) return;
+    const t = setTimeout(() => {
+      supabase.functions.invoke("weight-tracker-analysis", { method: "GET" } as any).catch(() => {});
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [userId]);
 
+  // Visibility-based revalidation
+  useEffect(() => {
+    const handleVis = () => {
+      if (document.visibilityState === 'visible' && userId) fetchWeightLogs();
+    };
+    document.addEventListener('visibilitychange', handleVis);
+    return () => document.removeEventListener('visibilitychange', handleVis);
+  }, [userId]);
+
+  const loadPersistedAnalysis = () => {
+    if (!userId || !contextProfile) return;
+    const cw = contextProfile.current_weight_kg;
+    const ft = contextProfile.fight_week_target_kg;
+    if (!cw || !ft) return;
     try {
-      const storageKey = `weight_tracker_ai_analysis_${userId}`;
-      const stored = localStorage.getItem(storageKey);
-
-      if (!stored) return;
-
-      const parsed = JSON.parse(stored);
-      const { analysis, currentWeight, fightWeekTarget } = parsed;
-
-      // Validate that the stored analysis is still valid
-      // Get current weight and target
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: latestWeightLog } = await supabase
-        .from("weight_logs")
-        .select("weight_kg")
-        .eq("user_id", user.id)
-        .order("date", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("current_weight_kg, fight_week_target_kg")
-        .eq("id", user.id)
-        .single();
-
-      if (!profileData) return;
-
-      const actualCurrentWeight = latestWeightLog?.weight_kg || profileData.current_weight_kg;
-      const actualFightWeekTarget = profileData.fight_week_target_kg;
-
-      // Only restore if weight and target match (analysis is still valid)
-      if (
-        actualCurrentWeight === currentWeight &&
-        actualFightWeekTarget === fightWeekTarget &&
-        analysis
-      ) {
-        setAiAnalysis(analysis);
-        setAiAnalysisWeight(currentWeight);
-        setAiAnalysisTarget(fightWeekTarget);
-      } else {
-        // Clear invalid stored analysis
-        localStorage.removeItem(storageKey);
+      const cacheKey = `weight_analysis_${cw}_${ft}`;
+      const cached = AIPersistence.load(userId, cacheKey);
+      if (cached) {
+        setAiAnalysis(cached);
+        setAiAnalysisWeight(cw);
+        setAiAnalysisTarget(ft);
       }
     } catch (error) {
       console.error("Error loading persisted analysis:", error);
     }
   };
 
-  const fetchData = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+  const fetchWeightLogs = async () => {
+    if (!userId) return;
 
-    // Fetch profile
-    const { data: profileData } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
-
-    if (profileData) {
-      setProfile(profileData);
-    }
-
-    // Fetch weight logs
     const { data: logsData } = await supabase
       .from("weight_logs")
-      .select("*")
-      .eq("user_id", user.id)
+      .select("id, date, weight_kg")
+      .eq("user_id", userId)
       .order("date", { ascending: true });
 
     if (logsData) {
       setWeightLogs(logsData);
     }
   };
+
+  const fetchData = fetchWeightLogs;
 
   const handleAddWeight = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -199,58 +180,59 @@ export default function WeightTracker() {
       return;
     }
 
-    setLoading(true);
+    if (!userId) return;
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    const loggedWeight = parseFloat(newWeight);
+    const tempId = `temp-${Date.now()}`;
+
+    // Optimistic: add entry immediately, clear form
+    setWeightLogs(prev => [...prev, { id: tempId, date: newDate, weight_kg: loggedWeight }]);
+    setNewWeight("");
 
     const { error } = await supabase.from("weight_logs").insert({
-      user_id: user.id,
-      weight_kg: parseFloat(newWeight),
+      user_id: userId,
+      weight_kg: loggedWeight,
       date: newDate,
     });
 
     if (error) {
+      // Rollback optimistic entry
+      setWeightLogs(prev => prev.filter(l => l.id !== tempId));
       toast({
         title: "Error",
         description: "Failed to log weight",
         variant: "destructive",
       });
     } else {
-      const loggedWeight = parseFloat(newWeight);
-
       // Update profile current weight
-      await supabase
+      supabase
         .from("profiles")
         .update({ current_weight_kg: loggedWeight })
-        .eq("id", user.id);
+        .eq("id", userId);
 
-      // Update centralized current weight
       await updateCurrentWeight(loggedWeight);
 
-      // Clear stored AI analysis since weight has changed
-      if (userId) {
-        const storageKey = `weight_tracker_ai_analysis_${userId}`;
-        localStorage.removeItem(storageKey);
-        setAiAnalysis(null);
-        setAiAnalysisWeight(null);
-        setAiAnalysisTarget(null);
+      // Clear AI analysis cache since weight has changed
+      if (profile?.fight_week_target_kg) {
+        const oldCacheKey = `weight_analysis_${profile.current_weight_kg}_${profile.fight_week_target_kg}`;
+        AIPersistence.remove(userId, oldCacheKey);
       }
+      setAiAnalysis(null);
+      setAiAnalysisWeight(null);
+      setAiAnalysisTarget(null);
 
       toast({
         title: "Weight logged",
         description: "Your weight has been recorded",
       });
-      setNewWeight("");
-      fetchData();
 
-      // Refresh AI analysis with new weight
+      // Replace temp entry with real data
+      fetchWeightLogs();
+
       if (profile) {
         getAIAnalysis();
       }
     }
-
-    setLoading(false);
   };
 
   const handleDeleteLog = async () => {
@@ -273,7 +255,7 @@ export default function WeightTracker() {
         title: "Deleted",
         description: "Weight log has been removed",
       });
-      fetchData();
+      fetchWeightLogs();
     }
 
     setLoading(false);
@@ -302,24 +284,26 @@ export default function WeightTracker() {
 
     setAnalyzingWeight(true);
 
-    // Fetch fresh weight from database to ensure we have the latest
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
+    if (!userId) {
       setAnalyzingWeight(false);
       return;
     }
 
-    const { data: latestWeightLog } = await supabase
-      .from("weight_logs")
-      .select("weight_kg, date")
-      .eq("user_id", user.id)
-      .order("date", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // Use latest weight from in-memory logs if available, otherwise use profile weight
+    const latestLog = weightLogs.length > 0 ? weightLogs[weightLogs.length - 1] : null;
+    const currentWeight = latestLog?.weight_kg || profile.current_weight_kg;
+    const currentWeightSource = latestLog?.weight_kg ? "weight_logs (latest log)" : "profile.current_weight_kg";
 
-    // Use latest weight log if available, otherwise use profile weight
-    const currentWeight = latestWeightLog?.weight_kg || profile.current_weight_kg;
-    const currentWeightSource = latestWeightLog?.weight_kg ? "weight_logs (latest log)" : "profile.current_weight_kg";
+    // Check AIPersistence cache first
+    const cacheKey = `weight_analysis_${currentWeight}_${fightWeekTarget}`;
+    const cached = AIPersistence.load(userId, cacheKey);
+    if (cached) {
+      setAiAnalysis(cached);
+      setAiAnalysisWeight(currentWeight);
+      setAiAnalysisTarget(fightWeekTarget);
+      setAnalyzingWeight(false);
+      return;
+    }
 
     // Check if goal is unrealistic (>1.5kg/week)
     if (isGoalUnrealistic(currentWeight, fightWeekTarget, profile.target_date)) {
@@ -358,7 +342,8 @@ export default function WeightTracker() {
       sex: profile.sex,
       heightCm: profile.height_cm,
       tdee: profile.tdee,
-      bypassSafety: false
+      bypassSafety: false,
+      weightHistory: weightLogs.slice(-60).map(l => ({ date: l.date, weight_kg: l.weight_kg })),
     };
 
     const { data, error } = await supabase.functions.invoke("weight-tracker-analysis", {
@@ -400,18 +385,7 @@ export default function WeightTracker() {
       setAiAnalysis(data.analysis);
       setAiAnalysisWeight(currentWeight);
       setAiAnalysisTarget(fightWeekTarget);
-
-      // Store in localStorage for persistence
-      if (userId) {
-        const storageKey = `weight_tracker_ai_analysis_${userId}`;
-        const storageData = {
-          analysis: data.analysis,
-          currentWeight,
-          fightWeekTarget,
-          timestamp: Date.now()
-        };
-        localStorage.setItem(storageKey, JSON.stringify(storageData));
-      }
+      AIPersistence.save(userId, cacheKey, data.analysis, 24);
     }
     setAnalyzingWeight(false);
   };
@@ -427,11 +401,9 @@ export default function WeightTracker() {
     // Add bypassSafety flag to request
     const requestPayloadWithBypass = {
       ...requestPayload,
-      bypassSafety: true
+      bypassSafety: true,
+      weightHistory: weightLogs.slice(-60).map(l => ({ date: l.date, weight_kg: l.weight_kg })),
     };
-
-    // Get user for saving recommendations
-    const { data: { user } } = await supabase.auth.getUser();
 
     const { data, error } = await supabase.functions.invoke("weight-tracker-analysis", {
       body: requestPayloadWithBypass
@@ -448,17 +420,9 @@ export default function WeightTracker() {
       setAiAnalysis(data.analysis);
       setAiAnalysisWeight(currentWeight);
       setAiAnalysisTarget(fightWeekTarget);
-
-      // Store in localStorage for persistence
       if (userId) {
-        const storageKey = `weight_tracker_ai_analysis_${userId}`;
-        const storageData = {
-          analysis: data.analysis,
-          currentWeight,
-          fightWeekTarget,
-          timestamp: Date.now()
-        };
-        localStorage.setItem(storageKey, JSON.stringify(storageData));
+        const cacheKey = `weight_analysis_${currentWeight}_${fightWeekTarget}`;
+        AIPersistence.save(userId, cacheKey, data.analysis, 24);
       }
     }
 

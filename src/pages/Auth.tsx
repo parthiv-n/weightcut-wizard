@@ -78,7 +78,9 @@ export default function Auth() {
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/dashboard`,
+            emailRedirectTo: window.location.protocol === 'file:' || window.location.hostname === 'localhost'
+              ? 'weightcutwizard://dashboard'
+              : `${window.location.origin}/dashboard`,
           },
         });
         if (error) throw error;

@@ -7,6 +7,10 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { AIPersistence } from "@/lib/aiPersistence";
+import { useUser } from "@/contexts/UserContext";
+import { Capacitor } from "@capacitor/core";
+import { Camera as CapCamera, CameraPermissionState } from "@capacitor/camera";
 
 interface BarcodeScannerProps {
   onFoodScanned: (foodData: {
@@ -27,14 +31,42 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
   const [scannedProduct, setScannedProduct] = useState<any>(null);
   const [lastScannedBarcode, setLastScannedBarcode] = useState<string>("");
+  const [permissionDenied, setPermissionDenied] = useState(false);
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
+  const { userId } = useUser();
+
+  const requestNativePermission = async (): Promise<boolean> => {
+    if (!Capacitor.isNativePlatform()) return true;
+    try {
+      const status = await CapCamera.requestPermissions({ permissions: ["camera"] });
+      const granted: CameraPermissionState = status.camera;
+      if (granted === "denied" || granted === "restricted") {
+        setPermissionDenied(true);
+        setCameraError("Camera access was denied. Go to iOS Settings > WeightCut Wizard > Camera and enable it.");
+        return false;
+      }
+      return true;
+    } catch {
+      return true; // non-iOS or plugin unavailable — fall through to getUserMedia
+    }
+  };
 
   const handleBarcodeScanned = async (barcode: string) => {
     setIsProcessing(true);
     setScannedProduct(null);
-    
+
     try {
+      // Check cache first (barcodes don't change — 30-day TTL)
+      const cacheKey = `barcode_${barcode}`;
+      const cachedData = userId ? AIPersistence.load(userId, cacheKey) : null;
+      if (cachedData) {
+        setScannedProduct(cachedData);
+        setIsProcessing(false);
+        toast({ title: "Product found!", description: `${cachedData.productName} scanned successfully` });
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke("scan-barcode", {
         body: { barcode },
       });
@@ -54,6 +86,11 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
       // Show product information
       setScannedProduct(data);
       setIsProcessing(false);
+
+      // Cache barcode result for 30 days
+      if (userId) {
+        AIPersistence.save(userId, `barcode_${barcode}`, data, 24 * 30);
+      }
 
       toast({
         title: "Product found!",
@@ -128,6 +165,7 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
       setCameraError("");
       setScannedProduct(null);
       setLastScannedBarcode("");
+      setPermissionDenied(false);
       if (scanTimeoutRef.current) {
         clearTimeout(scanTimeoutRef.current);
       }
@@ -152,7 +190,10 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
     <>
       <Button
         variant="outline"
-        onClick={() => setIsOpen(true)}
+        onClick={async () => {
+          const ok = await requestNativePermission();
+          if (ok) setIsOpen(true);
+        }}
         disabled={disabled}
         className={className}
         title="Scan Barcode"
