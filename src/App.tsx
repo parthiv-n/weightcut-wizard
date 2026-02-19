@@ -51,7 +51,7 @@ function RouteTracker() {
     CapacitorApp.addListener('appUrlOpen', async ({ url }) => {
       console.log('App opened with URL:', url);
 
-      // Handle Supabase PKCE Code
+      // 1. Handle Supabase Auth (PKCE Code)
       if (url.includes('code=')) {
         try {
           const params = new URLSearchParams(new URL(url).search);
@@ -59,17 +59,53 @@ function RouteTracker() {
           if (code) {
             const { error } = await supabase.auth.exchangeCodeForSession(code);
             if (!error) {
-              navigate('/dashboard');
+              // Valid session estalished
+              // If we have a specific path in the URL, go there, otherwise dashboard
+              const path = url.split("weightcutwizard://")[1]?.split('?')[0];
+              if (path && path.length > 0 && path !== 'callback') {
+                navigate(`/${path}`);
+              } else {
+                navigate('/dashboard');
+              }
             }
           }
         } catch (e) {
           console.error("Error exchanging code:", e);
         }
+        return; // specific auth handling done
       }
 
-      // Handle Implicit Flow or Redirects
-      if (url.includes('weightcutwizard://dashboard')) {
-        navigate('/dashboard');
+      // 2. Handle Supabase Auth (Implicit Flow / Hash Fragment)
+      if (url.includes('#access_token') || url.includes('&access_token')) {
+        try {
+          // Supabase client might handle this if it detects the hash, 
+          // but we can force a session check or navigation
+          const { data } = await supabase.auth.getSession();
+          if (data.session) {
+            navigate('/dashboard');
+          }
+        } catch (e) {
+          console.error("Error handling implicit flow:", e);
+        }
+        return;
+      }
+
+      // 3. Generic Deep Linking (weightcutwizard://page)
+      // e.g. weightcutwizard://nutrition -> /nutrition
+      if (url.includes('weightcutwizard://')) {
+        const slug = url.split("weightcutwizard://")[1];
+        if (slug) {
+          // Remove query params if any, unless we want to keep them
+          const path = slug.split('?')[0];
+
+          // special case: 'callback' is often used for auth redirects, ignore it if we didn't match auth above
+          if (path !== 'callback') {
+            navigate(`/${path}`);
+          } else {
+            // callback without code? maybe just go to dashboard
+            navigate('/dashboard');
+          }
+        }
       }
     });
   }, [navigate]);
@@ -89,19 +125,13 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
         </div>
         {/* Main content area - responsive padding for mobile */}
         <div className="flex-1 flex flex-col min-w-0 w-full">
-          {/* Floating theme toggle button - right side, mobile only */}
-          <div className="fixed top-0 right-0 z-[9999] md:hidden safe-area-inset-top p-2">
-            <div className="h-12 w-12 rounded-full shadow-lg bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 border border-border/50 flex items-center justify-center touch-target hover:bg-background/90 transition-all overflow-hidden">
-              <ThemeToggle className="touch-target h-full w-full" />
-            </div>
-          </div>
           {/* Desktop-only header with sidebar trigger and theme toggle */}
           <header className="hidden md:flex sticky top-0 z-50 h-14 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 items-center justify-between px-4 md:static md:z-auto">
             <SidebarTrigger className="touch-target" />
             <ThemeToggle className="touch-target" />
           </header>
           {/* Main content with mobile-first responsive padding - bottom padding for bottom nav */}
-          <main className="flex-1 overflow-auto relative min-h-0 w-full pb-20 md:pb-0">
+          <main className="flex-1 overflow-auto relative min-h-0 w-full pt-2 pb-24 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right">
             <Suspense fallback={<DashboardSkeleton />}>
               <PageTransition>
                 {children}

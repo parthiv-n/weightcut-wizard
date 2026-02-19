@@ -123,6 +123,8 @@ All colors MUST be HSL.
     overscroll-behavior: none;
     /* Smooth scrolling on iOS */
     -webkit-overflow-scrolling: touch;
+    /* Prevent white flash on iOS cold start before dark theme loads */
+    background-color: #050505;
   }
 
   body {
@@ -138,6 +140,13 @@ All colors MUST be HSL.
     -webkit-overflow-scrolling: touch;
     /* Prevent iOS tap highlight */
     -webkit-tap-highlight-color: transparent;
+    /* Smooth fade-in on cold start to eliminate launch screen flash */
+    animation: appLaunchFadeIn 0.35s ease-out both;
+  }
+
+  @keyframes appLaunchFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
   }
 
   /* Fix iOS input zoom on focus - ensure font-size is at least 16px */
@@ -153,15 +162,12 @@ All colors MUST be HSL.
     font-size: 16px; /* Prevents iOS zoom on focus */
   }
 
-  /* Improve touch targets for mobile */
+  /* Improve touch responsiveness for mobile */
   button,
   a,
   [role="button"],
   input[type="submit"],
   input[type="button"] {
-    /* Minimum touch target size for iOS (44x44px recommended) */
-    min-height: 44px;
-    min-width: 44px;
     /* Improve tap responsiveness */
     touch-action: manipulation;
   }

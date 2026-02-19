@@ -1,4 +1,5 @@
-import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Sparkles, Trophy, Settings, LogOut, Droplets, Calendar } from "lucide-react";
+import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Sparkles, Trophy, Settings, LogOut, Droplets, Calendar, Moon, Sun } from "lucide-react";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -269,6 +270,14 @@ export function BottomNav() {
                   });
                 }}
               />
+            </div>
+            {/* Theme Toggle */}
+            <div className="flex items-center justify-between py-3 px-1 border-b border-border/50">
+              <div>
+                <p className="text-sm font-medium">Appearance</p>
+                <p className="text-xs text-muted-foreground">Toggle dark / light mode</p>
+              </div>
+              <ThemeToggle />
             </div>
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
