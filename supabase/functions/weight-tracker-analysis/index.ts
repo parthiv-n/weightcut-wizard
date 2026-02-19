@@ -143,7 +143,9 @@ serve(async (req) => {
     const requiredWeeklyLoss = weightToLose > 0 ? weightToLose / weeksRemaining : 0;
     const requiredWeeklyGain = weightToGain > 0 ? weightToGain / weeksRemaining : 0;
 
-    const systemPrompt = `You are the Weight Cut Wizard — an evidence-based sports nutrition and weight-cutting specialist for combat-sports athletes.
+    const systemPrompt = `You are a JSON API. Respond with ONLY the JSON object — no preamble, no reasoning steps, no text outside the JSON braces.
+
+You are the Weight Cut Wizard — an evidence-based sports nutrition and weight-cutting specialist for combat-sports athletes.
 
 Your responsibilities:
 • Calculate safe calories, macronutrients, and weekly weight-loss rates
@@ -152,14 +154,7 @@ Your responsibilities:
 • Prevent RED-S, overcutting, and dangerous deficits
 • Provide structured JSON-only output
 
-EVIDENCE BASE — RESEARCH FOUNDATION
-Your recommendations are grounded in peer-reviewed research:
-• IOC Consensus Statement on RED-S: Min energy availability ~30 kcal/kg FFM/day, optimal ~45 kcal/kg FFM/day
-• ISSN Position Stand (Phillips 2011, Morton 2018): Athlete protein 1.6-2.4 g/kg/day, cutting phase 2.0-2.5 g/kg/day
-• ISSN Nutrient Timing: Carbohydrates scale with training load, high-intensity sessions require carb prioritization
-• ACSM & Academy Position Stand: Weight loss must be individualized, excessive deficits harm performance
-• Combat-Sports RWL Reviews (Reale 2017, Barley 2018): RWL >5% body weight in <7 days increases injury/illness risk
-• Safe Weight Loss Research (Garthe 2011, Helms 2014): 0.5-1.0% body weight per week preserves lean mass and performance
+EVIDENCE BASE: Follow IOC, ISSN, and ACSM guidelines for combat-sport athletes.
 
 You MUST apply these principles, limits, and safety thresholds. Do NOT contradict these guidelines.
 
@@ -287,15 +282,8 @@ ${bypassSafety ? `\nWARNING: User has confirmed they want to proceed despite unr
 
 ${isMaintenanceMode ? `\nCRITICAL: Current weight (${currentWeight}kg) is AT OR BELOW fight week target (${goalWeight}kg). User is already at or below their diet goal. ${weightToGain > 0 ? `User needs to GAIN ${weightToGain.toFixed(1)}kg to reach target, but this should be achieved through natural weight gain with MAINTENANCE calories, not a surplus.` : 'User is at target.'} You MUST recommend MAINTENANCE calories (TDEE: ${tdee}kcal) with NO calorie deficit (calorieDeficit MUST be 0). The remaining weight to reach weigh-in day weight will be achieved through dehydration protocols in the final days before weigh-in, NOT through diet.` : ''}
 
-Provide:
-1. Risk level assessment (green/yellow/red)${isMaintenanceMode ? ' - Should be GREEN (maintenance mode)' : ''}
-2. Recommended daily calorie intake${isMaintenanceMode ? ' - Should be TDEE (maintenance) with no deficit' : ''}
-3. Macronutrient breakdown (protein/carbs/fats in grams)${isMaintenanceMode ? ' - Balanced macros for maintenance' : ''}
-4. Strategic guidance for achieving goal safely${isMaintenanceMode ? ' - Focus on maintaining current weight and preparing for final dehydration phase' : ''}
-5. Weekly plan structure${isMaintenanceMode ? ' - Maintenance nutrition plan' : ''}
-6. Training considerations${isMaintenanceMode ? ' - Training nutrition for maintenance' : ' based on deficit'}
-
-${isMaintenanceMode ? 'Since user is already at or below fight week target, focus on maintenance nutrition. The weigh-in day weight will be achieved through dehydration protocols in the final days before weigh-in, not through continued dieting. calorieDeficit MUST be 0, recommendedCalories MUST equal TDEE.' : 'Be specific with numbers and practical advice. If the timeline is unrealistic (requires >1.5kg/week), clearly state this and recommend timeline extension.'}`;
+Provide a JSON response with risk level, recommended calories, macros, strategic guidance, weekly plan, and training considerations.
+${isMaintenanceMode ? 'MAINTENANCE MODE: calorieDeficit MUST be 0, recommendedCalories MUST equal TDEE. Focus on weight maintenance and dehydration prep for fight week.' : 'Be specific with numbers. If the timeline requires >1.5kg/week, flag as unrealistic and recommend an extension.'}`;
 
     // Call Minimax API
     console.log("Calling Minimax API for weight tracker analysis...");
@@ -312,7 +300,7 @@ ${isMaintenanceMode ? 'Since user is already at or below fight week target, focu
           { role: "user", content: userPrompt },
         ],
         temperature: 0.1,
-        max_tokens: 2048
+        max_tokens: 2500
       }),
     });
 
@@ -365,11 +353,18 @@ ${isMaintenanceMode ? 'Since user is already at or below fight week target, focu
     let analysis;
     try {
       analysis = JSON.parse(analysisText);
-    } catch {
+    } catch (parseError) {
+      // Try extracting JSON from markdown code blocks
       const jsonMatch = analysisText.match(/```(?:json)?\s*([\s\S]*?)```/);
       if (jsonMatch) {
-        analysis = JSON.parse(jsonMatch[1].trim());
-      } else {
+        try {
+          analysis = JSON.parse(jsonMatch[1].trim());
+        } catch {
+          console.error("Failed to parse extracted JSON:", jsonMatch[1]);
+        }
+      }
+      if (!analysis) {
+        console.error("Failed to parse Minimax response as JSON:", analysisText);
         throw new Error("Could not parse analysis data from AI response");
       }
     }

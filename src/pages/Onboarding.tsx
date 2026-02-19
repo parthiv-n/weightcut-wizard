@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { useUser } from "@/contexts/UserContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,8 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Sparkles, AlertTriangle, CheckCircle } from "lucide-react";
+import { Sparkles, AlertTriangle, CheckCircle, Zap, Shield, Activity } from "lucide-react";
 import { profileSchema } from "@/lib/validation";
+import wizardLogo from "@/assets/wizard-logo.png";
 
 const ACTIVITY_MULTIPLIERS = {
   sedentary: 1.2,
@@ -23,7 +25,10 @@ const ACTIVITY_MULTIPLIERS = {
 export default function Onboarding() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [generatingPlan, setGeneratingPlan] = useState(false);
+  const [generationStep, setGenerationStep] = useState(0);
   const navigate = useNavigate();
+  const { refreshProfile } = useUser();
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -52,7 +57,7 @@ export default function Onboarding() {
             .select("id")
             .eq("id", user.id)
             .maybeSingle();
-          
+
           if (data) {
             navigate("/dashboard");
           }
@@ -61,7 +66,7 @@ export default function Onboarding() {
         // Silently fail - user can continue with onboarding
       }
     };
-    
+
     checkExistingProfile();
   }, [navigate]);
 
@@ -80,7 +85,7 @@ export default function Onboarding() {
   const handleSubmit = async () => {
     const startTime = performance.now();
     console.log("🚀 Starting onboarding profile creation...");
-    
+
     // Validate input
     const validationResult = profileSchema.safeParse({
       age: parseInt(formData.age),
@@ -101,6 +106,16 @@ export default function Onboarding() {
     }
 
     setLoading(true);
+    setGeneratingPlan(true);
+    setGenerationStep(0);
+
+    // Staged progress messages
+    const stepTimers = [
+      setTimeout(() => setGenerationStep(1), 600),
+      setTimeout(() => setGenerationStep(2), 1400),
+      setTimeout(() => setGenerationStep(3), 2200),
+    ];
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("No user found");
@@ -128,21 +143,27 @@ export default function Onboarding() {
       const endTime = performance.now();
       const duration = Math.round(endTime - startTime);
       console.log(`✅ Onboarding completed in ${duration}ms`);
-      
-      toast({
-        title: "Profile created!",
-        description: "Your weight cut plan is ready. Redirecting to dashboard...",
-      });
-      
-      // Small delay to show success message before navigation
-      setTimeout(() => {
-        navigate("/dashboard");
-      }, 1000);
+
+      // Ensure all 3 animation steps have had time to play (step 3 fires at 2200ms)
+      const minAnimMs = 2400;
+      const remainingAnim = Math.max(0, minAnimMs - (endTime - startTime));
+
+      stepTimers.forEach(clearTimeout);
+
+      setTimeout(async () => {
+        setGenerationStep(4);
+        await refreshProfile(); // update hasProfile=true before navigating
+        setTimeout(() => navigate("/dashboard"), 1000);
+      }, remainingAnim);
     } catch (error: any) {
       const endTime = performance.now();
       const duration = Math.round(endTime - startTime);
       console.error(`❌ Onboarding failed after ${duration}ms:`, error);
-      
+
+      stepTimers.forEach(clearTimeout);
+      setGeneratingPlan(false);
+      setGenerationStep(0);
+
       toast({
         variant: "destructive",
         title: "Error",
@@ -200,12 +221,90 @@ export default function Onboarding() {
 
   const getSafetyFeedback = () => {
     if (!formData.goal_weight_kg || !formData.fight_week_target_kg) return null;
-    
+
     return assessTargetSafety(
       parseFloat(formData.goal_weight_kg),
       parseFloat(formData.fight_week_target_kg)
     );
   };
+
+  const GENERATION_STEPS = [
+    { icon: Activity, label: "Analyzing your profile", color: "text-blue-400" },
+    { icon: Zap, label: "Calculating nutrition targets", color: "text-yellow-400" },
+    { icon: Shield, label: "Building your weight cut strategy", color: "text-purple-400" },
+    { icon: Sparkles, label: "Finalizing your plan", color: "text-primary" },
+    { icon: CheckCircle, label: "Your plan is ready!", color: "text-green-400" },
+  ];
+
+  // Full-screen generating plan overlay
+  if (generatingPlan) {
+    const progressPercent = Math.min((generationStep / 4) * 100, 100);
+    return (
+      <div className="fixed inset-0 bg-black flex flex-col items-center justify-center z-50 px-6">
+        {/* Background glow */}
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-primary/15 rounded-full blur-[120px] pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col items-center max-w-sm w-full">
+          {/* Logo */}
+          <div className="relative mb-8">
+            <div className="absolute inset-0 bg-primary/20 rounded-full blur-2xl animate-pulse" />
+            <img
+              src={wizardLogo}
+              alt="Wizard"
+              className="relative h-20 w-20 object-contain drop-shadow-2xl"
+            />
+          </div>
+
+          {/* Title */}
+          <h2 className="text-2xl font-bold text-white tracking-tight mb-2 text-center">
+            {generationStep >= 4 ? "All Set!" : "Creating Your Plan"}
+          </h2>
+          <p className="text-sm text-zinc-500 mb-10 text-center">
+            {generationStep >= 4 ? "Redirecting to your dashboard..." : "This will only take a moment"}
+          </p>
+
+          {/* Progress bar */}
+          <div className="w-full h-1 bg-zinc-800 rounded-full mb-10 overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-primary to-green-400 rounded-full transition-all duration-700 ease-out"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+
+          {/* Steps */}
+          <div className="w-full space-y-4">
+            {GENERATION_STEPS.map((s, i) => {
+              const Icon = s.icon;
+              const isActive = i === generationStep;
+              const isDone = i < generationStep;
+              const isPending = i > generationStep;
+
+              return (
+                <div
+                  key={i}
+                  className={`flex items-center gap-3 transition-all duration-500 ${isPending ? "opacity-20" : isDone ? "opacity-50" : "opacity-100"
+                    }`}
+                >
+                  <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-500 ${isDone ? "bg-green-500/10" : isActive ? "bg-zinc-800" : "bg-zinc-900"
+                    }`}>
+                    {isDone ? (
+                      <CheckCircle className="h-4 w-4 text-green-400" />
+                    ) : (
+                      <Icon className={`h-4 w-4 ${isActive ? s.color : "text-zinc-600"} ${isActive ? "animate-pulse" : ""}`} />
+                    )}
+                  </div>
+                  <span className={`text-sm font-medium transition-colors duration-500 ${isDone ? "text-zinc-500 line-through" : isActive ? "text-white" : "text-zinc-700"
+                    }`}>
+                    {s.label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-background to-card p-4">
@@ -284,7 +383,7 @@ export default function Onboarding() {
               <div className="grid gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="goal_weight">
-                    Fight Night Weight (kg) 
+                    Fight Night Weight (kg)
                     <span className="text-xs text-muted-foreground ml-2">Your competition weight class</span>
                   </Label>
                   <Input
@@ -297,7 +396,7 @@ export default function Onboarding() {
                     required
                   />
                 </div>
-                
+
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="fight_week_target">
@@ -315,7 +414,7 @@ export default function Onboarding() {
                       {useAutoTarget ? "AI Auto" : "Manual"}
                     </Button>
                   </div>
-                  
+
                   <Input
                     id="fight_week_target"
                     type="number"
@@ -329,7 +428,7 @@ export default function Onboarding() {
                     disabled={useAutoTarget}
                     required
                   />
-                  
+
                   {useAutoTarget ? (
                     <Alert className="border-primary/50 bg-primary/5">
                       <Sparkles className="h-4 w-4 text-primary" />
@@ -339,23 +438,21 @@ export default function Onboarding() {
                     </Alert>
                   ) : (
                     getSafetyFeedback() && (
-                      <Alert className={`${
-                        targetSafetyLevel === "safe" ? "border-green-500/50 bg-green-500/5" :
-                        targetSafetyLevel === "moderate" ? "border-yellow-500/50 bg-yellow-500/5" :
-                        "border-red-500/50 bg-red-500/5"
-                      }`}>
+                      <Alert className={`${targetSafetyLevel === "safe" ? "border-green-500/50 bg-green-500/5" :
+                          targetSafetyLevel === "moderate" ? "border-yellow-500/50 bg-yellow-500/5" :
+                            "border-red-500/50 bg-red-500/5"
+                        }`}>
                         {targetSafetyLevel === "safe" ? (
                           <CheckCircle className="h-4 w-4 text-green-500" />
                         ) : (
-                          <AlertTriangle className={`h-4 w-4 ${
-                            targetSafetyLevel === "moderate" ? "text-yellow-500" : "text-red-500"
-                          }`} />
+                          <AlertTriangle className={`h-4 w-4 ${targetSafetyLevel === "moderate" ? "text-yellow-500" : "text-red-500"
+                            }`} />
                         )}
                         <AlertDescription className={`text-sm ${getSafetyFeedback()?.color}`}>
                           {getSafetyFeedback()?.message}
                           {formData.goal_weight_kg && formData.fight_week_target_kg && (
                             <span className="block mt-1">
-                              Dehydration cut: {(parseFloat(formData.fight_week_target_kg) - parseFloat(formData.goal_weight_kg)).toFixed(1)}kg 
+                              Dehydration cut: {(parseFloat(formData.fight_week_target_kg) - parseFloat(formData.goal_weight_kg)).toFixed(1)}kg
                               ({((parseFloat(formData.fight_week_target_kg) - parseFloat(formData.goal_weight_kg)) / parseFloat(formData.goal_weight_kg) * 100).toFixed(1)}% of body weight)
                             </span>
                           )}
@@ -363,14 +460,14 @@ export default function Onboarding() {
                       </Alert>
                     )
                   )}
-                  
+
                   <p className="text-xs text-muted-foreground">
-                    {useAutoTarget 
+                    {useAutoTarget
                       ? "AI will calculate the optimal target based on safe dehydration limits"
                       : "Manual mode: Set your own target (typically 5-7kg above fight night weight)"}
                   </p>
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="target_date">Target Date</Label>
                   <Input
