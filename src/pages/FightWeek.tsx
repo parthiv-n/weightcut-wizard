@@ -7,7 +7,7 @@ import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { format, differenceInDays } from "date-fns";
-import { Calendar, Droplets, TrendingDown, AlertTriangle, CheckCircle, Activity, Sparkles, Trash2, ChevronDown, Timer } from "lucide-react";
+import { Calendar, Droplets, TrendingDown, AlertTriangle, CheckCircle, Activity, Sparkles, Trash2, ChevronDown, ChevronUp, Timer, Shield, BookOpen, Target } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -62,26 +62,42 @@ export default function FightWeek() {
   });
   const [timeRemaining, setTimeRemaining] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
   const [settingsExpanded, setSettingsExpanded] = useState(false);
+  const [wizardAdviceOpen, setWizardAdviceOpen] = useState(false);
+  const [riskExplanationOpen, setRiskExplanationOpen] = useState(false);
+  const [recommendationOpen, setRecommendationOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [analyzingWeight, setAnalyzingWeight] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [logToDelete, setLogToDelete] = useState<DailyLog | null>(null);
   const { toast } = useToast();
-  const { currentWeight: contextCurrentWeight, updateCurrentWeight } = useUser();
+  const { userId, currentWeight: contextCurrentWeight, updateCurrentWeight, profile: contextProfile } = useUser();
 
   useEffect(() => {
-    fetchProfile();
-    fetchPlanAndLogs();
-    loadPersistedAnalysis();
-  }, []);
+    if (userId) {
+      fetchPlanAndLogs();
+      loadPersistedAnalysis();
+    }
+  }, [userId]);
 
-  const loadPersistedAnalysis = async () => {
+  // Populate plan defaults from context profile
+  useEffect(() => {
+    if (contextProfile) {
+      setProfile(contextProfile);
+      const currentWeightValue = contextCurrentWeight ?? contextProfile.current_weight_kg ?? 0;
+      setNewPlan(prev => ({
+        ...prev,
+        starting_weight_kg: prev.starting_weight_kg || currentWeightValue.toString(),
+        target_weight_kg: prev.target_weight_kg || contextProfile.goal_weight_kg?.toString() || ""
+      }));
+    }
+  }, [contextProfile, contextCurrentWeight]);
+
+  const loadPersistedAnalysis = () => {
+    if (!userId || aiAnalysis) return;
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || aiAnalysis) return;
-
-      const persistedData = AIPersistence.load(user.id, 'fight_week_analysis');
+      const persistedData = AIPersistence.load(userId, 'fight_week_analysis');
       if (persistedData) {
         setAiAnalysis(persistedData);
       }
@@ -124,37 +140,6 @@ export default function FightWeek() {
     return () => clearInterval(interval);
   }, [plan]);
 
-  const fetchProfile = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
-
-    if (data) {
-      setProfile(data);
-
-      const { data: latestWeightLog } = await supabase
-        .from("weight_logs")
-        .select("weight_kg")
-        .eq("user_id", user.id)
-        .order("date", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      const currentWeightValue = contextCurrentWeight ?? latestWeightLog?.weight_kg ?? data.current_weight_kg ?? 0;
-
-      setNewPlan(prev => ({
-        ...prev,
-        starting_weight_kg: prev.starting_weight_kg || currentWeightValue.toString(),
-        target_weight_kg: data.goal_weight_kg?.toString() || ""
-      }));
-    }
-  };
-
   const updateLocalCurrentWeight = async () => {
     if (!plan) return;
 
@@ -169,42 +154,45 @@ export default function FightWeek() {
   };
 
   const fetchPlanAndLogs = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { data: planData } = await supabase
-      .from("fight_week_plans")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
-
-    if (planData) {
-      setPlan(planData);
-
-      const { data: logsData } = await supabase
-        .from("fight_week_logs")
+    if (!userId) return;
+    try {
+      const { data: planData } = await supabase
+        .from("fight_week_plans")
         .select("*")
-        .eq("user_id", user.id)
-        .order("log_date", { ascending: true });
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
 
-      setLogs(logsData || []);
+      if (planData) {
+        setPlan(planData);
 
-      if (logsData && logsData.some(log => log.weight_kg !== null)) {
-        setTimeout(() => getAIAnalysis(), 500);
+        const { data: logsData } = await supabase
+          .from("fight_week_logs")
+          .select("id, log_date, weight_kg, carbs_g, fluid_intake_ml, sweat_session_min, supplements, notes")
+          .eq("user_id", userId)
+          .order("log_date", { ascending: true });
+
+        setLogs(logsData || []);
+
+        if (logsData && logsData.some(log => log.weight_kg !== null)) {
+          setTimeout(() => getAIAnalysis(), 500);
+        }
       }
+    } catch (error) {
+      console.error("Error fetching plan:", error);
+    } finally {
+      setInitialLoading(false);
     }
   };
 
   const createPlan = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!userId) return;
 
     setLoading(true);
 
     const { error } = await supabase.from("fight_week_plans").insert({
-      user_id: user.id,
+      user_id: userId,
       fight_date: newPlan.fight_date,
       starting_weight_kg: parseFloat(newPlan.starting_weight_kg),
       target_weight_kg: parseFloat(newPlan.target_weight_kg)
@@ -221,12 +209,11 @@ export default function FightWeek() {
   };
 
   const saveQuickWeight = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user || !quickWeightLog.log_date || !quickWeightLog.weight_kg) return;
+    if (!userId || !quickWeightLog.log_date || !quickWeightLog.weight_kg) return;
 
     setLoading(true);
     const logData = {
-      user_id: user.id,
+      user_id: userId,
       log_date: quickWeightLog.log_date,
       weight_kg: quickWeightLog.weight_kg,
       carbs_g: null,
@@ -249,7 +236,7 @@ export default function FightWeek() {
       await supabase
         .from("profiles")
         .update({ current_weight_kg: quickWeightLog.weight_kg })
-        .eq("id", user.id);
+        .eq("id", userId);
 
       await updateCurrentWeight(quickWeightLog.weight_kg);
       await fetchPlanAndLogs();
@@ -267,20 +254,14 @@ export default function FightWeek() {
   };
 
   const getAIAnalysis = async () => {
-    if (!plan) return;
+    if (!plan || !userId) return;
 
     setAnalyzingWeight(true);
-
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      setAnalyzingWeight(false);
-      return;
-    }
 
     const { data: freshLogs } = await supabase
       .from("fight_week_logs")
       .select("*")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .order("log_date", { ascending: true });
 
     if (!freshLogs || freshLogs.length === 0) {
@@ -308,11 +289,7 @@ export default function FightWeek() {
       toast({ title: "AI analysis unavailable", description: error.message, variant: "destructive" });
     } else if (data?.analysis) {
       setAiAnalysis(data.analysis);
-
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        AIPersistence.save(user.id, 'fight_week_analysis', data.analysis, 72);
-      }
+      AIPersistence.save(userId, 'fight_week_analysis', data.analysis, 72);
     }
     setAnalyzingWeight(false);
   };
@@ -430,6 +407,24 @@ export default function FightWeek() {
   const daysUntilFight = getDaysUntilFight();
   const weightCutInfo = getWeightCutBreakdown();
 
+  // Add Skeleton Loader at the beginning of render
+  if (initialLoading) {
+    return (
+      <div className="min-h-screen bg-black text-white pb-32 md:pb-10 pt-safe-top p-6 space-y-8">
+        <div className="space-y-2">
+          <Skeleton className="h-8 w-48 bg-zinc-900" />
+          <Skeleton className="h-4 w-32 bg-zinc-900" />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <Skeleton className="h-32 rounded-3xl bg-zinc-900" />
+          <Skeleton className="h-32 rounded-3xl bg-zinc-900" />
+        </div>
+        <Skeleton className="h-40 rounded-3xl bg-zinc-900" />
+        <Skeleton className="h-64 rounded-3xl bg-zinc-900" />
+      </div>
+    );
+  }
+
   if (!plan) {
     return (
       <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-6 relative overflow-hidden">
@@ -546,6 +541,52 @@ export default function FightWeek() {
             </div>
           </div>
         </div>
+
+        {/* Wizard's Advice — Collapsible */}
+        {weightCutInfo && (
+          <div className="rounded-3xl bg-zinc-900 border border-zinc-800/50 overflow-hidden">
+            <button
+              className="w-full p-5 flex items-center gap-3 text-left hover:bg-zinc-800/30 transition-colors"
+              onClick={() => setWizardAdviceOpen(o => !o)}
+            >
+              <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <Shield className="h-4 w-4 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <span className="text-sm font-semibold block">Wizard's Safety Advice</span>
+                <span className="text-xs text-zinc-500">{weightCutInfo.message}</span>
+              </div>
+              <span className="text-zinc-500">
+                {wizardAdviceOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </span>
+            </button>
+            {wizardAdviceOpen && (
+              <div className="px-5 pb-5 space-y-4 border-t border-zinc-800">
+                <p className="text-sm text-zinc-300 leading-relaxed pt-4">{weightCutInfo.wizardAdvice}</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">% Bodyweight</span>
+                    <span className={`text-lg font-bold ${weightCutInfo.percentBodyweight <= 5 ? 'text-green-400' : weightCutInfo.percentBodyweight <= 8 ? 'text-yellow-400' : 'text-red-400'}`}>
+                      {weightCutInfo.percentBodyweight.toFixed(1)}%
+                    </span>
+                  </div>
+                  <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Total to Cut</span>
+                    <span className="text-lg font-bold text-white">{weightCutInfo.totalWeightToCut.toFixed(1)}kg</span>
+                  </div>
+                  <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Glycogen + Water</span>
+                    <span className="text-lg font-bold text-orange-400">~{weightCutInfo.glycogenWaterWeight.toFixed(1)}kg</span>
+                  </div>
+                  <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50">
+                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Safe Dehydration</span>
+                    <span className="text-lg font-bold text-blue-400">~{weightCutInfo.safeDehydration.toFixed(1)}kg</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Quick Log Action */}
         <div className="bg-zinc-900 rounded-3xl p-5 border border-zinc-800/50 space-y-4">
@@ -676,6 +717,44 @@ export default function FightWeek() {
                     </div>
                   )}
                 </div>
+
+                {/* Risk Explanation — Collapsible */}
+                {aiAnalysis.riskExplanation && (
+                  <div className="border-t border-zinc-800">
+                    <button
+                      className="w-full py-3 flex items-center gap-2 text-left hover:opacity-80 transition-opacity"
+                      onClick={() => setRiskExplanationOpen(o => !o)}
+                    >
+                      <BookOpen className="h-3.5 w-3.5 text-zinc-500" />
+                      <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Risk Explanation</span>
+                      <span className="ml-auto text-zinc-600">
+                        {riskExplanationOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      </span>
+                    </button>
+                    {riskExplanationOpen && (
+                      <p className="text-sm text-zinc-300 leading-relaxed pb-3">{aiAnalysis.riskExplanation}</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Recommendation — Collapsible */}
+                {aiAnalysis.recommendation && (
+                  <div className="border-t border-zinc-800">
+                    <button
+                      className="w-full py-3 flex items-center gap-2 text-left hover:opacity-80 transition-opacity"
+                      onClick={() => setRecommendationOpen(o => !o)}
+                    >
+                      <Target className="h-3.5 w-3.5 text-zinc-500" />
+                      <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Recommendation</span>
+                      <span className="ml-auto text-zinc-600">
+                        {recommendationOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                      </span>
+                    </button>
+                    {recommendationOpen && (
+                      <p className="text-sm text-zinc-300 leading-relaxed pb-3">{aiAnalysis.recommendation}</p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Protocol Toggle footer */}

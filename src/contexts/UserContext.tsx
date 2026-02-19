@@ -4,11 +4,34 @@ import { withAuthTimeout, withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 
+export interface ProfileData {
+  id?: string;
+  age?: number;
+  sex?: string;
+  height_cm?: number;
+  current_weight_kg?: number;
+  goal_weight_kg?: number;
+  fight_week_target_kg?: number | null;
+  target_date?: string;
+  activity_level?: string;
+  training_frequency?: number;
+  tdee?: number;
+  bmr?: number;
+  ai_recommended_calories?: number;
+  ai_recommended_protein_g?: number;
+  ai_recommended_carbs_g?: number;
+  ai_recommended_fats_g?: number;
+  manual_nutrition_override?: boolean;
+  avatar_url?: string;
+  [key: string]: any;
+}
+
 interface UserContextType {
   userName: string;
   avatarUrl: string;
   userId: string | null;
   currentWeight: number | null;
+  profile: ProfileData | null;
   isSessionValid: boolean;
   isLoading: boolean;
   hasProfile: boolean;
@@ -17,6 +40,7 @@ interface UserContextType {
   setAvatarUrl: (url: string) => void;
   updateCurrentWeight: (weight: number) => Promise<void>;
   loadUserData: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
   refreshSession: () => Promise<boolean>;
   checkSessionValidity: () => Promise<boolean>;
   retryAuth: () => Promise<void>;
@@ -29,11 +53,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [avatarUrl, setAvatarUrl] = useState<string>("");
   const [userId, setUserId] = useState<string | null>(null);
   const [currentWeight, setCurrentWeight] = useState<number | null>(null);
+  const [profile, setProfile] = useState<ProfileData | null>(null);
   const [isSessionValid, setIsSessionValid] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [hasProfile, setHasProfile] = useState<boolean>(false);
   const [authError, setAuthError] = useState<boolean>(false);
   const isUserLoadedRef = useRef(false);
+  const userIdRef = useRef<string | null>(null);
 
   const checkSessionValidity = async (): Promise<boolean> => {
     try {
@@ -87,6 +113,29 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const refreshProfile = async (): Promise<void> => {
+    const uid = userIdRef.current;
+    if (!uid) return;
+
+    try {
+      const { data } = await withSupabaseTimeout(
+        supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
+        8000,
+        "Profile refresh query"
+      );
+
+      if (data) {
+        setProfile(data);
+        setHasProfile(true);
+        if (data.avatar_url) setAvatarUrl(data.avatar_url);
+        const weight = data.current_weight_kg ?? null;
+        if (weight !== null) setCurrentWeight(weight);
+      }
+    } catch (error) {
+      console.error("Error refreshing profile:", error);
+    }
+  };
+
   const loadUserData = async () => {
     setAuthError(false);
 
@@ -98,6 +147,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       if (error || !session?.user) {
         setIsSessionValid(false);
         setUserId(null);
+        userIdRef.current = null;
         setHasProfile(false);
 
         if (error) {
@@ -112,6 +162,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       const user = session.user;
       setIsSessionValid(true);
       setUserId(user.id);
+      userIdRef.current = user.id;
 
       // Load name from localStorage first for instant display
       const savedName = localStorage.getItem(`user_name_${user.id}`);
@@ -128,7 +179,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         withSupabaseTimeout(
           supabase
             .from("profiles")
-            .select("avatar_url, current_weight_kg")
+            .select("*")
             .eq("id", user.id)
             .maybeSingle(),
           8000,
@@ -147,22 +198,26 @@ export function UserProvider({ children }: { children: ReactNode }) {
         ),
       ]);
 
-      const profile = profileResult.status === "fulfilled" ? profileResult.value.data : null;
+      const profileData = profileResult.status === "fulfilled" ? profileResult.value.data : null;
       const latestWeightLog = weightResult.status === "fulfilled" ? weightResult.value.data : null;
 
-      setHasProfile(!!profile);
+      setHasProfile(!!profileData);
 
-      if (profile?.avatar_url) {
-        setAvatarUrl(profile.avatar_url);
+      if (profileData) {
+        setProfile(profileData);
+        if (profileData.avatar_url) {
+          setAvatarUrl(profileData.avatar_url);
+        }
       }
 
-      const weight = latestWeightLog?.weight_kg || profile?.current_weight_kg || null;
+      const weight = latestWeightLog?.weight_kg || profileData?.current_weight_kg || null;
       setCurrentWeight(weight);
     } catch (error) {
       console.error("Error loading user data:", error);
       setAuthError(true);
       setIsSessionValid(false);
       setUserId(null);
+      userIdRef.current = null;
       setHasProfile(false);
     } finally {
       setIsLoading(false);
@@ -178,6 +233,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const updateCurrentWeight = async (weight: number) => {
     setCurrentWeight(weight);
+    setProfile(prev => prev ? { ...prev, current_weight_kg: weight } : prev);
 
     if (userId) {
       await supabase
@@ -210,9 +266,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
         isUserLoadedRef.current = false;
         setIsSessionValid(false);
         setUserId(null);
+        userIdRef.current = null;
         setUserName("");
         setAvatarUrl("");
         setCurrentWeight(null);
+        setProfile(null);
         setHasProfile(false);
         setIsLoading(false);
       } else if (event === 'TOKEN_REFRESHED' && session) {
@@ -231,7 +289,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       await checkSessionValidity();
     }, 30 * 60 * 1000);
 
-    // Proactive session refresh on app resume (Fix 3)
+    // Proactive session refresh on app resume
     let appResumeHandle: { remove: () => void } | null = null;
     let visibilityHandler: (() => void) | null = null;
 
@@ -263,6 +321,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         avatarUrl,
         userId,
         currentWeight,
+        profile,
         isSessionValid,
         isLoading,
         hasProfile,
@@ -271,6 +330,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setAvatarUrl: updateAvatarUrl,
         updateCurrentWeight,
         loadUserData,
+        refreshProfile,
         refreshSession,
         checkSessionValidity,
         retryAuth,

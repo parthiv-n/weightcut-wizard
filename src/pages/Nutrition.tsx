@@ -27,6 +27,7 @@ import ErrorBoundary from "@/components/ErrorBoundary";
 import { optimisticUpdateManager, createNutritionTargetUpdate, createMealLogUpdate } from "@/lib/optimisticUpdates";
 import { useDebouncedCallback } from "@/hooks/useDebounce";
 import { nutritionCache, cacheHelpers } from "@/lib/nutritionCache";
+import { preloadAdjacentDates } from "@/lib/backgroundSync";
 
 interface Ingredient {
   name: string;
@@ -73,7 +74,7 @@ export default function Nutrition() {
   const [mealToDelete, setMealToDelete] = useState<Meal | null>(null);
 
   // Enhanced authentication state management
-  const { isSessionValid, checkSessionValidity, refreshSession, userId } = useUser();
+  const { isSessionValid, checkSessionValidity, refreshSession, userId, profile: contextProfile, refreshProfile } = useUser();
   const [aiMacroGoals, setAiMacroGoals] = useState<{
     proteinGrams: number;
     carbsGrams: number;
@@ -133,28 +134,45 @@ export default function Nutrition() {
   });
 
   useEffect(() => {
-    loadProfile();
     loadMeals();
-    loadPersistedMealPlans();
-  }, [selectedDate]);
+    if (userId) preloadAdjacentDates(userId, selectedDate);
+  }, [selectedDate, userId]);
 
-  const loadPersistedMealPlans = async () => {
-    try {
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (!currentUser || mealPlanIdeas.length > 0) return;
-
-      const persistedData = AIPersistence.load(currentUser.id, 'meal_plans');
-      if (persistedData) {
-        setMealPlanIdeas(persistedData.meals || []);
-        if (persistedData.dailyCalorieTarget) setDailyCalorieTarget(persistedData.dailyCalorieTarget);
-        if (persistedData.safetyStatus) setSafetyStatus(persistedData.safetyStatus);
-        if (persistedData.safetyMessage) setSafetyMessage(persistedData.safetyMessage);
-      }
-    } catch (error) {
-      console.error("Error loading persisted meal plans:", error);
+  // Sync profile from context (always keep in sync)
+  useEffect(() => {
+    if (contextProfile) {
+      setProfile(contextProfile);
+      calculateCalorieTarget(contextProfile);
     }
-  };
+  }, [contextProfile]);
 
+  // Load persisted meal plans once on mount
+  useEffect(() => {
+    if (!userId) return;
+    const persistedData = AIPersistence.load(userId, 'meal_plans');
+    if (persistedData && mealPlanIdeas.length === 0) {
+      setMealPlanIdeas(persistedData.meals || []);
+      if (persistedData.dailyCalorieTarget) setDailyCalorieTarget(persistedData.dailyCalorieTarget);
+      if (persistedData.safetyStatus) setSafetyStatus(persistedData.safetyStatus);
+      if (persistedData.safetyMessage) setSafetyMessage(persistedData.safetyMessage);
+    }
+  }, [userId]);
+
+  // Visibility-based revalidation
+  useEffect(() => {
+    const handleVis = () => {
+      if (document.visibilityState === 'visible' && userId) loadMeals(true);
+    };
+    document.addEventListener('visibilitychange', handleVis);
+    return () => document.removeEventListener('visibilitychange', handleVis);
+  }, [userId, selectedDate]);
+
+  // Warmup analyze-meal edge function when AI dialog opens
+  useEffect(() => {
+    if (isAiDialogOpen && userId) {
+      supabase.functions.invoke("analyze-meal", { method: "GET" } as any).catch(() => {});
+    }
+  }, [isAiDialogOpen]);
 
   useEffect(() => {
     if (profile) {
@@ -180,7 +198,7 @@ export default function Nutrition() {
 
   // Real-time subscription to profiles table for automatic updates when Weight Tracker saves new recommendations
   useEffect(() => {
-    if (!profile) return;
+    if (!userId) return;
 
     const channel = supabase
       .channel('profile-nutrition-updates')
@@ -188,52 +206,21 @@ export default function Nutrition() {
         event: 'UPDATE',
         schema: 'public',
         table: 'profiles',
-        filter: `id=eq.${profile.id}`
-      }, (payload) => {
-        const newData = payload.new as any;
-        // Update profile with new data including manual_nutrition_override flag
-        setProfile((prev: any) => prev ? { ...prev, ...newData } : newData);
-        if (newData.ai_recommended_calories) {
-          setAiMacroGoals({
-            proteinGrams: newData.ai_recommended_protein_g || 0,
-            carbsGrams: newData.ai_recommended_carbs_g || 0,
-            fatsGrams: newData.ai_recommended_fats_g || 0,
-            recommendedCalories: newData.ai_recommended_calories || 0,
-          });
-          setDailyCalorieTarget(newData.ai_recommended_calories);
-        }
+        filter: `id=eq.${userId}`
+      }, () => {
+        refreshProfile();
       })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [profile?.id]);
+  }, [userId]);
 
-  const loadProfile = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    // Check cache first
-    const cachedProfile = nutritionCache.getProfile(user.id);
-    if (cachedProfile) {
-      setProfile(cachedProfile);
-      calculateCalorieTarget(cachedProfile);
-      return;
-    }
-
-    // Fetch from database if not cached
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
-
-    if (data) {
-      setProfile(data);
-      calculateCalorieTarget(data);
-      // Cache the profile data
-      nutritionCache.setProfile(user.id, data);
+  const loadProfile = () => {
+    if (contextProfile) {
+      setProfile(contextProfile);
+      calculateCalorieTarget(contextProfile);
     }
   };
 
@@ -264,13 +251,12 @@ export default function Nutrition() {
   };
 
   const getCurrentWeight = async (profileData: any) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return profileData?.current_weight_kg || 0;
+    if (!userId) return profileData?.current_weight_kg || 0;
 
     const { data: weightLogs } = await supabase
       .from("weight_logs")
       .select("weight_kg")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .order("date", { ascending: false })
       .limit(1);
 
@@ -292,15 +278,14 @@ export default function Nutrition() {
 
     setFetchingMacroGoals(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      if (!userId) {
         setAiMacroGoals(null);
         setFetchingMacroGoals(false);
         return;
       }
 
       // Check cache first
-      const cachedMacroGoals = nutritionCache.getMacroGoals(user.id);
+      const cachedMacroGoals = nutritionCache.getMacroGoals(userId);
       if (cachedMacroGoals) {
         setAiMacroGoals(cachedMacroGoals.macroGoals);
         if (cachedMacroGoals.dailyCalorieTarget) {
@@ -317,7 +302,7 @@ export default function Nutrition() {
       const { data: profileData, error } = await supabase
         .from("profiles")
         .select("ai_recommended_calories, ai_recommended_protein_g, ai_recommended_carbs_g, ai_recommended_fats_g, manual_nutrition_override")
-        .eq("id", user.id)
+        .eq("id", userId)
         .single();
 
       if (error) {
@@ -341,7 +326,7 @@ export default function Nutrition() {
         }
 
         // Cache the macro goals data
-        nutritionCache.setMacroGoals(user.id, {
+        nutritionCache.setMacroGoals(userId, {
           macroGoals,
           dailyCalorieTarget: profileData.ai_recommended_calories,
           profileUpdate: { manual_nutrition_override: profileData.manual_nutrition_override }
@@ -429,8 +414,7 @@ export default function Nutrition() {
         }
       }
 
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
+      if (!userId) {
         throw new Error("Authentication required. Please log in again.");
       }
 
@@ -565,8 +549,8 @@ export default function Nutrition() {
 
       // Save accumulated ideas to localStorage for persistence
       const accumulatedIdeas = [...mealPlanIdeas, ...ideasToStore];
-      if (user) {
-        AIPersistence.save(user.id, 'meal_plans', {
+      if (userId) {
+        AIPersistence.save(userId, 'meal_plans', {
           meals: accumulatedIdeas,
           dailyCalorieTarget: target || dailyCalorieTarget,
           safetyStatus: status || safetyStatus,
@@ -629,14 +613,13 @@ export default function Nutrition() {
   const handleLogMealIdea = async (mealIdea: Meal) => {
     setLoggingMeal(mealIdea.id);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
+      if (!userId) throw new Error("Not authenticated");
 
       // Recalculate calories from macros to ensure consistency
       const consistentCalories = (mealIdea.protein_g || 0) * 4 + (mealIdea.carbs_g || 0) * 4 + (mealIdea.fats_g || 0) * 9;
 
       const { error } = await supabase.from("nutrition_logs").insert({
-        user_id: user.id,
+        user_id: userId,
         date: selectedDate,
         meal_name: mealIdea.meal_name,
         calories: consistentCalories || mealIdea.calories,
@@ -675,14 +658,13 @@ export default function Nutrition() {
 
     setSavingAllMeals(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
+      if (!userId) throw new Error("Not authenticated");
 
       // Prepare meals for database insertion (recalculate calories from macros for consistency)
       const mealsToInsert = mealIdeas.map(meal => {
         const recalcCal = (meal.protein_g || 0) * 4 + (meal.carbs_g || 0) * 4 + (meal.fats_g || 0) * 9;
         return {
-          user_id: user.id,
+          user_id: userId,
           date: selectedDate,
           meal_name: meal.meal_name,
           calories: recalcCal || meal.calories,
@@ -708,7 +690,7 @@ export default function Nutrition() {
 
       // Clear meal ideas after saving all + clear localStorage
       setMealPlanIdeas([]);
-      AIPersistence.remove(user.id, 'meal_plans');
+      AIPersistence.remove(userId, 'meal_plans');
 
       // Reload meals to show the new entries
       await loadMeals(true);
@@ -727,8 +709,7 @@ export default function Nutrition() {
   const clearMealIdeas = async () => {
     setMealPlanIdeas([]);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) AIPersistence.remove(user.id, 'meal_plans');
+      if (userId) AIPersistence.remove(userId, 'meal_plans');
     } catch (e) {
       console.warn("Failed to clear persisted meal plans:", e);
     }
@@ -848,13 +829,12 @@ export default function Nutrition() {
     }
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
+      if (!userId) throw new Error("Not authenticated");
 
       // Create optimistic meal data
       const optimisticMeal = {
         id: `temp-${Date.now()}`, // Temporary ID for optimistic update
-        user_id: user.id,
+        user_id: userId,
         date: selectedDate,
         meal_name: manualMeal.meal_name,
         calories: parseInt(manualMeal.calories),
@@ -894,7 +874,7 @@ export default function Nutrition() {
       // Create the database insert operation
       const insertOperation = async () => {
         const { error } = await supabase.from("nutrition_logs").insert({
-          user_id: user.id,
+          user_id: userId,
           date: selectedDate,
           meal_name: manualMeal.meal_name,
           calories: parseInt(manualMeal.calories),
@@ -959,13 +939,20 @@ export default function Nutrition() {
 
     setAiAnalyzing(true);
     try {
-      const { data, error } = await supabase.functions.invoke("analyze-meal", {
-        body: { mealDescription: aiMealDescription },
-      });
+      const mealCacheKey = `meal_${aiMealDescription.toLowerCase().trim().replace(/\s+/g, '_').slice(0, 60)}`;
+      let nutritionData = userId ? AIPersistence.load(userId, mealCacheKey) : null;
 
-      if (error) throw error;
+      if (!nutritionData) {
+        const { data, error } = await supabase.functions.invoke("analyze-meal", {
+          body: { mealDescription: aiMealDescription },
+        });
 
-      const { nutritionData } = data;
+        if (error) throw error;
+        nutritionData = data.nutritionData;
+        if (userId && nutritionData) {
+          AIPersistence.save(userId, mealCacheKey, nutritionData, 24 * 7);
+        }
+      }
 
       setManualMeal({
         meal_name: nutritionData.meal_name,
@@ -1177,11 +1164,10 @@ export default function Nutrition() {
       const { nutritionData } = data;
 
       // Auto-add the meal directly
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
+      if (!userId) throw new Error("Not authenticated");
 
       const { error: insertError } = await supabase.from("nutrition_logs").insert({
-        user_id: user.id,
+        user_id: userId,
         date: selectedDate,
         meal_name: nutritionData.meal_name,
         calories: nutritionData.calories,
@@ -2412,8 +2398,7 @@ export default function Nutrition() {
                     }
 
                     try {
-                      const { data: { user } } = await supabase.auth.getUser();
-                      if (!user) throw new Error("Not authenticated");
+                      if (!userId) throw new Error("Not authenticated");
 
                       // Store original profile data for rollback
                       const originalProfile = { ...profile };
@@ -2475,7 +2460,7 @@ export default function Nutrition() {
                         const { error } = await supabase
                           .from("profiles")
                           .update(updateData)
-                          .eq("id", user.id);
+                          .eq("id", userId);
 
                         if (error) {
                           console.error("Supabase update error:", error);
@@ -2493,7 +2478,7 @@ export default function Nutrition() {
 
                       // Execute optimistic update
                       const update = createNutritionTargetUpdate(
-                        user.id,
+                        userId,
                         optimisticProfile,
                         originalProfile,
                         updateOperation

@@ -11,6 +11,10 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  if (req.method === "GET") {
+    return new Response(JSON.stringify({ status: "warm" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+  }
+
   try {
     // Verify authentication
     const authHeader = req.headers.get('Authorization');
@@ -41,7 +45,8 @@ serve(async (req) => {
       heightCm,
       tdee,
       weighInDayWeight,
-      bypassSafety = false
+      bypassSafety = false,
+      weightHistory: clientWeightHistory
     } = await req.json();
 
     const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
@@ -50,13 +55,17 @@ serve(async (req) => {
       throw new Error("MINIMAX_API_KEY is not configured");
     }
 
-    // Fetch weight history for pattern analysis
-    const { data: weightHistory } = await supabaseClient
-      .from("weight_logs")
-      .select("date, weight_kg")
-      .eq("user_id", user.id)
-      .order("date", { ascending: false })
-      .limit(60); // Last 60 days
+    // Use client-provided weight history if available (saves a DB round-trip)
+    let weightHistory = clientWeightHistory;
+    if (!weightHistory || !Array.isArray(weightHistory) || weightHistory.length === 0) {
+      const { data: fetchedHistory } = await supabaseClient
+        .from("weight_logs")
+        .select("date, weight_kg")
+        .eq("user_id", user.id)
+        .order("date", { ascending: false })
+        .limit(60);
+      weightHistory = fetchedHistory;
+    }
 
     // Fetch stored insights
     const { data: storedInsights } = await supabaseClient

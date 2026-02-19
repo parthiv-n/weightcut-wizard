@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Droplets, TrendingDown, Calendar } from "lucide-react";
@@ -69,7 +70,7 @@ export default function Dashboard() {
         withSupabaseTimeout(
           supabase
             .from("weight_logs")
-            .select("*")
+            .select("date, weight_kg")
             .eq("user_id", userId)
             .order("date", { ascending: true })
             .limit(30),
@@ -131,7 +132,7 @@ export default function Dashboard() {
   };
 
   if (loading) {
-    return <div className="flex items-center justify-center h-full">Loading...</div>;
+    return <DashboardSkeleton />;
   }
 
   const daysUntilTarget = profile ? Math.ceil((new Date(profile.target_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : 0;

@@ -4,8 +4,9 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { AIPersistence } from "@/lib/aiPersistence";
-import { Droplets, AlertTriangle, RefreshCw, ChevronDown, ChevronUp, Info } from "lucide-react";
+import { Droplets, AlertTriangle, RefreshCw, ChevronDown, ChevronUp, Info, BookOpen, Beaker } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useUser } from "@/contexts/UserContext";
 
 interface HourlyStep {
   hour: number;
@@ -56,19 +57,26 @@ export default function Hydration() {
   const [expandedStep, setExpandedStep] = useState<number | null>(null);
   const [expandedMeal, setExpandedMeal] = useState<number | null>(null);
   const [remindersOpen, setRemindersOpen] = useState(false);
+  const [scienceOpen, setScienceOpen] = useState(false);
+  const [electrolyteGuideOpen, setElectrolyteGuideOpen] = useState(false);
   const { toast } = useToast();
+  const { userId, profile: contextProfile } = useUser();
+
+  // Sync profile from context
+  useEffect(() => {
+    if (contextProfile) {
+      setProfile({ current_weight_kg: contextProfile.current_weight_kg ?? 0 });
+    }
+  }, [contextProfile]);
 
   useEffect(() => {
-    fetchProfile();
     loadPersistedProtocol();
-  }, []);
+  }, [userId]);
 
-  const loadPersistedProtocol = async () => {
+  const loadPersistedProtocol = () => {
+    if (!userId || protocol) return;
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user || protocol) return;
-
-      const persistedData = AIPersistence.load(user.id, 'rehydration_protocol');
+      const persistedData = AIPersistence.load(userId, 'rehydration_protocol');
       if (persistedData) {
         setProtocol(persistedData.protocol);
         if (persistedData.inputs) {
@@ -79,21 +87,6 @@ export default function Hydration() {
       }
     } catch (error) {
       console.error("Error loading persisted protocol:", error);
-    }
-  };
-
-  const fetchProfile = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const { data: profileData } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
-
-    if (profileData) {
-      setProfile(profileData);
     }
   };
 
@@ -118,9 +111,8 @@ export default function Hydration() {
       if (data?.protocol) {
         setProtocol(data.protocol);
 
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          AIPersistence.save(user.id, 'rehydration_protocol', {
+        if (userId) {
+          AIPersistence.save(userId, 'rehydration_protocol', {
             protocol: data.protocol,
             inputs: {
               weightLost,
@@ -250,6 +242,42 @@ export default function Hydration() {
             )}
           </div>
 
+          {/* How This Protocol Works — Collapsible */}
+          <div className="rounded-2xl bg-white/5 border border-white/10 overflow-hidden">
+            <button
+              className="w-full px-4 py-3 flex items-center gap-2 text-left hover:bg-white/5 transition-colors"
+              onClick={() => setScienceOpen(o => !o)}
+            >
+              <BookOpen className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+              <span className="text-sm font-medium">How This Protocol Works</span>
+              <span className="ml-auto text-muted-foreground">
+                {scienceOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              </span>
+            </button>
+            {scienceOpen && (
+              <div className="px-4 pb-4 space-y-3 border-t border-white/5">
+                <div className="pt-3 space-y-3">
+                  <div>
+                    <p className="text-xs font-semibold text-foreground/80 mb-1">Gastric Emptying</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">Your stomach can process ~800–1000ml of fluid per hour. Drinking beyond this rate causes bloating and impairs absorption. This protocol spaces intake to maximize absorption efficiency.</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-foreground/80 mb-1">Electrolyte-Driven Absorption</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">Sodium is the primary driver of water absorption in the gut. Adding sodium to your fluids activates the sodium-glucose co-transporter (SGLT1), pulling water into cells 2–3× faster than plain water alone.</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-foreground/80 mb-1">Carb-Loading Rationale</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">Each gram of glycogen stored in muscles binds ~3g of water. Carb loading after weigh-in restores energy AND accelerates rehydration — a dual benefit for fight performance.</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-foreground/80 mb-1">Phased Recovery</p>
+                    <p className="text-xs text-muted-foreground leading-relaxed">The first 2 hours focus on rapid cellular rehydration with higher sodium. Hours 3–4 shift to glycogen restoration with carbs. The final phase before competition maintains equilibrium without overloading the gut.</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Electrolyte cells */}
           <div>
             <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2 px-1">
@@ -272,6 +300,47 @@ export default function Hydration() {
             </div>
           </div>
 
+          {/* Electrolyte Guide — Collapsible */}
+          <div className="rounded-2xl bg-white/5 border border-white/10 overflow-hidden">
+            <button
+              className="w-full px-4 py-3 flex items-center gap-2 text-left hover:bg-white/5 transition-colors"
+              onClick={() => setElectrolyteGuideOpen(o => !o)}
+            >
+              <Beaker className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+              <span className="text-sm font-medium">Why These Ratios Matter</span>
+              <span className="ml-auto text-muted-foreground">
+                {electrolyteGuideOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              </span>
+            </button>
+            {electrolyteGuideOpen && (
+              <div className="px-4 pb-4 space-y-3 border-t border-white/5">
+                <div className="pt-3 space-y-3">
+                  <div className="flex items-start gap-2">
+                    <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-md px-1.5 py-0.5 shrink-0 mt-0.5">Na</span>
+                    <div>
+                      <p className="text-xs font-semibold text-foreground/80">Sodium</p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">The #1 electrolyte for rehydration. Sodium creates the osmotic gradient that pulls water into your cells and bloodstream. After a weight cut, your sodium stores are severely depleted. Without adequate sodium, you'll urinate out most of the water you drink.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-md px-1.5 py-0.5 shrink-0 mt-0.5">K</span>
+                    <div>
+                      <p className="text-xs font-semibold text-foreground/80">Potassium</p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">Essential for intracellular hydration and muscle function. Potassium works with sodium to maintain fluid balance across cell membranes. Low potassium leads to muscle cramps, weakness, and impaired reflexes — critical for fight performance.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-md px-1.5 py-0.5 shrink-0 mt-0.5">Mg</span>
+                    <div>
+                      <p className="text-xs font-semibold text-foreground/80">Magnesium</p>
+                      <p className="text-xs text-muted-foreground leading-relaxed">Supports neuromuscular function, energy production, and reduces cramping risk. Magnesium is lost through sweat during the cut and is critical for maintaining reaction time and power output during competition.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Segmented Tab Control */}
           <div className="rounded-2xl bg-white/5 border border-white/10 overflow-hidden">
 
@@ -280,22 +349,20 @@ export default function Hydration() {
               <div className="flex bg-muted rounded-full p-0.5">
                 <button
                   onClick={() => setActiveTab("fluid")}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-full text-xs font-medium transition-all ${
-                    activeTab === "fluid"
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === "fluid"
                       ? "bg-blue-500 text-white shadow-sm"
                       : "text-muted-foreground"
-                  }`}
+                    }`}
                 >
                   <Droplets className="h-3 w-3" />
                   Fluid
                 </button>
                 <button
                   onClick={() => setActiveTab("carbs")}
-                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-full text-xs font-medium transition-all ${
-                    activeTab === "carbs"
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === "carbs"
                       ? "bg-blue-500 text-white shadow-sm"
                       : "text-muted-foreground"
-                  }`}
+                    }`}
                 >
                   🍚 Carbs
                 </button>

@@ -25,7 +25,7 @@ export default function Goals() {
   const [saving, setSaving] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { currentWeight } = useUser();
+  const { userId, currentWeight, profile: contextProfile, refreshProfile } = useUser();
 
   const [formData, setFormData] = useState({
     age: "",
@@ -42,67 +42,38 @@ export default function Goals() {
   const [useAutoTarget, setUseAutoTarget] = useState(true);
   const [targetSafetyLevel, setTargetSafetyLevel] = useState<"safe" | "moderate" | "risky">("safe");
 
+  // Populate form from context profile
   useEffect(() => {
-    loadProfile();
-  }, []);
+    if (!userId) {
+      navigate("/auth");
+      return;
+    }
 
-  const loadProfile = async () => {
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        navigate("/auth");
-        return;
-      }
-
-      const { data: profile, error } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .single();
-
-      if (error) {
-        console.error("Error loading profile:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load profile data",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      if (profile) {
-        // Use centralized currentWeight if available, otherwise use profile weight
-        const currentWeightValue = currentWeight ?? profile.current_weight_kg ?? 0;
-        setFormData({
-          age: profile.age?.toString() || "",
-          sex: profile.sex || "",
-          height_cm: profile.height_cm?.toString() || "",
-          current_weight_kg: currentWeightValue.toString(),
-          goal_weight_kg: profile.goal_weight_kg?.toString() || "",
-          fight_week_target_kg: profile.fight_week_target_kg?.toString() || "",
-          target_date: profile.target_date || "",
-          activity_level: profile.activity_level || "",
-          training_frequency: profile.training_frequency?.toString() || "",
-        });
-
-        // Check if fight week target matches AI calculation
-        if (profile.goal_weight_kg && profile.fight_week_target_kg) {
-          const recommended = calculateRecommendedTarget(profile.goal_weight_kg);
-          const isAutoCalculated = Math.abs(profile.fight_week_target_kg - recommended) < 0.1;
-          setUseAutoTarget(isAutoCalculated);
-        }
-      }
-    } catch (error) {
-      console.error("Unexpected error loading profile:", error);
-      toast({
-        title: "Error",
-        description: "An unexpected error occurred while loading profile",
-        variant: "destructive",
+    if (contextProfile) {
+      const currentWeightValue = currentWeight ?? contextProfile.current_weight_kg ?? 0;
+      setFormData({
+        age: contextProfile.age?.toString() || "",
+        sex: contextProfile.sex || "",
+        height_cm: contextProfile.height_cm?.toString() || "",
+        current_weight_kg: currentWeightValue.toString(),
+        goal_weight_kg: contextProfile.goal_weight_kg?.toString() || "",
+        fight_week_target_kg: contextProfile.fight_week_target_kg?.toString() || "",
+        target_date: contextProfile.target_date || "",
+        activity_level: contextProfile.activity_level || "",
+        training_frequency: contextProfile.training_frequency?.toString() || "",
       });
-    } finally {
+
+      if (contextProfile.goal_weight_kg && contextProfile.fight_week_target_kg) {
+        const recommended = calculateRecommendedTarget(contextProfile.goal_weight_kg);
+        const isAutoCalculated = Math.abs(contextProfile.fight_week_target_kg - recommended) < 0.1;
+        setUseAutoTarget(isAutoCalculated);
+      }
+
+      setLoading(false);
+    } else {
       setLoading(false);
     }
-  };
+  }, [userId, contextProfile]);
 
   const calculateBMR = () => {
     const weight = parseFloat(formData.current_weight_kg);
@@ -184,8 +155,7 @@ export default function Goals() {
 
     setSaving(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("No user found");
+      if (!userId) throw new Error("No user found");
 
       const bmr = calculateBMR();
       const tdee = bmr * ACTIVITY_MULTIPLIERS[formData.activity_level as keyof typeof ACTIVITY_MULTIPLIERS];
@@ -202,9 +172,11 @@ export default function Goals() {
         training_frequency: parseInt(formData.training_frequency),
         bmr,
         tdee,
-      }).eq("id", user.id);
+      }).eq("id", userId);
 
       if (error) throw error;
+
+      await refreshProfile();
 
       toast({
         title: "Goals updated!",
