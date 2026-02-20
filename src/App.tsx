@@ -14,6 +14,7 @@ import { WizardBackgroundProvider } from "@/contexts/WizardBackgroundContext";
 import { PageTransition } from "@/components/PageTransition";
 import { BottomNav } from "@/components/BottomNav";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { PullToRefresh } from "@/components/PullToRefresh";
 import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
@@ -132,13 +133,13 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
             <ThemeToggle className="touch-target" />
           </header>
           {/* Main content with mobile-first responsive padding - bottom padding for bottom nav */}
-          <main className="flex-1 overflow-auto relative min-h-0 w-full pt-2 pb-24 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right">
+          <PullToRefresh className="flex-1 overflow-auto relative min-h-0 w-full pt-2 pb-24 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right">
             <Suspense fallback={<DashboardSkeleton />}>
               <PageTransition>
                 {children}
               </PageTransition>
             </Suspense>
-          </main>
+          </PullToRefresh>
         </div>
       </div>
       {/* Bottom Navigation - Mobile Only */}
