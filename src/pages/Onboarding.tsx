@@ -439,8 +439,8 @@ export default function Onboarding() {
                   ) : (
                     getSafetyFeedback() && (
                       <Alert className={`${targetSafetyLevel === "safe" ? "border-green-500/50 bg-green-500/5" :
-                          targetSafetyLevel === "moderate" ? "border-yellow-500/50 bg-yellow-500/5" :
-                            "border-red-500/50 bg-red-500/5"
+                        targetSafetyLevel === "moderate" ? "border-yellow-500/50 bg-yellow-500/5" :
+                          "border-red-500/50 bg-red-500/5"
                         }`}>
                         {targetSafetyLevel === "safe" ? (
                           <CheckCircle className="h-4 w-4 text-green-500" />
