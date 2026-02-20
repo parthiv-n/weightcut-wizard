@@ -1,10 +1,16 @@
-import { useRef, useEffect, useState } from "react";
+import re
+
+with open('src/pages/Wizard.tsx', 'r') as f:
+    content = f.read()
+
+# I am completely rewriting the file to become a chat interface
+new_content = """import { useState, useRef, useEffect } from "react";
 import { useUser } from "@/contexts/UserContext";
-import { useWizardBackground } from "@/contexts/WizardBackgroundContext";
-import { Sparkles, Send, Trash2, User, Bot, Loader2 } from "lucide-react";
+import { Sparkles, Send, Bot, User, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import ReactMarkdown from "react-markdown";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { supabase } from "@/integrations/supabase/client";
 import { triggerHapticSelection, triggerHapticSuccess } from "@/lib/haptics";
 import wizardAvatar from "@/assets/wizard-logo.png";
 
@@ -15,29 +21,25 @@ interface Message {
 
 export default function Wizard() {
   const { userId } = useUser();
-  const { messages, isLoading, sendMessage, clearChat } = useWizardBackground();
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Load chat history on mount - This logic is now handled by useWizardBackground
-  // useEffect(() => {
-  //   if (userId) {
-  //     const history = localStorage.getItem(`wizard_chat_history_${ userId } `);
-  //     if (history) {
-  //       setMessages(JSON.parse(history));
-  //     } else {
-  //       // Initial greeting
-  //       setMessages([
-  //         { role: "assistant", content: "Hey champ! I'm the Weight Cut Wizard. How can I help you dial in your nutrition and weight today?" }
-  //       ]);
-  //     }
-  //   }
-  // }, [userId]);
-
-  const handleClearChat = () => {
-    triggerHapticSelection();
-    clearChat(); // Call clearChat from context
-  };
+  // Load chat history on mount
+  useEffect(() => {
+    if (userId) {
+      const history = localStorage.getItem(`wizard_chat_history_${userId}`);
+      if (history) {
+        setMessages(JSON.parse(history));
+      } else {
+        // Initial greeting
+        setMessages([
+          { role: "assistant", content: "Hey champ! I'm the Weight Cut Wizard. How can I help you dial in your nutrition and weight today?" }
+        ]);
+      }
+    }
+  }, [userId]);
 
   // Auto-scroll to bottom of chat
   useEffect(() => {
@@ -52,12 +54,53 @@ export default function Wizard() {
 
     triggerHapticSelection();
 
-    const currentInput = input;
+    const userMessage = input.trim();
     setInput("");
+    
+    const newMessages: Message[] = [...messages, { role: "user", content: userMessage }];
+    setMessages(newMessages);
+    setIsLoading(true);
 
-    // Message sending logic moved to context
-    await sendMessage(currentInput);
-    triggerHapticSuccess();
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("No active session");
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/wizard-chat`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          // Send all messages for context memory (excluding the very first hardcoded greeting if needed, but sending it is fine)
+          body: JSON.stringify({ messages: newMessages }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to get response from Wizard");
+      }
+
+      const data = await response.json();
+      const assistantMessage = data.choices[0].message.content;
+
+      const finalMessages: Message[] = [...newMessages, { role: "assistant", content: assistantMessage }];
+      setMessages(finalMessages);
+      
+      // Persist memory
+      if (userId) {
+        localStorage.setItem(`wizard_chat_history_${userId}`, JSON.stringify(finalMessages));
+      }
+      triggerHapticSuccess();
+
+    } catch (error) {
+      console.error("Chat error:", error);
+      // Fallback message on error
+      setMessages([...newMessages, { role: "assistant", content: "Sorry, my crystal ball is cloudy right now. Try again in a moment." }]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -79,17 +122,6 @@ export default function Wizard() {
               AI Coach Online
             </p>
           </div>
-          <div className="ml-auto">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleClearChat}
-              className="h-8 w-8 text-muted-foreground hover:text-destructive transition-colors"
-              title="Clear chat history"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
         </div>
       </div>
 
@@ -105,17 +137,19 @@ export default function Wizard() {
               <div className={`shrink-0 h-8 w-8 rounded-full flex items-center justify-center ${msg.role === "user" ? "bg-primary/20" : "bg-card border border-white/10"}`}>
                 {msg.role === "user" ? <User className="h-4 w-4 text-primary" /> : <Bot className="h-4 w-4 text-secondary" />}
               </div>
-
+              
               {/* Message Bubble */}
-              <div className={`p-3 rounded-2xl text-sm ${msg.role === "user" ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground rounded-tr-sm" : "bg-card/80 border border-white/10 text-card-foreground rounded-tl-sm backdrop-blur-md"}`}>
-                <ReactMarkdown className="prose prose-invert prose-sm max-w-none">
-                  {msg.content}
-                </ReactMarkdown>
+              <div className={`p-3 rounded-2xl text-sm ${
+                msg.role === "user" 
+                  ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground rounded-tr-sm" 
+                  : "bg-card/80 border border-white/10 text-card-foreground rounded-tl-sm backdrop-blur-md"
+              }`}>
+                {msg.content}
               </div>
             </div>
           </div>
         ))}
-
+        
         {/* Loading Indicator */}
         {isLoading && (
           <div className="flex justify-start animate-fade-in">
@@ -135,16 +169,16 @@ export default function Wizard() {
       {/* Input Area */}
       <div className="flex-none p-4 pb-[calc(env(safe-area-inset-bottom)+5rem)] bg-background/80 backdrop-blur-md border-t border-border/20">
         <form onSubmit={handleSend} className="flex gap-2 relative">
-          <Input
+          <Input 
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask your nutritionist..."
+            placeholder="Ask your nutritionist..." 
             className="rounded-full bg-card/50 border-white/10 pr-12 focus-visible:ring-primary/50"
             disabled={isLoading}
           />
-          <Button
-            type="submit"
-            size="icon"
+          <Button 
+            type="submit" 
+            size="icon" 
             className="absolute right-1 top-1 bottom-1 h-8 w-8 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground transition-all duration-200"
             disabled={!input.trim() || isLoading}
           >
@@ -155,3 +189,8 @@ export default function Wizard() {
     </div>
   );
 }
+"""
+
+with open('src/pages/Wizard.tsx', 'w') as f:
+    f.write(new_content)
+print("Updated Wizard page with chat UI")

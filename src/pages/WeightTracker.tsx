@@ -7,12 +7,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { format } from "date-fns";
-import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Sparkles, Activity, Apple, Trash2, RefreshCw, Bug } from "lucide-react";
+import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Sparkles, Activity, Apple, Trash2, RefreshCw, Bug, Edit2, ChevronDown } from "lucide-react";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { weightLogSchema } from "@/lib/validation";
 import { useUser } from "@/contexts/UserContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { triggerHapticSuccess } from "@/lib/haptics";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -73,6 +75,8 @@ export default function WeightTracker() {
   const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
   const [aiAnalysisWeight, setAiAnalysisWeight] = useState<number | null>(null);
   const [aiAnalysisTarget, setAiAnalysisTarget] = useState<number | null>(null);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [editingLogId, setEditingLogId] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [logToDelete, setLogToDelete] = useState<WeightLog | null>(null);
   const [debugDialogOpen, setDebugDialogOpen] = useState(false);
@@ -185,7 +189,6 @@ export default function WeightTracker() {
   const handleAddWeight = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate input
     const validationResult = weightLogSchema.safeParse({
       weight_kg: parseFloat(newWeight),
       date: newDate,
@@ -205,31 +208,42 @@ export default function WeightTracker() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
 
-    const { error } = await supabase.from("weight_logs").insert({
-      user_id: user.id,
-      weight_kg: parseFloat(newWeight),
-      date: newDate,
-    });
+    let opError = null;
 
-    if (error) {
+    if (editingLogId) {
+      const { error } = await supabase
+        .from("weight_logs")
+        .update({
+          weight_kg: parseFloat(newWeight),
+          date: newDate,
+        })
+        .eq("id", editingLogId);
+      opError = error;
+    } else {
+      const { error } = await supabase.from("weight_logs").insert({
+        user_id: user.id,
+        weight_kg: parseFloat(newWeight),
+        date: newDate,
+      });
+      opError = error;
+    }
+
+    if (opError) {
       toast({
         title: "Error",
-        description: "Failed to log weight",
+        description: `Failed to ${editingLogId ? 'update' : 'log'} weight`,
         variant: "destructive",
       });
     } else {
       const loggedWeight = parseFloat(newWeight);
 
-      // Update profile current weight
       await supabase
         .from("profiles")
         .update({ current_weight_kg: loggedWeight })
         .eq("id", user.id);
 
-      // Update centralized current weight
       await updateCurrentWeight(loggedWeight);
 
-      // Clear stored AI analysis since weight has changed
       if (userId) {
         const storageKey = `weight_tracker_ai_analysis_${userId}`;
         localStorage.removeItem(storageKey);
@@ -239,16 +253,13 @@ export default function WeightTracker() {
       }
 
       toast({
-        title: "Weight logged",
+        title: editingLogId ? "Weight updated" : "Weight logged",
         description: "Your weight has been recorded",
       });
+      triggerHapticSuccess();
       setNewWeight("");
+      setEditingLogId(null);
       fetchData();
-
-      // Refresh AI analysis with new weight
-      if (profile) {
-        getAIAnalysis();
-      }
     }
 
     setLoading(false);
@@ -280,6 +291,14 @@ export default function WeightTracker() {
     setLoading(false);
     setDeleteDialogOpen(false);
     setLogToDelete(null);
+  };
+
+  const handleEditLog = (log: WeightLog) => {
+    setNewWeight(log.weight_kg.toString());
+    setNewDate(log.date);
+    setEditingLogId(log.id);
+    weightInputRef.current?.focus();
+    triggerHapticSuccess();
   };
 
   const initiateDelete = (log: WeightLog) => {
@@ -670,10 +689,130 @@ export default function WeightTracker() {
         subtitle="Reviewing your weight data..."
       />
       <div className="space-y-5 px-4 pb-4 pt-16 sm:p-5 sm:pt-16 max-w-2xl mx-auto">
+        <h1 className="text-xl font-bold">Weight</h1>
+        {/* Chart + History */}
+        <div className="glass-card p-4 space-y-4">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Progress Chart</p>
+          {getChartData().length > 0 ? (
+            <>
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={getChartData()} onClick={handleChartClick}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.2} />
+                  <XAxis
+                    dataKey="date"
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                    domain={["dataMin - 2", "dataMax + 2"]}
+                    width={36}
+                  />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (active && payload && payload.length) {
+                        return (
+                          <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
+                            <p className="text-xs text-muted-foreground">{payload[0].payload.fullDate}</p>
+                            <p className="text-lg font-bold text-primary">{payload[0].value}kg</p>
+                            <p className="text-[10px] text-muted-foreground mt-1">Tap to delete</p>
+                          </div>
+                        );
+                      }
+                      return null;
+                    }}
+                  />
+                  <ReferenceLine
+                    y={profile?.fight_week_target_kg || profile?.goal_weight_kg}
+                    stroke="hsl(var(--primary))"
+                    strokeDasharray="5 5"
+                    label={{ value: "Target", fill: "hsl(var(--primary))", fontSize: 10 }}
+                  />
+                  {profile?.fight_week_target_kg && (
+                    <ReferenceLine
+                      y={profile.goal_weight_kg}
+                      stroke="hsl(var(--destructive))"
+                      strokeDasharray="3 3"
+                      label={{ value: "Fight Night", fill: "hsl(var(--destructive))", fontSize: 10 }}
+                    />
+                  )}
+                  <Line
+                    type="monotone"
+                    dataKey="weight"
+                    stroke="hsl(var(--primary))"
+                    strokeWidth={2.5}
+                    dot={{ fill: "hsl(var(--primary))", r: 4, cursor: "pointer" }}
+                    activeDot={{ r: 6, cursor: "pointer" }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+              <div className="border-t border-border/20 pt-3">
+                <Collapsible
+                  open={isHistoryOpen}
+                  onOpenChange={setIsHistoryOpen}
+                  className="w-full space-y-2"
+                >
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Recent Entries</p>
+                    <CollapsibleTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground hover:text-foreground">
+                        {isHistoryOpen ? "Hide" : "View & Edit"}
+                        <ChevronDown className={`h-3 w-3 ml-1 transition-transform duration-200 ${isHistoryOpen ? "rotate-180" : ""}`} />
+                      </Button>
+                    </CollapsibleTrigger>
+                  </div>
+                  <CollapsibleContent className="space-y-2 pt-2">
+                    <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+                      {weightLogs.slice().reverse().map((log) => (
+                        <div
+                          key={log.id}
+                          className="flex items-center justify-between p-3 rounded-xl border border-white/5 bg-background/50 hover:bg-background/80 transition-colors"
+                        >
+                          <div>
+                            <span className="text-base font-bold text-primary mr-3">{log.weight_kg} kg</span>
+                            <span className="text-xs text-muted-foreground">{format(new Date(log.date), "MMM dd, yyyy")}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleEditLog(log)}
+                              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => initiateDelete(log)}
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              </div>
+            </>
+          ) : (
+            <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
+              Log your first weight to see progress
+            </div>
+          )}
+        </div>
+
+
         {/* Header + Inline Log Form */}
         <div className="flex flex-col gap-3">
-          <h1 className="text-xl font-bold">Weight</h1>
-          <form onSubmit={handleAddWeight} className="flex gap-2 items-center">
+            <form onSubmit={handleAddWeight} className="flex gap-2 items-center">
             <Input
               ref={weightInputRef}
               type="number"
@@ -692,7 +831,7 @@ export default function WeightTracker() {
               className="w-[130px] h-10"
             />
             <Button type="submit" disabled={loading} className="h-10 px-4 shrink-0">
-              {loading ? "..." : "Log"}
+              {loading ? "..." : editingLogId ? "Update" : "Log"}
             </Button>
           </form>
         </div>
@@ -757,99 +896,6 @@ export default function WeightTracker() {
             <p className="text-xs text-muted-foreground">{insight.message}</p>
           </div>
         )}
-
-        {/* Chart + History */}
-        <div className="glass-card p-4 space-y-4">
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Progress Chart</p>
-          {getChartData().length > 0 ? (
-            <>
-              <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={getChartData()} onClick={handleChartClick}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.2} />
-                  <XAxis
-                    dataKey="date"
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={false}
-                    domain={["dataMin - 2", "dataMax + 2"]}
-                    width={36}
-                  />
-                  <Tooltip
-                    content={({ active, payload }) => {
-                      if (active && payload && payload.length) {
-                        return (
-                          <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
-                            <p className="text-xs text-muted-foreground">{payload[0].payload.fullDate}</p>
-                            <p className="text-lg font-bold text-primary">{payload[0].value}kg</p>
-                            <p className="text-[10px] text-muted-foreground mt-1">Tap to delete</p>
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                  />
-                  <ReferenceLine
-                    y={profile?.fight_week_target_kg || profile?.goal_weight_kg}
-                    stroke="hsl(var(--primary))"
-                    strokeDasharray="5 5"
-                    label={{ value: "Target", fill: "hsl(var(--primary))", fontSize: 10 }}
-                  />
-                  {profile?.fight_week_target_kg && (
-                    <ReferenceLine
-                      y={profile.goal_weight_kg}
-                      stroke="hsl(var(--destructive))"
-                      strokeDasharray="3 3"
-                      label={{ value: "Fight Night", fill: "hsl(var(--destructive))", fontSize: 10 }}
-                    />
-                  )}
-                  <Line
-                    type="monotone"
-                    dataKey="weight"
-                    stroke="hsl(var(--primary))"
-                    strokeWidth={2.5}
-                    dot={{ fill: "hsl(var(--primary))", r: 4, cursor: "pointer" }}
-                    activeDot={{ r: 6, cursor: "pointer" }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-              <div className="border-t border-border/20 pt-3">
-                <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-2">Recent Entries</p>
-                <div className="max-h-44 overflow-y-auto">
-                  {weightLogs.slice().reverse().slice(0, 10).map((log) => (
-                    <div
-                      key={log.id}
-                      className="flex items-center justify-between py-2 border-b border-border/20 last:border-0"
-                    >
-                      <p className="text-sm">{format(new Date(log.date), "MMM dd, yyyy")}</p>
-                      <div className="flex items-center gap-3">
-                        <span className="text-sm font-semibold text-primary">{log.weight_kg} kg</span>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => initiateDelete(log)}
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          ) : (
-            <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
-              Log your first weight to see progress
-            </div>
-          )}
-        </div>
 
         {/* AI Analysis Loading */}
         {analyzingWeight && (

@@ -29,6 +29,7 @@ import { useDebouncedCallback } from "@/hooks/useDebounce";
 import { nutritionCache, cacheHelpers } from "@/lib/nutritionCache";
 import { preloadAdjacentDates } from "@/lib/backgroundSync";
 import { AIGeneratingOverlay } from "@/components/AIGeneratingOverlay";
+import { triggerHapticSuccess } from "@/lib/haptics";
 
 interface Ingredient {
   name: string;
@@ -117,6 +118,15 @@ export default function Nutrition() {
     ingredients: [] as Ingredient[],
   });
   const [aiMealDescription, setAiMealDescription] = useState("");
+  const [barcodeBaseMacros, setBarcodeBaseMacros] = useState<{
+    calories: number;
+    protein_g: number;
+    carbs_g: number;
+    fats_g: number;
+    serving_size: string;
+    serving_weight_g: number;
+  } | null>(null);
+  const [servingMultiplier, setServingMultiplier] = useState(1);
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
   const [aiIngredientDescription, setAiIngredientDescription] = useState("");
   const [aiAnalyzingIngredient, setAiAnalyzingIngredient] = useState(false);
@@ -869,8 +879,11 @@ export default function Nutrition() {
       });
       setAiMealDescription("");
       setNewIngredient({ name: "", grams: "" });
+      setBarcodeBaseMacros(null);
+      setServingMultiplier(1);
 
-      // Show immediate success feedback
+      // Show immediate success feedback with hardware Haptic
+      triggerHapticSuccess();
       toast({ title: "Meal added successfully" });
 
       // Create the database insert operation
@@ -1203,13 +1216,30 @@ export default function Nutrition() {
     }
   };
 
+  const parseServingGrams = (servingSize: string): number => {
+    const match = servingSize.match(/(\d+(?:\.\d+)?)\s*g\b/i);
+    if (match) return parseFloat(match[1]);
+    return 100;
+  };
+
   const handleBarcodeScanned = async (foodData: {
     meal_name: string;
     calories: number;
     protein_g: number;
     carbs_g: number;
     fats_g: number;
+    serving_size: string;
   }) => {
+    const servingWt = parseServingGrams(foodData.serving_size || "100g");
+    setBarcodeBaseMacros({
+      calories: foodData.calories,
+      protein_g: foodData.protein_g,
+      carbs_g: foodData.carbs_g,
+      fats_g: foodData.fats_g,
+      serving_size: foodData.serving_size || "1 serving",
+      serving_weight_g: servingWt,
+    });
+    setServingMultiplier(1);
     setManualMeal({
       meal_name: foodData.meal_name,
       calories: foodData.calories.toString(),
@@ -1217,7 +1247,7 @@ export default function Nutrition() {
       carbs_g: foodData.carbs_g.toString(),
       fats_g: foodData.fats_g.toString(),
       meal_type: "snack",
-      portion_size: "100g",
+      portion_size: foodData.serving_size || "1 serving",
       recipe_notes: "",
       ingredients: [],
     });
@@ -1484,6 +1514,8 @@ export default function Nutrition() {
               setIsManualDialogOpen(open);
               if (!open) {
                 setIngredientLookupError(null);
+                setBarcodeBaseMacros(null);
+                setServingMultiplier(1);
               }
             }}>
               <DialogTrigger asChild>
@@ -1548,6 +1580,99 @@ export default function Nutrition() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  {/* Serving Size Adjustment — only for barcode-scanned items */}
+                  {barcodeBaseMacros && (
+                    <div className="rounded-xl border border-border/50 bg-muted/30 p-3 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Serving Size</p>
+                        <span className="text-xs text-muted-foreground">{barcodeBaseMacros.serving_size}</span>
+                      </div>
+
+                      {/* Custom gram amount */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground flex-1">Amount</span>
+                        <div className="flex items-center gap-1">
+                          <Input
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={Math.round(servingMultiplier * barcodeBaseMacros.serving_weight_g)}
+                            onChange={(e) => {
+                              const grams = parseFloat(e.target.value);
+                              if (!isNaN(grams) && grams > 0) {
+                                const m = grams / barcodeBaseMacros.serving_weight_g;
+                                setServingMultiplier(Math.round(m * 10) / 10);
+                                setManualMeal(prev => ({
+                                  ...prev,
+                                  calories: Math.round(barcodeBaseMacros.calories * m).toString(),
+                                  protein_g: (Math.round(barcodeBaseMacros.protein_g * m * 10) / 10).toString(),
+                                  carbs_g: (Math.round(barcodeBaseMacros.carbs_g * m * 10) / 10).toString(),
+                                  fats_g: (Math.round(barcodeBaseMacros.fats_g * m * 10) / 10).toString(),
+                                  portion_size: `${Math.round(grams)}g`,
+                                }));
+                              }
+                            }}
+                            className="w-20 text-sm text-right h-8"
+                          />
+                          <span className="text-sm text-muted-foreground">g</span>
+                        </div>
+                      </div>
+
+                      {/* Servings stepper */}
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground flex-1">Servings</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = Math.max(0.5, Math.round((servingMultiplier - 0.5) * 10) / 10);
+                              setServingMultiplier(next);
+                              setManualMeal(prev => ({
+                                ...prev,
+                                calories: Math.round(barcodeBaseMacros.calories * next).toString(),
+                                protein_g: (Math.round(barcodeBaseMacros.protein_g * next * 10) / 10).toString(),
+                                carbs_g: (Math.round(barcodeBaseMacros.carbs_g * next * 10) / 10).toString(),
+                                fats_g: (Math.round(barcodeBaseMacros.fats_g * next * 10) / 10).toString(),
+                                portion_size: `${Math.round(next * barcodeBaseMacros.serving_weight_g)}g`,
+                              }));
+                            }}
+                            disabled={servingMultiplier <= 0.5}
+                            className="h-7 w-7 rounded-full border border-border flex items-center justify-center text-base font-medium hover:bg-muted transition-colors disabled:opacity-40"
+                          >
+                            −
+                          </button>
+                          <span className="text-sm font-semibold w-8 text-center tabular-nums">{servingMultiplier}×</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = Math.min(10, Math.round((servingMultiplier + 0.5) * 10) / 10);
+                              setServingMultiplier(next);
+                              setManualMeal(prev => ({
+                                ...prev,
+                                calories: Math.round(barcodeBaseMacros.calories * next).toString(),
+                                protein_g: (Math.round(barcodeBaseMacros.protein_g * next * 10) / 10).toString(),
+                                carbs_g: (Math.round(barcodeBaseMacros.carbs_g * next * 10) / 10).toString(),
+                                fats_g: (Math.round(barcodeBaseMacros.fats_g * next * 10) / 10).toString(),
+                                portion_size: `${Math.round(next * barcodeBaseMacros.serving_weight_g)}g`,
+                              }));
+                            }}
+                            className="h-7 w-7 rounded-full border border-border flex items-center justify-center text-base font-medium hover:bg-muted transition-colors"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Live macro preview */}
+                      <div className="flex gap-3 pt-1 border-t border-border/40 text-xs">
+                        <span className="font-semibold text-primary">{manualMeal.calories} kcal</span>
+                        <span className="text-muted-foreground">{manualMeal.protein_g}g P</span>
+                        <span className="text-muted-foreground">{manualMeal.carbs_g}g C</span>
+                        <span className="text-muted-foreground">{manualMeal.fats_g}g F</span>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Calories */}
                   <div>
@@ -2550,8 +2675,8 @@ export default function Nutrition() {
 
                         if (success) {
                           // Invalidate related caches on successful update
-                          nutritionCache.remove(user.id, 'profile');
-                          nutritionCache.remove(user.id, 'macroGoals');
+                          nutritionCache.remove(userId, 'profile');
+                          nutritionCache.remove(userId, 'macroGoals');
                         }
 
                       } catch (error: any) {

@@ -19,6 +19,7 @@ interface BarcodeScannerProps {
     protein_g: number;
     carbs_g: number;
     fats_g: number;
+    serving_size: string;
   }) => void;
   disabled?: boolean;
   className?: string;
@@ -116,10 +117,11 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
   };
 
   const { ref } = useZxing({
+    paused: !isOpen,
     constraints: {
       audio: false,
       video: {
-        facingMode: facingMode,
+        facingMode: { ideal: facingMode },
         width: { ideal: 1280 },
         height: { ideal: 720 }
       }
@@ -169,6 +171,9 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
       if (scanTimeoutRef.current) {
         clearTimeout(scanTimeoutRef.current);
       }
+    } else {
+      // Always start with rear camera when dialog opens
+      setFacingMode("environment");
     }
   }, [isOpen]);
 
@@ -335,6 +340,7 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
                       protein_g: scannedProduct.protein_g,
                       carbs_g: scannedProduct.carbs_g,
                       fats_g: scannedProduct.fats_g,
+                      serving_size: scannedProduct.serving_size || "1 serving",
                     });
                     setIsOpen(false);
                   }}
