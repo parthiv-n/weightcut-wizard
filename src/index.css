@@ -199,6 +199,29 @@ All colors MUST be HSL.
     border-radius: 1rem;
   }
 
+  .nutrition-dashboard {
+    background: hsl(var(--card) / 0.9);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid hsl(var(--border) / 0.3);
+    border-radius: 1.25rem;
+    padding: 1.25rem;
+    box-shadow:
+      0 1px 3px hsl(var(--primary) / 0.04),
+      0 4px 16px hsl(var(--primary) / 0.03),
+      inset 0 1px 0 hsl(0 0% 100% / 0.06);
+    animation: dashboardCardEnter 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+  }
+
+  .dark .nutrition-dashboard {
+    background: hsl(var(--card) / 0.6);
+    border-color: hsl(var(--border) / 0.15);
+    box-shadow:
+      0 1px 3px hsl(var(--primary) / 0.06),
+      0 8px 24px hsl(0 0% 0% / 0.2),
+      inset 0 1px 0 hsl(0 0% 100% / 0.04);
+  }
+
   .display-number {
     font-variant-numeric: tabular-nums;
     font-weight: 700;
