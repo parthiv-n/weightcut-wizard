@@ -77,17 +77,12 @@ function RouteTracker() {
       }
 
       // 2. Handle Supabase Auth (Implicit Flow / Hash Fragment)
+      // Supabase client detects the hash and fires onAuthStateChange automatically.
+      // No need to call getSession() — just navigate after a short delay to let
+      // the auth state change propagate.
       if (url.includes('#access_token') || url.includes('&access_token')) {
-        try {
-          // Supabase client might handle this if it detects the hash, 
-          // but we can force a session check or navigation
-          const { data } = await supabase.auth.getSession();
-          if (data.session) {
-            navigate('/dashboard');
-          }
-        } catch (e) {
-          console.error("Error handling implicit flow:", e);
-        }
+        console.debug('[deeplink] Implicit flow detected, waiting for auth state change');
+        setTimeout(() => navigate('/dashboard'), 500);
         return;
       }
 

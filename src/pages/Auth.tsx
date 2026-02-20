@@ -21,15 +21,11 @@ export default function Auth() {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // Rely solely on onAuthStateChange — no blocking getSession() call.
+  // The INITIAL_SESSION event fires on mount and handles existing sessions.
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        navigate("/dashboard");
-      }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (session?.user && (event === 'INITIAL_SESSION' || event === 'SIGNED_IN')) {
         navigate("/dashboard");
       }
     });
