@@ -14,7 +14,6 @@ import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { Button } from "@/components/ui/button";
 import { calculateCalorieTarget } from "@/lib/calorieCalculation";
 import { AIPersistence } from "@/lib/aiPersistence";
-import { localCache } from "@/lib/localCache";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { WeightIncreaseQuestionnaire } from "@/components/dashboard/WeightIncreaseQuestionnaire";
 
@@ -30,8 +29,6 @@ interface DailyWisdom {
   actionItems: string[];
   nutritionStatus: string;
 }
-
-const DASHBOARD_CACHE_KEY = 'dashboard_snapshot';
 
 export default function Dashboard() {
   const [profile, setProfile] = useState<any>(null);
@@ -54,22 +51,8 @@ export default function Dashboard() {
     return "Good evening";
   };
 
-  // Seed from cache immediately when userId becomes available
   useEffect(() => {
     if (userId) {
-      const cached = localCache.get<{ profile: any; weightLogs: any[]; todayCalories: number; todayHydration: number }>(userId, DASHBOARD_CACHE_KEY);
-      if (cached) {
-        setProfile(cached.profile);
-        setWeightLogs(cached.weightLogs || []);
-        setTodayCalories(cached.todayCalories || 0);
-        setTodayHydration(cached.todayHydration || 0);
-        setLoading(false);
-
-        // Also restore cached wisdom
-        const today = new Date().toISOString().split('T')[0];
-        const cachedWisdom = AIPersistence.load(userId, `daily_wisdom_${today}`);
-        if (cachedWisdom) setWisdom(cachedWisdom);
-      }
       loadDashboardData();
     }
   }, [userId]);
@@ -94,7 +77,7 @@ export default function Dashboard() {
     }
   }, [userId]);
 
-  const generateWisdom = async (profileData: any, logs: any[], calories: number) => {
+  const generateWisdom = async (profileData: any, logs: any[], calories: number, hydration: number) => {
     if (!userId || !profileData) return;
     setWisdomLoading(true);
     try {
@@ -117,6 +100,8 @@ export default function Dashboard() {
         aiRecommendedCalories: profileData.ai_recommended_calories,
         todayCalories: calories,
         dailyCalorieGoal: calorieGoal,
+        todayHydration: hydration,
+        hydrationGoalMl: 3000,
         weightHistory: last7,
       };
 
@@ -134,7 +119,7 @@ export default function Dashboard() {
     }
   };
 
-  const checkAndGenerateWisdom = (profileData: any, logs: any[], calories: number) => {
+  const checkAndGenerateWisdom = async (profileData: any, logs: any[], calories: number, hydration: number) => {
     if (!userId || !profileData) return;
     const today = new Date().toISOString().split('T')[0];
     const hasTodayLog = logs.some((l: any) => l.date === today);
@@ -149,8 +134,7 @@ export default function Dashboard() {
       setWisdom(cached);
       return;
     }
-    // Fire-and-forget: don't block dashboard render on AI call
-    generateWisdom(profileData, logs, calories);
+    await generateWisdom(profileData, logs, calories, hydration);
   };
 
   const loadDashboardData = async () => {
@@ -169,7 +153,7 @@ export default function Dashboard() {
             .select("*")
             .eq("id", userId)
             .maybeSingle(),
-          5000,
+          8000,
           "Profile query"
         ),
 
@@ -180,7 +164,7 @@ export default function Dashboard() {
             .eq("user_id", userId)
             .order("date", { ascending: true })
             .limit(30),
-          5000,
+          8000,
           "Weight logs query"
         ),
 
@@ -190,7 +174,7 @@ export default function Dashboard() {
             .select("calories")
             .eq("user_id", userId)
             .eq("date", today),
-          5000,
+          8000,
           "Nutrition logs query"
         ),
 
@@ -200,7 +184,7 @@ export default function Dashboard() {
             .select("amount_ml")
             .eq("user_id", userId)
             .eq("date", today),
-          5000,
+          8000,
           "Hydration logs query"
         )
       ]);
@@ -224,25 +208,13 @@ export default function Dashboard() {
       setTodayCalories(totalCalories);
       setTodayHydration(totalHydration);
 
-      // Cache the dashboard snapshot for instant load next time
-      localCache.set(userId, DASHBOARD_CACHE_KEY, {
-        profile: profileData,
-        weightLogs: logsData || [],
-        todayCalories: totalCalories,
-        todayHydration: totalHydration,
-      });
-
-      // Fire-and-forget: wisdom has its own loading state
-      checkAndGenerateWisdom(profileData, logsData ?? [], totalCalories);
+      await checkAndGenerateWisdom(profileData, logsData ?? [], totalCalories, totalHydration);
     } catch (error) {
       console.error("Error loading dashboard data:", error);
-      // Only reset state if we don't have cached data already showing
-      if (!profile) {
-        setProfile(null);
-        setWeightLogs([]);
-        setTodayCalories(0);
-        setTodayHydration(0);
-      }
+      setProfile(null);
+      setWeightLogs([]);
+      setTodayCalories(0);
+      setTodayHydration(0);
     } finally {
       setLoading(false);
     }
