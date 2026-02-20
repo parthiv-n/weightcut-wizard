@@ -227,6 +227,50 @@ All colors MUST be HSL.
     font-weight: 700;
     letter-spacing: -0.02em;
   }
+
+  /* Pull-to-Refresh */
+  .pull-to-refresh-container {
+    position: relative;
+    overflow: visible;
+    min-height: 100%;
+  }
+
+  .pull-to-refresh-indicator {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    z-index: 10;
+    pointer-events: none;
+    transition: height 0.3s ease-out, opacity 0.3s ease-out;
+  }
+
+  .pull-to-refresh-spinner {
+    width: 24px;
+    height: 24px;
+    border: 2.5px solid hsl(var(--muted-foreground) / 0.3);
+    border-top-color: hsl(var(--primary));
+    border-radius: 50%;
+    transition: transform 0.1s linear;
+  }
+
+  .pull-to-refresh-spinner.spinning {
+    animation: ptr-spin 0.7s linear infinite;
+  }
+
+  @keyframes ptr-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  .pull-to-refresh-content {
+    will-change: transform;
+  }
 }
 
 @layer utilities {
