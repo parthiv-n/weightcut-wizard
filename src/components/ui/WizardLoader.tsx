@@ -27,10 +27,10 @@ export function WizardLoader({
       });
     }, 200);
 
-    // Show force refresh button after 5 seconds if still loading
+    // Show force refresh button after 1 second if still loading
     const refreshTimer = setTimeout(() => {
       setShowRefresh(true);
-    }, 5000);
+    }, 1000);
 
     return () => {
       clearInterval(timer);
@@ -64,7 +64,7 @@ export function WizardLoader({
         </div>
 
         {/* Force refresh button - fades in after a delay to resolve connection hangs */}
-        <div className={`transition-opacity duration-1000 ${showRefresh ? "opacity-100" : "opacity-0 pointer-events-none"}`}>
+        <div className={`transition-opacity duration-1000 ${showRefresh ? "opacity-100" : "opacity-0 pointer-events-none"} flex flex-col items-center gap-2`}>
           <Button
             variant="outline"
             size="sm"
@@ -74,6 +74,9 @@ export function WizardLoader({
             <RefreshCw className="mr-2 h-3 w-3" />
             Force Refresh
           </Button>
+          <p className="text-[10px] text-muted-foreground/60 text-center max-w-[200px]">
+            Tip: Multiple force refreshes may load the app faster if your connection to the database dropped (this issue is currently in process of being resolved).
+          </p>
         </div>
       </div>
     </div>
