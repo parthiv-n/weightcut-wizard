@@ -124,7 +124,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     try {
       const { data } = await withSupabaseTimeout(
         supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
-        8000,
+        4000,
         "Profile refresh query"
       );
 
@@ -199,7 +199,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
             .select("*")
             .eq("id", user.id)
             .maybeSingle(),
-          8000,
+          4000,
           "Profile query"
         ),
         withSupabaseTimeout(
@@ -210,7 +210,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
             .order("date", { ascending: false })
             .limit(1)
             .maybeSingle(),
-          8000,
+          4000,
           "Weight log query"
         ),
       ]);
@@ -250,7 +250,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
     if (!isUserLoadedRef.current) {
       setIsLoading(true);
     }
-    const DELAYS = [1000, 2000, 4000];
+
+    // Aggressive exponential backoff for faster recovery from short network drops
+    const DELAYS = [100, 500, 1500, 3000];
 
     for (let attempt = 0; attempt <= DELAYS.length; attempt++) {
       const result = await _performLoad();
@@ -370,7 +372,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       // Flush any offline writes queued while the app was backgrounded
       if (userIdRef.current) {
         import('@/lib/syncQueue').then(({ syncQueue }) => {
-          syncQueue.process(userIdRef.current!).catch(() => {});
+          syncQueue.process(userIdRef.current!).catch(() => { });
         });
       }
     };
@@ -407,7 +409,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       // Flush queued offline writes on reconnect
       if (userIdRef.current) {
         import('@/lib/syncQueue').then(({ syncQueue }) => {
-          syncQueue.process(userIdRef.current!).catch(() => {});
+          syncQueue.process(userIdRef.current!).catch(() => { });
         });
       }
     };

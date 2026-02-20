@@ -14,5 +14,11 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     persistSession: true,
     autoRefreshToken: true,
     storageKey: 'weightcut-wizard-auth',
+  },
+  global: {
+    fetch: (url, options) => {
+      // Keep TCP connection open to reduce TLS negotiation time on subsequent queries
+      return fetch(url, { ...options, keepalive: true });
+    }
   }
 });
