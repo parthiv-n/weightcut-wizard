@@ -17,6 +17,7 @@ import { useUser } from "@/contexts/UserContext";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { AIGeneratingOverlay } from "@/components/AIGeneratingOverlay";
+import PullToRefresh from "@/components/PullToRefresh";
 
 interface FightWeekPlan {
   id: string;
@@ -500,375 +501,377 @@ export default function FightWeek() {
         title="Analyzing Progress"
         subtitle="Optimizing your weight cut strategy..."
       />
-      <div className="min-h-screen bg-black text-white pb-32 md:pb-10 pt-safe-top">
-        {/* Dynamic Background */}
-        <div className="fixed inset-0 pointer-events-none z-0">
-          <div className="absolute top-[-10%] right-[-10%] w-[400px] h-[400px] bg-primary/10 rounded-full blur-[100px] opacity-40" />
-        </div>
-
-        <div className="relative z-10 max-w-2xl mx-auto px-6 py-6 space-y-8">
-          {/* Header & Countdown */}
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold tracking-tight">Fight Week</h1>
-                <p className="text-zinc-400 text-sm font-medium">
-                  {format(new Date(plan.fight_date), "MMMM dd, yyyy")}
-                </p>
-              </div>
-              <div className={`px-3 py-1 rounded-full text-xs font-bold border ${weightCutInfo?.status === 'safe' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
-                weightCutInfo?.status === 'warning' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
-                  'bg-red-500/10 text-red-400 border-red-500/20'
-                }`}>
-                {weightCutInfo?.status === 'safe' ? 'ON TRACK' : weightCutInfo?.status === 'warning' ? 'CAUTION' : 'CRITICAL'}
-              </div>
-            </div>
-
-            {/* Hero Countdown & Weight */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-zinc-900 rounded-3xl p-5 border border-zinc-800/50 flex flex-col justify-between h-32 relative overflow-hidden group">
-                <div className="absolute top-3 right-3 text-zinc-600 group-hover:text-zinc-500 transition-colors">
-                  <Timer className="h-5 w-5" />
-                </div>
-                <span className="text-sm font-medium text-zinc-400">Time Left</span>
-                <div className="space-y-1">
-                  <span className="text-4xl font-bold tracking-tight block">
-                    {timeRemaining.days}<span className="text-lg text-zinc-500 font-normal ml-1">d</span>
-                  </span>
-                  <span className="text-sm text-zinc-500 font-mono">
-                    {String(timeRemaining.hours).padStart(2, '0')}:{String(timeRemaining.minutes).padStart(2, '0')}
-                  </span>
-                </div>
-              </div>
-
-              <div className="bg-zinc-900 rounded-3xl p-5 border border-zinc-800/50 flex flex-col justify-between h-32 relative overflow-hidden group">
-                <div className="absolute top-3 right-3 text-zinc-600 group-hover:text-zinc-500 transition-colors">
-                  <Activity className="h-5 w-5" />
-                </div>
-                <span className="text-sm font-medium text-zinc-400">Weight Left</span>
-                <div>
-                  <span className="text-4xl font-bold tracking-tight text-white block">
-                    {(currentWeight - plan.target_weight_kg).toFixed(1)}<span className="text-lg text-zinc-500 font-normal ml-1">kg</span>
-                  </span>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Progress value={getWeightProgress()} className="h-1.5 bg-zinc-800" indicatorClassName="bg-primary" />
-                  </div>
-                </div>
-              </div>
-            </div>
+      <PullToRefresh onRefresh={fetchPlanAndLogs}>
+        <div className="min-h-screen bg-black text-white pb-32 md:pb-10 pt-safe-top">
+          {/* Dynamic Background */}
+          <div className="fixed inset-0 pointer-events-none z-0">
+            <div className="absolute top-[-10%] right-[-10%] w-[400px] h-[400px] bg-primary/10 rounded-full blur-[100px] opacity-40" />
           </div>
 
-          {/* Wizard's Advice — Collapsible */}
-          {weightCutInfo && (
-            <div className="rounded-3xl bg-zinc-900 border border-zinc-800/50 overflow-hidden">
-              <button
-                className="w-full p-5 flex items-center gap-3 text-left hover:bg-zinc-800/30 transition-colors"
-                onClick={() => setWizardAdviceOpen(o => !o)}
-              >
-                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  <Shield className="h-4 w-4 text-primary" />
+          <div className="relative z-10 max-w-2xl mx-auto px-6 py-6 space-y-8">
+            {/* Header & Countdown */}
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-3xl font-bold tracking-tight">Fight Week</h1>
+                  <p className="text-zinc-400 text-sm font-medium">
+                    {format(new Date(plan.fight_date), "MMMM dd, yyyy")}
+                  </p>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <span className="text-sm font-semibold block">Wizard's Safety Advice</span>
-                  <span className="text-xs text-zinc-500">{weightCutInfo.message}</span>
+                <div className={`px-3 py-1 rounded-full text-xs font-bold border ${weightCutInfo?.status === 'safe' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+                  weightCutInfo?.status === 'warning' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
+                    'bg-red-500/10 text-red-400 border-red-500/20'
+                  }`}>
+                  {weightCutInfo?.status === 'safe' ? 'ON TRACK' : weightCutInfo?.status === 'warning' ? 'CAUTION' : 'CRITICAL'}
                 </div>
-                <span className="text-zinc-500">
-                  {wizardAdviceOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                </span>
-              </button>
-              {wizardAdviceOpen && (
-                <div className="px-5 pb-5 space-y-4 border-t border-zinc-800">
-                  <p className="text-sm text-zinc-300 leading-relaxed pt-4">{weightCutInfo.wizardAdvice}</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50">
-                      <span className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">% Bodyweight</span>
-                      <span className={`text-lg font-bold ${weightCutInfo.percentBodyweight <= 5 ? 'text-green-400' : weightCutInfo.percentBodyweight <= 8 ? 'text-yellow-400' : 'text-red-400'}`}>
-                        {weightCutInfo.percentBodyweight.toFixed(1)}%
-                      </span>
-                    </div>
-                    <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50">
-                      <span className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Total to Cut</span>
-                      <span className="text-lg font-bold text-white">{weightCutInfo.totalWeightToCut.toFixed(1)}kg</span>
-                    </div>
-                    <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50">
-                      <span className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Glycogen + Water</span>
-                      <span className="text-lg font-bold text-orange-400">~{weightCutInfo.glycogenWaterWeight.toFixed(1)}kg</span>
-                    </div>
-                    <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50">
-                      <span className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Safe Dehydration</span>
-                      <span className="text-lg font-bold text-blue-400">~{weightCutInfo.safeDehydration.toFixed(1)}kg</span>
+              </div>
+
+              {/* Hero Countdown & Weight */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-zinc-900 rounded-3xl p-5 border border-zinc-800/50 flex flex-col justify-between h-32 relative overflow-hidden group">
+                  <div className="absolute top-3 right-3 text-zinc-600 group-hover:text-zinc-500 transition-colors">
+                    <Timer className="h-5 w-5" />
+                  </div>
+                  <span className="text-sm font-medium text-zinc-400">Time Left</span>
+                  <div className="space-y-1">
+                    <span className="text-4xl font-bold tracking-tight block">
+                      {timeRemaining.days}<span className="text-lg text-zinc-500 font-normal ml-1">d</span>
+                    </span>
+                    <span className="text-sm text-zinc-500 font-mono">
+                      {String(timeRemaining.hours).padStart(2, '0')}:{String(timeRemaining.minutes).padStart(2, '0')}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-zinc-900 rounded-3xl p-5 border border-zinc-800/50 flex flex-col justify-between h-32 relative overflow-hidden group">
+                  <div className="absolute top-3 right-3 text-zinc-600 group-hover:text-zinc-500 transition-colors">
+                    <Activity className="h-5 w-5" />
+                  </div>
+                  <span className="text-sm font-medium text-zinc-400">Weight Left</span>
+                  <div>
+                    <span className="text-4xl font-bold tracking-tight text-white block">
+                      {(currentWeight - plan.target_weight_kg).toFixed(1)}<span className="text-lg text-zinc-500 font-normal ml-1">kg</span>
+                    </span>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Progress value={getWeightProgress()} className="h-1.5 bg-zinc-800" indicatorClassName="bg-primary" />
                     </div>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Wizard's Advice — Collapsible */}
+            {weightCutInfo && (
+              <div className="rounded-3xl bg-zinc-900 border border-zinc-800/50 overflow-hidden">
+                <button
+                  className="w-full p-5 flex items-center gap-3 text-left hover:bg-zinc-800/30 transition-colors"
+                  onClick={() => setWizardAdviceOpen(o => !o)}
+                >
+                  <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <Shield className="h-4 w-4 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm font-semibold block">Wizard's Safety Advice</span>
+                    <span className="text-xs text-zinc-500">{weightCutInfo.message}</span>
+                  </div>
+                  <span className="text-zinc-500">
+                    {wizardAdviceOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                  </span>
+                </button>
+                {wizardAdviceOpen && (
+                  <div className="px-5 pb-5 space-y-4 border-t border-zinc-800">
+                    <p className="text-sm text-zinc-300 leading-relaxed pt-4">{weightCutInfo.wizardAdvice}</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50">
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">% Bodyweight</span>
+                        <span className={`text-lg font-bold ${weightCutInfo.percentBodyweight <= 5 ? 'text-green-400' : weightCutInfo.percentBodyweight <= 8 ? 'text-yellow-400' : 'text-red-400'}`}>
+                          {weightCutInfo.percentBodyweight.toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50">
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Total to Cut</span>
+                        <span className="text-lg font-bold text-white">{weightCutInfo.totalWeightToCut.toFixed(1)}kg</span>
+                      </div>
+                      <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50">
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Glycogen + Water</span>
+                        <span className="text-lg font-bold text-orange-400">~{weightCutInfo.glycogenWaterWeight.toFixed(1)}kg</span>
+                      </div>
+                      <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50">
+                        <span className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Safe Dehydration</span>
+                        <span className="text-lg font-bold text-blue-400">~{weightCutInfo.safeDehydration.toFixed(1)}kg</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Quick Log Action */}
+            <div className="bg-zinc-900 rounded-3xl p-5 border border-zinc-800/50 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">Log Weight</h3>
+              </div>
+              <div className="flex gap-3">
+                <div className="w-1/3">
+                  <Input
+                    type="date"
+                    value={quickWeightLog.log_date}
+                    onChange={(e) => setQuickWeightLog({ ...quickWeightLog, log_date: e.target.value })}
+                    className="bg-black border-zinc-800 text-white h-12 rounded-xl focus:border-primary text-sm font-medium text-center"
+                  />
+                </div>
+                <div className="flex-1">
+                  <Input
+                    type="number"
+                    step="0.1"
+                    placeholder="0.0"
+                    value={quickWeightLog.weight_kg || ""}
+                    onChange={(e) => setQuickWeightLog({ ...quickWeightLog, weight_kg: parseFloat(e.target.value) })}
+                    className="bg-black border-zinc-800 text-white h-12 rounded-xl focus:border-primary text-lg font-medium text-center"
+                  />
+                </div>
+                <Button
+                  onClick={saveQuickWeight}
+                  disabled={loading || !quickWeightLog.weight_kg}
+                  className="h-12 w-24 rounded-xl bg-white text-black hover:bg-zinc-200 font-bold text-base transition-transform active:scale-95"
+                >
+                  {loading ? "..." : "Save"}
+                </Button>
+              </div>
+            </div>
+
+            {/* AI Insight Section */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between px-1">
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                  <Sparkles className="h-5 w-5 text-primary" />
+                  AI Insight
+                </h2>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 text-xs text-zinc-400 hover:text-white"
+                  onClick={getAIAnalysis}
+                  disabled={analyzingWeight}
+                >
+                  {analyzingWeight ? "Analyzing..." : "Refresh"}
+                </Button>
+              </div>
+
+              {analyzingWeight ? (
+                <div className="bg-zinc-900 rounded-3xl p-8 border border-zinc-800/50 flex flex-col items-center justify-center space-y-4 min-h-[200px]">
+                  <Sparkles className="h-8 w-8 text-primary animate-spin" />
+                  <p className="text-zinc-400 animate-pulse text-sm">Analyzing protocol...</p>
+                </div>
+              ) : aiAnalysis ? (
+                <div className="bg-zinc-900 rounded-3xl border border-zinc-800/50 overflow-hidden">
+                  <div className="p-5 space-y-4">
+                    {/* Risk Header */}
+                    <div className="flex items-center gap-3 pb-4 border-b border-zinc-800">
+                      <div className={`h-10 w-10 rounded-full flex items-center justify-center ${aiAnalysis.riskLevel === 'green' ? 'bg-green-500/20 text-green-400' :
+                        aiAnalysis.riskLevel === 'yellow' ? 'bg-yellow-500/20 text-yellow-400' :
+                          'bg-red-500/20 text-red-400'
+                        }`}>
+                        {aiAnalysis.riskLevel === 'green' ? <CheckCircle className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-lg leading-tight">
+                          {aiAnalysis.riskLevel === 'green' ? 'Protocol Safe' : aiAnalysis.riskLevel === 'yellow' ? 'Moderate adjustments needed' : 'Immediate action required'}
+                        </h3>
+                        <p className="text-sm text-zinc-400">{aiAnalysis.progressStatus}</p>
+                      </div>
+                    </div>
+
+                    {/* Cut Composition Visualization */}
+                    <div className="space-y-3">
+                      <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Estimated Cut Composition</h4>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Activity className="h-3.5 w-3.5 text-orange-400" />
+                            <span className="text-xs text-zinc-400">Carb/Gut Depletion</span>
+                          </div>
+                          <span className="text-xl font-bold text-white block">
+                            ~{aiAnalysis.carbDepletionEstimate.toFixed(1)}<span className="text-sm text-zinc-500 font-normal ml-0.5">kg</span>
+                          </span>
+                        </div>
+                        <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Droplets className="h-3.5 w-3.5 text-blue-400" />
+                            <span className="text-xs text-zinc-400">Water Loss Required</span>
+                          </div>
+                          <span className="text-xl font-bold text-white block">
+                            ~{aiAnalysis.dehydrationRequired.toFixed(1)}<span className="text-sm text-zinc-500 font-normal ml-0.5">kg</span>
+                          </span>
+                        </div>
+                      </div>
+                      {isWaterloading && (
+                        <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 flex items-start gap-3">
+                          <Droplets className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-blue-400">Water Loading Active</p>
+                            <p className="text-xs text-blue-300/70 mt-0.5">Bonus 2-3kg safe dehydration capacity added.</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Analysis Text */}
+                    <div className="space-y-3 border-t border-zinc-800 pt-3">
+                      <p className="text-sm text-zinc-300 leading-relaxed">
+                        "{aiAnalysis.dailyAnalysis}"
+                      </p>
+                      {aiAnalysis.adaptations.length > 0 && (
+                        <div className="bg-zinc-950/50 rounded-xl p-3 space-y-2">
+                          <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Adaptations</span>
+                          <ul className="space-y-2">
+                            {aiAnalysis.adaptations.map((item, i) => (
+                              <li key={i} className="text-sm flex gap-2 text-zinc-300">
+                                <span className="text-primary mt-1">•</span>
+                                {item}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Risk Explanation — Collapsible */}
+                    {aiAnalysis.riskExplanation && (
+                      <div className="border-t border-zinc-800">
+                        <button
+                          className="w-full py-3 flex items-center gap-2 text-left hover:opacity-80 transition-opacity"
+                          onClick={() => setRiskExplanationOpen(o => !o)}
+                        >
+                          <BookOpen className="h-3.5 w-3.5 text-zinc-500" />
+                          <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Risk Explanation</span>
+                          <span className="ml-auto text-zinc-600">
+                            {riskExplanationOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                          </span>
+                        </button>
+                        {riskExplanationOpen && (
+                          <p className="text-sm text-zinc-300 leading-relaxed pb-3">{aiAnalysis.riskExplanation}</p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Recommendation — Collapsible */}
+                    {aiAnalysis.recommendation && (
+                      <div className="border-t border-zinc-800">
+                        <button
+                          className="w-full py-3 flex items-center gap-2 text-left hover:opacity-80 transition-opacity"
+                          onClick={() => setRecommendationOpen(o => !o)}
+                        >
+                          <Target className="h-3.5 w-3.5 text-zinc-500" />
+                          <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Recommendation</span>
+                          <span className="ml-auto text-zinc-600">
+                            {recommendationOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                          </span>
+                        </button>
+                        {recommendationOpen && (
+                          <p className="text-sm text-zinc-300 leading-relaxed pb-3">{aiAnalysis.recommendation}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Protocol Toggle footer */}
+                  <div className="bg-zinc-950 p-4 border-t border-zinc-800 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Droplets className={`h-4 w-4 ${isWaterloading ? 'text-blue-500' : 'text-zinc-600'}`} />
+                      <span className="text-sm font-medium text-zinc-400">Water Loading</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-zinc-500">{isWaterloading ? "On" : "Off"}</span>
+                      <input
+                        type="checkbox"
+                        checked={isWaterloading}
+                        onChange={(e) => setIsWaterloading(e.target.checked)}
+                        className="toggle-checkbox h-5 w-9 rounded-full bg-zinc-800 border-transparent appearance-none transition-colors checked:bg-blue-600 relative cursor-pointer
+                      after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-transform checked:after:translate-x-4"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-zinc-900 rounded-3xl p-8 border border-zinc-800/50 text-center space-y-4">
+                  <p className="text-zinc-400">No analysis available. Log your weight to get started.</p>
+                  <Button onClick={getAIAnalysis} variant="outline" className="text-white border-zinc-700 hover:bg-zinc-800">
+                    Generate Analysis
+                  </Button>
                 </div>
               )}
             </div>
-          )}
 
-          {/* Quick Log Action */}
-          <div className="bg-zinc-900 rounded-3xl p-5 border border-zinc-800/50 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold">Log Weight</h3>
-            </div>
-            <div className="flex gap-3">
-              <div className="w-1/3">
-                <Input
-                  type="date"
-                  value={quickWeightLog.log_date}
-                  onChange={(e) => setQuickWeightLog({ ...quickWeightLog, log_date: e.target.value })}
-                  className="bg-black border-zinc-800 text-white h-12 rounded-xl focus:border-primary text-sm font-medium text-center"
-                />
-              </div>
-              <div className="flex-1">
-                <Input
-                  type="number"
-                  step="0.1"
-                  placeholder="0.0"
-                  value={quickWeightLog.weight_kg || ""}
-                  onChange={(e) => setQuickWeightLog({ ...quickWeightLog, weight_kg: parseFloat(e.target.value) })}
-                  className="bg-black border-zinc-800 text-white h-12 rounded-xl focus:border-primary text-lg font-medium text-center"
-                />
-              </div>
-              <Button
-                onClick={saveQuickWeight}
-                disabled={loading || !quickWeightLog.weight_kg}
-                className="h-12 w-24 rounded-xl bg-white text-black hover:bg-zinc-200 font-bold text-base transition-transform active:scale-95"
-              >
-                {loading ? "..." : "Save"}
-              </Button>
-            </div>
-          </div>
-
-          {/* AI Insight Section */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between px-1">
-              <h2 className="text-xl font-bold flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-primary" />
-                AI Insight
-              </h2>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 text-xs text-zinc-400 hover:text-white"
-                onClick={getAIAnalysis}
-                disabled={analyzingWeight}
-              >
-                {analyzingWeight ? "Analyzing..." : "Refresh"}
-              </Button>
-            </div>
-
-            {analyzingWeight ? (
-              <div className="bg-zinc-900 rounded-3xl p-8 border border-zinc-800/50 flex flex-col items-center justify-center space-y-4 min-h-[200px]">
-                <Sparkles className="h-8 w-8 text-primary animate-spin" />
-                <p className="text-zinc-400 animate-pulse text-sm">Analyzing protocol...</p>
-              </div>
-            ) : aiAnalysis ? (
-              <div className="bg-zinc-900 rounded-3xl border border-zinc-800/50 overflow-hidden">
-                <div className="p-5 space-y-4">
-                  {/* Risk Header */}
-                  <div className="flex items-center gap-3 pb-4 border-b border-zinc-800">
-                    <div className={`h-10 w-10 rounded-full flex items-center justify-center ${aiAnalysis.riskLevel === 'green' ? 'bg-green-500/20 text-green-400' :
-                      aiAnalysis.riskLevel === 'yellow' ? 'bg-yellow-500/20 text-yellow-400' :
-                        'bg-red-500/20 text-red-400'
-                      }`}>
-                      {aiAnalysis.riskLevel === 'green' ? <CheckCircle className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-lg leading-tight">
-                        {aiAnalysis.riskLevel === 'green' ? 'Protocol Safe' : aiAnalysis.riskLevel === 'yellow' ? 'Moderate adjustments needed' : 'Immediate action required'}
-                      </h3>
-                      <p className="text-sm text-zinc-400">{aiAnalysis.progressStatus}</p>
-                    </div>
+            {/* Chart & History */}
+            {logs.length > 0 && (
+              <div className="space-y-4">
+                <h2 className="text-xl font-bold px-1">History</h2>
+                <div className="bg-zinc-900 rounded-3xl p-5 border border-zinc-800/50 overflow-hidden">
+                  <div className="h-48 w-full -ml-2">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={getChartData()}>
+                        <XAxis
+                          dataKey="date"
+                          stroke="#52525b"
+                          fontSize={12}
+                          tickLine={false}
+                          axisLine={false}
+                          tickMargin={10}
+                        />
+                        <Tooltip
+                          contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '12px' }}
+                          itemStyle={{ color: '#fff' }}
+                          labelStyle={{ color: '#a1a1aa' }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="weight"
+                          stroke="hsl(var(--primary))"
+                          strokeWidth={3}
+                          dot={false}
+                          activeDot={{ r: 6, fill: "#fff", strokeWidth: 0 }}
+                        />
+                        <ReferenceLine y={plan.target_weight_kg} stroke="#3f3f46" strokeDasharray="3 3" />
+                      </LineChart>
+                    </ResponsiveContainer>
                   </div>
 
-                  {/* Cut Composition Visualization */}
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Estimated Cut Composition</h4>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Activity className="h-3.5 w-3.5 text-orange-400" />
-                          <span className="text-xs text-zinc-400">Carb/Gut Depletion</span>
+                  <div className="mt-4 space-y-px bg-zinc-800 rounded-xl overflow-hidden border border-zinc-800">
+                    {logs.slice().reverse().map((log) => (
+                      <div key={log.id} className="flex items-center justify-between p-4 bg-zinc-900 hover:bg-zinc-800/80 transition-colors group">
+                        <div className="flex items-center gap-4">
+                          <div className="h-2 w-2 rounded-full bg-primary/50"></div>
+                          <div>
+                            <p className="font-semibold text-sm text-white">{format(new Date(log.log_date), "MMM dd")}</p>
+                          </div>
                         </div>
-                        <span className="text-xl font-bold text-white block">
-                          ~{aiAnalysis.carbDepletionEstimate.toFixed(1)}<span className="text-sm text-zinc-500 font-normal ml-0.5">kg</span>
-                        </span>
-                      </div>
-                      <div className="bg-zinc-950 p-3 rounded-xl border border-zinc-800/50">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Droplets className="h-3.5 w-3.5 text-blue-400" />
-                          <span className="text-xs text-zinc-400">Water Loss Required</span>
-                        </div>
-                        <span className="text-xl font-bold text-white block">
-                          ~{aiAnalysis.dehydrationRequired.toFixed(1)}<span className="text-sm text-zinc-500 font-normal ml-0.5">kg</span>
-                        </span>
-                      </div>
-                    </div>
-                    {isWaterloading && (
-                      <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 flex items-start gap-3">
-                        <Droplets className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-medium text-blue-400">Water Loading Active</p>
-                          <p className="text-xs text-blue-300/70 mt-0.5">Bonus 2-3kg safe dehydration capacity added.</p>
+                        <div className="flex items-center gap-4">
+                          <span className="font-mono font-bold text-white">{log.weight_kg}kg</span>
+                          <button
+                            onClick={() => initiateDelete(log)}
+                            className="text-zinc-600 hover:text-red-500 transition-colors p-1"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
                         </div>
                       </div>
-                    )}
-                  </div>
-
-                  {/* Analysis Text */}
-                  <div className="space-y-3 border-t border-zinc-800 pt-3">
-                    <p className="text-sm text-zinc-300 leading-relaxed">
-                      "{aiAnalysis.dailyAnalysis}"
-                    </p>
-                    {aiAnalysis.adaptations.length > 0 && (
-                      <div className="bg-zinc-950/50 rounded-xl p-3 space-y-2">
-                        <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Adaptations</span>
-                        <ul className="space-y-2">
-                          {aiAnalysis.adaptations.map((item, i) => (
-                            <li key={i} className="text-sm flex gap-2 text-zinc-300">
-                              <span className="text-primary mt-1">•</span>
-                              {item}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Risk Explanation — Collapsible */}
-                  {aiAnalysis.riskExplanation && (
-                    <div className="border-t border-zinc-800">
-                      <button
-                        className="w-full py-3 flex items-center gap-2 text-left hover:opacity-80 transition-opacity"
-                        onClick={() => setRiskExplanationOpen(o => !o)}
-                      >
-                        <BookOpen className="h-3.5 w-3.5 text-zinc-500" />
-                        <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Risk Explanation</span>
-                        <span className="ml-auto text-zinc-600">
-                          {riskExplanationOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                        </span>
-                      </button>
-                      {riskExplanationOpen && (
-                        <p className="text-sm text-zinc-300 leading-relaxed pb-3">{aiAnalysis.riskExplanation}</p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Recommendation — Collapsible */}
-                  {aiAnalysis.recommendation && (
-                    <div className="border-t border-zinc-800">
-                      <button
-                        className="w-full py-3 flex items-center gap-2 text-left hover:opacity-80 transition-opacity"
-                        onClick={() => setRecommendationOpen(o => !o)}
-                      >
-                        <Target className="h-3.5 w-3.5 text-zinc-500" />
-                        <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">Recommendation</span>
-                        <span className="ml-auto text-zinc-600">
-                          {recommendationOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                        </span>
-                      </button>
-                      {recommendationOpen && (
-                        <p className="text-sm text-zinc-300 leading-relaxed pb-3">{aiAnalysis.recommendation}</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Protocol Toggle footer */}
-                <div className="bg-zinc-950 p-4 border-t border-zinc-800 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Droplets className={`h-4 w-4 ${isWaterloading ? 'text-blue-500' : 'text-zinc-600'}`} />
-                    <span className="text-sm font-medium text-zinc-400">Water Loading</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-zinc-500">{isWaterloading ? "On" : "Off"}</span>
-                    <input
-                      type="checkbox"
-                      checked={isWaterloading}
-                      onChange={(e) => setIsWaterloading(e.target.checked)}
-                      className="toggle-checkbox h-5 w-9 rounded-full bg-zinc-800 border-transparent appearance-none transition-colors checked:bg-blue-600 relative cursor-pointer
-                      after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-transform checked:after:translate-x-4"
-                    />
+                    ))}
                   </div>
                 </div>
-              </div>
-            ) : (
-              <div className="bg-zinc-900 rounded-3xl p-8 border border-zinc-800/50 text-center space-y-4">
-                <p className="text-zinc-400">No analysis available. Log your weight to get started.</p>
-                <Button onClick={getAIAnalysis} variant="outline" className="text-white border-zinc-700 hover:bg-zinc-800">
-                  Generate Analysis
-                </Button>
               </div>
             )}
           </div>
 
-          {/* Chart & History */}
-          {logs.length > 0 && (
-            <div className="space-y-4">
-              <h2 className="text-xl font-bold px-1">History</h2>
-              <div className="bg-zinc-900 rounded-3xl p-5 border border-zinc-800/50 overflow-hidden">
-                <div className="h-48 w-full -ml-2">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={getChartData()}>
-                      <XAxis
-                        dataKey="date"
-                        stroke="#52525b"
-                        fontSize={12}
-                        tickLine={false}
-                        axisLine={false}
-                        tickMargin={10}
-                      />
-                      <Tooltip
-                        contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '12px' }}
-                        itemStyle={{ color: '#fff' }}
-                        labelStyle={{ color: '#a1a1aa' }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="weight"
-                        stroke="hsl(var(--primary))"
-                        strokeWidth={3}
-                        dot={false}
-                        activeDot={{ r: 6, fill: "#fff", strokeWidth: 0 }}
-                      />
-                      <ReferenceLine y={plan.target_weight_kg} stroke="#3f3f46" strokeDasharray="3 3" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div className="mt-4 space-y-px bg-zinc-800 rounded-xl overflow-hidden border border-zinc-800">
-                  {logs.slice().reverse().map((log) => (
-                    <div key={log.id} className="flex items-center justify-between p-4 bg-zinc-900 hover:bg-zinc-800/80 transition-colors group">
-                      <div className="flex items-center gap-4">
-                        <div className="h-2 w-2 rounded-full bg-primary/50"></div>
-                        <div>
-                          <p className="font-semibold text-sm text-white">{format(new Date(log.log_date), "MMM dd")}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <span className="font-mono font-bold text-white">{log.weight_kg}kg</span>
-                        <button
-                          onClick={() => initiateDelete(log)}
-                          className="text-zinc-600 hover:text-red-500 transition-colors p-1"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
+          <DeleteConfirmDialog
+            open={deleteDialogOpen}
+            onOpenChange={setDeleteDialogOpen}
+            onConfirm={handleDeleteLog}
+            title="Delete Log"
+            itemName={logToDelete ? `entry from ${format(new Date(logToDelete.log_date), "MMM dd")}` : undefined}
+          />
         </div>
-
-        <DeleteConfirmDialog
-          open={deleteDialogOpen}
-          onOpenChange={setDeleteDialogOpen}
-          onConfirm={handleDeleteLog}
-          title="Delete Log"
-          itemName={logToDelete ? `entry from ${format(new Date(logToDelete.log_date), "MMM dd")}` : undefined}
-        />
-      </div>
+      </PullToRefresh>
     </>
   );
 }
