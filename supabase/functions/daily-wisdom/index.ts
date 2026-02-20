@@ -48,8 +48,6 @@ serve(async (req) => {
       aiRecommendedCalories,
       todayCalories,
       dailyCalorieGoal,
-      todayHydration,
-      hydrationGoalMl,
       weightHistory,
     } = await req.json();
 
@@ -69,8 +67,6 @@ serve(async (req) => {
 
     const calorieGoal = aiRecommendedCalories ?? dailyCalorieGoal;
     const caloriePercentage = calorieGoal > 0 ? (todayCalories / calorieGoal) * 100 : 0;
-    const hydGoal = hydrationGoalMl ?? 3000;
-    const hydrationPercentage = (todayHydration / hydGoal) * 100;
 
     // Summarise weight history for prompt
     const last7 = Array.isArray(weightHistory) ? weightHistory.slice(-7) : [];
@@ -86,8 +82,7 @@ Given today's snapshot of an athlete's data, produce a concise, personalised dai
 
 RULES:
 - Reference actual numbers (kg, kcal, days) in your advice.
-- Flag risk as "red" if requiredWeeklyKg > 1.5 or hydrationPercentage < 50.
-- Flag risk as "yellow" if requiredWeeklyKg > 1.0 or hydrationPercentage < 70.
+- Flag risk as "orange" if requiredWeeklyKg > 1.0.
 - Otherwise "green".
 - Keep summary ≤ 15 words.
 - adviceParagraph: 2-3 sentences of direct, personalised guidance.
@@ -96,7 +91,7 @@ RULES:
 OUTPUT (valid JSON only):
 {
   "summary": "One-line card preview max 15 words",
-  "riskLevel": "green|yellow|red",
+  "riskLevel": "green|orange",
   "riskReason": "Brief scientific justification",
   "daysToFight": 0,
   "weeklyPaceKg": 0.0,
@@ -104,8 +99,7 @@ OUTPUT (valid JSON only):
   "paceStatus": "on_track|ahead|behind|at_target",
   "adviceParagraph": "2-3 personalised sentences",
   "actionItems": ["item1", "item2", "item3"],
-  "nutritionStatus": "Short nutrition assessment",
-  "hydrationStatus": "Short hydration assessment"
+  "nutritionStatus": "Short nutrition assessment"
 }`;
 
     const userPrompt = `Athlete daily snapshot:
@@ -117,7 +111,6 @@ OUTPUT (valid JSON only):
 - TDEE: ${tdee ?? 'unknown'} kcal${bmr ? ` | BMR: ${bmr} kcal` : ''}
 - Activity: ${activityLevel ?? 'unknown'} | Age: ${age ?? 'unknown'} | Sex: ${sex ?? 'unknown'} | Height: ${heightCm ?? 'unknown'}cm
 - Today calories consumed: ${todayCalories} kcal / goal ${calorieGoal} kcal (${caloriePercentage.toFixed(0)}%)
-- Today hydration: ${(todayHydration / 1000).toFixed(2)}L / ${(hydGoal / 1000).toFixed(1)}L goal (${hydrationPercentage.toFixed(0)}%)
 - Last 7 weight logs: ${historyText}
 
 Compute weeklyPaceKg from last 7 logs if possible (loss per week). Set daysToFight = ${daysRemaining}. Set requiredWeeklyKg = ${requiredWeeklyKg.toFixed(2)}. Determine paceStatus vs required pace.`;
