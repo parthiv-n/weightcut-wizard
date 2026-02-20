@@ -14,12 +14,12 @@ export function withTimeout<T>(
 
 // Specific wrapper for Supabase queries
 export function withSupabaseTimeout<T>(
-  supabaseQuery: Promise<T>,
+  supabaseQuery: PromiseLike<T>,
   timeoutMs: number = 4000, // 4 second timeout for database queries to fail fast and retry
   operation: string = "Database query"
 ): Promise<T> {
   return withTimeout(
-    supabaseQuery,
+    Promise.resolve(supabaseQuery),
     timeoutMs,
     `${operation} timed out after ${timeoutMs}ms`
   );

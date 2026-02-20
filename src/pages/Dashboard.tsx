@@ -189,10 +189,10 @@ export default function Dashboard() {
         )
       ]);
 
-      const profileData = results[0].status === 'fulfilled' ? results[0].value.data : null;
-      const logsData = results[1].status === 'fulfilled' ? results[1].value.data : [];
-      const nutritionData = results[2].status === 'fulfilled' ? results[2].value.data : [];
-      const hydrationData = results[3].status === 'fulfilled' ? results[3].value.data : [];
+      const profileData = results[0].status === 'fulfilled' ? (results[0] as PromiseFulfilledResult<any>).value.data : null;
+      const logsData = results[1].status === 'fulfilled' ? (results[1] as PromiseFulfilledResult<any>).value.data : [];
+      const nutritionData = results[2].status === 'fulfilled' ? (results[2] as PromiseFulfilledResult<any>).value.data : [];
+      const hydrationData = results[3].status === 'fulfilled' ? (results[3] as PromiseFulfilledResult<any>).value.data : [];
 
       results.forEach((result, index) => {
         if (result.status === 'rejected') {
@@ -403,8 +403,8 @@ export default function Dashboard() {
             />
           </div>
 
-          {/* Stats Grid - Takes 2 columns on desktop, hidden on mobile */}
-          <div className="hidden lg:grid lg:col-span-2 gap-4 grid-cols-2">
+          {/* Stats Grid - Takes 1 column on desktop, hidden on mobile */}
+          <div className="hidden lg:grid lg:col-span-1 gap-4 grid-cols-1">
             {/* Calorie Progress - Takes 2 rows on desktop */}
             <div className="row-span-2">
               <CalorieProgressRing
@@ -423,19 +423,6 @@ export default function Dashboard() {
                 <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mt-1">days remaining</p>
               </CardContent>
             </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Today's Hydration</CardTitle>
-                <Droplets className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent className="p-4 sm:p-6">
-                <div className="text-3xl sm:text-4xl font-bold display-number">{(todayHydration / 1000).toFixed(1)}L</div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mt-1">
-                  {todayHydration >= 3000 ? "Great job!" : `${((3000 - todayHydration) / 1000).toFixed(1)}L to go`}
-                </p>
-              </CardContent>
-            </Card>
           </div>
 
           {/* Days Until Target - Order 3 on mobile only */}
@@ -447,20 +434,6 @@ export default function Dashboard() {
             <CardContent className="p-4 sm:p-6">
               <div className="text-3xl sm:text-4xl font-bold">{daysUntilTarget}</div>
               <p className="text-xs sm:text-sm text-muted-foreground mt-1">days remaining</p>
-            </CardContent>
-          </Card>
-
-          {/* Today's Hydration - Order 4 on mobile only */}
-          <Card className="order-4 lg:hidden">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Today's Hydration</CardTitle>
-              <Droplets className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent className="p-4 sm:p-6">
-              <div className="text-3xl sm:text-4xl font-bold">{(todayHydration / 1000).toFixed(1)}L</div>
-              <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                {todayHydration >= 3000 ? "Great job!" : `${((3000 - todayHydration) / 1000).toFixed(1)}L to go`}
-              </p>
             </CardContent>
           </Card>
         </div>
