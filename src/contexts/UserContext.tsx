@@ -3,7 +3,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { withAuthTimeout, withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
+import { Network } from "@capacitor/network";
 import { localCache } from "@/lib/localCache";
+import { fetchWithRetry } from "@/utils/retry";
+import type { Session } from "@supabase/supabase-js";
 
 export interface ProfileData {
   id?: string;
@@ -50,6 +53,9 @@ interface UserContextType {
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
+// Boot-flow timeout: if auth hasn't resolved after 5s, unblock the UI
+const AUTH_TIMEOUT_MS = 5000;
+
 export function UserProvider({ children }: { children: ReactNode }) {
   const [userName, setUserName] = useState<string>("");
   const [avatarUrl, setAvatarUrl] = useState<string>("");
@@ -60,7 +66,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [hasProfile, setHasProfile] = useState<boolean>(false);
   const [authError, setAuthError] = useState<boolean>(false);
-  const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
+  const [isOffline, setIsOffline] = useState<boolean>(false);
   const isUserLoadedRef = useRef(false);
   const userIdRef = useRef<string | null>(null);
   const profileRef = useRef<ProfileData | null>(null);
@@ -142,20 +148,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Internal: performs one load attempt. Returns 'success' | 'no_session' | 'error'.
-  // Does NOT touch isLoading, authError, or isUserLoadedRef.
-  const _performLoad = async (): Promise<'success' | 'no_session' | 'error'> => {
+  // Internal: performs one load attempt using the session already received
+  // from onAuthStateChange. Does NOT call getSession() — no blocking await.
+  // Returns 'success' | 'no_session' | 'error'.
+  const _performLoad = async (session: Session | null): Promise<'success' | 'no_session' | 'error'> => {
     try {
-      const { data: { session }, error } = await withAuthTimeout(
-        supabase.auth.getSession()
-      );
-
-      if (error) {
-        console.error("Auth session error:", error);
-        return 'error';
-      }
-
       if (!session?.user) {
+        console.debug('[auth] _performLoad: no session');
         setIsSessionValid(false);
         setUserId(null);
         userIdRef.current = null;
@@ -164,6 +163,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
 
       const user = session.user;
+      console.debug('[auth] _performLoad: user', user.id.slice(0, 8));
       setIsSessionValid(true);
       setUserId(user.id);
       userIdRef.current = user.id;
@@ -189,34 +189,47 @@ export function UserProvider({ children }: { children: ReactNode }) {
         // Resolve loading now so ProtectedRoute renders without waiting for DB
         isUserLoadedRef.current = true;
         setIsLoading(false);
+        console.debug('[auth] Served cached profile, unblocked UI');
       }
 
-      // Parallelize profile + weight queries
+      // Parallelize profile + weight queries with retry for first fetch
+      console.debug('[auth] Fetching profile + weight from DB');
       const [profileResult, weightResult] = await Promise.allSettled([
-        withSupabaseTimeout(
-          supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", user.id)
-            .maybeSingle(),
-          8000,
-          "Profile query"
+        fetchWithRetry(
+          () =>
+            withSupabaseTimeout(
+              supabase
+                .from("profiles")
+                .select("*")
+                .eq("id", user.id)
+                .maybeSingle(),
+              8000,
+              "Profile query"
+            ),
+          2, // 2 retries (3 total attempts)
+          1000
         ),
-        withSupabaseTimeout(
-          supabase
-            .from("weight_logs")
-            .select("weight_kg")
-            .eq("user_id", user.id)
-            .order("date", { ascending: false })
-            .limit(1)
-            .maybeSingle(),
-          8000,
-          "Weight log query"
+        fetchWithRetry(
+          () =>
+            withSupabaseTimeout(
+              supabase
+                .from("weight_logs")
+                .select("weight_kg")
+                .eq("user_id", user.id)
+                .order("date", { ascending: false })
+                .limit(1)
+                .maybeSingle(),
+              8000,
+              "Weight log query"
+            ),
+          2,
+          1000
         ),
       ]);
 
       // If both parallel queries failed (network error), treat as error to retry
       if (profileResult.status === "rejected" && weightResult.status === "rejected") {
+        console.debug('[auth] Both DB queries failed');
         return 'error';
       }
 
@@ -232,6 +245,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
           setAvatarUrl(profileData.avatar_url);
         }
         localCache.set(user.id, 'profiles', profileData);
+        console.debug('[auth] Profile loaded from DB');
       }
 
       const weight = latestWeightLog?.weight_kg || profileData?.current_weight_kg || null;
@@ -244,7 +258,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const loadUserData = async () => {
+  // sessionRef keeps the latest session for loadUserData to use without
+  // needing it as a parameter (e.g. from retryAuth, handleAppResume)
+  const sessionRef = useRef<Session | null>(null);
+
+  const loadUserData = async (session?: Session | null) => {
+    // Use passed session, or fall back to the ref (for retries/resume)
+    const activeSession = session !== undefined ? session : sessionRef.current;
+
     setAuthError(false);
     // Only show loading spinner if cache hasn't already resolved it
     if (!isUserLoadedRef.current) {
@@ -253,7 +274,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const DELAYS = [1000, 2000, 4000];
 
     for (let attempt = 0; attempt <= DELAYS.length; attempt++) {
-      const result = await _performLoad();
+      const result = await _performLoad(activeSession);
 
       if (result === 'success' || result === 'no_session') {
         isUserLoadedRef.current = true;
@@ -287,6 +308,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const retryAuth = async () => {
     setAuthError(false);
     setIsLoading(true);
+    // On retry, re-fetch session from Supabase since the stored one might be stale
+    try {
+      const { data: { session } } = await withAuthTimeout(supabase.auth.getSession());
+      sessionRef.current = session;
+    } catch {
+      // Will use whatever sessionRef has
+    }
     await loadUserData();
   };
 
@@ -317,12 +345,98 @@ export function UserProvider({ children }: { children: ReactNode }) {
     setAvatarUrl(url);
   };
 
+  // ── Network readiness check ──────────────────────────────────────────
   useEffect(() => {
+    let networkHandle: { remove: () => void } | null = null;
+
+    const initNetwork = async () => {
+      try {
+        const status = await Network.getStatus();
+        console.debug('[network] Initial status:', status.connected ? 'online' : 'offline');
+        setIsOffline(!status.connected);
+      } catch {
+        // Fallback to navigator.onLine on web
+        setIsOffline(!navigator.onLine);
+      }
+
+      try {
+        networkHandle = await Network.addListener('networkStatusChange', (status) => {
+          console.debug('[network] Status changed:', status.connected ? 'online' : 'offline');
+          setIsOffline(!status.connected);
+
+          if (status.connected) {
+            // Auto-reconnect if data not loaded yet
+            if (!userIdRef.current || !profileRef.current) {
+              loadUserData();
+            }
+            // Flush queued offline writes on reconnect
+            if (userIdRef.current) {
+              import('@/lib/syncQueue').then(({ syncQueue }) => {
+                syncQueue.process(userIdRef.current!).catch(() => {});
+              });
+            }
+          }
+        });
+      } catch {
+        // Fallback: browser events
+        const handleOnline = () => {
+          setIsOffline(false);
+          if (!userIdRef.current || !profileRef.current) {
+            loadUserData();
+          }
+          if (userIdRef.current) {
+            import('@/lib/syncQueue').then(({ syncQueue }) => {
+              syncQueue.process(userIdRef.current!).catch(() => {});
+            });
+          }
+        };
+        const handleOffline = () => setIsOffline(true);
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+        // Store cleanup refs
+        (window as any).__wcw_online = handleOnline;
+        (window as any).__wcw_offline = handleOffline;
+      }
+    };
+
+    initNetwork();
+
+    return () => {
+      networkHandle?.remove();
+      // Clean up fallback listeners if they were used
+      if ((window as any).__wcw_online) {
+        window.removeEventListener('online', (window as any).__wcw_online);
+        window.removeEventListener('offline', (window as any).__wcw_offline);
+        delete (window as any).__wcw_online;
+        delete (window as any).__wcw_offline;
+      }
+    };
+  }, []);
+
+  // ── Auth state listener + 5s timeout fallback ────────────────────────
+  useEffect(() => {
+    // 5-second fallback: if auth hasn't resolved by then, unblock the UI.
+    // This prevents the app from hanging on a loading screen indefinitely.
+    const fallbackTimer = setTimeout(() => {
+      if (!isUserLoadedRef.current) {
+        console.warn('[auth] 5s timeout — unblocking UI without auth resolution');
+        isUserLoadedRef.current = true;
+        setIsLoading(false);
+      }
+    }, AUTH_TIMEOUT_MS);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.debug('[auth] Event:', event, session ? `user=${session.user.id.slice(0, 8)}` : 'no-session');
+
+      // Keep sessionRef in sync for retryAuth / app resume
+      sessionRef.current = session;
+
       if (event === 'INITIAL_SESSION') {
         if (session?.user) {
-          await loadUserData();
+          await loadUserData(session);
         } else {
+          console.debug('[auth] INITIAL_SESSION: no user, unblocking');
+          isUserLoadedRef.current = true;
           setIsLoading(false);
         }
       } else if (event === 'SIGNED_OUT') {
@@ -347,7 +461,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         if (!isUserLoadedRef.current) {
           setIsLoading(true); // only for fresh logins, not token refreshes
         }
-        await loadUserData();
+        await loadUserData(session);
       }
     });
 
@@ -361,11 +475,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
     let visibilityHandler: (() => void) | null = null;
 
     const handleAppResume = () => {
+      console.debug('[lifecycle] App resumed');
       // If profile failed to load initially, do a full reload on resume
       if (!userIdRef.current || !profileRef.current) {
         loadUserData();
       } else {
-        checkSessionValidity();
+        // Refresh session to prevent stale token on resume
+        supabase.auth.refreshSession().catch(() => {});
       }
       // Flush any offline writes queued while the app was backgrounded
       if (userIdRef.current) {
@@ -387,37 +503,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
 
     return () => {
+      clearTimeout(fallbackTimer);
       subscription.unsubscribe();
       clearInterval(sessionCheckInterval);
       appResumeHandle?.remove();
       if (visibilityHandler) {
         document.removeEventListener('visibilitychange', visibilityHandler);
       }
-    };
-  }, []);
-
-  // Network online/offline detection + auto-reconnect
-  useEffect(() => {
-    const handleOnline = () => {
-      setIsOffline(false);
-      // Auto-reconnect if data not loaded yet
-      if (!userIdRef.current || !profileRef.current) {
-        loadUserData();
-      }
-      // Flush queued offline writes on reconnect
-      if (userIdRef.current) {
-        import('@/lib/syncQueue').then(({ syncQueue }) => {
-          syncQueue.process(userIdRef.current!).catch(() => {});
-        });
-      }
-    };
-    const handleOffline = () => setIsOffline(true);
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
