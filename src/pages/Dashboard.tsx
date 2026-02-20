@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { Droplets, TrendingDown, Calendar, Lock, ChevronRight, Flame, Zap, CheckCircle2 } from "lucide-react";
+import { RefreshCw, TrendingDown, Calendar, Lock, ChevronRight, Flame, Zap, CheckCircle2, PlusCircle } from "lucide-react";
 import wizardLogo from "@/assets/wizard-logo.png";
 import { WeightProgressRing } from "@/components/dashboard/WeightProgressRing";
 import { CalorieProgressRing } from "@/components/dashboard/CalorieProgressRing";
@@ -37,6 +37,7 @@ export default function Dashboard() {
   const [profile, setProfile] = useState<any>(null);
   const [weightLogs, setWeightLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lb'>('kg');
   const [todayCalories, setTodayCalories] = useState(0);
   const [todayHydration, setTodayHydration] = useState(0);
@@ -159,6 +160,11 @@ export default function Dashboard() {
       return;
     }
 
+    // Only show refresh if we already have data (bypassing the full skeleton)
+    if (profile) {
+      setIsRefreshing(true);
+    }
+
     try {
       const today = new Date().toISOString().split('T')[0];
 
@@ -245,6 +251,7 @@ export default function Dashboard() {
       }
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -323,9 +330,29 @@ export default function Dashboard() {
     <ErrorBoundary>
       <div className="space-y-5 sm:space-y-6 p-4 sm:p-5 md:p-6 w-full max-w-7xl mx-auto">
         {/* Greeting header */}
-        <div className="dashboard-card-enter dashboard-stagger-1">
-          <h1 className="text-2xl font-bold">{getGreeting()}, {userName || "Fighter"}</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Your weight cut journey dashboard</p>
+        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-3xl font-bold tracking-tight">{getGreeting()}, {userName || 'Fighter'}</h1>
+              {isRefreshing && !loading && (
+                <div className="flex items-center text-xs font-medium text-muted-foreground bg-muted/50 px-2.5 py-1 rounded-full border border-border/50 animate-in fade-in duration-300">
+                  <RefreshCw className="h-3 w-3 mr-1.5 animate-spin" />
+                  Syncing
+                </div>
+              )}
+            </div>
+            <p className="text-muted-foreground mt-1 text-base">Here's your weight cut progress today.</p>
+          </div>
+          {profile && !profile.manual_nutrition_override && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full md:w-auto"
+              onClick={() => navigate('/nutrition')}
+            >
+              <PlusCircle className="h-4 w-4 mr-2" /> Log Nutrition
+            </Button>
+          )}
         </div>
 
         {/* Wizard's Daily Wisdom card — conditional states */}
@@ -451,19 +478,6 @@ export default function Dashboard() {
                 <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mt-1">days remaining</p>
               </CardContent>
             </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Today's Hydration</CardTitle>
-                <Droplets className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent className="p-4 sm:p-6">
-                <div className="text-3xl sm:text-4xl font-bold display-number">{(todayHydration / 1000).toFixed(1)}L</div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mt-1">
-                  {todayHydration >= 3000 ? "Great job!" : `${((3000 - todayHydration) / 1000).toFixed(1)}L to go`}
-                </p>
-              </CardContent>
-            </Card>
           </div>
 
           {/* Days Until Target - Order 3 on mobile only */}
@@ -475,20 +489,6 @@ export default function Dashboard() {
             <CardContent className="p-4 sm:p-6">
               <div className="text-3xl sm:text-4xl font-bold">{daysUntilTarget}</div>
               <p className="text-xs sm:text-sm text-muted-foreground mt-1">days remaining</p>
-            </CardContent>
-          </Card>
-
-          {/* Today's Hydration - Order 4 on mobile only */}
-          <Card className="order-4 lg:hidden">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Today's Hydration</CardTitle>
-              <Droplets className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent className="p-4 sm:p-6">
-              <div className="text-3xl sm:text-4xl font-bold">{(todayHydration / 1000).toFixed(1)}L</div>
-              <p className="text-xs sm:text-sm text-muted-foreground mt-1">
-                {todayHydration >= 3000 ? "Great job!" : `${((3000 - todayHydration) / 1000).toFixed(1)}L to go`}
-              </p>
             </CardContent>
           </Card>
         </div>
