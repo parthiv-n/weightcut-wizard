@@ -51,7 +51,6 @@ export default function Hydration() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [weightLost, setWeightLost] = useState("");
   const [weighInTiming, setWeighInTiming] = useState<string>("same-day");
-  const [fightTimeHours, setFightTimeHours] = useState("");
   const [startTime, setStartTime] = useState<string>("16:00");
   const [protocol, setProtocol] = useState<RehydrationProtocol | null>(null);
   const [loading, setLoading] = useState(false);
@@ -84,7 +83,6 @@ export default function Hydration() {
         if (persistedData.inputs) {
           setWeightLost(persistedData.inputs.weightLost || "");
           setWeighInTiming(persistedData.inputs.weighInTiming || "same-day");
-          setFightTimeHours(persistedData.inputs.fightTimeHours || "");
           setStartTime(persistedData.inputs.startTime || "16:00");
         }
       }
@@ -105,7 +103,6 @@ export default function Hydration() {
           weightLostKg: parseFloat(weightLost),
           weighInTiming,
           currentWeightKg: profile.current_weight_kg,
-          fightTimeHours: parseInt(fightTimeHours),
         },
       });
 
@@ -120,7 +117,6 @@ export default function Hydration() {
             inputs: {
               weightLost,
               weighInTiming,
-              fightTimeHours,
               startTime
             }
           }, 168);
@@ -145,6 +141,18 @@ export default function Hydration() {
 
   const toggleStep = (idx: number) => setExpandedStep(prev => prev === idx ? null : idx);
   const toggleMeal = (idx: number) => setExpandedMeal(prev => prev === idx ? null : idx);
+
+  // Calculate dynamic ring color based on % body weight lost
+  const getWeightLossColor = () => {
+    if (!profile?.current_weight_kg || !weightLost) return "text-blue-500 border-blue-500/20";
+    const lossPercentage = (parseFloat(weightLost) / profile.current_weight_kg) * 100;
+
+    // Up to 5% is generally safe, 5-8% is moderate/high risk, >8% is extreme
+    if (lossPercentage <= 5) return "text-emerald-500 border-emerald-500/20 drop-shadow-[0_0_15px_rgba(16,185,129,0.3)]";
+    if (lossPercentage <= 8) return "text-amber-500 border-amber-500/20 drop-shadow-[0_0_15px_rgba(245,158,11,0.3)]";
+    return "text-red-500 border-red-500/20 drop-shadow-[0_0_15px_rgba(239,68,68,0.3)]";
+  };
+  const ringColorClasses = getWeightLossColor();
 
   const formatTime = (startStr: string, hourIndex: number) => {
     if (!startStr) return `H${hourIndex}`;
@@ -199,10 +207,10 @@ export default function Hydration() {
             {/* Weight Lost Ring */}
             <div className="flex flex-col items-center justify-center space-y-3">
               <p className="text-[11px] text-blue-400 font-bold uppercase tracking-[0.2em]">Weight Lost (kg)</p>
-              <div className="relative w-36 h-36 rounded-full border-[6px] border-blue-500/20 flex flex-col items-center justify-center bg-black shadow-[0_0_40px_rgba(59,130,246,0.15)] ring-1 ring-white/5">
-                {/* Simulated inner progress ring (static decorative) */}
+              <div className={`relative w-36 h-36 rounded-full border-[6px] transition-colors duration-500 flex flex-col items-center justify-center bg-black ring-1 ring-white/5 ${ringColorClasses.split(' ')[1]} ${ringColorClasses.split(' ')[2] || ''}`}>
+                {/* Simulated inner progress ring */}
                 <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" className="text-blue-500" strokeWidth="6" strokeDasharray="289" strokeDashoffset="40" strokeLinecap="round" />
+                  <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" className={`transition-colors duration-500 ${ringColorClasses.split(' ')[0]}`} strokeWidth="6" strokeDasharray="289" strokeDashoffset="40" strokeLinecap="round" />
                 </svg>
                 <Input
                   type="number"
@@ -217,44 +225,39 @@ export default function Hydration() {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              {/* Fight Time Hours */}
-              <div className="flex flex-col items-center justify-center space-y-2 bg-zinc-900/80 rounded-2xl p-4 border border-white/5 shadow-inner">
-                <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest text-center">Hours to Fight</p>
-                <Input
-                  type="number"
-                  placeholder="24"
-                  value={fightTimeHours}
-                  onChange={(e) => setFightTimeHours(e.target.value)}
-                  required
-                  className="text-center text-3xl font-black bg-transparent border-none text-white focus-visible:ring-0 placeholder:text-white/20 p-0 h-auto"
-                />
+              {/* Weigh-in Type Toggle */}
+              <div className="flex flex-col justify-center space-y-2 bg-zinc-900/80 rounded-2xl p-4 border border-white/5 shadow-inner col-span-1">
+                <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest text-center">Weigh-In</p>
+                <div className="w-full h-full flex flex-col gap-1.5 justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setWeighInTiming("same-day")}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${weighInTiming === "same-day" ? "bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.3)]" : "bg-zinc-800 text-white/50 hover:bg-zinc-700"}`}
+                  >
+                    Same Day
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWeighInTiming("day-before")}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${weighInTiming === "day-before" ? "bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.3)]" : "bg-zinc-800 text-white/50 hover:bg-zinc-700"}`}
+                  >
+                    Day Before
+                  </button>
+                </div>
               </div>
 
               {/* Start Time */}
-              <div className="flex flex-col items-center justify-center space-y-2 bg-zinc-900/80 rounded-2xl p-4 border border-white/5 shadow-inner">
-                <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest text-center">Weigh-in Time</p>
+              <div className="flex flex-col items-center justify-center space-y-2 bg-zinc-900/80 rounded-2xl p-4 border border-white/5 shadow-inner col-span-1">
+                <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest text-center">Time</p>
                 <Input
                   type="time"
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
                   required
-                  className="text-center text-xl font-bold bg-transparent border-none text-white focus-visible:ring-0 p-0 h-auto [&::-webkit-calendar-picker-indicator]:filter-[invert(1)] [&::-webkit-calendar-picker-indicator]:opacity-50"
+                  className="text-center text-2xl font-black bg-transparent border-none text-white focus-visible:ring-0 p-0 h-auto [&::-webkit-calendar-picker-indicator]:filter-[invert(1)] [&::-webkit-calendar-picker-indicator]:opacity-50 mt-2"
                   title="Weigh-in time"
                 />
               </div>
-            </div>
-
-            <div className="space-y-1.5 pt-2">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-widest text-center font-medium">Weigh-In Type</p>
-              <Select value={weighInTiming} onValueChange={setWeighInTiming}>
-                <SelectTrigger className="h-11 text-sm bg-zinc-900 border-white/10 rounded-xl font-medium focus:ring-1 focus:ring-white/20">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="bg-zinc-900 border-white/10 text-white">
-                  <SelectItem value="same-day">Same Day (4–6 hrs before)</SelectItem>
-                  <SelectItem value="day-before">Day Before (24+ hrs before)</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
 
             <Button

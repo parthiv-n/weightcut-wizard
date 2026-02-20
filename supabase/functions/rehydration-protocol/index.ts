@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import knowledgeData from "./chatbot-index.json" assert { type: "json" };
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,12 +12,14 @@ serve(async (req) => {
   }
 
   try {
-    const { weightLostKg, weighInTiming, currentWeightKg, fightTimeHours } = await req.json();
+    const { weightLostKg, weighInTiming, currentWeightKg } = await req.json();
     const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
 
     if (!MINIMAX_API_KEY) {
       throw new Error("MINIMAX_API_KEY is not configured");
     }
+
+    const researchContext = knowledgeData.map((doc: any) => `## Source: ${doc.title}\n${doc.content}`).join('\n\n');
 
     const systemPrompt = `You are the Weight Cut Wizard, a science-based combat sports rehydration expert. You PRIORITIZE fighter safety and performance.
 
@@ -28,11 +31,18 @@ CRITICAL SAFETY PRINCIPLES:
 - Target 5-10g carbs per kg body weight post weigh-in
 - Avoid high fiber, high fat foods that slow digestion
 
+YOUR KNOWLEDGE BASE (Scientific Research):
+The following are full-text research papers and protocols on combat sports nutrition and rehydration. You MUST base your fluid schedules, electrolyte ratios, and carbohydrate protocols STRICTLY on the data provided in these papers. Do not hallucinate statistics or generalize internet advice. Retrieve exact scientific protocols from this context.
+
+<knowledge>
+${researchContext}
+</knowledge>
+
 You provide evidence-based rehydration protocols based on:
 - Weight lost via dehydration
-- Time between weigh-in and fight
+- The specific weigh-in schedule chosen (Same Day vs Day Before)
 - Body weight
-- Scientific literature on combat sports rehydration
+- The scientific literature provided in your knowledge base
 
 OUTPUT FORMAT - You must respond with valid JSON only:
 {
@@ -79,9 +89,19 @@ Use these evidence-based guidelines:
 
     const userPrompt = `Create a rehydration protocol for:
 - Weight lost via dehydration: ${weightLostKg}kg
-- Weigh-in timing: ${weighInTiming}
+- Weigh-in timing: ${weighInTiming} (THIS IS CRITICAL FOR YOUR TIMELINE)
 - Current weight: ${currentWeightKg}kg
-- Time until fight: ${fightTimeHours} hours
+
+CRITICAL TIMELINE INSTRUCTIONS:
+If Weigh-in timing is "same-day":
+- You MUST generate an aggressive, fast-absorbing protocol.
+- The \`hourlyProtocol\` array MUST cover exactly 4 to 6 hours total. Do not generate 24 hours of data.
+- Prioritize liquid carbs and fast gastric emptying.
+
+If Weigh-in timing is "day-before":
+- You MUST generate a prolonged, massive carbohydrate super-compensation protocol.
+- The \`hourlyProtocol\` array MUST cover at least 12 and up to 24 hours.
+- Transition from liquids to solid, high-carb low-fiber meals after the first 3 hours.
 
 Provide:
 1. Hour-by-hour rehydration protocol with specific fluid volumes and electrolyte content

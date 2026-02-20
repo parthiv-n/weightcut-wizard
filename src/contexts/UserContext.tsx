@@ -36,6 +36,7 @@ interface UserContextType {
   isLoading: boolean;
   hasProfile: boolean;
   authError: boolean;
+  isOffline: boolean;
   setUserName: (name: string) => void;
   setAvatarUrl: (url: string) => void;
   updateCurrentWeight: (weight: number) => Promise<void>;
@@ -58,8 +59,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [hasProfile, setHasProfile] = useState<boolean>(false);
   const [authError, setAuthError] = useState<boolean>(false);
+  const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
   const isUserLoadedRef = useRef(false);
   const userIdRef = useRef<string | null>(null);
+  const profileRef = useRef<ProfileData | null>(null);
 
   const checkSessionValidity = async (): Promise<boolean> => {
     try {
@@ -126,6 +129,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
       if (data) {
         setProfile(data);
+        profileRef.current = data;
         setHasProfile(true);
         if (data.avatar_url) setAvatarUrl(data.avatar_url);
         const weight = data.current_weight_kg ?? null;
@@ -136,27 +140,25 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const loadUserData = async () => {
-    setAuthError(false);
-
+  // Internal: performs one load attempt. Returns 'success' | 'no_session' | 'error'.
+  // Does NOT touch isLoading, authError, or isUserLoadedRef.
+  const _performLoad = async (): Promise<'success' | 'no_session' | 'error'> => {
     try {
       const { data: { session }, error } = await withAuthTimeout(
         supabase.auth.getSession()
       );
 
-      if (error || !session?.user) {
+      if (error) {
+        console.error("Auth session error:", error);
+        return 'error';
+      }
+
+      if (!session?.user) {
         setIsSessionValid(false);
         setUserId(null);
         userIdRef.current = null;
         setHasProfile(false);
-
-        if (error) {
-          console.error("Auth session error:", error);
-          setAuthError(true);
-        }
-
-        setIsLoading(false);
-        return;
+        return 'no_session';
       }
 
       const user = session.user;
@@ -198,6 +200,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
         ),
       ]);
 
+      // If both parallel queries failed (network error), treat as error to retry
+      if (profileResult.status === "rejected" && weightResult.status === "rejected") {
+        return 'error';
+      }
+
       const profileData = profileResult.status === "fulfilled" ? profileResult.value.data : null;
       const latestWeightLog = weightResult.status === "fulfilled" ? weightResult.value.data : null;
 
@@ -205,6 +212,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
       if (profileData) {
         setProfile(profileData);
+        profileRef.current = profileData;
         if (profileData.avatar_url) {
           setAvatarUrl(profileData.avatar_url);
         }
@@ -212,17 +220,42 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
       const weight = latestWeightLog?.weight_kg || profileData?.current_weight_kg || null;
       setCurrentWeight(weight);
+
+      return 'success';
     } catch (error) {
       console.error("Error loading user data:", error);
-      setAuthError(true);
-      setIsSessionValid(false);
-      setUserId(null);
-      userIdRef.current = null;
-      setHasProfile(false);
-    } finally {
-      setIsLoading(false);
-      isUserLoadedRef.current = true;
+      return 'error';
     }
+  };
+
+  const loadUserData = async () => {
+    setAuthError(false);
+    setIsLoading(true);
+    const DELAYS = [1000, 2000, 4000];
+
+    for (let attempt = 0; attempt <= DELAYS.length; attempt++) {
+      const result = await _performLoad();
+
+      if (result === 'success' || result === 'no_session') {
+        isUserLoadedRef.current = true;
+        setIsLoading(false);
+        return;
+      }
+
+      // 'error' — retry unless exhausted
+      if (attempt < DELAYS.length) {
+        await new Promise(r => setTimeout(r, DELAYS[attempt]));
+      }
+    }
+
+    // All retries failed → show error UI
+    setAuthError(true);
+    setIsSessionValid(false);
+    setUserId(null);
+    userIdRef.current = null;
+    setHasProfile(false);
+    isUserLoadedRef.current = true;
+    setIsLoading(false);
   };
 
   const retryAuth = async () => {
@@ -233,7 +266,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const updateCurrentWeight = async (weight: number) => {
     setCurrentWeight(weight);
-    setProfile(prev => prev ? { ...prev, current_weight_kg: weight } : prev);
+    setProfile(prev => {
+      const updated = prev ? { ...prev, current_weight_kg: weight } : prev;
+      profileRef.current = updated;
+      return updated;
+    });
 
     if (userId) {
       await supabase
@@ -271,6 +308,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setAvatarUrl("");
         setCurrentWeight(null);
         setProfile(null);
+        profileRef.current = null;
         setHasProfile(false);
         setIsLoading(false);
       } else if (event === 'TOKEN_REFRESHED' && session) {
@@ -289,17 +327,26 @@ export function UserProvider({ children }: { children: ReactNode }) {
       await checkSessionValidity();
     }, 30 * 60 * 1000);
 
-    // Proactive session refresh on app resume
+    // Proactive session refresh / full reload on app resume
     let appResumeHandle: { remove: () => void } | null = null;
     let visibilityHandler: (() => void) | null = null;
 
+    const handleAppResume = () => {
+      // If profile failed to load initially, do a full reload on resume
+      if (!userIdRef.current || !profileRef.current) {
+        loadUserData();
+      } else {
+        checkSessionValidity();
+      }
+    };
+
     if (Capacitor.isNativePlatform()) {
       CapacitorApp.addListener('appStateChange', ({ isActive }) => {
-        if (isActive) checkSessionValidity();
+        if (isActive) handleAppResume();
       }).then(h => { appResumeHandle = h; });
     } else {
       visibilityHandler = () => {
-        if (document.visibilityState === 'visible') checkSessionValidity();
+        if (document.visibilityState === 'visible') handleAppResume();
       };
       document.addEventListener('visibilitychange', visibilityHandler);
     }
@@ -311,6 +358,25 @@ export function UserProvider({ children }: { children: ReactNode }) {
       if (visibilityHandler) {
         document.removeEventListener('visibilitychange', visibilityHandler);
       }
+    };
+  }, []);
+
+  // Network online/offline detection + auto-reconnect
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOffline(false);
+      // Auto-reconnect if data not loaded yet
+      if (!userIdRef.current || !profileRef.current) {
+        loadUserData();
+      }
+    };
+    const handleOffline = () => setIsOffline(true);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
@@ -326,6 +392,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         isLoading,
         hasProfile,
         authError,
+        isOffline,
         setUserName: updateUserName,
         setAvatarUrl: updateAvatarUrl,
         updateCurrentWeight,

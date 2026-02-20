@@ -99,6 +99,7 @@ export default function WeightTracker() {
   const { updateCurrentWeight, userId } = useUser();
   const [searchParams, setSearchParams] = useSearchParams();
   const weightInputRef = useRef<HTMLInputElement>(null);
+  const [timeFilter, setTimeFilter] = useState<"1W" | "1M" | "ALL">("1M");
 
   useEffect(() => {
     fetchData();
@@ -542,7 +543,24 @@ export default function WeightTracker() {
       return [];
     }
 
-    const data = weightLogs.map((log) => ({
+    let filteredLogs = [...weightLogs];
+    const now = new Date();
+
+    if (timeFilter === "1W") {
+      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      filteredLogs = filteredLogs.filter(log => new Date(log.date) >= oneWeekAgo);
+    } else if (timeFilter === "1M") {
+      const oneMonthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+      filteredLogs = filteredLogs.filter(log => new Date(log.date) >= oneMonthAgo);
+    }
+
+    // If filtering results in empty array but we have data overall, 
+    // just show the latest raw data point so the graph isn't entirely blank
+    if (filteredLogs.length === 0 && weightLogs.length > 0) {
+      filteredLogs = [weightLogs[weightLogs.length - 1]];
+    }
+
+    const data = filteredLogs.map((log) => ({
       date: format(new Date(log.date), "MMM dd"),
       weight: log.weight_kg,
       fightWeekGoal: fightWeekTarget,
@@ -692,7 +710,24 @@ export default function WeightTracker() {
         <h1 className="text-xl font-bold">Weight</h1>
         {/* Chart + History */}
         <div className="glass-card p-4 space-y-4">
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Progress Chart</p>
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Progress Chart</p>
+            {/* Time Filter Toggle */}
+            <div className="flex bg-muted rounded-full p-0.5 border border-white/5">
+              {(["1W", "1M", "ALL"] as const).map((filter) => (
+                <button
+                  key={filter}
+                  onClick={() => setTimeFilter(filter)}
+                  className={`px-3 py-1 rounded-full text-[10px] font-bold transition-all ${timeFilter === filter
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                    }`}
+                >
+                  {filter}
+                </button>
+              ))}
+            </div>
+          </div>
           {getChartData().length > 0 ? (
             <>
               <ResponsiveContainer width="100%" height={200}>
@@ -812,7 +847,7 @@ export default function WeightTracker() {
 
         {/* Header + Inline Log Form */}
         <div className="flex flex-col gap-3">
-            <form onSubmit={handleAddWeight} className="flex gap-2 items-center">
+          <form onSubmit={handleAddWeight} className="flex gap-2 items-center">
             <Input
               ref={weightInputRef}
               type="number"
