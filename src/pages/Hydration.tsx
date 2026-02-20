@@ -51,7 +51,7 @@ export default function Hydration() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [weightLost, setWeightLost] = useState("");
   const [weighInTiming, setWeighInTiming] = useState<string>("same-day");
-  const [fightTimeHours, setFightTimeHours] = useState("");
+  const [startTime, setStartTime] = useState<string>("16:00");
   const [protocol, setProtocol] = useState<RehydrationProtocol | null>(null);
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<"fluid" | "carbs">("fluid");
@@ -83,7 +83,7 @@ export default function Hydration() {
         if (persistedData.inputs) {
           setWeightLost(persistedData.inputs.weightLost || "");
           setWeighInTiming(persistedData.inputs.weighInTiming || "same-day");
-          setFightTimeHours(persistedData.inputs.fightTimeHours || "");
+          setStartTime(persistedData.inputs.startTime || "16:00");
         }
       }
     } catch (error) {
@@ -103,7 +103,6 @@ export default function Hydration() {
           weightLostKg: parseFloat(weightLost),
           weighInTiming,
           currentWeightKg: profile.current_weight_kg,
-          fightTimeHours: parseInt(fightTimeHours),
         },
       });
 
@@ -118,7 +117,7 @@ export default function Hydration() {
             inputs: {
               weightLost,
               weighInTiming,
-              fightTimeHours
+              startTime
             }
           }, 168);
         }
@@ -142,6 +141,28 @@ export default function Hydration() {
 
   const toggleStep = (idx: number) => setExpandedStep(prev => prev === idx ? null : idx);
   const toggleMeal = (idx: number) => setExpandedMeal(prev => prev === idx ? null : idx);
+
+  // Calculate dynamic ring color based on % body weight lost
+  const getWeightLossColor = () => {
+    if (!profile?.current_weight_kg || !weightLost) return "text-blue-500 border-blue-500/20";
+    const lossPercentage = (parseFloat(weightLost) / profile.current_weight_kg) * 100;
+
+    // Up to 5% is generally safe, 5-8% is moderate/high risk, >8% is extreme
+    if (lossPercentage <= 5) return "text-emerald-500 border-emerald-500/20 drop-shadow-[0_0_15px_rgba(16,185,129,0.3)]";
+    if (lossPercentage <= 8) return "text-amber-500 border-amber-500/20 drop-shadow-[0_0_15px_rgba(245,158,11,0.3)]";
+    return "text-red-500 border-red-500/20 drop-shadow-[0_0_15px_rgba(239,68,68,0.3)]";
+  };
+  const ringColorClasses = getWeightLossColor();
+
+  const formatTime = (startStr: string, hourIndex: number) => {
+    if (!startStr) return `H${hourIndex}`;
+    const [h, m] = startStr.split(':').map(Number);
+    if (isNaN(h) || isNaN(m)) return `H${hourIndex}`;
+    const d = new Date();
+    d.setHours(h, m, 0, 0);
+    d.setHours(d.getHours() + (hourIndex - 1));
+    return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  };
 
   // Define steps for rehydration protocol generation
   const REHYDRATION_STEPS = [
@@ -177,51 +198,71 @@ export default function Hydration() {
           </p>
         </div>
 
-        {/* Input Form — glass card */}
-        <div className="rounded-2xl bg-white/5 border border-white/10 p-4 mb-4">
-          <form onSubmit={handleGenerateProtocol} className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Weight Lost (kg)</p>
+        {/* Input Form — Apple Watch OLED Aesthetic */}
+        <div className="rounded-3xl bg-zinc-950 border border-white/10 p-6 mb-6 shadow-2xl relative overflow-hidden">
+          {/* Subtle glow background */}
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[200px] h-[200px] bg-blue-500/20 opacity-40 blur-[80px] rounded-full point-events-none"></div>
+
+          <form onSubmit={handleGenerateProtocol} className="space-y-6 relative z-10">
+            {/* Weight Lost Ring */}
+            <div className="flex flex-col items-center justify-center space-y-3">
+              <p className="text-[11px] text-blue-400 font-bold uppercase tracking-[0.2em]">Weight Lost (kg)</p>
+              <div className={`relative w-36 h-36 rounded-full border-[6px] transition-colors duration-500 flex flex-col items-center justify-center bg-black ring-1 ring-white/5 ${ringColorClasses.split(' ')[1]} ${ringColorClasses.split(' ')[2] || ''}`}>
+                {/* Simulated inner progress ring */}
+                <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" className={`transition-colors duration-500 ${ringColorClasses.split(' ')[0]}`} strokeWidth="6" strokeDasharray="289" strokeDashoffset="40" strokeLinecap="round" />
+                </svg>
                 <Input
                   type="number"
                   step="0.1"
-                  placeholder="2.5"
+                  placeholder="0.0"
                   value={weightLost}
                   onChange={(e) => setWeightLost(e.target.value)}
                   required
-                  className="h-9 text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Hours Until Fight</p>
-                <Input
-                  type="number"
-                  placeholder="6"
-                  value={fightTimeHours}
-                  onChange={(e) => setFightTimeHours(e.target.value)}
-                  required
-                  className="h-9 text-sm"
+                  className="w-24 text-center text-4xl font-black bg-transparent border-none text-white focus-visible:ring-0 placeholder:text-white/20 p-0 h-auto z-10"
                 />
               </div>
             </div>
 
-            <div className="space-y-1">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Weigh-In Timing</p>
-              <Select value={weighInTiming} onValueChange={setWeighInTiming}>
-                <SelectTrigger className="h-9 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="same-day">Same Day (4–6 hrs before fight)</SelectItem>
-                  <SelectItem value="day-before">Day Before (24+ hrs before fight)</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4">
+              {/* Weigh-in Type Toggle */}
+              <div className="flex flex-col justify-center space-y-2 bg-zinc-900/80 rounded-2xl p-4 border border-white/5 shadow-inner col-span-1">
+                <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest text-center">Weigh-In</p>
+                <div className="w-full h-full flex flex-col gap-1.5 justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setWeighInTiming("same-day")}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${weighInTiming === "same-day" ? "bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.3)]" : "bg-zinc-800 text-white/50 hover:bg-zinc-700"}`}
+                  >
+                    Same Day
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setWeighInTiming("day-before")}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${weighInTiming === "day-before" ? "bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.3)]" : "bg-zinc-800 text-white/50 hover:bg-zinc-700"}`}
+                  >
+                    Day Before
+                  </button>
+                </div>
+              </div>
+
+              {/* Start Time */}
+              <div className="flex flex-col items-center justify-center space-y-2 bg-zinc-900/80 rounded-2xl p-4 border border-white/5 shadow-inner col-span-1">
+                <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest text-center">Time</p>
+                <Input
+                  type="time"
+                  value={startTime}
+                  onChange={(e) => setStartTime(e.target.value)}
+                  required
+                  className="text-center text-2xl font-black bg-transparent border-none text-white focus-visible:ring-0 p-0 h-auto [&::-webkit-calendar-picker-indicator]:filter-[invert(1)] [&::-webkit-calendar-picker-indicator]:opacity-50 mt-2"
+                  title="Weigh-in time"
+                />
+              </div>
             </div>
 
             <Button
               type="submit"
-              className="w-full h-10 bg-blue-500 hover:bg-blue-600 text-white font-medium text-sm rounded-xl"
+              className="w-full h-12 mt-2 bg-white text-black hover:bg-zinc-200 font-bold text-base rounded-2xl transition-all active:scale-[0.98] shadow-[0_0_20px_rgba(255,255,255,0.1)]"
               disabled={loading}
             >
               {loading ? "Generating Protocol..." : "Generate Protocol"}
@@ -397,9 +438,12 @@ export default function Hydration() {
                         className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-white/5 transition-colors"
                         onClick={() => toggleStep(idx)}
                       >
-                        <span className="text-[10px] font-medium text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-md px-1.5 py-0.5 shrink-0">
-                          H{step.hour}
-                        </span>
+                        <div className="flex flex-col items-center justify-center bg-zinc-900 border border-white/10 rounded-xl px-2 py-1.5 shrink-0 min-w-[64px] shadow-sm">
+                          <span className="text-[9px] font-bold text-blue-500 uppercase tracking-wider">Hour {step.hour}</span>
+                          <span className="text-xs font-bold text-white">
+                            {formatTime(startTime, step.hour)}
+                          </span>
+                        </div>
                         <span className="text-sm font-semibold tabular-nums text-foreground">
                           {step.fluidML}ml
                         </span>
