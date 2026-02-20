@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { withAuthTimeout, withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
+import { localCache } from "@/lib/localCache";
 
 export interface ProfileData {
   id?: string;
@@ -134,6 +135,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         if (data.avatar_url) setAvatarUrl(data.avatar_url);
         const weight = data.current_weight_kg ?? null;
         if (weight !== null) setCurrentWeight(weight);
+        localCache.set(uid, 'profiles', data);
       }
     } catch (error) {
       console.error("Error refreshing profile:", error);
@@ -176,6 +178,19 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setUserName(formattedName);
       }
 
+      // Cold-start seed: serve from cache immediately so the app never blocks on DB
+      const cachedProfile = localCache.get<ProfileData>(user.id, 'profiles');
+      if (cachedProfile) {
+        setProfile(cachedProfile);
+        profileRef.current = cachedProfile;
+        setHasProfile(true);
+        if (cachedProfile.avatar_url) setAvatarUrl(cachedProfile.avatar_url);
+        if (cachedProfile.current_weight_kg) setCurrentWeight(cachedProfile.current_weight_kg);
+        // Resolve loading now so ProtectedRoute renders without waiting for DB
+        isUserLoadedRef.current = true;
+        setIsLoading(false);
+      }
+
       // Parallelize profile + weight queries
       const [profileResult, weightResult] = await Promise.allSettled([
         withSupabaseTimeout(
@@ -216,6 +231,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         if (profileData.avatar_url) {
           setAvatarUrl(profileData.avatar_url);
         }
+        localCache.set(user.id, 'profiles', profileData);
       }
 
       const weight = latestWeightLog?.weight_kg || profileData?.current_weight_kg || null;
@@ -230,7 +246,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const loadUserData = async () => {
     setAuthError(false);
-    setIsLoading(true);
+    // Only show loading spinner if cache hasn't already resolved it
+    if (!isUserLoadedRef.current) {
+      setIsLoading(true);
+    }
     const DELAYS = [1000, 2000, 4000];
 
     for (let attempt = 0; attempt <= DELAYS.length; attempt++) {
@@ -248,7 +267,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // All retries failed → show error UI
+    // All retries failed
+    // If cache already served content, don't show error screen — just stay with cached data
+    if (isUserLoadedRef.current) {
+      console.warn("loadUserData: DB unreachable, serving cached data");
+      return;
+    }
+
+    // True first-launch with no cache and all retries exhausted → show error UI
     setAuthError(true);
     setIsSessionValid(false);
     setUserId(null);
@@ -300,6 +326,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
           setIsLoading(false);
         }
       } else if (event === 'SIGNED_OUT') {
+        // Clear all cached data for this user before resetting refs
+        const uid = userIdRef.current;
+        if (uid) localCache.clearUser(uid);
         isUserLoadedRef.current = false;
         setIsSessionValid(false);
         setUserId(null);
@@ -338,6 +367,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
       } else {
         checkSessionValidity();
       }
+      // Flush any offline writes queued while the app was backgrounded
+      if (userIdRef.current) {
+        import('@/lib/syncQueue').then(({ syncQueue }) => {
+          syncQueue.process(userIdRef.current!).catch(() => {});
+        });
+      }
     };
 
     if (Capacitor.isNativePlatform()) {
@@ -368,6 +403,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
       // Auto-reconnect if data not loaded yet
       if (!userIdRef.current || !profileRef.current) {
         loadUserData();
+      }
+      // Flush queued offline writes on reconnect
+      if (userIdRef.current) {
+        import('@/lib/syncQueue').then(({ syncQueue }) => {
+          syncQueue.process(userIdRef.current!).catch(() => {});
+        });
       }
     };
     const handleOffline = () => setIsOffline(true);

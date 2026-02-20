@@ -66,6 +66,11 @@ export function BottomNav() {
     navigate("/weight?focusWeightInput=true");
   };
 
+  const handleTalkToWizard = () => {
+    setQuickLogOpen(false);
+    navigate("/wizard");
+  };
+
   const handleMoreItemClick = (url: string) => {
     setMoreMenuOpen(false);
     navigate(url);
@@ -194,24 +199,36 @@ export function BottomNav() {
           <DialogHeader>
             <DialogTitle>Quick Log</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          <div className="grid grid-cols-1 gap-4 py-4">
             <Button
               onClick={handleLogFood}
               size="lg"
-              className="h-20 flex flex-col items-center justify-center gap-2"
+              className="h-16 flex items-center justify-start gap-4 px-6"
               variant="outline"
             >
-              <Utensils className="h-8 w-8" />
+              <Utensils className="h-6 w-6 text-emerald-500" />
               <span className="text-lg font-semibold">Log Food</span>
             </Button>
             <Button
               onClick={handleLogWeight}
               size="lg"
-              className="h-20 flex flex-col items-center justify-center gap-2"
+              className="h-16 flex items-center justify-start gap-4 px-6"
               variant="outline"
             >
-              <Weight className="h-8 w-8" />
+              <Weight className="h-6 w-6 text-blue-500" />
               <span className="text-lg font-semibold">Log Weight</span>
+            </Button>
+            <Button
+              onClick={handleTalkToWizard}
+              size="lg"
+              className="h-16 flex items-center justify-start gap-4 px-6 border-primary/20 bg-primary/5 hover:bg-primary/10"
+              variant="outline"
+            >
+              <Sparkles className="h-6 w-6 text-primary" />
+              <div className="flex flex-col items-start leading-tight">
+                <span className="text-lg font-semibold">Talk to Wizard</span>
+                <span className="text-xs text-muted-foreground font-normal">Ask for diet & cut advice</span>
+              </div>
             </Button>
           </div>
         </DialogContent>
