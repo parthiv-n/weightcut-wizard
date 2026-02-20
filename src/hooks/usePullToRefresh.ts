@@ -1,5 +1,4 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 
 const PULL_THRESHOLD = 80;
@@ -13,7 +12,6 @@ const triggerHaptic = async (style: ImpactStyle = ImpactStyle.Medium) => {
 };
 
 export function usePullToRefresh() {
-    const queryClient = useQueryClient();
     const containerRef = useRef<HTMLElement>(null);
     const [pullDistance, setPullDistance] = useState(0);
     const [isRefreshing, setIsRefreshing] = useState(false);
@@ -28,8 +26,8 @@ export function usePullToRefresh() {
         await triggerHaptic(ImpactStyle.Medium);
 
         try {
-            // Invalidate all React Query caches – forces Supabase data to re-fetch
-            await queryClient.invalidateQueries();
+            // Force a hard reload of the app window resolving connection hangs
+            window.location.reload();
         } finally {
             // Small delay so the user sees the spinner
             await new Promise((r) => setTimeout(r, 600));
@@ -37,7 +35,7 @@ export function usePullToRefresh() {
             setIsRefreshing(false);
             setPullDistance(0);
         }
-    }, [queryClient]);
+    }, []);
 
     useEffect(() => {
         const el = containerRef.current;
