@@ -182,7 +182,11 @@ VERIFICATION STEP: Before responding, verify that:
 - Sum of all meal fats ≈ totalFats
 - Sum of all meal calories ≈ totalCalories
 
-Respond ONLY with JSON:
+FORMATTING RULES:
+You must output ONLY valid, raw JSON. Do NOT wrap the JSON in markdown code blocks (\`\`\`json). Do NOT add explanatory text before or after the JSON. Provide EXACTLY the structure requested below.
+You must provide AT LEAST 3 real meals per day. Meals must include an array of specific ingredients with their absolute values in grams.
+
+Respond ONLY with this exact JSON structure:
 {
   "meals": [
     {
@@ -192,7 +196,7 @@ Respond ONLY with JSON:
       "carbs": 30,
       "fats": 12,
       "portion": "300g",
-      "recipe": "Brief prep",
+      "recipe": "Brief prep method goes here",
       "type": "breakfast",
       "ingredients": [{"name": "Chicken breast", "grams": 200}]
     }
@@ -204,9 +208,7 @@ Respond ONLY with JSON:
   "safetyStatus": "${safetyIndicator}",
   "safetyMessage": "${safetyMessage}",
   "tips": "Brief tips"
-}
-
-Rules: 3+ meals, specific ingredients with grams, no markdown, numbers not strings.`;
+}`;
 
     console.log("Calling Minimax API for meal planning...");
 
@@ -214,7 +216,7 @@ Rules: 3+ meals, specific ingredients with grams, no markdown, numbers not strin
 
     // Add timeout to prevent hanging - increased for more reliable responses
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 second timeout
+    const timeoutId = setTimeout(() => controller.abort(), 55000); // 55 second timeout
 
     let response;
     try {
@@ -231,7 +233,7 @@ Rules: 3+ meals, specific ingredients with grams, no markdown, numbers not strin
             { role: "user", content: userPrompt }
           ],
           temperature: 0.3,
-          max_tokens: 1024
+          max_tokens: 4096
         }),
         signal: controller.signal
       });
@@ -242,17 +244,17 @@ Rules: 3+ meals, specific ingredients with grams, no markdown, numbers not strin
       clearTimeout(timeoutId);
 
       if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-        console.error("Minimax API request timed out after 25 seconds");
+        console.error("Minimax API request timed out after 55 seconds");
         return new Response(
-          JSON.stringify({ error: "AI request timed out after 25 seconds. The service may be busy. Please try again in a moment." }),
-          { status: 408, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ error: "AI request timed out after 55 seconds. The service may be busy. Please try again in a moment." }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
       console.error("Minimax API fetch error:", fetchError);
       return new Response(
         JSON.stringify({ error: "Failed to connect to AI service" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -263,27 +265,27 @@ Rules: 3+ meals, specific ingredients with grams, no markdown, numbers not strin
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
       if (response.status === 401) {
         return new Response(
           JSON.stringify({ error: "Invalid API key." }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
       if (response.status === 403) {
         return new Response(
           JSON.stringify({ error: "API key invalid or quota exceeded." }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
       return new Response(
         JSON.stringify({ error: `Minimax API error: ${errorData.error?.message || 'Unknown error'}` }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -365,19 +367,21 @@ Rules: 3+ meals, specific ingredients with grams, no markdown, numbers not strin
       console.log("=== JSON PARSING DEBUG ===");
       console.log("Parsing Minimax JSON response...");
 
-      // Extract JSON from potential markdown code blocks
-      // Try direct JSON parse first, then try extracting from code blocks
-      try {
-        mealPlanData = JSON.parse(content);
-      } catch {
-        const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)```/);
-        if (jsonMatch) {
-          mealPlanData = JSON.parse(jsonMatch[1].trim());
-        } else {
-          throw new Error("Could not extract JSON from response");
-        }
+      // Clean trailing text or markdown
+      let cleanContent = content.trim();
+      if (cleanContent.startsWith('```json')) cleanContent = cleanContent.substring(7);
+      if (cleanContent.startsWith('```')) cleanContent = cleanContent.substring(3);
+      if (cleanContent.endsWith('```')) cleanContent = cleanContent.substring(0, cleanContent.length - 3);
+      cleanContent = cleanContent.trim();
+
+      // Robust JSON extraction
+      const firstCurly = cleanContent.indexOf('{');
+      const lastCurly = cleanContent.lastIndexOf('}');
+      if (firstCurly !== -1 && lastCurly !== -1 && lastCurly > firstCurly) {
+        cleanContent = cleanContent.substring(firstCurly, lastCurly + 1);
       }
 
+      mealPlanData = JSON.parse(cleanContent);
       console.log("Successfully parsed Minimax response");
       console.log("Meal plan structure:", Object.keys(mealPlanData));
       console.log("Number of meals:", mealPlanData.meals?.length || 0);

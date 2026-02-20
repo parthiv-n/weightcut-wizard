@@ -2569,36 +2569,11 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
             <DialogHeader>
               <div className="flex items-center justify-between">
                 <DialogTitle>Generate Meal Plan Ideas for {format(new Date(selectedDate), "MMM d, yyyy")}</DialogTitle>
-                <button onClick={() => setShowDevInput(!showDevInput)} className="opacity-30 hover:opacity-60 transition-opacity p-1">
-                  <Lock className="h-3 w-3" />
-                </button>
               </div>
               <DialogDescription>
                 Describe what kind of meals you'd like. These will be created as suggestions that you can log to your day.
               </DialogDescription>
             </DialogHeader>
-            {showDevInput && (
-              <div className="flex gap-2 items-center">
-                <Input
-                  type="password"
-                  placeholder="Dev password"
-                  value={devPasswordInput}
-                  onChange={(e) => setDevPasswordInput(e.target.value)}
-                  className="h-8 text-xs flex-1"
-                />
-                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => {
-                  if (devPasswordInput === DEV_PASSWORD) {
-                    setDevUnlocked(true);
-                    setShowDevInput(false);
-                    toast({ title: "Dev mode unlocked" });
-                  } else {
-                    toast({ title: "Wrong password", variant: "destructive" });
-                  }
-                }}>
-                  Unlock
-                </Button>
-              </div>
-            )}
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="aiPrompt">What would you like to eat?</Label>
@@ -2621,6 +2596,27 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                 <Sparkles className="mr-2 h-4 w-4" />
                 {generatingPlan ? "Generating..." : "Generate Meal Ideas"}
               </Button>
+              {!devUnlocked && (
+                <div className="flex gap-2 items-center pt-2">
+                  <Input
+                    type="password"
+                    placeholder="Dev passcode to bypass limits"
+                    value={devPasswordInput}
+                    onChange={(e) => setDevPasswordInput(e.target.value)}
+                    className="h-8 text-xs flex-1"
+                  />
+                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => {
+                    if (devPasswordInput === DEV_PASSWORD) {
+                      setDevUnlocked(true);
+                      toast({ title: "Dev mode unlocked" });
+                    } else {
+                      toast({ title: "Wrong password", variant: "destructive" });
+                    }
+                  }}>
+                    Unlock
+                  </Button>
+                </div>
+              )}
             </div>
           </DialogContent>
         </Dialog>
