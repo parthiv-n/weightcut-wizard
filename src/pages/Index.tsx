@@ -5,6 +5,7 @@ import { Shield, TrendingDown, Brain } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import wizardNutrition from "@/assets/wizard-nutrition.png";
 import { useUser } from "@/contexts/UserContext";
+import { WizardLoader } from "@/components/ui/WizardLoader";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -24,11 +25,7 @@ const Index = () => {
   }, [userId, hasProfile, isLoading, navigate]);
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-      </div>
-    );
+    return <WizardLoader />;
   }
 
   return (

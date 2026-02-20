@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import knowledgeData from "./chatbot-index.json" assert { type: "json" };
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -53,22 +54,31 @@ serve(async (req) => {
       throw new Error("MINIMAX_API_KEY is not configured");
     }
 
-    const systemPrompt = `Weight Cut Wizard - friendly coach for fighters. Keep messages casual, under 100 words.
+    const researchContext = knowledgeData.map((doc: any) => `## Source: ${doc.title}\n${doc.content}`).join('\n\n');
 
-SAFETY RULES:
-- Max 1kg/week loss
-- No extreme dehydration (>3% body weight)  
-- No dangerous supplements/diuretics
-- Performance-first approach
+    const systemPrompt = `You are the "Weight Cut Wizard", a master, science-backed combat sports nutritionist and coach.
+Keep your responses modern, conversational, and relatively concise (under 200 words unless explaining a complex protocol). You are talking directly to a fighter.
 
-${userData ? `User: ${userData.currentWeight}kg → ${userData.goalWeight}kg, ${userData.daysToWeighIn} days left` : ""}
+CRITICAL USER CONTEXT:
+${userData ? `- Current Weight: ${userData.currentWeight}kg\n- Fight Target Weight: ${userData.goalWeight}kg\n- Days Until Weigh-in: ${userData.daysToWeighIn} days` : "- No profile data provided yet."}
 
-Text Style: Keep it short (2-4 sentences max), friendly, and motivational. Use casual language like you're texting. Add some personality! If a request is unsafe, firmly but kindly decline and suggest safer alternatives.`;
+YOUR KNOWLEDGE BASE (Scientific Research):
+The following are full-text research papers and protocols on combat sports nutrition. You MUST base your advice strictly on these protocols and standards. Retrieve the most relevant scientific data from this context to answer the user's questions intelligently. Do not hallucinate statistics.
 
-    // Get the latest user message
-    const userMessage = messages[messages.length - 1]?.content || "";
+<knowledge>
+${researchContext}
+</knowledge>
 
-    console.log("Calling Minimax API...");
+YOUR PERSONALITY & RULES:
+- Expert, authoritative, yet friendly and motivational ("Let's get this cut dialed in, champ").
+- You remember the conversation history provided in the chat.
+- SAFETY FIRST: Base your safety standards strictly on the research provided.
+- Focus on performance. A fighter who makes weight but has no energy will lose. Recommend high-carb peri-workout nutrition as supported by the literature.
+- If they ask for a plan, calculate the exact daily deficit needed based on their timeline.
+- If a request is dangerous, firmly decline and provide the safe, scientific alternative.
+- IMPORTANT FORMATTING: Organize your replies into easy-to-read, short paragraphs. Use bullet points when listing items, and bold key terms for readability. Never output a giant wall of text.`;
+
+    console.log("Calling Minimax API with memory footprint...");
 
     const response = await fetch("https://api.minimax.io/v1/chat/completions", {
       method: "POST",
@@ -80,10 +90,10 @@ Text Style: Keep it short (2-4 sentences max), friendly, and motivational. Use c
         model: "MiniMax-M2.5",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userMessage }
+          ...messages // Spread the full conversation history for memory
         ],
         temperature: 0.7,
-        max_tokens: 300
+        max_tokens: 2048
       })
     });
 

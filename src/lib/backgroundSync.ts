@@ -170,9 +170,11 @@ export const preloadNutritionData = (userId: string, dates: string[]) => {
           .eq('date', date)
           .order('created_at', { ascending: true });
         
-        // Cache the preloaded data
+        // Cache the preloaded data — both in-memory and localStorage
         if (data) {
           nutritionCache.setMeals(userId, date, data);
+          const { localCache } = await import('@/lib/localCache');
+          localCache.setForDate(userId, 'nutrition_logs', date, data);
         }
         
         return data;
