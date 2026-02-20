@@ -48,8 +48,8 @@ export function MealCard({ meal, onEdit, onDelete }: MealCardProps) {
 
         {/* Name + macros */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="text-sm font-medium truncate">{meal.meal_name}</span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-xs font-medium leading-snug">{meal.meal_name}</span>
             {meal.is_ai_generated && (
               <Sparkles className="h-3 w-3 text-primary flex-shrink-0" />
             )}
