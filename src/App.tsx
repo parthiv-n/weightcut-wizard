@@ -10,6 +10,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ProfileCompletionGuard } from "@/components/ProfileCompletionGuard";
 import { UserProvider } from "@/contexts/UserContext";
+import { WizardBackgroundProvider } from "@/contexts/WizardBackgroundContext";
 import { PageTransition } from "@/components/PageTransition";
 import { BottomNav } from "@/components/BottomNav";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -157,102 +158,104 @@ const App = () => (
     <TooltipProvider>
       <ErrorBoundary>
         <UserProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <RouteTracker />
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/onboarding" element={
-                <ProtectedRoute>
-                  <Onboarding />
-                </ProtectedRoute>
-              } />
-              <Route path="/dashboard" element={
-                <ProtectedRoute>
-                  <ProfileCompletionGuard>
-                    <AppLayout>
-                      <Dashboard />
-                    </AppLayout>
-                  </ProfileCompletionGuard>
-                </ProtectedRoute>
-              } />
-              <Route path="/goals" element={
-                <ProtectedRoute>
-                  <ProfileCompletionGuard>
-                    <AppLayout>
-                      <Goals />
-                    </AppLayout>
-                  </ProfileCompletionGuard>
-                </ProtectedRoute>
-              } />
-              <Route path="/nutrition" element={
-                <ProtectedRoute>
-                  <ProfileCompletionGuard>
-                    <AppLayout>
-                      <Nutrition />
-                    </AppLayout>
-                  </ProfileCompletionGuard>
-                </ProtectedRoute>
-              } />
-              <Route path="/weight" element={
-                <ProtectedRoute>
-                  <ProfileCompletionGuard>
-                    <AppLayout>
-                      <WeightTracker />
-                    </AppLayout>
-                  </ProfileCompletionGuard>
-                </ProtectedRoute>
-              } />
-              <Route path="/hydration" element={
-                <ProtectedRoute>
-                  <ProfileCompletionGuard>
-                    <AppLayout>
-                      <Hydration />
-                    </AppLayout>
-                  </ProfileCompletionGuard>
-                </ProtectedRoute>
-              } />
-              <Route path="/fight-camps" element={
-                <ProtectedRoute>
-                  <ProfileCompletionGuard>
-                    <AppLayout>
-                      <FightCamps />
-                    </AppLayout>
-                  </ProfileCompletionGuard>
-                </ProtectedRoute>
-              } />
-              <Route path="/fight-camps/:id" element={
-                <ProtectedRoute>
-                  <ProfileCompletionGuard>
-                    <AppLayout>
-                      <FightCampDetail />
-                    </AppLayout>
-                  </ProfileCompletionGuard>
-                </ProtectedRoute>
-              } />
-              <Route path="/fight-week" element={
-                <ProtectedRoute>
-                  <ProfileCompletionGuard>
-                    <AppLayout>
-                      <FightWeek />
-                    </AppLayout>
-                  </ProfileCompletionGuard>
-                </ProtectedRoute>
-              } />
-              <Route path="/wizard" element={
-                <ProtectedRoute>
-                  <ProfileCompletionGuard>
-                    <AppLayout>
-                      <Wizard />
-                    </AppLayout>
-                  </ProfileCompletionGuard>
-                </ProtectedRoute>
-              } />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
+          <WizardBackgroundProvider>
+            <Toaster />
+            <Sonner />
+            <BrowserRouter>
+              <RouteTracker />
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/onboarding" element={
+                  <ProtectedRoute>
+                    <Onboarding />
+                  </ProtectedRoute>
+                } />
+                <Route path="/dashboard" element={
+                  <ProtectedRoute>
+                    <ProfileCompletionGuard>
+                      <AppLayout>
+                        <Dashboard />
+                      </AppLayout>
+                    </ProfileCompletionGuard>
+                  </ProtectedRoute>
+                } />
+                <Route path="/goals" element={
+                  <ProtectedRoute>
+                    <ProfileCompletionGuard>
+                      <AppLayout>
+                        <Goals />
+                      </AppLayout>
+                    </ProfileCompletionGuard>
+                  </ProtectedRoute>
+                } />
+                <Route path="/nutrition" element={
+                  <ProtectedRoute>
+                    <ProfileCompletionGuard>
+                      <AppLayout>
+                        <Nutrition />
+                      </AppLayout>
+                    </ProfileCompletionGuard>
+                  </ProtectedRoute>
+                } />
+                <Route path="/weight" element={
+                  <ProtectedRoute>
+                    <ProfileCompletionGuard>
+                      <AppLayout>
+                        <WeightTracker />
+                      </AppLayout>
+                    </ProfileCompletionGuard>
+                  </ProtectedRoute>
+                } />
+                <Route path="/hydration" element={
+                  <ProtectedRoute>
+                    <ProfileCompletionGuard>
+                      <AppLayout>
+                        <Hydration />
+                      </AppLayout>
+                    </ProfileCompletionGuard>
+                  </ProtectedRoute>
+                } />
+                <Route path="/fight-camps" element={
+                  <ProtectedRoute>
+                    <ProfileCompletionGuard>
+                      <AppLayout>
+                        <FightCamps />
+                      </AppLayout>
+                    </ProfileCompletionGuard>
+                  </ProtectedRoute>
+                } />
+                <Route path="/fight-camps/:id" element={
+                  <ProtectedRoute>
+                    <ProfileCompletionGuard>
+                      <AppLayout>
+                        <FightCampDetail />
+                      </AppLayout>
+                    </ProfileCompletionGuard>
+                  </ProtectedRoute>
+                } />
+                <Route path="/fight-week" element={
+                  <ProtectedRoute>
+                    <ProfileCompletionGuard>
+                      <AppLayout>
+                        <FightWeek />
+                      </AppLayout>
+                    </ProfileCompletionGuard>
+                  </ProtectedRoute>
+                } />
+                <Route path="/wizard" element={
+                  <ProtectedRoute>
+                    <ProfileCompletionGuard>
+                      <AppLayout>
+                        <Wizard />
+                      </AppLayout>
+                    </ProfileCompletionGuard>
+                  </ProtectedRoute>
+                } />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </BrowserRouter>
+          </WizardBackgroundProvider>
         </UserProvider>
       </ErrorBoundary>
     </TooltipProvider>
