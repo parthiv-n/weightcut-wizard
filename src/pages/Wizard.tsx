@@ -108,9 +108,11 @@ export default function Wizard() {
 
               {/* Message Bubble */}
               <div className={`p-3 rounded-2xl text-sm ${msg.role === "user" ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground rounded-tr-sm" : "bg-card/80 border border-white/10 text-card-foreground rounded-tl-sm backdrop-blur-md"}`}>
-                <ReactMarkdown className="prose prose-invert prose-sm max-w-none">
-                  {msg.content}
-                </ReactMarkdown>
+                <div className="prose prose-invert prose-sm max-w-none">
+                  <ReactMarkdown>
+                    {msg.content}
+                  </ReactMarkdown>
+                </div>
               </div>
             </div>
           </div>
