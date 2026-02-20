@@ -68,8 +68,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const checkSessionValidity = async (): Promise<boolean> => {
     try {
       const { data: { session }, error } = await withAuthTimeout(
-        supabase.auth.getSession(),
-        5000
+        supabase.auth.getSession()
       );
 
       if (error || !session) {
@@ -102,8 +101,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const refreshSession = async (): Promise<boolean> => {
     try {
       const { data, error } = await withAuthTimeout(
-        supabase.auth.refreshSession(),
-        5000
+        supabase.auth.refreshSession()
       );
 
       if (error || !data.session) {
@@ -126,7 +124,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     try {
       const { data } = await withSupabaseTimeout(
         supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
-        5000,
+        8000,
         "Profile refresh query"
       );
 
@@ -149,8 +147,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const _performLoad = async (): Promise<'success' | 'no_session' | 'error'> => {
     try {
       const { data: { session }, error } = await withAuthTimeout(
-        supabase.auth.getSession(),
-        5000
+        supabase.auth.getSession()
       );
 
       if (error) {
@@ -202,7 +199,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
             .select("*")
             .eq("id", user.id)
             .maybeSingle(),
-          5000,
+          8000,
           "Profile query"
         ),
         withSupabaseTimeout(
@@ -213,22 +210,19 @@ export function UserProvider({ children }: { children: ReactNode }) {
             .order("date", { ascending: false })
             .limit(1)
             .maybeSingle(),
-          5000,
+          8000,
           "Weight log query"
         ),
       ]);
 
-      // If profile query threw an error (like a timeout) or returned a database error
-      // Note: maybeSingle() returns { data: null, error: null } if no row exists, which we treat as a success (auth but no profile)
-      const profileError = profileResult.status === "rejected" || (profileResult.status === "fulfilled" && profileResult.value?.error);
-      const latestWeightLog = weightResult.status === "fulfilled" ? weightResult.value.data : null;
-
-      if (profileError) {
-        console.error("Profile query failed or timed out, triggering retry");
+      // If both parallel queries failed (network error), treat as error to retry
+      if (profileResult.status === "rejected" && weightResult.status === "rejected") {
         return 'error';
       }
 
       const profileData = profileResult.status === "fulfilled" ? profileResult.value.data : null;
+      const latestWeightLog = weightResult.status === "fulfilled" ? weightResult.value.data : null;
+
       setHasProfile(!!profileData);
 
       if (profileData) {
@@ -256,7 +250,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     if (!isUserLoadedRef.current) {
       setIsLoading(true);
     }
-    const DELAYS = [500, 1000, 2000];
+    const DELAYS = [1000, 2000, 4000];
 
     for (let attempt = 0; attempt <= DELAYS.length; attempt++) {
       const result = await _performLoad();
@@ -324,83 +318,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    // Safety timer: never show white screen for more than 3s
-    const safetyTimer = setTimeout(() => {
-      if (!isUserLoadedRef.current) {
-        let currentUid = userIdRef.current;
-
-        // Fallback: If INITIAL_SESSION never fired but we have auth in localStorage, salvage it
-        if (!currentUid) {
-          try {
-            const authSaved = localStorage.getItem('weightcut-wizard-auth');
-            if (authSaved) {
-              const parsed = JSON.parse(authSaved);
-              const user = parsed?.user || parsed?.currentSession?.user;
-              if (user?.id) {
-                console.warn('UserContext: Salvaged userId from localStorage in safety timer');
-                setUserId(user.id);
-                currentUid = user.id;
-                userIdRef.current = user.id;
-                setIsSessionValid(true);
-              }
-            }
-          } catch (e) {
-            console.error('Failed to parse auth from localStorage in safety timer', e);
-          }
-        }
-
-        if (currentUid) {
-          const cachedProfile = localCache.get<ProfileData>(currentUid, 'profiles');
-          if (cachedProfile) {
-            console.warn('UserContext: Safety timer fired — salvaging profile from cache & forcing isLoading=false');
-            setProfile(cachedProfile);
-            profileRef.current = cachedProfile;
-            setHasProfile(true);
-            if (cachedProfile.avatar_url) setAvatarUrl(cachedProfile.avatar_url);
-            if (cachedProfile.current_weight_kg) setCurrentWeight(cachedProfile.current_weight_kg);
-            const savedName = localStorage.getItem(`user_name_${currentUid}`);
-            if (savedName) setUserName(savedName);
-
-            isUserLoadedRef.current = true;
-            setIsLoading(false);
-          } else {
-            // Very important: if we know they are logged in, but don't have a cached profile,
-            // we CANNOT force isLoading=false. If we do, hasProfile=false will route them to onboarding.
-            // We must wait for the network to respond to verify if they really need onboarding.
-            console.warn('UserContext: Safety timer fired, but no cached profile exists. Waiting for network...');
-          }
-        } else {
-          // No user found in cache or INITIAL_SESSION. We can safely stop loading and let them go to /auth
-          console.warn('UserContext: Safety timer fired — no user found, forcing isLoading=false');
-          isUserLoadedRef.current = true;
-          setIsLoading(false);
-        }
-      }
-    }, 3000);
-
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'INITIAL_SESSION') {
         if (session?.user) {
-          const uid = session.user.id;
-          // Set essential auth state immediately so we don't get booted to login
-          setUserId(uid);
-          userIdRef.current = uid;
-          setIsSessionValid(true);
-
-          // Immediately resolve from cache so routes render right away
-          const cachedProfile = localCache.get<ProfileData>(uid, 'profiles');
-          if (cachedProfile && !isUserLoadedRef.current) {
-            setProfile(cachedProfile);
-            profileRef.current = cachedProfile;
-            setHasProfile(true);
-            if (cachedProfile.avatar_url) setAvatarUrl(cachedProfile.avatar_url);
-            if (cachedProfile.current_weight_kg) setCurrentWeight(cachedProfile.current_weight_kg);
-            const savedName = localStorage.getItem(`user_name_${uid}`);
-            if (savedName) setUserName(savedName);
-            isUserLoadedRef.current = true;
-            setIsLoading(false);
-          }
-          // Background refresh from network (won't block UI)
           await loadUserData();
         } else {
           setIsLoading(false);
@@ -450,7 +370,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       // Flush any offline writes queued while the app was backgrounded
       if (userIdRef.current) {
         import('@/lib/syncQueue').then(({ syncQueue }) => {
-          syncQueue.process(userIdRef.current!).catch(() => { });
+          syncQueue.process(userIdRef.current!).catch(() => {});
         });
       }
     };
@@ -467,7 +387,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
 
     return () => {
-      clearTimeout(safetyTimer);
       subscription.unsubscribe();
       clearInterval(sessionCheckInterval);
       appResumeHandle?.remove();
@@ -488,7 +407,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       // Flush queued offline writes on reconnect
       if (userIdRef.current) {
         import('@/lib/syncQueue').then(({ syncQueue }) => {
-          syncQueue.process(userIdRef.current!).catch(() => { });
+          syncQueue.process(userIdRef.current!).catch(() => {});
         });
       }
     };
