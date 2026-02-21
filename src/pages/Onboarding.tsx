@@ -5,10 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Progress } from "@/components/ui/progress";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Sparkles, AlertTriangle, CheckCircle, Zap, Shield, Activity } from "lucide-react";
 import { profileSchema } from "@/lib/validation";
@@ -236,16 +234,20 @@ export default function Onboarding() {
     { icon: CheckCircle, label: "Your plan is ready!", color: "text-green-400" },
   ];
 
+  // Shared input/select styles — Apple Health / Watch style
+  const inputClass =
+    "h-12 min-h-[44px] rounded-2xl bg-card dark:bg-white/5 border border-border dark:border-white/10 text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-0 focus-visible:border-primary/40 px-4 text-base transition-colors touch-manipulation";
+  const selectTriggerClass =
+    "h-12 min-h-[44px] rounded-2xl bg-card dark:bg-white/5 border border-border dark:border-white/10 text-foreground data-[placeholder]:text-muted-foreground focus:ring-2 focus:ring-primary/30 focus:ring-offset-0 focus:border-primary/40 px-4 text-base transition-colors";
+
   // Full-screen generating plan overlay
   if (generatingPlan) {
     const progressPercent = Math.min((generationStep / 4) * 100, 100);
     return (
-      <div className="fixed inset-0 bg-black flex flex-col items-center justify-center z-50 px-6">
-        {/* Background glow */}
+      <div className="fixed inset-0 bg-background dark:bg-black/95 text-foreground flex flex-col items-center justify-center z-50 px-6">
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-primary/15 rounded-full blur-[120px] pointer-events-none" />
 
         <div className="relative z-10 flex flex-col items-center max-w-sm w-full">
-          {/* Logo */}
           <div className="relative mb-8">
             <div className="absolute inset-0 bg-primary/20 rounded-full blur-2xl animate-pulse" />
             <img
@@ -255,23 +257,21 @@ export default function Onboarding() {
             />
           </div>
 
-          {/* Title */}
-          <h2 className="text-2xl font-bold text-white tracking-tight mb-2 text-center">
+          <h2 className="text-2xl font-bold text-foreground tracking-tight mb-2 text-center">
             {generationStep >= 4 ? "All Set!" : "Creating Your Plan"}
           </h2>
-          <p className="text-sm text-zinc-500 mb-10 text-center">
+          <p className="text-sm text-muted-foreground mb-10 text-center">
             {generationStep >= 4 ? "Redirecting to your dashboard..." : "This will only take a moment"}
           </p>
 
-          {/* Progress bar */}
-          <div className="w-full h-1 bg-zinc-800 rounded-full mb-10 overflow-hidden">
+          {/* Slim Apple-style progress bar */}
+          <div className="w-full h-1.5 rounded-full bg-muted/50 dark:bg-white/10 overflow-hidden mb-10">
             <div
-              className="h-full bg-gradient-to-r from-primary to-green-400 rounded-full transition-all duration-700 ease-out"
+              className="h-full rounded-full bg-gradient-to-r from-primary to-secondary transition-all duration-700 ease-out"
               style={{ width: `${progressPercent}%` }}
             />
           </div>
 
-          {/* Steps */}
           <div className="w-full space-y-4">
             {GENERATION_STEPS.map((s, i) => {
               const Icon = s.icon;
@@ -282,19 +282,28 @@ export default function Onboarding() {
               return (
                 <div
                   key={i}
-                  className={`flex items-center gap-3 transition-all duration-500 ${isPending ? "opacity-20" : isDone ? "opacity-50" : "opacity-100"
-                    }`}
+                  className={`flex items-center gap-3 transition-all duration-500 ${isPending ? "opacity-20" : isDone ? "opacity-60" : "opacity-100"}`}
                 >
-                  <div className={`h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-500 ${isDone ? "bg-green-500/10" : isActive ? "bg-zinc-800" : "bg-zinc-900"
-                    }`}>
+                  <div
+                    className={`h-9 w-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-500 ${
+                      isDone
+                        ? "bg-primary/20 dark:bg-primary/30"
+                        : isActive
+                          ? "bg-muted dark:bg-white/15"
+                          : "bg-muted/50 dark:bg-white/10"
+                    }`}
+                  >
                     {isDone ? (
-                      <CheckCircle className="h-4 w-4 text-green-400" />
+                      <CheckCircle className="h-4 w-4 text-primary" />
                     ) : (
-                      <Icon className={`h-4 w-4 ${isActive ? s.color : "text-zinc-600"} ${isActive ? "animate-pulse" : ""}`} />
+                      <Icon className={`h-4 w-4 ${isActive ? s.color : "text-muted-foreground"} ${isActive ? "animate-pulse" : ""}`} />
                     )}
                   </div>
-                  <span className={`text-sm font-medium transition-colors duration-500 ${isDone ? "text-zinc-500 line-through" : isActive ? "text-white" : "text-zinc-700"
-                    }`}>
+                  <span
+                    className={`text-sm font-medium transition-colors duration-500 ${
+                      isDone ? "text-muted-foreground line-through" : isActive ? "text-foreground" : "text-muted-foreground"
+                    }`}
+                  >
                     {s.label}
                   </span>
                 </div>
@@ -307,38 +316,47 @@ export default function Onboarding() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-background via-background to-card p-4">
-      <Card className="w-full max-w-2xl">
-        <CardHeader>
-          <CardTitle className="text-2xl font-title">Set Up Your Weight Cut Plan</CardTitle>
-          <CardDescription>Let's personalize your journey ({step}/4)</CardDescription>
-          <Progress value={progress} className="mt-4" />
-          <p className="text-xs text-muted-foreground mt-2">
-            {step === 1 && "Basic information"}
-            {step === 2 && "Weight goals"}
-            {step === 3 && "Activity level"}
-            {step === 4 && "Review and create"}
-          </p>
-        </CardHeader>
-        <CardContent>
+    <div className="flex min-h-screen items-center justify-center bg-background dark:bg-gradient-to-br dark:from-[#120024] dark:via-[#05000f] dark:to-[#180636] p-4">
+      <div className="glass-card w-full max-w-2xl rounded-3xl border border-border dark:border-white/10 bg-gradient-to-br from-primary/[0.03] via-background/80 to-secondary/[0.03] dark:from-primary/10 dark:via-background/60 dark:to-secondary/10 shadow-xl dark:shadow-[0_0_60px_rgba(168,85,247,0.15)] backdrop-blur-2xl overflow-hidden">
+        <div className="p-6 md:p-8">
+          <div className="mb-6">
+            <h1 className="text-2xl font-title font-semibold text-foreground">Set Up Your Weight Cut Plan</h1>
+            <p className="text-muted-foreground mt-1">Let's personalize your journey ({step}/4)</p>
+            {/* Slim Apple-style progress bar */}
+            <div className="mt-4 w-full h-1.5 rounded-full bg-muted/50 dark:bg-white/10 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-primary to-secondary transition-all duration-500 ease-out"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">
+              {step === 1 && "Basic information"}
+              {step === 2 && "Weight goals"}
+              {step === 3 && "Activity level"}
+              {step === 4 && "Review and create"}
+            </p>
+          </div>
+
+          <div className="space-y-6">
           {step === 1 && (
             <div className="space-y-4">
-              <h3 className="font-semibold text-lg">Basic Information</h3>
+              <h3 className="font-semibold text-lg text-foreground">Basic Information</h3>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="age">Age</Label>
+                  <Label htmlFor="age" className="text-foreground text-sm font-medium">Age</Label>
                   <Input
                     id="age"
                     type="number"
                     value={formData.age}
                     onChange={(e) => setFormData({ ...formData, age: e.target.value })}
                     required
+                    className={inputClass}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="sex">Sex</Label>
+                  <Label htmlFor="sex" className="text-foreground text-sm font-medium">Sex</Label>
                   <Select value={formData.sex} onValueChange={(value) => setFormData({ ...formData, sex: value })}>
-                    <SelectTrigger>
+                    <SelectTrigger className={selectTriggerClass}>
                       <SelectValue placeholder="Select sex" />
                     </SelectTrigger>
                     <SelectContent>
@@ -348,7 +366,7 @@ export default function Onboarding() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="height">Height (cm)</Label>
+                  <Label htmlFor="height" className="text-foreground text-sm font-medium">Height (cm)</Label>
                   <Input
                     id="height"
                     type="number"
@@ -356,10 +374,11 @@ export default function Onboarding() {
                     value={formData.height_cm}
                     onChange={(e) => setFormData({ ...formData, height_cm: e.target.value })}
                     required
+                    className={inputClass}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="current_weight">Current Weight (kg)</Label>
+                  <Label htmlFor="current_weight" className="text-foreground text-sm font-medium">Current Weight (kg)</Label>
                   <Input
                     id="current_weight"
                     type="number"
@@ -367,24 +386,25 @@ export default function Onboarding() {
                     value={formData.current_weight_kg}
                     onChange={(e) => setFormData({ ...formData, current_weight_kg: e.target.value })}
                     required
+                    className={inputClass}
                   />
                 </div>
               </div>
-              <Button onClick={() => setStep(2)} className="w-full">Next</Button>
+              <Button onClick={() => setStep(2)} className="w-full h-12 rounded-2xl text-base font-medium bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90">Next</Button>
             </div>
           )}
 
           {step === 2 && (
             <div className="space-y-4">
-              <h3 className="font-semibold text-lg">Weight Goals</h3>
+              <h3 className="font-semibold text-lg text-foreground">Weight Goals</h3>
               <p className="text-sm text-muted-foreground">
                 Set your fight night weight (weigh-in) and fight week target (before dehydration cut)
               </p>
               <div className="grid gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="goal_weight">
+                  <Label htmlFor="goal_weight" className="text-foreground text-sm font-medium">
                     Fight Night Weight (kg)
-                    <span className="text-xs text-muted-foreground ml-2">Your competition weight class</span>
+                    <span className="text-xs text-muted-foreground ml-2 font-normal">Your competition weight class</span>
                   </Label>
                   <Input
                     id="goal_weight"
@@ -394,21 +414,22 @@ export default function Onboarding() {
                     value={formData.goal_weight_kg}
                     onChange={(e) => setFormData({ ...formData, goal_weight_kg: e.target.value })}
                     required
+                    className={inputClass}
                   />
                 </div>
 
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="fight_week_target">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <Label htmlFor="fight_week_target" className="text-foreground text-sm font-medium">
                       Fight Week Target (kg)
-                      <span className="text-xs text-muted-foreground ml-2">Weight before dehydration</span>
+                      <span className="text-xs text-muted-foreground ml-2 font-normal">Weight before dehydration</span>
                     </Label>
                     <Button
                       type="button"
                       variant={useAutoTarget ? "default" : "outline"}
                       size="sm"
                       onClick={() => setUseAutoTarget(!useAutoTarget)}
-                      className="gap-2"
+                      className="gap-2 rounded-2xl h-9"
                     >
                       <Sparkles className="h-3 w-3" />
                       {useAutoTarget ? "AI Auto" : "Manual"}
@@ -427,26 +448,26 @@ export default function Onboarding() {
                     }}
                     disabled={useAutoTarget}
                     required
+                    className={inputClass}
                   />
 
                   {useAutoTarget ? (
-                    <Alert className="border-primary/50 bg-primary/5">
+                    <Alert className="border-primary/40 bg-primary/10 dark:bg-primary/20 rounded-2xl">
                       <Sparkles className="h-4 w-4 text-primary" />
-                      <AlertDescription className="text-sm">
+                      <AlertDescription className="text-sm text-foreground">
                         AI calculated safe target based on 5.5% dehydration capacity with water loading protocol
                       </AlertDescription>
                     </Alert>
                   ) : (
                     getSafetyFeedback() && (
-                      <Alert className={`${targetSafetyLevel === "safe" ? "border-green-500/50 bg-green-500/5" :
-                        targetSafetyLevel === "moderate" ? "border-yellow-500/50 bg-yellow-500/5" :
-                          "border-red-500/50 bg-red-500/5"
+                      <Alert className={`rounded-2xl ${targetSafetyLevel === "safe" ? "border-green-500/40 bg-green-500/10 dark:bg-green-500/20" :
+                        targetSafetyLevel === "moderate" ? "border-yellow-500/40 bg-yellow-500/10 dark:bg-yellow-500/20" :
+                          "border-red-500/40 bg-red-500/10 dark:bg-red-500/20"
                         }`}>
                         {targetSafetyLevel === "safe" ? (
-                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
                         ) : (
-                          <AlertTriangle className={`h-4 w-4 ${targetSafetyLevel === "moderate" ? "text-yellow-500" : "text-red-500"
-                            }`} />
+                          <AlertTriangle className={`h-4 w-4 ${targetSafetyLevel === "moderate" ? "text-yellow-600 dark:text-yellow-400" : "text-red-600 dark:text-red-400"}`} />
                         )}
                         <AlertDescription className={`text-sm ${getSafetyFeedback()?.color}`}>
                           {getSafetyFeedback()?.message}
@@ -469,30 +490,31 @@ export default function Onboarding() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="target_date">Target Date</Label>
+                  <Label htmlFor="target_date" className="text-foreground text-sm font-medium">Target Date</Label>
                   <Input
                     id="target_date"
                     type="date"
                     value={formData.target_date}
                     onChange={(e) => setFormData({ ...formData, target_date: e.target.value })}
                     required
+                    className={inputClass}
                   />
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setStep(1)}>Back</Button>
-                <Button onClick={() => setStep(3)} className="flex-1">Next</Button>
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" onClick={() => setStep(1)} className="h-12 rounded-2xl flex-1 border-border dark:border-white/15 text-foreground">Back</Button>
+                <Button onClick={() => setStep(3)} className="flex-1 h-12 rounded-2xl bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90">Next</Button>
               </div>
             </div>
           )}
 
           {step === 3 && (
             <div className="space-y-4">
-              <h3 className="font-semibold text-lg">Activity Level</h3>
+              <h3 className="font-semibold text-lg text-foreground">Activity Level</h3>
               <div className="space-y-2">
-                <Label htmlFor="activity_level">Activity Level</Label>
+                <Label htmlFor="activity_level" className="text-foreground text-sm font-medium">Activity Level</Label>
                 <Select value={formData.activity_level} onValueChange={(value) => setFormData({ ...formData, activity_level: value })}>
-                  <SelectTrigger>
+                  <SelectTrigger className={selectTriggerClass}>
                     <SelectValue placeholder="Select activity level" />
                   </SelectTrigger>
                   <SelectContent>
@@ -505,42 +527,43 @@ export default function Onboarding() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="training_frequency">Training Frequency (sessions per week)</Label>
+                <Label htmlFor="training_frequency" className="text-foreground text-sm font-medium">Training Frequency (sessions per week)</Label>
                 <Input
                   id="training_frequency"
                   type="number"
                   value={formData.training_frequency}
                   onChange={(e) => setFormData({ ...formData, training_frequency: e.target.value })}
                   required
+                  className={inputClass}
                 />
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setStep(2)}>Back</Button>
-                <Button onClick={() => setStep(4)} className="flex-1">Next</Button>
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" onClick={() => setStep(2)} className="h-12 rounded-2xl flex-1 border-border dark:border-white/15 text-foreground">Back</Button>
+                <Button onClick={() => setStep(4)} className="flex-1 h-12 rounded-2xl bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90">Next</Button>
               </div>
             </div>
           )}
 
           {step === 4 && (
             <div className="space-y-4">
-              <h3 className="font-semibold text-lg">Review & Confirm</h3>
-              <div className="space-y-2 text-sm">
-                <p><strong>Age:</strong> {formData.age} years</p>
-                <p><strong>Sex:</strong> {formData.sex}</p>
-                <p><strong>Height:</strong> {formData.height_cm} cm</p>
-                <p><strong>Current Weight:</strong> {formData.current_weight_kg} kg</p>
-                <p><strong>Fight Night Weight:</strong> {formData.goal_weight_kg} kg</p>
-                <p><strong>Fight Week Target:</strong> {formData.fight_week_target_kg} kg</p>
-                <p><strong>Target Date:</strong> {formData.target_date}</p>
-                <p><strong>Activity Level:</strong> {formData.activity_level?.replace(/_/g, " ")}</p>
-                <p><strong>Training Frequency:</strong> {formData.training_frequency} sessions/week</p>
+              <h3 className="font-semibold text-lg text-foreground">Review & Confirm</h3>
+              <div className="rounded-2xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 p-4 space-y-2 text-sm text-foreground">
+                <p><strong className="text-foreground">Age:</strong> <span className="text-muted-foreground">{formData.age} years</span></p>
+                <p><strong className="text-foreground">Sex:</strong> <span className="text-muted-foreground">{formData.sex}</span></p>
+                <p><strong className="text-foreground">Height:</strong> <span className="text-muted-foreground">{formData.height_cm} cm</span></p>
+                <p><strong className="text-foreground">Current Weight:</strong> <span className="text-muted-foreground">{formData.current_weight_kg} kg</span></p>
+                <p><strong className="text-foreground">Fight Night Weight:</strong> <span className="text-muted-foreground">{formData.goal_weight_kg} kg</span></p>
+                <p><strong className="text-foreground">Fight Week Target:</strong> <span className="text-muted-foreground">{formData.fight_week_target_kg} kg</span></p>
+                <p><strong className="text-foreground">Target Date:</strong> <span className="text-muted-foreground">{formData.target_date}</span></p>
+                <p><strong className="text-foreground">Activity Level:</strong> <span className="text-muted-foreground">{formData.activity_level?.replace(/_/g, " ")}</span></p>
+                <p><strong className="text-foreground">Training Frequency:</strong> <span className="text-muted-foreground">{formData.training_frequency} sessions/week</span></p>
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setStep(3)}>Back</Button>
-                <Button onClick={handleSubmit} disabled={loading} className="flex-1">
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" onClick={() => setStep(3)} className="h-12 rounded-2xl flex-1 border-border dark:border-white/15 text-foreground">Back</Button>
+                <Button onClick={handleSubmit} disabled={loading} className="flex-1 h-12 rounded-2xl bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-70">
                   {loading ? (
                     <div className="flex items-center gap-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground"></div>
                       Creating your plan...
                     </div>
                   ) : (
@@ -550,8 +573,9 @@ export default function Onboarding() {
               </div>
             </div>
           )}
-        </CardContent>
-      </Card>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
