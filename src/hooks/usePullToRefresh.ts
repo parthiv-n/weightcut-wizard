@@ -20,6 +20,7 @@ export function usePullToRefresh() {
     const startY = useRef(0);
     const isPulling = useRef(false);
     const hasTriggeredHaptic = useRef(false);
+    const wasAtTop = useRef(false);
 
     const handleRefresh = useCallback(async () => {
         setIsRefreshing(true);
@@ -42,8 +43,9 @@ export function usePullToRefresh() {
         if (!el) return;
 
         const onTouchStart = (e: TouchEvent) => {
-            // Only start pull tracking when scrolled to top
-            if (el.scrollTop <= 0 && !isRefreshing) {
+            // Only allow pull-to-refresh if the user is already at the very top
+            wasAtTop.current = el.scrollTop <= 1;
+            if (wasAtTop.current && !isRefreshing) {
                 startY.current = e.touches[0].clientY;
                 isPulling.current = true;
                 hasTriggeredHaptic.current = false;
@@ -51,12 +53,12 @@ export function usePullToRefresh() {
         };
 
         const onTouchMove = (e: TouchEvent) => {
-            if (!isPulling.current || isRefreshing) return;
+            if (!isPulling.current || isRefreshing || !wasAtTop.current) return;
 
             const currentY = e.touches[0].clientY;
             const diff = currentY - startY.current;
 
-            if (diff > 0 && el.scrollTop <= 0) {
+            if (diff > 0 && el.scrollTop <= 1) {
                 // Apply resistance: the further you pull, the harder it gets
                 const resistedDiff = Math.min(diff * 0.5, 150);
                 setPullDistance(resistedDiff);
@@ -89,14 +91,25 @@ export function usePullToRefresh() {
             }
         };
 
+        const onScroll = () => {
+            // If the container scrolls at all, cancel any active pull gesture
+            if (el.scrollTop > 1 && isPulling.current) {
+                isPulling.current = false;
+                wasAtTop.current = false;
+                setPullDistance(0);
+            }
+        };
+
         el.addEventListener('touchstart', onTouchStart, { passive: true });
         el.addEventListener('touchmove', onTouchMove, { passive: false });
         el.addEventListener('touchend', onTouchEnd, { passive: true });
+        el.addEventListener('scroll', onScroll, { passive: true });
 
         return () => {
             el.removeEventListener('touchstart', onTouchStart);
             el.removeEventListener('touchmove', onTouchMove);
             el.removeEventListener('touchend', onTouchEnd);
+            el.removeEventListener('scroll', onScroll);
         };
     }, [isRefreshing, pullDistance, handleRefresh]);
 

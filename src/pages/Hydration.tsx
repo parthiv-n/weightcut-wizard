@@ -193,13 +193,13 @@ export default function Hydration() {
         {/* Safety Banner — slim amber strip */}
         <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 mb-4">
           <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-          <p className="text-[11px] text-amber-300 leading-snug">
+          <p className="text-[11px] text-amber-600 dark:text-amber-300 leading-snug">
             For athletes who have safely completed their weight cut. Never rehydrate without guidance.
           </p>
         </div>
 
         {/* Input Form — Apple Watch OLED Aesthetic */}
-        <div className="rounded-3xl bg-zinc-950 border border-white/10 p-6 mb-6 shadow-2xl relative overflow-hidden">
+        <div className="rounded-3xl bg-card border border-border/50 p-6 mb-6 shadow-2xl relative overflow-hidden">
           {/* Subtle glow background */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[200px] h-[200px] bg-blue-500/20 opacity-40 blur-[80px] rounded-full point-events-none"></div>
 
@@ -207,7 +207,7 @@ export default function Hydration() {
             {/* Weight Lost Ring */}
             <div className="flex flex-col items-center justify-center space-y-3">
               <p className="text-[11px] text-blue-400 font-bold uppercase tracking-[0.2em]">Weight Lost (kg)</p>
-              <div className={`relative w-36 h-36 rounded-full border-[6px] transition-colors duration-500 flex flex-col items-center justify-center bg-black ring-1 ring-white/5 ${ringColorClasses.split(' ')[1]} ${ringColorClasses.split(' ')[2] || ''}`}>
+              <div className={`relative w-36 h-36 rounded-full border-[6px] transition-colors duration-500 flex flex-col items-center justify-center bg-background ring-1 ring-border/30 ${ringColorClasses.split(' ')[1]} ${ringColorClasses.split(' ')[2] || ''}`}>
                 {/* Simulated inner progress ring */}
                 <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 100 100">
                   <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" className={`transition-colors duration-500 ${ringColorClasses.split(' ')[0]}`} strokeWidth="6" strokeDasharray="289" strokeDashoffset="40" strokeLinecap="round" />
@@ -219,27 +219,27 @@ export default function Hydration() {
                   value={weightLost}
                   onChange={(e) => setWeightLost(e.target.value)}
                   required
-                  className="w-24 text-center text-4xl font-black bg-transparent border-none text-white focus-visible:ring-0 placeholder:text-white/20 p-0 h-auto z-10"
+                  className="w-24 text-center text-4xl font-black bg-transparent border-none text-foreground focus-visible:ring-0 placeholder:text-muted-foreground/30 p-0 h-auto z-10"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               {/* Weigh-in Type Toggle */}
-              <div className="flex flex-col justify-center space-y-2 bg-zinc-900/80 rounded-2xl p-4 border border-white/5 shadow-inner col-span-1">
+              <div className="flex flex-col justify-center space-y-2 bg-muted rounded-2xl p-4 border border-border/30 shadow-inner col-span-1">
                 <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest text-center">Weigh-In</p>
                 <div className="w-full h-full flex flex-col gap-1.5 justify-center">
                   <button
                     type="button"
                     onClick={() => setWeighInTiming("same-day")}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${weighInTiming === "same-day" ? "bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.3)]" : "bg-zinc-800 text-white/50 hover:bg-zinc-700"}`}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${weighInTiming === "same-day" ? "bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.3)]" : "bg-muted/80 text-muted-foreground hover:bg-muted"}`}
                   >
                     Same Day
                   </button>
                   <button
                     type="button"
                     onClick={() => setWeighInTiming("day-before")}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${weighInTiming === "day-before" ? "bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.3)]" : "bg-zinc-800 text-white/50 hover:bg-zinc-700"}`}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${weighInTiming === "day-before" ? "bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.3)]" : "bg-muted/80 text-muted-foreground hover:bg-muted"}`}
                   >
                     Day Before
                   </button>
@@ -247,14 +247,14 @@ export default function Hydration() {
               </div>
 
               {/* Start Time */}
-              <div className="flex flex-col items-center justify-center space-y-2 bg-zinc-900/80 rounded-2xl p-4 border border-white/5 shadow-inner col-span-1">
+              <div className="flex flex-col items-center justify-center space-y-2 bg-muted rounded-2xl p-4 border border-border/30 shadow-inner col-span-1">
                 <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest text-center">Time</p>
                 <Input
                   type="time"
                   value={startTime}
                   onChange={(e) => setStartTime(e.target.value)}
                   required
-                  className="text-center text-2xl font-black bg-transparent border-none text-white focus-visible:ring-0 p-0 h-auto [&::-webkit-calendar-picker-indicator]:filter-[invert(1)] [&::-webkit-calendar-picker-indicator]:opacity-50 mt-2"
+                  className="text-center text-2xl font-black bg-transparent border-none text-foreground focus-visible:ring-0 p-0 h-auto [&::-webkit-calendar-picker-indicator]:opacity-50 mt-2"
                   title="Weigh-in time"
                 />
               </div>
@@ -262,7 +262,7 @@ export default function Hydration() {
 
             <Button
               type="submit"
-              className="w-full h-12 mt-2 bg-white text-black hover:bg-zinc-200 font-bold text-base rounded-2xl transition-all active:scale-[0.98] shadow-[0_0_20px_rgba(255,255,255,0.1)]"
+              className="w-full h-12 mt-2 font-bold text-base rounded-2xl transition-all active:scale-[0.98]"
               disabled={loading}
             >
               {loading ? "Generating Protocol..." : "Generate Protocol"}
@@ -275,13 +275,13 @@ export default function Hydration() {
           <div className="space-y-4">
 
             {/* Summary strip */}
-            <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
+            <div className="rounded-2xl bg-muted/50 border border-border/50 p-4">
               <div className="flex items-start justify-between gap-3">
                 <p className="text-sm text-foreground/90 leading-snug">{protocol.summary}</p>
                 <button
                   onClick={() => handleGenerateProtocol(new Event('submit') as any)}
                   disabled={loading}
-                  className="shrink-0 p-1.5 rounded-lg hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
+                  className="shrink-0 p-1.5 rounded-lg hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
                   aria-label="Regenerate"
                 >
                   <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
@@ -294,7 +294,7 @@ export default function Hydration() {
                   {protocol.warnings.map((warning, idx) => (
                     <div key={idx} className="flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/10 border border-amber-500/20">
                       <AlertTriangle className="h-3 w-3 text-amber-400 shrink-0" />
-                      <span className="text-[10px] text-amber-300 leading-none">{warning}</span>
+                      <span className="text-[10px] text-amber-600 dark:text-amber-300 leading-none">{warning}</span>
                     </div>
                   ))}
                 </div>
@@ -302,9 +302,9 @@ export default function Hydration() {
             </div>
 
             {/* How This Protocol Works — Collapsible */}
-            <div className="rounded-2xl bg-white/5 border border-white/10 overflow-hidden">
+            <div className="rounded-2xl bg-muted/50 border border-border/50 overflow-hidden">
               <button
-                className="w-full px-4 py-3 flex items-center gap-2 text-left hover:bg-white/5 transition-colors"
+                className="w-full px-4 py-3 flex items-center gap-2 text-left hover:bg-muted/30 transition-colors"
                 onClick={() => setScienceOpen(o => !o)}
               >
                 <BookOpen className="h-3.5 w-3.5 text-blue-400 shrink-0" />
@@ -314,7 +314,7 @@ export default function Hydration() {
                 </span>
               </button>
               {scienceOpen && (
-                <div className="px-4 pb-4 space-y-3 border-t border-white/5">
+                <div className="px-4 pb-4 space-y-3 border-t border-border/30">
                   <div className="pt-3 space-y-3">
                     <div>
                       <p className="text-xs font-semibold text-foreground/80 mb-1">Gastric Emptying</p>
@@ -350,7 +350,7 @@ export default function Hydration() {
                 ].map(({ label, value }) => (
                   <div
                     key={label}
-                    className="rounded-2xl bg-white/5 border border-white/10 border-t-2 border-t-blue-500/60 p-3 text-center"
+                    className="rounded-2xl bg-card border border-border/50 border-t-2 border-t-blue-500/60 p-3 text-center"
                   >
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">{label}</p>
                     <p className="text-sm font-semibold tabular-nums text-blue-400">{value}</p>
@@ -360,9 +360,9 @@ export default function Hydration() {
             </div>
 
             {/* Electrolyte Guide — Collapsible */}
-            <div className="rounded-2xl bg-white/5 border border-white/10 overflow-hidden">
+            <div className="rounded-2xl bg-muted/50 border border-border/50 overflow-hidden">
               <button
-                className="w-full px-4 py-3 flex items-center gap-2 text-left hover:bg-white/5 transition-colors"
+                className="w-full px-4 py-3 flex items-center gap-2 text-left hover:bg-muted/30 transition-colors"
                 onClick={() => setElectrolyteGuideOpen(o => !o)}
               >
                 <Beaker className="h-3.5 w-3.5 text-blue-400 shrink-0" />
@@ -372,7 +372,7 @@ export default function Hydration() {
                 </span>
               </button>
               {electrolyteGuideOpen && (
-                <div className="px-4 pb-4 space-y-3 border-t border-white/5">
+                <div className="px-4 pb-4 space-y-3 border-t border-border/30">
                   <div className="pt-3 space-y-3">
                     <div className="flex items-start gap-2">
                       <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-md px-1.5 py-0.5 shrink-0 mt-0.5">Na</span>
@@ -401,7 +401,7 @@ export default function Hydration() {
             </div>
 
             {/* Segmented Tab Control */}
-            <div className="rounded-2xl bg-white/5 border border-white/10 overflow-hidden">
+            <div className="rounded-2xl bg-muted/50 border border-border/50 overflow-hidden">
 
               {/* Pill switcher */}
               <div className="p-2">
@@ -433,14 +433,14 @@ export default function Hydration() {
                 <div>
                   {protocol.hourlyProtocol.map((step, idx) => (
                     <div key={idx}>
-                      {idx > 0 && <div className="h-px bg-white/5 mx-4" />}
+                      {idx > 0 && <div className="h-px bg-border/50 mx-4" />}
                       <button
-                        className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-white/5 transition-colors"
+                        className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-muted/30 transition-colors"
                         onClick={() => toggleStep(idx)}
                       >
-                        <div className="flex flex-col items-center justify-center bg-zinc-900 border border-white/10 rounded-xl px-2 py-1.5 shrink-0 min-w-[64px] shadow-sm">
+                        <div className="flex flex-col items-center justify-center bg-muted border border-border/50 rounded-xl px-2 py-1.5 shrink-0 min-w-[64px] shadow-sm">
                           <span className="text-[9px] font-bold text-blue-500 uppercase tracking-wider">Hour {step.hour}</span>
-                          <span className="text-xs font-bold text-white">
+                          <span className="text-xs font-bold text-foreground">
                             {formatTime(startTime, step.hour)}
                           </span>
                         </div>
@@ -484,9 +484,9 @@ export default function Hydration() {
                   </div>
                   {protocol.carbRefuelPlan.meals.map((meal, idx) => (
                     <div key={idx}>
-                      {idx > 0 && <div className="h-px bg-white/5 mx-4" />}
+                      {idx > 0 && <div className="h-px bg-border/50 mx-4" />}
                       <button
-                        className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-white/5 transition-colors"
+                        className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-muted/30 transition-colors"
                         onClick={() => toggleMeal(idx)}
                       >
                         <span className="text-[10px] font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-md px-1.5 py-0.5 shrink-0 max-w-[80px] truncate">
@@ -526,9 +526,9 @@ export default function Hydration() {
             </div>
 
             {/* Critical Reminders — collapsed by default */}
-            <div className="rounded-2xl bg-white/5 border border-white/10 overflow-hidden">
+            <div className="rounded-2xl bg-muted/50 border border-border/50 overflow-hidden">
               <button
-                className="w-full px-4 py-3 flex items-center gap-2 text-left hover:bg-white/5 transition-colors"
+                className="w-full px-4 py-3 flex items-center gap-2 text-left hover:bg-muted/30 transition-colors"
                 onClick={() => setRemindersOpen(o => !o)}
               >
                 <Info className="h-3.5 w-3.5 text-blue-400 shrink-0" />
