@@ -69,9 +69,11 @@ serve(async (req) => {
     const systemPrompt = `Nutrition analysis expert. Analyze meals and return accurate nutrition data.
 
 Rules:
+- Return food items as the user described them, NOT broken into raw sub-ingredients. For example, "2 slices tiger bread" stays as one item — do NOT split it into flour, yeast, water, etc.
+- Each item should have its total macros (not per-100g).
 - Use exact values if user provides calories/macros
 - Estimate only when not specified
-- Use USDA/nutrition databases
+- Use USDA/nutrition databases for reference
 - Realistic portion sizes
 
 Respond ONLY with JSON:
@@ -81,9 +83,9 @@ Respond ONLY with JSON:
   "protein_g": number,
   "carbs_g": number,
   "fats_g": number,
-  "portion_size": "250g",
-  "ingredients": [{"name": "ingredient", "grams": number, "source": "USDA"}],
-  "data_source": "Primary source"
+  "items": [
+    { "name": "Food item as described", "quantity": "2 slices", "calories": number, "protein_g": number, "carbs_g": number, "fats_g": number }
+  ]
 }`;
 
     const userPrompt = `Analyze this meal and provide nutritional information: "${mealDescription}"`;
@@ -101,7 +103,7 @@ Respond ONLY with JSON:
           { role: "user", content: userPrompt }
         ],
         temperature: 0.1,
-        max_tokens: 512
+        max_tokens: 800
       })
     });
 

@@ -44,6 +44,15 @@ interface Ingredient {
   source?: string; // e.g., "USDA", "Nutrition Database", "AI Analysis"
 }
 
+interface AiLineItem {
+  name: string;
+  quantity: string;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fats_g: number;
+}
+
 interface Meal {
   id: string;
   meal_name: string;
@@ -69,7 +78,10 @@ export default function Nutrition() {
   const loading = generatingPlan || loggingMeal !== null || savingAllMeals;
   const [aiPrompt, setAiPrompt] = useState("");
   const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
-  const [isManualDialogOpen, setIsManualDialogOpen] = useState(false);
+  const [isQuickAddSheetOpen, setIsQuickAddSheetOpen] = useState(false);
+  const [quickAddTab, setQuickAddTab] = useState<"ai" | "manual">("ai");
+  const [aiLineItems, setAiLineItems] = useState<AiLineItem[]>([]);
+  const [aiAnalysisComplete, setAiAnalysisComplete] = useState(false);
   const [isManualMacrosDialogOpen, setIsManualMacrosDialogOpen] = useState(false);
   const [profile, setProfile] = useState<any>(null);
   const [dailyCalorieTarget, setDailyCalorieTarget] = useState(2000);
@@ -416,12 +428,12 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     return () => document.removeEventListener('visibilitychange', handleVis);
   }, [userId, selectedDate]);
 
-  // Warmup analyze-meal edge function when AI dialog opens
+  // Warmup analyze-meal edge function when quick add sheet opens on AI tab
   useEffect(() => {
-    if (isAiDialogOpen && userId) {
+    if (isQuickAddSheetOpen && quickAddTab === "ai" && userId) {
       supabase.functions.invoke("analyze-meal", { method: "GET" } as any).catch(() => { });
     }
-  }, [isAiDialogOpen]);
+  }, [isQuickAddSheetOpen, quickAddTab]);
 
   useEffect(() => {
     if (profile) {
@@ -432,14 +444,14 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
   // Auto-open add meal dialog if URL param is present
   useEffect(() => {
     if (searchParams.get("openAddMeal") === "true") {
-      setIsAiDialogOpen(true);
-      // Remove the param from URL
+      setQuickAddTab("ai");
+      setIsQuickAddSheetOpen(true);
       searchParams.delete("openAddMeal");
       setSearchParams(searchParams, { replace: true });
     }
     if (searchParams.get("openManualMeal") === "true") {
-      setIsManualDialogOpen(true);
-      // Remove the param from URL
+      setQuickAddTab("manual");
+      setIsQuickAddSheetOpen(true);
       searchParams.delete("openManualMeal");
       setSearchParams(searchParams, { replace: true });
     }
@@ -1056,8 +1068,66 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     debouncedMacroCalculation(calories, updateFunction);
   };
 
+  const saveMealToDb = async (mealData: {
+    meal_name: string;
+    calories: number;
+    protein_g: number | null;
+    carbs_g: number | null;
+    fats_g: number | null;
+    meal_type: string;
+    portion_size: string | null;
+    recipe_notes: string | null;
+    ingredients: Ingredient[] | null;
+    is_ai_generated: boolean;
+  }) => {
+    if (!userId) throw new Error("Not authenticated");
+
+    const optimisticMeal = {
+      id: `temp-${Date.now()}`,
+      user_id: userId,
+      date: selectedDate,
+      ...mealData,
+      created_at: new Date().toISOString(),
+    };
+
+    setMeals(prevMeals => [...prevMeals, optimisticMeal]);
+
+    triggerHapticSuccess();
+    toast({ title: "Meal added successfully" });
+
+    const insertOperation = async () => {
+      const { error } = await supabase.from("nutrition_logs").insert({
+        user_id: userId,
+        date: selectedDate,
+        ...mealData,
+      } as any);
+      if (error) throw error;
+    };
+
+    const update = createMealLogUpdate(
+      optimisticMeal.id,
+      optimisticMeal,
+      insertOperation
+    );
+
+    update.onSuccess = () => {
+      loadMeals(true);
+    };
+
+    update.onError = (error: any) => {
+      setMeals(prevMeals => prevMeals.filter(meal => meal.id !== optimisticMeal.id));
+      console.error("Error adding meal:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add meal. Please try again.",
+        variant: "destructive",
+      });
+    };
+
+    await optimisticUpdateManager.executeOptimisticUpdate(update);
+  };
+
   const handleAddManualMeal = async () => {
-    // Validate input
     const validationResult = nutritionLogSchema.safeParse({
       meal_name: manualMeal.meal_name,
       calories: parseInt(manualMeal.calories),
@@ -1079,13 +1149,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     }
 
     try {
-      if (!userId) throw new Error("Not authenticated");
-
-      // Create optimistic meal data
-      const optimisticMeal = {
-        id: `temp-${Date.now()}`, // Temporary ID for optimistic update
-        user_id: userId,
-        date: selectedDate,
+      await saveMealToDb({
         meal_name: manualMeal.meal_name,
         calories: parseInt(manualMeal.calories),
         protein_g: manualMeal.protein_g ? parseFloat(manualMeal.protein_g) : null,
@@ -1096,14 +1160,9 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         recipe_notes: manualMeal.recipe_notes || null,
         ingredients: manualMeal.ingredients.length > 0 ? manualMeal.ingredients : null,
         is_ai_generated: false,
-        created_at: new Date().toISOString(),
-      };
+      });
 
-      // Add meal to UI immediately
-      setMeals(prevMeals => [...prevMeals, optimisticMeal]);
-
-      // Close dialog and reset form immediately
-      setIsManualDialogOpen(false);
+      setIsQuickAddSheetOpen(false);
       setManualMeal({
         meal_name: "",
         calories: "",
@@ -1119,57 +1178,6 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       setNewIngredient({ name: "", grams: "" });
       setBarcodeBaseMacros(null);
       setServingMultiplier(1);
-
-      // Show immediate success feedback with hardware Haptic
-      triggerHapticSuccess();
-      toast({ title: "Meal added successfully" });
-
-      // Create the database insert operation
-      const insertOperation = async () => {
-        const { error } = await supabase.from("nutrition_logs").insert({
-          user_id: userId,
-          date: selectedDate,
-          meal_name: manualMeal.meal_name,
-          calories: parseInt(manualMeal.calories),
-          protein_g: manualMeal.protein_g ? parseFloat(manualMeal.protein_g) : null,
-          carbs_g: manualMeal.carbs_g ? parseFloat(manualMeal.carbs_g) : null,
-          fats_g: manualMeal.fats_g ? parseFloat(manualMeal.fats_g) : null,
-          meal_type: manualMeal.meal_type,
-          portion_size: manualMeal.portion_size || null,
-          recipe_notes: manualMeal.recipe_notes || null,
-          ingredients: manualMeal.ingredients.length > 0 ? manualMeal.ingredients : null,
-          is_ai_generated: false,
-        } as any);
-
-        if (error) throw error;
-      };
-
-      // Execute optimistic update
-      const update = createMealLogUpdate(
-        optimisticMeal.id,
-        optimisticMeal,
-        insertOperation
-      );
-
-      update.onSuccess = () => {
-        // Reload meals to get the real data with proper ID (skip cache)
-        loadMeals(true);
-      };
-
-      update.onError = (error: any) => {
-        // Remove the optimistic meal on error
-        setMeals(prevMeals => prevMeals.filter(meal => meal.id !== optimisticMeal.id));
-        console.error("Error adding meal:", error);
-        toast({
-          title: "Error",
-          description: "Failed to add meal. Please try again.",
-          variant: "destructive",
-        });
-      };
-
-      // Execute the background update
-      await optimisticUpdateManager.executeOptimisticUpdate(update);
-
     } catch (error) {
       console.error("Error in optimistic meal update setup:", error);
       toast({
@@ -1191,6 +1199,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     }
 
     setAiAnalyzing(true);
+    setAiAnalysisComplete(false);
     try {
       const mealCacheKey = `meal_${aiMealDescription.toLowerCase().trim().replace(/\s+/g, '_').slice(0, 60)}`;
       let nutritionData = userId ? AIPersistence.load(userId, mealCacheKey) : null;
@@ -1207,21 +1216,39 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         }
       }
 
-      setManualMeal({
+      // Map response items to aiLineItems; fallback for old cached data without items
+      if (nutritionData.items && Array.isArray(nutritionData.items) && nutritionData.items.length > 0) {
+        setAiLineItems(nutritionData.items.map((item: any) => ({
+          name: item.name,
+          quantity: item.quantity || "",
+          calories: item.calories || 0,
+          protein_g: item.protein_g || 0,
+          carbs_g: item.carbs_g || 0,
+          fats_g: item.fats_g || 0,
+        })));
+      } else {
+        // Fallback: create a single line item from top-level totals
+        setAiLineItems([{
+          name: nutritionData.meal_name,
+          quantity: nutritionData.portion_size || "1 serving",
+          calories: nutritionData.calories || 0,
+          protein_g: nutritionData.protein_g || 0,
+          carbs_g: nutritionData.carbs_g || 0,
+          fats_g: nutritionData.fats_g || 0,
+        }]);
+      }
+
+      // Also set the meal name for saving
+      setManualMeal(prev => ({
+        ...prev,
         meal_name: nutritionData.meal_name,
-        calories: nutritionData.calories.toString(),
-        protein_g: nutritionData.protein_g.toString(),
-        carbs_g: nutritionData.carbs_g.toString(),
-        fats_g: nutritionData.fats_g.toString(),
-        meal_type: manualMeal.meal_type,
-        portion_size: nutritionData.portion_size,
-        recipe_notes: manualMeal.recipe_notes,
-        ingredients: nutritionData.ingredients || [],
-      });
+      }));
+
+      setAiAnalysisComplete(true);
 
       toast({
         title: "Analysis complete!",
-        description: "Nutritional information has been filled in",
+        description: "Review the items below and tap Add Meal",
       });
     } catch (error: any) {
       console.error("Error analyzing meal:", error);
@@ -1232,6 +1259,48 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       });
     } finally {
       setAiAnalyzing(false);
+    }
+  };
+
+  const handleSaveAiMeal = async () => {
+    if (aiLineItems.length === 0) return;
+
+    const totalCalories = aiLineItems.reduce((s, i) => s + i.calories, 0);
+    const totalProtein = aiLineItems.reduce((s, i) => s + i.protein_g, 0);
+    const totalCarbs = aiLineItems.reduce((s, i) => s + i.carbs_g, 0);
+    const totalFats = aiLineItems.reduce((s, i) => s + i.fats_g, 0);
+
+    // Store item breakdown in recipe_notes for reference
+    const itemBreakdown = aiLineItems
+      .map(i => `${i.quantity} ${i.name} (${i.calories} cal)`)
+      .join(", ");
+
+    try {
+      await saveMealToDb({
+        meal_name: manualMeal.meal_name || aiMealDescription,
+        calories: Math.round(totalCalories),
+        protein_g: Math.round(totalProtein * 10) / 10,
+        carbs_g: Math.round(totalCarbs * 10) / 10,
+        fats_g: Math.round(totalFats * 10) / 10,
+        meal_type: manualMeal.meal_type,
+        portion_size: null,
+        recipe_notes: itemBreakdown,
+        ingredients: null,
+        is_ai_generated: true,
+      });
+
+      setIsQuickAddSheetOpen(false);
+      setAiLineItems([]);
+      setAiAnalysisComplete(false);
+      setAiMealDescription("");
+      setManualMeal(prev => ({ ...prev, meal_name: "" }));
+    } catch (error) {
+      console.error("Error saving AI meal:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add meal",
+        variant: "destructive",
+      });
     }
   };
 
@@ -1403,49 +1472,50 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
   };
 
   const handleVoiceInput = async (transcribedText: string) => {
+    // Open the bottom sheet on AI tab with transcribed text
     setAiMealDescription(transcribedText);
+    setQuickAddTab("ai");
+    setIsQuickAddSheetOpen(true);
+    setExpandedMealActions(null);
 
-    // Automatically analyze the meal
+    // Auto-trigger analysis so user can review line items before saving
     setAiAnalyzing(true);
+    setAiAnalysisComplete(false);
     try {
       const { data, error } = await supabase.functions.invoke("analyze-meal", {
         body: { mealDescription: transcribedText },
       });
 
       if (error) throw error;
-
       const { nutritionData } = data;
 
-      // Auto-add the meal directly
-      if (!userId) throw new Error("Not authenticated");
+      if (nutritionData.items && Array.isArray(nutritionData.items) && nutritionData.items.length > 0) {
+        setAiLineItems(nutritionData.items.map((item: any) => ({
+          name: item.name,
+          quantity: item.quantity || "",
+          calories: item.calories || 0,
+          protein_g: item.protein_g || 0,
+          carbs_g: item.carbs_g || 0,
+          fats_g: item.fats_g || 0,
+        })));
+      } else {
+        setAiLineItems([{
+          name: nutritionData.meal_name,
+          quantity: nutritionData.portion_size || "1 serving",
+          calories: nutritionData.calories || 0,
+          protein_g: nutritionData.protein_g || 0,
+          carbs_g: nutritionData.carbs_g || 0,
+          fats_g: nutritionData.fats_g || 0,
+        }]);
+      }
 
-      const { error: insertError } = await supabase.from("nutrition_logs").insert({
-        user_id: userId,
-        date: selectedDate,
-        meal_name: nutritionData.meal_name,
-        calories: nutritionData.calories,
-        protein_g: nutritionData.protein_g,
-        carbs_g: nutritionData.carbs_g,
-        fats_g: nutritionData.fats_g,
-        meal_type: "snack", // Default to snack for voice inputs
-        portion_size: nutritionData.portion_size,
-        recipe_notes: null,
-        ingredients: nutritionData.ingredients || null,
-        is_ai_generated: true,
-      } as any);
-
-      if (insertError) throw insertError;
-
-      toast({
-        title: "Meal added!",
-        description: `${nutritionData.meal_name} (${nutritionData.calories} cal) logged successfully`,
-      });
-
-      await loadMeals(true);
+      setManualMeal(prev => ({ ...prev, meal_name: nutritionData.meal_name }));
+      setAiAnalysisComplete(true);
+      toast({ title: "Analysis complete!", description: "Review the items below and tap Add Meal" });
     } catch (error: any) {
       console.error("Error processing voice input:", error);
       toast({
-        title: "Failed to add meal",
+        title: "Analysis failed",
         description: error.message || "Failed to process voice input",
         variant: "destructive",
       });
@@ -1489,7 +1559,8 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       recipe_notes: "",
       ingredients: [],
     });
-    setIsManualDialogOpen(true);
+    setQuickAddTab("manual");
+    setIsQuickAddSheetOpen(true);
   };
 
   // Lookup ingredient nutrition data using AI
@@ -1981,7 +2052,8 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                       <button
                         onClick={() => {
                           setManualMeal(prev => ({ ...prev, meal_type: mealType }));
-                          setIsManualDialogOpen(true);
+                          setQuickAddTab("ai");
+                          setIsQuickAddSheetOpen(true);
                           setExpandedMealActions(null);
                         }}
                         className="flex flex-col items-center gap-1 py-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors"
@@ -2009,7 +2081,10 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                             ingredients: [],
                           }));
                           setAiMealDescription("");
-                          setIsManualDialogOpen(true);
+                          setAiLineItems([]);
+                          setAiAnalysisComplete(false);
+                          setQuickAddTab("manual");
+                          setIsQuickAddSheetOpen(true);
                           setExpandedMealActions(null);
                         }}
                         className="flex flex-col items-center gap-1 py-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors"
@@ -2206,362 +2281,460 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           mealType={foodSearchMealType}
         />
 
-        {/* Add Meal Dialog (Manual + AI Quick Fill) */}
-        <Dialog open={isManualDialogOpen} onOpenChange={(open) => {
-          setIsManualDialogOpen(open);
+        {/* Quick Add Bottom Sheet (AI + Manual tabs) */}
+        <Sheet open={isQuickAddSheetOpen} onOpenChange={(open) => {
+          setIsQuickAddSheetOpen(open);
           if (!open) {
             setIngredientLookupError(null);
             setBarcodeBaseMacros(null);
             setServingMultiplier(1);
+            setAiLineItems([]);
+            setAiAnalysisComplete(false);
           }
         }}>
-          <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto w-[95vw] sm:w-full">
-            <DialogHeader>
-              <DialogTitle>Add Meal</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3 pt-1">
+          <SheetContent side="bottom" className="h-[85vh] overflow-y-auto pb-8 pt-0">
+            {/* Drag handle */}
+            <div className="flex justify-center pt-3 pb-2">
+              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+            </div>
 
-              {/* AI Quick Fill — full meal */}
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Describe your meal for AI fill…"
-                  value={aiMealDescription}
-                  onChange={(e) => setAiMealDescription(e.target.value)}
-                  disabled={aiAnalyzing}
-                  className="flex-1 text-sm"
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={handleAiAnalyzeMeal}
-                  disabled={aiAnalyzing || !aiMealDescription.trim()}
-                  className="shrink-0"
-                >
-                  <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                  {aiAnalyzing ? "Analyzing…" : "Fill"}
-                </Button>
+            <SheetHeader className="pb-3">
+              <SheetTitle className="text-base">Add Meal</SheetTitle>
+            </SheetHeader>
+
+            {/* Pill tab switcher */}
+            <div className="flex gap-1 p-1 rounded-xl bg-muted/50 mb-4">
+              <button
+                onClick={() => setQuickAddTab("ai")}
+                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
+                  quickAddTab === "ai"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Sparkles className="h-3.5 w-3.5 inline mr-1.5 -mt-0.5" />
+                AI Quick Fill
+              </button>
+              <button
+                onClick={() => setQuickAddTab("manual")}
+                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
+                  quickAddTab === "manual"
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Edit2 className="h-3.5 w-3.5 inline mr-1.5 -mt-0.5" />
+                Manual
+              </button>
+            </div>
+
+            {/* Meal type selector (shared) */}
+            <div className="mb-4">
+              <Select
+                value={manualMeal.meal_type}
+                onValueChange={(v) => setManualMeal(prev => ({ ...prev, meal_type: v }))}
+              >
+                <SelectTrigger className="text-sm h-9">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="breakfast">Breakfast</SelectItem>
+                  <SelectItem value="lunch">Lunch</SelectItem>
+                  <SelectItem value="dinner">Dinner</SelectItem>
+                  <SelectItem value="snack">Snack</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* ── AI Tab ── */}
+            {quickAddTab === "ai" && (
+              <div className={`space-y-3 ${!aiAnalysisComplete ? "flex flex-col items-center justify-center min-h-[40vh]" : ""}`}>
+                <div className={`flex gap-2 ${!aiAnalysisComplete ? "w-full max-w-md" : ""}`}>
+                  <Input
+                    placeholder="e.g. 2 slices tiger bread with nutella…"
+                    value={aiMealDescription}
+                    onChange={(e) => setAiMealDescription(e.target.value)}
+                    disabled={aiAnalyzing}
+                    className="flex-1 text-sm"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && aiMealDescription.trim() && !aiAnalyzing) {
+                        handleAiAnalyzeMeal();
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleAiAnalyzeMeal}
+                    disabled={aiAnalyzing || !aiMealDescription.trim()}
+                    className="shrink-0"
+                  >
+                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                    {aiAnalyzing ? "Analyzing…" : "Analyze"}
+                  </Button>
+                </div>
+
+                {/* AI Line Items */}
+                {aiAnalysisComplete && aiLineItems.length > 0 && (
+                  <div className="space-y-2 animate-fade-in">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      Items
+                    </p>
+                    <div className="rounded-xl border border-border/40 divide-y divide-border/20 overflow-hidden">
+                      {aiLineItems.map((item, idx) => (
+                        <div key={idx} className="flex items-center gap-2 px-3 py-2.5">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium truncate">{item.name}</p>
+                            <p className="text-[10px] text-muted-foreground">{item.quantity}</p>
+                          </div>
+                          <div className="flex items-center gap-2 text-[10px] text-muted-foreground tabular-nums flex-shrink-0">
+                            <span className="font-semibold text-foreground">{item.calories}</span>
+                            <span>{Math.round(item.protein_g)}P</span>
+                            <span>{Math.round(item.carbs_g)}C</span>
+                            <span>{Math.round(item.fats_g)}F</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAiLineItems(prev => prev.filter((_, i) => i !== idx));
+                            }}
+                            className="h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Totals bar */}
+                    {aiLineItems.length > 0 && (
+                      <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-muted/40 text-xs">
+                        <span className="font-semibold">Total</span>
+                        <div className="flex gap-3 tabular-nums">
+                          <span className="font-semibold text-primary">
+                            {aiLineItems.reduce((s, i) => s + i.calories, 0)} kcal
+                          </span>
+                          <span className="text-muted-foreground">
+                            {Math.round(aiLineItems.reduce((s, i) => s + i.protein_g, 0))}P
+                          </span>
+                          <span className="text-muted-foreground">
+                            {Math.round(aiLineItems.reduce((s, i) => s + i.carbs_g, 0))}C
+                          </span>
+                          <span className="text-muted-foreground">
+                            {Math.round(aiLineItems.reduce((s, i) => s + i.fats_g, 0))}F
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    <Button
+                      onClick={handleSaveAiMeal}
+                      disabled={aiLineItems.length === 0}
+                      className="w-full"
+                    >
+                      Add Meal
+                    </Button>
+                  </div>
+                )}
               </div>
+            )}
 
-              <div className="flex items-center gap-2">
-                <div className="flex-1 border-t border-border/40" />
-                <span className="text-[10px] uppercase tracking-widest text-muted-foreground">or enter manually</span>
-                <div className="flex-1 border-t border-border/40" />
-              </div>
-
-              {/* Name + Type */}
-              <div className="grid grid-cols-2 gap-2">
+            {/* ── Manual Tab ── */}
+            {quickAddTab === "manual" && (
+              <div className="space-y-3">
+                {/* Name */}
                 <Input
                   placeholder="Meal name *"
                   value={manualMeal.meal_name}
                   onChange={(e) => setManualMeal({ ...manualMeal, meal_name: e.target.value })}
                   className="text-sm"
                 />
-                <Select
-                  value={manualMeal.meal_type}
-                  onValueChange={(v) => setManualMeal({ ...manualMeal, meal_type: v })}
-                >
-                  <SelectTrigger className="text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="breakfast">Breakfast</SelectItem>
-                    <SelectItem value="lunch">Lunch</SelectItem>
-                    <SelectItem value="dinner">Dinner</SelectItem>
-                    <SelectItem value="snack">Snack</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
 
-              {/* Serving Size Adjustment — only for barcode-scanned items */}
-              {barcodeBaseMacros && (
-                <div className="rounded-xl border border-border/50 bg-muted/30 p-3 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Serving Size</p>
-                    <span className="text-xs text-muted-foreground">{barcodeBaseMacros.serving_size}</span>
-                  </div>
-
-                  {/* Custom gram amount */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground flex-1">Amount</span>
-                    <div className="flex items-center gap-1">
-                      <Input
-                        type="number"
-                        min="1"
-                        step="1"
-                        value={Math.round(servingMultiplier * barcodeBaseMacros.serving_weight_g)}
-                        onChange={(e) => {
-                          const grams = parseFloat(e.target.value);
-                          if (!isNaN(grams) && grams > 0) {
-                            const m = grams / barcodeBaseMacros.serving_weight_g;
-                            setServingMultiplier(Math.round(m * 10) / 10);
+                {/* Serving Size Adjustment — only for barcode-scanned items */}
+                {barcodeBaseMacros && (
+                  <div className="rounded-xl border border-border/50 bg-muted/30 p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Serving Size</p>
+                      <span className="text-xs text-muted-foreground">{barcodeBaseMacros.serving_size}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground flex-1">Amount</span>
+                      <div className="flex items-center gap-1">
+                        <Input
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={Math.round(servingMultiplier * barcodeBaseMacros.serving_weight_g)}
+                          onChange={(e) => {
+                            const grams = parseFloat(e.target.value);
+                            if (!isNaN(grams) && grams > 0) {
+                              const m = grams / barcodeBaseMacros.serving_weight_g;
+                              setServingMultiplier(Math.round(m * 10) / 10);
+                              setManualMeal(prev => ({
+                                ...prev,
+                                calories: Math.round(barcodeBaseMacros.calories * m).toString(),
+                                protein_g: (Math.round(barcodeBaseMacros.protein_g * m * 10) / 10).toString(),
+                                carbs_g: (Math.round(barcodeBaseMacros.carbs_g * m * 10) / 10).toString(),
+                                fats_g: (Math.round(barcodeBaseMacros.fats_g * m * 10) / 10).toString(),
+                                portion_size: `${Math.round(grams)}g`,
+                              }));
+                            }
+                          }}
+                          className="w-20 text-sm text-right h-8"
+                        />
+                        <span className="text-sm text-muted-foreground">g</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground flex-1">Servings</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = Math.max(0.5, Math.round((servingMultiplier - 0.5) * 10) / 10);
+                            setServingMultiplier(next);
                             setManualMeal(prev => ({
                               ...prev,
-                              calories: Math.round(barcodeBaseMacros.calories * m).toString(),
-                              protein_g: (Math.round(barcodeBaseMacros.protein_g * m * 10) / 10).toString(),
-                              carbs_g: (Math.round(barcodeBaseMacros.carbs_g * m * 10) / 10).toString(),
-                              fats_g: (Math.round(barcodeBaseMacros.fats_g * m * 10) / 10).toString(),
-                              portion_size: `${Math.round(grams)}g`,
+                              calories: Math.round(barcodeBaseMacros.calories * next).toString(),
+                              protein_g: (Math.round(barcodeBaseMacros.protein_g * next * 10) / 10).toString(),
+                              carbs_g: (Math.round(barcodeBaseMacros.carbs_g * next * 10) / 10).toString(),
+                              fats_g: (Math.round(barcodeBaseMacros.fats_g * next * 10) / 10).toString(),
+                              portion_size: `${Math.round(next * barcodeBaseMacros.serving_weight_g)}g`,
                             }));
-                          }
-                        }}
-                        className="w-20 text-sm text-right h-8"
-                      />
-                      <span className="text-sm text-muted-foreground">g</span>
-                    </div>
-                  </div>
-
-                  {/* Servings stepper */}
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-muted-foreground flex-1">Servings</span>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const next = Math.max(0.5, Math.round((servingMultiplier - 0.5) * 10) / 10);
-                          setServingMultiplier(next);
-                          setManualMeal(prev => ({
-                            ...prev,
-                            calories: Math.round(barcodeBaseMacros.calories * next).toString(),
-                            protein_g: (Math.round(barcodeBaseMacros.protein_g * next * 10) / 10).toString(),
-                            carbs_g: (Math.round(barcodeBaseMacros.carbs_g * next * 10) / 10).toString(),
-                            fats_g: (Math.round(barcodeBaseMacros.fats_g * next * 10) / 10).toString(),
-                            portion_size: `${Math.round(next * barcodeBaseMacros.serving_weight_g)}g`,
-                          }));
-                        }}
-                        disabled={servingMultiplier <= 0.5}
-                        className="h-7 w-7 rounded-full border border-border flex items-center justify-center text-base font-medium hover:bg-muted transition-colors disabled:opacity-40"
-                      >
-                        −
-                      </button>
-                      <span className="text-sm font-semibold w-8 text-center tabular-nums">{servingMultiplier}×</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const next = Math.min(10, Math.round((servingMultiplier + 0.5) * 10) / 10);
-                          setServingMultiplier(next);
-                          setManualMeal(prev => ({
-                            ...prev,
-                            calories: Math.round(barcodeBaseMacros.calories * next).toString(),
-                            protein_g: (Math.round(barcodeBaseMacros.protein_g * next * 10) / 10).toString(),
-                            carbs_g: (Math.round(barcodeBaseMacros.carbs_g * next * 10) / 10).toString(),
-                            fats_g: (Math.round(barcodeBaseMacros.fats_g * next * 10) / 10).toString(),
-                            portion_size: `${Math.round(next * barcodeBaseMacros.serving_weight_g)}g`,
-                          }));
-                        }}
-                        className="h-7 w-7 rounded-full border border-border flex items-center justify-center text-base font-medium hover:bg-muted transition-colors"
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Live macro preview */}
-                  <div className="flex gap-3 pt-1 border-t border-border/40 text-xs">
-                    <span className="font-semibold text-primary">{manualMeal.calories} kcal</span>
-                    <span className="text-muted-foreground">{manualMeal.protein_g}g P</span>
-                    <span className="text-muted-foreground">{manualMeal.carbs_g}g C</span>
-                    <span className="text-muted-foreground">{manualMeal.fats_g}g F</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Calories */}
-              <div>
-                <Input
-                  type="number"
-                  placeholder="Calories *"
-                  value={manualMeal.calories}
-                  onChange={(e) => handleCalorieChange(e.target.value, setManualMeal)}
-                  className="text-sm"
-                />
-                {manualMeal.ingredients.some(ing => ing.calories_per_100g !== undefined) && (
-                  <p className="text-[10px] text-muted-foreground mt-1">Auto-calculated from ingredients</p>
-                )}
-              </div>
-
-              {/* P / C / F */}
-              <div className="grid grid-cols-3 gap-2">
-                <Input
-                  type="number"
-                  step="0.1"
-                  placeholder="Protein g"
-                  value={manualMeal.protein_g}
-                  onChange={(e) => setManualMeal({ ...manualMeal, protein_g: e.target.value })}
-                  className="text-sm"
-                />
-                <Input
-                  type="number"
-                  step="0.1"
-                  placeholder="Carbs g"
-                  value={manualMeal.carbs_g}
-                  onChange={(e) => setManualMeal({ ...manualMeal, carbs_g: e.target.value })}
-                  className="text-sm"
-                />
-                <Input
-                  type="number"
-                  step="0.1"
-                  placeholder="Fats g"
-                  value={manualMeal.fats_g}
-                  onChange={(e) => setManualMeal({ ...manualMeal, fats_g: e.target.value })}
-                  className="text-sm"
-                />
-              </div>
-
-              {/* Ingredients */}
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground pt-1">
-                Ingredients (optional)
-              </p>
-
-              {/* AI ingredient fill */}
-              <div className="flex gap-2">
-                <Input
-                  placeholder="e.g. 250g chicken breast"
-                  value={aiIngredientDescription}
-                  onChange={(e) => setAiIngredientDescription(e.target.value)}
-                  disabled={aiAnalyzingIngredient}
-                  className="flex-1 text-sm"
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={handleAiAnalyzeIngredient}
-                  disabled={aiAnalyzingIngredient || !aiIngredientDescription.trim()}
-                  className="shrink-0"
-                >
-                  <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                  {aiAnalyzingIngredient ? "…" : "AI Add"}
-                </Button>
-              </div>
-
-              {/* Manual ingredient add */}
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Ingredient name"
-                  value={newIngredient.name}
-                  onChange={(e) => setNewIngredient({ ...newIngredient, name: e.target.value })}
-                  className="flex-1 text-sm"
-                />
-                <Input
-                  type="number"
-                  placeholder="g"
-                  value={newIngredient.grams}
-                  onChange={(e) => setNewIngredient({ ...newIngredient, grams: e.target.value })}
-                  className="w-16 text-sm"
-                />
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={async () => {
-                    if (!newIngredient.name.trim() || !newIngredient.grams) {
-                      toast({ title: "Missing Information", description: "Please enter ingredient name and grams", variant: "destructive" });
-                      return;
-                    }
-                    const ingredientName = newIngredient.name.trim();
-                    const grams = parseFloat(newIngredient.grams);
-                    if (isNaN(grams) || grams <= 0) {
-                      toast({ title: "Invalid Amount", description: "Please enter a valid number of grams", variant: "destructive" });
-                      return;
-                    }
-                    setLookingUpIngredient(true);
-                    setIngredientLookupError(null);
-                    try {
-                      const nutritionData = await lookupIngredientNutrition(ingredientName);
-                      if (nutritionData) {
-                        const newIngredients = [
-                          ...manualMeal.ingredients,
-                          {
-                            name: ingredientName,
-                            grams,
-                            calories_per_100g: nutritionData.calories_per_100g,
-                            protein_per_100g: nutritionData.protein_per_100g,
-                            carbs_per_100g: nutritionData.carbs_per_100g,
-                            fats_per_100g: nutritionData.fats_per_100g,
-                            source: nutritionData.source,
-                          }
-                        ];
-                        const tc = newIngredients.reduce((s, i) => s + (i.calories_per_100g || 0) * i.grams / 100, 0);
-                        const tp = newIngredients.reduce((s, i) => s + (i.protein_per_100g || 0) * i.grams / 100, 0);
-                        const tcarb = newIngredients.reduce((s, i) => s + (i.carbs_per_100g || 0) * i.grams / 100, 0);
-                        const tf = newIngredients.reduce((s, i) => s + (i.fats_per_100g || 0) * i.grams / 100, 0);
-                        setManualMeal({
-                          ...manualMeal,
-                          ingredients: newIngredients,
-                          calories: Math.round(tc).toString(),
-                          protein_g: tp > 0 ? (Math.round(tp * 10) / 10).toString() : "",
-                          carbs_g: tcarb > 0 ? (Math.round(tcarb * 10) / 10).toString() : "",
-                          fats_g: tf > 0 ? (Math.round(tf * 10) / 10).toString() : "",
-                        });
-                        setNewIngredient({ name: "", grams: "" });
-                        toast({ title: "Ingredient added", description: `Found nutrition data for ${ingredientName}` });
-                      } else {
-                        setManualNutritionDialog({ open: true, ingredientName, grams, calories_per_100g: "", protein_per_100g: "", carbs_per_100g: "", fats_per_100g: "" });
-                      }
-                    } catch {
-                      setManualNutritionDialog({ open: true, ingredientName, grams, calories_per_100g: "", protein_per_100g: "", carbs_per_100g: "", fats_per_100g: "" });
-                    } finally {
-                      setLookingUpIngredient(false);
-                    }
-                  }}
-                  disabled={lookingUpIngredient || !newIngredient.name.trim() || !newIngredient.grams}
-                  className="shrink-0"
-                >
-                  {lookingUpIngredient
-                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    : <Plus className="h-3.5 w-3.5" />}
-                </Button>
-              </div>
-
-              {ingredientLookupError && (
-                <p className="text-xs text-destructive">{ingredientLookupError}</p>
-              )}
-
-              {/* Ingredients list */}
-              {manualMeal.ingredients.length > 0 && (
-                <div className="rounded-md border border-border/40 divide-y divide-border/30 overflow-hidden">
-                  {manualMeal.ingredients.map((ingredient, idx) => {
-                    const cal = ingredient.calories_per_100g !== undefined
-                      ? Math.round(ingredient.calories_per_100g * ingredient.grams / 100)
-                      : null;
-                    return (
-                      <div key={idx} className="flex items-center gap-2 px-3 py-2 text-sm">
-                        <span className="flex-1 truncate">{ingredient.name}</span>
-                        <span className="text-xs text-muted-foreground shrink-0">{ingredient.grams}g</span>
-                        {cal !== null && (
-                          <span className="text-xs text-muted-foreground shrink-0">{cal} kcal</span>
-                        )}
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-5 w-5 shrink-0 text-muted-foreground hover:text-destructive"
-                          onClick={() => {
-                            const updated = [...manualMeal.ingredients];
-                            updated.splice(idx, 1);
-                            setManualMeal({ ...manualMeal, ingredients: updated });
                           }}
+                          disabled={servingMultiplier <= 0.5}
+                          className="h-7 w-7 rounded-full border border-border flex items-center justify-center text-base font-medium hover:bg-muted transition-colors disabled:opacity-40"
                         >
-                          <X className="h-3 w-3" />
-                        </Button>
+                          −
+                        </button>
+                        <span className="text-sm font-semibold w-8 text-center tabular-nums">{servingMultiplier}×</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const next = Math.min(10, Math.round((servingMultiplier + 0.5) * 10) / 10);
+                            setServingMultiplier(next);
+                            setManualMeal(prev => ({
+                              ...prev,
+                              calories: Math.round(barcodeBaseMacros.calories * next).toString(),
+                              protein_g: (Math.round(barcodeBaseMacros.protein_g * next * 10) / 10).toString(),
+                              carbs_g: (Math.round(barcodeBaseMacros.carbs_g * next * 10) / 10).toString(),
+                              fats_g: (Math.round(barcodeBaseMacros.fats_g * next * 10) / 10).toString(),
+                              portion_size: `${Math.round(next * barcodeBaseMacros.serving_weight_g)}g`,
+                            }));
+                          }}
+                          className="h-7 w-7 rounded-full border border-border flex items-center justify-center text-base font-medium hover:bg-muted transition-colors"
+                        >
+                          +
+                        </button>
                       </div>
-                    );
-                  })}
-                  {manualMeal.ingredients.some(ing => ing.calories_per_100g !== undefined) && (
-                    <div className="flex justify-between px-3 py-1.5 text-xs text-muted-foreground bg-muted/30">
-                      <span>Total</span>
-                      <span>{manualMeal.ingredients.reduce((s, i) => s + i.grams, 0)}g</span>
                     </div>
+                    <div className="flex gap-3 pt-1 border-t border-border/40 text-xs">
+                      <span className="font-semibold text-primary">{manualMeal.calories} kcal</span>
+                      <span className="text-muted-foreground">{manualMeal.protein_g}g P</span>
+                      <span className="text-muted-foreground">{manualMeal.carbs_g}g C</span>
+                      <span className="text-muted-foreground">{manualMeal.fats_g}g F</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Calories */}
+                <div>
+                  <Input
+                    type="number"
+                    placeholder="Calories *"
+                    value={manualMeal.calories}
+                    onChange={(e) => handleCalorieChange(e.target.value, setManualMeal)}
+                    className="text-sm"
+                  />
+                  {manualMeal.ingredients.some(ing => ing.calories_per_100g !== undefined) && (
+                    <p className="text-[10px] text-muted-foreground mt-1">Auto-calculated from ingredients</p>
                   )}
                 </div>
-              )}
 
-              <Button onClick={handleAddManualMeal} disabled={savingAllMeals} className="w-full mt-1">
-                {savingAllMeals ? "Adding…" : "Add Meal"}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+                {/* P / C / F */}
+                <div className="grid grid-cols-3 gap-2">
+                  <Input
+                    type="number"
+                    step="0.1"
+                    placeholder="Protein g"
+                    value={manualMeal.protein_g}
+                    onChange={(e) => setManualMeal({ ...manualMeal, protein_g: e.target.value })}
+                    className="text-sm"
+                  />
+                  <Input
+                    type="number"
+                    step="0.1"
+                    placeholder="Carbs g"
+                    value={manualMeal.carbs_g}
+                    onChange={(e) => setManualMeal({ ...manualMeal, carbs_g: e.target.value })}
+                    className="text-sm"
+                  />
+                  <Input
+                    type="number"
+                    step="0.1"
+                    placeholder="Fats g"
+                    value={manualMeal.fats_g}
+                    onChange={(e) => setManualMeal({ ...manualMeal, fats_g: e.target.value })}
+                    className="text-sm"
+                  />
+                </div>
+
+                {/* Ingredients */}
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground pt-1">
+                  Ingredients (optional)
+                </p>
+
+                {/* AI ingredient fill */}
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="e.g. 250g chicken breast"
+                    value={aiIngredientDescription}
+                    onChange={(e) => setAiIngredientDescription(e.target.value)}
+                    disabled={aiAnalyzingIngredient}
+                    className="flex-1 text-sm"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleAiAnalyzeIngredient}
+                    disabled={aiAnalyzingIngredient || !aiIngredientDescription.trim()}
+                    className="shrink-0"
+                  >
+                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                    {aiAnalyzingIngredient ? "…" : "AI Add"}
+                  </Button>
+                </div>
+
+                {/* Manual ingredient add */}
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Ingredient name"
+                    value={newIngredient.name}
+                    onChange={(e) => setNewIngredient({ ...newIngredient, name: e.target.value })}
+                    className="flex-1 text-sm"
+                  />
+                  <Input
+                    type="number"
+                    placeholder="g"
+                    value={newIngredient.grams}
+                    onChange={(e) => setNewIngredient({ ...newIngredient, grams: e.target.value })}
+                    className="w-16 text-sm"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      if (!newIngredient.name.trim() || !newIngredient.grams) {
+                        toast({ title: "Missing Information", description: "Please enter ingredient name and grams", variant: "destructive" });
+                        return;
+                      }
+                      const ingredientName = newIngredient.name.trim();
+                      const grams = parseFloat(newIngredient.grams);
+                      if (isNaN(grams) || grams <= 0) {
+                        toast({ title: "Invalid Amount", description: "Please enter a valid number of grams", variant: "destructive" });
+                        return;
+                      }
+                      setLookingUpIngredient(true);
+                      setIngredientLookupError(null);
+                      try {
+                        const nutritionData = await lookupIngredientNutrition(ingredientName);
+                        if (nutritionData) {
+                          const newIngredients = [
+                            ...manualMeal.ingredients,
+                            {
+                              name: ingredientName,
+                              grams,
+                              calories_per_100g: nutritionData.calories_per_100g,
+                              protein_per_100g: nutritionData.protein_per_100g,
+                              carbs_per_100g: nutritionData.carbs_per_100g,
+                              fats_per_100g: nutritionData.fats_per_100g,
+                              source: nutritionData.source,
+                            }
+                          ];
+                          const tc = newIngredients.reduce((s, i) => s + (i.calories_per_100g || 0) * i.grams / 100, 0);
+                          const tp = newIngredients.reduce((s, i) => s + (i.protein_per_100g || 0) * i.grams / 100, 0);
+                          const tcarb = newIngredients.reduce((s, i) => s + (i.carbs_per_100g || 0) * i.grams / 100, 0);
+                          const tf = newIngredients.reduce((s, i) => s + (i.fats_per_100g || 0) * i.grams / 100, 0);
+                          setManualMeal({
+                            ...manualMeal,
+                            ingredients: newIngredients,
+                            calories: Math.round(tc).toString(),
+                            protein_g: tp > 0 ? (Math.round(tp * 10) / 10).toString() : "",
+                            carbs_g: tcarb > 0 ? (Math.round(tcarb * 10) / 10).toString() : "",
+                            fats_g: tf > 0 ? (Math.round(tf * 10) / 10).toString() : "",
+                          });
+                          setNewIngredient({ name: "", grams: "" });
+                          toast({ title: "Ingredient added", description: `Found nutrition data for ${ingredientName}` });
+                        } else {
+                          setManualNutritionDialog({ open: true, ingredientName, grams, calories_per_100g: "", protein_per_100g: "", carbs_per_100g: "", fats_per_100g: "" });
+                        }
+                      } catch {
+                        setManualNutritionDialog({ open: true, ingredientName, grams, calories_per_100g: "", protein_per_100g: "", carbs_per_100g: "", fats_per_100g: "" });
+                      } finally {
+                        setLookingUpIngredient(false);
+                      }
+                    }}
+                    disabled={lookingUpIngredient || !newIngredient.name.trim() || !newIngredient.grams}
+                    className="shrink-0"
+                  >
+                    {lookingUpIngredient
+                      ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      : <Plus className="h-3.5 w-3.5" />}
+                  </Button>
+                </div>
+
+                {ingredientLookupError && (
+                  <p className="text-xs text-destructive">{ingredientLookupError}</p>
+                )}
+
+                {/* Ingredients list */}
+                {manualMeal.ingredients.length > 0 && (
+                  <div className="rounded-md border border-border/40 divide-y divide-border/30 overflow-hidden">
+                    {manualMeal.ingredients.map((ingredient, idx) => {
+                      const cal = ingredient.calories_per_100g !== undefined
+                        ? Math.round(ingredient.calories_per_100g * ingredient.grams / 100)
+                        : null;
+                      return (
+                        <div key={idx} className="flex items-center gap-2 px-3 py-2 text-sm">
+                          <span className="flex-1 truncate">{ingredient.name}</span>
+                          <span className="text-xs text-muted-foreground shrink-0">{ingredient.grams}g</span>
+                          {cal !== null && (
+                            <span className="text-xs text-muted-foreground shrink-0">{cal} kcal</span>
+                          )}
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-5 w-5 shrink-0 text-muted-foreground hover:text-destructive"
+                            onClick={() => {
+                              const updated = [...manualMeal.ingredients];
+                              updated.splice(idx, 1);
+                              setManualMeal({ ...manualMeal, ingredients: updated });
+                            }}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                    {manualMeal.ingredients.some(ing => ing.calories_per_100g !== undefined) && (
+                      <div className="flex justify-between px-3 py-1.5 text-xs text-muted-foreground bg-muted/30">
+                        <span>Total</span>
+                        <span>{manualMeal.ingredients.reduce((s, i) => s + i.grams, 0)}g</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <Button onClick={handleAddManualMeal} disabled={savingAllMeals} className="w-full mt-1">
+                  {savingAllMeals ? "Adding…" : "Add Meal"}
+                </Button>
+              </div>
+            )}
+          </SheetContent>
+        </Sheet>
 
         {/* AI Meal Plan Dialog */}
         <Dialog open={isAiDialogOpen} onOpenChange={setIsAiDialogOpen}>

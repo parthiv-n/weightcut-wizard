@@ -126,8 +126,7 @@ All colors MUST be HSL.
     overscroll-behavior: none;
     /* Smooth scrolling on iOS */
     -webkit-overflow-scrolling: touch;
-    /* Prevent white flash on iOS cold start before dark theme loads */
-    background-color: #050505;
+    background-color: hsl(var(--background));
   }
 
   body {
