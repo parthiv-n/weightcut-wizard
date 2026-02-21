@@ -18,9 +18,10 @@ export function usePullToRefresh() {
 
     // Refs to track touch state without re-renders
     const startY = useRef(0);
+    const startX = useRef(0);
     const isPulling = useRef(false);
+    const isGestureLocked = useRef(false); // Once locked, we either refresh or ignore
     const hasTriggeredHaptic = useRef(false);
-    const wasAtTop = useRef(false);
 
     const handleRefresh = useCallback(async () => {
         setIsRefreshing(true);
@@ -43,24 +44,53 @@ export function usePullToRefresh() {
         if (!el) return;
 
         const onTouchStart = (e: TouchEvent) => {
-            // Only allow pull-to-refresh if the user is already at the very top
-            wasAtTop.current = el.scrollTop <= 1;
-            if (wasAtTop.current && !isRefreshing) {
+            // STRICT RULE: User MUST be at the absolute top of the scroll container to even begin a pull
+            if (el.scrollTop <= 0 && !isRefreshing) {
                 startY.current = e.touches[0].clientY;
+                startX.current = e.touches[0].clientX;
                 isPulling.current = true;
+                isGestureLocked.current = false;
                 hasTriggeredHaptic.current = false;
             }
         };
 
         const onTouchMove = (e: TouchEvent) => {
-            if (!isPulling.current || isRefreshing || !wasAtTop.current) return;
+            if (!isPulling.current || isRefreshing) return;
+
+            // If we've scrolled down at all during the pull, cancel the pull instantly
+            if (el.scrollTop > 0) {
+                isPulling.current = false;
+                setPullDistance(0);
+                return;
+            }
 
             const currentY = e.touches[0].clientY;
-            const diff = currentY - startY.current;
+            const currentX = e.touches[0].clientX;
+            const diffY = currentY - startY.current;
+            const diffX = Math.abs(currentX - startX.current);
 
-            if (diff > 0 && el.scrollTop <= 1) {
-                // Apply resistance: the further you pull, the harder it gets
-                const resistedDiff = Math.min(diff * 0.5, 150);
+            // Phase 1: Deadzone & Directional Check (Only run before gesture is locked)
+            if (!isGestureLocked.current) {
+                // If they swipe left/right more than 15px BEFORE wiping down 15px, cancel the pull.
+                if (diffX > 15 && diffX > diffY) {
+                    isPulling.current = false;
+                    return;
+                }
+
+                // If they haven't pulled down at least 15px yet, do nothing (Deadzone)
+                if (diffY < 15) {
+                    return;
+                }
+
+                // If we pass the deadzone strictly downwards while at the top, lock it in!
+                isGestureLocked.current = true;
+            }
+
+            // Phase 2: Active Pulling
+            if (isGestureLocked.current && diffY > 0) {
+                // Apply a tight iOS native-feeling resistance curve
+                // diffY squared logic slows it down dramatically the further you pull
+                const resistedDiff = Math.min(diffY * 0.4, 100);
                 setPullDistance(resistedDiff);
 
                 // Haptic feedback when crossing the threshold
@@ -69,20 +99,15 @@ export function usePullToRefresh() {
                     triggerHaptic(ImpactStyle.Heavy);
                 }
 
-                // Prevent default scroll when pulling down from top
-                if (diff > 10) {
-                    e.preventDefault();
-                }
-            } else {
-                // User scrolled back up or container is not at top
-                setPullDistance(0);
-                isPulling.current = false;
+                // Prevent default scroll to stop Safari from rubber-banding the whole page
+                e.preventDefault();
             }
         };
 
         const onTouchEnd = () => {
             if (!isPulling.current) return;
             isPulling.current = false;
+            isGestureLocked.current = false;
 
             if (pullDistance >= PULL_THRESHOLD && !isRefreshing) {
                 handleRefresh();
@@ -92,10 +117,10 @@ export function usePullToRefresh() {
         };
 
         const onScroll = () => {
-            // If the container scrolls at all, cancel any active pull gesture
-            if (el.scrollTop > 1 && isPulling.current) {
+            // Failsafe: if the container scrolls natively, terminate the artificial pull
+            if (el.scrollTop > 0 && isPulling.current) {
                 isPulling.current = false;
-                wasAtTop.current = false;
+                isGestureLocked.current = false;
                 setPullDistance(0);
             }
         };

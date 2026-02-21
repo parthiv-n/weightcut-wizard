@@ -24,6 +24,7 @@ const menuItems = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
   { title: "Goals", url: "/goals", icon: Target },
   { title: "Fight Camps", url: "/fight-camps", icon: Trophy },
+  { title: "Fight Camp Calendar", url: "/fight-camp-calendar", icon: Calendar },
   { title: "Nutrition", url: "/nutrition", icon: Utensils },
   { title: "Weight Tracker", url: "/weight", icon: Weight },
   { title: "Rehydration", url: "/hydration", icon: Droplets },
@@ -47,10 +48,10 @@ export function AppSidebar() {
       {/* Mobile-optimized header with responsive sizing */}
       <SidebarHeader className="p-3 sm:p-4">
         <div className="flex items-center gap-2 sm:gap-3">
-          <img 
-            src={wizardLogo} 
-            alt="Wizard" 
-            className="w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0" 
+          <img
+            src={wizardLogo}
+            alt="Wizard"
+            className="w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0"
           />
           <h1 className="text-base sm:text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent truncate">
             Weight Cut Wizard
@@ -67,14 +68,13 @@ export function AppSidebar() {
               {menuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild className="touch-target min-h-[44px]">
-                    <NavLink 
+                    <NavLink
                       to={item.url}
                       onClick={handleNavClick}
-                      className={({ isActive }) => 
-                        `transition-all duration-200 ease-in-out px-3 sm:px-4 py-2.5 sm:py-2 rounded-md ${
-                          isActive 
-                            ? "bg-sidebar-accent text-sidebar-accent-foreground" 
-                            : "hover:bg-sidebar-accent/50 active:bg-sidebar-accent/70"
+                      className={({ isActive }) =>
+                        `transition-all duration-200 ease-in-out px-3 sm:px-4 py-2.5 sm:py-2 rounded-md ${isActive
+                          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                          : "hover:bg-sidebar-accent/50 active:bg-sidebar-accent/70"
                         }`
                       }
                     >

@@ -12,17 +12,17 @@ export function WeightProgressRing({ currentWeight, startingWeight, goalWeight }
   const weightLost = startingWeight - currentWeight;
   const weightRemaining = currentWeight - goalWeight;
   const progressPercentage = totalToLose > 0 ? (weightLost / totalToLose) * 100 : 0;
-  
+
   // Ensure progress doesn't exceed 100%
   const displayProgress = Math.min(Math.max(progressPercentage, 0), 100);
-  
+
   // Calculate circle properties
   const radius = 70;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (displayProgress / 100) * circumference;
 
   return (
-    <Card className="overflow-hidden animate-fade-in">
+    <Card className="glass-card overflow-hidden animate-fade-in">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">Weight Loss Progress</CardTitle>
         <TrendingDown className="h-4 w-4 text-muted-foreground" />
