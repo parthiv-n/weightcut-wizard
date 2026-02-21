@@ -28,6 +28,7 @@ const Hydration = lazy(() => import("./pages/Hydration"));
 const FightWeek = lazy(() => import("./pages/FightWeek"));
 const FightCamps = lazy(() => import("./pages/FightCamps"));
 const FightCampDetail = lazy(() => import("./pages/FightCampDetail"));
+const FightCampCalendar = lazy(() => import("./pages/FightCampCalendar"));
 const Wizard = lazy(() => import("./pages/Wizard"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -231,6 +232,15 @@ const App = () => (
                     <ProfileCompletionGuard>
                       <AppLayout>
                         <FightCampDetail />
+                      </AppLayout>
+                    </ProfileCompletionGuard>
+                  </ProtectedRoute>
+                } />
+                <Route path="/fight-camp-calendar" element={
+                  <ProtectedRoute>
+                    <ProfileCompletionGuard>
+                      <AppLayout>
+                        <FightCampCalendar />
                       </AppLayout>
                     </ProfileCompletionGuard>
                   </ProtectedRoute>

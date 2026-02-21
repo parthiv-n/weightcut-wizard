@@ -33,6 +33,7 @@ const moreMenuItems = [
   { title: "Goals", url: "/goals", icon: Target },
   { title: "AI Wizard", url: "/wizard", icon: Sparkles },
   { title: "Fight Camps", url: "/fight-camps", icon: Trophy },
+  { title: "Fight Camp Calendar", url: "/fight-camp-calendar", icon: Calendar },
   { title: "Rehydration", url: "/hydration", icon: Droplets },
   { title: "Fight Week", url: "/fight-week", icon: Calendar },
 ];
