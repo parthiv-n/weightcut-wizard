@@ -14,6 +14,7 @@ import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { Button } from "@/components/ui/button";
 import { calculateCalorieTarget } from "@/lib/calorieCalculation";
 import { AIPersistence } from "@/lib/aiPersistence";
+import { localCache } from "@/lib/localCache";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { WeightIncreaseQuestionnaire } from "@/components/dashboard/WeightIncreaseQuestionnaire";
 
@@ -31,7 +32,6 @@ interface DailyWisdom {
 }
 
 export default function Dashboard() {
-  const [profile, setProfile] = useState<any>(null);
   const [weightLogs, setWeightLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lb'>('kg');
@@ -41,7 +41,7 @@ export default function Dashboard() {
   const [wisdomLoading, setWisdomLoading] = useState(false);
   const [wisdomSheetOpen, setWisdomSheetOpen] = useState(false);
   const [questionnaireOpen, setQuestionnaireOpen] = useState(false);
-  const { userName, currentWeight, userId } = useUser();
+  const { userName, currentWeight, userId, profile } = useUser();
   const navigate = useNavigate();
 
   const getGreeting = () => {
@@ -143,20 +143,31 @@ export default function Dashboard() {
       return;
     }
 
+    const today = new Date().toISOString().split('T')[0];
+
+    // --- Cache-first: serve cached data instantly, then refresh in background ---
+    const cachedWeightLogs = localCache.get<any[]>(userId, 'dashboard_weight_logs');
+    const cachedNutrition = localCache.getForDate<any[]>(userId, 'nutrition_logs', today);
+    const cachedHydration = localCache.getForDate<any[]>(userId, 'hydration_logs', today);
+
+    const hasCachedData = cachedWeightLogs !== null;
+
+    if (hasCachedData) {
+      const cachedCalories = cachedNutrition?.reduce((sum: number, log: any) => sum + (log?.calories || 0), 0) || 0;
+      const cachedHydrationTotal = cachedHydration?.reduce((sum: number, log: any) => sum + (log?.amount_ml || 0), 0) || 0;
+
+      setWeightLogs(cachedWeightLogs);
+      setTodayCalories(cachedCalories);
+      setTodayHydration(cachedHydrationTotal);
+      setLoading(false);
+
+      // Fire-and-forget wisdom with cached data
+      checkAndGenerateWisdom(profile, cachedWeightLogs, cachedCalories, cachedHydrationTotal);
+    }
+
+    // --- Fetch fresh data from Supabase (3 queries — profile comes from context) ---
     try {
-      const today = new Date().toISOString().split('T')[0];
-
       const results = await Promise.allSettled([
-        withSupabaseTimeout(
-          supabase
-            .from("profiles")
-            .select("*")
-            .eq("id", userId)
-            .maybeSingle(),
-          8000,
-          "Profile query"
-        ),
-
         withSupabaseTimeout(
           supabase
             .from("weight_logs")
@@ -164,7 +175,7 @@ export default function Dashboard() {
             .eq("user_id", userId)
             .order("date", { ascending: true })
             .limit(30),
-          8000,
+          5000,
           "Weight logs query"
         ),
 
@@ -174,7 +185,7 @@ export default function Dashboard() {
             .select("calories")
             .eq("user_id", userId)
             .eq("date", today),
-          8000,
+          5000,
           "Nutrition logs query"
         ),
 
@@ -184,15 +195,14 @@ export default function Dashboard() {
             .select("amount_ml")
             .eq("user_id", userId)
             .eq("date", today),
-          8000,
+          5000,
           "Hydration logs query"
         )
       ]);
 
-      const profileData = results[0].status === 'fulfilled' ? (results[0] as PromiseFulfilledResult<any>).value.data : null;
-      const logsData = results[1].status === 'fulfilled' ? (results[1] as PromiseFulfilledResult<any>).value.data : [];
-      const nutritionData = results[2].status === 'fulfilled' ? (results[2] as PromiseFulfilledResult<any>).value.data : [];
-      const hydrationData = results[3].status === 'fulfilled' ? (results[3] as PromiseFulfilledResult<any>).value.data : [];
+      const logsData = results[0].status === 'fulfilled' ? (results[0] as PromiseFulfilledResult<any>).value.data : [];
+      const nutritionData = results[1].status === 'fulfilled' ? (results[1] as PromiseFulfilledResult<any>).value.data : [];
+      const hydrationData = results[2].status === 'fulfilled' ? (results[2] as PromiseFulfilledResult<any>).value.data : [];
 
       results.forEach((result, index) => {
         if (result.status === 'rejected') {
@@ -203,18 +213,24 @@ export default function Dashboard() {
       const totalCalories = nutritionData?.reduce((sum: number, log: any) => sum + (log?.calories || 0), 0) || 0;
       const totalHydration = hydrationData?.reduce((sum: number, log: any) => sum + (log?.amount_ml || 0), 0) || 0;
 
-      setProfile(profileData);
       setWeightLogs(logsData || []);
       setTodayCalories(totalCalories);
       setTodayHydration(totalHydration);
 
-      await checkAndGenerateWisdom(profileData, logsData ?? [], totalCalories, totalHydration);
+      // Update cache
+      if (logsData) localCache.set(userId, 'dashboard_weight_logs', logsData);
+      if (nutritionData) localCache.setForDate(userId, 'nutrition_logs', today, nutritionData);
+      if (hydrationData) localCache.setForDate(userId, 'hydration_logs', today, hydrationData);
+
+      // Fire-and-forget wisdom (has its own loading state)
+      checkAndGenerateWisdom(profile, logsData ?? [], totalCalories, totalHydration);
     } catch (error) {
       console.error("Error loading dashboard data:", error);
-      setProfile(null);
-      setWeightLogs([]);
-      setTodayCalories(0);
-      setTodayHydration(0);
+      if (!hasCachedData) {
+        setWeightLogs([]);
+        setTodayCalories(0);
+        setTodayHydration(0);
+      }
     } finally {
       setLoading(false);
     }
