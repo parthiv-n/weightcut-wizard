@@ -1,37 +1,56 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <!-- Mobile-first viewport configuration for iOS -->
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-    <!-- iOS PWA meta tags for fullscreen app experience -->
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
-    <meta name="apple-mobile-web-app-title" content="Weight Cut Wizard" />
-    <!-- Prevent iOS Safari from auto-formatting phone numbers -->
-    <meta name="format-detection" content="telephone=no" />
-    <title>Weight Cut Wizard - Safe Combat Sports Weight Management</title>
-    <meta name="description" content="AI-assisted weight cutting for combat sports athletes. Science-based, safe, and effective weight management with personalized guidance." />
-    <meta name="author" content="Weight Cut Wizard" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-    
-    <!-- Preconnect to Supabase for faster database lookup, TCP handshake, and TLS negotiation -->
-    <link rel="preconnect" href="https://pkubdwmnnsxjjnpjjqqy.supabase.co" crossorigin />
 
-    <meta property="og:title" content="Weight Cut Wizard" />
-    <meta property="og:description" content="Safe AI-assisted weight cutting for combat sports" />
-    <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+<head>
+  <meta charset="UTF-8" />
+  <!-- Mobile-first viewport configuration for iOS -->
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <!-- iOS PWA meta tags for fullscreen app experience -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Weight Cut Wizard" />
+  <!-- Prevent iOS Safari from auto-formatting phone numbers -->
+  <meta name="format-detection" content="telephone=no" />
+  <title>Weight Cut Wizard - Safe Combat Sports Weight Management</title>
+  <meta name="description"
+    content="AI-assisted weight cutting for combat sports athletes. Science-based, safe, and effective weight management with personalized guidance." />
+  <meta name="author" content="Weight Cut Wizard" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet" />
 
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@lovable_dev" />
-    <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
-  </head>
+  <!-- Preconnect to Supabase for faster database lookup, TCP handshake, and TLS negotiation -->
+  <link rel="preconnect" href="https://pkubdwmnnsxjjnpjjqqy.supabase.co" crossorigin />
 
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+  <meta property="og:title" content="Weight Cut Wizard" />
+  <meta property="og:description" content="Safe AI-assisted weight cutting for combat sports" />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@lovable_dev" />
+  <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+
+  <!-- Script to prevent Flash of Unstyled Content and set default theme to dark -->
+  <script>
+    (function () {
+      try {
+        var savedTheme = localStorage.getItem("theme");
+        if (savedTheme === "dark" || !savedTheme) {
+          document.documentElement.classList.add("dark");
+        } else {
+          document.documentElement.classList.remove("dark");
+        }
+      } catch (e) { }
+    })();
+  </script>
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/main.tsx"></script>
+</body>
+
 </html>
