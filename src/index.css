@@ -382,6 +382,22 @@ All colors MUST be HSL.
     max-width: 100vw;
   }
 
+  /* Hide scrollbar while keeping scroll behavior (iOS-style) */
+  .scrollbar-hide {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* iOS: smooth momentum scroll + contain overscroll to prevent pull-to-refresh */
+  .scroll-touch {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    touch-action: pan-y;
+  }
+
   /* Page transition animations - optimized with GPU acceleration */
   .page-transition-wrapper {
     @apply w-full h-full;
