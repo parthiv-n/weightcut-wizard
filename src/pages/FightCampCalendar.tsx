@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, subMonths, addMonths } from "date-fns";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, subMonths, addMonths, subDays } from "date-fns";
 import { ChevronLeft, ChevronRight, Plus, Activity, Moon, Ruler, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useUser } from "@/contexts/UserContext";
@@ -8,10 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Database } from "@/integrations/supabase/types";
+import { RecoveryDashboard } from "@/components/fightcamp/RecoveryDashboard";
 
 // Temporarily define the type here since we can't reliably update the generated types without Supabase CLI
 type FightCampCalendarInsert = {
@@ -42,6 +42,7 @@ export default function FightCampCalendar() {
     const [sessions, setSessions] = useState<FightCampCalendarRow[]>([]);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [sessions28d, setSessions28d] = useState<FightCampCalendarRow[]>([]);
 
     // Form State
     const [sessionType, setSessionType] = useState(SESSION_TYPES[0]);
@@ -79,9 +80,33 @@ export default function FightCampCalendar() {
         }
     }, [userId, currentDate, toast]);
 
+    const fetch28DaySessions = useCallback(async () => {
+        if (!userId) return;
+        try {
+            const from = format(subDays(new Date(), 28), "yyyy-MM-dd");
+            const to = format(new Date(), "yyyy-MM-dd");
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data, error } = await (supabase as any)
+                .from('fight_camp_calendar')
+                .select('*')
+                .eq('user_id', userId)
+                .gte('date', from)
+                .lte('date', to);
+
+            if (error) throw error;
+            setSessions28d((data as FightCampCalendarRow[]) || []);
+        } catch (error) {
+            console.error("Error fetching 28-day sessions:", error);
+        }
+    }, [userId]);
+
     useEffect(() => {
         fetchSessions();
     }, [fetchSessions]);
+
+    useEffect(() => {
+        fetch28DaySessions();
+    }, [fetch28DaySessions]);
 
     const handleSaveSession = async () => {
         if (!userId) return;
@@ -112,6 +137,7 @@ export default function FightCampCalendar() {
 
             setIsAddModalOpen(false);
             fetchSessions();
+            fetch28DaySessions();
 
             // Reset form
             setSessionType(SESSION_TYPES[0]);
@@ -148,6 +174,7 @@ export default function FightCampCalendar() {
 
             // Optimistic update
             setSessions(sessions.filter(s => s.id !== id));
+            fetch28DaySessions();
         } catch (error) {
             console.error("Error deleting session:", error);
             toast({
@@ -171,11 +198,10 @@ export default function FightCampCalendar() {
     return (
         <div className="min-h-screen bg-background pb-20 md:pb-6">
             <div className="p-4 safe-area-inset-top">
-                {/* Header */}
-                <div className="mb-6">
-                    <h1 className="text-3xl font-extrabold tracking-tight mb-1 font-sans">Fight Camp Calendar</h1>
-                    <p className="text-muted-foreground font-medium">Track your training sessions and recovery</p>
-                </div>
+                {/* Recovery Dashboard */}
+                {sessions28d.length > 0 && userId && (
+                    <RecoveryDashboard sessions28d={sessions28d} userId={userId} />
+                )}
 
                 {/* Calendar View */}
                 <Card className="p-4 rounded-[20px] shadow-sm glass-card mb-6">
@@ -240,55 +266,64 @@ export default function FightCampCalendar() {
                                 <DialogHeader>
                                     <DialogTitle className="text-2xl font-bold">Log Session</DialogTitle>
                                 </DialogHeader>
-                                <div className="grid gap-6 py-4">
+                                <div className="grid gap-4 py-3">
 
-                                    {/* Session Type */}
-                                    <div className="space-y-3">
+                                    {/* Session Type — pill chips */}
+                                    <div className="space-y-2">
                                         <Label className="text-sm font-semibold text-muted-foreground">SESSION TYPE</Label>
-                                        <div className="grid grid-cols-2 gap-2">
+                                        <div className="flex flex-wrap gap-2">
                                             {SESSION_TYPES.map(type => (
-                                                <Button
+                                                <button
                                                     key={type}
-                                                    variant={sessionType === type ? "default" : "outline"}
-                                                    className={`rounded-xl justify-start ${sessionType === type ? 'shadow-md' : ''}`}
                                                     onClick={() => setSessionType(type)}
+                                                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all
+                                                        ${sessionType === type
+                                                            ? 'bg-primary text-primary-foreground shadow-sm'
+                                                            : 'bg-accent/40 text-foreground/70 hover:bg-accent/60'}`}
                                                 >
                                                     {type}
-                                                </Button>
+                                                </button>
                                             ))}
                                         </div>
                                     </div>
 
-                                    {/* Duration */}
-                                    <div className="space-y-1 bg-accent/20 p-4 rounded-2xl border border-border/50">
-                                        <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 block">DURATION (MIN)</Label>
-                                        <Input
-                                            type="number"
-                                            value={duration}
-                                            onChange={(e) => setDuration(e.target.value)}
-                                            className="text-2xl font-bold h-14 bg-transparent border-none shadow-none focus-visible:ring-0 px-0 rounded-none border-b-2 border-primary/20 focus-visible:border-primary transition-colors text-center"
-                                        />
+                                    {/* Duration — compact stepper */}
+                                    <div className="flex items-center justify-between bg-accent/20 px-4 py-3 rounded-2xl border border-border/50">
+                                        <Label className="text-sm font-semibold text-muted-foreground">DURATION</Label>
+                                        <div className="flex items-center gap-3">
+                                            <button onClick={() => setDuration(String(Math.max(0, parseInt(duration) - 5)))}
+                                                className="h-7 w-7 rounded-full border border-border flex items-center justify-center text-base font-medium hover:bg-muted transition-colors">
+                                                −
+                                            </button>
+                                            <span className="text-xl font-bold display-number w-12 text-center">{duration}<span className="text-xs text-muted-foreground ml-0.5">m</span></span>
+                                            <button onClick={() => setDuration(String(parseInt(duration) + 5))}
+                                                className="h-7 w-7 rounded-full border border-border flex items-center justify-center text-base font-medium hover:bg-muted transition-colors">
+                                                +
+                                            </button>
+                                        </div>
                                     </div>
 
-                                    {/* Intensity */}
-                                    <div className="space-y-3">
+                                    {/* Intensity — segmented pill */}
+                                    <div className="space-y-2">
                                         <Label className="text-sm font-semibold text-muted-foreground">INTENSITY</Label>
-                                        <div className="flex gap-2">
+                                        <div className="flex gap-1.5">
                                             {(['low', 'moderate', 'high'] as const).map(level => (
-                                                <Button
+                                                <button
                                                     key={level}
-                                                    variant={intensity === level ? "default" : "outline"}
-                                                    className="flex-1 rounded-xl capitalize"
                                                     onClick={() => setIntensity(level)}
+                                                    className={`flex-1 py-1.5 rounded-full text-sm font-medium capitalize transition-all
+                                                        ${intensity === level
+                                                            ? 'bg-primary text-primary-foreground shadow-sm'
+                                                            : 'bg-accent/40 text-foreground/70 hover:bg-accent/60'}`}
                                                 >
                                                     {level}
-                                                </Button>
+                                                </button>
                                             ))}
                                         </div>
                                     </div>
 
                                     {/* RPE */}
-                                    <div className="space-y-4 bg-accent/30 p-4 rounded-2xl">
+                                    <div className="space-y-2 bg-accent/30 p-3 rounded-2xl">
                                         <div className="flex justify-between items-center">
                                             <Label className="text-sm font-semibold flex items-center gap-1">
                                                 <Activity className="h-4 w-4 text-primary" /> RPE
@@ -309,8 +344,8 @@ export default function FightCampCalendar() {
                                         </div>
                                     </div>
 
-                                    <div className="space-y-4 bg-accent/30 p-4 rounded-2xl">
-                                        {/* Soreness */}
+                                    {/* Soreness */}
+                                    <div className="space-y-2 bg-accent/30 p-3 rounded-2xl">
                                         <div className="flex items-center justify-between">
                                             <Label className="text-sm font-semibold">SORENESS</Label>
                                             <Switch checked={hasSoreness} onCheckedChange={setHasSoreness} />
@@ -334,22 +369,26 @@ export default function FightCampCalendar() {
                                         )}
                                     </div>
 
-                                    {/* Sleep */}
-                                    <div className="space-y-1 bg-accent/20 p-4 rounded-2xl border border-border/50">
-                                        <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-1 justify-center">
-                                            <Moon className="h-3 w-3" /> SLEEP (HOURS)
+                                    {/* Sleep — compact stepper */}
+                                    <div className="flex items-center justify-between bg-accent/20 px-4 py-3 rounded-2xl border border-border/50">
+                                        <Label className="text-sm font-semibold text-muted-foreground flex items-center gap-1">
+                                            <Moon className="h-3.5 w-3.5" /> SLEEP
                                         </Label>
-                                        <Input
-                                            type="number"
-                                            step="0.5"
-                                            value={sleepHours}
-                                            onChange={(e) => setSleepHours(e.target.value)}
-                                            className="text-2xl font-bold h-14 bg-transparent border-none shadow-none focus-visible:ring-0 px-0 rounded-none border-b-2 border-primary/20 focus-visible:border-primary transition-colors text-center"
-                                        />
+                                        <div className="flex items-center gap-3">
+                                            <button onClick={() => setSleepHours(String(Math.max(0, parseFloat(sleepHours) - 0.5)))}
+                                                className="h-7 w-7 rounded-full border border-border flex items-center justify-center text-base font-medium hover:bg-muted transition-colors">
+                                                −
+                                            </button>
+                                            <span className="text-xl font-bold display-number w-12 text-center">{sleepHours}<span className="text-xs text-muted-foreground ml-0.5">h</span></span>
+                                            <button onClick={() => setSleepHours(String(parseFloat(sleepHours) + 0.5))}
+                                                className="h-7 w-7 rounded-full border border-border flex items-center justify-center text-base font-medium hover:bg-muted transition-colors">
+                                                +
+                                            </button>
+                                        </div>
                                     </div>
 
                                     <Button
-                                        className="w-full h-14 rounded-2xl text-lg font-bold mt-2 shadow-lg"
+                                        className="w-full h-12 rounded-2xl text-lg font-bold mt-2 shadow-lg"
                                         onClick={handleSaveSession}
                                     >
                                         Save Session
