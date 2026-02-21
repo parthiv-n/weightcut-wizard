@@ -1994,7 +1994,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
             const mealIcon = { breakfast: "☀️", lunch: "🥗", dinner: "🍽️", snack: "🍎" }[mealType];
 
             return (
-              <div key={mealType} className="rounded-2xl border border-border/30 bg-card/80 backdrop-blur-sm overflow-hidden shadow-sm">
+              <div key={mealType} className="glass-card overflow-hidden transition-all duration-300">
                 {/* Section header */}
                 <div className="flex items-center justify-between px-4 py-3">
                   <div className="flex items-center gap-2">
@@ -2116,10 +2116,10 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           </div>
 
           {mealPlanIdeas.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-border/30 bg-card/40 backdrop-blur-sm py-10 text-center">
-              <Sparkles className="h-7 w-7 text-muted-foreground/20 mx-auto mb-2" />
-              <p className="text-sm font-medium text-muted-foreground">No meal ideas yet</p>
-              <p className="text-xs text-muted-foreground/50 mt-0.5">Generate AI meal suggestions above</p>
+            <div className="glass-card border-dashed py-10 text-center">
+              <Sparkles className="h-7 w-7 text-primary/50 mx-auto mb-2 mix-blend-screen" />
+              <p className="text-sm font-medium text-foreground">No meal ideas yet</p>
+              <p className="text-xs text-foreground/60 mt-0.5">Generate AI meal suggestions above</p>
             </div>
           ) : (
             <ErrorBoundary>
@@ -2168,7 +2168,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                     ];
 
                     return (
-                      <div key={meal.id} className="rounded-2xl border border-border/30 bg-card/80 backdrop-blur-sm overflow-hidden shadow-sm">
+                      <div key={meal.id} className="glass-card overflow-hidden transition-all duration-300">
                         {/* Top section: donut + name + macros */}
                         <div className="p-4">
                           <div className="flex items-start gap-3">
@@ -2203,9 +2203,9 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
 
                             {/* Name + macro bars */}
                             <div className="flex-1 min-w-0">
-                              <h4 className="font-semibold text-sm leading-tight truncate">{meal.meal_name}</h4>
+                              <h4 className="font-semibold text-sm leading-tight truncate text-foreground">{meal.meal_name}</h4>
                               {meal.portion_size && (
-                                <p className="text-[10px] text-muted-foreground/60 mt-0.5">{meal.portion_size}</p>
+                                <p className="text-[10px] text-foreground/80 mt-0.5">{meal.portion_size}</p>
                               )}
                               <div className="flex items-center gap-3 mt-2">
                                 <div className="flex items-center gap-1">
@@ -2227,12 +2227,12 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                           {/* Ingredients */}
                           {meal.ingredients && Array.isArray(meal.ingredients) && meal.ingredients.length > 0 && (
                             <div className="mt-3">
-                              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50 mb-1.5">Ingredients</p>
+                              <p className="text-[10px] font-semibold uppercase tracking-wider text-foreground/50 mb-1.5">Ingredients</p>
                               <div className="space-y-0.5">
                                 {meal.ingredients.map((ing: Ingredient, idx: number) => (
                                   <div key={idx} className="flex items-center justify-between text-[11px] py-0.5">
-                                    <span className="text-muted-foreground">{ing.name}</span>
-                                    <span className="text-muted-foreground/60 tabular-nums ml-2 flex-shrink-0">{ing.grams}g</span>
+                                    <span className="text-foreground/80">{ing.name}</span>
+                                    <span className="text-foreground/60 tabular-nums ml-2 flex-shrink-0">{ing.grams}g</span>
                                   </div>
                                 ))}
                               </div>
@@ -2242,20 +2242,20 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                           {/* Method / Recipe */}
                           {meal.recipe_notes && (
                             <div className="mt-3">
-                              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50 mb-1">Method</p>
-                              <p className="text-[11px] text-muted-foreground leading-relaxed">{meal.recipe_notes}</p>
+                              <p className="text-[10px] font-semibold uppercase tracking-wider text-foreground/50 mb-1">Method</p>
+                              <p className="text-[11px] text-foreground/80 leading-relaxed">{meal.recipe_notes}</p>
                             </div>
                           )}
                         </div>
 
                         {/* Add to meal type buttons */}
-                        <div className="border-t border-border/15 grid grid-cols-4">
+                        <div className="border-t border-white/10 grid grid-cols-4 bg-black/10">
                           {mealTypeButtons.map((btn) => (
                             <button
                               key={btn.type}
                               onClick={() => handleLogMealIdea(meal, btn.type)}
                               disabled={loggingMeal === meal.id || savingAllMeals}
-                              className="flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium text-muted-foreground hover:text-primary hover:bg-primary/5 active:bg-primary/10 active:scale-[0.97] transition-all disabled:opacity-40 border-r border-border/10 last:border-r-0"
+                              className="flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium text-foreground/80 hover:text-primary hover:bg-primary/5 active:bg-primary/10 active:scale-[0.97] transition-all disabled:opacity-40 border-r border-white/5 last:border-r-0"
                             >
                               <span className="text-xs">{btn.icon}</span>
                               <span>{btn.label}</span>
@@ -2306,22 +2306,20 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
             <div className="flex gap-1 p-1 rounded-xl bg-muted/50 mb-4">
               <button
                 onClick={() => setQuickAddTab("ai")}
-                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
-                  quickAddTab === "ai"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
+                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${quickAddTab === "ai"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+                  }`}
               >
                 <Sparkles className="h-3.5 w-3.5 inline mr-1.5 -mt-0.5" />
                 AI Quick Fill
               </button>
               <button
                 onClick={() => setQuickAddTab("manual")}
-                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
-                  quickAddTab === "manual"
-                    ? "bg-background text-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
+                className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${quickAddTab === "manual"
+                  ? "bg-background text-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+                  }`}
               >
                 <Edit2 className="h-3.5 w-3.5 inline mr-1.5 -mt-0.5" />
                 Manual
@@ -3347,7 +3345,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                 </div>
                 <div className="space-y-2.5">
                   {trainingWisdom.preMeals.map((meal, i) => (
-                    <div key={i} className="rounded-xl border border-border/30 bg-card/80 p-3.5 space-y-1.5">
+                    <div key={i} className="glass-card p-3.5 space-y-1.5">
                       <div className="flex items-start justify-between gap-2">
                         <h5 className="text-sm font-semibold">{meal.name}</h5>
                         <span className="text-[10px] font-medium text-orange-500/70 bg-orange-500/10 px-2 py-0.5 rounded-full flex-shrink-0">
@@ -3371,7 +3369,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                 </div>
                 <div className="space-y-2.5">
                   {trainingWisdom.postMeals.map((meal, i) => (
-                    <div key={i} className="rounded-xl border border-border/30 bg-card/80 p-3.5 space-y-1.5">
+                    <div key={i} className="glass-card p-3.5 space-y-1.5">
                       <div className="flex items-start justify-between gap-2">
                         <h5 className="text-sm font-semibold">{meal.name}</h5>
                         <span className="text-[10px] font-medium text-blue-500/70 bg-blue-500/10 px-2 py-0.5 rounded-full flex-shrink-0">
