@@ -29,7 +29,7 @@ export function VoiceInput({ onTranscription, disabled, className }: VoiceInputP
 
   const loadModel = async () => {
     if (transcriberRef.current) return;
-    
+
     setIsModelLoading(true);
     try {
       toast({
@@ -48,13 +48,6 @@ export function VoiceInput({ onTranscription, disabled, className }: VoiceInputP
         description: "Ready to transcribe",
       });
     } catch (error) {
-      console.error('Error loading model:', error);
-      toast({
-        title: "Model loading failed",
-        description: "Falling back to CPU processing",
-        variant: "destructive",
-      });
-      
       // Fallback to CPU if WebGPU fails
       try {
         transcriberRef.current = await pipeline(
@@ -82,11 +75,11 @@ export function VoiceInput({ onTranscription, disabled, className }: VoiceInputP
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
+
       const mediaRecorder = new MediaRecorder(stream, {
         mimeType: 'audio/webm',
       });
-      
+
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
 
@@ -103,7 +96,7 @@ export function VoiceInput({ onTranscription, disabled, className }: VoiceInputP
 
       mediaRecorder.start();
       setIsRecording(true);
-      
+
       toast({
         title: "Recording...",
         description: "Speak what you ate",
@@ -129,10 +122,10 @@ export function VoiceInput({ onTranscription, disabled, className }: VoiceInputP
     setIsProcessing(true);
     try {
       const audioBlob = new Blob(chunksRef.current, { type: 'audio/webm' });
-      
+
       // Convert blob to URL for Whisper model
       const audioUrl = URL.createObjectURL(audioBlob);
-      
+
       if (!transcriberRef.current) {
         throw new Error("Model not loaded");
       }
@@ -143,7 +136,7 @@ export function VoiceInput({ onTranscription, disabled, className }: VoiceInputP
       });
 
       const result = await transcriberRef.current(audioUrl);
-      
+
       URL.revokeObjectURL(audioUrl);
 
       if (result.text) {
@@ -170,6 +163,13 @@ export function VoiceInput({ onTranscription, disabled, className }: VoiceInputP
 
   return (
     <>
+      <style>{`
+        @keyframes waveform {
+          0% { transform: scaleY(0.4); opacity: 0.6; }
+          100% { transform: scaleY(1); opacity: 1; }
+        }
+      `}</style>
+
       {!isRecording && !isProcessing && !isModelLoading && (
         <Button
           type="button"
@@ -179,8 +179,8 @@ export function VoiceInput({ onTranscription, disabled, className }: VoiceInputP
           className={className}
           title="Voice Input"
         >
-          <Mic className="h-4 w-4" />
-          <span className="sr-only">Voice Input</span>
+          <Mic className="h-4 w-4 text-orange-500" />
+          <span className="text-[10px] text-muted-foreground font-normal">Voice</span>
         </Button>
       )}
 
@@ -192,22 +192,48 @@ export function VoiceInput({ onTranscription, disabled, className }: VoiceInputP
           className={className}
           title="Loading model..."
         >
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span className="sr-only">Loading Model</span>
+          <Loader2 className="h-4 w-4 animate-spin text-orange-400" />
+          <span className="text-[10px] text-muted-foreground font-normal overflow-hidden whitespace-nowrap text-ellipsis max-w-full">Loading</span>
         </Button>
       )}
 
       {isRecording && (
-        <Button
-          type="button"
-          variant="destructive"
-          onClick={stopRecording}
-          className={`${className} animate-pulse`}
-          title="Stop Recording"
-        >
-          <Square className="h-4 w-4" />
-          <span className="sr-only">Stop Recording</span>
-        </Button>
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={stopRecording}
+            className={`${className} bg-red-500/5 dark:bg-red-500/10 border-red-500/20`}
+            title="Stop Recording"
+          >
+            <Mic className="h-4 w-4 text-red-500 animate-pulse" />
+            <span className="text-[10px] text-red-600/80 font-normal">Recording</span>
+          </Button>
+
+          {/* Floating native iOS feel Voice recording pill */}
+          <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-background border border-border/40 shadow-[0_8px_30px_rgb(0,0,0,0.12)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.4)] rounded-full px-5 py-2.5 flex items-center gap-3 z-[100] animate-in slide-in-from-bottom-4 zoom-in-95 duration-300">
+            <div className="flex items-center gap-[3px] h-5 mr-1">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <div
+                  key={i}
+                  className="w-[3.5px] rounded-full bg-red-500"
+                  style={{
+                    height: `${30 + Math.random() * 70}%`,
+                    animation: `waveform 0.6s cubic-bezier(0.4, 0, 0.2, 1) infinite alternate ${i * 0.15}s`
+                  }}
+                />
+              ))}
+            </div>
+            <span className="text-sm font-medium pr-2 text-foreground/80 pointer-events-none">Listening...</span>
+            <button
+              onClick={stopRecording}
+              className="h-8 w-8 rounded-full bg-red-100 hover:bg-red-200 dark:bg-red-500/20 dark:hover:bg-red-500/30 flex items-center justify-center transition-colors shrink-0"
+              aria-label="Stop recording"
+            >
+              <Square className="h-3 w-3 text-red-600 dark:text-red-400 fill-current" />
+            </button>
+          </div>
+        </>
       )}
 
       {isProcessing && (
@@ -218,8 +244,8 @@ export function VoiceInput({ onTranscription, disabled, className }: VoiceInputP
           className={className}
           title="Processing..."
         >
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span className="sr-only">Processing</span>
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          <span className="text-[10px] text-muted-foreground font-normal text-ellipsis overflow-hidden">Processing</span>
         </Button>
       )}
     </>

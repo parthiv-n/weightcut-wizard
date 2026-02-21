@@ -69,7 +69,8 @@ serve(async (req) => {
     const systemPrompt = `Nutrition analysis expert. Analyze meals and return accurate nutrition data.
 
 Rules:
-- Return food items as the user described them, NOT broken into raw sub-ingredients. For example, "2 slices tiger bread" stays as one item — do NOT split it into flour, yeast, water, etc.
+- Identify and separate distinct food items (e.g., "2 slices of bread with banana, eggs, and nutella" should be at least 4 distinct items: Bread, Banana, Eggs, Nutella).
+- However, do NOT break down a single cohesive item into raw recipe sub-ingredients (e.g., "2 slices tiger bread" stays as one item — do NOT split it into flour, yeast, water).
 - Each item should have its total macros (not per-100g).
 - Use exact values if user provides calories/macros
 - Estimate only when not specified
@@ -84,7 +85,8 @@ Respond ONLY with JSON:
   "carbs_g": number,
   "fats_g": number,
   "items": [
-    { "name": "Food item as described", "quantity": "2 slices", "calories": number, "protein_g": number, "carbs_g": number, "fats_g": number }
+    { "name": "Food item 1", "quantity": "amount", "calories": number, "protein_g": number, "carbs_g": number, "fats_g": number },
+    { "name": "Food item 2", "quantity": "amount", "calories": number, "protein_g": number, "carbs_g": number, "fats_g": number }
   ]
 }`;
 
@@ -102,7 +104,7 @@ Respond ONLY with JSON:
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
         ],
-        temperature: 0.1,
+        temperature: 0.2,
         max_tokens: 800
       })
     });
