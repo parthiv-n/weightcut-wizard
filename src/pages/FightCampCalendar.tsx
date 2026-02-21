@@ -178,7 +178,7 @@ export default function FightCampCalendar() {
                 </div>
 
                 {/* Calendar View */}
-                <Card className="p-4 rounded-[20px] shadow-sm bg-card border-border/50 mb-6">
+                <Card className="p-4 rounded-[20px] shadow-sm glass-card mb-6">
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-xl font-bold">{format(currentDate, "MMMM yyyy")}</h2>
                         <div className="flex gap-2">
@@ -218,7 +218,7 @@ export default function FightCampCalendar() {
                                         {format(day, 'd')}
                                     </div>
                                     {hasSession && (
-                                        <div className="absolute bottom-1 w-1 h-1 rounded-full bg-blue-500" />
+                                        <div className="absolute bottom-1 w-1 h-1 rounded-full bg-primary drop-shadow-sm" />
                                     )}
                                 </div>
                             );
@@ -363,20 +363,20 @@ export default function FightCampCalendar() {
                         {isLoading ? (
                             <div className="text-center py-8 text-muted-foreground">Loading...</div>
                         ) : sessionsForSelectedDate.length === 0 ? (
-                            <Card className="p-8 rounded-[20px] bg-card border-dashed border-2 flex flex-col items-center justify-center text-muted-foreground">
+                            <Card className="p-8 rounded-[20px] glass-card border-dashed flex flex-col items-center justify-center text-foreground/70">
                                 <p>No sessions logged today.</p>
                             </Card>
                         ) : (
                             sessionsForSelectedDate.map(session => (
-                                <Card key={session.id} className="p-4 rounded-[20px] shadow-sm bg-card overflow-hidden relative">
+                                <Card key={session.id} className="p-4 rounded-[20px] shadow-sm glass-card overflow-hidden relative border-border/10">
                                     <div className={`absolute top-0 left-0 w-2 h-full ${session.intensity === 'high' ? 'bg-red-500' :
                                         session.intensity === 'moderate' ? 'bg-yellow-500' : 'bg-green-500'
                                         }`} />
 
                                     <div className="flex justify-between items-start ml-2">
                                         <div>
-                                            <h4 className="font-bold text-lg">{session.session_type}</h4>
-                                            <div className="flex items-center gap-3 text-sm text-muted-foreground mt-1 font-medium">
+                                            <h4 className="font-bold text-lg text-foreground">{session.session_type}</h4>
+                                            <div className="flex items-center gap-3 text-sm text-foreground/80 mt-1 font-medium">
                                                 <span className="flex items-center gap-1"><Activity className="w-3 h-3" /> {session.duration_minutes} min</span>
                                                 <span>•</span>
                                                 <span>RPE {session.rpe}</span>
@@ -395,8 +395,8 @@ export default function FightCampCalendar() {
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
                                             {session.sleep_hours > 0 && (
-                                                <div className="text-xs text-muted-foreground flex items-center justify-end gap-1 mt-1 font-medium">
-                                                    <Moon className="w-3 h-3" /> {session.sleep_hours}h
+                                                <div className="text-xs text-foreground/80 flex items-center justify-end gap-1 mt-1 font-medium">
+                                                    <Moon className="w-3 h-3 text-primary" /> {session.sleep_hours}h
                                                 </div>
                                             )}
                                         </div>

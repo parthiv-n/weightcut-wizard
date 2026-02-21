@@ -11,10 +11,10 @@ export function CalorieProgressRing({ consumed, target }: CalorieProgressRingPro
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
   const remaining = Math.max(target - consumed, 0);
-  
+
   // Debug logging
   console.log('CalorieProgressRing:', { consumed, target, percentage, circumference, strokeDashoffset });
-  
+
   // Determine status color based on consumption
   const getStatusColor = () => {
     if (consumed < target * 0.8) return "hsl(var(--chart-1))"; // Under target
@@ -29,7 +29,7 @@ export function CalorieProgressRing({ consumed, target }: CalorieProgressRingPro
   };
 
   return (
-    <Card className="overflow-hidden h-full">
+    <Card className="glass-card overflow-hidden h-full">
       <CardContent className="p-6 pb-28 relative h-full flex flex-col justify-between">
         <div className="flex flex-col pr-28">
           <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">Calorie Progress</div>

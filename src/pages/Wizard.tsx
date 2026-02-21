@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
 import { triggerHapticSelection, triggerHapticSuccess } from "@/lib/haptics";
 import wizardAvatar from "@/assets/wizard-logo.png";
+import { GlowingEffect } from "@/components/ui/glowing-effect";
 
 interface Message {
   role: "system" | "user" | "assistant";
@@ -66,8 +67,8 @@ export default function Wizard() {
       <div className="flex-none pt-[calc(env(safe-area-inset-top)+1rem)] px-4 pb-4 border-b border-border/20 bg-background/80 backdrop-blur-md z-10">
         <div className="flex items-center gap-3">
           <div className="relative">
-            <img src={wizardAvatar} alt="Wizard" className="w-10 h-10 object-cover rounded-full border border-primary/20" />
-            <Sparkles className="h-3 w-3 text-primary absolute -bottom-1 -right-1" />
+            <img src={wizardAvatar} alt="Wizard" className="w-10 h-10 object-cover rounded-full border border-primary/20 mix-blend-screen" />
+            <Sparkles className="h-3 w-3 text-primary absolute -bottom-1 -right-1 drop-shadow-md" />
           </div>
           <div>
             <h1 className="text-lg font-bold leading-tight">Weight Cut Wizard</h1>
@@ -102,18 +103,36 @@ export default function Wizard() {
           >
             <div className={`flex gap-2 max-w-[85%] ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
               {/* Avatar Icon */}
-              <div className={`shrink-0 h-8 w-8 rounded-full flex items-center justify-center ${msg.role === "user" ? "bg-primary/20" : "bg-card border border-white/10"}`}>
-                {msg.role === "user" ? <User className="h-4 w-4 text-primary" /> : <Bot className="h-4 w-4 text-secondary" />}
+              <div className={`shrink-0 h-8 w-8 rounded-full flex items-center justify-center ${msg.role === "user" ? "bg-primary/20" : "glass-card border-none"}`}>
+                {msg.role === "user" ? <User className="h-4 w-4 text-primary drop-shadow-md" /> : <Bot className="h-4 w-4 text-secondary drop-shadow-md" />}
               </div>
 
               {/* Message Bubble */}
-              <div className={`p-3 rounded-2xl text-sm ${msg.role === "user" ? "bg-gradient-to-br from-primary to-primary/80 text-primary-foreground rounded-tr-sm" : "bg-card/80 border border-white/10 text-card-foreground rounded-tl-sm backdrop-blur-md"}`}>
-                <div className="prose prose-invert prose-sm max-w-none">
-                  <ReactMarkdown>
-                    {msg.content}
-                  </ReactMarkdown>
+              {msg.role === "user" ? (
+                <div className={`p-3 rounded-2xl text-sm bg-gradient-to-br from-primary to-primary/80 text-primary-foreground rounded-tr-sm shadow-[0_0_15px_rgba(var(--primary),0.4)]`}>
+                  <div className="prose prose-invert prose-sm max-w-none">
+                    <ReactMarkdown>
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="relative p-3 rounded-2xl text-sm glass-card text-card-foreground rounded-tl-sm border-white/10">
+                  <GlowingEffect
+                    spread={40}
+                    glow={true}
+                    disabled={false}
+                    proximity={64}
+                    inactiveZone={0.01}
+                    borderWidth={1}
+                  />
+                  <div className="relative z-10 prose prose-invert prose-sm max-w-none">
+                    <ReactMarkdown>
+                      {msg.content}
+                    </ReactMarkdown>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -122,12 +141,20 @@ export default function Wizard() {
         {isLoading && (
           <div className="flex justify-start animate-fade-in">
             <div className="flex gap-2 max-w-[85%]">
-              <div className="shrink-0 h-8 w-8 rounded-full bg-card border border-white/10 flex items-center justify-center">
-                <Bot className="h-4 w-4 text-secondary" />
+              <div className="shrink-0 h-8 w-8 rounded-full glass-card border-none flex items-center justify-center">
+                <Bot className="h-4 w-4 text-secondary drop-shadow-md" />
               </div>
-              <div className="p-3 rounded-2xl bg-card/80 border border-white/10 rounded-tl-sm backdrop-blur-md flex items-center gap-2">
-                <Loader2 className="h-4 w-4 text-primary animate-spin" />
-                <span className="text-xs text-muted-foreground animate-pulse">Wizard is thinking...</span>
+              <div className="relative p-3 rounded-2xl glass-card rounded-tl-sm border-white/10 flex items-center gap-2">
+                <GlowingEffect
+                  spread={40}
+                  glow={true}
+                  disabled={false}
+                  proximity={64}
+                  inactiveZone={0.01}
+                  borderWidth={1}
+                />
+                <Loader2 className="relative z-10 h-4 w-4 text-primary animate-spin drop-shadow-md" />
+                <span className="relative z-10 text-xs text-muted-foreground animate-pulse">Wizard is thinking...</span>
               </div>
             </div>
           </div>
@@ -135,19 +162,29 @@ export default function Wizard() {
       </div>
 
       {/* Input Area */}
-      <div className="flex-none p-4 pb-[calc(env(safe-area-inset-bottom)+5rem)] bg-background/80 backdrop-blur-md border-t border-border/20">
-        <form onSubmit={handleSend} className="flex gap-2 relative">
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask your nutritionist..."
-            className="rounded-full bg-card/50 border-white/10 pr-12 focus-visible:ring-primary/50"
-            disabled={isLoading}
-          />
+      <div className="flex-none p-4 pb-[calc(env(safe-area-inset-bottom)+5rem)] glass-card !rounded-none !border-x-0 !border-b-0 !border-t-white/10">
+        <form onSubmit={handleSend} className="flex gap-2 relative z-10">
+          <div className="relative flex-1 rounded-full">
+            <GlowingEffect
+              spread={40}
+              glow={true}
+              disabled={false}
+              proximity={64}
+              inactiveZone={0.01}
+              borderWidth={1}
+            />
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Ask your nutritionist..."
+              className="relative z-10 w-full rounded-full bg-black/20 border-white/10 pr-12 focus-visible:ring-primary/50 text-foreground placeholder:text-muted-foreground"
+              disabled={isLoading}
+            />
+          </div>
           <Button
             type="submit"
             size="icon"
-            className="absolute right-1 top-1 bottom-1 h-8 w-8 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground transition-all duration-200"
+            className="absolute right-1 top-1 bottom-1 h-8 w-8 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground transition-all duration-200 z-20"
             disabled={!input.trim() || isLoading}
           >
             <Send className="h-4 w-4 ml-0.5" />

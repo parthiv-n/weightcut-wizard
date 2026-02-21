@@ -40,22 +40,22 @@ export function MealCard({ meal, onEdit, onDelete }: MealCardProps) {
   };
 
   return (
-    <div className="animate-fade-in">
+    <div className="glass-card mb-3 overflow-hidden animate-fade-in transition-all duration-300">
       {/* Main row */}
-      <div className="flex items-center gap-3 py-3 border-b border-border/30">
+      <div className="flex items-center gap-3 p-4">
         {/* Meal type dot */}
         <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${getMealTypeDotColor(meal.meal_type)}`} />
 
         {/* Name + macros */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs font-medium leading-snug">{meal.meal_name}</span>
+            <span className="text-xs font-semibold leading-snug text-foreground">{meal.meal_name}</span>
             {meal.is_ai_generated && (
-              <Sparkles className="h-3 w-3 text-primary flex-shrink-0" />
+              <Sparkles className="h-3 w-3 text-primary flex-shrink-0 drop-shadow-md" />
             )}
           </div>
           {(meal.protein_g || meal.carbs_g || meal.fats_g) && (
-            <p className="text-xs text-muted-foreground mt-0.5 leading-none">
+            <p className="text-xs text-muted-foreground mt-0.5 leading-none font-medium">
               {[
                 meal.protein_g ? `P ${Math.round(meal.protein_g)}g` : null,
                 meal.carbs_g ? `C ${Math.round(meal.carbs_g)}g` : null,
@@ -68,7 +68,7 @@ export function MealCard({ meal, onEdit, onDelete }: MealCardProps) {
         </div>
 
         {/* Calories */}
-        <span className="text-sm font-semibold text-primary flex-shrink-0">
+        <span className="text-sm font-bold text-primary flex-shrink-0 drop-shadow-sm">
           {meal.calories} kcal
         </span>
 
@@ -96,7 +96,7 @@ export function MealCard({ meal, onEdit, onDelete }: MealCardProps) {
 
       {/* Expanded details */}
       {expanded && (
-        <div className="pl-4 pb-3 pt-2 space-y-2 animate-fade-in border-b border-border/20">
+        <div className="px-4 pb-4 pt-2 space-y-2 animate-fade-in border-t border-border/20 bg-black/10">
           {meal.ingredients && meal.ingredients.length > 0 && (
             <div className="space-y-1">
               {meal.ingredients.map((ingredient, idx) => (
