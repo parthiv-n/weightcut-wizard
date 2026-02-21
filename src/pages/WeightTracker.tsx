@@ -15,6 +15,7 @@ import { weightLogSchema } from "@/lib/validation";
 import { useUser } from "@/contexts/UserContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { triggerHapticSuccess } from "@/lib/haptics";
+import { localCache } from "@/lib/localCache";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -251,6 +252,25 @@ export default function WeightTracker() {
         setAiAnalysis(null);
         setAiAnalysisWeight(null);
         setAiAnalysisTarget(null);
+      }
+
+      // Pre-cache weight logs for Dashboard so it loads instantly
+      if (userId) {
+        const cachedLogs = localCache.get<any[]>(userId, 'dashboard_weight_logs');
+        if (cachedLogs) {
+          const existingIdx = cachedLogs.findIndex((l: any) => l.date === newDate);
+          let updatedLogs: any[];
+          if (existingIdx >= 0) {
+            updatedLogs = [...cachedLogs];
+            updatedLogs[existingIdx] = { date: newDate, weight_kg: loggedWeight };
+          } else {
+            updatedLogs = [...cachedLogs, { date: newDate, weight_kg: loggedWeight }]
+              .sort((a, b) => a.date.localeCompare(b.date));
+          }
+          // Keep only last 30 entries to match Dashboard query
+          if (updatedLogs.length > 30) updatedLogs = updatedLogs.slice(-30);
+          localCache.set(userId, 'dashboard_weight_logs', updatedLogs);
+        }
       }
 
       toast({
