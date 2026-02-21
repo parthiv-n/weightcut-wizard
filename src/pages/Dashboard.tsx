@@ -303,22 +303,22 @@ export default function Dashboard() {
         {/* Wizard's Daily Wisdom card — conditional states */}
         {!hasTodayLog ? (
           /* State 1: Locked — no today weight log */
-          <div className="rounded-lg bg-gradient-to-r from-primary/10 to-secondary/10 p-3 sm:p-4 border border-primary/20">
+          <div className="rounded-lg glass-card p-3 sm:p-4 border-primary/20 bg-gradient-to-r from-primary/5 to-secondary/5">
             <div className="flex items-start gap-3 sm:gap-4">
-              <div className="rounded-full bg-primary/20 p-2 sm:p-3 flex-shrink-0 opacity-40">
+              <div className="rounded-full bg-primary/20 p-2 sm:p-3 flex-shrink-0 opacity-40 mix-blend-screen">
                 <img src={wizardLogo} alt="Wizard" className="w-12 h-12 sm:w-16 sm:h-16" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-semibold text-sm sm:text-base text-muted-foreground">Wizard's Daily Wisdom</h3>
+                  <h3 className="font-semibold text-sm sm:text-base text-foreground">Wizard's Daily Wisdom</h3>
                   <Lock className="h-3.5 w-3.5 text-muted-foreground" />
                 </div>
-                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                <p className="text-xs sm:text-sm text-foreground/80 mt-1">
                   Log your weight to unlock today's wisdom.
                 </p>
                 <Button
                   variant="link"
-                  className="h-auto p-0 mt-1 text-xs text-primary"
+                  className="h-auto p-0 mt-1 text-xs text-primary font-bold"
                   onClick={() => navigate('/weight')}
                 >
                   Go to Weight Tracker →
@@ -328,39 +328,39 @@ export default function Dashboard() {
           </div>
         ) : wisdomLoading ? (
           /* State 2: Loading */
-          <div className="rounded-lg bg-gradient-to-r from-primary/10 to-secondary/10 p-3 sm:p-4 border border-primary/20">
+          <div className="rounded-lg glass-card p-3 sm:p-4 border-primary/20 bg-gradient-to-r from-primary/5 to-secondary/5">
             <div className="flex items-start gap-3 sm:gap-4">
-              <div className="rounded-full bg-primary/20 p-2 sm:p-3 flex-shrink-0 animate-pulse">
+              <div className="rounded-full bg-primary/20 p-2 sm:p-3 flex-shrink-0 animate-pulse mix-blend-screen">
                 <img src={wizardLogo} alt="Wizard" className="w-12 h-12 sm:w-16 sm:h-16 opacity-60" />
               </div>
               <div className="flex-1 min-w-0 space-y-2 pt-1">
-                <div className="h-3 rounded bg-muted animate-pulse w-1/3" />
-                <div className="h-3 rounded bg-muted animate-pulse w-full" />
-                <div className="h-3 rounded bg-muted animate-pulse w-4/5" />
+                <div className="h-3 rounded bg-muted/50 animate-pulse w-1/3" />
+                <div className="h-3 rounded bg-muted/50 animate-pulse w-full" />
+                <div className="h-3 rounded bg-muted/50 animate-pulse w-4/5" />
               </div>
             </div>
           </div>
         ) : wisdom ? (
           /* State 3: Active — AI wisdom loaded */
           <button
-            className="w-full text-left rounded-lg bg-gradient-to-r from-primary/10 to-secondary/10 p-3 sm:p-4 border border-primary/20 hover:border-primary/40 transition-colors"
+            className="w-full text-left rounded-lg glass-card p-3 sm:p-4 border-primary/20 hover:border-primary/50 transition-colors bg-gradient-to-r from-primary/5 to-secondary/5"
             onClick={handleWisdomClick}
           >
             <div className="flex items-start gap-3 sm:gap-4">
-              <div className="rounded-full bg-primary/20 p-2 sm:p-3 flex-shrink-0">
+              <div className="rounded-full bg-primary/20 p-2 sm:p-3 flex-shrink-0 mix-blend-screen">
                 <img src={wizardLogo} alt="Wizard" className="w-12 h-12 sm:w-16 sm:h-16" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
-                  <h3 className="font-semibold text-sm sm:text-base">Wizard's Daily Wisdom</h3>
+                  <h3 className="font-semibold text-sm sm:text-base text-foreground">Wizard's Daily Wisdom</h3>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${riskColors[wisdom.riskLevel]}`}>
                       {wisdom.riskLevel.charAt(0).toUpperCase() + wisdom.riskLevel.slice(1)}
                     </span>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    <ChevronRight className="h-4 w-4 text-foreground/70" />
                   </div>
                 </div>
-                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                <p className="text-xs sm:text-sm text-foreground/80 mt-1 font-medium leading-snug">
                   {wisdom.summary}
                 </p>
               </div>
@@ -368,14 +368,14 @@ export default function Dashboard() {
           </button>
         ) : (
           /* State 4: Fallback — weight logged but AI failed */
-          <div className="rounded-lg bg-gradient-to-r from-primary/10 to-secondary/10 p-3 sm:p-4 border border-primary/20">
+          <div className="rounded-lg glass-card p-3 sm:p-4 border-primary/20 bg-gradient-to-r from-primary/5 to-secondary/5">
             <div className="flex items-start gap-3 sm:gap-4">
-              <div className="rounded-full bg-primary/20 p-2 sm:p-3 flex-shrink-0">
+              <div className="rounded-full bg-primary/20 p-2 sm:p-3 flex-shrink-0 mix-blend-screen">
                 <img src={wizardLogo} alt="Wizard" className="w-12 h-12 sm:w-16 sm:h-16" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-sm sm:text-base">Wizard's Daily Wisdom</h3>
-                <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+                <h3 className="font-semibold text-sm sm:text-base text-foreground">Wizard's Daily Wisdom</h3>
+                <p className="text-xs sm:text-sm text-foreground/80 mt-1 font-medium leading-snug">
                   {getWizardWisdom()}
                 </p>
               </div>
@@ -413,7 +413,7 @@ export default function Dashboard() {
               />
             </div>
 
-            <Card>
+            <Card className="glass-card">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Days Until Target</CardTitle>
                 <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -426,7 +426,7 @@ export default function Dashboard() {
           </div>
 
           {/* Days Until Target - Order 3 on mobile only */}
-          <Card className="order-3 lg:hidden">
+          <Card className="order-3 lg:hidden glass-card">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Days Until Target</CardTitle>
               <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -438,7 +438,7 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        <Card>
+        <Card className="glass-card">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Weight History</CardTitle>

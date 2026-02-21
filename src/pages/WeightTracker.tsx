@@ -719,8 +719,8 @@ export default function WeightTracker() {
                   key={filter}
                   onClick={() => setTimeFilter(filter)}
                   className={`px-3 py-1 rounded-full text-[10px] font-bold transition-all ${timeFilter === filter
-                      ? "bg-primary text-primary-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
                     }`}
                 >
                   {filter}
