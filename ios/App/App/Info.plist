@@ -62,6 +62,8 @@
     <string>Weight Cut Wizard needs access to your photo library to let you upload a profile picture.</string>
     <key>NSCameraUsageDescription</key>
     <string>Weight Cut Wizard needs access to your camera to let you take a profile picture.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Weight Cut Wizard needs access to your microphone to allow you to log food via voice dictation.</string>
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>Weight Cut Wizard needs access to save photos to your library.</string>
 </dict>
