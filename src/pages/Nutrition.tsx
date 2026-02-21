@@ -2292,7 +2292,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
             setAiAnalysisComplete(false);
           }
         }}>
-          <SheetContent side="bottom" className="h-[85vh] overflow-y-auto pb-8 pt-0">
+          <SheetContent side="bottom" className="h-[85vh] overflow-y-auto pb-32 pt-0">
             {/* Drag handle */}
             <div className="flex justify-center pt-3 pb-2">
               <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
@@ -2434,6 +2434,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                     </Button>
                   </div>
                 )}
+                <div className="h-10 w-full" /> {/* Extra bottom spacer for better scrolling */}
               </div>
             )}
 
@@ -2729,6 +2730,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                 <Button onClick={handleAddManualMeal} disabled={savingAllMeals} className="w-full mt-1">
                   {savingAllMeals ? "Adding…" : "Add Meal"}
                 </Button>
+                <div className="h-20 w-full" /> {/* Substantial bottom spacer for manual tab */}
               </div>
             )}
           </SheetContent>
