@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,70 +27,33 @@ serve(async (req) => {
       throw new Error("MINIMAX_API_KEY is not configured");
     }
 
-    const systemPrompt = `You are the Weight Cut Wizard, a science-based combat sports weight cutting expert. You INTERPRET pre-computed projection data — you do NOT recalculate values.
+    const systemPrompt = `You are the Weight Cut Wizard, a science-based combat sports weight cutting expert. You INTERPRET pre-computed projection data — do NOT recalculate.
 
-RESEARCH-BACKED KNOWLEDGE BASE:
+RESEARCH: Glycogen=350-700g muscle+80-100g liver, ratio=1:2.7. Low-carb(<50g/d,3-7d)=~2%BM. Low-fibre(<10g/d)=0.4-1%BM. Na<2300mg/d=0.5-1%BM. Water-load(100ml/kg/d×3d→15ml/kg)=3.2%BM. Safe-AWL:72h+=6.7%,48h=5.7%,24h=4.4%. Sauna:0.5-0.9%/session. Dehydration-2.8%=reversible-3h, 6%=NOT-reversed-15h. Post-weigh-in:125-150%fluid, ORS-50-90mmol/L, carbs-8-12g/kg.
 
-Source: ISSN 2025 Position Stand (Ricci et al.)
-- Glycogen stores: 350-700g muscle + 80-100g liver
-- Glycogen:water ratio = 1:2.7 (Bergström & Hultman 1972)
-- <50g carbs/day for 3-7 days = ~2% BM loss (maintains strength/power)
-- Low-fibre (<10g/day) for 4 days = 0.4-0.7% BM loss; 7 days = up to 1% BM
-- Sodium <2300mg/day = 0.5-1% BM loss over 3-5 days
-- Water loading: 100ml/kg/day × 3 days, then 15ml/kg/day = 3.2% BM loss
-- Safe AWL by timeline: 6.7% at 72h+, 5.7% at 48h, 4.4% at 24h
-- Dry sauna: 0.5-0.9% BM per session (4×10min at 90°C)
-- Hot bath + wrap: up to 4.5% BM (aggressive protocol)
+DEHYDRATION ZONES: GREEN≤2%, ORANGE 2-4%(needs≥12h recovery), RED>4%(significant decrement).
 
-Source: Reale et al. (2017) — Acute Weight-Loss Strategies
-- Dehydration of 2.8% BM is reversible after 3h aggressive recovery
-- Dehydration of 6% BM NOT fully reversed even after 15h
-- Gut transit time: 10-96 hours (individual variation)
-
-Source: Reale (2018) — Gatorade SSE #183
-- Post weigh-in: replace 125-150% of fluid deficit
-- ORS sodium: 50-90 mmol/L for >3% dehydration
-- Carbs post weigh-in: 8-12 g/kg over recovery period
-
-DEHYDRATION SAFETY ZONES:
-- GREEN (≤2% BW): minimal performance impact
-- ORANGE (2-4% BW): needs ≥12h recovery + aggressive rehydration
-- RED (>4% BW): significant performance decrement, may NOT fully recover
-
-OUTPUT FORMAT — respond with valid JSON only:
+Respond with valid JSON only:
 {
-  "summary": "2-3 sentence narrative assessment",
+  "summary": "2-3 sentence narrative",
   "dayByDayTips": ["tip1", "tip2", ...],
   "safetyWarning": "string or null",
-  "recoveryProtocol": "post weigh-in recovery protocol text",
-  "riskLevel": "green | orange | red"
+  "recoveryProtocol": "post weigh-in recovery text",
+  "riskLevel": "green|orange|red"
 }`;
 
-    const userPrompt = `Analyze this fighter's weight cut projection and provide protocol advice:
+    const userPrompt = `Fighter: ${sex}, ${age ? `age ${age}` : "age unknown"}
+Current: ${currentWeight}kg → Target: ${targetWeight}kg | ${daysUntilWeighIn} days
 
-Fighter: ${sex}, ${age ? `age ${age}` : "age unknown"}
-Current Weight: ${currentWeight}kg
-Target Weight: ${targetWeight}kg
-Days Until Weigh-In: ${daysUntilWeighIn}
-
-PRE-COMPUTED PROJECTION (deterministic — do not override these values):
-- Total to Cut: ${projection.totalToCut}kg (${projection.percentBW}% BW)
-- Glycogen + Water: ${projection.glycogenLoss}kg
-- Fibre / Gut: ${projection.fibreLoss}kg
-- Sodium / Water: ${projection.sodiumLoss}kg
-- Water Loading: ${projection.waterLoadingLoss}kg
+PRE-COMPUTED PROJECTION (deterministic — do not override):
+- Total: ${projection.totalToCut}kg (${projection.percentBW}% BW)
+- Glycogen+Water: ${projection.glycogenLoss}kg | Fibre/Gut: ${projection.fibreLoss}kg
+- Sodium/Water: ${projection.sodiumLoss}kg | Water Loading: ${projection.waterLoadingLoss}kg
 - Diet Total: ${projection.dietTotal}kg
-- Dehydration Needed: ${projection.dehydrationNeeded}kg (${projection.dehydrationPercentBW}% BW)
-- Dehydration Safety: ${projection.dehydrationSafety}
-- Overall Safety: ${projection.overallSafety}
-- Sauna Sessions Estimated: ${projection.saunaSessions}
+- Dehydration: ${projection.dehydrationNeeded}kg (${projection.dehydrationPercentBW}% BW) — ${projection.dehydrationSafety}
+- Overall: ${projection.overallSafety} | Sauna sessions: ${projection.saunaSessions}
 
-Provide:
-1. A 2-3 sentence summary narrative
-2. 5-8 practical day-by-day tips (specific to this fighter's timeline and cut size)
-3. Safety warning if dehydration is orange or red zone (null if green/no dehydration)
-4. Post weigh-in recovery protocol (always include — specific ORS, carb, fluid targets)
-5. Overall risk level`;
+Provide: 1) 2-3 sentence summary, 2) 5-8 day-by-day tips, 3) safety warning if orange/red (null if green), 4) post weigh-in recovery protocol, 5) risk level.`;
 
     console.log("Calling Minimax API for fight week advice...");
 
@@ -106,7 +70,7 @@ Provide:
           { role: "user", content: userPrompt },
         ],
         temperature: 0.1,
-        max_tokens: 2048,
+        max_tokens: 1200,
       }),
     });
 
@@ -132,45 +96,25 @@ Provide:
     }
 
     const data = await response.json();
-    let adviceText = data.choices?.[0]?.message?.content;
+    const { content, filtered } = extractContent(data);
 
-    // Strip <think> tags from Minimax response
-    if (adviceText) {
-      adviceText = adviceText.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
-    }
-
-    if (!adviceText) {
-      const finishReason = data.choices?.[0]?.finish_reason;
-      if (finishReason === "content_filter") {
-        throw new Error("Content was filtered for safety.");
-      }
+    if (!content) {
+      if (filtered) throw new Error("Content was filtered for safety.");
       throw new Error("No response from Minimax API");
     }
 
-    // Parse JSON
     let advice;
     try {
-      advice = JSON.parse(adviceText);
+      advice = parseJSON(content);
     } catch {
-      // Try extracting JSON from markdown code blocks
-      const jsonMatch = adviceText.match(/```(?:json)?\s*([\s\S]*?)```/);
-      if (jsonMatch) {
-        try {
-          advice = JSON.parse(jsonMatch[1].trim());
-        } catch {
-          console.error("Failed to parse extracted JSON:", jsonMatch[1]);
-        }
-      }
-      if (!advice) {
-        console.error("Failed to parse Minimax response as JSON:", adviceText);
-        return new Response(
-          JSON.stringify({
-            error: "AI returned invalid response format. Please try again.",
-            details: adviceText.substring(0, 200),
-          }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+      console.error("Failed to parse Minimax response as JSON:", content);
+      return new Response(
+        JSON.stringify({
+          error: "AI returned invalid response format. Please try again.",
+          details: content.substring(0, 200),
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     return new Response(JSON.stringify({ advice }), {

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -68,52 +69,56 @@ serve(async (req) => {
     const calorieGoal = aiRecommendedCalories ?? dailyCalorieGoal;
     const caloriePercentage = calorieGoal > 0 ? (todayCalories / calorieGoal) * 100 : 0;
 
-    // Summarise weight history for prompt
+    // Pre-compute weeklyPaceKg from weight history
     const last7 = Array.isArray(weightHistory) ? weightHistory.slice(-7) : [];
     const historyText = last7.length > 0
       ? last7.map((l: any) => `${l.date}: ${l.weight_kg}kg`).join(', ')
       : 'No recent logs';
 
-    const systemPrompt = `You are a JSON API. Respond with ONLY valid JSON — no preamble, no markdown, no text outside the JSON.
+    let weeklyPaceKg = 0;
+    if (last7.length >= 2) {
+      const sorted = [...last7].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      const firstW = parseFloat(sorted[0].weight_kg);
+      const lastW = parseFloat(sorted[sorted.length - 1].weight_kg);
+      const days = (new Date(sorted[sorted.length - 1].date).getTime() - new Date(sorted[0].date).getTime()) / (1000 * 60 * 60 * 24);
+      if (days > 0) weeklyPaceKg = ((firstW - lastW) / days) * 7;
+    }
 
-You are the Weight Cut Wizard — an evidence-based fight sports nutritionist and weight-cutting specialist for combat athletes.
+    // Pre-compute paceStatus
+    let paceStatus = "at_target";
+    if (requiredWeeklyKg > 0) {
+      if (weeklyPaceKg >= requiredWeeklyKg * 1.1) paceStatus = "ahead";
+      else if (weeklyPaceKg >= requiredWeeklyKg * 0.9) paceStatus = "on_track";
+      else paceStatus = "behind";
+    }
 
-Given today's snapshot of an athlete's data, produce a concise, personalised daily wisdom update.
+    const systemPrompt = `You are a JSON API. Respond with ONLY valid JSON.
+You are the Weight Cut Wizard — evidence-based fight sports nutritionist.
 
 RULES:
-- Reference actual numbers (kg, kcal, days) in your advice.
-- Flag risk as "orange" if requiredWeeklyKg > 1.0.
-- Otherwise "green".
-- Keep summary ≤ 15 words.
-- adviceParagraph: 2-3 sentences of direct, personalised guidance.
-- actionItems: exactly 3 short, actionable items for today.
+- Reference actual numbers (kg, kcal, days) in advice
+- riskLevel: "orange" if requiredWeeklyKg > 1.0, else "green"
+- summary: ≤15 words
+- adviceParagraph: 2-3 sentences, personalised
+- actionItems: exactly 3 short actionable items
 
-OUTPUT (valid JSON only):
+OUTPUT:
 {
-  "summary": "One-line card preview max 15 words",
+  "summary": "string",
   "riskLevel": "green|orange",
-  "riskReason": "Brief scientific justification",
-  "daysToFight": 0,
-  "weeklyPaceKg": 0.0,
-  "requiredWeeklyKg": 0.0,
-  "paceStatus": "on_track|ahead|behind|at_target",
-  "adviceParagraph": "2-3 personalised sentences",
+  "riskReason": "string",
+  "adviceParagraph": "string",
   "actionItems": ["item1", "item2", "item3"],
-  "nutritionStatus": "Short nutrition assessment"
+  "nutritionStatus": "string"
 }`;
 
-    const userPrompt = `Athlete daily snapshot:
-- Current weight: ${currentWeight}kg
-- Diet target (fight-week): ${dietTarget}kg
-- Final weigh-in target: ${goalWeight}kg
-- Days until fight: ${daysRemaining}
-- Required weekly loss: ${requiredWeeklyKg.toFixed(2)} kg/week
-- TDEE: ${tdee ?? 'unknown'} kcal${bmr ? ` | BMR: ${bmr} kcal` : ''}
-- Activity: ${activityLevel ?? 'unknown'} | Age: ${age ?? 'unknown'} | Sex: ${sex ?? 'unknown'} | Height: ${heightCm ?? 'unknown'}cm
-- Today calories consumed: ${todayCalories} kcal / goal ${calorieGoal} kcal (${caloriePercentage.toFixed(0)}%)
-- Last 7 weight logs: ${historyText}
-
-Compute weeklyPaceKg from last 7 logs if possible (loss per week). Set daysToFight = ${daysRemaining}. Set requiredWeeklyKg = ${requiredWeeklyKg.toFixed(2)}. Determine paceStatus vs required pace.`;
+    const userPrompt = `Athlete snapshot:
+- Weight: ${currentWeight}kg → Diet target: ${dietTarget}kg → Weigh-in: ${goalWeight}kg
+- Days left: ${daysRemaining} | Required: ${requiredWeeklyKg.toFixed(2)} kg/wk | Pace: ${weeklyPaceKg.toFixed(2)} kg/wk (${paceStatus})
+- TDEE: ${tdee ?? 'unknown'}${bmr ? ` | BMR: ${bmr}` : ''} | Activity: ${activityLevel ?? 'unknown'}
+- ${sex ?? 'unknown'}, ${age ?? 'unknown'}y, ${heightCm ?? 'unknown'}cm
+- Today: ${todayCalories} / ${calorieGoal} kcal (${caloriePercentage.toFixed(0)}%)
+- Last 7 logs: ${historyText}`;
 
     const response = await fetch("https://api.minimax.io/v1/chat/completions", {
       method: "POST",
@@ -128,7 +133,7 @@ Compute weeklyPaceKg from last 7 logs if possible (loss per week). Set daysToFig
           { role: "user", content: userPrompt },
         ],
         temperature: 0.3,
-        max_tokens: 800,
+        max_tokens: 500,
       }),
     });
 
@@ -162,48 +167,19 @@ Compute weeklyPaceKg from last 7 logs if possible (loss per week). Set daysToFig
     const data = await response.json();
     console.log("Minimax daily-wisdom response:", JSON.stringify(data, null, 2));
 
-    let wisdomText = data.choices?.[0]?.message?.content;
-    // Strip <think> tags
-    if (wisdomText) {
-      wisdomText = wisdomText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-    }
-
-    if (!wisdomText) {
-      const finishReason = data.choices?.[0]?.finish_reason;
-      if (finishReason === 'content_filter') {
-        throw new Error("Content was filtered. Please try again.");
-      }
+    const { content, filtered } = extractContent(data);
+    if (!content) {
+      if (filtered) throw new Error("Content was filtered. Please try again.");
       throw new Error("No response from Minimax API");
     }
 
-    let wisdom;
-    try {
-      wisdom = JSON.parse(wisdomText);
-    } catch {
-      const jsonMatch = wisdomText.match(/```(?:json)?\s*([\s\S]*?)```/);
-      if (jsonMatch) {
-        try {
-          wisdom = JSON.parse(jsonMatch[1].trim());
-        } catch {
-          console.error("Failed to parse extracted JSON:", jsonMatch[1]);
-        }
-      }
-      if (!wisdom) {
-        // Try extracting bare JSON object
-        const objMatch = wisdomText.match(/\{[\s\S]*\}/);
-        if (objMatch) {
-          try {
-            wisdom = JSON.parse(objMatch[0]);
-          } catch {
-            console.error("Failed to parse bare JSON from response:", wisdomText);
-          }
-        }
-      }
-      if (!wisdom) {
-        console.error("Failed to parse Minimax response as JSON:", wisdomText);
-        throw new Error("Could not parse wisdom from AI response");
-      }
-    }
+    const wisdom = parseJSON(content);
+
+    // Override with pre-computed deterministic values
+    wisdom.daysToFight = daysRemaining;
+    wisdom.requiredWeeklyKg = parseFloat(requiredWeeklyKg.toFixed(2));
+    wisdom.weeklyPaceKg = parseFloat(weeklyPaceKg.toFixed(2));
+    wisdom.paceStatus = paceStatus;
 
     return new Response(JSON.stringify({ wisdom }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
