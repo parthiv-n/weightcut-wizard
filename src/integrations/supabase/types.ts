@@ -75,6 +75,7 @@ export type Database = {
           intensity: string
           intensity_level: number | null
           mobility_done: boolean | null
+          notes: string | null
           rpe: number
           session_type: string
           sleep_hours: number | null
@@ -92,6 +93,7 @@ export type Database = {
           intensity: string
           intensity_level?: number | null
           mobility_done?: boolean | null
+          notes?: string | null
           rpe: number
           session_type: string
           sleep_hours?: number | null
@@ -109,6 +111,7 @@ export type Database = {
           intensity?: string
           intensity_level?: number | null
           mobility_done?: boolean | null
+          notes?: string | null
           rpe?: number
           session_type?: string
           sleep_hours?: number | null
