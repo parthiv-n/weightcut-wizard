@@ -49,10 +49,10 @@ serve(async (req) => {
     } : null;
 
     const { messages } = await req.json();
-    const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
+    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
 
-    if (!MINIMAX_API_KEY) {
-      throw new Error("MINIMAX_API_KEY is not configured");
+    if (!GROK_API_KEY) {
+      throw new Error("GROK_API_KEY is not configured");
     }
 
     // Cap conversation history to last 20 messages to prevent token explosion
@@ -73,28 +73,28 @@ RULES:
 - Focus on performance — making weight with no energy = losing the fight.
 - Format: short paragraphs, bullet points for lists, bold key terms. No walls of text.`;
 
-    console.log("Calling Minimax API with memory footprint...");
+    console.log("Calling Grok API with memory footprint...");
 
-    const response = await fetch("https://api.minimax.io/v1/chat/completions", {
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${MINIMAX_API_KEY}`,
+        "Authorization": `Bearer ${GROK_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "MiniMax-M2.5",
+        model: "grok-4-1-fast-reasoning",
         messages: [
           { role: "system", content: systemPrompt },
           ...cappedMessages
         ],
         temperature: 0.7,
-        max_tokens: 2048
+        max_completion_tokens: 2048
       })
     });
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error("Minimax API error:", response.status, errorData);
+      console.error("Grok API error:", response.status, errorData);
 
       if (response.status === 429) {
         return new Response(
@@ -118,13 +118,13 @@ RULES:
       }
 
       return new Response(
-        JSON.stringify({ error: `Minimax API error: ${errorData.error?.message || 'Unknown error'}` }),
+        JSON.stringify({ error: `Grok API error: ${errorData.error?.message || 'Unknown error'}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const data = await response.json();
-    console.log("Wizard chat Minimax response:", JSON.stringify(data, null, 2));
+    console.log("Wizard chat Grok response:", JSON.stringify(data, null, 2));
 
     let { content: generatedText, filtered } = extractContent(data);
 
@@ -132,7 +132,7 @@ RULES:
       if (filtered) {
         generatedText = "I can't provide that specific advice for safety reasons. Let me help you with a safer approach to your weight cut goals.";
       } else {
-        throw new Error("No response from Minimax API");
+        throw new Error("No response from Grok API");
       }
     }
 

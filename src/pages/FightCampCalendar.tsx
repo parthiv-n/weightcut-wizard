@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, subMonths, addMonths, subDays } from "date-fns";
-import { ChevronLeft, ChevronRight, Plus, Activity, Moon, Ruler, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Activity, Moon, Ruler, Trash2, CircleX } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useUser } from "@/contexts/UserContext";
 import { useToast } from "@/hooks/use-toast";
@@ -39,7 +39,7 @@ const SESSION_TYPES = [
 ];
 
 export default function FightCampCalendar() {
-    const { userId } = useUser();
+    const { userId, profile } = useUser();
     const { toast } = useToast();
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(new Date());
@@ -222,7 +222,15 @@ export default function FightCampCalendar() {
         <div className="space-y-4 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto pb-20 md:pb-6">
                 {/* Recovery Dashboard */}
                 {sessions28d.length > 0 && userId && (
-                    <RecoveryDashboard sessions28d={sessions28d as any} userId={userId} sessionLoggedAt={sessionLoggedTrigger} />
+                    <RecoveryDashboard
+                        sessions28d={sessions28d as any}
+                        userId={userId}
+                        sessionLoggedAt={sessionLoggedTrigger}
+                        athleteProfile={profile ? {
+                            trainingFrequency: profile.training_frequency ?? null,
+                            activityLevel: profile.activity_level ?? null,
+                        } : undefined}
+                    />
                 )}
 
                 {/* Calendar View */}
@@ -435,7 +443,12 @@ export default function FightCampCalendar() {
                                                                     ? 'bg-primary text-primary-foreground shadow-sm'
                                                                     : 'bg-accent/40 text-foreground/70 hover:bg-accent/60'}`}
                                                         >
-                                                            {quality === 'good' ? '😴 Good' : '😵 Poor'}
+                                                            <span className="flex items-center justify-center gap-1.5">
+                                                                {quality === 'good'
+                                                                  ? <Moon className="h-3.5 w-3.5" />
+                                                                  : <CircleX className="h-3.5 w-3.5" />}
+                                                                {quality === 'good' ? 'Good' : 'Poor'}
+                                                            </span>
                                                         </button>
                                                     ))}
                                                 </div>

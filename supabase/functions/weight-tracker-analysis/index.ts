@@ -49,10 +49,10 @@ serve(async (req) => {
       weightHistory: clientWeightHistory
     } = await req.json();
 
-    const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
+    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
 
-    if (!MINIMAX_API_KEY) {
-      throw new Error("MINIMAX_API_KEY is not configured");
+    if (!GROK_API_KEY) {
+      throw new Error("GROK_API_KEY is not configured");
     }
 
     // Use client-provided weight history if available (saves a DB round-trip)
@@ -196,22 +196,22 @@ OUTPUT:
       userPrompt += `\n\nMAINTENANCE MODE: At/below target. calorieDeficit=0, recommendedCalories=TDEE(${tdee}).${weightToGain > 0 ? ` Gain ${weightToGain.toFixed(1)}kg via maintenance calories, not surplus.` : ''}`;
     }
 
-    // Call Minimax API
-    console.log("Calling Minimax API for weight tracker analysis...");
-    const response = await fetch("https://api.minimax.io/v1/chat/completions", {
+    // Call Grok API
+    console.log("Calling Grok API for weight tracker analysis...");
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${MINIMAX_API_KEY}`,
+        "Authorization": `Bearer ${GROK_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "MiniMax-M2.5",
+        model: "grok-4-1-fast-reasoning",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
         temperature: 0.1,
-        max_tokens: 1500
+        max_completion_tokens: 1500
       }),
     });
 
@@ -235,7 +235,7 @@ OUTPUT:
         );
       }
       const errorText = await response.text();
-      console.error("Minimax API error:", response.status, errorText);
+      console.error("Grok API error:", response.status, errorText);
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -243,12 +243,12 @@ OUTPUT:
     }
 
     const data = await response.json();
-    console.log("Minimax weight tracker response:", JSON.stringify(data, null, 2));
+    console.log("Grok weight tracker response:", JSON.stringify(data, null, 2));
 
     const { content, filtered } = extractContent(data);
     if (!content) {
       if (filtered) throw new Error("Content was filtered for safety. Please try a different request.");
-      throw new Error("No response from Minimax API");
+      throw new Error("No response from Grok API");
     }
 
     const analysis = parseJSON(content);

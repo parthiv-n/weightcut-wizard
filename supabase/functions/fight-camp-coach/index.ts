@@ -7,6 +7,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+function getExperienceTier(freq: number | null, level: string | null): string {
+  const f = freq ?? 0;
+  if (f >= 6 || level === 'extra_active') return 'advanced (high-volume athlete)';
+  if (f >= 4 || level === 'very_active') return 'intermediate (regular competitor)';
+  if (f >= 2 || level === 'moderately_active') return 'developing (building base)';
+  return 'beginner (low training history)';
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -54,11 +62,13 @@ serve(async (req) => {
       latestSleep,
       latestSoreness,
       recentSessions,
+      checkIn,
+      athleteProfile,
     } = await req.json();
 
-    const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
-    if (!MINIMAX_API_KEY) {
-      throw new Error("MINIMAX_API_KEY is not configured");
+    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
+    if (!GROK_API_KEY) {
+      throw new Error("GROK_API_KEY is not configured");
     }
 
     const sessionsText = Array.isArray(recentSessions)
@@ -67,18 +77,56 @@ serve(async (req) => {
       ).join('\n')
       : 'No recent sessions';
 
+    const checkInText = checkIn
+      ? `\nSubjective check-in (fighter's self-report right now):
+- Energy: ${checkIn.energy}
+- Body soreness: ${checkIn.soreness}
+- Last night's sleep: ${checkIn.sleep}
+- Mental state: ${checkIn.mental}`
+      : '';
+
+    const athleteBaselineText = athleteProfile
+      ? `\nAthlete baseline (from onboarding profile):
+- Declared training frequency: ${athleteProfile.trainingFrequency ?? 'unknown'} sessions/week
+- Activity level: ${athleteProfile.activityLevel?.replace(/_/g, ' ') ?? 'unknown'}
+- Experience tier: ${getExperienceTier(athleteProfile.trainingFrequency, athleteProfile.activityLevel)}`
+      : '';
+
     const systemPrompt = `You are a JSON API. Respond with ONLY valid JSON.
 Elite recovery specialist for combat sports training load management. Calm, professional, conservative, evidence-informed.
 
 You CANNOT override deterministic values (strain, overtraining score, load ratio) — interpret only.
+Incorporate the fighter's subjective check-in alongside deterministic metrics when provided.
+If check-in reports severe soreness + empty energy + terrible sleep + burnt_out, strongly recommend rest (set rest_day_override: true).
+Always provide 2 alternatives: one for feeling better than the primary recommendation, one for feeling worse.
+If no subjective check-in is provided, base recommendations on metrics alone.
+
+ATHLETE CALIBRATION:
+When athlete baseline is provided, adjust your interpretation of metrics to their experience level:
+- Advanced (6+ sessions/week baseline): Load ratio up to 1.4 is tolerable. 5-7 sessions/week is normal. RPE 7-8 is sustainable working range. Maintain volume unless overtraining score exceeds 60.
+- Intermediate (4-5 sessions/week baseline): Load ratio 1.2-1.3 is the sweet spot. RPE 7 is a sustainable ceiling. 4-5 sessions/week is normal, flag 6+ as a spike.
+- Developing (2-3 sessions/week baseline): Load ratio above 1.2 warrants caution. RPE 6-7 should be the ceiling. 3+ sessions/week is significant.
+- Beginner (0-1 sessions/week baseline): Load ratio above 1.1 is a spike. Keep RPE at 5-6. Even 2-3 sessions/week may need extra recovery.
+If no athlete baseline is provided, default to conservative interpretation (assume developing level).
+The deterministic thresholds remain unchanged — calibrate RECOMMENDATIONS, not scores.
 
 OUTPUT:
 {
-  "readiness_state": "push|maintain|reduce|recover",  // push=green light, maintain=stay, reduce=scale back, recover=rest day
-  "coaching_summary": "1-2 sentences referencing actual numbers",
-  "next_session_advice": "Specific: session type, duration, max RPE",
-  "recovery_focus": ["protocol1", "protocol2", "protocol3"],  // 2-4 actionable, fighter-specific
-  "risk_level": "low|moderate|high|critical"  // must match overtraining zone
+  "readiness_state": "push|maintain|reduce|recover",
+  "coaching_summary": "2-3 sentences referencing numbers AND how fighter feels",
+  "recommended_session": {
+    "type": "e.g. BJJ, Conditioning, Active Recovery",
+    "duration_minutes": 60,
+    "max_rpe": 7,
+    "notes": "Specific guidance for this session"
+  },
+  "alternatives": [
+    { "condition": "If feeling better than expected", "type": "...", "duration_minutes": 75, "max_rpe": 8, "notes": "..." },
+    { "condition": "If feeling worse", "type": "...", "duration_minutes": 30, "max_rpe": 4, "notes": "..." }
+  ],
+  "recovery_focus": ["protocol1", "protocol2", "protocol3"],
+  "risk_level": "low|moderate|high|critical",
+  "rest_day_override": false
 }
 
 Conservative approach: when in doubt, recommend less intensity.`;
@@ -92,22 +140,22 @@ Conservative approach: when in doubt, recommend less intensity.`;
 - Sleep: ${latestSleep ?? 8}h (avg ${avgSleep?.toFixed(1) ?? 0}h) | Soreness: ${latestSoreness ?? 0}/10
 
 Recent sessions:
-${sessionsText}`;
+${sessionsText}${checkInText}${athleteBaselineText}`;
 
-    const response = await fetch("https://api.minimax.io/v1/chat/completions", {
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${MINIMAX_API_KEY}`,
+        "Authorization": `Bearer ${GROK_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "MiniMax-M2.5",
+        model: "grok-4-1-fast-reasoning",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
         temperature: 0.3,
-        max_tokens: 600,
+        max_completion_tokens: 1200,
       }),
     });
 
@@ -119,7 +167,7 @@ ${sessionsText}`;
         );
       }
       const errorText = await response.text();
-      console.error("Minimax API error:", response.status, errorText);
+      console.error("Grok API error:", response.status, errorText);
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -127,12 +175,12 @@ ${sessionsText}`;
     }
 
     const data = await response.json();
-    console.log("Minimax fight-camp-coach response:", JSON.stringify(data, null, 2));
+    console.log("Grok fight-camp-coach response:", JSON.stringify(data, null, 2));
 
     const { content, filtered } = extractContent(data);
     if (!content) {
       if (filtered) throw new Error("Content was filtered. Please try again.");
-      throw new Error("No response from Minimax API");
+      throw new Error("No response from Grok API");
     }
 
     const coach = parseJSON(content);

@@ -3,12 +3,12 @@
  * Handles think-tag stripping, JSON extraction, and content filter detection.
  */
 
-/** Strip <think>...</think> tags from MiniMax responses */
+/** Strip <think>...</think> tags from Grok responses */
 export function stripThinkTags(text: string): string {
   return text.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
 }
 
-/** Extract generated text from MiniMax API response, stripping think tags */
+/** Extract generated text from Grok API response, stripping think tags */
 export function extractContent(data: any): { content: string | null; filtered: boolean } {
   let content = data.choices?.[0]?.message?.content;
   if (content) {

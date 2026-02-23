@@ -33,10 +33,10 @@ serve(async (req) => {
     }
 
     const { hydrationData, profileData, recentLogs } = await req.json();
-    const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
+    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
 
-    if (!MINIMAX_API_KEY) {
-      throw new Error("MINIMAX_API_KEY is not configured");
+    if (!GROK_API_KEY) {
+      throw new Error("GROK_API_KEY is not configured");
     }
 
     const systemPrompt = `You are the Weight Cut Wizard, a science-based combat sports hydration coach. Safety first.
@@ -51,22 +51,22 @@ Provide evidence-based, gradual hydration strategies. Keep responses concise (2-
 
 Brief insight + one actionable recommendation.`;
 
-    console.log("Calling Minimax API for hydration insights...");
+    console.log("Calling Grok API for hydration insights...");
 
-    const response = await fetch("https://api.minimax.io/v1/chat/completions", {
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${MINIMAX_API_KEY}`,
+        "Authorization": `Bearer ${GROK_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "MiniMax-M2.5",
+        model: "grok-4-1-fast-reasoning",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
         ],
         temperature: 0.7,
-        max_tokens: 256
+        max_completion_tokens: 256
       })
     });
 
@@ -90,7 +90,7 @@ Brief insight + one actionable recommendation.`;
         );
       }
       const errorData = await response.json();
-      console.error("Minimax API error:", response.status, errorData);
+      console.error("Grok API error:", response.status, errorData);
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -98,12 +98,12 @@ Brief insight + one actionable recommendation.`;
     }
 
     const data = await response.json();
-    console.log("Minimax hydration response:", JSON.stringify(data, null, 2));
+    console.log("Grok hydration response:", JSON.stringify(data, null, 2));
 
     const { content: insight, filtered } = extractContent(data);
     if (!insight) {
       if (filtered) throw new Error("Content was filtered for safety. Please try a different request.");
-      throw new Error("No response from Minimax API");
+      throw new Error("No response from Grok API");
     }
 
     return new Response(JSON.stringify({ insight }), {
