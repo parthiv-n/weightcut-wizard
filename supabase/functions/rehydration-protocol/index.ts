@@ -1,133 +1,153 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import knowledgeData from "./chatbot-index.json" assert { type: "json" };
+import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
+import { RESEARCH_SUMMARY } from "../_shared/researchSummary.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ── Deterministic calculations (not LLM-generated) ─────────────────────────
+function computeTargets(
+  weightLostKg: number,
+  currentWeightKg: number,
+  weighInTiming: string,
+  glycogenDepletion: string
+) {
+  const availableHours = weighInTiming === "same-day" ? 5 : 16;
+  const totalFluidML = weightLostKg * 1.5 * 1000;
+  const totalFluidLitres = parseFloat((totalFluidML / 1000).toFixed(1));
+  const hourlyFluidML = Math.min(1000, Math.round(totalFluidML / availableHours));
+
+  const sodiumPerLitre = 1500;
+  const totalSodiumMg = Math.round(sodiumPerLitre * totalFluidLitres);
+  const potassiumPerLitre = 240;
+  const totalPotassiumMg = Math.round(potassiumPerLitre * totalFluidLitres);
+  const magnesiumPerLitre = 48;
+  const totalMagnesiumMg = Math.round(magnesiumPerLitre * totalFluidLitres);
+
+  let carbMultiplierLow: number;
+  let carbMultiplierHigh: number;
+  let carbTargetLabel: string;
+  switch (glycogenDepletion) {
+    case "significant":
+      carbMultiplierLow = 8; carbMultiplierHigh = 12; carbTargetLabel = "8-12"; break;
+    case "moderate":
+      carbMultiplierLow = 6; carbMultiplierHigh = 8; carbTargetLabel = "6-8"; break;
+    default:
+      carbMultiplierLow = 4; carbMultiplierHigh = 5; carbTargetLabel = "4-5";
+  }
+
+  const totalCarbsG = Math.round(currentWeightKg * (carbMultiplierLow + carbMultiplierHigh) / 2);
+  const maxCarbsPerHour = 60;
+  const caffeineLowMg = Math.round(currentWeightKg * 3);
+  const caffeineHighMg = Math.round(currentWeightKg * 6);
+
+  return {
+    totalFluidLitres, totalFluidML, hourlyFluidML,
+    totalSodiumMg, totalPotassiumMg, totalMagnesiumMg,
+    sodiumPerLitre, potassiumPerLitre, magnesiumPerLitre,
+    totalCarbsG, maxCarbsPerHour, carbTargetLabel,
+    carbMultiplierLow, carbMultiplierHigh,
+    availableHours, caffeineLowMg, caffeineHighMg,
+  };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
+  if (req.method === "GET") {
+    return new Response(JSON.stringify({ status: "warm" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   try {
-    const { weightLostKg, weighInTiming, currentWeightKg } = await req.json();
-    const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
+    const {
+      weightLostKg, weighInTiming, currentWeightKg,
+      glycogenDepletion = "moderate",
+      sex, age, heightCm, activityLevel, trainingFrequency,
+      tdee, goalWeightKg, fightWeekTargetKg,
+    } = await req.json();
 
-    if (!MINIMAX_API_KEY) {
-      throw new Error("MINIMAX_API_KEY is not configured");
+    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
+    if (!GROK_API_KEY) {
+      throw new Error("GROK_API_KEY is not configured");
     }
 
-    const researchContext = knowledgeData.map((doc: any) => `## Source: ${doc.title}\n${doc.content}`).join('\n\n');
+    const targets = computeTargets(weightLostKg, currentWeightKg, weighInTiming, glycogenDepletion);
 
-    const systemPrompt = `You are the Weight Cut Wizard, a science-based combat sports rehydration expert. You PRIORITIZE fighter safety and performance.
+    const profileLines = [
+      `Body weight: ${currentWeightKg}kg`,
+      sex ? `Sex: ${sex}` : null,
+      age ? `Age: ${age}` : null,
+      heightCm ? `Height: ${heightCm}cm` : null,
+      activityLevel ? `Activity: ${activityLevel}` : null,
+      trainingFrequency ? `Training: ${trainingFrequency} sessions/wk` : null,
+      tdee ? `TDEE: ${tdee} kcal` : null,
+      goalWeightKg ? `Goal: ${goalWeightKg}kg` : null,
+      fightWeekTargetKg ? `Fight week target: ${fightWeekTargetKg}kg` : null,
+    ].filter(Boolean).join(" | ");
 
-CRITICAL SAFETY PRINCIPLES:
-- Never recommend rapid rehydration that could cause hyponatremia
-- Gradual, controlled rehydration is essential
-- Electrolyte balance is as important as fluid volume
-- Carbohydrate reintroduction must be gradual and strategic
-- Target 5-10g carbs per kg body weight post weigh-in
-- Avoid high fiber, high fat foods that slow digestion
+    const systemPrompt = `You are the Weight Cut Wizard, a science-based combat sports rehydration expert. Safety first.
 
-YOUR KNOWLEDGE BASE (Scientific Research):
-The following are full-text research papers and protocols on combat sports nutrition and rehydration. You MUST base your fluid schedules, electrolyte ratios, and carbohydrate protocols STRICTLY on the data provided in these papers. Do not hallucinate statistics or generalize internet advice. Retrieve exact scientific protocols from this context.
+<research>
+${RESEARCH_SUMMARY}
+</research>
 
-<knowledge>
-${researchContext}
-</knowledge>
+ATHLETE: ${profileLines}
 
-You provide evidence-based rehydration protocols based on:
-- Weight lost via dehydration
-- The specific weigh-in schedule chosen (Same Day vs Day Before)
-- Body weight
-- The scientific literature provided in your knowledge base
+TARGETS (HARD CONSTRAINTS — do not deviate):
+- Fluid: ${targets.totalFluidLitres}L (${targets.totalFluidML}ml) — 150% of ${weightLostKg}kg lost
+- Max hourly: ${targets.hourlyFluidML}ml/h | Window: ${targets.availableHours}h (${weighInTiming})
+- Sodium: ${targets.totalSodiumMg}mg | Potassium: ${targets.totalPotassiumMg}mg | Magnesium: ${targets.totalMagnesiumMg}mg
+- Carbs: ${targets.totalCarbsG}g (${targets.carbTargetLabel} g/kg) | Max ${targets.maxCarbsPerHour}g/h
+- Glycogen depletion: ${glycogenDepletion}
+- Caffeine: ${targets.caffeineLowMg}-${targets.caffeineHighMg}mg, 60 min pre-competition
 
-OUTPUT FORMAT - You must respond with valid JSON only:
+Distribute fluid & electrolyte totals across hourly protocol. Sum of fluidML ≈ ${targets.totalFluidML}ml. Sum of carbsG ≈ ${targets.totalCarbsG}g. Never exceed ${targets.maxCarbsPerHour}g carbs/h or ~1000ml/h.
+
+Respond with valid JSON only:
 {
-  "hourlyProtocol": [
-    {
-      "hour": 1,
-      "fluidML": 500,
-      "sodium": 460,
-      "potassium": 120,
-      "notes": "Start slow - isotonic solution"
-    }
-  ],
-  "electrolyteRatio": {
-    "sodium": "460mg per 500ml",
-    "potassium": "120mg per 500ml",
-    "magnesium": "24mg per 500ml"
-  },
-  "carbRefuelPlan": {
-    "targetCarbs": "calculate based on fighter weight (6-8g per kg)",
-    "meals": [
-      {
-        "timing": "Hour 1",
-        "carbsG": 0,
-        "mealIdeas": ["Focus on fluids only"],
-        "rationale": "Prioritize rehydration first"
-      }
-    ],
-    "totalCarbs": "sum of all meal carbs"
-  },
-  "summary": "Brief overview of the protocol",
-  "warnings": ["Important safety warnings"]
+  "summary": "Brief protocol overview",
+  "hourlyProtocol": [{ "hour": 1, "timeLabel": "str", "phase": "str", "fluidML": 0, "sodiumMg": 0, "potassiumMg": 0, "magnesiumMg": 0, "carbsG": 0, "drinkRecipe": "str", "notes": "str", "foods": [] }],
+  "carbRefuelPlan": { "strategy": "str", "meals": [{ "timing": "str", "carbsG": 0, "foods": [], "rationale": "str" }] },
+  "warnings": ["str"],
+  "education": { "howItWorks": [{ "title": "str", "content": "str" }], "caffeineGuidance": "str", "carbMouthRinse": "str" }
 }
 
-Use these evidence-based guidelines:
-- Replace 150% of weight lost over available hours
-- Start with isotonic solutions (similar to plasma osmolality)
-- Sodium: 400-500mg per 500ml initially
-- Carbs: Target 6-8g per kg body weight total, distributed across meals
-- Start carbs Hour 2-3, gradually increase
-- Suggest specific low-fiber, easily digestible foods (white rice, white bread, bananas, honey, sports drinks, rice cakes, chicken breast)
-- Same-day weigh-in: aggressive but safe protocol (4-6 hours)
-- Day-before weigh-in: slower, more comfortable protocol (12-24 hours)
-- Calculate total carb intake and show progression toward goal`;
+Foods: white rice, white bread, bananas, honey, rice cakes, sports drinks, ORS, sweetened milk, chicken breast, sports gels/chews, candy, diluted juice+salt.
+Phases: Rapid Rehydration, Active Rehydration, Glycogen Loading, Sustained Recovery, Pre-Competition, Maintenance.
+Education: 5 items covering Gastric Emptying, SGLT1 Co-Transport, Glycogen-Water Binding, 150% Rule, Phased Recovery.`;
 
-    const userPrompt = `Create a rehydration protocol for:
-- Weight lost via dehydration: ${weightLostKg}kg
-- Weigh-in timing: ${weighInTiming} (THIS IS CRITICAL FOR YOUR TIMELINE)
-- Current weight: ${currentWeightKg}kg
+    const userPrompt = `Rehydration protocol:
+- Lost: ${weightLostKg}kg (${((weightLostKg / currentWeightKg) * 100).toFixed(1)}% BM) | Timing: ${weighInTiming} | Depletion: ${glycogenDepletion}
 
-CRITICAL TIMELINE INSTRUCTIONS:
-If Weigh-in timing is "same-day":
-- You MUST generate an aggressive, fast-absorbing protocol.
-- The \`hourlyProtocol\` array MUST cover exactly 4 to 6 hours total. Do not generate 24 hours of data.
-- Prioritize liquid carbs and fast gastric emptying.
+${weighInTiming === "same-day"
+  ? `Same-day: 4-6 hours, aggressive fast-absorbing protocol. Prioritize liquid carbs. First hour: 600-900ml ORS bolus.`
+  : `Day-before: 12-16 hours. Transition liquid→solid high-carb low-fiber after 3h. First hour: 600-900ml ORS bolus.`}
 
-If Weigh-in timing is "day-before":
-- You MUST generate a prolonged, massive carbohydrate super-compensation protocol.
-- The \`hourlyProtocol\` array MUST cover at least 12 and up to 24 hours.
-- Transition from liquids to solid, high-carb low-fiber meals after the first 3 hours.
+Constraints: total fluid ≈${targets.totalFluidML}ml, total carbs ≈${targets.totalCarbsG}g, no hour >${targets.hourlyFluidML}ml or >${targets.maxCarbsPerHour}g carbs. Include drink recipes every hour, food suggestions, 3-5 safety warnings.`;
 
-Provide:
-1. Hour-by-hour rehydration protocol with specific fluid volumes and electrolyte content
-2. Detailed carb refuel plan targeting 6-8g per kg body weight (for ${currentWeightKg}kg = ${(currentWeightKg * 6).toFixed(0)}-${(currentWeightKg * 8).toFixed(0)}g total carbs)
-3. Specific meal suggestions with carb amounts for each time window
-4. Calculate and show total carb intake across all meals`;
+    console.log("Calling Grok API for rehydration protocol...");
 
-    const fullPrompt = `${systemPrompt}\n\nUser: ${userPrompt}`;
-
-    console.log("Calling Minimax API for rehydration protocol...");
-
-    const response = await fetch("https://api.minimax.io/v1/chat/completions", {
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${MINIMAX_API_KEY}`,
+        Authorization: `Bearer ${GROK_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "MiniMax-M2.5",
+        model: "grok-4-1-fast-reasoning",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
+          { role: "user", content: userPrompt },
         ],
         temperature: 0.1,
-        max_tokens: 3072
-      })
+        max_completion_tokens: 3000,
+      }),
     });
 
     if (!response.ok) {
@@ -137,20 +157,14 @@ Provide:
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (response.status === 401) {
-        return new Response(
-          JSON.stringify({ error: "Invalid API key." }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 403) {
+      if (response.status === 401 || response.status === 403) {
         return new Response(
           JSON.stringify({ error: "API key invalid or quota exceeded." }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       const errorData = await response.json();
-      console.error("Minimax API error:", response.status, errorData);
+      console.error("Grok API error:", response.status, errorData);
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -158,37 +172,30 @@ Provide:
     }
 
     const data = await response.json();
-    console.log("Minimax rehydration response:", JSON.stringify(data, null, 2));
+    console.log("Grok rehydration response received");
 
-    let protocolText = data.choices?.[0]?.message?.content;
-    // Strip <think> tags from Minimax response
-    if (protocolText) {
-      protocolText = protocolText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    const { content, filtered } = extractContent(data);
+    if (!content) {
+      if (filtered) throw new Error("Content was filtered for safety. Please try a different request.");
+      throw new Error("No response from Grok API");
     }
 
-    if (!protocolText) {
-      console.error("No content found in Minimax response");
-      const finishReason = data.choices?.[0]?.finish_reason;
-      if (finishReason === 'content_filter') {
-        throw new Error("Content was filtered for safety. Please try a different request.");
-      }
-      throw new Error("No response from Minimax API");
-    }
+    const protocol = parseJSON(content);
 
-    // Parse the protocol text (may need JSON extraction)
-    let protocol;
-    try {
-      // Try parsing as direct JSON first
-      protocol = JSON.parse(protocolText);
-    } catch (parseError) {
-      // Extract JSON from markdown code blocks if present
-      const jsonMatch = protocolText.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
-      if (jsonMatch) {
-        protocol = JSON.parse(jsonMatch[1]);
-      } else {
-        throw new Error("Could not parse protocol data from AI response");
-      }
-    }
+    // ── Attach deterministic totals (overrides any LLM-computed values) ────
+    protocol.totals = {
+      totalFluidLitres: targets.totalFluidLitres,
+      totalSodiumMg: targets.totalSodiumMg,
+      totalPotassiumMg: targets.totalPotassiumMg,
+      totalMagnesiumMg: targets.totalMagnesiumMg,
+      totalCarbsG: targets.totalCarbsG,
+      carbTargetPerKg: targets.carbTargetLabel,
+      maxCarbsPerHour: targets.maxCarbsPerHour,
+      rehydrationWindowHours: targets.availableHours,
+      bodyWeightKg: currentWeightKg,
+      caffeineLowMg: targets.caffeineLowMg,
+      caffeineHighMg: targets.caffeineHighMg,
+    };
 
     return new Response(JSON.stringify({ protocol }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

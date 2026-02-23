@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Sparkles, Calendar as CalendarIcon, TrendingUp, Loader2, AlertCircle, Settings, Edit2, X, Lock, Activity, Utensils, Database, PieChart as PieChartIcon, Search, CheckCircle, ChevronDown, ChevronUp, ChevronRight, ScanLine, Mic, Dumbbell } from "lucide-react";
+import { Plus, Sparkles, Calendar as CalendarIcon, TrendingUp, Loader2, AlertCircle, Settings, Edit2, X, Lock, Activity, Utensils, Database, PieChart as PieChartIcon, Search, CheckCircle, ChevronDown, ChevronUp, ChevronRight, ScanLine, Mic, Dumbbell, Sunrise, Salad, UtensilsCrossed, Apple } from "lucide-react";
 import wizardLogo from "@/assets/wizard-logo.png";
 import { MealCard } from "@/components/nutrition/MealCard";
 import { CalorieBudgetIndicator } from "@/components/nutrition/CalorieBudgetIndicator";
@@ -1991,14 +1991,15 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
             );
             const groupCalories = groupMeals.reduce((sum, m) => sum + (m.calories || 0), 0);
             const isActionExpanded = expandedMealActions === mealType;
-            const mealIcon = { breakfast: "☀️", lunch: "🥗", dinner: "🍽️", snack: "🍎" }[mealType];
+            const MealIcon = { breakfast: Sunrise, lunch: Salad, dinner: UtensilsCrossed, snack: Apple }[mealType];
+            const mealIconColor = { breakfast: "text-orange-400", lunch: "text-blue-400", dinner: "text-purple-400", snack: "text-green-400" }[mealType];
 
             return (
               <div key={mealType} className="glass-card overflow-hidden transition-all duration-300">
                 {/* Section header */}
                 <div className="flex items-center justify-between px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm">{mealIcon}</span>
+                    <MealIcon className={`h-4 w-4 ${mealIconColor}`} />
                     <h3 className="text-sm font-semibold capitalize">{mealType}</h3>
                   </div>
                   <span className="text-xs font-medium text-muted-foreground tabular-nums">
@@ -2161,10 +2162,10 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                     const fOffset = pArc + cArc;
 
                     const mealTypeButtons = [
-                      { type: "breakfast", icon: "☀️", label: "Bkfst" },
-                      { type: "lunch", icon: "🥗", label: "Lunch" },
-                      { type: "dinner", icon: "🍽️", label: "Dinner" },
-                      { type: "snack", icon: "🍎", label: "Snack" },
+                      { type: "breakfast", Icon: Sunrise, color: "text-orange-400", label: "Bkfst" },
+                      { type: "lunch", Icon: Salad, color: "text-blue-400", label: "Lunch" },
+                      { type: "dinner", Icon: UtensilsCrossed, color: "text-purple-400", label: "Dinner" },
+                      { type: "snack", Icon: Apple, color: "text-green-400", label: "Snack" },
                     ];
 
                     return (
@@ -2257,7 +2258,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                               disabled={loggingMeal === meal.id || savingAllMeals}
                               className="flex flex-col items-center gap-0.5 py-2 text-[10px] font-medium text-foreground/80 hover:text-primary hover:bg-primary/5 active:bg-primary/10 active:scale-[0.97] transition-all disabled:opacity-40 border-r border-white/5 last:border-r-0"
                             >
-                              <span className="text-xs">{btn.icon}</span>
+                              <btn.Icon className={`h-3.5 w-3.5 ${btn.color}`} />
                               <span>{btn.label}</span>
                             </button>
                           ))}
@@ -2292,7 +2293,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
             setAiAnalysisComplete(false);
           }
         }}>
-          <SheetContent side="bottom" className="h-[85vh] overflow-y-auto pb-8 pt-0">
+          <SheetContent side="bottom" className="h-[85vh] overflow-y-auto pb-32 pt-0">
             {/* Drag handle */}
             <div className="flex justify-center pt-3 pb-2">
               <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
@@ -2434,6 +2435,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                     </Button>
                   </div>
                 )}
+                <div className="h-10 w-full" /> {/* Extra bottom spacer for better scrolling */}
               </div>
             )}
 
@@ -2729,6 +2731,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                 <Button onClick={handleAddManualMeal} disabled={savingAllMeals} className="w-full mt-1">
                   {savingAllMeals ? "Adding…" : "Add Meal"}
                 </Button>
+                <div className="h-20 w-full" /> {/* Substantial bottom spacer for manual tab */}
               </div>
             )}
           </SheetContent>

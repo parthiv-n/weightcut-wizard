@@ -1,163 +1,84 @@
-import { useEffect, useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useEffect, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { format, differenceInDays } from "date-fns";
-import { Calendar, Droplets, TrendingDown, AlertTriangle, CheckCircle, Activity, Sparkles, Trash2, ChevronDown, ChevronUp, Timer, Shield, BookOpen, Target } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
-import { Alert, AlertDescription } from "@/components/ui/alert";
+import { addDays, differenceInDays, format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
-import wizardLogo from "@/assets/wizard-logo.png";
-import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { useUser } from "@/contexts/UserContext";
 import { AIPersistence } from "@/lib/aiPersistence";
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
-import { AIGeneratingOverlay } from "@/components/AIGeneratingOverlay";
+import { computeFightWeekPlan, type FightWeekProjection } from "@/utils/fightWeekEngine";
+import { WeightCutBreakdownCard } from "@/components/fightweek/WeightCutBreakdownCard";
+import { DehydrationRingPanel } from "@/components/fightweek/DehydrationRingPanel";
+import { ProjectionChart } from "@/components/fightweek/ProjectionChart";
+import { DayTimelineCard } from "@/components/fightweek/DayTimelineCard";
+import { AIAdviceCard, type FightWeekAIAdvice } from "@/components/fightweek/AIAdviceCard";
+import { TrendingDown, Target, Calendar } from "lucide-react";
 
-interface FightWeekPlan {
+interface DBPlan {
   id: string;
   fight_date: string;
   starting_weight_kg: number;
   target_weight_kg: number;
 }
 
-interface DailyLog {
-  id?: string;
-  log_date: string;
-  weight_kg?: number;
-  carbs_g?: number;
-  fluid_intake_ml?: number;
-  sweat_session_min?: number;
-  supplements?: string;
-  notes?: string;
-}
-
-interface AIAnalysis {
-  riskLevel: "green" | "yellow" | "red";
-  riskPercentage: number;
-  weightRemaining: number;
-  dehydrationRequired: number;
-  carbDepletionEstimate: number;
-  isOnTrack: boolean;
-  progressStatus: string;
-  dailyAnalysis: string;
-  adaptations: string[];
-  riskExplanation: string;
-  recommendation: string;
-}
-
 export default function FightWeek() {
-  const [plan, setPlan] = useState<FightWeekPlan | null>(null);
-  const [logs, setLogs] = useState<DailyLog[]>([]);
-  const [profile, setProfile] = useState<any>(null);
-  const [currentWeight, setCurrentWeight] = useState<number>(0);
-  const [newPlan, setNewPlan] = useState({ fight_date: "", starting_weight_kg: "", target_weight_kg: "" });
-  const [isWaterloading, setIsWaterloading] = useState(false);
-  const [quickWeightLog, setQuickWeightLog] = useState({
-    log_date: format(new Date(), "yyyy-MM-dd"),
-    weight_kg: undefined as number | undefined,
-  });
-  const [timeRemaining, setTimeRemaining] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-  const [settingsExpanded, setSettingsExpanded] = useState(false);
-  const [wizardAdviceOpen, setWizardAdviceOpen] = useState(false);
-  const [riskExplanationOpen, setRiskExplanationOpen] = useState(false);
-  const [recommendationOpen, setRecommendationOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [analyzingWeight, setAnalyzingWeight] = useState(false);
-  const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [logToDelete, setLogToDelete] = useState<DailyLog | null>(null);
-  const { toast } = useToast();
-  const { userId, currentWeight: contextCurrentWeight, updateCurrentWeight, profile: contextProfile } = useUser();
+  // Inputs
+  const [currentWeight, setCurrentWeight] = useState("");
+  const [targetWeight, setTargetWeight] = useState("");
+  const [daysUntilWeighIn, setDaysUntilWeighIn] = useState("");
 
+  // State
+  const [dbPlan, setDbPlan] = useState<DBPlan | null>(null);
+  const [aiAdvice, setAiAdvice] = useState<FightWeekAIAdvice | null>(null);
+  const [isGeneratingAdvice, setIsGeneratingAdvice] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  const { toast } = useToast();
+  const { userId, profile } = useUser();
+
+  // Compute projection synchronously from inputs
+  const projection: FightWeekProjection | null = useMemo(() => {
+    const cw = parseFloat(currentWeight);
+    const tw = parseFloat(targetWeight);
+    const days = parseInt(daysUntilWeighIn);
+    if (!cw || !tw || !days || cw <= tw || days < 1 || days > 14) return null;
+
+    const sex = (profile?.sex as "male" | "female") || "male";
+    return computeFightWeekPlan({ currentWeight: cw, targetWeight: tw, daysUntilWeighIn: days, sex });
+  }, [currentWeight, targetWeight, daysUntilWeighIn, profile?.sex]);
+
+  // Pre-fill from profile
   useEffect(() => {
-    if (userId) {
-      fetchPlanAndLogs();
-      loadPersistedAnalysis();
+    if (profile && !currentWeight && !targetWeight) {
+      const cw = profile.current_weight_kg;
+      const tw = profile.goal_weight_kg;
+      if (cw) setCurrentWeight(cw.toString());
+      if (tw) setTargetWeight(tw.toString());
     }
+  }, [profile]);
+
+  // Load existing plan from DB
+  useEffect(() => {
+    if (!userId) return;
+    loadExistingPlan();
+    loadPersistedAdvice();
   }, [userId]);
 
-  // Populate plan defaults from context profile
+  // Edge function warmup
   useEffect(() => {
-    if (contextProfile) {
-      setProfile(contextProfile);
-      const currentWeightValue = contextCurrentWeight ?? contextProfile.current_weight_kg ?? 0;
-      setNewPlan(prev => ({
-        ...prev,
-        starting_weight_kg: prev.starting_weight_kg || currentWeightValue.toString(),
-        target_weight_kg: prev.target_weight_kg || contextProfile.goal_weight_kg?.toString() || ""
-      }));
-    }
-  }, [contextProfile, contextCurrentWeight]);
+    const timer = setTimeout(() => {
+      supabase.functions.invoke("fight-week-analysis", { method: "GET" }).catch(() => {});
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
 
-  const loadPersistedAnalysis = () => {
-    if (!userId || aiAnalysis) return;
-    try {
-      const persistedData = AIPersistence.load(userId, 'fight_week_analysis');
-      if (persistedData) {
-        setAiAnalysis(persistedData);
-      }
-    } catch (error) {
-      console.error("Error loading persisted analysis:", error);
-    }
-  };
-
-  useEffect(() => {
-    if (plan) {
-      updateLocalCurrentWeight();
-    }
-  }, [logs, plan, contextCurrentWeight]);
-
-  // Countdown timer
-  useEffect(() => {
-    if (!plan) return;
-
-    const updateCountdown = () => {
-      const fightDate = new Date(plan.fight_date);
-      fightDate.setHours(23, 59, 59, 999);
-      const now = Date.now();
-      const diff = fightDate.getTime() - now;
-
-      if (diff <= 0) {
-        setTimeRemaining({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-        return;
-      }
-
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-      setTimeRemaining({ days, hours, minutes, seconds });
-    };
-
-    updateCountdown();
-    const interval = setInterval(updateCountdown, 1000);
-    return () => clearInterval(interval);
-  }, [plan]);
-
-  const updateLocalCurrentWeight = async () => {
-    if (!plan) return;
-
-    const latestFightWeekLog = logs[logs.length - 1];
-    let weight = latestFightWeekLog?.weight_kg;
-
-    if (!weight) {
-      weight = contextCurrentWeight ?? plan.starting_weight_kg;
-    }
-
-    setCurrentWeight(weight);
-  };
-
-  const fetchPlanAndLogs = async () => {
+  const loadExistingPlan = async () => {
     if (!userId) return;
     try {
-      const { data: planData } = await supabase
+      const { data } = await supabase
         .from("fight_week_plans")
         .select("*")
         .eq("user_id", userId)
@@ -165,710 +86,249 @@ export default function FightWeek() {
         .limit(1)
         .single();
 
-      if (planData) {
-        setPlan(planData);
-
-        const { data: logsData } = await supabase
-          .from("fight_week_logs")
-          .select("id, log_date, weight_kg, carbs_g, fluid_intake_ml, sweat_session_min, supplements, notes")
-          .eq("user_id", userId)
-          .order("log_date", { ascending: true });
-
-        setLogs(logsData || []);
-
-        if (logsData && logsData.some(log => log.weight_kg !== null)) {
-          setTimeout(() => getAIAnalysis(), 500);
-        }
+      if (data) {
+        setDbPlan(data);
+        const daysLeft = Math.max(1, differenceInDays(new Date(data.fight_date), new Date()));
+        setCurrentWeight(data.starting_weight_kg.toString());
+        setTargetWeight(data.target_weight_kg.toString());
+        setDaysUntilWeighIn(Math.min(daysLeft, 14).toString());
       }
-    } catch (error) {
-      console.error("Error fetching plan:", error);
+    } catch {
+      // No existing plan — that's fine
     } finally {
       setInitialLoading(false);
     }
   };
 
-  const createPlan = async () => {
+  const loadPersistedAdvice = () => {
     if (!userId) return;
-
-    setLoading(true);
-
-    const { error } = await supabase.from("fight_week_plans").insert({
-      user_id: userId,
-      fight_date: newPlan.fight_date,
-      starting_weight_kg: parseFloat(newPlan.starting_weight_kg),
-      target_weight_kg: parseFloat(newPlan.target_weight_kg)
-    });
-
-    if (error) {
-      toast({ title: "Error creating plan", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Fight week plan created!", description: "Your countdown has started." });
-      fetchPlanAndLogs();
-      setNewPlan({ fight_date: "", starting_weight_kg: "", target_weight_kg: "" });
-    }
-    setLoading(false);
+    const persisted = AIPersistence.load(userId, "fight_week_advice");
+    if (persisted) setAiAdvice(persisted);
   };
 
-  const saveQuickWeight = async () => {
-    if (!userId || !quickWeightLog.log_date || !quickWeightLog.weight_kg) return;
+  const savePlan = async () => {
+    if (!userId || !projection) return;
+    setSaving(true);
 
-    setLoading(true);
-    const logData = {
+    const cw = parseFloat(currentWeight);
+    const tw = parseFloat(targetWeight);
+    const days = parseInt(daysUntilWeighIn);
+    const fightDate = format(addDays(new Date(), days), "yyyy-MM-dd");
+
+    const planData = {
       user_id: userId,
-      log_date: quickWeightLog.log_date,
-      weight_kg: quickWeightLog.weight_kg,
-      carbs_g: null,
-      fluid_intake_ml: null,
-      sweat_session_min: null,
-      supplements: null,
-      notes: null
+      fight_date: fightDate,
+      starting_weight_kg: cw,
+      target_weight_kg: tw,
     };
 
-    const { error } = await supabase
-      .from("fight_week_logs")
-      .upsert(logData, { onConflict: "user_id,log_date" });
+    const { data, error } = dbPlan
+      ? await supabase.from("fight_week_plans").update(planData).eq("id", dbPlan.id).select().single()
+      : await supabase.from("fight_week_plans").insert(planData).select().single();
 
     if (error) {
-      toast({ title: "Error saving log", description: error.message, variant: "destructive" });
-      setLoading(false);
+      toast({ title: "Error saving plan", description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "Weight logged!", description: "Your progress has been tracked." });
-
-      await supabase
-        .from("profiles")
-        .update({ current_weight_kg: quickWeightLog.weight_kg })
-        .eq("id", userId);
-
-      await updateCurrentWeight(quickWeightLog.weight_kg);
-      await fetchPlanAndLogs();
-
-      if (plan) {
-        await getAIAnalysis();
-      }
-
-      setQuickWeightLog({
-        log_date: format(new Date(), "yyyy-MM-dd"),
-        weight_kg: undefined,
-      });
-      setLoading(false);
+      setDbPlan(data);
+      toast({ title: "Plan saved" });
     }
+    setSaving(false);
   };
 
-  const getAIAnalysis = async () => {
-    if (!plan || !userId) return;
+  const generateAdvice = async () => {
+    if (!userId || !projection) return;
+    setIsGeneratingAdvice(true);
 
-    setAnalyzingWeight(true);
-
-    const { data: freshLogs } = await supabase
-      .from("fight_week_logs")
-      .select("*")
-      .eq("user_id", userId)
-      .order("log_date", { ascending: true });
-
-    if (!freshLogs || freshLogs.length === 0) {
-      setAnalyzingWeight(false);
-      return;
-    }
-
-    const logsWithWeight = freshLogs.filter(log => log.weight_kg !== null);
-    const latestLog = logsWithWeight[logsWithWeight.length - 1];
-    const currentWeight = latestLog?.weight_kg || plan.starting_weight_kg;
+    // Clear stale advice when generating new
+    setAiAdvice(null);
 
     const { data, error } = await supabase.functions.invoke("fight-week-analysis", {
       body: {
-        currentWeight,
-        targetWeight: plan.target_weight_kg,
-        daysUntilFight: getDaysUntilFight(),
-        dailyLogs: freshLogs,
-        startingWeight: plan.starting_weight_kg,
-        isWaterloading
-      }
+        currentWeight: parseFloat(currentWeight),
+        targetWeight: parseFloat(targetWeight),
+        daysUntilWeighIn: parseInt(daysUntilWeighIn),
+        sex: profile?.sex || "male",
+        age: profile?.age,
+        projection,
+      },
     });
 
     if (error) {
-      console.error("AI analysis error:", error);
-      toast({ title: "AI analysis unavailable", description: error.message, variant: "destructive" });
-    } else if (data?.analysis) {
-      setAiAnalysis(data.analysis);
-      AIPersistence.save(userId, 'fight_week_analysis', data.analysis, 72);
+      toast({ title: "AI advice unavailable", description: error.message, variant: "destructive" });
+    } else if (data?.advice) {
+      setAiAdvice(data.advice);
+      AIPersistence.save(userId, "fight_week_advice", data.advice, 48);
     }
-    setAnalyzingWeight(false);
+    setIsGeneratingAdvice(false);
   };
 
-  const handleDeleteLog = async () => {
-    if (!logToDelete?.id) return;
-
-    setLoading(true);
-    const { error } = await supabase
-      .from("fight_week_logs")
-      .delete()
-      .eq("id", logToDelete.id);
-
-    if (error) {
-      toast({
-        title: "Error",
-        description: "Failed to delete log entry",
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Deleted",
-        description: "Log entry has been removed",
-      });
-      await fetchPlanAndLogs();
-      if (logs.length > 0) {
-        await getAIAnalysis();
-      }
-    }
-
-    setLoading(false);
-    setDeleteDialogOpen(false);
-    setLogToDelete(null);
-  };
-
-  const initiateDelete = (log: DailyLog) => {
-    setLogToDelete(log);
-    setDeleteDialogOpen(true);
-  };
-
-  const getDaysUntilFight = () => {
-    if (!plan) return 0;
-    return differenceInDays(new Date(plan.fight_date), new Date());
-  };
-
-  const getWeightProgress = () => {
-    if (!plan || !currentWeight) return 0;
-    const totalLoss = plan.starting_weight_kg - plan.target_weight_kg;
-    const currentLoss = plan.starting_weight_kg - currentWeight;
-    return (currentLoss / totalLoss) * 100;
-  };
-
-  const getWeightCutBreakdown = () => {
-    if (!plan || !currentWeight) return null;
-    const totalWeightToCut = currentWeight - plan.target_weight_kg;
-
-    const glycogenWaterWeight = 2.0;
-    const safeDehydration = currentWeight * 0.03;
-    const maxSafeCut = glycogenWaterWeight + safeDehydration;
-
-    const isSafe = totalWeightToCut <= maxSafeCut;
-    const percentBodyweight = (totalWeightToCut / currentWeight) * 100;
-
-    let status: "safe" | "warning" | "danger";
-    let message: string;
-    let wizardAdvice: string;
-
-    if (percentBodyweight <= 5) {
-      status = "safe";
-      message = "Safe and manageable weight cut";
-      wizardAdvice = "Your weight cut is well within safe limits. Focus on gradual carb reduction starting 5 days out, maintain hydration until 24h before weigh-in, then implement controlled water loading/cutting protocol.";
-    } else if (percentBodyweight <= 8) {
-      status = "warning";
-      message = "Aggressive but doable with proper protocol";
-      wizardAdvice = "This is an aggressive cut that requires precise execution. You'll need to maximize glycogen depletion through carb restriction and strategic dehydration. Monitor your energy levels closely and consider extending your cut timeline if possible.";
-    } else {
-      status = "danger";
-      message = "DANGEROUS - Exceeds safe limits";
-      wizardAdvice = "WARNING: This weight cut exceeds safe physiological limits and poses serious health risks including cognitive impairment, reduced performance, and potential medical complications. Strongly recommend reconsidering your target weight or fight timeline.";
-    }
-
-    return {
-      totalWeightToCut,
-      glycogenWaterWeight,
-      safeDehydration,
-      maxSafeCut,
-      isSafe,
-      status,
-      message,
-      percentBodyweight,
-      wizardAdvice,
-      currentWeight
-    };
-  };
-
-  const getChartData = () => {
-    return logs.map(log => ({
-      date: format(new Date(log.log_date), "MMM dd"),
-      weight: log.weight_kg,
-      logId: log.id,
-      fullDate: log.log_date
-    }));
-  };
-
-  const handleChartClick = (data: any) => {
-    if (data && data.activePayload && data.activePayload[0]) {
-      const payload = data.activePayload[0].payload;
-      const log = logs.find(l => l.id === payload.logId);
-      if (log) {
-        initiateDelete(log);
-      }
-    }
-  };
-
-  const daysUntilFight = getDaysUntilFight();
-  const weightCutInfo = getWeightCutBreakdown();
-
-  const FIGHT_WEEK_STEPS = [
-    { icon: Activity, label: "Reviewing daily logs", color: "text-blue-400" },
-    { icon: Droplets, label: "Checking hydration status", color: "text-cyan-500" },
-    { icon: Shield, label: "Validating safety metrics", color: "text-green-500" },
-    { icon: Sparkles, label: "Updating strategy", color: "text-yellow-400" },
-  ];
-
-  // Add Skeleton Loader at the beginning of render
+  // Loading skeleton
   if (initialLoading) {
     return (
-      <div className="min-h-screen bg-background text-foreground pb-32 md:pb-10 pt-safe-top p-6 space-y-8">
-        <div className="space-y-2">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-4 w-32" />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <Skeleton className="h-32 rounded-3xl" />
-          <Skeleton className="h-32 rounded-3xl" />
-        </div>
-        <Skeleton className="h-40 rounded-3xl" />
-        <Skeleton className="h-64 rounded-3xl" />
+      <div className="space-y-4 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto pb-20 md:pb-6">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-40 rounded-2xl" />
+        <Skeleton className="h-64 rounded-2xl" />
       </div>
     );
   }
 
-  if (!plan) {
-    return (
-      <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-6 relative overflow-hidden">
-        {/* Background decorations */}
-        <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-primary/20 rounded-full blur-[120px] pointer-events-none opacity-30" />
-
-        <div className="w-full max-w-sm z-10 space-y-8">
-          <div className="text-center space-y-2">
-            <h1 className="text-3xl font-bold tracking-tight">Fight Week Plan</h1>
-            <p className="text-muted-foreground">Set your targets to start the countdown.</p>
-          </div>
-
-          <div className="space-y-4 bg-card p-6 rounded-3xl border border-border">
-            <div className="space-y-2">
-              <Label htmlFor="fight_date" className="text-muted-foreground">Fight Date</Label>
-              <Input
-                id="fight_date"
-                type="date"
-                value={newPlan.fight_date}
-                onChange={(e) => setNewPlan({ ...newPlan, fight_date: e.target.value })}
-                className="h-12 rounded-xl focus:border-primary"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="starting_weight" className="text-muted-foreground">Current Weight (kg)</Label>
-              <Input
-                id="starting_weight"
-                type="number"
-                step="0.1"
-                value={newPlan.starting_weight_kg}
-                onChange={(e) => setNewPlan({ ...newPlan, starting_weight_kg: e.target.value })}
-                className="h-12 rounded-xl focus:border-primary"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="target_weight" className="text-muted-foreground">Target Weight (kg)</Label>
-              <Input
-                id="target_weight"
-                type="number"
-                step="0.1"
-                value={newPlan.target_weight_kg}
-                onChange={(e) => setNewPlan({ ...newPlan, target_weight_kg: e.target.value })}
-                className="h-12 rounded-xl focus:border-primary"
-              />
-            </div>
-            <Button
-              onClick={createPlan}
-              disabled={loading}
-              className="w-full h-12 rounded-xl text-lg font-bold transition-all mt-2"
-            >
-              {loading ? "Creating..." : "Start Protocol"}
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const safetyBadge = projection
+    ? projection.overallSafety === "green"
+      ? { label: "ON TRACK", cls: "bg-green-500/10 text-green-400 border-green-500/20" }
+      : projection.overallSafety === "orange"
+        ? { label: "CAUTION", cls: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20" }
+        : { label: "CRITICAL", cls: "bg-red-500/10 text-red-400 border-red-500/20" }
+    : null;
 
   return (
-    <>
-      <AIGeneratingOverlay
-        isOpen={analyzingWeight}
-        isGenerating={analyzingWeight}
-        steps={FIGHT_WEEK_STEPS}
-        title="Analyzing Progress"
-        subtitle="Optimizing your weight cut strategy..."
-      />
-      <div className="min-h-screen bg-background text-foreground pb-32 md:pb-10 pt-safe-top">
-        {/* Dynamic Background */}
-        <div className="fixed inset-0 pointer-events-none z-0">
-          <div className="absolute top-[-10%] right-[-10%] w-[400px] h-[400px] bg-primary/10 rounded-full blur-[100px] opacity-40" />
+    <div className="space-y-4 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto pb-20 md:pb-6 text-foreground">
+      <div className="space-y-6">
+        {/* Header + safety badge */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Fight Week</h1>
+            <p className="text-muted-foreground text-sm font-medium">Protocol Generator</p>
+          </div>
+          {safetyBadge && (
+            <div className={`px-3 py-1 rounded-full text-xs font-bold border ${safetyBadge.cls}`}>
+              {safetyBadge.label}
+            </div>
+          )}
         </div>
 
-        <div className="relative z-10 max-w-2xl mx-auto px-6 py-6 space-y-8">
-          {/* Header & Countdown */}
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold tracking-tight">Fight Week</h1>
-                <p className="text-muted-foreground text-sm font-medium">
-                  {format(new Date(plan.fight_date), "MMMM dd, yyyy")}
+        {/* Input card */}
+        <div className="glass-card rounded-2xl p-5 border border-border/50 space-y-4">
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                Current (kg)
+              </Label>
+              <Input
+                type="number"
+                step="0.1"
+                value={currentWeight}
+                onChange={(e) => setCurrentWeight(e.target.value)}
+                className="h-12 rounded-xl text-center text-lg font-medium"
+                placeholder="77.0"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                Weigh-In (kg)
+              </Label>
+              <Input
+                type="number"
+                step="0.1"
+                value={targetWeight}
+                onChange={(e) => setTargetWeight(e.target.value)}
+                className="h-12 rounded-xl text-center text-lg font-medium"
+                placeholder="70.3"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                Days Out
+              </Label>
+              <Input
+                type="number"
+                min="1"
+                max="14"
+                value={daysUntilWeighIn}
+                onChange={(e) => setDaysUntilWeighIn(e.target.value)}
+                className="h-12 rounded-xl text-center text-lg font-medium"
+                placeholder="7"
+              />
+            </div>
+          </div>
+          {projection && (
+            <Button
+              onClick={savePlan}
+              disabled={saving}
+              variant="outline"
+              className="w-full h-10 rounded-xl text-sm"
+            >
+              {saving ? "Saving..." : dbPlan ? "Update Plan" : "Save Plan"}
+            </Button>
+          )}
+        </div>
+
+        {/* Everything below only shows when we have a valid projection */}
+        {projection && (
+          <>
+            {/* Summary tiles */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="glass-card rounded-2xl p-4 border border-border/50 text-center">
+                <TrendingDown className="h-4 w-4 mx-auto text-muted-foreground mb-1" />
+                <span className="text-2xl font-bold block">
+                  {projection.totalToCut.toFixed(1)}
+                </span>
+                <span className="text-[10px] text-muted-foreground uppercase">kg to cut</span>
+              </div>
+              <div className="glass-card rounded-2xl p-4 border border-border/50 text-center">
+                <Target className="h-4 w-4 mx-auto text-muted-foreground mb-1" />
+                <span className={`text-2xl font-bold block ${
+                  projection.percentBW <= 5 ? "text-green-400" :
+                  projection.percentBW <= 8 ? "text-yellow-400" : "text-red-400"
+                }`}>
+                  {projection.percentBW.toFixed(1)}%
+                </span>
+                <span className="text-[10px] text-muted-foreground uppercase">% bodyweight</span>
+              </div>
+              <div className="glass-card rounded-2xl p-4 border border-border/50 text-center">
+                <Calendar className="h-4 w-4 mx-auto text-muted-foreground mb-1" />
+                <span className="text-2xl font-bold block">{daysUntilWeighIn}</span>
+                <span className="text-[10px] text-muted-foreground uppercase">days</span>
+              </div>
+            </div>
+
+            {/* Safe AWL note */}
+            {projection.totalToCut > projection.maxSafeAWL && (
+              <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-3">
+                <p className="text-sm text-red-400">
+                  Cut exceeds safe AWL of {projection.maxSafeAWL.toFixed(1)}kg for this timeline (ISSN Position 7).
                 </p>
               </div>
-              <div className={`px-3 py-1 rounded-full text-xs font-bold border ${weightCutInfo?.status === 'safe' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
-                weightCutInfo?.status === 'warning' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
-                  'bg-red-500/10 text-red-400 border-red-500/20'
-                }`}>
-                {weightCutInfo?.status === 'safe' ? 'ON TRACK' : weightCutInfo?.status === 'warning' ? 'CAUTION' : 'CRITICAL'}
-              </div>
-            </div>
-
-            {/* Hero Countdown & Weight */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-card rounded-3xl p-5 border border-border/50 flex flex-col justify-between h-32 relative overflow-hidden group">
-                <div className="absolute top-3 right-3 text-muted-foreground/40 group-hover:text-muted-foreground/60 transition-colors">
-                  <Timer className="h-5 w-5" />
-                </div>
-                <span className="text-sm font-medium text-muted-foreground">Time Left</span>
-                <div className="space-y-1">
-                  <span className="text-4xl font-bold tracking-tight block">
-                    {timeRemaining.days}<span className="text-lg text-muted-foreground font-normal ml-1">d</span>
-                  </span>
-                  <span className="text-sm text-muted-foreground font-mono">
-                    {String(timeRemaining.hours).padStart(2, '0')}:{String(timeRemaining.minutes).padStart(2, '0')}
-                  </span>
-                </div>
-              </div>
-
-              <div className="bg-card rounded-3xl p-5 border border-border/50 flex flex-col justify-between h-32 relative overflow-hidden group">
-                <div className="absolute top-3 right-3 text-muted-foreground/40 group-hover:text-muted-foreground/60 transition-colors">
-                  <Activity className="h-5 w-5" />
-                </div>
-                <span className="text-sm font-medium text-muted-foreground">Weight Left</span>
-                <div>
-                  <span className="text-4xl font-bold tracking-tight block">
-                    {(currentWeight - plan.target_weight_kg).toFixed(1)}<span className="text-lg text-muted-foreground font-normal ml-1">kg</span>
-                  </span>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Progress value={getWeightProgress()} className="h-1.5 bg-muted" indicatorClassName="bg-primary" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Wizard's Advice — Collapsible */}
-          {weightCutInfo && (
-            <div className="rounded-3xl bg-card border border-border/50 overflow-hidden">
-              <button
-                className="w-full p-5 flex items-center gap-3 text-left hover:bg-muted/30 transition-colors"
-                onClick={() => setWizardAdviceOpen(o => !o)}
-              >
-                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                  <Shield className="h-4 w-4 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <span className="text-sm font-semibold block">Wizard's Safety Advice</span>
-                  <span className="text-xs text-muted-foreground">{weightCutInfo.message}</span>
-                </div>
-                <span className="text-muted-foreground">
-                  {wizardAdviceOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                </span>
-              </button>
-              {wizardAdviceOpen && (
-                <div className="px-5 pb-5 space-y-4 border-t border-border">
-                  <p className="text-sm text-muted-foreground leading-relaxed pt-4">{weightCutInfo.wizardAdvice}</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-muted/50 p-3 rounded-xl border border-border/50">
-                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1">% Bodyweight</span>
-                      <span className={`text-lg font-bold ${weightCutInfo.percentBodyweight <= 5 ? 'text-green-400' : weightCutInfo.percentBodyweight <= 8 ? 'text-yellow-400' : 'text-red-400'}`}>
-                        {weightCutInfo.percentBodyweight.toFixed(1)}%
-                      </span>
-                    </div>
-                    <div className="bg-muted/50 p-3 rounded-xl border border-border/50">
-                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1">Total to Cut</span>
-                      <span className="text-lg font-bold">{weightCutInfo.totalWeightToCut.toFixed(1)}kg</span>
-                    </div>
-                    <div className="bg-muted/50 p-3 rounded-xl border border-border/50">
-                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1">Glycogen + Water</span>
-                      <span className="text-lg font-bold text-orange-400">~{weightCutInfo.glycogenWaterWeight.toFixed(1)}kg</span>
-                    </div>
-                    <div className="bg-muted/50 p-3 rounded-xl border border-border/50">
-                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1">Safe Dehydration</span>
-                      <span className="text-lg font-bold text-blue-400">~{weightCutInfo.safeDehydration.toFixed(1)}kg</span>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Quick Log Action */}
-          <div className="bg-card rounded-3xl p-5 border border-border/50 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold">Log Weight</h3>
-            </div>
-            <div className="flex gap-3">
-              <div className="w-1/3">
-                <Input
-                  type="date"
-                  value={quickWeightLog.log_date}
-                  onChange={(e) => setQuickWeightLog({ ...quickWeightLog, log_date: e.target.value })}
-                  className="h-12 rounded-xl focus:border-primary text-sm font-medium text-center"
-                />
-              </div>
-              <div className="flex-1">
-                <Input
-                  type="number"
-                  step="0.1"
-                  placeholder="0.0"
-                  value={quickWeightLog.weight_kg || ""}
-                  onChange={(e) => setQuickWeightLog({ ...quickWeightLog, weight_kg: parseFloat(e.target.value) })}
-                  className="h-12 rounded-xl focus:border-primary text-lg font-medium text-center"
-                />
-              </div>
-              <Button
-                onClick={saveQuickWeight}
-                disabled={loading || !quickWeightLog.weight_kg}
-                className="h-12 w-24 rounded-xl font-bold text-base transition-transform active:scale-95"
-              >
-                {loading ? "..." : "Save"}
-              </Button>
-            </div>
-          </div>
-
-          {/* AI Insight Section */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between px-1">
-              <h2 className="text-xl font-bold flex items-center gap-2">
-                <Sparkles className="h-5 w-5 text-primary" />
-                AI Insight
-              </h2>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-8 text-xs text-muted-foreground hover:text-foreground"
-                onClick={getAIAnalysis}
-                disabled={analyzingWeight}
-              >
-                {analyzingWeight ? "Analyzing..." : "Refresh"}
-              </Button>
-            </div>
-
-            {analyzingWeight ? (
-              <div className="bg-card rounded-3xl p-8 border border-border/50 flex flex-col items-center justify-center space-y-4 min-h-[200px]">
-                <Sparkles className="h-8 w-8 text-primary animate-spin" />
-                <p className="text-muted-foreground animate-pulse text-sm">Analyzing protocol...</p>
-              </div>
-            ) : aiAnalysis ? (
-              <div className="bg-card rounded-3xl border border-border/50 overflow-hidden">
-                <div className="p-5 space-y-4">
-                  {/* Risk Header */}
-                  <div className="flex items-center gap-3 pb-4 border-b border-border">
-                    <div className={`h-10 w-10 rounded-full flex items-center justify-center ${aiAnalysis.riskLevel === 'green' ? 'bg-green-500/20 text-green-400' :
-                      aiAnalysis.riskLevel === 'yellow' ? 'bg-yellow-500/20 text-yellow-400' :
-                        'bg-red-500/20 text-red-400'
-                      }`}>
-                      {aiAnalysis.riskLevel === 'green' ? <CheckCircle className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-lg leading-tight">
-                        {aiAnalysis.riskLevel === 'green' ? 'Protocol Safe' : aiAnalysis.riskLevel === 'yellow' ? 'Moderate adjustments needed' : 'Immediate action required'}
-                      </h3>
-                      <p className="text-sm text-muted-foreground">{aiAnalysis.progressStatus}</p>
-                    </div>
-                  </div>
-
-                  {/* Cut Composition Visualization */}
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Estimated Cut Composition</h4>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="bg-muted/50 p-3 rounded-xl border border-border/50">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Activity className="h-3.5 w-3.5 text-orange-400" />
-                          <span className="text-xs text-muted-foreground">Carb/Gut Depletion</span>
-                        </div>
-                        <span className="text-xl font-bold block">
-                          ~{aiAnalysis.carbDepletionEstimate.toFixed(1)}<span className="text-sm text-muted-foreground font-normal ml-0.5">kg</span>
-                        </span>
-                      </div>
-                      <div className="bg-muted/50 p-3 rounded-xl border border-border/50">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Droplets className="h-3.5 w-3.5 text-blue-400" />
-                          <span className="text-xs text-muted-foreground">Water Loss Required</span>
-                        </div>
-                        <span className="text-xl font-bold block">
-                          ~{aiAnalysis.dehydrationRequired.toFixed(1)}<span className="text-sm text-muted-foreground font-normal ml-0.5">kg</span>
-                        </span>
-                      </div>
-                    </div>
-                    {isWaterloading && (
-                      <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-3 flex items-start gap-3">
-                        <Droplets className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-medium text-blue-400">Water Loading Active</p>
-                          <p className="text-xs text-blue-300/70 mt-0.5">Bonus 2-3kg safe dehydration capacity added.</p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Analysis Text */}
-                  <div className="space-y-3 border-t border-border pt-3">
-                    <p className="text-sm text-muted-foreground leading-relaxed">
-                      "{aiAnalysis.dailyAnalysis}"
-                    </p>
-                    {aiAnalysis.adaptations.length > 0 && (
-                      <div className="bg-muted/30 rounded-xl p-3 space-y-2">
-                        <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Adaptations</span>
-                        <ul className="space-y-2">
-                          {aiAnalysis.adaptations.map((item, i) => (
-                            <li key={i} className="text-sm flex gap-2 text-muted-foreground">
-                              <span className="text-primary mt-1">•</span>
-                              {item}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Risk Explanation — Collapsible */}
-                  {aiAnalysis.riskExplanation && (
-                    <div className="border-t border-border">
-                      <button
-                        className="w-full py-3 flex items-center gap-2 text-left hover:opacity-80 transition-opacity"
-                        onClick={() => setRiskExplanationOpen(o => !o)}
-                      >
-                        <BookOpen className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Risk Explanation</span>
-                        <span className="ml-auto text-muted-foreground/60">
-                          {riskExplanationOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                        </span>
-                      </button>
-                      {riskExplanationOpen && (
-                        <p className="text-sm text-muted-foreground leading-relaxed pb-3">{aiAnalysis.riskExplanation}</p>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Recommendation — Collapsible */}
-                  {aiAnalysis.recommendation && (
-                    <div className="border-t border-border">
-                      <button
-                        className="w-full py-3 flex items-center gap-2 text-left hover:opacity-80 transition-opacity"
-                        onClick={() => setRecommendationOpen(o => !o)}
-                      >
-                        <Target className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Recommendation</span>
-                        <span className="ml-auto text-muted-foreground/60">
-                          {recommendationOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                        </span>
-                      </button>
-                      {recommendationOpen && (
-                        <p className="text-sm text-muted-foreground leading-relaxed pb-3">{aiAnalysis.recommendation}</p>
-                      )}
-                    </div>
-                  )}
-                </div>
-
-                {/* Protocol Toggle footer */}
-                <div className="bg-muted/50 p-4 border-t border-border flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Droplets className={`h-4 w-4 ${isWaterloading ? 'text-blue-500' : 'text-muted-foreground/60'}`} />
-                    <span className="text-sm font-medium text-muted-foreground">Water Loading</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-muted-foreground">{isWaterloading ? "On" : "Off"}</span>
-                    <input
-                      type="checkbox"
-                      checked={isWaterloading}
-                      onChange={(e) => setIsWaterloading(e.target.checked)}
-                      className="toggle-checkbox h-5 w-9 rounded-full bg-muted border-transparent appearance-none transition-colors checked:bg-blue-600 relative cursor-pointer
-                      after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-transform checked:after:translate-x-4"
-                    />
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-card rounded-3xl p-8 border border-border/50 text-center space-y-4">
-                <p className="text-muted-foreground">No analysis available. Log your weight to get started.</p>
-                <Button onClick={getAIAnalysis} variant="outline">
-                  Generate Analysis
-                </Button>
-              </div>
             )}
-          </div>
 
-          {/* Chart & History */}
-          {logs.length > 0 && (
-            <div className="space-y-4">
-              <h2 className="text-xl font-bold px-1">History</h2>
-              <div className="bg-card rounded-3xl p-5 border border-border/50 overflow-hidden">
-                <div className="h-48 w-full -ml-2">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={getChartData()}>
-                      <XAxis
-                        dataKey="date"
-                        stroke="hsl(var(--muted-foreground))"
-                        fontSize={12}
-                        tickLine={false}
-                        axisLine={false}
-                        tickMargin={10}
-                      />
-                      <Tooltip
-                        contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '12px', color: 'hsl(var(--foreground))' }}
-                        itemStyle={{ color: 'hsl(var(--foreground))' }}
-                        labelStyle={{ color: 'hsl(var(--muted-foreground))' }}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="weight"
-                        stroke="hsl(var(--primary))"
-                        strokeWidth={3}
-                        dot={false}
-                        activeDot={{ r: 6, fill: "hsl(var(--primary))", strokeWidth: 0 }}
-                      />
-                      <ReferenceLine y={plan.target_weight_kg} stroke="hsl(var(--border))" strokeDasharray="3 3" />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
+            {/* Weight cut breakdown */}
+            <WeightCutBreakdownCard
+              glycogenLoss={projection.glycogenLoss}
+              fibreLoss={projection.fibreLoss}
+              sodiumLoss={projection.sodiumLoss}
+              waterLoadingLoss={projection.waterLoadingLoss}
+              dehydrationNeeded={projection.dehydrationNeeded}
+              dietTotal={projection.dietTotal}
+              totalToCut={projection.totalToCut}
+            />
 
-                <div className="mt-4 space-y-px bg-border rounded-xl overflow-hidden border border-border">
-                  {logs.slice().reverse().map((log) => (
-                    <div key={log.id} className="flex items-center justify-between p-4 bg-card hover:bg-muted/50 transition-colors group">
-                      <div className="flex items-center gap-4">
-                        <div className="h-2 w-2 rounded-full bg-primary/50"></div>
-                        <div>
-                          <p className="font-semibold text-sm">{format(new Date(log.log_date), "MMM dd")}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <span className="font-mono font-bold">{log.weight_kg}kg</span>
-                        <button
-                          onClick={() => initiateDelete(log)}
-                          className="text-muted-foreground/40 hover:text-red-500 transition-colors p-1"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
+            {/* Dehydration ring */}
+            <DehydrationRingPanel
+              dehydrationPercentBW={projection.dehydrationPercentBW}
+              dehydrationNeeded={projection.dehydrationNeeded}
+              dehydrationSafety={projection.dehydrationSafety}
+              saunaSessions={projection.saunaSessions}
+            />
 
-        <DeleteConfirmDialog
-          open={deleteDialogOpen}
-          onOpenChange={setDeleteDialogOpen}
-          onConfirm={handleDeleteLog}
-          title="Delete Log"
-          itemName={logToDelete ? `entry from ${format(new Date(logToDelete.log_date), "MMM dd")}` : undefined}
-        />
+            {/* Projection chart */}
+            <ProjectionChart
+              timeline={projection.timeline}
+              targetWeight={parseFloat(targetWeight)}
+            />
+
+            {/* Day-by-day timeline */}
+            <DayTimelineCard timeline={projection.timeline} />
+
+            {/* AI advice */}
+            <AIAdviceCard
+              advice={aiAdvice}
+              isGenerating={isGeneratingAdvice}
+              onGenerate={generateAdvice}
+            />
+          </>
+        )}
       </div>
-    </>
+    </div>
   );
 }

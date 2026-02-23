@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -6,118 +7,71 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Warmup GET
+  if (req.method === "GET") {
+    return new Response(JSON.stringify({ status: "ok" }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const {
-      currentWeight,
-      targetWeight,
-      daysUntilFight,
-      dailyLogs,
-      startingWeight,
-      isWaterloading
-    } = await req.json();
+    const { currentWeight, targetWeight, daysUntilWeighIn, sex, age, projection } =
+      await req.json();
 
-    const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
-
-    if (!MINIMAX_API_KEY) {
-      throw new Error("MINIMAX_API_KEY is not configured");
+    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
+    if (!GROK_API_KEY) {
+      throw new Error("GROK_API_KEY is not configured");
     }
 
-    const systemPrompt = `You are the Weight Cut Wizard, a science-based combat sports weight cutting expert with deep knowledge of physiology and fighter safety.
+    const systemPrompt = `You are the Weight Cut Wizard, a science-based combat sports weight cutting expert. You INTERPRET pre-computed projection data — do NOT recalculate.
 
-CRITICAL SAFETY ASSESSMENT FRAMEWORK:
-- Calculate weight to cut as percentage of body weight
-- GREEN (Safe): ≤5% body weight, achievable through carb depletion + minimal dehydration
-- YELLOW (Moderate Risk): 5-8% body weight, requires aggressive protocol, may affect performance
-- RED (High Risk): >8% body weight, dangerous, exceeds safe physiological limits
+RESEARCH: Glycogen=350-700g muscle+80-100g liver, ratio=1:2.7. Low-carb(<50g/d,3-7d)=~2%BM. Low-fibre(<10g/d)=0.4-1%BM. Na<2300mg/d=0.5-1%BM. Water-load(100ml/kg/d×3d→15ml/kg)=3.2%BM. Safe-AWL:72h+=6.7%,48h=5.7%,24h=4.4%. Sauna:0.5-0.9%/session. Dehydration-2.8%=reversible-3h, 6%=NOT-reversed-15h. Post-weigh-in:125-150%fluid, ORS-50-90mmol/L, carbs-8-12g/kg.
 
-WEIGHT CUT COMPONENTS:
-1. Glycogen + Water Depletion: ~2-2.5kg (carb restriction)
-2. Safe Dehydration: Max 3% of body weight
-3. Water Loading Protocol: If used, adds ~2-3kg extra capacity
-4. Digestive Tract Clearance: ~0.5-1kg
+DEHYDRATION ZONES: GREEN≤2%, ORANGE 2-4%(needs≥12h recovery), RED>4%(significant decrement).
 
-WATERLOADING PROTOCOL CONSIDERATION:
-${isWaterloading ? `
-- Fighter IS water loading
-- This increases safe dehydration capacity by 2-3kg
-- Factor this into total safe cut calculation
-- Monitor for hyponatremia risk (excessive water intake)
-` : `
-- Fighter is NOT water loading
-- Base calculations on standard carb depletion + 3% dehydration only
-`}
-
-ANALYSIS REQUIREMENTS:
-1. Calculate exact weight remaining to cut
-2. Determine risk level (GREEN/YELLOW/RED) with scientific justification
-3. Analyze daily progress against expected trajectory
-4. Identify if weight loss is on track, ahead, or behind
-5. Provide specific adaptation recommendations for remaining days
-6. Consider if current rate suggests more/less weight from carb depletion than expected
-
-OUTPUT FORMAT - You must respond with valid JSON only:
+Respond with valid JSON only:
 {
-  "riskLevel": "green" | "yellow" | "red",
-  "riskPercentage": 5.2,
-  "weightRemaining": 3.2,
-  "dehydrationRequired": 1.2,
-  "carbDepletionEstimate": 2.0,
-  "isOnTrack": true,
-  "progressStatus": "Ahead of schedule" | "On track" | "Behind schedule",
-  "dailyAnalysis": "Detailed analysis of daily weight changes and what they indicate",
-  "adaptations": [
-    "Specific change 1 for remaining days",
-    "Specific change 2 for remaining days"
-  ],
-  "riskExplanation": "Why this is green/yellow/red with scientific reasoning",
-  "recommendation": "Overall strategic guidance for completing the cut safely"
+  "summary": "2-3 sentence narrative",
+  "dayByDayTips": ["tip1", "tip2", ...],
+  "safetyWarning": "string or null",
+  "recoveryProtocol": "post weigh-in recovery text",
+  "riskLevel": "green|orange|red"
 }`;
 
-    const logsContext = dailyLogs && dailyLogs.length > 0
-      ? `Daily logs:\n${dailyLogs.map((log: any) =>
-        `Date: ${log.log_date}, Weight: ${log.weight_kg}kg, Carbs: ${log.carbs_g || 'N/A'}g, Fluids: ${log.fluid_intake_ml || 'N/A'}ml`
-      ).join('\n')}`
-      : 'No daily logs yet';
+    const userPrompt = `Fighter: ${sex}, ${age ? `age ${age}` : "age unknown"}
+Current: ${currentWeight}kg → Target: ${targetWeight}kg | ${daysUntilWeighIn} days
 
-    const userPrompt = `Analyze this fight week weight cut:
-- Starting Weight: ${startingWeight}kg
-- Current Weight: ${currentWeight}kg
-- Target Weight: ${targetWeight}kg
-- Days Until Fight: ${daysUntilFight}
-- Water Loading: ${isWaterloading ? 'YES' : 'NO'}
+PRE-COMPUTED PROJECTION (deterministic — do not override):
+- Total: ${projection.totalToCut}kg (${projection.percentBW}% BW)
+- Glycogen+Water: ${projection.glycogenLoss}kg | Fibre/Gut: ${projection.fibreLoss}kg
+- Sodium/Water: ${projection.sodiumLoss}kg | Water Loading: ${projection.waterLoadingLoss}kg
+- Diet Total: ${projection.dietTotal}kg
+- Dehydration: ${projection.dehydrationNeeded}kg (${projection.dehydrationPercentBW}% BW) — ${projection.dehydrationSafety}
+- Overall: ${projection.overallSafety} | Sauna sessions: ${projection.saunaSessions}
 
-${logsContext}
+Provide: 1) 2-3 sentence summary, 2) 5-8 day-by-day tips, 3) safety warning if orange/red (null if green), 4) post weigh-in recovery protocol, 5) risk level.`;
 
-Provide comprehensive analysis with:
-1. Risk level assessment (green/yellow/red)
-2. Weight breakdown (carb depletion vs dehydration needed)
-3. Progress tracking (on track, ahead, behind)
-4. Specific adaptations needed for remaining days
-5. Scientific justification for risk level`;
+    console.log("Calling Grok API for fight week advice...");
 
-    const fullPrompt = `${systemPrompt}\n\nUser: ${userPrompt}`;
-
-    console.log("Calling Minimax API for fight week analysis...");
-
-    const response = await fetch("https://api.minimax.io/v1/chat/completions", {
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${MINIMAX_API_KEY}`,
+        Authorization: `Bearer ${GROK_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "MiniMax-M2.5",
+        model: "grok-4-1-fast-reasoning",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
+          { role: "user", content: userPrompt },
         ],
         temperature: 0.1,
-        max_tokens: 2048
-      })
+        max_completion_tokens: 1200,
+      }),
     });
 
     if (!response.ok) {
@@ -127,20 +81,14 @@ Provide comprehensive analysis with:
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (response.status === 401) {
-        return new Response(
-          JSON.stringify({ error: "Invalid API key." }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      if (response.status === 403) {
+      if (response.status === 401 || response.status === 403) {
         return new Response(
           JSON.stringify({ error: "API key invalid or quota exceeded." }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
       const errorData = await response.json();
-      console.error("Minimax API error:", response.status, errorData);
+      console.error("Grok API error:", response.status, errorData);
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -148,50 +96,28 @@ Provide comprehensive analysis with:
     }
 
     const data = await response.json();
-    console.log("Minimax fight week response:", JSON.stringify(data, null, 2));
+    const { content, filtered } = extractContent(data);
 
-    let analysisText = data.choices?.[0]?.message?.content;
-    // Strip <think> tags from Minimax response
-    if (analysisText) {
-      analysisText = analysisText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    if (!content) {
+      if (filtered) throw new Error("Content was filtered for safety.");
+      throw new Error("No response from Grok API");
     }
 
-    if (!analysisText) {
-      console.error("No content found in Minimax response");
-      const finishReason = data.choices?.[0]?.finish_reason;
-      if (finishReason === 'content_filter') {
-        throw new Error("Content was filtered for safety. Please try a different request.");
-      }
-      throw new Error("No response from Minimax API");
-    }
-
-    // Parse the JSON analysis
-    let analysis;
+    let advice;
     try {
-      analysis = JSON.parse(analysisText);
-    } catch (parseError) {
-      // Try extracting JSON from markdown code blocks
-      const jsonMatch = analysisText.match(/```(?:json)?\s*([\s\S]*?)```/);
-      if (jsonMatch) {
-        try {
-          analysis = JSON.parse(jsonMatch[1].trim());
-        } catch {
-          console.error("Failed to parse extracted JSON:", jsonMatch[1]);
-        }
-      }
-      if (!analysis) {
-        console.error("Failed to parse Minimax response as JSON:", analysisText);
-        return new Response(
-          JSON.stringify({
-            error: "AI returned invalid response format. Please try again.",
-            details: analysisText.substring(0, 200)
-          }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+      advice = parseJSON(content);
+    } catch {
+      console.error("Failed to parse Grok response as JSON:", content);
+      return new Response(
+        JSON.stringify({
+          error: "AI returned invalid response format. Please try again.",
+          details: content.substring(0, 200),
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
-    return new Response(JSON.stringify({ analysis }), {
+    return new Response(JSON.stringify({ advice }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {

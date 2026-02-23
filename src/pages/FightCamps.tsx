@@ -3,16 +3,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { useUser } from "@/contexts/UserContext";
 import { format } from "date-fns";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Calendar, Plus, Trophy, Trash2, Eye, Scale, Droplets, TrendingDown, Activity } from "lucide-react";
+import { Plus, Trophy, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
-import { Badge } from "@/components/ui/badge";
 
 interface FightCamp {
   id: string;
@@ -131,11 +129,20 @@ export default function FightCamps() {
 
   if (loading) {
     return (
-      <div className="space-y-6 p-4 sm:p-5 md:p-6">
-        <Skeleton className="h-10 w-64" />
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="space-y-5 px-4 pb-4 pt-16 sm:p-5 sm:pt-16 max-w-2xl mx-auto">
+        <Skeleton className="h-7 w-32" />
+        <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-48" />
+            <div key={i} className="glass-card p-4 space-y-3">
+              <div className="flex items-center gap-3.5">
+                <Skeleton className="h-11 w-11 rounded-full shrink-0" />
+                <div className="space-y-2 flex-1">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+              </div>
+              <Skeleton className="h-12 w-full rounded-xl" />
+            </div>
           ))}
         </div>
       </div>
@@ -143,19 +150,15 @@ export default function FightCamps() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground pb-24">
-      <div className="p-4 space-y-6 max-w-md mx-auto">
+    <div className="space-y-5 px-4 pb-4 pt-16 sm:p-5 sm:pt-16 max-w-2xl mx-auto">
 
         {/* Header */}
-        <div className="flex items-center justify-between pt-2">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Fight Camps</h1>
-            <p className="text-muted-foreground text-sm font-medium">History & Performance</p>
-          </div>
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold">Fight Camps</h1>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button size="icon" className="rounded-full h-10 w-10 bg-muted hover:bg-muted/80 text-foreground border border-border/50">
-                <Plus className="h-5 w-5" />
+              <Button size="icon" className="rounded-full h-9 w-9 bg-muted hover:bg-muted/80 text-foreground border border-border/50">
+                <Plus className="h-4 w-4" />
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:rounded-3xl max-w-sm mx-auto">
@@ -203,15 +206,15 @@ export default function FightCamps() {
 
         {/* Camp List */}
         {camps.length === 0 ? (
-          <div className="glass-card p-8 border border-border/50 text-center space-y-4 mt-8">
-            <div className="h-16 w-16 bg-primary/20 rounded-full flex items-center justify-center mx-auto mix-blend-screen">
-              <Trophy className="w-8 h-8 text-primary" />
+          <div className="glass-card p-8 text-center space-y-4">
+            <div className="h-14 w-14 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
+              <Trophy className="w-6 h-6 text-primary" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-foreground">No Camps Yet</h3>
-              <p className="text-foreground/80 text-sm mt-1">Start tracking your first preparation.</p>
+              <h3 className="text-base font-bold">No Camps Yet</h3>
+              <p className="text-muted-foreground text-sm mt-1">Start tracking your first preparation.</p>
             </div>
-            <Button onClick={() => setDialogOpen(true)} variant="outline" className="rounded-xl mt-2 border-primary/30 hover:bg-primary/10">
+            <Button onClick={() => setDialogOpen(true)} variant="outline" className="rounded-xl mt-2 border-border/50 hover:bg-muted">
               Create First Camp
             </Button>
           </div>
@@ -220,73 +223,68 @@ export default function FightCamps() {
             {camps.map((camp) => (
               <div
                 key={camp.id}
-                className="group relative glass-card p-5 active:scale-[0.98] transition-all duration-200 overflow-hidden"
+                className="group relative glass-card p-4 active:scale-[0.98] transition-all duration-200 overflow-hidden"
               >
                 <div onClick={() => navigate(`/fight-camps/${camp.id}`)} className="cursor-pointer">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-4">
-                      {camp.profile_pic_url ? (
-                        <img
-                          src={camp.profile_pic_url}
-                          alt={camp.name}
-                          className="w-12 h-12 rounded-full object-cover border-2 border-border"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center border-2 border-border/30">
-                          <Trophy className="w-5 h-5 text-muted-foreground" />
-                        </div>
-                      )}
-                      <div>
-                        <h3 className="font-bold text-lg leading-tight text-foreground">{camp.name}</h3>
-                        {camp.event_name && (
-                          <p className="text-sm text-primary font-medium">{camp.event_name}</p>
-                        )}
-                        <p className="text-xs text-foreground/80 mt-0.5 font-medium">{format(new Date(camp.fight_date), "MMM dd, yyyy")}</p>
+                  <div className="flex items-start gap-3.5">
+                    {camp.profile_pic_url ? (
+                      <img
+                        src={camp.profile_pic_url}
+                        alt={camp.name}
+                        className="w-11 h-11 rounded-full object-cover border border-border/50 shrink-0"
+                      />
+                    ) : (
+                      <div className="w-11 h-11 rounded-full bg-muted flex items-center justify-center border border-border/50 shrink-0">
+                        <Trophy className="w-4.5 h-4.5 text-muted-foreground" />
                       </div>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-bold text-base leading-tight">{camp.name}</h3>
+                      {camp.event_name && (
+                        <p className="text-sm text-primary font-medium truncate">{camp.event_name}</p>
+                      )}
+                      <p className="text-xs text-muted-foreground mt-0.5">{format(new Date(camp.fight_date), "MMM dd, yyyy")}</p>
                     </div>
                   </div>
 
                   {/* Metrics Strip */}
                   {(camp.starting_weight_kg || camp.total_weight_cut) ? (
-                    <div className="mt-4 bg-black/20 rounded-2xl p-3 flex items-center justify-around border border-white/5">
+                    <div className="mt-3 bg-muted/50 rounded-xl p-2.5 flex items-center justify-around border border-border/30">
                       <div className="text-center">
-                        <p className="text-[10px] uppercase tracking-wider text-foreground/60 font-bold mb-0.5">Start</p>
-                        <p className="text-sm font-bold text-foreground">{camp.starting_weight_kg ? `${camp.starting_weight_kg}kg` : '-'}</p>
+                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-0.5">Start</p>
+                        <p className="text-sm font-bold">{camp.starting_weight_kg ? `${camp.starting_weight_kg}kg` : '-'}</p>
                       </div>
-                      <div className="h-6 w-px bg-border/30"></div>
+                      <div className="h-5 w-px bg-border/50" />
                       <div className="text-center">
-                        <p className="text-[10px] uppercase tracking-wider text-foreground/60 font-bold mb-0.5">Cut</p>
-                        <p className="text-sm font-bold text-primary drop-shadow-sm">{camp.total_weight_cut ? `-${camp.total_weight_cut.toFixed(1)}kg` : '-'}</p>
+                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-0.5">Cut</p>
+                        <p className="text-sm font-bold text-primary">{camp.total_weight_cut ? `-${camp.total_weight_cut.toFixed(1)}kg` : '-'}</p>
                       </div>
-                      <div className="h-6 w-px bg-border/30"></div>
+                      <div className="h-5 w-px bg-border/50" />
                       <div className="text-center">
-                        <p className="text-[10px] uppercase tracking-wider text-foreground/60 font-bold mb-0.5">End</p>
-                        <p className="text-sm font-bold text-foreground">{camp.end_weight_kg ? `${camp.end_weight_kg}kg` : '-'}</p>
+                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-0.5">End</p>
+                        <p className="text-sm font-bold">{camp.end_weight_kg ? `${camp.end_weight_kg}kg` : '-'}</p>
                       </div>
                     </div>
                   ) : (
-                    <div className="mt-2 text-xs text-foreground/50 pl-16">No weight data yet</div>
+                    <p className="mt-2 text-xs text-muted-foreground pl-[3.25rem]">No weight data yet</p>
                   )}
                 </div>
 
-                <div className="absolute top-4 right-4">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      initiateDelete(camp);
-                    }}
-                    className="h-8 w-8 text-muted-foreground hover:text-red-400 hover:bg-muted/50 rounded-full -mr-2 -mt-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    initiateDelete(camp);
+                  }}
+                  className="absolute top-3 right-3 h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-muted/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
               </div>
             ))}
           </div>
         )}
-      </div>
 
       <DeleteConfirmDialog
         open={deleteDialogOpen}

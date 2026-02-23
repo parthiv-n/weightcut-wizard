@@ -412,11 +412,6 @@ All colors MUST be HSL.
     will-change: transform, opacity;
   }
 
-  .page-exit {
-    animation: pageExit 0.25s cubic-bezier(0.4, 0, 1, 1) forwards;
-    will-change: transform, opacity;
-  }
-
   @keyframes pageEnter {
     from {
       opacity: 0;
@@ -426,18 +421,6 @@ All colors MUST be HSL.
     to {
       opacity: 1;
       transform: translateY(0) scale(1);
-    }
-  }
-
-  @keyframes pageExit {
-    from {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-
-    to {
-      opacity: 0;
-      transform: translateY(-6px) scale(0.99);
     }
   }
 
@@ -490,7 +473,6 @@ All colors MUST be HSL.
     }
 
     .page-enter,
-    .page-exit,
     .dashboard-card-enter {
       animation: none !important;
       opacity: 1;

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -37,7 +38,6 @@ serve(async (req) => {
 
     const { mealDescription } = await req.json();
 
-    // Validate input length
     if (!mealDescription || typeof mealDescription !== 'string') {
       return new Response(
         JSON.stringify({ error: "Meal description must be a string" }),
@@ -52,32 +52,21 @@ serve(async (req) => {
       );
     }
 
-    if (!mealDescription) {
-      return new Response(
-        JSON.stringify({ error: "Meal description is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
-    if (!MINIMAX_API_KEY) {
-      throw new Error("MINIMAX_API_KEY is not configured");
+    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
+    if (!GROK_API_KEY) {
+      throw new Error("GROK_API_KEY is not configured");
     }
 
     console.log("Analyzing meal:", mealDescription);
 
-    const systemPrompt = `Nutrition analysis expert. Analyze meals and return accurate nutrition data.
+    const systemPrompt = `Nutrition analysis expert. Return ONLY valid JSON.
 
 Rules:
-- Identify and separate distinct food items (e.g., "2 slices of bread with banana, eggs, and nutella" should be at least 4 distinct items: Bread, Banana, Eggs, Nutella).
-- However, do NOT break down a single cohesive item into raw recipe sub-ingredients (e.g., "2 slices tiger bread" stays as one item — do NOT split it into flour, yeast, water).
-- Each item should have its total macros (not per-100g).
-- Use exact values if user provides calories/macros
-- Estimate only when not specified
+- Separate distinct food items (e.g., "bread with banana, eggs, nutella" → 4 items)
+- Do NOT split a single item into raw sub-ingredients (e.g., "tiger bread" stays as one item)
+- Each item: total macros (not per-100g), realistic portions
 - Use USDA/nutrition databases for reference
-- Realistic portion sizes
 
-Respond ONLY with JSON:
 {
   "meal_name": "Clean meal name",
   "calories": number,
@@ -85,33 +74,32 @@ Respond ONLY with JSON:
   "carbs_g": number,
   "fats_g": number,
   "items": [
-    { "name": "Food item 1", "quantity": "amount", "calories": number, "protein_g": number, "carbs_g": number, "fats_g": number },
-    { "name": "Food item 2", "quantity": "amount", "calories": number, "protein_g": number, "carbs_g": number, "fats_g": number }
+    { "name": "Item", "quantity": "amount", "calories": number, "protein_g": number, "carbs_g": number, "fats_g": number }
   ]
 }`;
 
     const userPrompt = `Analyze this meal and provide nutritional information: "${mealDescription}"`;
 
-    const response = await fetch("https://api.minimax.io/v1/chat/completions", {
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${MINIMAX_API_KEY}`,
+        "Authorization": `Bearer ${GROK_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "MiniMax-M2.5",
+        model: "grok-4-1-fast-reasoning",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
         ],
         temperature: 0.2,
-        max_tokens: 800
+        max_completion_tokens: 600
       })
     });
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error("Minimax API error:", response.status, errorData);
+      console.error("Grok API error:", response.status, errorData);
 
       if (response.status === 429) {
         return new Response(
@@ -138,38 +126,15 @@ Respond ONLY with JSON:
     }
 
     const data = await response.json();
-    console.log("Minimax response:", JSON.stringify(data));
+    console.log("Grok response:", JSON.stringify(data));
 
-    // Parse Minimax response
-    console.log("Minimax response structure:", JSON.stringify(data, null, 2));
-
-    let generatedText = data.choices?.[0]?.message?.content;
-    // Strip <think> tags from Minimax response
-    if (generatedText) {
-      generatedText = generatedText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    const { content, filtered } = extractContent(data);
+    if (!content) {
+      if (filtered) throw new Error("Content was filtered for safety. Please try a different meal description.");
+      throw new Error("No response from Grok API");
     }
 
-    if (!generatedText) {
-      console.error("No content found in Minimax response");
-      const finishReason = data.choices?.[0]?.finish_reason;
-      if (finishReason === 'content_filter') {
-        throw new Error("Content was filtered for safety. Please try a different meal description.");
-      }
-      throw new Error("No response from Minimax API");
-    }
-
-    // Parse JSON from Minimax response
-    let nutritionData;
-    try {
-      nutritionData = JSON.parse(generatedText);
-    } catch {
-      const jsonMatch = generatedText.match(/```(?:json)?\s*([\s\S]*?)```/);
-      if (jsonMatch) {
-        nutritionData = JSON.parse(jsonMatch[1].trim());
-      } else {
-        throw new Error("Could not parse nutrition data from AI response");
-      }
-    }
+    const nutritionData = parseJSON(content);
     console.log("Parsed nutrition data:", nutritionData);
 
     return new Response(
