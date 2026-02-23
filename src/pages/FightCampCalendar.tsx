@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, subMonths, addMonths, subDays } from "date-fns";
 import { ChevronLeft, ChevronRight, Plus, Activity, Moon, Ruler, Trash2, CircleX } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,7 +10,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { RecoveryDashboard } from "@/components/fightcamp/RecoveryDashboard";
+import { TrainingSummarySection } from "@/components/fightcamp/TrainingSummarySection";
 
 // Type definitions for fight_camp_calendar table
 type FightCampCalendarInsert = {
@@ -23,6 +25,7 @@ type FightCampCalendarInsert = {
     soreness_level: number;
     sleep_hours: number;
     user_id: string;
+    notes?: string | null;
     // Rest day fields
     fatigue_level?: number | null;
     sleep_quality?: string | null;
@@ -32,6 +35,7 @@ type FightCampCalendarInsert = {
 type FightCampCalendarRow = FightCampCalendarInsert & {
     id: string;
     created_at: string;
+    notes?: string | null;
 };
 
 const SESSION_TYPES = [
@@ -57,10 +61,14 @@ export default function FightCampCalendar() {
     const [hasSoreness, setHasSoreness] = useState(false);
     const [sorenessLevel, setSorenessLevel] = useState([5]);
     const [sleepHours, setSleepHours] = useState("8");
+    const [notes, setNotes] = useState("");
     // Rest day form state
     const [fatigue, setFatigue] = useState([5]);
     const [sleepQuality, setSleepQuality] = useState<'good' | 'poor'>('good');
     const [mobilityDone, setMobilityDone] = useState(false);
+
+    // Edit state
+    const [editingSession, setEditingSession] = useState<FightCampCalendarRow | null>(null);
 
     const isRestDay = sessionType === 'Rest';
 
@@ -119,6 +127,37 @@ export default function FightCampCalendar() {
         fetch28DaySessions();
     }, [fetch28DaySessions]);
 
+    const resetForm = () => {
+        setSessionType(SESSION_TYPES[0]);
+        setDuration("60");
+        setRpe([5]);
+        setIntensityLevel([3]);
+        setHasSoreness(false);
+        setSorenessLevel([5]);
+        setNotes("");
+        setFatigue([5]);
+        setSleepQuality('good');
+        setMobilityDone(false);
+        setEditingSession(null);
+    };
+
+    const handleEditSession = (session: FightCampCalendarRow) => {
+        setEditingSession(session);
+        setSessionType(session.session_type);
+        setDuration(String(session.duration_minutes));
+        setRpe([session.rpe]);
+        const il = session.intensity_level ?? (session.intensity === 'high' ? 5 : session.intensity === 'moderate' ? 3 : 1);
+        setIntensityLevel([il]);
+        setHasSoreness((session.soreness_level ?? 0) > 0);
+        setSorenessLevel([(session.soreness_level ?? 0) > 0 ? session.soreness_level! : 5]);
+        setSleepHours(String(session.sleep_hours ?? 8));
+        setNotes(session.notes ?? "");
+        setFatigue([session.fatigue_level ?? 5]);
+        setSleepQuality((session.sleep_quality as 'good' | 'poor') ?? 'good');
+        setMobilityDone(session.mobility_done ?? false);
+        setIsAddModalOpen(true);
+    };
+
     const handleSaveSession = async () => {
         if (!userId) return;
 
@@ -134,41 +173,46 @@ export default function FightCampCalendar() {
                 intensity_level: isRestDay ? 1 : intensityLevel[0],
                 soreness_level: hasSoreness ? sorenessLevel[0] : 0,
                 sleep_hours: parseFloat(sleepHours) || 0,
+                notes: isRestDay ? null : (notes.trim() || null),
                 // Rest day fields
                 fatigue_level: isRestDay ? fatigue[0] : null,
                 sleep_quality: isRestDay ? sleepQuality : null,
                 mobility_done: isRestDay ? mobilityDone : null,
             };
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { error } = await (supabase as any)
-                .from('fight_camp_calendar')
-                .insert([payload]);
+            if (editingSession) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const { error } = await (supabase as any)
+                    .from('fight_camp_calendar')
+                    .update(payload)
+                    .eq('id', editingSession.id);
 
-            if (error) throw error;
+                if (error) throw error;
+            } else {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const { error } = await (supabase as any)
+                    .from('fight_camp_calendar')
+                    .insert([payload]);
+
+                if (error) throw error;
+            }
 
             toast({
-                title: isRestDay ? "Rest Day Logged" : "Session Saved",
-                description: isRestDay
-                    ? "Your rest day has been recorded."
-                    : "Your training session has been logged successfully.",
+                title: editingSession
+                    ? "Session Updated"
+                    : isRestDay ? "Rest Day Logged" : "Session Saved",
+                description: editingSession
+                    ? "Your session has been updated."
+                    : isRestDay
+                        ? "Your rest day has been recorded."
+                        : "Your training session has been logged successfully.",
             });
 
             setIsAddModalOpen(false);
             fetchSessions();
             fetch28DaySessions();
             setSessionLoggedTrigger(prev => prev + 1);
-
-            // Reset form
-            setSessionType(SESSION_TYPES[0]);
-            setDuration("60");
-            setRpe([5]);
-            setIntensityLevel([3]);
-            setHasSoreness(false);
-            setSorenessLevel([5]);
-            setFatigue([5]);
-            setSleepQuality('good');
-            setMobilityDone(false);
+            resetForm();
 
         } catch (error) {
             console.error("Error saving session:", error);
@@ -286,7 +330,10 @@ export default function FightCampCalendar() {
                 <div className="mb-6">
                     <div className="flex items-center justify-between mb-4">
                         <h3 className="text-xl font-bold">{format(selectedDate, "EEEE, MMM do")}</h3>
-                        <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+                        <Dialog open={isAddModalOpen} onOpenChange={(open) => {
+                            setIsAddModalOpen(open);
+                            if (!open) resetForm();
+                        }}>
                             <DialogTrigger asChild>
                                 <Button className="rounded-full h-10 w-10 p-0 shadow-md">
                                     <Plus className="h-5 w-5" />
@@ -294,7 +341,9 @@ export default function FightCampCalendar() {
                             </DialogTrigger>
                             <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto rounded-[24px]">
                                 <DialogHeader>
-                                    <DialogTitle className="text-2xl font-bold">Log Session</DialogTitle>
+                                    <DialogTitle className="text-2xl font-bold">
+                                        {editingSession ? 'Edit Session' : 'Log Session'}
+                                    </DialogTitle>
                                 </DialogHeader>
                                 <div className="grid gap-4 py-3">
 
@@ -480,11 +529,24 @@ export default function FightCampCalendar() {
                                         </div>
                                     </div>
 
+                                    {/* Session Notes — training days only */}
+                                    {!isRestDay && (
+                                        <div className="space-y-2">
+                                            <Label className="text-sm font-semibold text-muted-foreground">SESSION NOTES</Label>
+                                            <Textarea
+                                                value={notes}
+                                                onChange={(e) => setNotes(e.target.value)}
+                                                placeholder="What did you work on? Techniques, drills, combos..."
+                                                className="bg-accent/20 border-border/50 rounded-2xl min-h-[80px] resize-none text-sm"
+                                            />
+                                        </div>
+                                    )}
+
                                     <Button
                                         className="w-full h-12 rounded-2xl text-lg font-bold mt-2 shadow-lg"
                                         onClick={handleSaveSession}
                                     >
-                                        {isRestDay ? 'Log Rest Day' : 'Save Session'}
+                                        {editingSession ? 'Update Session' : isRestDay ? 'Log Rest Day' : 'Save Session'}
                                     </Button>
                                 </div>
                             </DialogContent>
@@ -505,7 +567,7 @@ export default function FightCampCalendar() {
                                 const barColor = il >= 4 ? 'bg-red-500' : il >= 3 ? 'bg-yellow-500' : 'bg-green-500';
 
                                 return (
-                                    <Card key={session.id} className="p-4 rounded-[20px] shadow-sm glass-card overflow-hidden relative border-border/10">
+                                    <Card key={session.id} className="p-4 rounded-[20px] shadow-sm glass-card overflow-hidden relative border-border/10 cursor-pointer active:scale-[0.98] transition-transform" onClick={() => handleEditSession(session)}>
                                         <div className={`absolute top-0 left-0 w-2 h-full ${isRest ? 'bg-blue-500' : barColor}`} />
 
                                         <div className="flex justify-between items-start ml-2">
@@ -552,11 +614,26 @@ export default function FightCampCalendar() {
                                                 Soreness Level: {session.soreness_level}/10
                                             </div>
                                         )}
+
+                                        {session.notes && (
+                                            <p className="mt-2 ml-2 text-xs text-muted-foreground italic line-clamp-2">
+                                                {session.notes}
+                                            </p>
+                                        )}
                                     </Card>
                                 );
                             })
                         )}
                     </div>
+
+                    {/* Training Summary Section */}
+                    {userId && (
+                        <TrainingSummarySection
+                            userId={userId}
+                            selectedDate={selectedDate}
+                            sessionLoggedTrigger={sessionLoggedTrigger}
+                        />
+                    )}
                 </div>
 
         </div>
