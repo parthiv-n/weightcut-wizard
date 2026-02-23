@@ -1,4 +1,4 @@
-import { useState, useLayoutEffect } from "react";
+import { useState, useRef, useLayoutEffect } from "react";
 import { useLocation } from "react-router-dom";
 
 interface PageTransitionProps {
@@ -7,26 +7,25 @@ interface PageTransitionProps {
 
 export function PageTransition({ children }: PageTransitionProps) {
   const location = useLocation();
-  const [stage, setStage] = useState<"enter" | "exit">("enter");
-  const [displayLocation, setDisplayLocation] = useState(location);
+  const [isEntering, setIsEntering] = useState(true);
+  const prevPathRef = useRef(location.pathname);
 
   useLayoutEffect(() => {
-    if (location.pathname !== displayLocation.pathname) {
-      setStage("exit");
+    if (location.pathname !== prevPathRef.current) {
+      prevPathRef.current = location.pathname;
+      setIsEntering(true);
     }
   }, [location.pathname]);
 
-  const onAnimationEnd = () => {
-    if (stage === "exit") {
-      setDisplayLocation(location);
-      setStage("enter");
+  const onAnimationEnd = (e: React.AnimationEvent) => {
+    if (e.target === e.currentTarget) {
+      setIsEntering(false);
     }
   };
 
   return (
     <div
-      key={displayLocation.pathname}
-      className={`page-transition-wrapper page-${stage}`}
+      className={`page-transition-wrapper ${isEntering ? "page-enter" : ""}`}
       onAnimationEnd={onAnimationEnd}
     >
       {children}

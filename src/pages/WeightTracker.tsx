@@ -554,6 +554,7 @@ export default function WeightTracker() {
         return [{
           date: "Start",
           weight: profile.current_weight_kg,
+          projected: null as number | null,
           fightWeekGoal: fightWeekTarget,
           fightNightGoal: profile.goal_weight_kg,
           logId: null,
@@ -574,20 +575,55 @@ export default function WeightTracker() {
       filteredLogs = filteredLogs.filter(log => new Date(log.date) >= oneMonthAgo);
     }
 
-    // If filtering results in empty array but we have data overall, 
+    // If filtering results in empty array but we have data overall,
     // just show the latest raw data point so the graph isn't entirely blank
     if (filteredLogs.length === 0 && weightLogs.length > 0) {
       filteredLogs = [weightLogs[weightLogs.length - 1]];
     }
 
-    const data = filteredLogs.map((log) => ({
+    const data = filteredLogs.map((log, idx) => ({
       date: format(new Date(log.date), "MMM dd"),
       weight: log.weight_kg,
+      // Last actual point gets projected value too so the lines connect
+      projected: (aiAnalysis && idx === filteredLogs.length - 1) ? log.weight_kg : null as number | null,
       fightWeekGoal: fightWeekTarget,
       fightNightGoal: profile.goal_weight_kg,
       logId: log.id,
       fullDate: log.date,
     }));
+
+    // Add projected future data points when AI analysis exists
+    if (aiAnalysis && aiAnalysis.requiredWeeklyLoss > 0 && filteredLogs.length > 0) {
+      const lastLog = filteredLogs[filteredLogs.length - 1];
+      const lastWeight = lastLog.weight_kg;
+      const lastDate = new Date(lastLog.date);
+      const targetDate = new Date(profile.target_date);
+      const maxWeeks = 8;
+
+      for (let week = 1; week <= maxWeeks; week++) {
+        const futureDate = new Date(lastDate.getTime() + week * 7 * 24 * 60 * 60 * 1000);
+        // Stop if we've passed the target date
+        if (futureDate > targetDate) break;
+
+        const projectedWeight = Math.max(
+          fightWeekTarget,
+          lastWeight - (week * aiAnalysis.requiredWeeklyLoss)
+        );
+
+        data.push({
+          date: format(futureDate, "MMM dd"),
+          weight: null as number | null,
+          projected: projectedWeight,
+          fightWeekGoal: fightWeekTarget,
+          fightNightGoal: profile.goal_weight_kg,
+          logId: null,
+          fullDate: format(futureDate, "yyyy-MM-dd"),
+        });
+
+        // Stop if we've reached the target weight
+        if (projectedWeight <= fightWeekTarget) break;
+      }
+    }
 
     return data;
   };
@@ -771,11 +807,20 @@ export default function WeightTracker() {
                   <Tooltip
                     content={({ active, payload }) => {
                       if (active && payload && payload.length) {
+                        const entry = payload[0].payload;
+                        const actualWeight = entry.weight;
+                        const projectedWeight = entry.projected;
+                        const isProjectedOnly = !actualWeight && projectedWeight;
                         return (
                           <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
-                            <p className="text-xs text-muted-foreground">{payload[0].payload.fullDate}</p>
-                            <p className="text-lg font-bold text-primary">{payload[0].value}kg</p>
-                            <p className="text-[10px] text-muted-foreground mt-1">Tap to delete</p>
+                            <p className="text-xs text-muted-foreground">{entry.fullDate}</p>
+                            {actualWeight && (
+                              <p className="text-lg font-bold text-primary">{actualWeight}kg</p>
+                            )}
+                            {isProjectedOnly && (
+                              <p className="text-lg font-bold text-muted-foreground">{projectedWeight.toFixed(1)}kg <span className="text-xs font-normal">projected</span></p>
+                            )}
+                            {actualWeight && <p className="text-[10px] text-muted-foreground mt-1">Tap to delete</p>}
                           </div>
                         );
                       }
@@ -804,6 +849,17 @@ export default function WeightTracker() {
                     dot={{ fill: "hsl(var(--primary))", r: 4, cursor: "pointer" }}
                     activeDot={{ r: 6, cursor: "pointer" }}
                   />
+                  {aiAnalysis && (
+                    <Line
+                      type="monotone"
+                      dataKey="projected"
+                      stroke="hsl(var(--muted-foreground))"
+                      strokeWidth={1.5}
+                      strokeDasharray="6 4"
+                      dot={false}
+                      connectNulls={false}
+                    />
+                  )}
                 </LineChart>
               </ResponsiveContainer>
               <div className="border-t border-border/20 pt-3">
