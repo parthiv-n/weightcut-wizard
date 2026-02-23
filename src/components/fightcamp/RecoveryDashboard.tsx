@@ -1,69 +1,61 @@
 import { useState, useEffect, useCallback } from "react";
-import { Activity, Brain, RefreshCw, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
+import { Activity, Brain, RefreshCw, AlertTriangle, CheckCircle, Loader2, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { RecoveryRing } from "./RecoveryRing";
-import { computeAllMetrics, type SessionRow, type AllMetrics } from "@/utils/recoveryCalculations";
+import { StrainChart } from "./StrainChart";
+import { computeAllMetrics, type SessionRow, type AllMetrics } from "@/utils/performanceEngine";
 
 interface CoachResponse {
-  readiness_state: 'ready_to_train' | 'train_light' | 'rest_recommended';
-  summary: string;
-  next_session_recommendation: string;
+  readiness_state: 'push' | 'maintain' | 'reduce' | 'recover';
+  coaching_summary: string;
+  next_session_advice: string;
   recovery_focus: string[];
-  risk_flags: string[];
+  risk_level: 'low' | 'moderate' | 'high' | 'critical';
 }
 
 interface RecoveryDashboardProps {
   sessions28d: SessionRow[];
   userId: string;
+  sessionLoggedAt?: number; // counter that increments on session save
 }
 
 function getStrainColor(strain: number) {
-  if (strain <= 7) return { color: "#3b82f6", glow: "#3b82f6" }; // blue
-  if (strain <= 14) return { color: "#f59e0b", glow: "#f59e0b" }; // amber
-  return { color: "#ef4444", glow: "#ef4444" }; // red
-}
-
-function getRecoveryColor(status: 'green' | 'yellow' | 'red') {
-  if (status === 'green') return { color: "#22c55e", glow: "#22c55e" };
-  if (status === 'yellow') return { color: "#f59e0b", glow: "#f59e0b" };
+  if (strain <= 7) return { color: "#3b82f6", glow: "#3b82f6" };
+  if (strain <= 14) return { color: "#f59e0b", glow: "#f59e0b" };
   return { color: "#ef4444", glow: "#ef4444" };
 }
 
-function getRiskColor(level: 'low' | 'moderate' | 'high') {
-  if (level === 'low') return { color: "#22c55e", glow: "#22c55e" };
-  if (level === 'moderate') return { color: "#f59e0b", glow: "#f59e0b" };
-  return { color: "#ef4444", glow: "#ef4444" };
-}
-
-function getRiskValue(level: 'low' | 'moderate' | 'high') {
-  if (level === 'low') return 33;
-  if (level === 'moderate') return 66;
-  return 100;
+function getOTColor(zone: 'low' | 'moderate' | 'high' | 'critical') {
+  if (zone === 'low') return { color: "#22c55e", glow: "#22c55e" };
+  if (zone === 'moderate') return { color: "#f59e0b", glow: "#f59e0b" };
+  if (zone === 'high') return { color: "#ef4444", glow: "#ef4444" };
+  return { color: "#dc2626", glow: "#dc2626" }; // critical
 }
 
 function getReadinessBadge(state: CoachResponse['readiness_state']) {
   switch (state) {
-    case 'ready_to_train':
-      return { label: "Ready to Train", className: "bg-green-500/20 text-green-400 border-green-500/30" };
-    case 'train_light':
-      return { label: "Train Light", className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" };
-    case 'rest_recommended':
-      return { label: "Rest Recommended", className: "bg-red-500/20 text-red-400 border-red-500/30" };
+    case 'push':
+      return { label: "PUSH", className: "bg-green-500/20 text-green-400 border-green-500/30", icon: TrendingUp };
+    case 'maintain':
+      return { label: "MAINTAIN", className: "bg-blue-500/20 text-blue-400 border-blue-500/30", icon: Minus };
+    case 'reduce':
+      return { label: "REDUCE", className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30", icon: TrendingDown };
+    case 'recover':
+      return { label: "RECOVER", className: "bg-red-500/20 text-red-400 border-red-500/30", icon: TrendingDown };
   }
 }
 
 const today = new Date().toISOString().split('T')[0];
 const CACHE_KEY = `fight_camp_coach_${today}`;
 
-export function RecoveryDashboard({ sessions28d, userId }: RecoveryDashboardProps) {
+export function RecoveryDashboard({ sessions28d, userId, sessionLoggedAt = 0 }: RecoveryDashboardProps) {
   const [metrics, setMetrics] = useState<AllMetrics | null>(null);
   const [coachData, setCoachData] = useState<CoachResponse | null>(null);
   const [isCoachLoading, setIsCoachLoading] = useState(false);
   const [coachError, setCoachError] = useState<string | null>(null);
 
-  // Check if we have enough data for AI coach (7+ days)
   const uniqueDays = new Set(sessions28d.map(s => s.date)).size;
   const hasEnoughData = uniqueDays >= 7;
 
@@ -91,7 +83,6 @@ export function RecoveryDashboard({ sessions28d, userId }: RecoveryDashboardProp
   const askCoach = useCallback(async () => {
     if (!metrics || !hasEnoughData) return;
 
-    // Check cache first
     const cached = AIPersistence.load(userId, CACHE_KEY);
     if (cached) {
       setCoachData(cached);
@@ -104,21 +95,27 @@ export function RecoveryDashboard({ sessions28d, userId }: RecoveryDashboardProp
     try {
       const payload = {
         strain: metrics.strain,
-        recoveryScore: metrics.recoveryScore.score,
-        recoveryStatus: metrics.recoveryScore.status,
-        acRatio: metrics.acRatio,
+        dailyLoad: metrics.dailyLoad,
+        acuteLoad: metrics.acuteLoad,
+        chronicLoad: metrics.chronicLoad,
+        loadRatio: metrics.loadRatio,
+        overtrainingScore: metrics.overtrainingRisk.score,
+        overtrainingZone: metrics.overtrainingRisk.zone,
+        avgRPE7d: metrics.avgRPE7d,
+        avgSoreness7d: metrics.avgSoreness7d,
+        sessionsLast7d: metrics.sessionsLast7d,
+        consecutiveHighDays: metrics.consecutiveHighDays,
         weeklySessionCount: metrics.weeklySessionCount,
-        overtrainingRisk: metrics.overtrainingRisk,
         avgSleep: metrics.avgSleep,
         latestSleep: metrics.latestSleep,
         latestSoreness: metrics.latestSoreness,
-        consecutiveHighDays: metrics.consecutiveHighDays,
         recentSessions: metrics.recentSessions.map(s => ({
           date: s.date,
           session_type: s.session_type,
           duration_minutes: s.duration_minutes,
           rpe: s.rpe,
           intensity: s.intensity,
+          intensity_level: s.intensity_level,
           soreness_level: s.soreness_level,
           sleep_hours: s.sleep_hours,
         })),
@@ -143,6 +140,18 @@ export function RecoveryDashboard({ sessions28d, userId }: RecoveryDashboardProp
     }
   }, [metrics, userId, hasEnoughData]);
 
+  // Auto-trigger AI when session is logged (sessionLoggedAt counter changes)
+  useEffect(() => {
+    if (sessionLoggedAt > 0 && metrics && hasEnoughData) {
+      AIPersistence.remove(userId, CACHE_KEY);
+      setCoachData(null);
+      // Small delay to let metrics recompute with new data
+      const timer = setTimeout(() => askCoach(), 500);
+      return () => clearTimeout(timer);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionLoggedAt]);
+
   const refreshCoach = useCallback(() => {
     AIPersistence.remove(userId, CACHE_KEY);
     setCoachData(null);
@@ -152,75 +161,103 @@ export function RecoveryDashboard({ sessions28d, userId }: RecoveryDashboardProp
   if (!metrics) return null;
 
   const strainColors = getStrainColor(metrics.strain);
-  const recoveryColors = getRecoveryColor(metrics.recoveryScore.status);
-  const riskColors = getRiskColor(metrics.overtrainingRisk.level);
+  const otColors = getOTColor(metrics.overtrainingRisk.zone);
 
   return (
-    <div className="glass-card rounded-[20px] p-4 mb-6 border border-border/50">
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-4">
-        <Activity className="h-5 w-5 text-primary" />
-        <h2 className="text-lg font-bold">Recovery Status</h2>
-      </div>
+    <div className="space-y-4 mb-6">
+      {/* 1) Readiness Hero Badge */}
+      {coachData && <ReadinessBadge state={coachData.readiness_state} />}
 
-      {/* Ring row - Strain + Recovery */}
-      <div className="flex justify-around mb-4">
-        <RecoveryRing
-          value={metrics.strain}
-          max={21}
-          color={strainColors.color}
-          glowColor={strainColors.glow}
-          label="Strain"
-          size={110}
-          displayValue={metrics.strain.toFixed(1)}
-          sublabel="/ 21"
-        />
-        <RecoveryRing
-          value={metrics.recoveryScore.score}
-          max={100}
-          color={recoveryColors.color}
-          glowColor={recoveryColors.glow}
-          label="Recovery"
-          size={110}
-          displayValue={`${Math.round(metrics.recoveryScore.score)}%`}
-          sublabel={metrics.recoveryScore.status}
-        />
-      </div>
-
-      {/* Risk ring - centered smaller */}
-      <div className="flex justify-center mb-4">
-        <RecoveryRing
-          value={getRiskValue(metrics.overtrainingRisk.level)}
-          max={100}
-          color={riskColors.color}
-          glowColor={riskColors.glow}
-          label="Overtraining Risk"
-          size={80}
-          strokeWidth={7}
-          displayValue={metrics.overtrainingRisk.level.toUpperCase()}
-        />
-      </div>
-
-      {/* Stats bar */}
-      <div className="grid grid-cols-3 gap-2 mb-4">
-        <div className="text-center p-2 rounded-xl bg-accent/20">
-          <div className="text-lg font-bold display-number text-foreground">{metrics.weeklySessionCount}</div>
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Sessions/wk</div>
+      {/* 2) Strain Ring + Overtraining Ring */}
+      <div className="glass-card rounded-[20px] p-4 border border-border/50">
+        <div className="flex items-center gap-2 mb-4">
+          <Activity className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-bold">Performance</h2>
         </div>
-        <div className="text-center p-2 rounded-xl bg-accent/20">
-          <div className="text-lg font-bold display-number text-foreground">{metrics.acRatio.toFixed(2)}</div>
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wider">AC Ratio</div>
-        </div>
-        <div className="text-center p-2 rounded-xl bg-accent/20">
-          <div className="text-lg font-bold display-number text-foreground">
-            {metrics.avgSleep > 0 ? `${metrics.avgSleep.toFixed(1)}h` : "—"}
+
+        <div className="flex items-end justify-around">
+          {/* Large primary strain ring */}
+          <RecoveryRing
+            value={metrics.strain}
+            max={21}
+            color={strainColors.color}
+            glowColor={strainColors.glow}
+            label="Strain"
+            size={140}
+            strokeWidth={12}
+            displayValue={metrics.strain.toFixed(1)}
+            sublabel="/ 21"
+          />
+          {/* Smaller overtraining ring */}
+          <div className="flex flex-col items-center gap-3">
+            <RecoveryRing
+              value={metrics.overtrainingRisk.score}
+              max={100}
+              color={otColors.color}
+              glowColor={otColors.glow}
+              label="Overtraining"
+              size={90}
+              strokeWidth={8}
+              displayValue={`${Math.round(metrics.overtrainingRisk.score)}`}
+              sublabel={metrics.overtrainingRisk.zone}
+            />
           </div>
-          <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Avg Sleep</div>
+        </div>
+
+        {/* Stats bar */}
+        <div className="grid grid-cols-3 gap-2 mt-4">
+          <div className="text-center p-2 rounded-xl bg-accent/20">
+            <div className="text-lg font-bold display-number text-foreground">{metrics.weeklySessionCount}</div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Sessions/wk</div>
+          </div>
+          <div className="text-center p-2 rounded-xl bg-accent/20">
+            <div className="text-lg font-bold display-number text-foreground">{metrics.loadRatio.toFixed(2)}</div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Load Ratio</div>
+          </div>
+          <div className="text-center p-2 rounded-xl bg-accent/20">
+            <div className="text-lg font-bold display-number text-foreground">
+              {metrics.avgSleep > 0 ? `${metrics.avgSleep.toFixed(1)}h` : "—"}
+            </div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Avg Sleep</div>
+          </div>
         </div>
       </div>
 
-      {/* AI Coach section */}
-      <div className="border-t border-border/30 pt-4">
+      {/* 3) 7-Day Strain Chart with forecast */}
+      <div className="glass-card rounded-[20px] p-4 border border-border/50">
+        <div className="flex items-center gap-2 mb-3">
+          <TrendingUp className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-bold">7-Day Strain Trend</h2>
+        </div>
+        <StrainChart strainHistory={metrics.strainHistory} forecast={metrics.forecast} />
+      </div>
+
+      {/* 4) Forecast Summary Card */}
+      <div className="glass-card rounded-[20px] p-4 border border-border/50">
+        <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 font-semibold">Projected Tomorrow</div>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="text-center">
+            <div className="text-lg font-bold display-number text-foreground">{metrics.forecast.predictedStrain.toFixed(1)}</div>
+            <div className="text-[10px] text-muted-foreground">Strain</div>
+          </div>
+          <div className="text-center">
+            <div className="text-lg font-bold display-number text-foreground">{metrics.forecast.predictedLoadRatio.toFixed(2)}</div>
+            <div className="text-[10px] text-muted-foreground">Load Ratio</div>
+          </div>
+          <div className="text-center">
+            <div className="text-lg font-bold display-number text-foreground">{Math.round(metrics.forecast.predictedOvertrainingScore)}</div>
+            <div className="text-[10px] text-muted-foreground">OT Score</div>
+          </div>
+        </div>
+      </div>
+
+      {/* 5) AI Coach Section */}
+      <div className="glass-card rounded-[20px] p-4 border border-border/50">
+        <div className="flex items-center gap-2 mb-3">
+          <Brain className="h-5 w-5 text-primary" />
+          <h2 className="text-lg font-bold">AI Recovery Coach</h2>
+        </div>
+
         {!coachData && !isCoachLoading && (
           <Button
             onClick={askCoach}
@@ -230,7 +267,7 @@ export function RecoveryDashboard({ sessions28d, userId }: RecoveryDashboardProp
             title={!hasEnoughData ? "Need 7+ days of data for AI coaching" : undefined}
           >
             <Brain className="h-4 w-4" />
-            {hasEnoughData ? "Ask Recovery Coach" : "Need 7+ days of data"}
+            {hasEnoughData ? "Analyze Training" : "Need 7+ days of data"}
           </Button>
         )}
 
@@ -251,28 +288,38 @@ export function RecoveryDashboard({ sessions28d, userId }: RecoveryDashboardProp
   );
 }
 
-function CoachResultCard({ coach, onRefresh }: { coach: CoachResponse; onRefresh: () => void }) {
-  const badge = getReadinessBadge(coach.readiness_state);
+// ─── Readiness Hero Badge ─────────────────────────────────────
+function ReadinessBadge({ state }: { state: CoachResponse['readiness_state'] }) {
+  const badge = getReadinessBadge(state);
+  const Icon = badge.icon;
 
   return (
+    <div className={`flex items-center justify-center gap-2 py-3 px-6 rounded-2xl border text-lg font-bold tracking-wide ${badge.className}`}>
+      <Icon className="h-5 w-5" />
+      {badge.label}
+    </div>
+  );
+}
+
+// ─── AI Coach Result Card ─────────────────────────────────────
+function CoachResultCard({ coach, onRefresh }: { coach: CoachResponse; onRefresh: () => void }) {
+  return (
     <div className="space-y-3">
-      {/* Header with badge + refresh */}
+      {/* Header with refresh */}
       <div className="flex items-center justify-between">
-        <span className={`text-xs font-semibold px-3 py-1 rounded-full border ${badge.className}`}>
-          {badge.label}
-        </span>
+        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Coach Analysis</span>
         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onRefresh}>
           <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
         </Button>
       </div>
 
       {/* Summary */}
-      <p className="text-sm text-foreground/90 leading-relaxed">{coach.summary}</p>
+      <p className="text-sm text-foreground/90 leading-relaxed">{coach.coaching_summary}</p>
 
-      {/* Next session recommendation */}
+      {/* Next session advice */}
       <div className="bg-accent/20 rounded-xl p-3">
         <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 font-semibold">Next Session</div>
-        <p className="text-sm font-medium text-foreground">{coach.next_session_recommendation}</p>
+        <p className="text-sm font-medium text-foreground">{coach.next_session_advice}</p>
       </div>
 
       {/* Recovery focus */}
@@ -290,17 +337,12 @@ function CoachResultCard({ coach, onRefresh }: { coach: CoachResponse; onRefresh
         </div>
       )}
 
-      {/* Risk flags */}
-      {coach.risk_flags?.length > 0 && (
+      {/* Risk flags from overtraining */}
+      {coach.risk_level && coach.risk_level !== 'low' && (
         <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/20">
-          <div className="text-[10px] uppercase tracking-wider text-red-400 mb-1.5 font-semibold flex items-center gap-1">
-            <AlertTriangle className="h-3 w-3" /> Risk Flags
+          <div className="text-[10px] uppercase tracking-wider text-red-400 mb-1 font-semibold flex items-center gap-1">
+            <AlertTriangle className="h-3 w-3" /> Risk Level: {coach.risk_level.toUpperCase()}
           </div>
-          <ul className="space-y-1">
-            {coach.risk_flags.map((flag, i) => (
-              <li key={i} className="text-sm text-red-300">{flag}</li>
-            ))}
-          </ul>
         </div>
       )}
     </div>

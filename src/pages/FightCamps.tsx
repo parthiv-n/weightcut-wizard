@@ -143,8 +143,7 @@ export default function FightCamps() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground pb-24">
-      <div className="p-4 space-y-6 max-w-md mx-auto">
+    <div className="space-y-4 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto pb-20 md:pb-6 text-foreground">
 
         {/* Header */}
         <div className="flex items-center justify-between pt-2">
@@ -286,7 +285,6 @@ export default function FightCamps() {
             ))}
           </div>
         )}
-      </div>
 
       <DeleteConfirmDialog
         open={deleteDialogOpen}

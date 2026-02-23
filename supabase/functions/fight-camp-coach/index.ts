@@ -38,15 +38,20 @@ serve(async (req) => {
 
     const {
       strain,
-      recoveryScore,
-      recoveryStatus,
-      acRatio,
+      dailyLoad,
+      acuteLoad,
+      chronicLoad,
+      loadRatio,
+      overtrainingScore,
+      overtrainingZone,
+      avgRPE7d,
+      avgSoreness7d,
+      sessionsLast7d,
+      consecutiveHighDays,
       weeklySessionCount,
-      overtrainingRisk,
       avgSleep,
       latestSleep,
       latestSoreness,
-      consecutiveHighDays,
       recentSessions,
     } = await req.json();
 
@@ -57,42 +62,54 @@ serve(async (req) => {
 
     const sessionsText = Array.isArray(recentSessions)
       ? recentSessions.map((s: any) =>
-        `${s.date}: ${s.session_type} ${s.duration_minutes}min RPE${s.rpe} (${s.intensity})${s.soreness_level > 0 ? ` soreness:${s.soreness_level}` : ''}${s.sleep_hours > 0 ? ` sleep:${s.sleep_hours}h` : ''}`
+        `${s.date}: ${s.session_type} ${s.duration_minutes}min RPE${s.rpe} intensity:${s.intensity_level ?? s.intensity}${s.soreness_level > 0 ? ` soreness:${s.soreness_level}` : ''}${s.sleep_hours > 0 ? ` sleep:${s.sleep_hours}h` : ''}`
       ).join('\n')
       : 'No recent sessions';
 
     const systemPrompt = `You are a JSON API. Respond with ONLY valid JSON — no preamble, no markdown, no text outside the JSON.
 
-You are an elite combat sports performance analyst specializing in training load management and recovery optimization for fighters.
+You are an elite recovery specialist and performance coach, similar to a WHOOP performance analyst, specializing in combat sports training load management.
 
-Given the athlete's training metrics and recent session data, provide a recovery coaching assessment.
+Tone: Calm, professional, conservative, evidence-informed. Never dramatic. No medical diagnosis. No extreme advice.
+
+IMPORTANT: You CANNOT override the following deterministic values — you can only interpret them:
+- Strain score (calculated from session load)
+- Overtraining score (calculated from load ratios and risk factors)
+- Load ratio (acute:chronic workload ratio)
+
+Given the athlete's metrics, provide a coaching assessment.
 
 OUTPUT (valid JSON only):
 {
-  "readiness_state": "ready_to_train|train_light|rest_recommended",
-  "summary": "1-2 sentences assessing current state",
-  "next_session_recommendation": "Specific: type, duration, RPE cap",
-  "recovery_focus": ["protocol1", "protocol2"],
-  "risk_flags": []
+  "readiness_state": "push|maintain|reduce|recover",
+  "coaching_summary": "1-2 sentences explaining current training state and what it means",
+  "next_session_advice": "Specific recommendation: session type, duration, max RPE",
+  "recovery_focus": ["protocol1", "protocol2", "protocol3"],
+  "risk_level": "low|moderate|high|critical"
 }
 
 RULES:
-- readiness_state must be exactly one of the three values
-- summary should reference actual numbers
-- next_session_recommendation must be specific (session type, duration, max RPE)
-- recovery_focus: 2-4 actionable recovery protocols
-- risk_flags: only include if there are genuine concerns, otherwise empty array
-- Be direct, evidence-based, and fighter-specific`;
+- readiness_state: "push" (green light, increase load), "maintain" (stay current), "reduce" (scale back), "recover" (rest day recommended)
+- risk_level must match the overtraining zone provided
+- coaching_summary should reference actual numbers provided
+- next_session_advice must be specific (session type, duration range, max RPE cap)
+- recovery_focus: 2-4 actionable recovery protocols relevant to combat sports
+- Be direct, evidence-based, and fighter-specific
+- Conservative approach: when in doubt, recommend less intensity`;
 
-    const userPrompt = `Fighter training metrics:
-- Today's strain: ${strain?.toFixed(1) ?? 0}/21
-- Recovery score: ${recoveryScore ?? 0}% (${recoveryStatus ?? 'unknown'})
-- Acute:Chronic ratio: ${acRatio?.toFixed(2) ?? 1.0}
-- Sessions this week: ${weeklySessionCount ?? 0}
-- Overtraining risk: ${overtrainingRisk?.level ?? 'low'}${overtrainingRisk?.factors?.length > 0 ? ` (${overtrainingRisk.factors.join('; ')})` : ''}
+    const userPrompt = `Fighter performance metrics (deterministic — do not override):
+- Today's Strain: ${strain?.toFixed(1) ?? 0}/21
+- Daily Load: ${dailyLoad?.toFixed(0) ?? 0}
+- Acute Load (7d): ${acuteLoad?.toFixed(0) ?? 0}
+- Chronic Load (28d avg): ${chronicLoad?.toFixed(0) ?? 0}
+- Load Ratio (AC): ${loadRatio?.toFixed(2) ?? 1.0}
+- Overtraining Score: ${overtrainingScore ?? 0}/100 (${overtrainingZone ?? 'low'})
+- Avg RPE (7d): ${avgRPE7d?.toFixed(1) ?? 0}
+- Avg Soreness (7d): ${avgSoreness7d?.toFixed(1) ?? 0}/10
+- Sessions (7d): ${sessionsLast7d ?? weeklySessionCount ?? 0}
+- Consecutive high-strain days: ${consecutiveHighDays ?? 0}
 - Latest sleep: ${latestSleep ?? 8}h | Avg sleep: ${avgSleep?.toFixed(1) ?? 0}h
 - Latest soreness: ${latestSoreness ?? 0}/10
-- Consecutive high-strain days: ${consecutiveHighDays ?? 0}
 
 Recent sessions (last 7 days):
 ${sessionsText}`;

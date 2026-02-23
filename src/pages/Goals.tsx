@@ -203,19 +203,18 @@ export default function Goals() {
   }
 
   return (
-    <div className="min-h-screen bg-muted/30 pb-24 md:pb-10">
-      <div className="max-w-2xl mx-auto">
+    <div className="space-y-4 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto pb-20 md:pb-6">
         {/* Header */}
-        <div className="px-4 py-6 md:py-8">
+        <div>
           <h1 className="text-3xl font-bold tracking-tight">Goals</h1>
           <p className="text-muted-foreground mt-1 text-sm">Update your profile and targets</p>
         </div>
 
-        <div className="space-y-6 px-4">
+        <div className="space-y-6">
           {/* Section: Personal Details */}
           <div className="space-y-2">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Personal Details</h2>
-            <div className="bg-background rounded-xl border shadow-sm overflow-hidden divide-y">
+            <div className="glass-card rounded-xl border border-border/50 overflow-hidden divide-y divide-border/50">
               <div className="flex items-center justify-between p-3 sm:p-4">
                 <Label htmlFor="age" className="text-base font-medium">Age</Label>
                 <Input
@@ -274,7 +273,7 @@ export default function Goals() {
           {/* Section: Targets */}
           <div className="space-y-2">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Targets</h2>
-            <div className="bg-background rounded-xl border shadow-sm overflow-hidden divide-y">
+            <div className="glass-card rounded-xl border border-border/50 overflow-hidden divide-y divide-border/50">
               {/* Weigh-in Goal */}
               <div className="p-3 sm:p-4 space-y-3">
                 <div className="flex items-center justify-between">
@@ -369,7 +368,7 @@ export default function Goals() {
           {/* Section: Activity */}
           <div className="space-y-2">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Activity</h2>
-            <div className="bg-background rounded-xl border shadow-sm overflow-hidden divide-y">
+            <div className="glass-card rounded-xl border border-border/50 overflow-hidden divide-y divide-border/50">
               <div className="p-3 sm:p-4 flex flex-col gap-2">
                 <Label htmlFor="activity_level" className="text-base font-medium">Activity Level</Label>
                 <Select value={formData.activity_level} onValueChange={(value) => setFormData({ ...formData, activity_level: value })}>
@@ -416,7 +415,6 @@ export default function Goals() {
             </Button>
           </div>
         </div>
-      </div>
     </div>
   );
 }
