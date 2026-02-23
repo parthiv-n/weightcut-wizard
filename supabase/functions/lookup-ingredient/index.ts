@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -54,39 +55,20 @@ serve(async (req) => {
 
     console.log("Looking up nutrition for ingredient:", ingredientName);
 
-    const systemPrompt = `You are a nutrition database expert. Look up accurate nutrition information per 100g for food ingredients.
+    const systemPrompt = `Nutrition database expert. Return ONLY valid JSON — no markdown, no text.
+Use USDA/authoritative food databases. Values per 100g. Calories as integer, macros 1 decimal.
+If ambiguous, specify most common preparation (e.g., "chicken" → "chicken breast, raw").
 
-CRITICAL RULES:
-1. Use reliable nutrition databases (USDA, nutrition websites, food databases)
-2. Return nutrition values per 100g (standard measurement)
-3. Be precise and use real nutrition data from authoritative sources, not estimates
-4. If the ingredient is ambiguous (e.g., "chicken"), specify the most common preparation (e.g., "chicken breast, raw")
-5. Return values as numbers (calories as integer, macros as decimals with 1 decimal place)
-6. Always indicate the data source (e.g., "USDA Food Database", "Nutrition Database", "Standard Nutrition Values", "Food Composition Database")
-7. Use authoritative sources like USDA, nutrition databases, or established food composition tables
-8. If you cannot find reliable data, indicate this clearly
-
-You MUST respond with ONLY valid JSON. No markdown, no explanations, no code blocks. The response will be automatically parsed as JSON.
-
-Provide accurate nutrition data from reliable sources (USDA, nutrition databases, etc.) and provide:
-- Calories per 100g (kcal, as integer)
-- Protein per 100g (grams, 1 decimal place)
-- Carbohydrates per 100g (grams, 1 decimal place)
-- Fats per 100g (grams, 1 decimal place)
-
-If the ingredient name is ambiguous, specify what you're looking up (e.g., if "chicken" is given, specify "chicken breast, raw" or similar common preparation).
-
-Respond with a JSON object in this exact format:
 {
   "calories_per_100g": number,
   "protein_per_100g": number,
   "carbs_per_100g": number,
   "fats_per_100g": number,
-  "ingredient_clarification": "clarified ingredient name if needed",
-  "data_source": "source of nutrition data"
+  "ingredient_clarification": "clarified name if needed",
+  "data_source": "source"
 }`;
 
-    const userPrompt = `Look up the nutrition information per 100g for: "${ingredientName}"`;
+    const userPrompt = `Nutrition per 100g for: "${ingredientName}"`;
 
     const response = await fetch("https://api.minimax.io/v1/chat/completions", {
       method: "POST",
@@ -101,7 +83,7 @@ Respond with a JSON object in this exact format:
           { role: "user", content: userPrompt }
         ],
         temperature: 0.1,
-        max_tokens: 1024
+        max_tokens: 300
       })
     });
 
@@ -136,33 +118,14 @@ Respond with a JSON object in this exact format:
     const data = await response.json();
     console.log("Minimax response:", JSON.stringify(data));
 
-    // Parse Minimax response
-    let generatedText = data.choices?.[0]?.message?.content;
-    // Strip <think> tags from Minimax response
-    if (generatedText) {
-      generatedText = generatedText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-    }
-    if (!generatedText) {
-      const finishReason = data.choices?.[0]?.finish_reason;
-      if (finishReason === 'content_filter') {
-        throw new Error("Content was filtered for safety. Please try a different ingredient.");
-      }
+    const { content, filtered } = extractContent(data);
+    if (!content) {
+      if (filtered) throw new Error("Content was filtered for safety. Please try a different ingredient.");
       throw new Error("No response from Minimax API");
     }
 
-    // Parse JSON from Minimax response
     try {
-      let nutritionData;
-      try {
-        nutritionData = JSON.parse(generatedText);
-      } catch {
-        const jsonMatch = generatedText.match(/```(?:json)?\s*([\s\S]*?)```/);
-        if (jsonMatch) {
-          nutritionData = JSON.parse(jsonMatch[1].trim());
-        } else {
-          throw new Error("Could not parse nutrition data");
-        }
-      }
+      const nutritionData = parseJSON(content);
       console.log("Parsed nutrition data:", nutritionData);
 
       // Validate the nutrition data
@@ -173,7 +136,6 @@ Respond with a JSON object in this exact format:
         );
       }
 
-      // Ensure all values are present and valid
       const result = {
         calories_per_100g: Math.round(nutritionData.calories_per_100g || 0),
         protein_per_100g: Math.round((nutritionData.protein_per_100g || 0) * 10) / 10,
@@ -207,4 +169,3 @@ Respond with a JSON object in this exact format:
     );
   }
 });
-

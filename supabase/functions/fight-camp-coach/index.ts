@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -66,52 +67,31 @@ serve(async (req) => {
       ).join('\n')
       : 'No recent sessions';
 
-    const systemPrompt = `You are a JSON API. Respond with ONLY valid JSON — no preamble, no markdown, no text outside the JSON.
+    const systemPrompt = `You are a JSON API. Respond with ONLY valid JSON.
+Elite recovery specialist for combat sports training load management. Calm, professional, conservative, evidence-informed.
 
-You are an elite recovery specialist and performance coach, similar to a WHOOP performance analyst, specializing in combat sports training load management.
+You CANNOT override deterministic values (strain, overtraining score, load ratio) — interpret only.
 
-Tone: Calm, professional, conservative, evidence-informed. Never dramatic. No medical diagnosis. No extreme advice.
-
-IMPORTANT: You CANNOT override the following deterministic values — you can only interpret them:
-- Strain score (calculated from session load)
-- Overtraining score (calculated from load ratios and risk factors)
-- Load ratio (acute:chronic workload ratio)
-
-Given the athlete's metrics, provide a coaching assessment.
-
-OUTPUT (valid JSON only):
+OUTPUT:
 {
-  "readiness_state": "push|maintain|reduce|recover",
-  "coaching_summary": "1-2 sentences explaining current training state and what it means",
-  "next_session_advice": "Specific recommendation: session type, duration, max RPE",
-  "recovery_focus": ["protocol1", "protocol2", "protocol3"],
-  "risk_level": "low|moderate|high|critical"
+  "readiness_state": "push|maintain|reduce|recover",  // push=green light, maintain=stay, reduce=scale back, recover=rest day
+  "coaching_summary": "1-2 sentences referencing actual numbers",
+  "next_session_advice": "Specific: session type, duration, max RPE",
+  "recovery_focus": ["protocol1", "protocol2", "protocol3"],  // 2-4 actionable, fighter-specific
+  "risk_level": "low|moderate|high|critical"  // must match overtraining zone
 }
 
-RULES:
-- readiness_state: "push" (green light, increase load), "maintain" (stay current), "reduce" (scale back), "recover" (rest day recommended)
-- risk_level must match the overtraining zone provided
-- coaching_summary should reference actual numbers provided
-- next_session_advice must be specific (session type, duration range, max RPE cap)
-- recovery_focus: 2-4 actionable recovery protocols relevant to combat sports
-- Be direct, evidence-based, and fighter-specific
-- Conservative approach: when in doubt, recommend less intensity`;
+Conservative approach: when in doubt, recommend less intensity.`;
 
-    const userPrompt = `Fighter performance metrics (deterministic — do not override):
-- Today's Strain: ${strain?.toFixed(1) ?? 0}/21
-- Daily Load: ${dailyLoad?.toFixed(0) ?? 0}
-- Acute Load (7d): ${acuteLoad?.toFixed(0) ?? 0}
-- Chronic Load (28d avg): ${chronicLoad?.toFixed(0) ?? 0}
-- Load Ratio (AC): ${loadRatio?.toFixed(2) ?? 1.0}
-- Overtraining Score: ${overtrainingScore ?? 0}/100 (${overtrainingZone ?? 'low'})
-- Avg RPE (7d): ${avgRPE7d?.toFixed(1) ?? 0}
-- Avg Soreness (7d): ${avgSoreness7d?.toFixed(1) ?? 0}/10
-- Sessions (7d): ${sessionsLast7d ?? weeklySessionCount ?? 0}
-- Consecutive high-strain days: ${consecutiveHighDays ?? 0}
-- Latest sleep: ${latestSleep ?? 8}h | Avg sleep: ${avgSleep?.toFixed(1) ?? 0}h
-- Latest soreness: ${latestSoreness ?? 0}/10
+    const userPrompt = `Fighter metrics (deterministic — do not override):
+- Strain: ${strain?.toFixed(1) ?? 0}/21 | Daily Load: ${dailyLoad?.toFixed(0) ?? 0}
+- Acute (7d): ${acuteLoad?.toFixed(0) ?? 0} | Chronic (28d): ${chronicLoad?.toFixed(0) ?? 0} | AC Ratio: ${loadRatio?.toFixed(2) ?? 1.0}
+- Overtraining: ${overtrainingScore ?? 0}/100 (${overtrainingZone ?? 'low'})
+- Avg RPE (7d): ${avgRPE7d?.toFixed(1) ?? 0} | Avg Soreness: ${avgSoreness7d?.toFixed(1) ?? 0}/10
+- Sessions (7d): ${sessionsLast7d ?? weeklySessionCount ?? 0} | Consecutive high days: ${consecutiveHighDays ?? 0}
+- Sleep: ${latestSleep ?? 8}h (avg ${avgSleep?.toFixed(1) ?? 0}h) | Soreness: ${latestSoreness ?? 0}/10
 
-Recent sessions (last 7 days):
+Recent sessions:
 ${sessionsText}`;
 
     const response = await fetch("https://api.minimax.io/v1/chat/completions", {
@@ -149,47 +129,13 @@ ${sessionsText}`;
     const data = await response.json();
     console.log("Minimax fight-camp-coach response:", JSON.stringify(data, null, 2));
 
-    let coachText = data.choices?.[0]?.message?.content;
-    // Strip <think> tags
-    if (coachText) {
-      coachText = coachText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-    }
-
-    if (!coachText) {
-      const finishReason = data.choices?.[0]?.finish_reason;
-      if (finishReason === 'content_filter') {
-        throw new Error("Content was filtered. Please try again.");
-      }
+    const { content, filtered } = extractContent(data);
+    if (!content) {
+      if (filtered) throw new Error("Content was filtered. Please try again.");
       throw new Error("No response from Minimax API");
     }
 
-    let coach;
-    try {
-      coach = JSON.parse(coachText);
-    } catch {
-      const jsonMatch = coachText.match(/```(?:json)?\s*([\s\S]*?)```/);
-      if (jsonMatch) {
-        try {
-          coach = JSON.parse(jsonMatch[1].trim());
-        } catch {
-          console.error("Failed to parse extracted JSON:", jsonMatch[1]);
-        }
-      }
-      if (!coach) {
-        const objMatch = coachText.match(/\{[\s\S]*\}/);
-        if (objMatch) {
-          try {
-            coach = JSON.parse(objMatch[0]);
-          } catch {
-            console.error("Failed to parse bare JSON from response:", coachText);
-          }
-        }
-      }
-      if (!coach) {
-        console.error("Failed to parse Minimax response as JSON:", coachText);
-        throw new Error("Could not parse coach response from AI");
-      }
-    }
+    const coach = parseJSON(content);
 
     return new Response(JSON.stringify({ coach }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

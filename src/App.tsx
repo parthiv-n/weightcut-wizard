@@ -118,6 +118,7 @@ function RouteTracker() {
 
 const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
   const { openMobile } = useSidebar();
+  const location = useLocation();
 
   return (
     <>
@@ -134,7 +135,7 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
             <ThemeToggle className="touch-target" />
           </header>
           {/* Main content with mobile-first responsive padding - bottom padding for bottom nav */}
-          <PullToRefresh className="flex-1 overflow-auto relative min-h-0 w-full pt-2 pb-24 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right">
+          <PullToRefresh disabled={location.pathname === '/wizard'} className="flex-1 overflow-auto relative min-h-0 w-full pt-2 pb-24 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right">
             <Suspense fallback={<DashboardSkeleton />}>
               <PageTransition>
                 {children}

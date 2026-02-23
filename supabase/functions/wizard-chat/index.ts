@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import knowledgeData from "./chatbot-index.json" assert { type: "json" };
+import { extractContent } from "../_shared/parseResponse.ts";
+import { RESEARCH_SUMMARY } from "../_shared/researchSummary.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -54,29 +55,23 @@ serve(async (req) => {
       throw new Error("MINIMAX_API_KEY is not configured");
     }
 
-    const researchContext = knowledgeData.map((doc: any) => `## Source: ${doc.title}\n${doc.content}`).join('\n\n');
+    // Cap conversation history to last 20 messages to prevent token explosion
+    const cappedMessages = Array.isArray(messages) ? messages.slice(-20) : [];
 
-    const systemPrompt = `You are the "Weight Cut Wizard", a master, science-backed combat sports nutritionist and coach.
-Keep your responses modern, conversational, and relatively concise (under 200 words unless explaining a complex protocol). You are talking directly to a fighter.
+    const systemPrompt = `You are the "Weight Cut Wizard" — expert, science-backed combat sports nutritionist and coach. Talking directly to a fighter. Modern, conversational, concise (under 200 words unless explaining a complex protocol).
 
-CRITICAL USER CONTEXT:
-${userData ? `- Current Weight: ${userData.currentWeight}kg\n- Fight Target Weight: ${userData.goalWeight}kg\n- Days Until Weigh-in: ${userData.daysToWeighIn} days` : "- No profile data provided yet."}
+${userData ? `ATHLETE: ${userData.currentWeight}kg → ${userData.goalWeight}kg | ${userData.daysToWeighIn} days` : "No profile data yet."}
 
-YOUR KNOWLEDGE BASE (Scientific Research):
-The following are full-text research papers and protocols on combat sports nutrition. You MUST base your advice strictly on these protocols and standards. Retrieve the most relevant scientific data from this context to answer the user's questions intelligently. Do not hallucinate statistics.
+<research>
+${RESEARCH_SUMMARY}
+</research>
 
-<knowledge>
-${researchContext}
-</knowledge>
-
-YOUR PERSONALITY & RULES:
-- Expert, authoritative, yet friendly and motivational ("Let's get this cut dialed in, champ").
-- You remember the conversation history provided in the chat.
-- SAFETY FIRST: Base your safety standards strictly on the research provided.
-- Focus on performance. A fighter who makes weight but has no energy will lose. Recommend high-carb peri-workout nutrition as supported by the literature.
-- If they ask for a plan, calculate the exact daily deficit needed based on their timeline.
-- If a request is dangerous, firmly decline and provide the safe, scientific alternative.
-- IMPORTANT FORMATTING: Organize your replies into easy-to-read, short paragraphs. Use bullet points when listing items, and bold key terms for readability. Never output a giant wall of text.`;
+RULES:
+- Base advice strictly on the research above. Do not hallucinate statistics.
+- Safety first. If dangerous, firmly decline and give the safe alternative.
+- Calculate exact deficits when asked, based on timeline.
+- Focus on performance — making weight with no energy = losing the fight.
+- Format: short paragraphs, bullet points for lists, bold key terms. No walls of text.`;
 
     console.log("Calling Minimax API with memory footprint...");
 
@@ -90,7 +85,7 @@ YOUR PERSONALITY & RULES:
         model: "MiniMax-M2.5",
         messages: [
           { role: "system", content: systemPrompt },
-          ...messages // Spread the full conversation history for memory
+          ...cappedMessages
         ],
         temperature: 0.7,
         max_tokens: 2048
@@ -131,23 +126,16 @@ YOUR PERSONALITY & RULES:
     const data = await response.json();
     console.log("Wizard chat Minimax response:", JSON.stringify(data, null, 2));
 
-    let generatedText = data.choices?.[0]?.message?.content;
-    // Strip <think> tags from Minimax response
-    if (generatedText) {
-      generatedText = generatedText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-    }
+    let { content: generatedText, filtered } = extractContent(data);
 
     if (!generatedText) {
-      console.error("No content found in wizard chat response");
-      const finishReason = data.choices?.[0]?.finish_reason;
-      if (finishReason === 'content_filter') {
+      if (filtered) {
         generatedText = "I can't provide that specific advice for safety reasons. Let me help you with a safer approach to your weight cut goals.";
       } else {
         throw new Error("No response from Minimax API");
       }
     }
 
-    // Return the response as JSON (not streaming like Lovable)
     return new Response(
       JSON.stringify({
         choices: [{

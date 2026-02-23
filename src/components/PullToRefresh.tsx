@@ -4,10 +4,15 @@ import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 interface PullToRefreshProps {
     children: React.ReactNode;
     className?: string;
+    disabled?: boolean;
 }
 
-export const PullToRefresh: React.FC<PullToRefreshProps> = ({ children, className = '' }) => {
+export const PullToRefresh: React.FC<PullToRefreshProps> = ({ children, className = '', disabled = false }) => {
     const { pullDistance, isRefreshing, containerRef, PULL_THRESHOLD } = usePullToRefresh();
+
+    if (disabled) {
+        return <main className={className}>{children}</main>;
+    }
 
     // Normalised progress 0→1 based on threshold
     const progress = Math.min(pullDistance / PULL_THRESHOLD, 1);

@@ -95,13 +95,13 @@ export default function Wizard() {
       </div>
 
       {/* Chat Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 pb-safe" ref={scrollRef}>
+      <div className="flex-1 overflow-y-auto p-3 space-y-3 pb-safe" ref={scrollRef}>
         {messages.map((msg, idx) => (
           <div
             key={idx}
             className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} animate-fade-in`}
           >
-            <div className={`flex gap-2 max-w-[85%] ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
+            <div className={`flex gap-2 max-w-[88%] ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
               {/* Avatar Icon */}
               <div className={`shrink-0 h-8 w-8 rounded-full flex items-center justify-center ${msg.role === "user" ? "bg-primary/20" : "glass-card border-none"}`}>
                 {msg.role === "user" ? <User className="h-4 w-4 text-primary drop-shadow-md" /> : <Bot className="h-4 w-4 text-secondary drop-shadow-md" />}
@@ -109,15 +109,15 @@ export default function Wizard() {
 
               {/* Message Bubble */}
               {msg.role === "user" ? (
-                <div className={`p-3 rounded-2xl text-sm bg-gradient-to-br from-primary to-primary/80 text-primary-foreground rounded-tr-sm shadow-[0_0_15px_rgba(var(--primary),0.4)]`}>
-                  <div className="prose prose-invert prose-sm max-w-none">
+                <div className={`px-3 py-2 rounded-2xl text-sm bg-gradient-to-br from-primary to-primary/80 text-primary-foreground rounded-tr-sm shadow-lg shadow-primary/20`}>
+                  <div className="prose dark:prose-invert prose-sm max-w-none">
                     <ReactMarkdown>
                       {msg.content}
                     </ReactMarkdown>
                   </div>
                 </div>
               ) : (
-                <div className="relative p-3 rounded-2xl text-sm glass-card text-card-foreground rounded-tl-sm border-white/10">
+                <div className="relative px-3 py-2 rounded-2xl text-sm glass-card text-card-foreground rounded-tl-sm border-border/30">
                   <GlowingEffect
                     spread={40}
                     glow={true}
@@ -126,7 +126,7 @@ export default function Wizard() {
                     inactiveZone={0.01}
                     borderWidth={1}
                   />
-                  <div className="relative z-10 prose prose-invert prose-sm max-w-none">
+                  <div className="relative z-10 prose dark:prose-invert prose-sm max-w-none">
                     <ReactMarkdown>
                       {msg.content}
                     </ReactMarkdown>
@@ -140,11 +140,11 @@ export default function Wizard() {
         {/* Loading Indicator */}
         {isLoading && (
           <div className="flex justify-start animate-fade-in">
-            <div className="flex gap-2 max-w-[85%]">
+            <div className="flex gap-2 max-w-[88%]">
               <div className="shrink-0 h-8 w-8 rounded-full glass-card border-none flex items-center justify-center">
                 <Bot className="h-4 w-4 text-secondary drop-shadow-md" />
               </div>
-              <div className="relative p-3 rounded-2xl glass-card rounded-tl-sm border-white/10 flex items-center gap-2">
+              <div className="relative px-3 py-2 rounded-2xl glass-card rounded-tl-sm border-border/30 flex items-center gap-2">
                 <GlowingEffect
                   spread={40}
                   glow={true}
@@ -162,7 +162,7 @@ export default function Wizard() {
       </div>
 
       {/* Input Area */}
-      <div className="flex-none p-4 pb-[calc(env(safe-area-inset-bottom)+5rem)] glass-card !rounded-none !border-x-0 !border-b-0 !border-t-white/10">
+      <div className="flex-none p-4 pb-[calc(env(safe-area-inset-bottom)+4rem)] bg-background/80 backdrop-blur-md border-t border-border/30">
         <form onSubmit={handleSend} className="flex gap-2 relative z-10">
           <div className="relative flex-1 rounded-full">
             <GlowingEffect
@@ -177,7 +177,7 @@ export default function Wizard() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask your nutritionist..."
-              className="relative z-10 w-full rounded-full bg-black/20 border-white/10 pr-12 focus-visible:ring-primary/50 text-foreground placeholder:text-muted-foreground"
+              className="relative z-10 w-full rounded-full bg-muted/50 border-border/30 pr-12 focus-visible:ring-primary/50 text-foreground placeholder:text-muted-foreground"
               disabled={isLoading}
             />
           </div>
