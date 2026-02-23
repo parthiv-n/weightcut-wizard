@@ -19,7 +19,6 @@ import { localCache } from "@/lib/localCache";
 import {
   AlertDialog,
   AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -91,11 +90,7 @@ export default function WeightTracker() {
     profileData: any;
   } | null>(null);
   const [unsafeGoalDialogOpen, setUnsafeGoalDialogOpen] = useState(false);
-  const [pendingAICallParams, setPendingAICallParams] = useState<{
-    currentWeight: number;
-    fightWeekTarget: number;
-    requestPayload: any;
-  } | null>(null);
+  const [showProjected, setShowProjected] = useState(true);
   const { toast } = useToast();
   const { updateCurrentWeight, userId } = useUser();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -105,9 +100,13 @@ export default function WeightTracker() {
   useEffect(() => {
     fetchData();
     loadPersistedAnalysis();
+    if (userId) {
+      const stored = localStorage.getItem(`weight_tracker_show_projected_${userId}`);
+      if (stored !== null) setShowProjected(JSON.parse(stored));
+    }
   }, []);
 
-  const loadPersistedAnalysis = async () => {
+  const loadPersistedAnalysis = () => {
     if (!userId) return;
 
     try {
@@ -119,46 +118,22 @@ export default function WeightTracker() {
       const parsed = JSON.parse(stored);
       const { analysis, currentWeight, fightWeekTarget } = parsed;
 
-      // Validate that the stored analysis is still valid
-      // Get current weight and target
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const { data: latestWeightLog } = await supabase
-        .from("weight_logs")
-        .select("weight_kg")
-        .eq("user_id", user.id)
-        .order("date", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      const { data: profileData } = await supabase
-        .from("profiles")
-        .select("current_weight_kg, fight_week_target_kg")
-        .eq("id", user.id)
-        .single();
-
-      if (!profileData) return;
-
-      const actualCurrentWeight = latestWeightLog?.weight_kg || profileData.current_weight_kg;
-      const actualFightWeekTarget = profileData.fight_week_target_kg;
-
-      // Only restore if weight and target match (analysis is still valid)
-      if (
-        actualCurrentWeight === currentWeight &&
-        actualFightWeekTarget === fightWeekTarget &&
-        analysis
-      ) {
+      if (analysis) {
         setAiAnalysis(analysis);
         setAiAnalysisWeight(currentWeight);
         setAiAnalysisTarget(fightWeekTarget);
-      } else {
-        // Clear invalid stored analysis
-        localStorage.removeItem(storageKey);
       }
     } catch (error) {
       console.error("Error loading persisted analysis:", error);
     }
+  };
+
+  const clearAnalysis = () => {
+    if (!userId) return;
+    setAiAnalysis(null);
+    setAiAnalysisWeight(null);
+    setAiAnalysisTarget(null);
+    localStorage.removeItem(`weight_tracker_ai_analysis_${userId}`);
   };
 
   const fetchData = async () => {
@@ -245,14 +220,6 @@ export default function WeightTracker() {
         .eq("id", user.id);
 
       await updateCurrentWeight(loggedWeight);
-
-      if (userId) {
-        const storageKey = `weight_tracker_ai_analysis_${userId}`;
-        localStorage.removeItem(storageKey);
-        setAiAnalysis(null);
-        setAiAnalysisWeight(null);
-        setAiAnalysisTarget(null);
-      }
 
       // Pre-cache weight logs for Dashboard so it loads instantly
       if (userId) {
@@ -362,29 +329,9 @@ export default function WeightTracker() {
     const currentWeight = latestWeightLog?.weight_kg || profile.current_weight_kg;
     const currentWeightSource = latestWeightLog?.weight_kg ? "weight_logs (latest log)" : "profile.current_weight_kg";
 
-    // Check if goal is unrealistic (>1.5kg/week)
+    // Show medical warning for aggressive goals (>1.5kg/week) but always proceed with analysis
     if (isGoalUnrealistic(currentWeight, fightWeekTarget, profile.target_date)) {
-      // Store parameters for later use
-      const requestPayload = {
-        currentWeight,
-        goalWeight: fightWeekTarget,
-        weighInDayWeight: profile.goal_weight_kg,
-        targetDate: profile.target_date,
-        activityLevel: profile.activity_level,
-        age: profile.age,
-        sex: profile.sex,
-        heightCm: profile.height_cm,
-        tdee: profile.tdee
-      };
-
-      setPendingAICallParams({
-        currentWeight,
-        fightWeekTarget,
-        requestPayload
-      });
       setUnsafeGoalDialogOpen(true);
-      setAnalyzingWeight(false);
-      return;
     }
 
     // Prepare request payload for debugging
@@ -399,7 +346,6 @@ export default function WeightTracker() {
       sex: profile.sex,
       heightCm: profile.height_cm,
       tdee: profile.tdee,
-      bypassSafety: false
     };
 
     const { data, error } = await supabase.functions.invoke("weight-tracker-analysis", {
@@ -457,64 +403,8 @@ export default function WeightTracker() {
     setAnalyzingWeight(false);
   };
 
-  const handleUnsafeGoalConfirm = async () => {
-    if (!pendingAICallParams) return;
-
+  const handleUnsafeGoalDismiss = () => {
     setUnsafeGoalDialogOpen(false);
-    setAnalyzingWeight(true);
-
-    const { currentWeight, fightWeekTarget, requestPayload } = pendingAICallParams;
-
-    // Add bypassSafety flag to request
-    const requestPayloadWithBypass = {
-      ...requestPayload,
-      bypassSafety: true
-    };
-
-    // Get user for saving recommendations
-    const { data: { user } } = await supabase.auth.getUser();
-
-    const { data, error } = await supabase.functions.invoke("weight-tracker-analysis", {
-      body: requestPayloadWithBypass
-    });
-
-    if (error) {
-      toast({
-        title: "AI analysis unavailable",
-        description: error.message,
-        variant: "destructive"
-      });
-      setAnalyzingWeight(false);
-    } else if (data?.analysis) {
-      setAiAnalysis(data.analysis);
-      setAiAnalysisWeight(currentWeight);
-      setAiAnalysisTarget(fightWeekTarget);
-
-      // Store in localStorage for persistence
-      if (userId) {
-        const storageKey = `weight_tracker_ai_analysis_${userId}`;
-        const storageData = {
-          analysis: data.analysis,
-          currentWeight,
-          fightWeekTarget,
-          timestamp: Date.now()
-        };
-        localStorage.setItem(storageKey, JSON.stringify(storageData));
-      }
-    }
-
-    setPendingAICallParams(null);
-    setAnalyzingWeight(false);
-  };
-
-  const handleUnsafeGoalCancel = () => {
-    setUnsafeGoalDialogOpen(false);
-    setPendingAICallParams(null);
-    toast({
-      title: "Unsafe Goal",
-      description: "Unsafe goals you will have to change weight and consider catch weight",
-      variant: "destructive",
-    });
   };
 
   const getWeeklyLossRequired = () => {
@@ -554,6 +444,7 @@ export default function WeightTracker() {
         return [{
           date: "Start",
           weight: profile.current_weight_kg,
+          projected: null as number | null,
           fightWeekGoal: fightWeekTarget,
           fightNightGoal: profile.goal_weight_kg,
           logId: null,
@@ -574,20 +465,55 @@ export default function WeightTracker() {
       filteredLogs = filteredLogs.filter(log => new Date(log.date) >= oneMonthAgo);
     }
 
-    // If filtering results in empty array but we have data overall, 
+    // If filtering results in empty array but we have data overall,
     // just show the latest raw data point so the graph isn't entirely blank
     if (filteredLogs.length === 0 && weightLogs.length > 0) {
       filteredLogs = [weightLogs[weightLogs.length - 1]];
     }
 
-    const data = filteredLogs.map((log) => ({
+    const data = filteredLogs.map((log, idx) => ({
       date: format(new Date(log.date), "MMM dd"),
       weight: log.weight_kg,
+      // Last actual point gets projected value too so the lines connect
+      projected: (aiAnalysis && idx === filteredLogs.length - 1) ? log.weight_kg : null as number | null,
       fightWeekGoal: fightWeekTarget,
       fightNightGoal: profile.goal_weight_kg,
       logId: log.id,
       fullDate: log.date,
     }));
+
+    // Add projected future data points when AI analysis exists
+    if (aiAnalysis && aiAnalysis.requiredWeeklyLoss > 0 && filteredLogs.length > 0) {
+      const lastLog = filteredLogs[filteredLogs.length - 1];
+      const lastWeight = lastLog.weight_kg;
+      const lastDate = new Date(lastLog.date);
+      const targetDate = new Date(profile.target_date);
+      const maxWeeks = 8;
+
+      for (let week = 1; week <= maxWeeks; week++) {
+        const futureDate = new Date(lastDate.getTime() + week * 7 * 24 * 60 * 60 * 1000);
+        // Stop if we've passed the target date
+        if (futureDate > targetDate) break;
+
+        const projectedWeight = Math.max(
+          fightWeekTarget,
+          lastWeight - (week * aiAnalysis.requiredWeeklyLoss)
+        );
+
+        data.push({
+          date: format(futureDate, "MMM dd"),
+          weight: null as number | null,
+          projected: projectedWeight,
+          fightWeekGoal: fightWeekTarget,
+          fightNightGoal: profile.goal_weight_kg,
+          logId: null,
+          fullDate: format(futureDate, "yyyy-MM-dd"),
+        });
+
+        // Stop if we've reached the target weight
+        if (projectedWeight <= fightWeekTarget) break;
+      }
+    }
 
     return data;
   };
@@ -771,11 +697,20 @@ export default function WeightTracker() {
                   <Tooltip
                     content={({ active, payload }) => {
                       if (active && payload && payload.length) {
+                        const entry = payload[0].payload;
+                        const actualWeight = entry.weight;
+                        const projectedWeight = entry.projected;
+                        const isProjectedOnly = !actualWeight && projectedWeight;
                         return (
                           <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
-                            <p className="text-xs text-muted-foreground">{payload[0].payload.fullDate}</p>
-                            <p className="text-lg font-bold text-primary">{payload[0].value}kg</p>
-                            <p className="text-[10px] text-muted-foreground mt-1">Tap to delete</p>
+                            <p className="text-xs text-muted-foreground">{entry.fullDate}</p>
+                            {actualWeight && (
+                              <p className="text-lg font-bold text-primary">{actualWeight}kg</p>
+                            )}
+                            {isProjectedOnly && (
+                              <p className="text-lg font-bold text-muted-foreground">{projectedWeight.toFixed(1)}kg <span className="text-xs font-normal">projected</span></p>
+                            )}
+                            {actualWeight && <p className="text-[10px] text-muted-foreground mt-1">Tap to delete</p>}
                           </div>
                         );
                       }
@@ -804,8 +739,36 @@ export default function WeightTracker() {
                     dot={{ fill: "hsl(var(--primary))", r: 4, cursor: "pointer" }}
                     activeDot={{ r: 6, cursor: "pointer" }}
                   />
+                  {aiAnalysis && showProjected && (
+                    <Line
+                      type="monotone"
+                      dataKey="projected"
+                      stroke="hsl(var(--muted-foreground))"
+                      strokeWidth={1.5}
+                      strokeDasharray="6 4"
+                      dot={false}
+                      connectNulls={false}
+                    />
+                  )}
                 </LineChart>
               </ResponsiveContainer>
+              {aiAnalysis && (
+                <div className="flex justify-end mb-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className={`h-7 text-[11px] gap-1.5 ${showProjected ? 'text-foreground' : 'text-muted-foreground'}`}
+                    onClick={() => {
+                      const next = !showProjected;
+                      setShowProjected(next);
+                      if (userId) localStorage.setItem(`weight_tracker_show_projected_${userId}`, JSON.stringify(next));
+                    }}
+                  >
+                    <TrendingDown className="h-3 w-3" />
+                    Projected {showProjected ? 'On' : 'Off'}
+                  </Button>
+                </div>
+              )}
               <div className="border-t border-border/20 pt-3">
                 <Collapsible
                   open={isHistoryOpen}
@@ -993,16 +956,27 @@ export default function WeightTracker() {
                     }
                   </p>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={getAIAnalysis}
-                  disabled={analyzingWeight}
-                  className="h-8 w-8"
-                  title="Refresh analysis"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={getAIAnalysis}
+                    disabled={analyzingWeight}
+                    className="h-8 w-8"
+                    title="Refresh analysis"
+                  >
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={clearAnalysis}
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    title="Delete analysis"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
 
               {/* Now / Goal / Diff */}
@@ -1283,18 +1257,14 @@ export default function WeightTracker() {
         <AlertDialog open={unsafeGoalDialogOpen} onOpenChange={setUnsafeGoalDialogOpen}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Unrealistic Weight Loss Goal</AlertDialogTitle>
+              <AlertDialogTitle>Aggressive Weight Loss Goal</AlertDialogTitle>
               <AlertDialogDescription>
-                This goal requires losing more than 1.5kg per week, which is considered unsafe and can cause severe performance degradation and health risks. Are you sure you want to proceed?
+                This goal requires losing more than 1.5kg per week, which carries serious health risks including performance degradation, muscle loss, and metabolic damage. Please consult a doctor or sports nutritionist before following this plan.
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={handleUnsafeGoalCancel}>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleUnsafeGoalConfirm}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                Yes, proceed
+              <AlertDialogAction onClick={handleUnsafeGoalDismiss}>
+                I understand
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

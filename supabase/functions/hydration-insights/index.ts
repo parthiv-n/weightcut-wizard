@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractContent } from "../_shared/parseResponse.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -32,58 +33,40 @@ serve(async (req) => {
     }
 
     const { hydrationData, profileData, recentLogs } = await req.json();
-    const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
+    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
 
-    if (!MINIMAX_API_KEY) {
-      throw new Error("MINIMAX_API_KEY is not configured");
+    if (!GROK_API_KEY) {
+      throw new Error("GROK_API_KEY is not configured");
     }
 
-    const systemPrompt = `You are the Weight Cut Wizard, a science-based mystical coach who prioritises fighter safety and performance. You NEVER encourage:
-- Extreme dehydration (>3% body weight loss)
-- Diuretics or dangerous supplements
-- Plastic suits or excessive sauna use without supervision
-- Eliminating sodium completely
-- Cutting water too early before weigh-in
+    const systemPrompt = `You are the Weight Cut Wizard, a science-based combat sports hydration coach. Safety first.
+Never encourage: extreme dehydration (>3% BW), diuretics, plastic suits unsupervised, eliminating sodium, cutting water too early.
+Provide evidence-based, gradual hydration strategies. Keep responses concise (2-3 sentences) and actionable.`;
 
-You provide:
-- Evidence-based hydration strategies
-- Safe sodium manipulation advice
-- Performance-focused guidance
-- Gradual, controlled adjustments
-- Recovery protocols that prioritize health
+    const userPrompt = `Hydration status:
+- Target: ${hydrationData.dailyTarget}L | Current: ${hydrationData.currentIntake}L
+- Sodium: ${hydrationData.sodiumToday || 0}mg | Sweat loss: ${hydrationData.sweatLoss || "none"}%
+- Days to weigh-in: ${profileData.daysToWeighIn || "unknown"} | Activity: ${profileData.activityLevel || "moderate"}
+- Recent: ${recentLogs || "No recent logs"}
 
-Keep responses concise (2-3 sentences max) and actionable. Use fighter-appropriate language.`;
+Brief insight + one actionable recommendation.`;
 
-    const userPrompt = `Current hydration status:
-- Daily target: ${hydrationData.dailyTarget}L
-- Current intake: ${hydrationData.currentIntake}L
-- Sodium today: ${hydrationData.sodiumToday || 0}mg
-- Recent sweat loss: ${hydrationData.sweatLoss || "none logged"}%
-- Days to weigh-in: ${profileData.daysToWeighIn || "unknown"}
-- Activity level: ${profileData.activityLevel || "moderate"}
+    console.log("Calling Grok API for hydration insights...");
 
-Recent patterns: ${recentLogs || "No recent logs"}
-
-Provide a brief insight on their hydration status and one actionable recommendation.`;
-
-    const fullPrompt = `${systemPrompt}\n\nUser: ${userPrompt}`;
-
-    console.log("Calling Minimax API for hydration insights...");
-
-    const response = await fetch("https://api.minimax.io/v1/chat/completions", {
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${MINIMAX_API_KEY}`,
+        "Authorization": `Bearer ${GROK_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "MiniMax-M2.5",
+        model: "grok-4-1-fast-reasoning",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
         ],
         temperature: 0.7,
-        max_tokens: 512
+        max_completion_tokens: 256
       })
     });
 
@@ -107,7 +90,7 @@ Provide a brief insight on their hydration status and one actionable recommendat
         );
       }
       const errorData = await response.json();
-      console.error("Minimax API error:", response.status, errorData);
+      console.error("Grok API error:", response.status, errorData);
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -115,21 +98,12 @@ Provide a brief insight on their hydration status and one actionable recommendat
     }
 
     const data = await response.json();
-    console.log("Minimax hydration response:", JSON.stringify(data, null, 2));
+    console.log("Grok hydration response:", JSON.stringify(data, null, 2));
 
-    let insight = data.choices?.[0]?.message?.content;
-    // Strip <think> tags from Minimax response
-    if (insight) {
-      insight = insight.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-    }
-
+    const { content: insight, filtered } = extractContent(data);
     if (!insight) {
-      console.error("No content found in Minimax response");
-      const finishReason = data.choices?.[0]?.finish_reason;
-      if (finishReason === 'content_filter') {
-        throw new Error("Content was filtered for safety. Please try a different request.");
-      }
-      throw new Error("No response from Minimax API");
+      if (filtered) throw new Error("Content was filtered for safety. Please try a different request.");
+      throw new Error("No response from Grok API");
     }
 
     return new Response(JSON.stringify({ insight }), {

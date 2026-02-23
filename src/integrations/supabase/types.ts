@@ -1,3 +1,4 @@
+Initialising login role...
 export type Json =
   | string
   | number
@@ -11,6 +12,31 @@ export type Database = {
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "13.0.5"
+  }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
   }
   public: {
     Tables: {
@@ -34,6 +60,63 @@ export type Database = {
           created_at?: string | null
           id?: string
           role?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      fight_camp_calendar: {
+        Row: {
+          bodyweight: number | null
+          created_at: string | null
+          date: string
+          duration_minutes: number
+          fatigue_level: number | null
+          id: string
+          intensity: string
+          intensity_level: number | null
+          mobility_done: boolean | null
+          notes: string | null
+          rpe: number
+          session_type: string
+          sleep_hours: number | null
+          sleep_quality: string | null
+          soreness_level: number | null
+          user_id: string
+        }
+        Insert: {
+          bodyweight?: number | null
+          created_at?: string | null
+          date: string
+          duration_minutes: number
+          fatigue_level?: number | null
+          id?: string
+          intensity: string
+          intensity_level?: number | null
+          mobility_done?: boolean | null
+          notes?: string | null
+          rpe: number
+          session_type: string
+          sleep_hours?: number | null
+          sleep_quality?: string | null
+          soreness_level?: number | null
+          user_id: string
+        }
+        Update: {
+          bodyweight?: number | null
+          created_at?: string | null
+          date?: string
+          duration_minutes?: number
+          fatigue_level?: number | null
+          id?: string
+          intensity?: string
+          intensity_level?: number | null
+          mobility_done?: boolean | null
+          notes?: string | null
+          rpe?: number
+          session_type?: string
+          sleep_hours?: number | null
+          sleep_quality?: string | null
+          soreness_level?: number | null
           user_id?: string
         }
         Relationships: []
@@ -314,6 +397,11 @@ export type Database = {
         Row: {
           activity_level: string
           age: number
+          ai_recommendations_updated_at: string | null
+          ai_recommended_calories: number | null
+          ai_recommended_carbs_g: number | null
+          ai_recommended_fats_g: number | null
+          ai_recommended_protein_g: number | null
           avatar_url: string | null
           bmr: number | null
           created_at: string | null
@@ -332,6 +420,11 @@ export type Database = {
         Insert: {
           activity_level: string
           age: number
+          ai_recommendations_updated_at?: string | null
+          ai_recommended_calories?: number | null
+          ai_recommended_carbs_g?: number | null
+          ai_recommended_fats_g?: number | null
+          ai_recommended_protein_g?: number | null
           avatar_url?: string | null
           bmr?: number | null
           created_at?: string | null
@@ -350,6 +443,11 @@ export type Database = {
         Update: {
           activity_level?: string
           age?: number
+          ai_recommendations_updated_at?: string | null
+          ai_recommended_calories?: number | null
+          ai_recommended_carbs_g?: number | null
+          ai_recommended_fats_g?: number | null
+          ai_recommended_protein_g?: number | null
           avatar_url?: string | null
           bmr?: number | null
           created_at?: string | null
@@ -364,6 +462,30 @@ export type Database = {
           tdee?: number | null
           training_frequency?: number | null
           updated_at?: string | null
+        }
+        Relationships: []
+      }
+      rate_limits: {
+        Row: {
+          function_name: string
+          id: number
+          request_count: number
+          user_id: string
+          window_start: string
+        }
+        Insert: {
+          function_name: string
+          id?: never
+          request_count?: number
+          user_id: string
+          window_start?: string
+        }
+        Update: {
+          function_name?: string
+          id?: never
+          request_count?: number
+          user_id?: string
+          window_start?: string
         }
         Relationships: []
       }
@@ -400,6 +522,36 @@ export type Database = {
         }
         Relationships: []
       }
+      user_insights: {
+        Row: {
+          confidence_score: number | null
+          created_at: string | null
+          id: string
+          insight_data: Json
+          insight_type: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          confidence_score?: number | null
+          created_at?: string | null
+          id?: string
+          insight_data: Json
+          insight_type: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          confidence_score?: number | null
+          created_at?: string | null
+          id?: string
+          insight_data?: Json
+          insight_type?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       weight_logs: {
         Row: {
           created_at: string | null
@@ -429,7 +581,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      increment_rate_limit: {
+        Args: {
+          p_function_name: string
+          p_max_requests: number
+          p_user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
@@ -558,7 +717,12 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },
 } as const
+A new version of Supabase CLI is available: v2.75.0 (currently installed v2.62.5)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli

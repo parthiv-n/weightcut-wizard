@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,14 +46,13 @@ serve(async (req) => {
       heightCm,
       tdee,
       weighInDayWeight,
-      bypassSafety = false,
       weightHistory: clientWeightHistory
     } = await req.json();
 
-    const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
+    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
 
-    if (!MINIMAX_API_KEY) {
-      throw new Error("MINIMAX_API_KEY is not configured");
+    if (!GROK_API_KEY) {
+      throw new Error("GROK_API_KEY is not configured");
     }
 
     // Use client-provided weight history if available (saves a DB round-trip)
@@ -81,7 +81,6 @@ serve(async (req) => {
         new Date(a.date).getTime() - new Date(b.date).getTime()
       );
 
-      // Calculate average weekly loss rate
       const firstWeight = parseFloat(sorted[0].weight_kg);
       const lastWeight = parseFloat(sorted[sorted.length - 1].weight_kg);
       const daysDiff = (new Date(sorted[sorted.length - 1].date).getTime() -
@@ -89,20 +88,16 @@ serve(async (req) => {
       const weeksDiff = daysDiff / 7;
       const avgWeeklyLoss = weeksDiff > 0 ? (firstWeight - lastWeight) / weeksDiff : 0;
 
-      // Detect plateaus (no significant change for 7+ days)
       let plateauDetected = false;
       if (sorted.length >= 7) {
         const recent = sorted.slice(-7);
         const weights = recent.map(w => parseFloat(w.weight_kg));
         const min = Math.min(...weights);
         const max = Math.max(...weights);
-        if (max - min < 0.3) { // Less than 0.3kg variation
-          plateauDetected = true;
-        }
+        if (max - min < 0.3) plateauDetected = true;
       }
 
-      // Calculate trend (improving, declining, stable)
-      const recent = sorted.slice(-14); // Last 14 days
+      const recent = sorted.slice(-14);
       let trend = "stable";
       if (recent.length >= 2) {
         const first = parseFloat(recent[0].weight_kg);
@@ -126,181 +121,97 @@ serve(async (req) => {
     const today = new Date();
     const target = new Date(targetDate);
     const daysRemaining = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    const weeksRemaining = Math.max(1, daysRemaining / 7); // Prevent division by zero
+    const weeksRemaining = Math.max(1, daysRemaining / 7);
 
-    // Calculate weight difference: positive if need to gain, negative if need to lose
     const weightDifference = goalWeight - currentWeight;
-
-    // Detect maintenance mode: when current weight is AT OR BELOW fight week target
-    // If current weight is below target, user is already under their diet goal - use maintenance, not deficit
     const isMaintenanceMode = currentWeight <= goalWeight;
-
-    // Calculate weight to gain (positive) or weight to lose (positive)
     const weightToGain = isMaintenanceMode && weightDifference > 0 ? weightDifference : 0;
     const weightToLose = !isMaintenanceMode && weightDifference < 0 ? Math.abs(weightDifference) : 0;
-
-    // Calculate required weekly change (positive for loss, positive for gain)
     const requiredWeeklyLoss = weightToLose > 0 ? weightToLose / weeksRemaining : 0;
     const requiredWeeklyGain = weightToGain > 0 ? weightToGain / weeksRemaining : 0;
 
-    const systemPrompt = `You are a JSON API. Respond with ONLY the JSON object — no preamble, no reasoning steps, no text outside the JSON braces.
+    const systemPrompt = `You are a JSON API. Respond with ONLY the JSON object.
+You are the Weight Cut Wizard — evidence-based sports nutrition specialist for combat athletes.
 
-You are the Weight Cut Wizard — an evidence-based sports nutrition and weight-cutting specialist for combat-sports athletes.
+RULES:
+- fightWeekTarget = diet-only target (fat loss). weighInWeight = final scale weight (water cut). These are DIFFERENT.
+- IF currentWeight ≤ fightWeekTarget: calorieDeficit MUST be 0, recommendedCalories = TDEE (maintenance)
+- IF currentWeight > fightWeekTarget: deficit 500-750 kcal/d (safe) or 750-1000 (aggressive), NEVER >1000
+- Minimum calories: Males 1500, Females 1200
+- RED-S risk: energy availability <30 kcal/kg FFM
+- Weekly loss: GREEN ≤1.0 kg/wk, YELLOW 1.0-1.5, RED >1.5
+- Protein: 2.0-2.5 g/kg | Carbs: scale with training | Fats: 20-30% total kcal
+- ALWAYS generate a full plan regardless of how aggressive the goal is
+- If requiredWeeklyLoss > 1.5: set riskLevel="red", include strong medical warning in riskExplanation urging consultation with a doctor/sports nutritionist, but still provide complete calorie/macro recommendations
 
-Your responsibilities:
-• Calculate safe calories, macronutrients, and weekly weight-loss rates
-• Tailor plans to combat athlete timelines
-• Enforce scientific safety limits
-• Prevent RED-S, overcutting, and dangerous deficits
-• Provide structured JSON-only output
-
-EVIDENCE BASE: Follow IOC, ISSN, and ACSM guidelines for combat-sport athletes.
-
-You MUST apply these principles, limits, and safety thresholds. Do NOT contradict these guidelines.
-
-CRITICAL DEFINITIONS
-• currentWeight = athlete's real weight today
-• fightWeekTarget = DIET-ONLY weight target before dehydration
-• weighInWeight = final scale weight achieved through water manipulation
-• fightWeekTarget is achieved via FAT LOSS & DIET
-• weighInWeight is achieved via SHORT-TERM WATER CUTTING ONLY
-
-CALORIE LOGIC — MUST FOLLOW
-IF currentWeight ≤ fightWeekTarget:
-    - Athlete is AT or BELOW diet goal
-    - calorieDeficit MUST be 0
-    - recommendedCalories MUST equal TDEE
-    - Explain this clearly
-
-IF currentWeight > fightWeekTarget:
-    Apply deficit within safe ranges:
-    - Safe: 500-750 kcal/day (≈0.5-0.75 kg/week)
-    - Aggressive: 750-1000 kcal/day (≈0.75-1 kg/week)
-    NEVER exceed 1000 kcal/day.
-
-SAFETY RULES — NON-NEGOTIABLE
-• Minimum calories: Males NEVER below 1500 kcal, Females NEVER below 1200 kcal
-• RED-S risk MUST be flagged when: energy availability < 30 kcal/kg FFM, calories extremely low, very lean athlete attempts rapid cut, rapid weight loss exceeds guidelines
-• Weekly safe weight loss ranges: GREEN ≤0.5-1.0 kg/week, YELLOW 1.0-1.5 kg/week, RED >1.5 kg/week (dangerous)
-• Severe dehydration strategies (sauna marathons, diuretics, extreme fasting) must be discouraged
-
-MACRONUTRIENT LOGIC
-Protein: 2.0-2.5 g/kg (cutting phase)
-Carbohydrates: scale with training intensity, prioritize fuelling key sessions
-Fats: 20-30% of total calories unless restricted safely
-
-STRATEGIC CONTEXT — MUST BE USED
-All plans must account for: time until fight, training load, recovery demands, athlete leanness, performance requirements, injury risk, sleep and fatigue, realistic weekly loss based on science
-
-WHEN GOALS ARE UNREALISTIC
-If requiredWeeklyLoss > 1.5 kg/week:
-• classify riskLevel as "red"
-• warn user the timeline is unsafe
-• recommend alternative timelines
-• advise reducing goal rigidity
-
-${bypassSafety ? `SAFETY BYPASS MODE — USER CONFIRMED
-The user has explicitly confirmed they want to proceed with an unrealistic goal (>1.5kg/week).
-You MUST still generate a plan, but:
-- Ignore minimum calorie limits (1500/1200 kcal)
-- Ignore weekly loss rate safety warnings
-- Still calculate calories and macros
-- Include strong warnings about health risks in riskExplanation
-- Set riskLevel to "red"
-- Clearly state this bypasses all safety features` : ''}
-
-OUTPUT FORMAT - You must respond with valid JSON only:
+OUTPUT:
 {
-  "riskLevel": "green" | "yellow" | "red",
+  "riskLevel": "green|yellow|red",
   "requiredWeeklyLoss": 0.8,
   "recommendedCalories": 2200,
   "calorieDeficit": 500,
   "proteinGrams": 160,
   "carbsGrams": 200,
   "fatsGrams": 70,
-  "riskExplanation": "Why this is green/yellow/red with scientific reasoning",
-  "strategicGuidance": "Comprehensive guidance on how to achieve this safely",
-  "nutritionTips": [
-    "Specific tip 1",
-    "Specific tip 2",
-    "Specific tip 3"
-  ],
-  "trainingConsiderations": "How to adjust training based on calorie deficit",
-  "timeline": "Whether the timeline is realistic or needs adjustment",
-  "weeklyPlan": {
-    "week1": "What to focus on in week 1",
-    "week2": "What to focus on in week 2",
-    "ongoing": "Ongoing strategy"
-  }
+  "riskExplanation": "string",
+  "strategicGuidance": "string",
+  "nutritionTips": ["tip1", "tip2", "tip3"],
+  "trainingConsiderations": "string",
+  "timeline": "string",
+  "weeklyPlan": { "week1": "string", "week2": "string", "ongoing": "string" }
 }`;
 
-    // Build user prompt with maintenance mode handling and weight history
-    let userPrompt = `Calculate optimal weight management strategy:
-- Current Weight: ${currentWeight}kg
-- Goal Weight (Fight Week Target - diet goal before dehydration): ${goalWeight}kg
-${weighInDayWeight ? `- Weigh In Day Weight (day before fight day, final weigh-in after dehydration): ${weighInDayWeight}kg (for reference only, not the diet target)` : ''}
-${weightToGain > 0 ? `- Weight to GAIN: ${weightToGain.toFixed(1)}kg (positive value - user is below target)` : ''}
-${weightToLose > 0 ? `- Weight to LOSE: ${weightToLose.toFixed(1)}kg (positive value - user is above target)` : ''}
-${weightToGain === 0 && weightToLose === 0 ? `- Weight Status: At target (no change needed)` : ''}
-- Days Remaining: ${daysRemaining}
-- Weeks Remaining: ${weeksRemaining.toFixed(1)}
-${requiredWeeklyGain > 0 ? `- Required Weekly GAIN: ${requiredWeeklyGain.toFixed(2)}kg/week` : ''}
-${requiredWeeklyLoss > 0 ? `- Required Weekly LOSS: ${requiredWeeklyLoss.toFixed(2)}kg/week` : ''}
-${requiredWeeklyGain === 0 && requiredWeeklyLoss === 0 ? `- Required Weekly Change: 0 kg/week (maintenance)` : ''}
-- TDEE: ${tdee} kcal/day
-- Activity Level: ${activityLevel}
-- Age: ${age}
-- Sex: ${sex}
-- Height: ${heightCm}cm
+    // Build compact user prompt
+    const weightStatus = weightToGain > 0
+      ? `GAIN ${weightToGain.toFixed(1)}kg (below target) | Required: +${requiredWeeklyGain.toFixed(2)} kg/wk`
+      : weightToLose > 0
+        ? `LOSE ${weightToLose.toFixed(1)}kg | Required: -${requiredWeeklyLoss.toFixed(2)} kg/wk`
+        : `At target (maintenance)`;
 
-${patterns ? `\nWEIGHT HISTORY & BODY ADAPTATION PATTERNS (learn from this data):
-- Historical Data Points: ${patterns.dataPoints} entries
-- Average Weekly Loss Rate: ${patterns.avgWeeklyLoss} kg/week
-- Weight Range: ${patterns.weightRange}
-- Trend: ${patterns.trend}
-- Plateau Detected: ${patterns.plateauDetected ? 'Yes (weight stable for 7+ days)' : 'No'}
-${patterns.plateauDetected ? 'Consider: Plateau may indicate metabolic adaptation or need for strategy adjustment.' : ''}
-${parseFloat(patterns.avgWeeklyLoss) > 0 ? `Historical loss rate (${patterns.avgWeeklyLoss} kg/week) suggests body responds to deficit.` : ''}
-${parseFloat(patterns.avgWeeklyLoss) < 0 ? `Historical gain rate suggests body may be in recovery/maintenance phase.` : ''}
-Use this historical pattern to inform calorie recommendations and predict body response.` : '\nWEIGHT HISTORY: No historical data available. Recommendations based on standard calculations only.'}
+    let userPrompt = `Weight strategy:
+- Current: ${currentWeight}kg | Goal (fight week target): ${goalWeight}kg${weighInDayWeight ? ` | Weigh-in day: ${weighInDayWeight}kg (ref only)` : ''}
+- Status: ${weightStatus}
+- Timeline: ${daysRemaining}d (${weeksRemaining.toFixed(1)} weeks)
+- TDEE: ${tdee} kcal | Activity: ${activityLevel} | ${sex}, ${age}y, ${heightCm}cm`;
 
-${storedInsights && storedInsights.length > 0 ? `\nSTORED BODY INSIGHTS (learned from previous analyses):
-${storedInsights.map((insight: any) => {
-      const data = insight.insight_data;
-      if (insight.insight_type === 'metabolism_rate') {
-        return `- Metabolism Rate: ${data.estimatedRate || 'N/A'} (confidence: ${(insight.confidence_score * 100).toFixed(0)}%)`;
-      } else if (insight.insight_type === 'deficit_response') {
-        return `- Deficit Response: ${data.response || 'N/A'} (confidence: ${(insight.confidence_score * 100).toFixed(0)}%)`;
-      } else if (insight.insight_type === 'weekly_loss_rate') {
-        return `- Weekly Loss Rate: ${data.rate || 'N/A'} kg/week (confidence: ${(insight.confidence_score * 100).toFixed(0)}%)`;
-      }
-      return null;
-    }).filter(Boolean).join('\n')}
-Use these insights to personalize recommendations.` : ''}
+    if (patterns) {
+      userPrompt += `\n\nWEIGHT PATTERNS (${patterns.dataPoints} entries):
+- Avg weekly loss: ${patterns.avgWeeklyLoss} kg/wk | Trend: ${patterns.trend} | Range: ${patterns.weightRange}
+- Plateau: ${patterns.plateauDetected ? 'Yes (7+ days stable)' : 'No'}`;
+    }
 
-${bypassSafety ? `\nWARNING: User has confirmed they want to proceed despite unrealistic goal. Generate plan ignoring all safety limits. Still include health risk warnings.` : ''}
+    if (storedInsights && storedInsights.length > 0) {
+      const insightLines = storedInsights.map((insight: any) => {
+        const d = insight.insight_data;
+        const c = `${(insight.confidence_score * 100).toFixed(0)}%`;
+        if (insight.insight_type === 'metabolism_rate') return `Metabolism: ${d.estimatedRate || 'N/A'} (${c})`;
+        if (insight.insight_type === 'deficit_response') return `Deficit response: ${d.response || 'N/A'} (${c})`;
+        if (insight.insight_type === 'weekly_loss_rate') return `Weekly rate: ${d.rate || 'N/A'} kg/wk (${c})`;
+        return null;
+      }).filter(Boolean);
+      if (insightLines.length > 0) userPrompt += `\n\nSTORED INSIGHTS:\n- ${insightLines.join('\n- ')}`;
+    }
 
-${isMaintenanceMode ? `\nCRITICAL: Current weight (${currentWeight}kg) is AT OR BELOW fight week target (${goalWeight}kg). User is already at or below their diet goal. ${weightToGain > 0 ? `User needs to GAIN ${weightToGain.toFixed(1)}kg to reach target, but this should be achieved through natural weight gain with MAINTENANCE calories, not a surplus.` : 'User is at target.'} You MUST recommend MAINTENANCE calories (TDEE: ${tdee}kcal) with NO calorie deficit (calorieDeficit MUST be 0). The remaining weight to reach weigh-in day weight will be achieved through dehydration protocols in the final days before weigh-in, NOT through diet.` : ''}
+    if (isMaintenanceMode) {
+      userPrompt += `\n\nMAINTENANCE MODE: At/below target. calorieDeficit=0, recommendedCalories=TDEE(${tdee}).${weightToGain > 0 ? ` Gain ${weightToGain.toFixed(1)}kg via maintenance calories, not surplus.` : ''}`;
+    }
 
-Provide a JSON response with risk level, recommended calories, macros, strategic guidance, weekly plan, and training considerations.
-${isMaintenanceMode ? 'MAINTENANCE MODE: calorieDeficit MUST be 0, recommendedCalories MUST equal TDEE. Focus on weight maintenance and dehydration prep for fight week.' : 'Be specific with numbers. If the timeline requires >1.5kg/week, flag as unrealistic and recommend an extension.'}`;
-
-    // Call Minimax API
-    console.log("Calling Minimax API for weight tracker analysis...");
-    const response = await fetch("https://api.minimax.io/v1/chat/completions", {
+    // Call Grok API
+    console.log("Calling Grok API for weight tracker analysis...");
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${MINIMAX_API_KEY}`,
+        "Authorization": `Bearer ${GROK_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "MiniMax-M2.5",
+        model: "grok-4-1-fast-reasoning",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
         temperature: 0.1,
-        max_tokens: 2500
+        max_completion_tokens: 1500
       }),
     });
 
@@ -324,7 +235,7 @@ ${isMaintenanceMode ? 'MAINTENANCE MODE: calorieDeficit MUST be 0, recommendedCa
         );
       }
       const errorText = await response.text();
-      console.error("Minimax API error:", response.status, errorText);
+      console.error("Grok API error:", response.status, errorText);
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -332,42 +243,15 @@ ${isMaintenanceMode ? 'MAINTENANCE MODE: calorieDeficit MUST be 0, recommendedCa
     }
 
     const data = await response.json();
-    console.log("Minimax weight tracker response:", JSON.stringify(data, null, 2));
+    console.log("Grok weight tracker response:", JSON.stringify(data, null, 2));
 
-    let analysisText = data.choices?.[0]?.message?.content;
-    // Strip <think> tags from Minimax response
-    if (analysisText) {
-      analysisText = analysisText.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    const { content, filtered } = extractContent(data);
+    if (!content) {
+      if (filtered) throw new Error("Content was filtered for safety. Please try a different request.");
+      throw new Error("No response from Grok API");
     }
 
-    if (!analysisText) {
-      console.error("No content found in Minimax response");
-      const finishReason = data.choices?.[0]?.finish_reason;
-      if (finishReason === 'content_filter') {
-        throw new Error("Content was filtered for safety. Please try a different request.");
-      }
-      throw new Error("No response from Minimax API");
-    }
-
-    // Parse the JSON analysis
-    let analysis;
-    try {
-      analysis = JSON.parse(analysisText);
-    } catch (parseError) {
-      // Try extracting JSON from markdown code blocks
-      const jsonMatch = analysisText.match(/```(?:json)?\s*([\s\S]*?)```/);
-      if (jsonMatch) {
-        try {
-          analysis = JSON.parse(jsonMatch[1].trim());
-        } catch {
-          console.error("Failed to parse extracted JSON:", jsonMatch[1]);
-        }
-      }
-      if (!analysis) {
-        console.error("Failed to parse Minimax response as JSON:", analysisText);
-        throw new Error("Could not parse analysis data from AI response");
-      }
-    }
+    const analysis = parseJSON(content);
 
     // Calculate and store insights
     const insightsToStore: Array<{
@@ -375,78 +259,56 @@ ${isMaintenanceMode ? 'MAINTENANCE MODE: calorieDeficit MUST be 0, recommendedCa
       insight_type: string;
       insight_data: Record<string, any>;
       confidence_score: number;
+      updated_at: string;
     }> = [];
 
-    // Store weekly loss rate insight
+    const now = new Date().toISOString();
+
     if (patterns && parseFloat(patterns.avgWeeklyLoss) !== 0) {
       insightsToStore.push({
         user_id: user.id,
         insight_type: 'weekly_loss_rate',
-        insight_data: {
-          rate: parseFloat(patterns.avgWeeklyLoss),
-          dataPoints: patterns.dataPoints,
-          trend: patterns.trend
-        },
-        confidence_score: Math.min(0.9, 0.5 + (patterns.dataPoints / 60) * 0.4) // Higher confidence with more data
+        insight_data: { rate: parseFloat(patterns.avgWeeklyLoss), dataPoints: patterns.dataPoints, trend: patterns.trend },
+        confidence_score: Math.min(0.9, 0.5 + (patterns.dataPoints / 60) * 0.4),
+        updated_at: now
       });
     }
 
-    // Store metabolism/deficit response insight
     if (analysis.recommendedCalories && analysis.calorieDeficit !== undefined) {
-      const estimatedMetabolism = analysis.recommendedCalories + analysis.calorieDeficit;
       insightsToStore.push({
         user_id: user.id,
         insight_type: 'metabolism_rate',
-        insight_data: {
-          estimatedRate: estimatedMetabolism,
-          recommendedCalories: analysis.recommendedCalories,
-          deficit: analysis.calorieDeficit
-        },
-        confidence_score: 0.6
+        insight_data: { estimatedRate: analysis.recommendedCalories + analysis.calorieDeficit, recommendedCalories: analysis.recommendedCalories, deficit: analysis.calorieDeficit },
+        confidence_score: 0.6,
+        updated_at: now
       });
 
       if (analysis.calorieDeficit > 0) {
         insightsToStore.push({
           user_id: user.id,
           insight_type: 'deficit_response',
-          insight_data: {
-            deficit: analysis.calorieDeficit,
-            weeklyLoss: analysis.requiredWeeklyLoss || 0,
-            response: patterns ? `Historical: ${patterns.avgWeeklyLoss} kg/week` : 'No historical data'
-          },
-          confidence_score: 0.5
+          insight_data: { deficit: analysis.calorieDeficit, weeklyLoss: analysis.requiredWeeklyLoss || 0, response: patterns ? `Historical: ${patterns.avgWeeklyLoss} kg/week` : 'No historical data' },
+          confidence_score: 0.5,
+          updated_at: now
         });
       }
     }
 
-    // Store body adaptation pattern
     if (patterns) {
       insightsToStore.push({
         user_id: user.id,
         insight_type: 'body_adaptation',
-        insight_data: {
-          avgWeeklyLoss: parseFloat(patterns.avgWeeklyLoss),
-          plateauDetected: patterns.plateauDetected,
-          trend: patterns.trend,
-          weightRange: patterns.weightRange
-        },
-        confidence_score: Math.min(0.8, 0.4 + (patterns.dataPoints / 60) * 0.4)
+        insight_data: { avgWeeklyLoss: parseFloat(patterns.avgWeeklyLoss), plateauDetected: patterns.plateauDetected, trend: patterns.trend, weightRange: patterns.weightRange },
+        confidence_score: Math.min(0.8, 0.4 + (patterns.dataPoints / 60) * 0.4),
+        updated_at: now
       });
     }
 
-    // Upsert insights (update if exists, insert if not)
-    for (const insight of insightsToStore) {
+    // Batch upsert all insights at once
+    if (insightsToStore.length > 0) {
       await supabaseClient
         .from("user_insights")
-        .upsert({
-          user_id: insight.user_id,
-          insight_type: insight.insight_type,
-          insight_data: insight.insight_data,
-          confidence_score: insight.confidence_score,
-          updated_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id,insight_type'
-        });
+        .upsert(insightsToStore, { onConflict: 'user_id,insight_type' });
     }
 
     return new Response(JSON.stringify({ analysis }), {

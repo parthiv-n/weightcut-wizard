@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, subMonths, addMonths, subDays } from "date-fns";
-import { ChevronLeft, ChevronRight, Plus, Activity, Moon, Ruler, Trash2 } from "lucide-react";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, subMonths, addMonths, subDays } from "date-fns";
+import { ChevronLeft, ChevronRight, Plus, Activity, Moon, Ruler, Trash2, CircleX } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useUser } from "@/contexts/UserContext";
 import { useToast } from "@/hooks/use-toast";
@@ -10,24 +10,32 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
-import { Database } from "@/integrations/supabase/types";
+import { Textarea } from "@/components/ui/textarea";
 import { RecoveryDashboard } from "@/components/fightcamp/RecoveryDashboard";
+import { TrainingSummarySection } from "@/components/fightcamp/TrainingSummarySection";
 
-// Temporarily define the type here since we can't reliably update the generated types without Supabase CLI
+// Type definitions for fight_camp_calendar table
 type FightCampCalendarInsert = {
     date: string;
     session_type: string;
     duration_minutes: number;
     rpe: number;
-    intensity: 'low' | 'moderate' | 'high';
+    intensity: string;
+    intensity_level: number;
     soreness_level: number;
     sleep_hours: number;
     user_id: string;
+    notes?: string | null;
+    // Rest day fields
+    fatigue_level?: number | null;
+    sleep_quality?: string | null;
+    mobility_done?: boolean | null;
 };
 
 type FightCampCalendarRow = FightCampCalendarInsert & {
     id: string;
     created_at: string;
+    notes?: string | null;
 };
 
 const SESSION_TYPES = [
@@ -35,7 +43,7 @@ const SESSION_TYPES = [
 ];
 
 export default function FightCampCalendar() {
-    const { userId } = useUser();
+    const { userId, profile } = useUser();
     const { toast } = useToast();
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(new Date());
@@ -43,15 +51,26 @@ export default function FightCampCalendar() {
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [sessions28d, setSessions28d] = useState<FightCampCalendarRow[]>([]);
+    const [sessionLoggedTrigger, setSessionLoggedTrigger] = useState(0);
 
     // Form State
     const [sessionType, setSessionType] = useState(SESSION_TYPES[0]);
     const [duration, setDuration] = useState("60");
     const [rpe, setRpe] = useState([5]);
-    const [intensity, setIntensity] = useState<'low' | 'moderate' | 'high'>('moderate');
+    const [intensityLevel, setIntensityLevel] = useState([3]);
     const [hasSoreness, setHasSoreness] = useState(false);
     const [sorenessLevel, setSorenessLevel] = useState([5]);
     const [sleepHours, setSleepHours] = useState("8");
+    const [notes, setNotes] = useState("");
+    // Rest day form state
+    const [fatigue, setFatigue] = useState([5]);
+    const [sleepQuality, setSleepQuality] = useState<'good' | 'poor'>('good');
+    const [mobilityDone, setMobilityDone] = useState(false);
+
+    // Edit state
+    const [editingSession, setEditingSession] = useState<FightCampCalendarRow | null>(null);
+
+    const isRestDay = sessionType === 'Rest';
 
     const fetchSessions = useCallback(async () => {
         if (!userId) return;
@@ -108,44 +127,92 @@ export default function FightCampCalendar() {
         fetch28DaySessions();
     }, [fetch28DaySessions]);
 
+    const resetForm = () => {
+        setSessionType(SESSION_TYPES[0]);
+        setDuration("60");
+        setRpe([5]);
+        setIntensityLevel([3]);
+        setHasSoreness(false);
+        setSorenessLevel([5]);
+        setNotes("");
+        setFatigue([5]);
+        setSleepQuality('good');
+        setMobilityDone(false);
+        setEditingSession(null);
+    };
+
+    const handleEditSession = (session: FightCampCalendarRow) => {
+        setEditingSession(session);
+        setSessionType(session.session_type);
+        setDuration(String(session.duration_minutes));
+        setRpe([session.rpe]);
+        const il = session.intensity_level ?? (session.intensity === 'high' ? 5 : session.intensity === 'moderate' ? 3 : 1);
+        setIntensityLevel([il]);
+        setHasSoreness((session.soreness_level ?? 0) > 0);
+        setSorenessLevel([(session.soreness_level ?? 0) > 0 ? session.soreness_level! : 5]);
+        setSleepHours(String(session.sleep_hours ?? 8));
+        setNotes(session.notes ?? "");
+        setFatigue([session.fatigue_level ?? 5]);
+        setSleepQuality((session.sleep_quality as 'good' | 'poor') ?? 'good');
+        setMobilityDone(session.mobility_done ?? false);
+        setIsAddModalOpen(true);
+    };
+
     const handleSaveSession = async () => {
         if (!userId) return;
 
         try {
+            const intensityMap: Record<number, string> = { 1: 'low', 2: 'low', 3: 'moderate', 4: 'high', 5: 'high' };
             const payload: FightCampCalendarInsert = {
                 user_id: userId,
                 date: format(selectedDate, "yyyy-MM-dd"),
                 session_type: sessionType,
-                duration_minutes: parseInt(duration) || 0,
-                rpe: rpe[0],
-                intensity,
+                duration_minutes: isRestDay ? 0 : (parseInt(duration) || 0),
+                rpe: isRestDay ? 1 : rpe[0],
+                intensity: intensityMap[intensityLevel[0]] || 'moderate',
+                intensity_level: isRestDay ? 1 : intensityLevel[0],
                 soreness_level: hasSoreness ? sorenessLevel[0] : 0,
                 sleep_hours: parseFloat(sleepHours) || 0,
+                notes: isRestDay ? null : (notes.trim() || null),
+                // Rest day fields
+                fatigue_level: isRestDay ? fatigue[0] : null,
+                sleep_quality: isRestDay ? sleepQuality : null,
+                mobility_done: isRestDay ? mobilityDone : null,
             };
 
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { error } = await (supabase as any)
-                .from('fight_camp_calendar')
-                .insert([payload]);
+            if (editingSession) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const { error } = await (supabase as any)
+                    .from('fight_camp_calendar')
+                    .update(payload)
+                    .eq('id', editingSession.id);
 
-            if (error) throw error;
+                if (error) throw error;
+            } else {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const { error } = await (supabase as any)
+                    .from('fight_camp_calendar')
+                    .insert([payload]);
+
+                if (error) throw error;
+            }
 
             toast({
-                title: "Session Saved",
-                description: "Your training session has been logged successfully.",
+                title: editingSession
+                    ? "Session Updated"
+                    : isRestDay ? "Rest Day Logged" : "Session Saved",
+                description: editingSession
+                    ? "Your session has been updated."
+                    : isRestDay
+                        ? "Your rest day has been recorded."
+                        : "Your training session has been logged successfully.",
             });
 
             setIsAddModalOpen(false);
             fetchSessions();
             fetch28DaySessions();
-
-            // Reset form
-            setSessionType(SESSION_TYPES[0]);
-            setDuration("60");
-            setRpe([5]);
-            setIntensity('moderate');
-            setHasSoreness(false);
-            setSorenessLevel([5]);
+            setSessionLoggedTrigger(prev => prev + 1);
+            resetForm();
 
         } catch (error) {
             console.error("Error saving session:", error);
@@ -196,11 +263,18 @@ export default function FightCampCalendar() {
     const sessionsForSelectedDate = sessions.filter(s => s.date === format(selectedDate, 'yyyy-MM-dd'));
 
     return (
-        <div className="min-h-screen bg-background pb-20 md:pb-6">
-            <div className="p-4 safe-area-inset-top">
+        <div className="space-y-4 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto pb-20 md:pb-6">
                 {/* Recovery Dashboard */}
                 {sessions28d.length > 0 && userId && (
-                    <RecoveryDashboard sessions28d={sessions28d} userId={userId} />
+                    <RecoveryDashboard
+                        sessions28d={sessions28d as any}
+                        userId={userId}
+                        sessionLoggedAt={sessionLoggedTrigger}
+                        athleteProfile={profile ? {
+                            trainingFrequency: profile.training_frequency ?? null,
+                            activityLevel: profile.activity_level ?? null,
+                        } : undefined}
+                    />
                 )}
 
                 {/* Calendar View */}
@@ -256,7 +330,10 @@ export default function FightCampCalendar() {
                 <div className="mb-6">
                     <div className="flex items-center justify-between mb-4">
                         <h3 className="text-xl font-bold">{format(selectedDate, "EEEE, MMM do")}</h3>
-                        <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+                        <Dialog open={isAddModalOpen} onOpenChange={(open) => {
+                            setIsAddModalOpen(open);
+                            if (!open) resetForm();
+                        }}>
                             <DialogTrigger asChild>
                                 <Button className="rounded-full h-10 w-10 p-0 shadow-md">
                                     <Plus className="h-5 w-5" />
@@ -264,7 +341,9 @@ export default function FightCampCalendar() {
                             </DialogTrigger>
                             <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto rounded-[24px]">
                                 <DialogHeader>
-                                    <DialogTitle className="text-2xl font-bold">Log Session</DialogTitle>
+                                    <DialogTitle className="text-2xl font-bold">
+                                        {editingSession ? 'Edit Session' : 'Log Session'}
+                                    </DialogTitle>
                                 </DialogHeader>
                                 <div className="grid gap-4 py-3">
 
@@ -287,71 +366,79 @@ export default function FightCampCalendar() {
                                         </div>
                                     </div>
 
-                                    {/* Duration — compact stepper */}
-                                    <div className="flex items-center justify-between bg-accent/20 px-4 py-3 rounded-2xl border border-border/50">
-                                        <Label className="text-sm font-semibold text-muted-foreground">DURATION</Label>
-                                        <div className="flex items-center gap-3">
-                                            <button onClick={() => setDuration(String(Math.max(0, parseInt(duration) - 5)))}
-                                                className="h-7 w-7 rounded-full border border-border flex items-center justify-center text-base font-medium hover:bg-muted transition-colors">
-                                                −
-                                            </button>
-                                            <span className="text-xl font-bold display-number w-12 text-center">{duration}<span className="text-xs text-muted-foreground ml-0.5">m</span></span>
-                                            <button onClick={() => setDuration(String(parseInt(duration) + 5))}
-                                                className="h-7 w-7 rounded-full border border-border flex items-center justify-center text-base font-medium hover:bg-muted transition-colors">
-                                                +
-                                            </button>
-                                        </div>
-                                    </div>
+                                    {!isRestDay && (
+                                        <>
+                                            {/* Duration — compact stepper */}
+                                            <div className="flex items-center justify-between bg-accent/20 px-4 py-3 rounded-2xl border border-border/50">
+                                                <Label className="text-sm font-semibold text-muted-foreground">DURATION</Label>
+                                                <div className="flex items-center gap-3">
+                                                    <button onClick={() => setDuration(String(Math.max(0, parseInt(duration) - 5)))}
+                                                        className="h-7 w-7 rounded-full border border-border flex items-center justify-center text-base font-medium hover:bg-muted transition-colors">
+                                                        −
+                                                    </button>
+                                                    <span className="text-xl font-bold display-number w-12 text-center">{duration}<span className="text-xs text-muted-foreground ml-0.5">m</span></span>
+                                                    <button onClick={() => setDuration(String(parseInt(duration) + 5))}
+                                                        className="h-7 w-7 rounded-full border border-border flex items-center justify-center text-base font-medium hover:bg-muted transition-colors">
+                                                        +
+                                                    </button>
+                                                </div>
+                                            </div>
 
-                                    {/* Intensity — segmented pill */}
-                                    <div className="space-y-2">
-                                        <Label className="text-sm font-semibold text-muted-foreground">INTENSITY</Label>
-                                        <div className="flex gap-1.5">
-                                            {(['low', 'moderate', 'high'] as const).map(level => (
-                                                <button
-                                                    key={level}
-                                                    onClick={() => setIntensity(level)}
-                                                    className={`flex-1 py-1.5 rounded-full text-sm font-medium capitalize transition-all
-                                                        ${intensity === level
-                                                            ? 'bg-primary text-primary-foreground shadow-sm'
-                                                            : 'bg-accent/40 text-foreground/70 hover:bg-accent/60'}`}
-                                                >
-                                                    {level}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
+                                            {/* Intensity — 1-5 slider */}
+                                            <div className="space-y-2 bg-accent/30 p-3 rounded-2xl">
+                                                <div className="flex justify-between items-center">
+                                                    <Label className="text-sm font-semibold flex items-center gap-1">
+                                                        <Ruler className="h-4 w-4 text-primary" /> INTENSITY
+                                                    </Label>
+                                                    <span className="font-bold text-lg">{intensityLevel[0]}</span>
+                                                </div>
+                                                <Slider
+                                                    value={intensityLevel}
+                                                    onValueChange={setIntensityLevel}
+                                                    max={5}
+                                                    min={1}
+                                                    step={1}
+                                                    className="py-2"
+                                                />
+                                                <div className="flex justify-between text-xs text-muted-foreground font-medium">
+                                                    <span>1 (Easy)</span>
+                                                    <span>3 (Mod)</span>
+                                                    <span>5 (Max)</span>
+                                                </div>
+                                            </div>
 
-                                    {/* RPE */}
-                                    <div className="space-y-2 bg-accent/30 p-3 rounded-2xl">
-                                        <div className="flex justify-between items-center">
-                                            <Label className="text-sm font-semibold flex items-center gap-1">
-                                                <Activity className="h-4 w-4 text-primary" /> RPE
-                                            </Label>
-                                            <span className="font-bold text-lg">{rpe[0]}</span>
-                                        </div>
-                                        <Slider
-                                            value={rpe}
-                                            onValueChange={setRpe}
-                                            max={10}
-                                            min={1}
-                                            step={1}
-                                            className="py-2"
-                                        />
-                                        <div className="flex justify-between text-xs text-muted-foreground font-medium">
-                                            <span>1 (Light)</span>
-                                            <span>10 (Max)</span>
-                                        </div>
-                                    </div>
+                                            {/* RPE */}
+                                            <div className="space-y-2 bg-accent/30 p-3 rounded-2xl">
+                                                <div className="flex justify-between items-center">
+                                                    <Label className="text-sm font-semibold flex items-center gap-1">
+                                                        <Activity className="h-4 w-4 text-primary" /> RPE
+                                                    </Label>
+                                                    <span className="font-bold text-lg">{rpe[0]}</span>
+                                                </div>
+                                                <Slider
+                                                    value={rpe}
+                                                    onValueChange={setRpe}
+                                                    max={10}
+                                                    min={1}
+                                                    step={1}
+                                                    className="py-2"
+                                                />
+                                                <div className="flex justify-between text-xs text-muted-foreground font-medium">
+                                                    <span>1 (Light)</span>
+                                                    <span>10 (Max)</span>
+                                                </div>
+                                            </div>
+                                        </>
+                                    )}
 
-                                    {/* Soreness */}
+                                    {/* Soreness — shown for both training and rest days */}
                                     <div className="space-y-2 bg-accent/30 p-3 rounded-2xl">
                                         <div className="flex items-center justify-between">
                                             <Label className="text-sm font-semibold">SORENESS</Label>
-                                            <Switch checked={hasSoreness} onCheckedChange={setHasSoreness} />
+                                            {!isRestDay && <Switch checked={hasSoreness} onCheckedChange={setHasSoreness} />}
                                         </div>
 
-                                        {hasSoreness && (
+                                        {(isRestDay || hasSoreness) && (
                                             <div className="pt-2">
                                                 <div className="flex justify-between items-center mb-2">
                                                     <span className="text-sm font-medium">Level</span>
@@ -369,7 +456,62 @@ export default function FightCampCalendar() {
                                         )}
                                     </div>
 
-                                    {/* Sleep — compact stepper */}
+                                    {/* Rest Day specific fields */}
+                                    {isRestDay && (
+                                        <>
+                                            {/* Fatigue */}
+                                            <div className="space-y-2 bg-accent/30 p-3 rounded-2xl">
+                                                <div className="flex justify-between items-center">
+                                                    <Label className="text-sm font-semibold">FATIGUE</Label>
+                                                    <span className="font-bold text-lg">{fatigue[0]}</span>
+                                                </div>
+                                                <Slider
+                                                    value={fatigue}
+                                                    onValueChange={setFatigue}
+                                                    max={10}
+                                                    min={1}
+                                                    step={1}
+                                                    className="py-2"
+                                                />
+                                                <div className="flex justify-between text-xs text-muted-foreground font-medium">
+                                                    <span>1 (Fresh)</span>
+                                                    <span>10 (Exhausted)</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Sleep Quality */}
+                                            <div className="space-y-2">
+                                                <Label className="text-sm font-semibold text-muted-foreground">SLEEP QUALITY</Label>
+                                                <div className="flex gap-1.5">
+                                                    {(['good', 'poor'] as const).map(quality => (
+                                                        <button
+                                                            key={quality}
+                                                            onClick={() => setSleepQuality(quality)}
+                                                            className={`flex-1 py-2 rounded-full text-sm font-medium capitalize transition-all
+                                                                ${sleepQuality === quality
+                                                                    ? 'bg-primary text-primary-foreground shadow-sm'
+                                                                    : 'bg-accent/40 text-foreground/70 hover:bg-accent/60'}`}
+                                                        >
+                                                            <span className="flex items-center justify-center gap-1.5">
+                                                                {quality === 'good'
+                                                                  ? <Moon className="h-3.5 w-3.5" />
+                                                                  : <CircleX className="h-3.5 w-3.5" />}
+                                                                {quality === 'good' ? 'Good' : 'Poor'}
+                                                            </span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+
+                                            {/* Mobility */}
+                                            <div className="flex items-center justify-between bg-accent/20 px-4 py-3 rounded-2xl border border-border/50">
+                                                <Label className="text-sm font-semibold text-muted-foreground">MOBILITY WORK DONE?</Label>
+                                                <Switch checked={mobilityDone} onCheckedChange={setMobilityDone} />
+                                            </div>
+                                        </>
+                                    )}
+
+                                    {/* Sleep — compact stepper (shown for all) */}
                                     <div className="flex items-center justify-between bg-accent/20 px-4 py-3 rounded-2xl border border-border/50">
                                         <Label className="text-sm font-semibold text-muted-foreground flex items-center gap-1">
                                             <Moon className="h-3.5 w-3.5" /> SLEEP
@@ -387,11 +529,24 @@ export default function FightCampCalendar() {
                                         </div>
                                     </div>
 
+                                    {/* Session Notes — training days only */}
+                                    {!isRestDay && (
+                                        <div className="space-y-2">
+                                            <Label className="text-sm font-semibold text-muted-foreground">SESSION NOTES</Label>
+                                            <Textarea
+                                                value={notes}
+                                                onChange={(e) => setNotes(e.target.value)}
+                                                placeholder="What did you work on? Techniques, drills, combos..."
+                                                className="bg-accent/20 border-border/50 rounded-2xl min-h-[80px] resize-none text-sm"
+                                            />
+                                        </div>
+                                    )}
+
                                     <Button
                                         className="w-full h-12 rounded-2xl text-lg font-bold mt-2 shadow-lg"
                                         onClick={handleSaveSession}
                                     >
-                                        Save Session
+                                        {editingSession ? 'Update Session' : isRestDay ? 'Log Rest Day' : 'Save Session'}
                                     </Button>
                                 </div>
                             </DialogContent>
@@ -406,53 +561,81 @@ export default function FightCampCalendar() {
                                 <p>No sessions logged today.</p>
                             </Card>
                         ) : (
-                            sessionsForSelectedDate.map(session => (
-                                <Card key={session.id} className="p-4 rounded-[20px] shadow-sm glass-card overflow-hidden relative border-border/10">
-                                    <div className={`absolute top-0 left-0 w-2 h-full ${session.intensity === 'high' ? 'bg-red-500' :
-                                        session.intensity === 'moderate' ? 'bg-yellow-500' : 'bg-green-500'
-                                        }`} />
+                            sessionsForSelectedDate.map(session => {
+                                const isRest = session.session_type === 'Rest';
+                                const il = session.intensity_level ?? (session.intensity === 'high' ? 5 : session.intensity === 'moderate' ? 3 : 1);
+                                const barColor = il >= 4 ? 'bg-red-500' : il >= 3 ? 'bg-yellow-500' : 'bg-green-500';
 
-                                    <div className="flex justify-between items-start ml-2">
-                                        <div>
-                                            <h4 className="font-bold text-lg text-foreground">{session.session_type}</h4>
-                                            <div className="flex items-center gap-3 text-sm text-foreground/80 mt-1 font-medium">
-                                                <span className="flex items-center gap-1"><Activity className="w-3 h-3" /> {session.duration_minutes} min</span>
-                                                <span>•</span>
-                                                <span>RPE {session.rpe}</span>
+                                return (
+                                    <Card key={session.id} className="p-4 rounded-[20px] shadow-sm glass-card overflow-hidden relative border-border/10 cursor-pointer active:scale-[0.98] transition-transform" onClick={() => handleEditSession(session)}>
+                                        <div className={`absolute top-0 left-0 w-2 h-full ${isRest ? 'bg-blue-500' : barColor}`} />
+
+                                        <div className="flex justify-between items-start ml-2">
+                                            <div>
+                                                <h4 className="font-bold text-lg text-foreground">{session.session_type}</h4>
+                                                {isRest ? (
+                                                    <div className="flex items-center gap-3 text-sm text-foreground/80 mt-1 font-medium flex-wrap">
+                                                        {session.sleep_quality && <span>Sleep: {session.sleep_quality}</span>}
+                                                        {session.fatigue_level && <><span>•</span><span>Fatigue: {session.fatigue_level}/10</span></>}
+                                                        {session.mobility_done && <><span>•</span><span>Mobility ✓</span></>}
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-3 text-sm text-foreground/80 mt-1 font-medium">
+                                                        <span className="flex items-center gap-1"><Activity className="w-3 h-3" /> {session.duration_minutes} min</span>
+                                                        <span>•</span>
+                                                        <span>RPE {session.rpe}</span>
+                                                        <span>•</span>
+                                                        <span>Int {il}/5</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="text-right">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 -mt-1 -mr-2"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleDeleteSession(session.id);
+                                                    }}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                                {session.sleep_hours > 0 && (
+                                                    <div className="text-xs text-foreground/80 flex items-center justify-end gap-1 mt-1 font-medium">
+                                                        <Moon className="w-3 h-3 text-primary" /> {session.sleep_hours}h
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
-                                        <div className="text-right">
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 -mt-1 -mr-2"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleDeleteSession(session.id);
-                                                }}
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                            {session.sleep_hours > 0 && (
-                                                <div className="text-xs text-foreground/80 flex items-center justify-end gap-1 mt-1 font-medium">
-                                                    <Moon className="w-3 h-3 text-primary" /> {session.sleep_hours}h
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
 
-                                    {session.soreness_level > 0 && (
-                                        <div className="mt-3 ml-2 text-xs bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 px-2 py-1 rounded-md inline-block font-medium">
-                                            Soreness Level: {session.soreness_level}/10
-                                        </div>
-                                    )}
-                                </Card>
-                            ))
+                                        {session.soreness_level > 0 && (
+                                            <div className="mt-3 ml-2 text-xs bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 px-2 py-1 rounded-md inline-block font-medium">
+                                                Soreness Level: {session.soreness_level}/10
+                                            </div>
+                                        )}
+
+                                        {session.notes && (
+                                            <p className="mt-2 ml-2 text-xs text-muted-foreground italic line-clamp-2">
+                                                {session.notes}
+                                            </p>
+                                        )}
+                                    </Card>
+                                );
+                            })
                         )}
                     </div>
+
+                    {/* Training Summary Section */}
+                    {userId && (
+                        <TrainingSummarySection
+                            userId={userId}
+                            selectedDate={selectedDate}
+                            sessionLoggedTrigger={sessionLoggedTrigger}
+                        />
+                    )}
                 </div>
 
-            </div>
         </div>
     );
 }

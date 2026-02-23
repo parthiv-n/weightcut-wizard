@@ -103,10 +103,10 @@ serve(async (req) => {
     } : null;
 
     const { prompt, action, userData } = await req.json();
-    const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
+    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
 
-    if (!MINIMAX_API_KEY) {
-      console.error("MINIMAX_API_KEY environment variable is not configured");
+    if (!GROK_API_KEY) {
+      console.error("GROK_API_KEY environment variable is not configured");
       return new Response(
         JSON.stringify({ error: "AI service not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -210,7 +210,7 @@ Respond ONLY with this exact JSON structure:
   "tips": "Brief tips"
 }`;
 
-    console.log("Calling Minimax API for meal planning...");
+    console.log("Calling Grok API for meal planning...");
 
     const userPrompt = `User Request: ${prompt}`;
 
@@ -220,38 +220,38 @@ Respond ONLY with this exact JSON structure:
 
     let response;
     try {
-      response = await fetch("https://api.minimax.io/v1/chat/completions", {
+      response = await fetch("https://api.x.ai/v1/chat/completions", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${MINIMAX_API_KEY}`,
+          "Authorization": `Bearer ${GROK_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "MiniMax-M2.5",
+          model: "grok-4-1-fast-reasoning",
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt }
           ],
           temperature: 0.3,
-          max_tokens: 4096
+          max_completion_tokens: 4096
         }),
         signal: controller.signal
       });
 
       clearTimeout(timeoutId);
-      console.log("Minimax API response status:", response.status);
+      console.log("Grok API response status:", response.status);
     } catch (fetchError) {
       clearTimeout(timeoutId);
 
       if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-        console.error("Minimax API request timed out after 55 seconds");
+        console.error("Grok API request timed out after 55 seconds");
         return new Response(
           JSON.stringify({ error: "AI request timed out after 55 seconds. The service may be busy. Please try again in a moment." }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      console.error("Minimax API fetch error:", fetchError);
+      console.error("Grok API fetch error:", fetchError);
       return new Response(
         JSON.stringify({ error: "Failed to connect to AI service" }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -260,7 +260,7 @@ Respond ONLY with this exact JSON structure:
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error("Minimax API error:", response.status, errorData);
+      console.error("Grok API error:", response.status, errorData);
 
       if (response.status === 429) {
         return new Response(
@@ -284,28 +284,28 @@ Respond ONLY with this exact JSON structure:
       }
 
       return new Response(
-        JSON.stringify({ error: `Minimax API error: ${errorData.error?.message || 'Unknown error'}` }),
+        JSON.stringify({ error: `Grok API error: ${errorData.error?.message || 'Unknown error'}` }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const data = await response.json();
-    console.log("Full Minimax response:", JSON.stringify(data, null, 2));
+    console.log("Full Grok response:", JSON.stringify(data, null, 2));
 
-    // Extract content from Minimax response and strip <think> tags
+    // Extract content from Grok response and strip <think> tags
     let content = data.choices?.[0]?.message?.content;
     if (content) {
       content = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
     }
 
-    console.log("=== MINIMAX RESPONSE DEBUG ===");
-    console.log("Raw Minimax content:", content);
+    console.log("=== GROK RESPONSE DEBUG ===");
+    console.log("Raw Grok content:", content);
     console.log("Content type:", typeof content);
     console.log("Content length:", content?.length);
     console.log("=== END DEBUG ===");
 
     if (!content) {
-      console.error("❌ No content found in Minimax response");
+      console.error("❌ No content found in Grok response");
       console.error("Available fields in response:", Object.keys(data));
       if (data.choices?.[0]) {
         console.error("Available fields in first choice:", Object.keys(data.choices[0]));
@@ -358,14 +358,14 @@ Respond ONLY with this exact JSON structure:
         );
       }
 
-      throw new Error("No content in Minimax API response and fallback extraction failed");
+      throw new Error("No content in Grok API response and fallback extraction failed");
     }
 
-    // Parse JSON from Minimax response
+    // Parse JSON from Grok response
     let mealPlanData;
     try {
       console.log("=== JSON PARSING DEBUG ===");
-      console.log("Parsing Minimax JSON response...");
+      console.log("Parsing Grok JSON response...");
 
       // Clean trailing text or markdown
       let cleanContent = content.trim();
@@ -382,7 +382,7 @@ Respond ONLY with this exact JSON structure:
       }
 
       mealPlanData = JSON.parse(cleanContent);
-      console.log("Successfully parsed Minimax response");
+      console.log("Successfully parsed Grok response");
       console.log("Meal plan structure:", Object.keys(mealPlanData));
       console.log("Number of meals:", mealPlanData.meals?.length || 0);
     } catch (e) {
@@ -474,7 +474,7 @@ Respond ONLY with this exact JSON structure:
     return new Response(
       JSON.stringify({
         error: error instanceof Error ? error.message : "Unknown error occurred",
-        details: "Minimax API integration error"
+        details: "Grok API integration error"
       }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
