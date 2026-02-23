@@ -52,9 +52,9 @@ serve(async (req) => {
       weightHistory,
     } = await req.json();
 
-    const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
-    if (!MINIMAX_API_KEY) {
-      throw new Error("MINIMAX_API_KEY is not configured");
+    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
+    if (!GROK_API_KEY) {
+      throw new Error("GROK_API_KEY is not configured");
     }
 
     const today = new Date();
@@ -120,20 +120,20 @@ OUTPUT:
 - Today: ${todayCalories} / ${calorieGoal} kcal (${caloriePercentage.toFixed(0)}%)
 - Last 7 logs: ${historyText}`;
 
-    const response = await fetch("https://api.minimax.io/v1/chat/completions", {
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${MINIMAX_API_KEY}`,
+        "Authorization": `Bearer ${GROK_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "MiniMax-M2.5",
+        model: "grok-4-1-fast-reasoning",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
         temperature: 0.3,
-        max_tokens: 500,
+        max_completion_tokens: 500,
       }),
     });
 
@@ -157,7 +157,7 @@ OUTPUT:
         );
       }
       const errorText = await response.text();
-      console.error("Minimax API error:", response.status, errorText);
+      console.error("Grok API error:", response.status, errorText);
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -165,12 +165,12 @@ OUTPUT:
     }
 
     const data = await response.json();
-    console.log("Minimax daily-wisdom response:", JSON.stringify(data, null, 2));
+    console.log("Grok daily-wisdom response:", JSON.stringify(data, null, 2));
 
     const { content, filtered } = extractContent(data);
     if (!content) {
       if (filtered) throw new Error("Content was filtered. Please try again.");
-      throw new Error("No response from Minimax API");
+      throw new Error("No response from Grok API");
     }
 
     const wisdom = parseJSON(content);

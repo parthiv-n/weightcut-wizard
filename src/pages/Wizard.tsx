@@ -64,14 +64,16 @@ export default function Wizard() {
   return (
     <div className="flex flex-col h-[100dvh] bg-background">
       {/* Header */}
-      <div className="flex-none pt-[calc(env(safe-area-inset-top)+1rem)] px-4 pb-4 border-b border-border/20 bg-background/80 backdrop-blur-md z-10">
+      <div className="flex-none pt-[calc(env(safe-area-inset-top)+1rem)] px-4 pb-4 border-b border-primary/15 bg-gradient-to-r from-primary/5 via-secondary/5 to-accent/5 backdrop-blur-xl z-10">
         <div className="flex items-center gap-3">
           <div className="relative">
-            <img src={wizardAvatar} alt="Wizard" className="w-10 h-10 object-cover rounded-full border border-primary/20 mix-blend-screen" />
-            <Sparkles className="h-3 w-3 text-primary absolute -bottom-1 -right-1 drop-shadow-md" />
+            <div className="w-10 h-10 rounded-full glass-card border-primary/20 p-0.5 overflow-hidden">
+              <img src={wizardAvatar} alt="Wizard" className="w-full h-full object-cover rounded-full mix-blend-screen" />
+            </div>
+            <Sparkles className="h-3 w-3 text-primary absolute -bottom-1 -right-1 drop-shadow-[0_0_6px_rgba(6,182,212,0.6)]" />
           </div>
           <div>
-            <h1 className="text-lg font-bold leading-tight">Weight Cut Wizard</h1>
+            <h1 className="text-lg font-bold leading-tight bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text">Weight Cut Wizard</h1>
             <p className="text-xs text-muted-foreground flex items-center gap-1">
               <span className="relative flex h-2 w-2">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
@@ -85,7 +87,7 @@ export default function Wizard() {
               variant="ghost"
               size="icon"
               onClick={handleClearChat}
-              className="h-8 w-8 text-muted-foreground hover:text-destructive transition-colors"
+              className="h-8 w-8 rounded-xl glass-card border-border/30 text-muted-foreground hover:text-destructive hover:border-destructive/30 transition-all"
               title="Clear chat history"
             >
               <Trash2 className="h-4 w-4" />
@@ -95,7 +97,7 @@ export default function Wizard() {
       </div>
 
       {/* Chat Area */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3 pb-safe" ref={scrollRef}>
+      <div className="flex-1 overflow-y-auto p-3 space-y-3 pb-[calc(env(safe-area-inset-bottom)+8rem)]" ref={scrollRef}>
         {messages.map((msg, idx) => (
           <div
             key={idx}
@@ -103,13 +105,13 @@ export default function Wizard() {
           >
             <div className={`flex gap-2 max-w-[88%] ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
               {/* Avatar Icon */}
-              <div className={`shrink-0 h-8 w-8 rounded-full flex items-center justify-center ${msg.role === "user" ? "bg-primary/20" : "glass-card border-none"}`}>
-                {msg.role === "user" ? <User className="h-4 w-4 text-primary drop-shadow-md" /> : <Bot className="h-4 w-4 text-secondary drop-shadow-md" />}
+              <div className={`shrink-0 h-8 w-8 rounded-full flex items-center justify-center ${msg.role === "user" ? "bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/15" : "glass-card border-secondary/15"}`}>
+                {msg.role === "user" ? <User className="h-4 w-4 text-primary drop-shadow-[0_0_4px_rgba(6,182,212,0.5)]" /> : <Bot className="h-4 w-4 text-secondary drop-shadow-[0_0_4px_rgba(168,85,247,0.5)]" />}
               </div>
 
               {/* Message Bubble */}
               {msg.role === "user" ? (
-                <div className={`px-3 py-2 rounded-2xl text-sm bg-gradient-to-br from-primary to-primary/80 text-primary-foreground rounded-tr-sm shadow-lg shadow-primary/20`}>
+                <div className="px-3.5 py-2.5 rounded-2xl text-sm bg-gradient-to-br from-primary/90 via-primary/80 to-accent/70 text-primary-foreground rounded-tr-sm shadow-lg shadow-primary/25 border border-primary/20">
                   <div className="prose dark:prose-invert prose-sm max-w-none">
                     <ReactMarkdown>
                       {msg.content}
@@ -117,7 +119,7 @@ export default function Wizard() {
                   </div>
                 </div>
               ) : (
-                <div className="relative px-3 py-2 rounded-2xl text-sm glass-card text-card-foreground rounded-tl-sm border-border/30">
+                <div className="relative px-3.5 py-2.5 rounded-2xl text-sm glass-card text-card-foreground rounded-tl-sm border-secondary/15 bg-gradient-to-br from-secondary/5 to-accent/5">
                   <GlowingEffect
                     spread={40}
                     glow={true}
@@ -141,10 +143,10 @@ export default function Wizard() {
         {isLoading && (
           <div className="flex justify-start animate-fade-in">
             <div className="flex gap-2 max-w-[88%]">
-              <div className="shrink-0 h-8 w-8 rounded-full glass-card border-none flex items-center justify-center">
-                <Bot className="h-4 w-4 text-secondary drop-shadow-md" />
+              <div className="shrink-0 h-8 w-8 rounded-full glass-card border-secondary/15 flex items-center justify-center">
+                <Bot className="h-4 w-4 text-secondary drop-shadow-[0_0_4px_rgba(168,85,247,0.5)]" />
               </div>
-              <div className="relative px-3 py-2 rounded-2xl glass-card rounded-tl-sm border-border/30 flex items-center gap-2">
+              <div className="relative px-3.5 py-2.5 rounded-2xl glass-card rounded-tl-sm border-secondary/15 bg-gradient-to-br from-secondary/5 to-accent/5 flex items-center gap-2">
                 <GlowingEffect
                   spread={40}
                   glow={true}
@@ -153,7 +155,7 @@ export default function Wizard() {
                   inactiveZone={0.01}
                   borderWidth={1}
                 />
-                <Loader2 className="relative z-10 h-4 w-4 text-primary animate-spin drop-shadow-md" />
+                <Loader2 className="relative z-10 h-4 w-4 text-accent animate-spin drop-shadow-[0_0_6px_rgba(139,92,246,0.5)]" />
                 <span className="relative z-10 text-xs text-muted-foreground animate-pulse">Wizard is thinking...</span>
               </div>
             </div>
@@ -161,10 +163,10 @@ export default function Wizard() {
         )}
       </div>
 
-      {/* Input Area */}
-      <div className="flex-none p-4 pb-[calc(env(safe-area-inset-bottom)+4rem)] bg-background/80 backdrop-blur-md border-t border-border/30">
-        <form onSubmit={handleSend} className="flex gap-2 relative z-10">
-          <div className="relative flex-1 rounded-full">
+      {/* Input Area — floating */}
+      <div className="fixed bottom-0 left-0 right-0 p-4 pb-[calc(env(safe-area-inset-bottom)+4rem)] bg-gradient-to-t from-background via-background/95 to-transparent backdrop-blur-xl z-20">
+        <form onSubmit={handleSend} className="relative">
+          <div className="relative rounded-2xl glass-card border-primary/15 bg-gradient-to-r from-primary/5 via-secondary/5 to-accent/5 overflow-hidden">
             <GlowingEffect
               spread={40}
               glow={true}
@@ -177,18 +179,18 @@ export default function Wizard() {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               placeholder="Ask your nutritionist..."
-              className="relative z-10 w-full rounded-full bg-muted/50 border-border/30 pr-12 focus-visible:ring-primary/50 text-foreground placeholder:text-muted-foreground"
+              className="relative z-10 w-full rounded-2xl bg-transparent border-none pr-12 focus-visible:ring-0 focus-visible:ring-offset-0 text-foreground placeholder:text-muted-foreground/60 h-11"
               disabled={isLoading}
             />
+            <Button
+              type="submit"
+              size="icon"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 h-8 w-8 rounded-xl bg-gradient-to-br from-primary to-accent hover:from-primary/90 hover:to-accent/90 text-primary-foreground transition-all duration-200 z-20 shadow-lg shadow-primary/20"
+              disabled={!input.trim() || isLoading}
+            >
+              <Send className="h-4 w-4 ml-0.5" />
+            </Button>
           </div>
-          <Button
-            type="submit"
-            size="icon"
-            className="absolute right-1 top-1 bottom-1 h-8 w-8 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground transition-all duration-200 z-20"
-            disabled={!input.trim() || isLoading}
-          >
-            <Send className="h-4 w-4 ml-0.5" />
-          </Button>
         </form>
       </div>
     </div>

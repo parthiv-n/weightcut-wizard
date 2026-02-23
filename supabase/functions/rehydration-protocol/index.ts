@@ -72,9 +72,9 @@ serve(async (req) => {
       tdee, goalWeightKg, fightWeekTargetKg,
     } = await req.json();
 
-    const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
-    if (!MINIMAX_API_KEY) {
-      throw new Error("MINIMAX_API_KEY is not configured");
+    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
+    if (!GROK_API_KEY) {
+      throw new Error("GROK_API_KEY is not configured");
     }
 
     const targets = computeTargets(weightLostKg, currentWeightKg, weighInTiming, glycogenDepletion);
@@ -131,22 +131,22 @@ ${weighInTiming === "same-day"
 
 Constraints: total fluid ≈${targets.totalFluidML}ml, total carbs ≈${targets.totalCarbsG}g, no hour >${targets.hourlyFluidML}ml or >${targets.maxCarbsPerHour}g carbs. Include drink recipes every hour, food suggestions, 3-5 safety warnings.`;
 
-    console.log("Calling Minimax API for rehydration protocol...");
+    console.log("Calling Grok API for rehydration protocol...");
 
-    const response = await fetch("https://api.minimax.io/v1/chat/completions", {
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${MINIMAX_API_KEY}`,
+        Authorization: `Bearer ${GROK_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "MiniMax-M2.5",
+        model: "grok-4-1-fast-reasoning",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
         temperature: 0.1,
-        max_tokens: 3000,
+        max_completion_tokens: 3000,
       }),
     });
 
@@ -164,7 +164,7 @@ Constraints: total fluid ≈${targets.totalFluidML}ml, total carbs ≈${targets.
         );
       }
       const errorData = await response.json();
-      console.error("Minimax API error:", response.status, errorData);
+      console.error("Grok API error:", response.status, errorData);
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -172,12 +172,12 @@ Constraints: total fluid ≈${targets.totalFluidML}ml, total carbs ≈${targets.
     }
 
     const data = await response.json();
-    console.log("Minimax rehydration response received");
+    console.log("Grok rehydration response received");
 
     const { content, filtered } = extractContent(data);
     if (!content) {
       if (filtered) throw new Error("Content was filtered for safety. Please try a different request.");
-      throw new Error("No response from Minimax API");
+      throw new Error("No response from Grok API");
     }
 
     const protocol = parseJSON(content);

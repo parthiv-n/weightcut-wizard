@@ -22,9 +22,9 @@ serve(async (req) => {
     const { currentWeight, targetWeight, daysUntilWeighIn, sex, age, projection } =
       await req.json();
 
-    const MINIMAX_API_KEY = Deno.env.get("MINIMAX_API_KEY");
-    if (!MINIMAX_API_KEY) {
-      throw new Error("MINIMAX_API_KEY is not configured");
+    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
+    if (!GROK_API_KEY) {
+      throw new Error("GROK_API_KEY is not configured");
     }
 
     const systemPrompt = `You are the Weight Cut Wizard, a science-based combat sports weight cutting expert. You INTERPRET pre-computed projection data — do NOT recalculate.
@@ -55,22 +55,22 @@ PRE-COMPUTED PROJECTION (deterministic — do not override):
 
 Provide: 1) 2-3 sentence summary, 2) 5-8 day-by-day tips, 3) safety warning if orange/red (null if green), 4) post weigh-in recovery protocol, 5) risk level.`;
 
-    console.log("Calling Minimax API for fight week advice...");
+    console.log("Calling Grok API for fight week advice...");
 
-    const response = await fetch("https://api.minimax.io/v1/chat/completions", {
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${MINIMAX_API_KEY}`,
+        Authorization: `Bearer ${GROK_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "MiniMax-M2.5",
+        model: "grok-4-1-fast-reasoning",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
         temperature: 0.1,
-        max_tokens: 1200,
+        max_completion_tokens: 1200,
       }),
     });
 
@@ -88,7 +88,7 @@ Provide: 1) 2-3 sentence summary, 2) 5-8 day-by-day tips, 3) safety warning if o
         );
       }
       const errorData = await response.json();
-      console.error("Minimax API error:", response.status, errorData);
+      console.error("Grok API error:", response.status, errorData);
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -100,14 +100,14 @@ Provide: 1) 2-3 sentence summary, 2) 5-8 day-by-day tips, 3) safety warning if o
 
     if (!content) {
       if (filtered) throw new Error("Content was filtered for safety.");
-      throw new Error("No response from Minimax API");
+      throw new Error("No response from Grok API");
     }
 
     let advice;
     try {
       advice = parseJSON(content);
     } catch {
-      console.error("Failed to parse Minimax response as JSON:", content);
+      console.error("Failed to parse Grok response as JSON:", content);
       return new Response(
         JSON.stringify({
           error: "AI returned invalid response format. Please try again.",
