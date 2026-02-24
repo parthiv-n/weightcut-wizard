@@ -60,7 +60,7 @@ export function FloatingWizardChat() {
       {!open && (
         <button
           onClick={() => { triggerHapticSelection(); setOpen(true); }}
-          className="fixed bottom-20 right-4 z-[10000] w-12 h-12 rounded-full bg-gradient-to-br from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/30 flex items-center justify-center active:scale-95 transition-transform duration-150 md:hidden"
+          className="fixed bottom-24 right-4 z-[10000] w-12 h-12 rounded-full bg-gradient-to-br from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/30 flex items-center justify-center active:scale-95 transition-transform duration-150 md:hidden"
           aria-label="Open AI Wizard"
         >
           <Sparkles className="h-5 w-5" />
