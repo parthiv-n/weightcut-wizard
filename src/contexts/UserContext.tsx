@@ -42,7 +42,7 @@ interface UserContextType {
   setAvatarUrl: (url: string) => void;
   updateCurrentWeight: (weight: number) => Promise<void>;
   loadUserData: () => Promise<void>;
-  refreshProfile: () => Promise<void>;
+  refreshProfile: () => Promise<boolean>;
   refreshSession: () => Promise<boolean>;
   checkSessionValidity: () => Promise<boolean>;
   retryAuth: () => Promise<void>;
@@ -117,11 +117,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const refreshProfile = async (): Promise<void> => {
+  const refreshProfile = async (): Promise<boolean> => {
     const uid = userIdRef.current;
-    if (!uid) return;
+    if (!uid) {
+      console.warn("refreshProfile: skipped — no userId yet");
+      return false;
+    }
 
-    try {
+    const attempt = async (): Promise<boolean> => {
       const { data } = await withSupabaseTimeout(
         supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
         4000,
@@ -136,9 +139,23 @@ export function UserProvider({ children }: { children: ReactNode }) {
         const weight = data.current_weight_kg ?? null;
         if (weight !== null) setCurrentWeight(weight);
         localCache.set(uid, 'profiles', data);
+        return true;
       }
+      return false;
+    };
+
+    try {
+      return await attempt();
     } catch (error) {
-      console.error("Error refreshing profile:", error);
+      console.warn("refreshProfile: first attempt failed, retrying...", error);
+      // Single retry after short delay
+      try {
+        await new Promise(r => setTimeout(r, 500));
+        return await attempt();
+      } catch (retryError) {
+        console.error("refreshProfile: retry also failed:", retryError);
+        return false;
+      }
     }
   };
 
@@ -179,7 +196,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
 
       // Cold-start seed: serve from cache immediately so the app never blocks on DB
-      const cachedProfile = localCache.get<ProfileData>(user.id, 'profiles');
+      // Profile cache expires after 1 hour to prevent serving very stale data
+      const PROFILE_CACHE_TTL = 60 * 60 * 1000;
+      const cachedProfile = localCache.get<ProfileData>(user.id, 'profiles', PROFILE_CACHE_TTL);
       if (cachedProfile) {
         setProfile(cachedProfile);
         profileRef.current = cachedProfile;
@@ -344,6 +363,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
       } else if (event === 'TOKEN_REFRESHED' && session) {
         setIsSessionValid(true);
+        // Refresh profile data after token refresh to avoid serving stale context
+        if (isUserLoadedRef.current && userIdRef.current) {
+          refreshProfile();
+        }
       } else if (event === 'SIGNED_IN' && session) {
         setIsSessionValid(true);
         if (!isUserLoadedRef.current) {
@@ -367,7 +390,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
       if (!userIdRef.current || !profileRef.current) {
         loadUserData();
       } else {
-        checkSessionValidity();
+        // Verify session is still valid, then refresh profile data from DB
+        checkSessionValidity().then(valid => {
+          if (valid) refreshProfile();
+        });
       }
       // Flush any offline writes queued while the app was backgrounded
       if (userIdRef.current) {

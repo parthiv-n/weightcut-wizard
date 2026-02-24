@@ -200,9 +200,10 @@ export default function Dashboard() {
         )
       ]);
 
-      const logsData = results[0].status === 'fulfilled' ? (results[0] as PromiseFulfilledResult<any>).value.data : [];
-      const nutritionData = results[1].status === 'fulfilled' ? (results[1] as PromiseFulfilledResult<any>).value.data : [];
-      const hydrationData = results[2].status === 'fulfilled' ? (results[2] as PromiseFulfilledResult<any>).value.data : [];
+      // Only update state and cache for queries that succeeded — don't overwrite cached data with empty arrays on failure
+      const logsOk = results[0].status === 'fulfilled';
+      const nutritionOk = results[1].status === 'fulfilled';
+      const hydrationOk = results[2].status === 'fulfilled';
 
       results.forEach((result, index) => {
         if (result.status === 'rejected') {
@@ -210,20 +211,35 @@ export default function Dashboard() {
         }
       });
 
-      const totalCalories = nutritionData?.reduce((sum: number, log: any) => sum + (log?.calories || 0), 0) || 0;
-      const totalHydration = hydrationData?.reduce((sum: number, log: any) => sum + (log?.amount_ml || 0), 0) || 0;
+      if (logsOk) {
+        const logsData = (results[0] as PromiseFulfilledResult<any>).value.data || [];
+        setWeightLogs(logsData);
+        localCache.set(userId, 'dashboard_weight_logs', logsData);
+      }
 
-      setWeightLogs(logsData || []);
-      setTodayCalories(totalCalories);
-      setTodayHydration(totalHydration);
+      if (nutritionOk) {
+        const nutritionData = (results[1] as PromiseFulfilledResult<any>).value.data || [];
+        const totalCalories = nutritionData.reduce((sum: number, log: any) => sum + (log?.calories || 0), 0) || 0;
+        setTodayCalories(totalCalories);
+        localCache.setForDate(userId, 'nutrition_logs', today, nutritionData);
+      }
 
-      // Update cache
-      if (logsData) localCache.set(userId, 'dashboard_weight_logs', logsData);
-      if (nutritionData) localCache.setForDate(userId, 'nutrition_logs', today, nutritionData);
-      if (hydrationData) localCache.setForDate(userId, 'hydration_logs', today, hydrationData);
+      if (hydrationOk) {
+        const hydrationData = (results[2] as PromiseFulfilledResult<any>).value.data || [];
+        const totalHydration = hydrationData.reduce((sum: number, log: any) => sum + (log?.amount_ml || 0), 0) || 0;
+        setTodayHydration(totalHydration);
+        localCache.setForDate(userId, 'hydration_logs', today, hydrationData);
+      }
 
-      // Fire-and-forget wisdom (has its own loading state)
-      checkAndGenerateWisdom(profile, logsData ?? [], totalCalories, totalHydration);
+      // Fire-and-forget wisdom with best available data (use fresh values, fall back to current state)
+      const wisdomLogs = logsOk ? (results[0] as PromiseFulfilledResult<any>).value.data ?? [] : weightLogs;
+      const wisdomCals = nutritionOk
+        ? ((results[1] as PromiseFulfilledResult<any>).value.data || []).reduce((s: number, l: any) => s + (l?.calories || 0), 0)
+        : todayCalories;
+      const wisdomHydration = hydrationOk
+        ? ((results[2] as PromiseFulfilledResult<any>).value.data || []).reduce((s: number, l: any) => s + (l?.amount_ml || 0), 0)
+        : todayHydration;
+      checkAndGenerateWisdom(profile, wisdomLogs, wisdomCals, wisdomHydration);
     } catch (error) {
       console.error("Error loading dashboard data:", error);
       if (!hasCachedData) {

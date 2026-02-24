@@ -1,4 +1,4 @@
-import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Sparkles, Trophy, Settings, LogOut, Droplets, Calendar, Moon, Sun, ChevronRight } from "lucide-react";
+import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Settings, LogOut, Droplets, Calendar, Moon, Sun, ChevronRight } from "lucide-react";
 import { motion } from "motion/react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { NavLink, useNavigate } from "react-router-dom";
@@ -11,7 +11,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { ProfilePictureUpload } from "@/components/ProfilePictureUpload";
 import {
   AlertDialog,
@@ -32,7 +31,6 @@ const mainNavItems = [
 
 const moreMenuItems = [
   { title: "Goals", url: "/goals", icon: Target },
-  { title: "AI Wizard", url: "/wizard", icon: Sparkles },
   { title: "Fight Camps", url: "/fight-camps", icon: Trophy },
   { title: "Fight Camp Calendar", url: "/fight-camp-calendar", icon: Calendar },
   { title: "Rehydration", url: "/hydration", icon: Droplets },
@@ -66,11 +64,6 @@ export function BottomNav() {
   const handleLogWeight = () => {
     setQuickLogOpen(false);
     navigate("/weight?focusWeightInput=true");
-  };
-
-  const handleTalkToWizard = () => {
-    setQuickLogOpen(false);
-    navigate("/wizard");
   };
 
   const handleMoreItemClick = (url: string) => {
@@ -220,18 +213,6 @@ export function BottomNav() {
               <Weight className="h-6 w-6 text-blue-500" />
               <span className="text-lg font-semibold">Log Weight</span>
             </Button>
-            <Button
-              onClick={handleTalkToWizard}
-              size="lg"
-              className="h-16 flex items-center justify-start gap-4 px-6 border-primary/20 bg-primary/5 hover:bg-primary/10"
-              variant="outline"
-            >
-              <Sparkles className="h-6 w-6 text-primary" />
-              <div className="flex flex-col items-start leading-tight">
-                <span className="text-lg font-semibold">Talk to Wizard</span>
-                <span className="text-xs text-muted-foreground font-normal">Ask for diet & cut advice</span>
-              </div>
-            </Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -331,74 +312,100 @@ export function BottomNav() {
         </SheetContent>
       </Sheet>
 
-      {/* Settings Dialog */}
-      <Dialog open={settingsDialogOpen} onOpenChange={setSettingsDialogOpen}>
-        <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Profile Settings</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-6 py-4">
-            <div className="flex flex-col items-center gap-4">
-              <ProfilePictureUpload
-                currentAvatarUrl={avatarUrl || undefined}
-                onUploadSuccess={(url) => {
-                  setAvatarUrl(url);
-                  toast({
-                    description: "Profile picture updated successfully",
-                  });
-                }}
-              />
+      {/* Settings Panel */}
+      {settingsDialogOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-[10001] bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
+            onClick={() => setSettingsDialogOpen(false)}
+          />
+          <div className="fixed inset-x-0 bottom-0 z-[10002] bg-background/95 dark:bg-background/98 backdrop-blur-xl border-t border-border/50 rounded-t-3xl animate-in slide-in-from-bottom duration-300 safe-area-inset-bottom">
+            {/* Drag handle */}
+            <div className="flex justify-center pt-3 pb-1">
+              <div className="w-10 h-1 rounded-full bg-muted-foreground/25" />
             </div>
-            {/* Theme Toggle */}
-            <div className="flex items-center justify-between py-3 px-1 border-b border-border/50">
-              <div>
-                <p className="text-sm font-medium">Appearance</p>
-                <p className="text-xs text-muted-foreground">Toggle dark / light mode</p>
+            <div className="px-5 pb-2 pt-1">
+              <h2 className="text-lg font-semibold text-foreground">Settings</h2>
+            </div>
+
+            <div className="px-4 space-y-3" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1.5rem)" }}>
+              {/* Profile Picture + Name row */}
+              <div className="rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 p-4">
+                <div className="flex items-center gap-4">
+                  <div className="shrink-0">
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt="Profile" className="h-14 w-14 rounded-full object-cover border-2 border-primary/20" />
+                    ) : (
+                      <div className="h-14 w-14 rounded-full bg-muted/50 border-2 border-border/50 flex items-center justify-center">
+                        <span className="text-xl font-bold text-muted-foreground">{(userName || "?")[0]?.toUpperCase()}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <Input
+                      id="name"
+                      value={editedName}
+                      onChange={(e) => setEditedName(e.target.value)}
+                      placeholder="Your name"
+                      className="h-10 rounded-xl bg-background/60 dark:bg-white/5 border-border/40 text-sm font-medium"
+                    />
+                    <ProfilePictureUpload
+                      currentAvatarUrl={avatarUrl || undefined}
+                      onUploadSuccess={(url) => {
+                        setAvatarUrl(url);
+                        toast({ description: "Profile picture updated" });
+                      }}
+                    />
+                  </div>
+                </div>
               </div>
-              <ThemeToggle />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="name">Name</Label>
-              <Input
-                id="name"
-                value={editedName}
-                onChange={(e) => setEditedName(e.target.value)}
-                placeholder="Enter your name"
-              />
-            </div>
-            <div className="flex gap-2">
+
+              {/* Appearance */}
+              <div className="rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
+                      <Sun className="h-5 w-5 text-primary dark:hidden" />
+                      <Moon className="h-5 w-5 text-primary hidden dark:block" />
+                    </span>
+                    <div>
+                      <p className="text-[15px] font-medium text-foreground">Appearance</p>
+                      <p className="text-xs text-muted-foreground">Dark / light mode</p>
+                    </div>
+                  </div>
+                  <ThemeToggle />
+                </div>
+              </div>
+
+              {/* Save */}
               <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => setSettingsDialogOpen(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                className="flex-1"
                 onClick={handleUpdateProfile}
+                className="w-full h-11 rounded-2xl text-base font-bold bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/20"
               >
                 Save Changes
               </Button>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </>
+      )}
 
       {/* Logout Confirmation Dialog */}
       <AlertDialog open={logoutDialogOpen} onOpenChange={setLogoutDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Sign Out</AlertDialogTitle>
-            <AlertDialogDescription>
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader className="sm:text-center">
+            <div className="mx-auto mb-1 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 dark:bg-destructive/15 ring-1 ring-destructive/20">
+              <LogOut className="h-5 w-5 text-destructive" />
+            </div>
+            <AlertDialogTitle className="text-center">Sign Out</AlertDialogTitle>
+            <AlertDialogDescription className="text-center">
               Are you sure you want to sign out? You'll need to sign in again to access your data.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogFooter className="flex-row gap-3 sm:justify-center pt-1">
+            <AlertDialogCancel className="flex-1 sm:flex-initial sm:min-w-[100px]">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleLogout}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="flex-1 sm:flex-initial sm:min-w-[100px] rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Sign Out
             </AlertDialogAction>

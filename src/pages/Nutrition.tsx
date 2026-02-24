@@ -32,7 +32,7 @@ import { useDebouncedCallback } from "@/hooks/useDebounce";
 import { nutritionCache, cacheHelpers } from "@/lib/nutritionCache";
 import { preloadAdjacentDates } from "@/lib/backgroundSync";
 import { AIGeneratingOverlay } from "@/components/AIGeneratingOverlay";
-import { triggerHapticSuccess } from "@/lib/haptics";
+import { triggerHapticSuccess, celebrateSuccess } from "@/lib/haptics";
 import { DietAnalysisCard } from "@/components/nutrition/DietAnalysisCard";
 import type { DietAnalysisResult } from "@/types/dietAnalysis";
 
@@ -488,7 +488,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
   useEffect(() => {
     if (!userId) return;
 
-    const channel = supabase
+    let channel = supabase
       .channel('profile-nutrition-updates')
       .on('postgres_changes', {
         event: 'UPDATE',
@@ -498,7 +498,25 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       }, () => {
         refreshProfile();
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          // Attempt to reconnect after a short delay
+          setTimeout(() => {
+            supabase.removeChannel(channel);
+            channel = supabase
+              .channel('profile-nutrition-updates-retry')
+              .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'profiles',
+                filter: `id=eq.${userId}`
+              }, () => {
+                refreshProfile();
+              })
+              .subscribe();
+          }, 2000);
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
@@ -930,6 +948,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
 
       if (error) throw error;
 
+      celebrateSuccess();
       toast({
         title: "Meal logged!",
         description: `${mealIdea.meal_name} added to your day`,
@@ -978,6 +997,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
 
       if (error) throw error;
 
+      celebrateSuccess();
       toast({
         title: "All meals saved!",
         description: `${mealIdeas.length} meals added to your day`,
@@ -1125,7 +1145,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
 
     setMeals(prevMeals => [...prevMeals, optimisticMeal]);
 
-    triggerHapticSuccess();
+    celebrateSuccess();
     toast({ title: "Meal added successfully" });
 
     const insertOperation = async () => {
@@ -1964,7 +1984,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       };
 
       setMeals(prevMeals => [...prevMeals, optimisticMeal]);
-      triggerHapticSuccess();
+      celebrateSuccess();
       toast({ title: "Food logged!", description: `${food.meal_name} · ${food.calories} kcal` });
 
       const { error } = await supabase.from("nutrition_logs").insert({
@@ -3371,7 +3391,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
 
       {/* Training Food Ideas Bottom Sheet */}
       <Sheet open={trainingWisdomSheetOpen} onOpenChange={setTrainingWisdomSheetOpen}>
-        <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl overflow-y-auto pb-8">
+        <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl overflow-y-auto pb-[calc(5rem+env(safe-area-inset-bottom))]">
           <SheetHeader className="mb-4">
             <div className="flex items-center gap-3">
               <div className="rounded-full bg-primary/15 p-2 flex-shrink-0">
