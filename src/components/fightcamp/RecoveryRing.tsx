@@ -77,20 +77,20 @@ export function RecoveryRing({
           />
         </svg>
 
-        {/* Center content */}
+        {/* Center content — sizes scale with ring */}
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="display-number text-xl font-bold" style={{ color }}>
+          <span className="display-number font-bold" style={{ color, fontSize: Math.max(10, size * 0.14) }}>
             {displayValue ?? Math.round(value)}
           </span>
           {sublabel && (
-            <span className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">
+            <span className="text-muted-foreground uppercase tracking-wider" style={{ fontSize: Math.max(7, size * 0.09), marginTop: 1 }}>
               {sublabel}
             </span>
           )}
         </div>
       </div>
 
-      <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium">
+      <span className="uppercase tracking-widest text-muted-foreground font-medium" style={{ fontSize: Math.max(8, size * 0.07) }}>
         {label}
       </span>
     </div>

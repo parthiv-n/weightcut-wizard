@@ -70,7 +70,7 @@ Provide: 1) 2-3 sentence summary, 2) 5-8 day-by-day tips, 3) safety warning if o
           { role: "user", content: userPrompt },
         ],
         temperature: 0.1,
-        max_completion_tokens: 1200,
+        max_completion_tokens: 3000,
       }),
     });
 

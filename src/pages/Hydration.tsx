@@ -510,35 +510,35 @@ export default function Hydration() {
             </div>
 
             {/* Glycogen Depletion Calculator */}
-            <div className="bg-muted rounded-2xl p-4 border border-border/30 shadow-inner">
-              <p className="text-[10px] text-purple-400 font-bold uppercase tracking-widest text-center mb-3">
+            <div className="bg-muted rounded-2xl p-3 border border-border/30 shadow-inner">
+              <p className="text-[10px] text-purple-400 font-bold uppercase tracking-widest text-center mb-2">
                 Glycogen Depletion
               </p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1 text-center">
-                    Normal Carbs (g/day)
+                  <label className="text-[9px] text-muted-foreground uppercase tracking-wider block mb-1 text-center">
+                    Normal (g/day)
                   </label>
                   <Input
                     type="number"
                     inputMode="numeric"
-                    placeholder="e.g. 300"
+                    placeholder="300"
                     value={normalCarbs}
                     onChange={(e) => setNormalCarbs(e.target.value)}
-                    className="text-center text-lg font-bold bg-background/50 border-border/30 rounded-xl h-10"
+                    className="text-center text-base font-bold bg-background/50 border-border/30 rounded-xl h-9"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1 text-center">
-                    Fight Week Carbs (g/day)
+                  <label className="text-[9px] text-muted-foreground uppercase tracking-wider block mb-1 text-center">
+                    Fight Week (g/day)
                   </label>
                   <Input
                     type="number"
                     inputMode="numeric"
-                    placeholder="e.g. 50"
+                    placeholder="50"
                     value={fightWeekCarbs}
                     onChange={(e) => setFightWeekCarbs(e.target.value)}
-                    className="text-center text-lg font-bold bg-background/50 border-border/30 rounded-xl h-10"
+                    className="text-center text-base font-bold bg-background/50 border-border/30 rounded-xl h-9"
                   />
                 </div>
               </div>

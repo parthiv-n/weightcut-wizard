@@ -64,6 +64,16 @@ serve(async (req) => {
       recentSessions,
       checkIn,
       athleteProfile,
+      // New enhanced fields
+      readinessScore,
+      readinessLabel,
+      readinessBreakdown,
+      trendAlerts,
+      athleteTier,
+      personalRpeCeiling,
+      personalNormalSessions,
+      sleepScore,
+      avgSleepLast3,
     } = await req.json();
 
     const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
@@ -92,10 +102,34 @@ serve(async (req) => {
 - Experience tier: ${getExperienceTier(athleteProfile.trainingFrequency, athleteProfile.activityLevel)}`
       : '';
 
+    // Build readiness text if available
+    const readinessText = readinessScore != null
+      ? `\nReadiness Score: ${readinessScore}/100 (${readinessLabel ?? 'unknown'})${
+          readinessBreakdown
+            ? `\n  - Sleep: ${readinessBreakdown.sleepScore}/100 | Soreness: ${readinessBreakdown.sorenessScore}/100 | Load Balance: ${readinessBreakdown.loadBalanceScore}/100 | Recovery: ${readinessBreakdown.recoveryScore}/100 | Consistency: ${readinessBreakdown.consistencyScore}/100`
+            : ''
+        }`
+      : '';
+
+    // Build calibration text if available
+    const calibrationText = athleteTier
+      ? `\nPersonal Calibration:
+- Tier: ${athleteTier}
+- RPE Ceiling: ${personalRpeCeiling ?? 'default'}
+- Normal Sessions/wk: ${personalNormalSessions ?? 'default'}
+- Sleep Score: ${sleepScore ?? 'N/A'}/100
+- 3-Night Avg Sleep: ${avgSleepLast3 ? avgSleepLast3.toFixed(1) + 'h' : 'N/A'}`
+      : '';
+
+    // Build trend alerts text
+    const trendAlertsText = Array.isArray(trendAlerts) && trendAlerts.length > 0
+      ? `\nActive Trend Alerts:\n${trendAlerts.map((a: string) => `- ${a}`).join('\n')}`
+      : '';
+
     const systemPrompt = `You are a JSON API. Respond with ONLY valid JSON.
 Elite recovery specialist for combat sports training load management. Calm, professional, conservative, evidence-informed.
 
-You CANNOT override deterministic values (strain, overtraining score, load ratio) — interpret only.
+You CANNOT override deterministic values (strain, overtraining score, load ratio, readiness score) — interpret only.
 Incorporate the fighter's subjective check-in alongside deterministic metrics when provided.
 If check-in reports severe soreness + empty energy + terrible sleep + burnt_out, strongly recommend rest (set rest_day_override: true).
 Always provide 2 alternatives: one for feeling better than the primary recommendation, one for feeling worse.
@@ -109,6 +143,16 @@ When athlete baseline is provided, adjust your interpretation of metrics to thei
 - Beginner (0-1 sessions/week baseline): Load ratio above 1.1 is a spike. Keep RPE at 5-6. Even 2-3 sessions/week may need extra recovery.
 If no athlete baseline is provided, default to conservative interpretation (assume developing level).
 The deterministic thresholds remain unchanged — calibrate RECOMMENDATIONS, not scores.
+
+READINESS SCORE INTERPRETATION:
+- 80+ (Peaked): Fighter is fully recovered, all systems green. Can push harder, increase volume or intensity.
+- 55-79 (Ready): Normal training day. Follow standard programming.
+- 35-54 (Recovering): Reduce intensity/volume. Focus on technique, light drilling, or active recovery.
+- Below 35 (Strained): Strongly consider rest day. If training, keep it very light (mobility, stretching only).
+Factor the readiness breakdown components (sleep, soreness, load balance, recovery, consistency) into specific advice.
+
+TREND ALERTS:
+When active trend alerts are provided, factor them into risk assessment and recommendations. Trends indicate emerging patterns that may not yet be reflected in single-day metrics. Address them proactively in coaching_summary.
 
 OUTPUT:
 {
@@ -137,7 +181,7 @@ Conservative approach: when in doubt, recommend less intensity.`;
 - Overtraining: ${overtrainingScore ?? 0}/100 (${overtrainingZone ?? 'low'})
 - Avg RPE (7d): ${avgRPE7d?.toFixed(1) ?? 0} | Avg Soreness: ${avgSoreness7d?.toFixed(1) ?? 0}/10
 - Sessions (7d): ${sessionsLast7d ?? weeklySessionCount ?? 0} | Consecutive high days: ${consecutiveHighDays ?? 0}
-- Sleep: ${latestSleep ?? 8}h (avg ${avgSleep?.toFixed(1) ?? 0}h) | Soreness: ${latestSoreness ?? 0}/10
+- Sleep: ${latestSleep ?? 8}h (avg ${avgSleep?.toFixed(1) ?? 0}h) | Soreness: ${latestSoreness ?? 0}/10${readinessText}${calibrationText}${trendAlertsText}
 
 Recent sessions:
 ${sessionsText}${checkInText}${athleteBaselineText}`;

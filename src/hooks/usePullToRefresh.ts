@@ -2,6 +2,7 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 
 const PULL_THRESHOLD = 80;
+const SCROLL_COOLDOWN_MS = 300;
 
 const triggerHaptic = async (style: ImpactStyle = ImpactStyle.Medium) => {
     try {
@@ -22,6 +23,7 @@ export function usePullToRefresh() {
     const isPulling = useRef(false);
     const isGestureLocked = useRef(false); // Once locked, we either refresh or ignore
     const hasTriggeredHaptic = useRef(false);
+    const lastScrollTime = useRef(0);
 
     const handleRefresh = useCallback(async () => {
         setIsRefreshing(true);
@@ -45,7 +47,8 @@ export function usePullToRefresh() {
 
         const onTouchStart = (e: TouchEvent) => {
             // STRICT RULE: User MUST be at the absolute top of the scroll container to even begin a pull
-            if (el.scrollTop <= 0 && !isRefreshing) {
+            const scrollCooledDown = Date.now() - lastScrollTime.current > SCROLL_COOLDOWN_MS;
+            if (el.scrollTop <= 0 && !isRefreshing && scrollCooledDown) {
                 startY.current = e.touches[0].clientY;
                 startX.current = e.touches[0].clientX;
                 isPulling.current = true;
@@ -117,6 +120,7 @@ export function usePullToRefresh() {
         };
 
         const onScroll = () => {
+            lastScrollTime.current = Date.now();
             // Failsafe: if the container scrolls natively, terminate the artificial pull
             if (el.scrollTop > 0 && isPulling.current) {
                 isPulling.current = false;

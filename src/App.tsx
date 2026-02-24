@@ -12,6 +12,7 @@ import { ProfileCompletionGuard } from "@/components/ProfileCompletionGuard";
 import { UserProvider } from "@/contexts/UserContext";
 import { WizardBackgroundProvider } from "@/contexts/WizardBackgroundContext";
 import { PageTransition } from "@/components/PageTransition";
+import { NavigationDirectionProvider } from "@/hooks/useNavigationDirection";
 import { BottomNav } from "@/components/BottomNav";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { PullToRefresh } from "@/components/PullToRefresh";
@@ -135,12 +136,12 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
             <ThemeToggle className="touch-target" />
           </header>
           {/* Main content with mobile-first responsive padding - bottom padding for bottom nav */}
-          <PullToRefresh disabled={location.pathname === '/wizard'} className="flex-1 overflow-auto relative min-h-0 w-full pt-2 pb-24 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right">
-            <Suspense fallback={<DashboardSkeleton />}>
-              <PageTransition>
+          <PullToRefresh disabled={location.pathname === '/wizard'} className="flex-1 overflow-auto overflow-x-hidden relative min-h-0 w-full pt-2 pb-24 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right">
+            <PageTransition>
+              <Suspense fallback={<DashboardSkeleton />}>
                 {children}
-              </PageTransition>
-            </Suspense>
+              </Suspense>
+            </PageTransition>
           </PullToRefresh>
         </div>
       </div>
@@ -165,6 +166,7 @@ const App = () => (
             <Toaster />
             <Sonner />
             <BrowserRouter>
+              <NavigationDirectionProvider>
               <RouteTracker />
               <Routes>
                 <Route path="/" element={<Index />} />
@@ -266,6 +268,7 @@ const App = () => (
                 } />
                 <Route path="*" element={<NotFound />} />
               </Routes>
+              </NavigationDirectionProvider>
             </BrowserRouter>
           </WizardBackgroundProvider>
         </UserProvider>
