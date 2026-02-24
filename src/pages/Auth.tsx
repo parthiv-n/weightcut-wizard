@@ -144,7 +144,7 @@ export default function Auth() {
   }, [password, confirmPassword, isLogin]);
 
   return (
-    <div className="min-h-screen bg-background dark:bg-gradient-to-br dark:from-[#120024] dark:via-[#05000f] dark:to-[#180636] text-foreground flex flex-col items-center justify-center p-6 relative overflow-hidden">
+    <div className="min-h-screen bg-background dark:bg-gradient-to-br dark:from-[#040810] dark:via-[#020204] dark:to-[#060a14] text-foreground flex flex-col items-center justify-center p-6 relative overflow-hidden">
       <div className="fixed top-[max(1rem,env(safe-area-inset-top))] left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] z-50 flex items-center justify-between px-1">
         <button
           type="button"
@@ -163,7 +163,7 @@ export default function Auth() {
 
       <div className="w-full max-w-[380px] z-10">
         {/* Glass card container */}
-        <div className="glass-card relative rounded-3xl border border-border dark:border-white/10 bg-gradient-to-br from-primary/5 via-background/60 to-secondary/5 dark:from-primary/10 dark:via-background/50 dark:to-secondary/10 shadow-xl dark:shadow-[0_0_60px_rgba(168,85,247,0.25)] backdrop-blur-2xl overflow-hidden">
+        <div className="glass-card relative rounded-3xl border border-border dark:border-white/10 bg-gradient-to-br from-primary/5 via-background/60 to-secondary/5 dark:from-primary/10 dark:via-background/50 dark:to-secondary/10 shadow-xl dark:shadow-[0_0_60px_rgba(37,99,235,0.2)] backdrop-blur-2xl overflow-hidden">
           <div className="p-8 flex flex-col gap-6">
             {/* Header */}
             <div className="flex flex-col items-center text-center space-y-3">

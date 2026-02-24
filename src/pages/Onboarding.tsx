@@ -229,7 +229,7 @@ export default function Onboarding() {
   const GENERATION_STEPS = [
     { icon: Activity, label: "Analyzing your profile", color: "text-blue-400" },
     { icon: Zap, label: "Calculating nutrition targets", color: "text-yellow-400" },
-    { icon: Shield, label: "Building your weight cut strategy", color: "text-purple-400" },
+    { icon: Shield, label: "Building your weight cut strategy", color: "text-blue-400" },
     { icon: Sparkles, label: "Finalizing your plan", color: "text-primary" },
     { icon: CheckCircle, label: "Your plan is ready!", color: "text-green-400" },
   ];
@@ -316,8 +316,8 @@ export default function Onboarding() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background dark:bg-gradient-to-br dark:from-[#120024] dark:via-[#05000f] dark:to-[#180636] p-4">
-      <div className="glass-card w-full max-w-2xl rounded-3xl border border-border dark:border-white/10 bg-gradient-to-br from-primary/[0.03] via-background/80 to-secondary/[0.03] dark:from-primary/10 dark:via-background/60 dark:to-secondary/10 shadow-xl dark:shadow-[0_0_60px_rgba(168,85,247,0.15)] backdrop-blur-2xl overflow-hidden">
+    <div className="flex min-h-screen items-center justify-center bg-background dark:bg-gradient-to-br dark:from-[#040810] dark:via-[#020204] dark:to-[#060a14] p-4">
+      <div className="glass-card w-full max-w-2xl rounded-3xl border border-border dark:border-white/10 bg-gradient-to-br from-primary/[0.03] via-background/80 to-secondary/[0.03] dark:from-primary/10 dark:via-background/60 dark:to-secondary/10 shadow-xl dark:shadow-[0_0_60px_rgba(37,99,235,0.12)] backdrop-blur-2xl overflow-hidden">
         <div className="p-6 md:p-8">
           <div className="mb-6">
             <h1 className="text-2xl font-title font-semibold text-foreground">Set Up Your Weight Cut Plan</h1>

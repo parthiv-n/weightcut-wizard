@@ -639,7 +639,7 @@ export default function WeightTracker() {
   const ANALYSIS_STEPS = [
     { icon: Activity, label: "Analyzing weight trends", color: "text-blue-400" },
     { icon: TrendingDown, label: "Calculating loss rate", color: "text-green-500" },
-    { icon: Target, label: "Projecting goal completion", color: "text-purple-500" },
+    { icon: Target, label: "Projecting goal completion", color: "text-blue-500" },
     { icon: Sparkles, label: "Formulating strategy", color: "text-yellow-400" },
   ];
 

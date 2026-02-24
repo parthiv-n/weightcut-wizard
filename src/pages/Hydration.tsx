@@ -511,7 +511,7 @@ export default function Hydration() {
 
             {/* Glycogen Depletion Calculator */}
             <div className="bg-muted rounded-2xl p-3 border border-border/30 shadow-inner">
-              <p className="text-[10px] text-purple-400 font-bold uppercase tracking-widest text-center mb-2">
+              <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest text-center mb-2">
                 Glycogen Depletion
               </p>
               <div className="grid grid-cols-2 gap-2">
