@@ -14,6 +14,7 @@ import { WizardBackgroundProvider } from "@/contexts/WizardBackgroundContext";
 import { PageTransition } from "@/components/PageTransition";
 import { NavigationDirectionProvider } from "@/hooks/useNavigationDirection";
 import { BottomNav } from "@/components/BottomNav";
+import { FloatingWizardChat } from "@/components/FloatingWizardChat";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
@@ -30,7 +31,6 @@ const FightWeek = lazy(() => import("./pages/FightWeek"));
 const FightCamps = lazy(() => import("./pages/FightCamps"));
 const FightCampDetail = lazy(() => import("./pages/FightCampDetail"));
 const FightCampCalendar = lazy(() => import("./pages/FightCampCalendar"));
-const Wizard = lazy(() => import("./pages/Wizard"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
@@ -136,7 +136,7 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
             <ThemeToggle className="touch-target" />
           </header>
           {/* Main content with mobile-first responsive padding - bottom padding for bottom nav */}
-          <PullToRefresh disabled={location.pathname === '/wizard'} className="flex-1 overflow-auto overflow-x-hidden relative min-h-0 w-full pt-2 pb-24 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right">
+          <PullToRefresh className="flex-1 overflow-auto overflow-x-hidden relative min-h-0 w-full pt-2 pb-24 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right">
             <PageTransition>
               <Suspense fallback={<DashboardSkeleton />}>
                 {children}
@@ -147,6 +147,7 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
       </div>
       {/* Bottom Navigation - Mobile Only */}
       <BottomNav />
+      <FloatingWizardChat />
     </>
   );
 };
@@ -253,15 +254,6 @@ const App = () => (
                     <ProfileCompletionGuard>
                       <AppLayout>
                         <FightWeek />
-                      </AppLayout>
-                    </ProfileCompletionGuard>
-                  </ProtectedRoute>
-                } />
-                <Route path="/wizard" element={
-                  <ProtectedRoute>
-                    <ProfileCompletionGuard>
-                      <AppLayout>
-                        <Wizard />
                       </AppLayout>
                     </ProfileCompletionGuard>
                   </ProtectedRoute>
