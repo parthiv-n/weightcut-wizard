@@ -14,7 +14,7 @@ import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { weightLogSchema } from "@/lib/validation";
 import { useUser } from "@/contexts/UserContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { triggerHapticSuccess } from "@/lib/haptics";
+import { triggerHapticSuccess, celebrateSuccess } from "@/lib/haptics";
 import { localCache } from "@/lib/localCache";
 import {
   AlertDialog,
@@ -244,7 +244,7 @@ export default function WeightTracker() {
         title: editingLogId ? "Weight updated" : "Weight logged",
         description: "Your weight has been recorded",
       });
-      triggerHapticSuccess();
+      celebrateSuccess();
       setNewWeight("");
       setEditingLogId(null);
       fetchData();

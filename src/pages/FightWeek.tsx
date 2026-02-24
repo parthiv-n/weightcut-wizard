@@ -8,6 +8,8 @@ import { addDays, differenceInDays, format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUser } from "@/contexts/UserContext";
 import { AIPersistence } from "@/lib/aiPersistence";
+import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
+import { localCache } from "@/lib/localCache";
 import { computeFightWeekPlan, type FightWeekProjection } from "@/utils/fightWeekEngine";
 import { WeightCutBreakdownCard } from "@/components/fightweek/WeightCutBreakdownCard";
 import { DehydrationRingPanel } from "@/components/fightweek/DehydrationRingPanel";
@@ -50,15 +52,15 @@ export default function FightWeek() {
     return computeFightWeekPlan({ currentWeight: cw, targetWeight: tw, daysUntilWeighIn: days, sex });
   }, [currentWeight, targetWeight, daysUntilWeighIn, profile?.sex]);
 
-  // Pre-fill from profile
+  // Pre-fill from profile only if no plan exists
   useEffect(() => {
-    if (profile && !currentWeight && !targetWeight) {
+    if (profile && !dbPlan && !currentWeight && !targetWeight) {
       const cw = profile.current_weight_kg;
       const tw = profile.goal_weight_kg;
       if (cw) setCurrentWeight(cw.toString());
       if (tw) setTargetWeight(tw.toString());
     }
-  }, [profile]);
+  }, [profile, dbPlan]);
 
   // Load existing plan from DB
   useEffect(() => {
@@ -75,26 +77,44 @@ export default function FightWeek() {
     return () => clearTimeout(timer);
   }, []);
 
+  const hydrateFromPlan = (plan: DBPlan) => {
+    setDbPlan(plan);
+    const daysLeft = Math.max(1, differenceInDays(new Date(plan.fight_date), new Date()));
+    setCurrentWeight(plan.starting_weight_kg.toString());
+    setTargetWeight(plan.target_weight_kg.toString());
+    setDaysUntilWeighIn(Math.min(daysLeft, 14).toString());
+  };
+
   const loadExistingPlan = async () => {
     if (!userId) return;
+
+    // Cache-first: show cached plan instantly
+    const cached = localCache.get<DBPlan>(userId, "fight_week_plan");
+    if (cached) {
+      hydrateFromPlan(cached);
+      setInitialLoading(false);
+    }
+
+    // Then refresh from DB in background
     try {
-      const { data } = await supabase
-        .from("fight_week_plans")
-        .select("*")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
+      const { data } = await withSupabaseTimeout(
+        supabase
+          .from("fight_week_plans")
+          .select("*")
+          .eq("user_id", userId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        4000,
+        "Load fight week plan"
+      );
 
       if (data) {
-        setDbPlan(data);
-        const daysLeft = Math.max(1, differenceInDays(new Date(data.fight_date), new Date()));
-        setCurrentWeight(data.starting_weight_kg.toString());
-        setTargetWeight(data.target_weight_kg.toString());
-        setDaysUntilWeighIn(Math.min(daysLeft, 14).toString());
+        hydrateFromPlan(data);
+        localCache.set(userId, "fight_week_plan", data);
       }
     } catch {
-      // No existing plan — that's fine
+      // Timeout or network error — cached data (if any) is already showing
     } finally {
       setInitialLoading(false);
     }
@@ -130,6 +150,7 @@ export default function FightWeek() {
       toast({ title: "Error saving plan", description: error.message, variant: "destructive" });
     } else {
       setDbPlan(data);
+      localCache.set(userId, "fight_week_plan", data);
       toast({ title: "Plan saved" });
     }
     setSaving(false);

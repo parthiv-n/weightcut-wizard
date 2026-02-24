@@ -17,7 +17,7 @@ const Index = () => {
     if (userId) {
       if (hasProfile) {
         const lastRoute = localStorage.getItem('lastRoute');
-        navigate(lastRoute || '/dashboard');
+        navigate(lastRoute && lastRoute !== '/wizard' ? lastRoute : '/dashboard');
       } else {
         navigate("/onboarding");
       }

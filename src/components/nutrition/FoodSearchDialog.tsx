@@ -3,20 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Loader2, ChevronRight, Minus, Plus, X } from "lucide-react";
-
-interface OpenFoodFactsProduct {
-    code: string;
-    product_name: string;
-    brands?: string;
-    nutriments: {
-        "energy-kcal_100g"?: number;
-        proteins_100g?: number;
-        carbohydrates_100g?: number;
-        fat_100g?: number;
-    };
-    serving_size?: string;
-    image_small_url?: string;
-}
+import { supabase } from "@/integrations/supabase/client";
 
 interface FoodSearchResult {
     id: string;
@@ -27,7 +14,6 @@ interface FoodSearchResult {
     carbs_per_100g: number;
     fats_per_100g: number;
     serving_size?: string;
-    image_url?: string;
 }
 
 interface FoodSearchDialogProps {
@@ -56,6 +42,15 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const abortRef = useRef<AbortController | null>(null);
 
+    // Warmup edge function on dialog open
+    useEffect(() => {
+        if (open) {
+            fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/food-search`, {
+                method: "GET",
+            }).catch(() => {});
+        }
+    }, [open]);
+
     // Debounced search
     const searchFoods = useCallback(async (searchQuery: string) => {
         if (searchQuery.trim().length < 2) {
@@ -70,25 +65,21 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
 
         setSearching(true);
         try {
-            const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(searchQuery)}&search_simple=1&action=process&json=1&page_size=20&fields=code,product_name,brands,nutriments,serving_size,image_small_url`;
-            const response = await fetch(url, { signal: controller.signal });
+            const { data: { session } } = await supabase.auth.getSession();
+            const response = await fetch(
+                `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/food-search`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${session?.access_token}`,
+                    },
+                    body: JSON.stringify({ query: searchQuery }),
+                    signal: controller.signal,
+                }
+            );
             const data = await response.json();
-
-            const foods: FoodSearchResult[] = (data.products || [])
-                .filter((p: OpenFoodFactsProduct) => p.product_name && p.nutriments?.["energy-kcal_100g"])
-                .map((p: OpenFoodFactsProduct) => ({
-                    id: p.code,
-                    name: p.product_name,
-                    brand: p.brands || "",
-                    calories_per_100g: Math.round(p.nutriments["energy-kcal_100g"] || 0),
-                    protein_per_100g: Math.round((p.nutriments.proteins_100g || 0) * 10) / 10,
-                    carbs_per_100g: Math.round((p.nutriments.carbohydrates_100g || 0) * 10) / 10,
-                    fats_per_100g: Math.round((p.nutriments.fat_100g || 0) * 10) / 10,
-                    serving_size: p.serving_size,
-                    image_url: p.image_small_url,
-                }));
-
-            setResults(foods);
+            setResults(data.results || []);
         } catch (err: any) {
             if (err.name !== "AbortError") {
                 console.error("Food search error:", err);
@@ -100,7 +91,7 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
 
     useEffect(() => {
         if (debounceRef.current) clearTimeout(debounceRef.current);
-        debounceRef.current = setTimeout(() => searchFoods(query), 350);
+        debounceRef.current = setTimeout(() => searchFoods(query), 200);
         return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
     }, [query, searchFoods]);
 
@@ -185,7 +176,7 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                                 <div className="text-center py-12">
                                     <Search className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
                                     <p className="text-sm text-muted-foreground">Type to search the food database</p>
-                                    <p className="text-xs text-muted-foreground/60 mt-1">Powered by OpenFoodFacts · 3M+ products</p>
+                                    <p className="text-xs text-muted-foreground/60 mt-1">Powered by USDA FoodData Central</p>
                                 </div>
                             )}
 
@@ -200,18 +191,9 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                                             }}
                                             className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/50 active:bg-muted transition-colors text-left"
                                         >
-                                            {food.image_url ? (
-                                                <img
-                                                    src={food.image_url}
-                                                    alt=""
-                                                    className="w-10 h-10 rounded-lg object-cover bg-muted flex-shrink-0"
-                                                    onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
-                                                />
-                                            ) : (
-                                                <div className="w-10 h-10 rounded-lg bg-muted/60 flex items-center justify-center flex-shrink-0">
-                                                    <span className="text-lg">🍽</span>
-                                                </div>
-                                            )}
+                                            <div className="w-10 h-10 rounded-lg bg-muted/60 flex items-center justify-center flex-shrink-0">
+                                                <span className="text-lg">🍽</span>
+                                            </div>
                                             <div className="flex-1 min-w-0">
                                                 <p className="text-sm font-medium truncate">{food.name}</p>
                                                 {food.brand && (
