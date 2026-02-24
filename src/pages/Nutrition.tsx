@@ -488,7 +488,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
   useEffect(() => {
     if (!userId) return;
 
-    const channel = supabase
+    let channel = supabase
       .channel('profile-nutrition-updates')
       .on('postgres_changes', {
         event: 'UPDATE',
@@ -498,7 +498,25 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       }, () => {
         refreshProfile();
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          // Attempt to reconnect after a short delay
+          setTimeout(() => {
+            supabase.removeChannel(channel);
+            channel = supabase
+              .channel('profile-nutrition-updates-retry')
+              .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'profiles',
+                filter: `id=eq.${userId}`
+              }, () => {
+                refreshProfile();
+              })
+              .subscribe();
+          }, 2000);
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);

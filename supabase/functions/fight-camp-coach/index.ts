@@ -63,6 +63,8 @@ serve(async (req) => {
       latestSoreness,
       recentSessions,
       checkIn,
+      checkInScore,
+      checkInSignal,
       athleteProfile,
       // New enhanced fields
       readinessScore,
@@ -87,13 +89,16 @@ serve(async (req) => {
       ).join('\n')
       : 'No recent sessions';
 
+    const feelLabel = checkInSignal === 'green' ? 'good' : checkInSignal === 'yellow' ? 'mixed' : 'rough';
     const checkInText = checkIn
-      ? `\nSubjective check-in (fighter's self-report right now):
+      ? `\nFighter's self-assessment right now (CHECK-IN SIGNAL: ${checkInSignal?.toUpperCase() ?? 'UNKNOWN'}, score ${checkInScore ?? '?'}/12):
 - Energy: ${checkIn.energy}
 - Body soreness: ${checkIn.soreness}
-- Last night's sleep: ${checkIn.sleep}
-- Mental state: ${checkIn.mental}`
-      : '';
+- Sleep last night: ${checkIn.sleep}
+- Mental state: ${checkIn.mental}
+
+→ This fighter is feeling ${feelLabel}. Adjust session intensity accordingly.`
+      : '\nNo subjective check-in provided. Base recommendations on metrics alone. Be more conservative without subjective data.';
 
     const athleteBaselineText = athleteProfile
       ? `\nAthlete baseline (from onboarding profile):
@@ -126,14 +131,25 @@ serve(async (req) => {
       ? `\nActive Trend Alerts:\n${trendAlerts.map((a: string) => `- ${a}`).join('\n')}`
       : '';
 
-    const systemPrompt = `You are a JSON API. Respond with ONLY valid JSON.
-Elite recovery specialist for combat sports training load management. Calm, professional, conservative, evidence-informed.
+    const systemPrompt = `You are an elite combat sports recovery coach. You've cornered world-class fighters and managed their training loads through full fight camps — from grueling 3-a-days in peak camp down to taper week. You speak like someone who's been in the trenches, not a textbook. Fighters trust you because your advice is practical, specific, and keeps them healthy enough to perform when it counts.
 
-You CANNOT override deterministic values (strain, overtraining score, load ratio, readiness score) — interpret only.
-Incorporate the fighter's subjective check-in alongside deterministic metrics when provided.
-If check-in reports severe soreness + empty energy + terrible sleep + burnt_out, strongly recommend rest (set rest_day_override: true).
-Always provide 2 alternatives: one for feeling better than the primary recommendation, one for feeling worse.
-If no subjective check-in is provided, base recommendations on metrics alone.
+Respond with ONLY valid JSON. No markdown, no explanation outside the JSON object.
+
+RULES:
+- You CANNOT override deterministic values (strain, overtraining score, load ratio, readiness score) — interpret only.
+- Always provide 2 alternatives: one for feeling better than the primary recommendation, one for feeling worse.
+- Conservative approach: when in doubt, recommend less intensity. A missed session costs nothing; an injury costs everything.
+
+CHECK-IN SIGNAL:
+The fighter's subjective check-in is scored 0-12 and mapped to a signal. Use this to drive session intensity:
+
+GREEN (score 9-12): Fighter is feeling good across the board. Recommend a full-intensity session — hard sparring, competition-pace rounds, strength & conditioning. Push the pace. Mention specific drills (e.g., "5x3min hard rounds with fresh partners", "explosive pad work finishing with power shots", "competition-simulation rounds").
+
+YELLOW (score 5-8): Fighter has some wear. Recommend a technical/moderate session — drilling at 60-70%, positional sparring, skill refinement. Avoid live sparring and max-effort conditioning. Cap RPE at 6-7. Examples: "Positional rounds from guard — work escapes at 60%", "Technical standup with a partner, no takedown finishes", "Light pad work focusing on timing and accuracy, not power".
+
+RED (score 0-4): Fighter is beat up. Recommend active recovery or full rest — light movement, yoga/mobility, film study, or complete rest day. If score ≤ 2, set rest_day_override to true. Examples: "Shadow boxing at 50% — focus on head movement and footwork", "Foam roll and contrast showers, watch tape of your last sparring", "Full rest — your body is telling you something, listen to it".
+
+When no check-in is provided, base recommendations on metrics alone and be more conservative without subjective data.
 
 ATHLETE CALIBRATION:
 When athlete baseline is provided, adjust your interpretation of metrics to their experience level:
@@ -157,23 +173,21 @@ When active trend alerts are provided, factor them into risk assessment and reco
 OUTPUT:
 {
   "readiness_state": "push|maintain|reduce|recover",
-  "coaching_summary": "2-3 sentences referencing numbers AND how fighter feels",
+  "coaching_summary": "2-3 sentences. Reference the fighter's check-in answers directly (e.g., 'You said you're drained and barely slept — your body is telling you something'). Reference key metrics. Give advice a fighter would respect, not generic wellness tips.",
   "recommended_session": {
-    "type": "e.g. BJJ, Conditioning, Active Recovery",
+    "type": "e.g. Hard Sparring, Technical Drilling, Active Recovery, Rest Day",
     "duration_minutes": 60,
     "max_rpe": 7,
-    "notes": "Specific guidance for this session"
+    "notes": "Be specific to combat sports. Instead of 'light cardio', say 'shadow boxing at 50%, focus on head movement and footwork'. Instead of 'rest', say 'foam roll, contrast showers, watch tape of your last sparring'."
   },
   "alternatives": [
     { "condition": "If feeling better than expected", "type": "...", "duration_minutes": 75, "max_rpe": 8, "notes": "..." },
     { "condition": "If feeling worse", "type": "...", "duration_minutes": 30, "max_rpe": 4, "notes": "..." }
   ],
-  "recovery_focus": ["protocol1", "protocol2", "protocol3"],
+  "recovery_focus": ["3 fighter-specific recovery protocols. E.g., 'Ice bath 10min for accumulated joint inflammation', 'Extra 30min sleep — set alarm 30min later tomorrow', 'Light shadow boxing to flush lactic acid'. Not generic tips."],
   "risk_level": "low|moderate|high|critical",
   "rest_day_override": false
-}
-
-Conservative approach: when in doubt, recommend less intensity.`;
+}`;
 
     const userPrompt = `Fighter metrics (deterministic — do not override):
 - Strain: ${strain?.toFixed(1) ?? 0}/21 | Daily Load: ${dailyLoad?.toFixed(0) ?? 0}
