@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { useUser } from "@/contexts/UserContext";
 import wizardLogo from "@/assets/wizard-logo.png";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ChevronLeft } from "lucide-react";
@@ -18,22 +19,16 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { userId } = useUser();
 
+  // Redirect when user is authenticated (handles both fresh logins and already-logged-in).
+  // UserContext's onAuthStateChange calls loadUserData() first, then sets userId —
+  // so by the time this fires, profile data is already loaded. No race condition.
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        navigate("/dashboard");
-      }
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user) {
-        navigate("/dashboard");
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, [navigate]);
+    if (userId) {
+      navigate("/dashboard");
+    }
+  }, [userId, navigate]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();

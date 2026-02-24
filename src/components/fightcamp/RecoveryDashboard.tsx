@@ -94,6 +94,25 @@ function getDeterministicReadinessBadge(label: ReadinessResult['label']) {
   }
 }
 
+// ─── Check-In Scoring ─────────────────────────────────────────
+const CHECKIN_SCORES: Record<string, Record<string, number>> = {
+  energy:   { high: 3, moderate: 2, low: 1, empty: 0 },
+  soreness: { none: 3, mild: 2, moderate: 1, severe: 0 },
+  sleep:    { great: 3, ok: 2, poor: 1, terrible: 0 },
+  mental:   { motivated: 3, neutral: 2, stressed: 1, burnt_out: 0 },
+};
+
+function computeCheckInSignal(ci: FeelCheckIn): { score: number; signal: 'green' | 'yellow' | 'red' } {
+  const score =
+    (CHECKIN_SCORES.energy[ci.energy] ?? 0) +
+    (CHECKIN_SCORES.soreness[ci.soreness] ?? 0) +
+    (CHECKIN_SCORES.sleep[ci.sleep] ?? 0) +
+    (CHECKIN_SCORES.mental[ci.mental] ?? 0);
+
+  const signal = score >= 9 ? 'green' : score >= 5 ? 'yellow' : 'red';
+  return { score, signal };
+}
+
 const today = new Date().toISOString().split('T')[0];
 const CACHE_KEY = `fight_camp_coach_${today}`;
 
@@ -188,7 +207,11 @@ export function RecoveryDashboard({ sessions28d, userId, sessionLoggedAt = 0, at
         personalNormalSessions: metrics.calibration.normalSessionsPerWeek,
         sleepScore: metrics.sleepScore,
         avgSleepLast3: metrics.avgSleepLast3,
-        ...(checkInComplete ? { checkIn: checkIn as FeelCheckIn } : {}),
+        ...(checkInComplete ? (() => {
+          const ci = checkIn as FeelCheckIn;
+          const { score, signal } = computeCheckInSignal(ci);
+          return { checkIn: ci, checkInScore: score, checkInSignal: signal };
+        })() : {}),
         ...(athleteProfile ? { athleteProfile } : {}),
       };
 

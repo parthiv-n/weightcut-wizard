@@ -36,11 +36,14 @@ class LocalCache {
     }
   }
 
-  get<T>(userId: string, key: string): T | null {
+  get<T>(userId: string, key: string, maxAgeMs?: number): T | null {
     try {
       const raw = localStorage.getItem(this.buildKey(userId, key));
       if (!raw) return null;
       const envelope: CacheEnvelope<T> = JSON.parse(raw);
+      if (maxAgeMs !== undefined && Date.now() - envelope.cachedAt > maxAgeMs) {
+        return null;
+      }
       return envelope.data;
     } catch {
       return null;
