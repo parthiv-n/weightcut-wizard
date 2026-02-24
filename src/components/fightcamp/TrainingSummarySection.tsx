@@ -306,7 +306,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
                     ) : (
                         <>
                             <Brain className="h-5 w-5 text-primary" />
-                            <span className="text-sm font-semibold bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent">
+                            <span className="text-sm font-semibold bg-gradient-to-r from-primary to-blue-400 bg-clip-text text-transparent">
                                 {buttonState === "update" ? "Update Training Summary" : "Generate Training Summary"}
                             </span>
                         </>

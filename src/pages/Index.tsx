@@ -29,19 +29,19 @@ const Index = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background dark:bg-gradient-to-br dark:from-[#120024] dark:via-[#05000f] dark:to-[#180636]">
+    <div className="min-h-screen bg-background dark:bg-gradient-to-br dark:from-[#040810] dark:via-[#020204] dark:to-[#060a14]">
       <div className="fixed top-4 right-4 z-50">
         <ThemeToggle />
       </div>
       <div className="container mx-auto px-4 py-16">
         <div className="relative mx-auto mb-12 max-w-5xl">
-          <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-primary/10 via-background/50 to-secondary/10 shadow-[0_0_60px_rgba(168,85,247,0.4)] backdrop-blur-2xl" />
+          <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-primary/10 via-background/50 to-secondary/10 shadow-[0_0_60px_rgba(37,99,235,0.25)] backdrop-blur-2xl" />
           <div className="relative z-10 px-6 py-10 md:px-10 md:py-12 flex flex-col items-center text-center gap-8">
             <div className="mx-auto mb-2 md:mb-4">
               <img
                 src={wizardNutrition}
                 alt="Weight Cut Wizard"
-                className="h-24 w-24 md:h-32 md:w-32 mx-auto rounded-2xl object-contain shadow-xl shadow-purple-500/40 ring-2 ring-primary/40 bg-background/60"
+                className="h-24 w-24 md:h-32 md:w-32 mx-auto rounded-2xl object-contain shadow-xl shadow-blue-500/40 ring-2 ring-primary/40 bg-background/60"
               />
             </div>
             <div>

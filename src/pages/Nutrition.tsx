@@ -1909,7 +1909,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           { icon: Utensils, label: "Reviewing meals", color: "text-blue-400" },
           { icon: PieChartIcon, label: "Estimating micronutrients", color: "text-green-500" },
           { icon: Search, label: "Identifying gaps", color: "text-yellow-400" },
-          { icon: Sparkles, label: "Generating recommendations", color: "text-purple-400" },
+          { icon: Sparkles, label: "Generating recommendations", color: "text-blue-400" },
         ],
         title: "Analysing Diet",
         subtitle: "Evaluating your full day of eating..."
@@ -1930,7 +1930,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       return {
         steps: [
           { icon: Search, label: "Identifying food items", color: "text-blue-400" },
-          { icon: Database, label: "Retrieving macros", color: "text-purple-500" },
+          { icon: Database, label: "Retrieving macros", color: "text-blue-500" },
           { icon: CheckCircle, label: "Finalizing log", color: "text-green-400" },
         ],
         title: "Analyzing Meal",
@@ -2197,7 +2197,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                         }}
                         className="flex flex-col items-center gap-1 py-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors"
                       >
-                        <Sparkles className="h-4 w-4 text-violet-500" />
+                        <Sparkles className="h-4 w-4 text-blue-500" />
                         <span className="text-[10px] text-muted-foreground">Quick</span>
                       </button>
                       <VoiceInput
