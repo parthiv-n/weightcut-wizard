@@ -33,6 +33,8 @@ import { nutritionCache, cacheHelpers } from "@/lib/nutritionCache";
 import { preloadAdjacentDates } from "@/lib/backgroundSync";
 import { AIGeneratingOverlay } from "@/components/AIGeneratingOverlay";
 import { triggerHapticSuccess } from "@/lib/haptics";
+import { DietAnalysisCard } from "@/components/nutrition/DietAnalysisCard";
+import type { DietAnalysisResult } from "@/types/dietAnalysis";
 
 interface Ingredient {
   name: string;
@@ -42,6 +44,11 @@ interface Ingredient {
   carbs_per_100g?: number;
   fats_per_100g?: number;
   source?: string; // e.g., "USDA", "Nutrition Database", "AI Analysis"
+  calories?: number;
+  protein_g?: number;
+  carbs_g?: number;
+  fats_g?: number;
+  quantity?: string;
 }
 
 interface AiLineItem {
@@ -160,6 +167,10 @@ export default function Nutrition() {
   const [trainingWisdomLoading, setTrainingWisdomLoading] = useState(false);
   const [trainingWisdomSheetOpen, setTrainingWisdomSheetOpen] = useState(false);
   const [trainingPreference, setTrainingPreference] = useState("");
+
+  // Diet analysis state
+  const [dietAnalysis, setDietAnalysis] = useState<DietAnalysisResult | null>(null);
+  const [dietAnalysisLoading, setDietAnalysisLoading] = useState(false);
 
   // Dynamic macro-aware wisdom text (fallback)
   const getNutritionWisdom = () => {
@@ -435,6 +446,22 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     }
   }, [isQuickAddSheetOpen, quickAddTab]);
 
+  // Warmup analyse-diet edge function on mount
+  useEffect(() => {
+    if (!userId) return;
+    const timer = setTimeout(() => {
+      supabase.functions.invoke("analyse-diet", { method: "GET" } as any).catch(() => { });
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [userId]);
+
+  // Load cached diet analysis on date change
+  useEffect(() => {
+    if (!userId) return;
+    const cached = AIPersistence.load(userId, `diet_analysis_${selectedDate}`);
+    setDietAnalysis(cached || null);
+  }, [selectedDate, userId]);
+
   useEffect(() => {
     if (profile) {
       fetchMacroGoals();
@@ -606,6 +633,12 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
 
   const loadMeals = async (skipCache = false) => {
     if (!userId) return;
+
+    // Invalidate diet analysis when meals change (mutation triggered reload)
+    if (skipCache) {
+      setDietAnalysis(null);
+      AIPersistence.remove(userId, `diet_analysis_${selectedDate}`);
+    }
 
     // Check cache first (unless explicitly skipped after mutations)
     if (!skipCache) {
@@ -1270,10 +1303,21 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     const totalCarbs = aiLineItems.reduce((s, i) => s + i.carbs_g, 0);
     const totalFats = aiLineItems.reduce((s, i) => s + i.fats_g, 0);
 
-    // Store item breakdown in recipe_notes for reference
+    // Store item breakdown in recipe_notes as text fallback
     const itemBreakdown = aiLineItems
       .map(i => `${i.quantity} ${i.name} (${i.calories} cal)`)
       .join(", ");
+
+    // Build ingredients with per-item macros
+    const ingredients: Ingredient[] = aiLineItems.map(item => ({
+      name: item.name,
+      grams: 0,
+      calories: Math.round(item.calories),
+      protein_g: Math.round(item.protein_g * 10) / 10,
+      carbs_g: Math.round(item.carbs_g * 10) / 10,
+      fats_g: Math.round(item.fats_g * 10) / 10,
+      quantity: item.quantity,
+    }));
 
     try {
       await saveMealToDb({
@@ -1285,7 +1329,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         meal_type: manualMeal.meal_type,
         portion_size: null,
         recipe_notes: itemBreakdown,
-        ingredients: null,
+        ingredients: ingredients,
         is_ai_generated: true,
       });
 
@@ -1776,7 +1820,81 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     return () => clearTimeout(timer);
   }, [meals.length, totalCalories]);
 
+  const handleAnalyseDiet = async (forceRefresh = false) => {
+    if (!userId || meals.length === 0) return;
+
+    const cacheKey = `diet_analysis_${selectedDate}`;
+    if (!forceRefresh) {
+      const cached = AIPersistence.load(userId, cacheKey);
+      if (cached) {
+        setDietAnalysis(cached);
+        return;
+      }
+    }
+
+    setDietAnalysisLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("analyse-diet", {
+        body: {
+          meals: meals.map(m => ({
+            meal_name: m.meal_name,
+            calories: m.calories,
+            protein_g: m.protein_g || 0,
+            carbs_g: m.carbs_g || 0,
+            fats_g: m.fats_g || 0,
+            meal_type: m.meal_type,
+            ingredients: m.ingredients,
+          })),
+          profile: contextProfile ? {
+            age: contextProfile.age,
+            sex: contextProfile.sex,
+            height_cm: contextProfile.height_cm,
+            current_weight_kg: contextProfile.current_weight_kg,
+            activity_level: contextProfile.activity_level,
+            training_frequency: contextProfile.training_frequency,
+          } : {},
+          macroGoals: aiMacroGoals ? {
+            calorieTarget: dailyCalorieTarget,
+            proteinGrams: aiMacroGoals.proteinGrams,
+            carbsGrams: aiMacroGoals.carbsGrams,
+            fatsGrams: aiMacroGoals.fatsGrams,
+          } : {},
+          date: selectedDate,
+        },
+      });
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      const result = data.analysisData as DietAnalysisResult;
+      setDietAnalysis(result);
+      AIPersistence.save(userId, cacheKey, result, 6);
+      triggerHapticSuccess();
+    } catch (error) {
+      console.error("Error analysing diet:", error);
+      toast({
+        title: "Analysis failed",
+        description: error instanceof Error ? error.message : "Could not analyse your diet",
+        variant: "destructive",
+      });
+    } finally {
+      setDietAnalysisLoading(false);
+    }
+  };
+
   const getOverlayProps = () => {
+    if (dietAnalysisLoading) {
+      return {
+        steps: [
+          { icon: Utensils, label: "Reviewing meals", color: "text-blue-400" },
+          { icon: PieChartIcon, label: "Estimating micronutrients", color: "text-green-500" },
+          { icon: Search, label: "Identifying gaps", color: "text-yellow-400" },
+          { icon: Sparkles, label: "Generating recommendations", color: "text-purple-400" },
+        ],
+        title: "Analysing Diet",
+        subtitle: "Evaluating your full day of eating..."
+      };
+    }
     if (generatingPlan) {
       return {
         steps: [
@@ -1813,7 +1931,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
   };
 
   const overlayProps = getOverlayProps();
-  const isAiActive = generatingPlan || aiAnalyzing || aiAnalyzingIngredient;
+  const isAiActive = generatingPlan || aiAnalyzing || aiAnalyzingIngredient || dietAnalysisLoading;
 
   // Handle food selected from search dialog
   const handleFoodSearchSelected = async (food: {
@@ -2100,6 +2218,25 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
             );
           })}
         </div>
+
+        {/* ═══ Diet Analysis Section ═══ */}
+        {dietAnalysis ? (
+          <DietAnalysisCard
+            analysis={dietAnalysis}
+            onDismiss={() => setDietAnalysis(null)}
+            onRefresh={() => handleAnalyseDiet(true)}
+            refreshing={dietAnalysisLoading}
+          />
+        ) : meals.length > 0 && (
+          <button
+            onClick={() => handleAnalyseDiet()}
+            disabled={dietAnalysisLoading}
+            className="glass-card w-full p-4 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+          >
+            <Sparkles className="h-4 w-4 text-primary" />
+            <span className="text-sm font-medium text-foreground">Analyse Diet</span>
+          </button>
+        )}
 
         {/* ═══ AI Meal Ideas Section ═══ */}
         <div className="space-y-3">

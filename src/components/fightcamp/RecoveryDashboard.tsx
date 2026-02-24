@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { RecoveryRing } from "./RecoveryRing";
 import { StrainChart } from "./StrainChart";
-import { computeAllMetrics, type SessionRow, type AllMetrics } from "@/utils/performanceEngine";
+import { computeAllMetrics, type SessionRow, type AllMetrics, type ReadinessResult } from "@/utils/performanceEngine";
 
 interface FeelCheckIn {
   energy: 'high' | 'moderate' | 'low' | 'empty';
@@ -61,6 +61,13 @@ function getOTColor(zone: 'low' | 'moderate' | 'high' | 'critical') {
   return { color: "#dc2626", glow: "#dc2626" }; // critical
 }
 
+function getReadinessColor(label: ReadinessResult['label']) {
+  if (label === 'peaked') return { color: "#22c55e", glow: "#22c55e" };
+  if (label === 'ready') return { color: "#3b82f6", glow: "#3b82f6" };
+  if (label === 'recovering') return { color: "#f59e0b", glow: "#f59e0b" };
+  return { color: "#ef4444", glow: "#ef4444" }; // strained
+}
+
 function getReadinessBadge(state: CoachResponse['readiness_state']) {
   switch (state) {
     case 'push':
@@ -71,6 +78,19 @@ function getReadinessBadge(state: CoachResponse['readiness_state']) {
       return { label: "REDUCE", className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30", icon: TrendingDown };
     case 'recover':
       return { label: "RECOVER", className: "bg-red-500/20 text-red-400 border-red-500/30", icon: TrendingDown };
+  }
+}
+
+function getDeterministicReadinessBadge(label: ReadinessResult['label']) {
+  switch (label) {
+    case 'peaked':
+      return { label: "PEAKED", className: "bg-green-500/20 text-green-400 border-green-500/30", icon: TrendingUp };
+    case 'ready':
+      return { label: "READY", className: "bg-blue-500/20 text-blue-400 border-blue-500/30", icon: Minus };
+    case 'recovering':
+      return { label: "RECOVERING", className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30", icon: TrendingDown };
+    case 'strained':
+      return { label: "STRAINED", className: "bg-red-500/20 text-red-400 border-red-500/30", icon: TrendingDown };
   }
 }
 
@@ -87,12 +107,18 @@ export function RecoveryDashboard({ sessions28d, userId, sessionLoggedAt = 0, at
   const uniqueDays = new Set(sessions28d.map(s => s.date)).size;
   const hasEnoughData = uniqueDays >= 1;
 
-  // Compute metrics whenever sessions change
+  // Compute metrics whenever sessions change — pass profile for personalization
   useEffect(() => {
     if (sessions28d.length > 0) {
-      setMetrics(computeAllMetrics(sessions28d));
+      setMetrics(computeAllMetrics(
+        sessions28d,
+        athleteProfile?.trainingFrequency,
+        athleteProfile?.activityLevel,
+      ));
+    } else {
+      setMetrics(computeAllMetrics([]));
     }
-  }, [sessions28d]);
+  }, [sessions28d, athleteProfile?.trainingFrequency, athleteProfile?.activityLevel]);
 
   // Load cached coach data on mount
   useEffect(() => {
@@ -152,6 +178,16 @@ export function RecoveryDashboard({ sessions28d, userId, sessionLoggedAt = 0, at
           soreness_level: s.soreness_level,
           sleep_hours: s.sleep_hours,
         })),
+        // New enhanced payload fields
+        readinessScore: metrics.readiness.score,
+        readinessLabel: metrics.readiness.label,
+        readinessBreakdown: metrics.readiness.breakdown,
+        trendAlerts: metrics.trends.alerts,
+        athleteTier: metrics.calibration.tier,
+        personalRpeCeiling: metrics.calibration.rpeCeiling,
+        personalNormalSessions: metrics.calibration.normalSessionsPerWeek,
+        sleepScore: metrics.sleepScore,
+        avgSleepLast3: metrics.avgSleepLast3,
         ...(checkInComplete ? { checkIn: checkIn as FeelCheckIn } : {}),
         ...(athleteProfile ? { athleteProfile } : {}),
       };
@@ -194,15 +230,20 @@ export function RecoveryDashboard({ sessions28d, userId, sessionLoggedAt = 0, at
 
   if (!metrics) return null;
 
+  const readinessColors = getReadinessColor(metrics.readiness.label);
   const strainColors = getStrainColor(metrics.strain);
   const otColors = getOTColor(metrics.overtrainingRisk.zone);
 
   return (
     <div className="space-y-4 mb-6">
-      {/* 1) Readiness Hero Badge */}
-      {coachData && <ReadinessBadge state={coachData.readiness_state} />}
+      {/* 1) Readiness Badge — deterministic first, AI overrides */}
+      {coachData ? (
+        <ReadinessBadgeUI state={coachData.readiness_state} />
+      ) : (
+        <DeterministicReadinessBadge label={metrics.readiness.label} score={metrics.readiness.score} />
+      )}
 
-      {/* 2) Strain Ring + Overtraining Ring */}
+      {/* 2) Readiness Ring (hero) + Strain Ring + OT Ring */}
       <div className="glass-card rounded-[20px] p-4 border border-border/50">
         <div className="flex items-center gap-2 mb-4">
           <Activity className="h-5 w-5 text-primary" />
@@ -210,19 +251,33 @@ export function RecoveryDashboard({ sessions28d, userId, sessionLoggedAt = 0, at
         </div>
 
         <div className="flex items-end justify-around">
-          {/* Large primary strain ring */}
+          {/* Large primary readiness ring */}
           <RecoveryRing
-            value={metrics.strain}
-            max={21}
-            color={strainColors.color}
-            glowColor={strainColors.glow}
-            label="Strain"
+            value={metrics.readiness.score}
+            max={100}
+            color={readinessColors.color}
+            glowColor={readinessColors.glow}
+            label="Readiness"
             size={140}
             strokeWidth={12}
-            displayValue={metrics.strain.toFixed(1)}
-            sublabel="/ 21"
+            displayValue={`${metrics.readiness.score}`}
+            sublabel={metrics.readiness.label}
           />
-          {/* Smaller overtraining ring */}
+          {/* Medium strain ring */}
+          <div className="flex flex-col items-center gap-3">
+            <RecoveryRing
+              value={metrics.strain}
+              max={21}
+              color={strainColors.color}
+              glowColor={strainColors.glow}
+              label="Strain"
+              size={90}
+              strokeWidth={8}
+              displayValue={metrics.strain.toFixed(1)}
+              sublabel="/ 21"
+            />
+          </div>
+          {/* Small overtraining ring */}
           <div className="flex flex-col items-center gap-3">
             <RecoveryRing
               value={metrics.overtrainingRisk.score}
@@ -230,16 +285,16 @@ export function RecoveryDashboard({ sessions28d, userId, sessionLoggedAt = 0, at
               color={otColors.color}
               glowColor={otColors.glow}
               label="Overtraining"
-              size={90}
-              strokeWidth={8}
+              size={70}
+              strokeWidth={6}
               displayValue={`${Math.round(metrics.overtrainingRisk.score)}`}
               sublabel={metrics.overtrainingRisk.zone}
             />
           </div>
         </div>
 
-        {/* Stats bar */}
-        <div className="grid grid-cols-3 gap-2 mt-4">
+        {/* Stats bar — 4 columns */}
+        <div className="grid grid-cols-4 gap-2 mt-4">
           <div className="text-center p-2 rounded-xl bg-accent/20">
             <div className="text-lg font-bold display-number text-foreground">{metrics.weeklySessionCount}</div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Sessions/wk</div>
@@ -249,10 +304,14 @@ export function RecoveryDashboard({ sessions28d, userId, sessionLoggedAt = 0, at
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Load Ratio</div>
           </div>
           <div className="text-center p-2 rounded-xl bg-accent/20">
+            <div className="text-lg font-bold display-number text-foreground">{metrics.sleepScore}</div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Sleep Score</div>
+          </div>
+          <div className="text-center p-2 rounded-xl bg-accent/20">
             <div className="text-lg font-bold display-number text-foreground">
-              {metrics.avgSleep > 0 ? `${metrics.avgSleep.toFixed(1)}h` : "—"}
+              {metrics.avgSleepLast3 > 0 ? `${metrics.avgSleepLast3.toFixed(1)}h` : "—"}
             </div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Avg Sleep</div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-wider">3-Night Avg</div>
           </div>
         </div>
       </div>
@@ -265,6 +324,24 @@ export function RecoveryDashboard({ sessions28d, userId, sessionLoggedAt = 0, at
         </div>
         <StrainChart strainHistory={metrics.strainHistory} forecast={metrics.forecast} />
       </div>
+
+      {/* 3.5) Trend Alerts — only when alerts exist */}
+      {metrics.trends.alerts.length > 0 && (
+        <div className="glass-card rounded-[20px] p-4 border border-amber-500/30 bg-amber-500/5">
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle className="h-5 w-5 text-amber-400" />
+            <h2 className="text-lg font-bold text-amber-400">Trend Alerts</h2>
+          </div>
+          <ul className="space-y-1.5">
+            {metrics.trends.alerts.map((alert, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-amber-300/90">
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-400 mt-0.5 shrink-0" />
+                {alert}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* 4) Forecast Summary Card */}
       <div className="glass-card rounded-[20px] p-4 border border-border/50">
@@ -329,8 +406,8 @@ export function RecoveryDashboard({ sessions28d, userId, sessionLoggedAt = 0, at
   );
 }
 
-// ─── Readiness Hero Badge ─────────────────────────────────────
-function ReadinessBadge({ state }: { state: CoachResponse['readiness_state'] }) {
+// ─── Readiness Hero Badge (AI-driven) ────────────────────────
+function ReadinessBadgeUI({ state }: { state: CoachResponse['readiness_state'] }) {
   const badge = getReadinessBadge(state);
   const Icon = badge.icon;
 
@@ -338,6 +415,20 @@ function ReadinessBadge({ state }: { state: CoachResponse['readiness_state'] }) 
     <div className={`flex items-center justify-center gap-2 py-3 px-6 rounded-2xl border text-lg font-bold tracking-wide ${badge.className}`}>
       <Icon className="h-5 w-5" />
       {badge.label}
+    </div>
+  );
+}
+
+// ─── Deterministic Readiness Badge ───────────────────────────
+function DeterministicReadinessBadge({ label, score }: { label: ReadinessResult['label']; score: number }) {
+  const badge = getDeterministicReadinessBadge(label);
+  const Icon = badge.icon;
+
+  return (
+    <div className={`flex items-center justify-center gap-2 py-3 px-6 rounded-2xl border text-lg font-bold tracking-wide ${badge.className}`}>
+      <Icon className="h-5 w-5" />
+      {badge.label}
+      <span className="text-sm font-normal opacity-70">{score}/100</span>
     </div>
   );
 }

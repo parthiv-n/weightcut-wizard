@@ -5,6 +5,11 @@ import { useState } from "react";
 interface Ingredient {
   name: string;
   grams: number;
+  calories?: number;
+  protein_g?: number;
+  carbs_g?: number;
+  fats_g?: number;
+  quantity?: string;
 }
 
 interface MealCardProps {
@@ -99,18 +104,29 @@ export function MealCard({ meal, onEdit, onDelete }: MealCardProps) {
         <div className="px-4 pb-4 pt-2 space-y-2 animate-fade-in border-t border-border/20 bg-black/10">
           {meal.ingredients && meal.ingredients.length > 0 && (
             <div className="space-y-1">
-              {meal.ingredients.map((ingredient, idx) => (
-                <div key={idx} className="flex justify-between text-xs text-muted-foreground">
-                  <span>{ingredient.name}</span>
-                  <span>{ingredient.grams}g</span>
-                </div>
-              ))}
+              {meal.ingredients.map((ingredient, idx) =>
+                ingredient.calories != null ? (
+                  <div key={idx} className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span className="flex-1 min-w-0 truncate">
+                      {ingredient.quantity ? `${ingredient.quantity} ` : ""}{ingredient.name}
+                    </span>
+                    <span className="flex-shrink-0 ml-2 tabular-nums">
+                      {ingredient.calories} · P{Math.round(ingredient.protein_g || 0)}  C{Math.round(ingredient.carbs_g || 0)}  F{Math.round(ingredient.fats_g || 0)}
+                    </span>
+                  </div>
+                ) : (
+                  <div key={idx} className="flex justify-between text-xs text-muted-foreground">
+                    <span>{ingredient.name}</span>
+                    <span>{ingredient.grams}g</span>
+                  </div>
+                )
+              )}
             </div>
           )}
           {meal.portion_size && !meal.ingredients?.length && (
             <p className="text-xs text-muted-foreground">Portion: {meal.portion_size}</p>
           )}
-          {meal.recipe_notes && (
+          {meal.recipe_notes && !meal.ingredients?.some(i => i.calories != null) && (
             <p className="text-xs text-muted-foreground whitespace-pre-wrap">{meal.recipe_notes}</p>
           )}
           {(onEdit || onDelete) && (

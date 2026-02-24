@@ -40,6 +40,41 @@ export interface ForecastResult {
   isRestDay: boolean;
 }
 
+// ─── New Types ──────────────────────────────────────────────
+
+export type AthleteTier = 'beginner' | 'developing' | 'intermediate' | 'advanced';
+
+export interface AthleteCalibration {
+  tier: AthleteTier;
+  loadRatioThresholds: { caution: number; danger: number };
+  rpeCeiling: number;
+  normalSessionsPerWeek: number;
+  strainDivisor: number;
+  sessionFrequencyFlagThreshold: number;
+}
+
+export interface TrendAlerts {
+  sorenessRising: boolean;
+  sleepDeclining: boolean;
+  loadEscalating: boolean;
+  rpeCreeping: boolean;
+  alerts: string[];
+}
+
+export interface ReadinessBreakdown {
+  sleepScore: number;
+  sorenessScore: number;
+  loadBalanceScore: number;
+  recoveryScore: number;
+  consistencyScore: number;
+}
+
+export interface ReadinessResult {
+  score: number;
+  label: 'peaked' | 'ready' | 'recovering' | 'strained';
+  breakdown: ReadinessBreakdown;
+}
+
 export interface AllMetrics {
   strain: number;           // Today's 0-21 strain
   dailyLoad: number;        // Today's raw load
@@ -58,6 +93,53 @@ export interface AllMetrics {
   strainHistory: DailyStrainEntry[]; // Last 7 days for chart
   forecast: ForecastResult;
   recentSessions: SessionRow[];
+  // New fields
+  readiness: ReadinessResult;
+  trends: TrendAlerts;
+  calibration: AthleteCalibration;
+  sleepScore: number;
+  avgSleepLast3: number;
+}
+
+// ─── Utility Functions ──────────────────────────────────────
+
+export function clamp(min: number, max: number, value: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+export function mapRange(value: number, inMin: number, inMax: number, outMin: number, outMax: number): number {
+  const clamped = clamp(inMin, inMax, value);
+  return outMin + ((clamped - inMin) / (inMax - inMin)) * (outMax - outMin);
+}
+
+export function getRecentSleepValues(sessions: SessionRow[], count: number): number[] {
+  const grouped = groupByDate(sessions);
+  const today = new Date();
+  const values: number[] = [];
+  for (let i = 0; i < 28 && values.length < count; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split('T')[0];
+    const daySessions = grouped.get(dateStr) || [];
+    const withSleep = daySessions.find(s => s.sleep_hours > 0);
+    if (withSleep) values.push(withSleep.sleep_hours);
+  }
+  return values;
+}
+
+export function getRecentSorenessValues(sessions: SessionRow[], count: number): number[] {
+  const grouped = groupByDate(sessions);
+  const today = new Date();
+  const values: number[] = [];
+  for (let i = 0; i < 28 && values.length < count; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().split('T')[0];
+    const daySessions = grouped.get(dateStr) || [];
+    const withSoreness = daySessions.find(s => s.soreness_level > 0);
+    if (withSoreness) values.push(withSoreness.soreness_level);
+  }
+  return values;
 }
 
 // ─── Intensity Multiplier ────────────────────────────────────
@@ -120,17 +202,97 @@ export function dailyLoad(sessions: SessionRow[]): number {
 }
 
 // ─── Strain (WHOOP-style scaling) ────────────────────────────
-// strain = 21 * (1 - e^(-dailyLoad / 1000))
+// strain = 21 * (1 - e^(-dailyLoad / divisor))
 // Clamped 0-21. Diminishing returns at high loads.
-export function calculateStrain(load: number): number {
-  const strain = 21 * (1 - Math.exp(-load / 1000));
+export function calculateStrain(load: number, divisor: number = 1000): number {
+  const strain = 21 * (1 - Math.exp(-load / divisor));
   const clamped = Math.min(21, Math.max(0, strain));
 
   if (import.meta.env.DEV) {
-    console.log('[PE] strain:', { load, strain: clamped });
+    console.log('[PE] strain:', { load, divisor, strain: clamped });
   }
 
   return clamped;
+}
+
+// ─── Athlete Calibration System ─────────────────────────────
+
+const TIER_DEFAULTS: Record<AthleteTier, Omit<AthleteCalibration, 'tier'>> = {
+  advanced: {
+    loadRatioThresholds: { caution: 1.4, danger: 1.6 },
+    rpeCeiling: 8,
+    normalSessionsPerWeek: 6,
+    strainDivisor: 1400,
+    sessionFrequencyFlagThreshold: 8,
+  },
+  intermediate: {
+    loadRatioThresholds: { caution: 1.3, danger: 1.5 },
+    rpeCeiling: 7,
+    normalSessionsPerWeek: 4,
+    strainDivisor: 1100,
+    sessionFrequencyFlagThreshold: 6,
+  },
+  developing: {
+    loadRatioThresholds: { caution: 1.2, danger: 1.4 },
+    rpeCeiling: 7,
+    normalSessionsPerWeek: 3,
+    strainDivisor: 900,
+    sessionFrequencyFlagThreshold: 4,
+  },
+  beginner: {
+    loadRatioThresholds: { caution: 1.1, danger: 1.3 },
+    rpeCeiling: 6,
+    normalSessionsPerWeek: 1,
+    strainDivisor: 700,
+    sessionFrequencyFlagThreshold: 3,
+  },
+};
+
+function determineTier(profileFreq: number | null, activityLevel: string | null): AthleteTier {
+  const f = profileFreq ?? 0;
+  if (f >= 6 || activityLevel === 'extra_active') return 'advanced';
+  if (f >= 4 || activityLevel === 'very_active') return 'intermediate';
+  if (f >= 2 || activityLevel === 'moderately_active') return 'developing';
+  return 'beginner';
+}
+
+export function deriveCalibration(
+  profileFreq: number | null,
+  activityLevel: string | null,
+  sessions28d: SessionRow[],
+): AthleteCalibration {
+  const tier = determineTier(profileFreq, activityLevel);
+  const defaults = TIER_DEFAULTS[tier];
+  const calibration: AthleteCalibration = { tier, ...defaults };
+
+  // Personal override: need 7+ unique training days in 28d data
+  const trainingSessions = sessions28d.filter(s => s.session_type !== 'Rest' && s.session_type !== 'Recovery');
+  const uniqueTrainingDays = new Set(trainingSessions.map(s => s.date)).size;
+
+  if (uniqueTrainingDays >= 7) {
+    // Personal RPE ceiling from avg RPE + 1.5
+    const avgRPE = trainingSessions.reduce((sum, s) => sum + s.rpe, 0) / trainingSessions.length;
+    calibration.rpeCeiling = clamp(4, 10, avgRPE + 1.5);
+
+    // Actual sessions per week from real data
+    const weeksOfData = Math.max(1, uniqueTrainingDays / 7 * (28 / Math.max(1, uniqueTrainingDays)) );
+    // Count actual unique days over 28 days, convert to weekly rate
+    calibration.normalSessionsPerWeek = Math.round((uniqueTrainingDays / 4) * 10) / 10; // 28 days = 4 weeks
+
+    // Personal strain divisor: avg session load maps to ~strain 8-9/21
+    // 21*(1-e^(-avgLoad/divisor)) = 8.5 → divisor = -avgLoad / ln(1 - 8.5/21)
+    const avgSessionLoad = trainingSessions.reduce((sum, s) => sum + sessionLoad(s), 0) / trainingSessions.length;
+    const targetStrain = 8.5;
+    const ratio = 1 - targetStrain / 21;
+    if (ratio > 0 && avgSessionLoad > 0) {
+      calibration.strainDivisor = clamp(400, 2500, -avgSessionLoad / Math.log(ratio));
+    }
+
+    // Flag threshold: personal weekly rate + 2
+    calibration.sessionFrequencyFlagThreshold = Math.ceil(calibration.normalSessionsPerWeek + 2);
+  }
+
+  return calibration;
 }
 
 // ─── Group Sessions By Date ──────────────────────────────────
@@ -178,37 +340,110 @@ function computeLoadMetrics(dailyLoads: { date: string; load: number }[]) {
   return { acuteLoad, chronicLoad, loadRatio };
 }
 
-// ─── Overtraining Risk Engine ────────────────────────────────
-// Score 0-100 based on multiple risk factors
-function computeOvertrainingScore(
+// ─── Trend Detection ────────────────────────────────────────
+
+export function detectTrends(
+  sessions28d: SessionRow[],
+  dailyLoadsArr: { date: string; load: number }[],
+): TrendAlerts {
+  const alerts: string[] = [];
+  let sorenessRising = false;
+  let sleepDeclining = false;
+  let loadEscalating = false;
+  let rpeCreeping = false;
+
+  // Soreness rising: 3+ consecutive days of increasing soreness (most-recent-first)
+  const recentSoreness = getRecentSorenessValues(sessions28d, 4);
+  if (recentSoreness.length >= 3) {
+    // recentSoreness[0] is most recent
+    if (recentSoreness[0] > recentSoreness[1] && recentSoreness[1] > recentSoreness[2]) {
+      sorenessRising = true;
+      alerts.push(`Soreness trending up: ${recentSoreness[2]}→${recentSoreness[1]}→${recentSoreness[0]}/10 over 3 days`);
+    }
+  }
+
+  // Sleep declining: 3 of last 4 nights declining
+  const recentSleep = getRecentSleepValues(sessions28d, 4);
+  if (recentSleep.length >= 4) {
+    let decliningCount = 0;
+    for (let i = 0; i < 3; i++) {
+      if (recentSleep[i] < recentSleep[i + 1]) decliningCount++;
+    }
+    if (decliningCount >= 3) {
+      sleepDeclining = true;
+      alerts.push(`Sleep declining: ${recentSleep.slice().reverse().map(h => h + 'h').join('→')} over 4 nights`);
+    }
+  }
+
+  // Load escalating: 3+ consecutive days of increasing load with no rest
+  const lastDays = dailyLoadsArr.slice(-4);
+  if (lastDays.length >= 3) {
+    const last3 = lastDays.slice(-3);
+    const allNonZero = last3.every(d => d.load > 0);
+    const increasing = last3[2].load > last3[1].load && last3[1].load > last3[0].load;
+    if (allNonZero && increasing) {
+      loadEscalating = true;
+      alerts.push(`Training load escalating for 3+ days with no rest`);
+    }
+  }
+
+  // RPE creeping: avg RPE of last 3 sessions > prior 3 by 1.5+
+  const trainingSessions = sessions28d
+    .filter(s => s.session_type !== 'Rest' && s.session_type !== 'Recovery')
+    .sort((a, b) => b.date.localeCompare(a.date) || b.created_at.localeCompare(a.created_at));
+
+  if (trainingSessions.length >= 6) {
+    const recent3 = trainingSessions.slice(0, 3);
+    const prior3 = trainingSessions.slice(3, 6);
+    const avgRecent = recent3.reduce((s, x) => s + x.rpe, 0) / 3;
+    const avgPrior = prior3.reduce((s, x) => s + x.rpe, 0) / 3;
+    if (avgRecent - avgPrior >= 1.5) {
+      rpeCreeping = true;
+      alerts.push(`RPE creeping up: recent avg ${avgRecent.toFixed(1)} vs prior ${avgPrior.toFixed(1)}`);
+    }
+  }
+
+  return { sorenessRising, sleepDeclining, loadEscalating, rpeCreeping, alerts };
+}
+
+// ─── Adaptive Overtraining Score ────────────────────────────
+
+function computeAdaptiveOvertrainingScore(
   loadRatio: number,
   avgRPE7d: number,
   avgSoreness7d: number,
   consecutiveHighDays: number,
   sessionsLast7d: number,
+  calibration: AthleteCalibration,
+  trends: TrendAlerts,
 ): OvertrainingRisk {
   let score = 0;
   const factors: string[] = [];
 
-  // Load ratio spikes
-  if (loadRatio > 1.5) {
+  // Load ratio scoring using calibrated thresholds
+  const { caution, danger } = calibration.loadRatioThresholds;
+  if (loadRatio > danger) {
     score += 40;
-    factors.push('Severe acute load spike (ratio > 1.5)');
-  } else if (loadRatio > 1.3) {
-    score += 25;
-    factors.push('Elevated acute load (ratio > 1.3)');
+    factors.push(`Severe acute load spike (ratio ${loadRatio.toFixed(2)} > ${danger})`);
+  } else if (loadRatio > caution) {
+    // Proportional: 15 at caution, 40 at danger
+    score += Math.round(mapRange(loadRatio, caution, danger, 15, 40));
+    factors.push(`Elevated acute load (ratio ${loadRatio.toFixed(2)} > ${caution})`);
   }
 
-  // Average RPE
-  if (avgRPE7d > 8) {
-    score += 15;
-    factors.push('Average RPE over 8 in last 7 days');
+  // RPE scoring using calibrated ceiling — proportional penalty per point over ceiling
+  if (avgRPE7d > calibration.rpeCeiling) {
+    const overBy = avgRPE7d - calibration.rpeCeiling;
+    const rpePenalty = Math.round(clamp(0, 25, overBy * 10));
+    score += rpePenalty;
+    factors.push(`Average RPE ${avgRPE7d.toFixed(1)} exceeds ceiling ${calibration.rpeCeiling}`);
   }
 
-  // Average soreness
-  if (avgSoreness7d > 7) {
-    score += 20;
-    factors.push('High average soreness (>7) in last 7 days');
+  // Soreness: threshold at >6 with proportional scoring (10-25 pts)
+  if (avgSoreness7d > 6) {
+    const sorenessPenalty = Math.round(mapRange(avgSoreness7d, 6, 10, 10, 25));
+    score += sorenessPenalty;
+    factors.push(`High average soreness (${avgSoreness7d.toFixed(1)}/10) in last 7 days`);
   }
 
   // Consecutive high strain days (strain > 15)
@@ -217,13 +452,27 @@ function computeOvertrainingScore(
     factors.push(`${consecutiveHighDays} consecutive high-strain days`);
   }
 
-  // Session frequency
-  if (sessionsLast7d >= 5) {
+  // Session frequency using calibrated threshold
+  if (sessionsLast7d >= calibration.sessionFrequencyFlagThreshold) {
     score += 15;
-    factors.push('5+ sessions in last 7 days');
+    factors.push(`${sessionsLast7d} sessions in last 7 days (threshold: ${calibration.sessionFrequencyFlagThreshold})`);
   }
 
-  score = Math.min(100, Math.max(0, score));
+  // Trend-based penalties
+  if (trends.sorenessRising) {
+    score += 10;
+    factors.push('Soreness trending upward');
+  }
+  if (trends.sleepDeclining) {
+    score += 8;
+    factors.push('Sleep quality declining');
+  }
+  if (trends.loadEscalating) {
+    score += 8;
+    factors.push('Training load escalating without rest');
+  }
+
+  score = clamp(0, 100, score);
 
   let zone: OvertrainingRisk['zone'];
   if (score <= 30) zone = 'low';
@@ -232,43 +481,209 @@ function computeOvertrainingScore(
   else zone = 'critical';
 
   if (import.meta.env.DEV) {
-    console.log('[PE] overtrainingScore:', { score, zone, factors });
+    console.log('[PE] adaptiveOvertrainingScore:', { score, zone, factors, tier: calibration.tier });
   }
 
   return { score, zone, factors };
 }
 
-// ─── Rest Day Logic ──────────────────────────────────────────
-// When a rest day is logged, apply recovery adjustments
+// ─── Granular Rest Day Recovery ─────────────────────────────
+// Backward compatible — old 3-arg calls still work
 export function applyRestDayRecovery(
   currentOvertrainingScore: number,
   sorenessLevel: number,
   sleepQuality: string | null,
+  sleepHours?: number | null,
+  fatigueLevel?: number | null,
+  mobilityDone?: boolean | null,
 ): number {
-  // Good recovery conditions: reduce by 15%
-  if (sorenessLevel <= 4 && sleepQuality === 'good') {
-    return Math.max(0, currentOvertrainingScore * 0.85);
+  // If only 3 args provided (old callers), use legacy behavior
+  if (sleepHours === undefined && fatigueLevel === undefined && mobilityDone === undefined) {
+    if (sorenessLevel <= 4 && sleepQuality === 'good') {
+      return Math.max(0, currentOvertrainingScore * 0.85);
+    }
+    return Math.max(0, currentOvertrainingScore * 0.95);
   }
-  // Poor recovery: reduce by only 5%
-  return Math.max(0, currentOvertrainingScore * 0.95);
+
+  // Granular recovery: 5%-25% reduction
+  let recoveryPct = 5; // base minimum
+
+  // Sleep quality
+  if (sleepQuality === 'good') recoveryPct += 8;
+  else if (sleepQuality === 'poor') recoveryPct += 2;
+
+  // Sleep hours
+  const hours = sleepHours ?? 0;
+  if (hours >= 8) recoveryPct += 5;
+  else if (hours >= 7) recoveryPct += 3;
+  else if (hours >= 6) recoveryPct += 1;
+
+  // Soreness
+  if (sorenessLevel <= 2) recoveryPct += 5;
+  else if (sorenessLevel <= 4) recoveryPct += 3;
+  else if (sorenessLevel <= 6) recoveryPct += 1;
+
+  // Fatigue level
+  const fatigue = fatigueLevel ?? 10;
+  if (fatigue <= 3) recoveryPct += 4;
+  else if (fatigue <= 5) recoveryPct += 2;
+  else if (fatigue <= 7) recoveryPct += 1;
+
+  // Mobility done
+  if (mobilityDone) recoveryPct += 3;
+
+  recoveryPct = clamp(5, 25, recoveryPct);
+
+  return Math.max(0, currentOvertrainingScore * (1 - recoveryPct / 100));
+}
+
+// ─── Readiness Score (0-100) ────────────────────────────────
+
+export function computeReadiness(
+  sessions28d: SessionRow[],
+  dailyLoadsArr: { date: string; load: number; sessions: SessionRow[] }[],
+  loadRatio: number,
+  calibration: AthleteCalibration,
+): ReadinessResult {
+  // ── Sleep Score (30%) ──
+  const recentSleep = getRecentSleepValues(sessions28d, 3);
+  let sleepScore: number;
+  if (recentSleep.length === 0) {
+    sleepScore = 50; // neutral if no data
+  } else {
+    // 28d avg as baseline, default 7.5
+    const allSleep = sessions28d.filter(s => s.sleep_hours > 0);
+    const baseline = allSleep.length > 0
+      ? allSleep.reduce((sum, s) => sum + s.sleep_hours, 0) / allSleep.length
+      : 7.5;
+
+    // Exponentially weighted last 3 nights (0.5/0.3/0.2)
+    const weights = [0.5, 0.3, 0.2];
+    let weightedSleep = 0;
+    let totalWeight = 0;
+    for (let i = 0; i < recentSleep.length; i++) {
+      const w = weights[i] ?? 0;
+      weightedSleep += recentSleep[i] * w;
+      totalWeight += w;
+    }
+    if (totalWeight > 0) weightedSleep /= totalWeight;
+    else weightedSleep = baseline;
+
+    // 100 at baseline+1h, 0 at baseline-3h
+    sleepScore = clamp(0, 100, mapRange(weightedSleep, baseline - 3, baseline + 1, 0, 100));
+  }
+
+  // ── Soreness Score (25%) ──
+  const recentSoreness = getRecentSorenessValues(sessions28d, 3);
+  let sorenessScore: number;
+  if (recentSoreness.length === 0) {
+    sorenessScore = 80; // default if no data
+  } else {
+    // Weighted 3-day soreness (0.5/0.3/0.2)
+    const weights = [0.5, 0.3, 0.2];
+    let weightedSoreness = 0;
+    let totalWeight = 0;
+    for (let i = 0; i < recentSoreness.length; i++) {
+      const w = weights[i] ?? 0;
+      weightedSoreness += recentSoreness[i] * w;
+      totalWeight += w;
+    }
+    if (totalWeight > 0) weightedSoreness /= totalWeight;
+    else weightedSoreness = 2;
+
+    // Inverse: 100 at 0/10, 0 at 10/10
+    sorenessScore = clamp(0, 100, mapRange(weightedSoreness, 0, 10, 100, 0));
+  }
+
+  // ── Load Balance Score (25%) ──
+  const { caution, danger } = calibration.loadRatioThresholds;
+  let loadBalanceScore: number;
+  if (loadRatio < 0.8) {
+    loadBalanceScore = 70; // detraining penalty
+  } else if (loadRatio <= caution) {
+    loadBalanceScore = 100; // sweet spot
+  } else if (loadRatio <= danger + 0.3) {
+    loadBalanceScore = clamp(0, 100, mapRange(loadRatio, caution, danger + 0.3, 100, 0));
+  } else {
+    loadBalanceScore = 0;
+  }
+
+  // ── Recovery Score (10%) ──
+  const optimalRestDays = 7 - calibration.normalSessionsPerWeek;
+  const last7 = dailyLoadsArr.slice(-7);
+  const actualRestDays = last7.filter(d => d.load === 0).length;
+  let recoveryScore = clamp(0, 100, mapRange(actualRestDays, 0, Math.max(1, optimalRestDays), 20, 100));
+
+  // Boost from good sleep quality and mobility on recent rest days
+  const restDaySessions = last7
+    .filter(d => d.load === 0)
+    .flatMap(d => d.sessions);
+  const goodSleepOnRest = restDaySessions.filter(s => s.sleep_quality === 'good').length;
+  const mobilityOnRest = restDaySessions.filter(s => s.mobility_done).length;
+  recoveryScore = clamp(0, 100, recoveryScore + goodSleepOnRest * 5 + mobilityOnRest * 5);
+
+  // ── Consistency Score (10%) ──
+  const last7Loads = last7.map(d => d.load).filter(l => l > 0);
+  let consistencyScore: number;
+  if (last7Loads.length <= 1) {
+    consistencyScore = 50; // not enough data
+  } else {
+    const mean = last7Loads.reduce((s, l) => s + l, 0) / last7Loads.length;
+    const variance = last7Loads.reduce((s, l) => s + (l - mean) ** 2, 0) / last7Loads.length;
+    const cv = mean > 0 ? Math.sqrt(variance) / mean : 0;
+    // CV<0.15=100, CV>0.8=20
+    consistencyScore = clamp(20, 100, mapRange(cv, 0.15, 0.8, 100, 20));
+  }
+
+  // ── Composite ──
+  const score = clamp(0, 100, Math.round(
+    sleepScore * 0.30 +
+    sorenessScore * 0.25 +
+    loadBalanceScore * 0.25 +
+    recoveryScore * 0.10 +
+    consistencyScore * 0.10
+  ));
+
+  let label: ReadinessResult['label'];
+  if (score >= 80) label = 'peaked';
+  else if (score >= 55) label = 'ready';
+  else if (score >= 35) label = 'recovering';
+  else label = 'strained';
+
+  return {
+    score,
+    label,
+    breakdown: {
+      sleepScore: Math.round(sleepScore),
+      sorenessScore: Math.round(sorenessScore),
+      loadBalanceScore: Math.round(loadBalanceScore),
+      recoveryScore: Math.round(recoveryScore),
+      consistencyScore: Math.round(consistencyScore),
+    },
+  };
 }
 
 // ─── Helper: Get 7-day strain history ────────────────────────
-function getStrainHistory(dailyLoads: { date: string; load: number; sessions: SessionRow[] }[]): DailyStrainEntry[] {
+function getStrainHistory(
+  dailyLoads: { date: string; load: number; sessions: SessionRow[] }[],
+  divisor: number = 1000,
+): DailyStrainEntry[] {
   return dailyLoads.slice(-7).map(d => ({
     date: d.date,
-    strain: calculateStrain(d.load),
+    strain: calculateStrain(d.load, divisor),
     dailyLoad: d.load,
     sessionCount: d.sessions.filter(s => s.session_type !== 'Rest').length,
   }));
 }
 
 // ─── Helper: Consecutive high-strain days ────────────────────
-function getConsecutiveHighStrainDays(dailyLoads: { date: string; load: number }[]): number {
+function getConsecutiveHighStrainDays(
+  dailyLoads: { date: string; load: number }[],
+  divisor: number = 1000,
+): number {
   let count = 0;
-  // Walk backwards from today
   for (let i = dailyLoads.length - 1; i >= 0; i--) {
-    if (calculateStrain(dailyLoads[i].load) > 15) {
+    if (calculateStrain(dailyLoads[i].load, divisor) > 15) {
       count++;
     } else {
       break;
@@ -368,56 +783,146 @@ function getRecentSessions(sessions28d: SessionRow[]): SessionRow[] {
   return recent.slice(0, 15);
 }
 
-// ─── Forecast ────────────────────────────────────────────────
+// ─── Improved Forecast ──────────────────────────────────────
 function computeForecast(
   dailyLoads: { date: string; load: number }[],
   currentOvertrainingScore: number,
+  calibration: AthleteCalibration,
 ): ForecastResult {
-  // Predict tomorrow's load as average of last 3 days
-  const last3 = dailyLoads.slice(-3);
-  const avgLoad = last3.reduce((sum, d) => sum + d.load, 0) / last3.length;
+  // Try same-day-of-week prediction from past 3 weeks
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const targetDow = tomorrow.getDay();
 
-  // Projected with training
-  const predictedStrain = calculateStrain(avgLoad);
+  const sameDowLoads: number[] = [];
+  for (let weeksBack = 1; weeksBack <= 3; weeksBack++) {
+    const idx = dailyLoads.length - (weeksBack * 7);
+    if (idx >= 0) {
+      const entry = dailyLoads[idx];
+      const entryDate = new Date(entry.date);
+      if (entryDate.getDay() === targetDow && entry.load > 0) {
+        sameDowLoads.push(entry.load);
+      }
+    }
+  }
 
-  // Projected load ratio with one more day of avg load
+  let avgLoad: number;
+  if (sameDowLoads.length >= 2) {
+    // Same-day-of-week pattern
+    avgLoad = sameDowLoads.reduce((s, l) => s + l, 0) / sameDowLoads.length;
+  } else {
+    // Fallback: recent-biased weighted average (0.5/0.3/0.2 of last 3 days)
+    const last3 = dailyLoads.slice(-3);
+    const weights = [0.5, 0.3, 0.2];
+    let weighted = 0;
+    let totalW = 0;
+    for (let i = 0; i < last3.length; i++) {
+      const w = weights[i] ?? 0.1;
+      weighted += last3[last3.length - 1 - i].load * w; // most recent first
+      totalW += w;
+    }
+    avgLoad = totalW > 0 ? weighted / totalW : 0;
+  }
+
+  const predictedStrain = calculateStrain(avgLoad, calibration.strainDivisor);
+
+  // Projected load ratio
   const acuteWithPredicted = dailyLoads.slice(-6).reduce((sum, d) => sum + d.load, 0) + avgLoad;
   const chronicWithPredicted = (dailyLoads.reduce((sum, d) => sum + d.load, 0) + avgLoad) / 29;
   const predictedLoadRatio = acuteWithPredicted / (chronicWithPredicted + 1);
 
-  // Simple OT projection
-  const predictedOvertrainingScore = Math.min(100, currentOvertrainingScore + (predictedLoadRatio > 1.3 ? 10 : -5));
+  // OT projection using calibrated thresholds
+  let otDelta: number;
+  const { caution, danger } = calibration.loadRatioThresholds;
+  if (avgLoad === 0) {
+    otDelta = -10; // rest day
+  } else if (predictedLoadRatio > caution) {
+    // Proportional: +5 at caution, +15 at danger+
+    otDelta = Math.round(mapRange(predictedLoadRatio, caution, danger, 5, 15));
+  } else {
+    otDelta = -3; // within limits
+  }
+
+  const predictedOvertrainingScore = clamp(0, 100, currentOvertrainingScore + otDelta);
 
   return {
     predictedStrain,
     predictedLoadRatio,
-    predictedOvertrainingScore: Math.max(0, predictedOvertrainingScore),
-    isRestDay: false,
+    predictedOvertrainingScore,
+    isRestDay: avgLoad === 0,
   };
 }
 
+// ─── Helper: Sleep score for stats display ──────────────────
+function computeSleepScore(sessions28d: SessionRow[]): number {
+  const recentSleep = getRecentSleepValues(sessions28d, 3);
+  if (recentSleep.length === 0) return 50;
+
+  const allSleep = sessions28d.filter(s => s.sleep_hours > 0);
+  const baseline = allSleep.length > 0
+    ? allSleep.reduce((sum, s) => sum + s.sleep_hours, 0) / allSleep.length
+    : 7.5;
+
+  const weights = [0.5, 0.3, 0.2];
+  let weightedSleep = 0;
+  let totalWeight = 0;
+  for (let i = 0; i < recentSleep.length; i++) {
+    const w = weights[i] ?? 0;
+    weightedSleep += recentSleep[i] * w;
+    totalWeight += w;
+  }
+  if (totalWeight > 0) weightedSleep /= totalWeight;
+  else weightedSleep = baseline;
+
+  return Math.round(clamp(0, 100, mapRange(weightedSleep, baseline - 3, baseline + 1, 0, 100)));
+}
+
+// ─── Helper: Average sleep last 3 nights ────────────────────
+function getAvgSleepLast3(sessions28d: SessionRow[]): number {
+  const recentSleep = getRecentSleepValues(sessions28d, 3);
+  if (recentSleep.length === 0) return 0;
+  return recentSleep.reduce((s, h) => s + h, 0) / recentSleep.length;
+}
+
 // ─── Master Function ─────────────────────────────────────────
-export function computeAllMetrics(sessions28d: SessionRow[]): AllMetrics {
+export function computeAllMetrics(
+  sessions28d: SessionRow[],
+  profileFreq?: number | null,
+  activityLevel?: string | null,
+): AllMetrics {
+  // Derive calibration
+  const calibration = deriveCalibration(
+    profileFreq ?? null,
+    activityLevel ?? null,
+    sessions28d,
+  );
+
   const dailyLoadsArr = buildDailyLoads(sessions28d);
   const { acuteLoad, chronicLoad, loadRatio } = computeLoadMetrics(dailyLoadsArr);
 
   const todayEntry = dailyLoadsArr[dailyLoadsArr.length - 1];
-  const todayStrain = calculateStrain(todayEntry.load);
+  const todayStrain = calculateStrain(todayEntry.load, calibration.strainDivisor);
 
   const avgRPE7d = getAvgRPE7d(sessions28d);
   const avgSoreness7d = getAvgSoreness7d(sessions28d);
-  const consecutiveHighDays = getConsecutiveHighStrainDays(dailyLoadsArr);
+  const consecutiveHighDays = getConsecutiveHighStrainDays(dailyLoadsArr, calibration.strainDivisor);
   const sessionsLast7d = getSessionsLast7d(sessions28d);
 
-  const overtrainingRisk = computeOvertrainingScore(
+  // Detect trends
+  const trends = detectTrends(sessions28d, dailyLoadsArr);
+
+  // Adaptive overtraining score
+  const overtrainingRisk = computeAdaptiveOvertrainingScore(
     loadRatio,
     avgRPE7d,
     avgSoreness7d,
     consecutiveHighDays,
     sessionsLast7d,
+    calibration,
+    trends,
   );
 
-  // Check if today has rest day sessions — apply recovery
+  // Check if today has rest day sessions — apply granular recovery
   const todayRestSessions = todayEntry.sessions?.filter(s => s.session_type === 'Rest') || [];
   if (todayRestSessions.length > 0) {
     const restSession = todayRestSessions[0];
@@ -425,6 +930,9 @@ export function computeAllMetrics(sessions28d: SessionRow[]): AllMetrics {
       overtrainingRisk.score,
       restSession.soreness_level,
       restSession.sleep_quality ?? null,
+      restSession.sleep_hours,
+      restSession.fatigue_level ?? null,
+      restSession.mobility_done ?? null,
     );
     overtrainingRisk.score = adjusted;
     // Recalculate zone
@@ -434,7 +942,13 @@ export function computeAllMetrics(sessions28d: SessionRow[]): AllMetrics {
     else overtrainingRisk.zone = 'critical';
   }
 
-  const forecast = computeForecast(dailyLoadsArr, overtrainingRisk.score);
+  // Readiness
+  const readiness = computeReadiness(sessions28d, dailyLoadsArr, loadRatio, calibration);
+
+  const forecast = computeForecast(dailyLoadsArr, overtrainingRisk.score, calibration);
+
+  const sleepScore = computeSleepScore(sessions28d);
+  const avgSleepLast3 = getAvgSleepLast3(sessions28d);
 
   if (import.meta.env.DEV) {
     console.log('[PE] allMetrics:', {
@@ -444,6 +958,8 @@ export function computeAllMetrics(sessions28d: SessionRow[]): AllMetrics {
       loadRatio,
       overtrainingScore: overtrainingRisk.score,
       overtrainingZone: overtrainingRisk.zone,
+      readiness: readiness.score,
+      tier: calibration.tier,
     });
   }
 
@@ -462,8 +978,14 @@ export function computeAllMetrics(sessions28d: SessionRow[]): AllMetrics {
     avgSoreness7d,
     sessionsLast7d,
     consecutiveHighDays,
-    strainHistory: getStrainHistory(dailyLoadsArr),
+    strainHistory: getStrainHistory(dailyLoadsArr, calibration.strainDivisor),
     forecast,
     recentSessions: getRecentSessions(sessions28d),
+    // New fields
+    readiness,
+    trends,
+    calibration,
+    sleepScore,
+    avgSleepLast3,
   };
 }

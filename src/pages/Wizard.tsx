@@ -62,7 +62,7 @@ export default function Wizard() {
   };
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-background">
+    <div className="flex flex-col h-[100dvh] bg-background overflow-hidden">
       {/* Header */}
       <div className="flex-none pt-[calc(env(safe-area-inset-top)+1rem)] px-4 pb-4 border-b border-primary/15 bg-gradient-to-r from-primary/5 via-secondary/5 to-accent/5 backdrop-blur-xl z-10">
         <div className="flex items-center gap-3">
@@ -97,7 +97,7 @@ export default function Wizard() {
       </div>
 
       {/* Chat Area */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-3 pb-[calc(env(safe-area-inset-bottom)+8rem)]" ref={scrollRef}>
+      <div className="flex-1 overflow-y-auto min-h-0 p-3 space-y-3 pb-3" ref={scrollRef}>
         {messages.map((msg, idx) => (
           <div
             key={idx}
@@ -163,8 +163,8 @@ export default function Wizard() {
         )}
       </div>
 
-      {/* Input Area — floating */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 pb-[calc(env(safe-area-inset-bottom)+4rem)] bg-gradient-to-t from-background via-background/95 to-transparent backdrop-blur-xl z-20">
+      {/* Input Area — pinned to bottom */}
+      <div className="flex-none p-4 pb-[calc(env(safe-area-inset-bottom)+4rem)] border-t border-border/10 bg-background/95 backdrop-blur-xl">
         <form onSubmit={handleSend} className="relative">
           <div className="relative rounded-2xl glass-card border-primary/15 bg-gradient-to-r from-primary/5 via-secondary/5 to-accent/5 overflow-hidden">
             <GlowingEffect
