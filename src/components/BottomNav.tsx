@@ -1,4 +1,4 @@
-import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Sparkles, Trophy, Settings, LogOut, Droplets, Calendar, Moon, Sun, ChevronRight } from "lucide-react";
+import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Settings, LogOut, Droplets, Calendar, Moon, Sun, ChevronRight } from "lucide-react";
 import { motion } from "motion/react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { NavLink, useNavigate } from "react-router-dom";
@@ -32,7 +32,6 @@ const mainNavItems = [
 
 const moreMenuItems = [
   { title: "Goals", url: "/goals", icon: Target },
-  { title: "AI Wizard", url: "/wizard", icon: Sparkles },
   { title: "Fight Camps", url: "/fight-camps", icon: Trophy },
   { title: "Fight Camp Calendar", url: "/fight-camp-calendar", icon: Calendar },
   { title: "Rehydration", url: "/hydration", icon: Droplets },
@@ -66,11 +65,6 @@ export function BottomNav() {
   const handleLogWeight = () => {
     setQuickLogOpen(false);
     navigate("/weight?focusWeightInput=true");
-  };
-
-  const handleTalkToWizard = () => {
-    setQuickLogOpen(false);
-    navigate("/wizard");
   };
 
   const handleMoreItemClick = (url: string) => {
@@ -219,18 +213,6 @@ export function BottomNav() {
             >
               <Weight className="h-6 w-6 text-blue-500" />
               <span className="text-lg font-semibold">Log Weight</span>
-            </Button>
-            <Button
-              onClick={handleTalkToWizard}
-              size="lg"
-              className="h-16 flex items-center justify-start gap-4 px-6 border-primary/20 bg-primary/5 hover:bg-primary/10"
-              variant="outline"
-            >
-              <Sparkles className="h-6 w-6 text-primary" />
-              <div className="flex flex-col items-start leading-tight">
-                <span className="text-lg font-semibold">Talk to Wizard</span>
-                <span className="text-xs text-muted-foreground font-normal">Ask for diet & cut advice</span>
-              </div>
             </Button>
           </div>
         </DialogContent>
