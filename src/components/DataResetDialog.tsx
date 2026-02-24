@@ -12,7 +12,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { Download, Loader2, AlertTriangle } from "lucide-react";
+import { Download, Loader2, AlertTriangle, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import * as XLSX from 'xlsx';
 import { format } from "date-fns";
@@ -261,7 +261,7 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
 
       // Delete profile last (fight camps are preserved)
       const { error: deleteError } = await supabase.from("profiles").delete().eq("id", user.id);
-      
+
       if (deleteError) {
         throw deleteError;
       }
@@ -291,72 +291,69 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent className="max-w-md">
-        <AlertDialogHeader>
-          <div className="flex items-center gap-2">
+        <AlertDialogHeader className="sm:text-center">
+          {/* Icon badge */}
+          <div className="mx-auto mb-1 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 dark:bg-destructive/15 ring-1 ring-destructive/20">
             <AlertTriangle className="h-5 w-5 text-destructive" />
-            <AlertDialogTitle>Reset All Data?</AlertDialogTitle>
           </div>
-          <AlertDialogDescription className="space-y-3 pt-2">
-            <p>
-              This will permanently delete your tracking data including:
-            </p>
-            <ul className="list-disc list-inside space-y-1 text-sm">
-              <li>Profile information (age, height, targets)</li>
-              <li>All weight logs</li>
-              <li>All nutrition logs</li>
-              <li>All hydration logs</li>
-              <li>Fight week plans and logs</li>
-              <li>All AI chat history</li>
-            </ul>
-            <p className="text-sm font-medium text-primary">
-              ✓ Fight camps will be preserved
-            </p>
-            <p className="font-semibold text-foreground">
-              This action cannot be undone.
-            </p>
-            <p className="text-sm">
-              We recommend exporting your data before resetting.
-            </p>
+          <AlertDialogTitle className="text-center">Reset All Data?</AlertDialogTitle>
+          <AlertDialogDescription asChild>
+            <div className="space-y-3 pt-1 text-center text-sm text-muted-foreground">
+              <p>This will permanently delete your tracking data:</p>
+              <div className="rounded-xl bg-destructive/5 dark:bg-destructive/10 border border-destructive/10 dark:border-destructive/15 p-3 text-left text-xs space-y-1 text-muted-foreground/80">
+                <p>Profile information (age, height, targets)</p>
+                <p>All weight, nutrition & hydration logs</p>
+                <p>Fight week plans, logs & AI chat history</p>
+              </div>
+              <div className="flex items-center justify-center gap-2 text-xs font-medium text-primary">
+                <Shield className="h-3.5 w-3.5" />
+                Fight camps will be preserved
+              </div>
+              <p className="text-xs text-muted-foreground/60">
+                We recommend exporting your data before resetting.
+              </p>
+            </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <AlertDialogFooter className="flex-col sm:flex-col gap-2">
-          <Button
-            variant="outline"
-            onClick={exportAllData}
+
+        {/* Export button */}
+        <Button
+          variant="outline"
+          onClick={exportAllData}
+          disabled={exporting || resetting}
+          className="w-full rounded-xl h-10"
+        >
+          {exporting ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Exporting...
+            </>
+          ) : (
+            <>
+              <Download className="mr-2 h-4 w-4" />
+              Export Data First
+            </>
+          )}
+        </Button>
+
+        <AlertDialogFooter className="flex-row gap-3 sm:justify-center">
+          <AlertDialogCancel className="flex-1" disabled={resetting}>
+            Cancel
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleReset}
             disabled={exporting || resetting}
-            className="w-full"
+            className="flex-1 rounded-xl bg-destructive hover:bg-destructive/90"
           >
-            {exporting ? (
+            {resetting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Exporting...
+                Resetting...
               </>
             ) : (
-              <>
-                <Download className="mr-2 h-4 w-4" />
-                Export Data First
-              </>
+              "Reset All Data"
             )}
-          </Button>
-          <div className="flex gap-2 w-full">
-            <AlertDialogCancel className="flex-1" disabled={resetting}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleReset}
-              disabled={exporting || resetting}
-              className="flex-1 bg-destructive hover:bg-destructive/90"
-            >
-              {resetting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Resetting...
-                </>
-              ) : (
-                "Reset All Data"
-              )}
-            </AlertDialogAction>
-          </div>
+          </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
