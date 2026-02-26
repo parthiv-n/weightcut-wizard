@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import { AIGeneratingOverlay } from "@/components/AIGeneratingOverlay";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -204,6 +205,7 @@ export default function Hydration() {
   const [electrolyteGuideOpen, setElectrolyteGuideOpen] = useState(false);
   const { toast } = useToast();
   const { userId, profile: contextProfile, userName } = useUser();
+  const { safeAsync, isMounted } = useSafeAsync();
 
   const currentWeight = contextProfile?.current_weight_kg ?? 0;
 
@@ -248,7 +250,7 @@ export default function Hydration() {
     e.preventDefault();
     if (!currentWeight) return;
 
-    setLoading(true);
+    safeAsync(setLoading)(true);
 
     try {
       const { data, error } = await supabase.functions.invoke("rehydration-protocol", {
@@ -268,6 +270,7 @@ export default function Hydration() {
         },
       });
 
+      if (!isMounted()) return;
       if (error) throw error;
 
       if (data?.protocol) {
@@ -291,6 +294,7 @@ export default function Hydration() {
         });
       }
     } catch (error) {
+      if (!isMounted()) return;
       console.error("Error generating protocol:", error);
       toast({
         title: "Error",
@@ -299,7 +303,7 @@ export default function Hydration() {
       });
     }
 
-    setLoading(false);
+    safeAsync(setLoading)(false);
   };
 
   const toggleStep = (idx: number) => setExpandedStep((prev) => (prev === idx ? null : idx));

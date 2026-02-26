@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,7 @@ import { preloadAdjacentDates } from "@/lib/backgroundSync";
 import { AIGeneratingOverlay } from "@/components/AIGeneratingOverlay";
 import { triggerHapticSuccess, celebrateSuccess } from "@/lib/haptics";
 import { DietAnalysisCard } from "@/components/nutrition/DietAnalysisCard";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import type { DietAnalysisResult } from "@/types/dietAnalysis";
 
 interface Ingredient {
@@ -99,6 +100,7 @@ export default function Nutrition() {
 
   // Enhanced authentication state management
   const { isSessionValid, checkSessionValidity, refreshSession, userId, profile: contextProfile, refreshProfile } = useUser();
+  const { safeAsync, isMounted } = useSafeAsync();
   const [aiMacroGoals, setAiMacroGoals] = useState<{
     proteinGrams: number;
     carbsGrams: number;
@@ -219,7 +221,7 @@ export default function Nutrition() {
 
   const generateWisdomAdvice = async () => {
     if (!userId || totalCalories === 0) {
-      setAiWisdomAdvice(null);
+      safeAsync(setAiWisdomAdvice)(null);
       return;
     }
 
@@ -232,12 +234,12 @@ export default function Nutrition() {
     const cacheKey = `nutrition_wisdom_${today}_${hash}`;
     const cached = AIPersistence.load(userId, cacheKey);
     if (cached) {
-      setAiWisdomAdvice(cached);
+      safeAsync(setAiWisdomAdvice)(cached);
       wisdomGenRef.lastHash = hash;
       return;
     }
 
-    setAiWisdomLoading(true);
+    safeAsync(setAiWisdomLoading)(true);
     try {
       const calGoal = dailyCalorieTarget;
       const pGoal = aiMacroGoals?.proteinGrams || 0;
@@ -256,6 +258,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         },
       });
 
+      if (!isMounted()) return;
       if (error) throw error;
 
       // Extract the text - the API might return it in different formats
@@ -282,7 +285,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       console.error("Wisdom advice error:", err);
       // Keep fallback text, no toast needed
     } finally {
-      setAiWisdomLoading(false);
+      safeAsync(setAiWisdomLoading)(false);
     }
   };
 
@@ -296,14 +299,14 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     if (!forceRefresh && userId) {
       const cached = AIPersistence.load(userId, cacheKey);
       if (cached) {
-        setTrainingWisdom(cached);
-        setTrainingWisdomSheetOpen(true);
+        safeAsync(setTrainingWisdom)(cached);
+        safeAsync(setTrainingWisdomSheetOpen)(true);
         return;
       }
     }
 
-    setTrainingWisdomLoading(true);
-    setTrainingWisdomSheetOpen(true);
+    safeAsync(setTrainingWisdomLoading)(true);
+    safeAsync(setTrainingWisdomSheetOpen)(true);
     try {
       const calorieTarget = dailyCalorieTarget;
       const proteinGoal = aiMacroGoals?.proteinGrams || Math.round(calorieTarget * 0.4 / 4);
@@ -338,6 +341,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         },
       });
 
+      if (!isMounted()) return;
       if (error) throw error;
 
       // Try to parse training-specific response from the mealPlan data
@@ -378,7 +382,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       }
 
       if (trainingData) {
-        setTrainingWisdom(trainingData);
+        safeAsync(setTrainingWisdom)(trainingData);
         if (userId) {
           AIPersistence.save(userId, cacheKey, trainingData, 24);
         }
@@ -387,7 +391,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       console.error("Training food ideas error:", err);
       toast({ title: "Could not generate ideas", description: "Please try again later", variant: "destructive" });
     } finally {
-      setTrainingWisdomLoading(false);
+      safeAsync(setTrainingWisdomLoading)(false);
     }
   };
   const [expandedMealActions, setExpandedMealActions] = useState<string | null>(null);
@@ -577,30 +581,29 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
 
     const fightWeekTarget = profile.fight_week_target_kg;
     if (!fightWeekTarget) {
-      // No fight week target set, clear macro goals
-      setAiMacroGoals(null);
+      safeAsync(setAiMacroGoals)(null);
       return;
     }
 
-    setFetchingMacroGoals(true);
+    safeAsync(setFetchingMacroGoals)(true);
     try {
       if (!userId) {
-        setAiMacroGoals(null);
-        setFetchingMacroGoals(false);
+        safeAsync(setAiMacroGoals)(null);
+        safeAsync(setFetchingMacroGoals)(false);
         return;
       }
 
       // Check cache first
       const cachedMacroGoals = nutritionCache.getMacroGoals(userId);
       if (cachedMacroGoals) {
-        setAiMacroGoals(cachedMacroGoals.macroGoals);
+        safeAsync(setAiMacroGoals)(cachedMacroGoals.macroGoals);
         if (cachedMacroGoals.dailyCalorieTarget) {
-          setDailyCalorieTarget(cachedMacroGoals.dailyCalorieTarget);
+          safeAsync(setDailyCalorieTarget)(cachedMacroGoals.dailyCalorieTarget);
         }
         if (cachedMacroGoals.profileUpdate && profile) {
-          setProfile({ ...profile, manual_nutrition_override: cachedMacroGoals.profileUpdate.manual_nutrition_override });
+          safeAsync(setProfile)({ ...profile, manual_nutrition_override: cachedMacroGoals.profileUpdate.manual_nutrition_override });
         }
-        setFetchingMacroGoals(false);
+        safeAsync(setFetchingMacroGoals)(false);
         return;
       }
 
@@ -611,11 +614,11 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         .eq("id", userId)
         .single();
 
+      if (!isMounted()) return;
+
       if (error) {
-        // Silently fail - don't show error toast, just don't show goals
         setAiMacroGoals(null);
       } else if (profileData?.ai_recommended_calories) {
-        // Use values whether they're manual override or AI recommendations
         const macroGoals = {
           proteinGrams: profileData.ai_recommended_protein_g || 0,
           carbsGrams: profileData.ai_recommended_carbs_g || 0,
@@ -624,28 +627,23 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         };
 
         setAiMacroGoals(macroGoals);
-        // Also update dailyCalorieTarget
         setDailyCalorieTarget(profileData.ai_recommended_calories);
-        // Update profile to include manual_nutrition_override flag
         if (profile) {
           setProfile({ ...profile, manual_nutrition_override: profileData.manual_nutrition_override });
         }
 
-        // Cache the macro goals data
         nutritionCache.setMacroGoals(userId, {
           macroGoals,
           dailyCalorieTarget: profileData.ai_recommended_calories,
           profileUpdate: { manual_nutrition_override: profileData.manual_nutrition_override }
         });
       } else {
-        // Fallback to calculated target if no recommendations or overrides
         setAiMacroGoals(null);
       }
     } catch (error) {
-      // Silently fail
-      setAiMacroGoals(null);
+      safeAsync(setAiMacroGoals)(null);
     } finally {
-      setFetchingMacroGoals(false);
+      safeAsync(setFetchingMacroGoals)(false);
     }
   };
 
@@ -673,6 +671,8 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       .eq("user_id", userId)
       .eq("date", selectedDate)
       .order("created_at", { ascending: true });
+
+    if (!isMounted()) return;
 
     if (error) {
       console.error("Error loading meals:", error);

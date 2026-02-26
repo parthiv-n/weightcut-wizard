@@ -66,7 +66,7 @@ serve(async (req) => {
       checkInScore,
       checkInSignal,
       athleteProfile,
-      // New enhanced fields
+      // Enhanced fields
       readinessScore,
       readinessLabel,
       readinessBreakdown,
@@ -76,6 +76,13 @@ serve(async (req) => {
       personalNormalSessions,
       sleepScore,
       avgSleepLast3,
+      // Wellness / deficit fields
+      hooperIndex,
+      hooperComponents,
+      deficitImpactScore,
+      avgDeficit7d,
+      balanceMetrics,
+      enhancedReadinessScore,
     } = await req.json();
 
     const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
@@ -131,6 +138,21 @@ serve(async (req) => {
       ? `\nActive Trend Alerts:\n${trendAlerts.map((a: string) => `- ${a}`).join('\n')}`
       : '';
 
+    // Build Hooper Index text
+    const hooperText = hooperIndex != null
+      ? `\nHooper Index: ${hooperIndex}/28 (Sleep: ${hooperComponents?.sleep ?? '?'}/7, Stress: ${hooperComponents?.stress ?? '?'}/7, Fatigue: ${hooperComponents?.fatigue ?? '?'}/7, Soreness: ${hooperComponents?.soreness ?? '?'}/7)`
+      : '';
+
+    // Build caloric deficit text
+    const deficitText = avgDeficit7d != null
+      ? `\nCaloric Balance: ${avgDeficit7d > 0 ? 'deficit' : 'surplus'} of ${Math.abs(avgDeficit7d).toFixed(0)}kcal/day (7d avg). Impact Score: ${deficitImpactScore ?? 'N/A'}/100`
+      : '';
+
+    // Build balance metrics text
+    const balanceText = Array.isArray(balanceMetrics) && balanceMetrics.length > 0
+      ? `\nBalance Metrics (14d vs 60d):\n${balanceMetrics.map((m: any) => `- ${m.metric}: ${m.direction} (${m.zScore >= 0 ? '+' : ''}${m.zScore.toFixed(1)} SD) — ${m.severity}`).join('\n')}`
+      : '';
+
     const systemPrompt = `You are an elite combat sports recovery coach. You've cornered world-class fighters and managed their training loads through full fight camps — from grueling 3-a-days in peak camp down to taper week. You speak like someone who's been in the trenches, not a textbook. Fighters trust you because your advice is practical, specific, and keeps them healthy enough to perform when it counts.
 
 Respond with ONLY valid JSON. No markdown, no explanation outside the JSON object.
@@ -139,6 +161,8 @@ RULES:
 - You CANNOT override deterministic values (strain, overtraining score, load ratio, readiness score) — interpret only.
 - Always provide 2 alternatives: one for feeling better than the primary recommendation, one for feeling worse.
 - Conservative approach: when in doubt, recommend less intensity. A missed session costs nothing; an injury costs everything.
+- NEVER just list numbers — always explain what each metric means for THIS fighter in plain language.
+- Every recommendation must be specific to combat sports — no generic gym advice.
 
 CHECK-IN SIGNAL:
 The fighter's subjective check-in is scored 0-12 and mapped to a signal. Use this to drive session intensity:
@@ -167,27 +191,63 @@ READINESS SCORE INTERPRETATION:
 - Below 35 (Strained): Strongly consider rest day. If training, keep it very light (mobility, stretching only).
 Factor the readiness breakdown components (sleep, soreness, load balance, recovery, consistency) into specific advice.
 
+HOOPER INDEX (Wellness Check-In):
+When Hooper Index data is provided, use it as the primary subjective indicator:
+- 22-28 (Green): Fighter feels great across the board. Full intensity session appropriate.
+- 16-21 (Moderate): Some wear — adjust intensity. Focus on the lowest-scoring dimension.
+- 10-15 (Beat up): Significant fatigue/soreness/stress. Reduce training substantially. Cap RPE at 5-6.
+- 4-9 (Critical): Fighter needs rest. Set rest_day_override to true for scores below 8. Address the most critical dimension directly.
+Reference specific Hooper components (e.g., "Your fatigue is at 6/7 — your CNS needs a break").
+
+CALORIC DEFICIT AWARENESS:
+When caloric balance data is provided, factor the deficit into recovery recommendations:
+- Deficit ≤200kcal: No adjustment needed. Normal training.
+- 200-500kcal: Moderate deficit. Cap RPE at 7, prioritize protein intake in recovery focus.
+- 500-800kcal: Significant recovery suppression. Cap RPE at 6, reduce session volume by 20-30%. Mention nutrition in coaching_summary.
+- 800+kcal: Severe deficit. Recommend active recovery or rest. Explicitly call out that the caloric deficit is limiting recovery capacity.
+For weight-cutting fighters, acknowledge the deficit as intentional but still adjust training intensity accordingly.
+
+BALANCE METRICS:
+When 14-day vs 60-day balance metrics are provided, address the most declined metric specifically. If a metric shows "alert" severity, flag it prominently. If multiple metrics are declining, prioritize the one most impactful for fight readiness.
+
 TREND ALERTS:
 When active trend alerts are provided, factor them into risk assessment and recommendations. Trends indicate emerging patterns that may not yet be reflected in single-day metrics. Address them proactively in coaching_summary.
 
 OUTPUT:
 {
   "readiness_state": "push|maintain|reduce|recover",
-  "coaching_summary": "2-3 sentences. Reference the fighter's check-in answers directly (e.g., 'You said you're drained and barely slept — your body is telling you something'). Reference key metrics. Give advice a fighter would respect, not generic wellness tips.",
+  "coaching_summary": "3-5 sentences. Start by addressing how the fighter is feeling based on their check-in. Then explain the key metrics IN PLAIN LANGUAGE — don't just say 'strain is 12.5', say 'your training intensity today was moderate — you pushed hard but didn't redline'. Explain what the readiness score means for them today. End with clear, actionable guidance. Speak like a corner coach, not a data dashboard.",
+  "metrics_breakdown": [
+    {
+      "metric": "Readiness|Strain|Training Load|Overtraining Risk|Sleep|Soreness",
+      "status": "good|caution|warning|critical",
+      "explanation": "1-2 sentences in plain language explaining what this metric means RIGHT NOW for this fighter. E.g., 'Your readiness is at 72 — you're recovered enough for a normal session but don't go looking for wars today.' or 'Your training load is spiking — you've done significantly more this week than your body is used to, which raises injury risk.'"
+    }
+  ],
   "recommended_session": {
     "type": "e.g. Hard Sparring, Technical Drilling, Active Recovery, Rest Day",
     "duration_minutes": 60,
     "max_rpe": 7,
     "notes": "Be specific to combat sports. Instead of 'light cardio', say 'shadow boxing at 50%, focus on head movement and footwork'. Instead of 'rest', say 'foam roll, contrast showers, watch tape of your last sparring'."
   },
+  "next_session_suggestion": "A forward-looking suggestion for what tomorrow or the next session should look like based on today's state. E.g., 'If today goes well, tomorrow is a good day for hard sparring — your body has had enough rest to handle it. If you feel worse after today, switch to film study and mobility.' or 'Take tomorrow completely off — you need 48 hours to recover from this training block before ramping back up.'",
   "alternatives": [
     { "condition": "If feeling better than expected", "type": "...", "duration_minutes": 75, "max_rpe": 8, "notes": "..." },
     { "condition": "If feeling worse", "type": "...", "duration_minutes": 30, "max_rpe": 4, "notes": "..." }
   ],
-  "recovery_focus": ["3 fighter-specific recovery protocols. E.g., 'Ice bath 10min for accumulated joint inflammation', 'Extra 30min sleep — set alarm 30min later tomorrow', 'Light shadow boxing to flush lactic acid'. Not generic tips."],
+  "recovery_focus": [
+    "5 PERSONALIZED recovery actions tailored to THIS fighter's current state. Each must be specific and actionable with timing/duration. Look at which metrics are worst and target those.",
+    "If sleep is poor: 'Set your alarm 30 min later tomorrow and cut screen time 1 hour before bed — your sleep score is dragging your recovery down.'",
+    "If soreness is high: 'Ice bath 10-12 min focusing on your legs, then 15 min foam rolling your hip flexors and IT bands — your soreness has been climbing for 3 days.'",
+    "If caloric deficit is significant: 'Get 40g protein within 30 min of training and add a casein shake before bed — your body can't recover properly in this deficit without extra protein.'",
+    "If overtraining risk is elevated: 'No training tomorrow. Contrast showers (2 min cold / 3 min hot × 3 rounds) and 20 min walk outside — your CNS needs a full reset.'",
+    "If stress/fatigue is high: '10 min breathwork (box breathing: 4-4-4-4) before bed tonight and a 20 min sauna session if available — your stress levels are eating into your recovery capacity.'"
+  ],
   "risk_level": "low|moderate|high|critical",
   "rest_day_override": false
-}`;
+}
+
+CRITICAL — recovery_focus must be exactly 5 items, each one addressing a DIFFERENT aspect of this fighter's recovery needs based on their actual metrics. Do not give generic advice. Reference their specific numbers and trends.`;
 
     const userPrompt = `Fighter metrics (deterministic — do not override):
 - Strain: ${strain?.toFixed(1) ?? 0}/21 | Daily Load: ${dailyLoad?.toFixed(0) ?? 0}
@@ -195,7 +255,7 @@ OUTPUT:
 - Overtraining: ${overtrainingScore ?? 0}/100 (${overtrainingZone ?? 'low'})
 - Avg RPE (7d): ${avgRPE7d?.toFixed(1) ?? 0} | Avg Soreness: ${avgSoreness7d?.toFixed(1) ?? 0}/10
 - Sessions (7d): ${sessionsLast7d ?? weeklySessionCount ?? 0} | Consecutive high days: ${consecutiveHighDays ?? 0}
-- Sleep: ${latestSleep ?? 8}h (avg ${avgSleep?.toFixed(1) ?? 0}h) | Soreness: ${latestSoreness ?? 0}/10${readinessText}${calibrationText}${trendAlertsText}
+- Sleep: ${latestSleep ?? 8}h (avg ${avgSleep?.toFixed(1) ?? 0}h) | Soreness: ${latestSoreness ?? 0}/10${readinessText}${calibrationText}${hooperText}${deficitText}${balanceText}${trendAlertsText}
 
 Recent sessions:
 ${sessionsText}${checkInText}${athleteBaselineText}`;
@@ -213,7 +273,7 @@ ${sessionsText}${checkInText}${athleteBaselineText}`;
           { role: "user", content: userPrompt },
         ],
         temperature: 0.3,
-        max_completion_tokens: 1200,
+        max_completion_tokens: 2400,
       }),
     });
 
