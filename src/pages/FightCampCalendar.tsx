@@ -274,6 +274,7 @@ export default function FightCampCalendar() {
                             trainingFrequency: profile.training_frequency ?? null,
                             activityLevel: profile.activity_level ?? null,
                         } : undefined}
+                        tdee={profile?.tdee ?? null}
                     />
                 )}
 

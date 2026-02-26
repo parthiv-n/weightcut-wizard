@@ -16,6 +16,8 @@ import { useUser } from "@/contexts/UserContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { triggerHapticSuccess, celebrateSuccess } from "@/lib/haptics";
 import { localCache } from "@/lib/localCache";
+import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -92,19 +94,26 @@ export default function WeightTracker() {
   const [unsafeGoalDialogOpen, setUnsafeGoalDialogOpen] = useState(false);
   const [showProjected, setShowProjected] = useState(true);
   const { toast } = useToast();
-  const { updateCurrentWeight, userId } = useUser();
+  const { updateCurrentWeight, userId, profile: contextProfile } = useUser();
+  const { safeAsync, isMounted } = useSafeAsync();
   const [searchParams, setSearchParams] = useSearchParams();
   const weightInputRef = useRef<HTMLInputElement>(null);
   const [timeFilter, setTimeFilter] = useState<"1W" | "1M" | "ALL">("1M");
 
   useEffect(() => {
+    if (!userId) return;
     fetchData();
     loadPersistedAnalysis();
-    if (userId) {
-      const stored = localStorage.getItem(`weight_tracker_show_projected_${userId}`);
-      if (stored !== null) setShowProjected(JSON.parse(stored));
+    const stored = localStorage.getItem(`weight_tracker_show_projected_${userId}`);
+    if (stored !== null) setShowProjected(JSON.parse(stored));
+  }, [userId]);
+
+  // Sync contextProfile → local profile state
+  useEffect(() => {
+    if (contextProfile) {
+      setProfile(contextProfile as unknown as Profile);
     }
-  }, []);
+  }, [contextProfile]);
 
   const loadPersistedAnalysis = () => {
     if (!userId) return;
@@ -137,29 +146,40 @@ export default function WeightTracker() {
   };
 
   const fetchData = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!userId) return;
 
-    // Fetch profile
-    const { data: profileData } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", user.id)
-      .single();
-
-    if (profileData) {
-      setProfile(profileData);
+    // Use contextProfile instead of fetching from DB
+    if (contextProfile) {
+      safeAsync(setProfile)(contextProfile as unknown as Profile);
     }
 
-    // Fetch weight logs
-    const { data: logsData } = await supabase
-      .from("weight_logs")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("date", { ascending: true });
+    // Cache-first: show cached logs instantly
+    const cachedLogs = localCache.get<WeightLog[]>(userId, 'weight_logs');
+    if (cachedLogs) {
+      safeAsync(setWeightLogs)(cachedLogs);
+    }
 
-    if (logsData) {
-      setWeightLogs(logsData);
+    // Fetch fresh weight logs with timeout
+    try {
+      const { data: logsData } = await withSupabaseTimeout(
+        supabase
+          .from("weight_logs")
+          .select("*")
+          .eq("user_id", userId)
+          .order("date", { ascending: true }),
+        undefined,
+        "Weight logs query"
+      );
+
+      if (!isMounted()) return;
+
+      if (logsData) {
+        setWeightLogs(logsData);
+        localCache.set(userId, 'weight_logs', logsData);
+      }
+    } catch (err) {
+      console.error("Error fetching weight logs:", err);
+      // Cached data (if any) is already showing
     }
   };
 

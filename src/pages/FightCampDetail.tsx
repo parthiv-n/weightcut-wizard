@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ArrowLeft, Save, Trophy, Scale, Droplets, TrendingDown, Upload, Camera, CheckCircle2, FileText, Zap } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 
 interface FightCamp {
   id: string;
@@ -32,6 +34,7 @@ export default function FightCampDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { safeAsync, isMounted } = useSafeAsync();
   const [camp, setCamp] = useState<FightCamp | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -43,20 +46,32 @@ export default function FightCampDetail() {
   const fetchCampDetails = async () => {
     if (!id) return;
 
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("fight_camps")
-      .select("*")
-      .eq("id", id)
-      .single();
+    safeAsync(setLoading)(true);
+    try {
+      const { data, error } = await withSupabaseTimeout(
+        supabase
+          .from("fight_camps")
+          .select("*")
+          .eq("id", id)
+          .single(),
+        undefined,
+        "Load fight camp details"
+      );
 
-    if (error) {
+      if (!isMounted()) return;
+
+      if (error) {
+        toast({ title: "Error", description: "Failed to load fight camp", variant: "destructive" });
+        navigate("/fight-camps");
+      } else {
+        setCamp(data);
+      }
+    } catch {
+      if (!isMounted()) return;
       toast({ title: "Error", description: "Failed to load fight camp", variant: "destructive" });
       navigate("/fight-camps");
-    } else {
-      setCamp(data);
     }
-    setLoading(false);
+    safeAsync(setLoading)(false);
   };
 
   const handleUpdate = async () => {
@@ -88,10 +103,10 @@ export default function FightCampDetail() {
     if (!e.target.files || e.target.files.length === 0 || !camp) return;
 
     const file = e.target.files[0];
-    setUploading(true);
+    safeAsync(setUploading)(true);
 
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user || !isMounted()) return;
 
     const fileExt = file.name.split('.').pop();
     const fileName = `${user.id}/fight-camp-${camp.id}.${fileExt}`;
@@ -99,6 +114,8 @@ export default function FightCampDetail() {
     const { error: uploadError } = await supabase.storage
       .from("avatars")
       .upload(fileName, file, { upsert: true });
+
+    if (!isMounted()) return;
 
     if (uploadError) {
       toast({ title: "Error", description: "Failed to upload image", variant: "destructive" });
@@ -112,6 +129,8 @@ export default function FightCampDetail() {
       .from("fight_camps")
       .update({ profile_pic_url: data.publicUrl })
       .eq("id", camp.id);
+
+    if (!isMounted()) return;
 
     if (updateError) {
       toast({ title: "Error", description: "Failed to update profile picture", variant: "destructive" });

@@ -144,6 +144,14 @@ RULES:
 - ALWAYS generate a full plan regardless of how aggressive the goal is
 - If requiredWeeklyLoss > 1.5: set riskLevel="red", include strong medical warning in riskExplanation urging consultation with a doctor/sports nutritionist, but still provide complete calorie/macro recommendations
 
+STYLE — be brutally concise, every word must earn its place:
+- riskExplanation: 1 sentence max. State risk level + the single most important reason.
+- strategicGuidance: 2 sentences max. One actionable strategy, one specific tactic.
+- nutritionTips: 3 short tips, each ≤8 words. Name specific foods/actions (e.g. "Greek yoghurt before bed for casein"), not generic advice.
+- trainingConsiderations: 2 sentences max. Concrete adjustments only (e.g. "Drop sparring to 70% final week").
+- timeline: 1-2 sentences max. Key milestones and dates only.
+- weeklyPlan: each week value ≤15 words. Action-focused, no filler.
+
 OUTPUT:
 {
   "riskLevel": "green|yellow|red",
@@ -211,7 +219,7 @@ OUTPUT:
           { role: "user", content: userPrompt },
         ],
         temperature: 0.1,
-        max_completion_tokens: 1500
+        max_completion_tokens: 1000
       }),
     });
 

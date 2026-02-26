@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
@@ -11,6 +11,7 @@ import { CalorieProgressRing } from "@/components/dashboard/CalorieProgressRing"
 import { useUser } from "@/contexts/UserContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { Button } from "@/components/ui/button";
 import { calculateCalorieTarget } from "@/lib/calorieCalculation";
 import { AIPersistence } from "@/lib/aiPersistence";
@@ -43,6 +44,7 @@ export default function Dashboard() {
   const [questionnaireOpen, setQuestionnaireOpen] = useState(false);
   const { userName, currentWeight, userId, profile } = useUser();
   const navigate = useNavigate();
+  const { safeAsync, isMounted } = useSafeAsync();
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -79,7 +81,7 @@ export default function Dashboard() {
 
   const generateWisdom = async (profileData: any, logs: any[], calories: number, hydration: number) => {
     if (!userId || !profileData) return;
-    setWisdomLoading(true);
+    safeAsync(setWisdomLoading)(true);
     try {
       const today = new Date().toISOString().split('T')[0];
       const cacheKey = `daily_wisdom_${today}`;
@@ -106,6 +108,7 @@ export default function Dashboard() {
       };
 
       const { data, error } = await supabase.functions.invoke("daily-wisdom", { body: payload });
+      if (!isMounted()) return;
       if (error || !data?.wisdom) {
         console.error("daily-wisdom error:", error);
         return;
@@ -115,7 +118,7 @@ export default function Dashboard() {
     } catch (err) {
       console.error("generateWisdom error:", err);
     } finally {
-      setWisdomLoading(false);
+      safeAsync(setWisdomLoading)(false);
     }
   };
 
@@ -124,14 +127,14 @@ export default function Dashboard() {
     const today = new Date().toISOString().split('T')[0];
     const hasTodayLog = logs.some((l: any) => l.date === today);
     if (!hasTodayLog) {
-      setWisdom(null);
-      setWisdomLoading(false);
+      safeAsync(setWisdom)(null);
+      safeAsync(setWisdomLoading)(false);
       return;
     }
     const cacheKey = `daily_wisdom_${today}`;
     const cached = AIPersistence.load(userId, cacheKey);
     if (cached) {
-      setWisdom(cached);
+      safeAsync(setWisdom)(cached);
       return;
     }
     await generateWisdom(profileData, logs, calories, hydration);
@@ -139,7 +142,7 @@ export default function Dashboard() {
 
   const loadDashboardData = async () => {
     if (!userId) {
-      setLoading(false);
+      safeAsync(setLoading)(false);
       return;
     }
 
@@ -156,10 +159,10 @@ export default function Dashboard() {
       const cachedCalories = cachedNutrition?.reduce((sum: number, log: any) => sum + (log?.calories || 0), 0) || 0;
       const cachedHydrationTotal = cachedHydration?.reduce((sum: number, log: any) => sum + (log?.amount_ml || 0), 0) || 0;
 
-      setWeightLogs(cachedWeightLogs);
-      setTodayCalories(cachedCalories);
-      setTodayHydration(cachedHydrationTotal);
-      setLoading(false);
+      safeAsync(setWeightLogs)(cachedWeightLogs);
+      safeAsync(setTodayCalories)(cachedCalories);
+      safeAsync(setTodayHydration)(cachedHydrationTotal);
+      safeAsync(setLoading)(false);
 
       // Fire-and-forget wisdom with cached data
       checkAndGenerateWisdom(profile, cachedWeightLogs, cachedCalories, cachedHydrationTotal);
@@ -175,7 +178,7 @@ export default function Dashboard() {
             .eq("user_id", userId)
             .order("date", { ascending: true })
             .limit(30),
-          5000,
+          undefined,
           "Weight logs query"
         ),
 
@@ -185,7 +188,7 @@ export default function Dashboard() {
             .select("calories")
             .eq("user_id", userId)
             .eq("date", today),
-          5000,
+          undefined,
           "Nutrition logs query"
         ),
 
@@ -195,10 +198,12 @@ export default function Dashboard() {
             .select("amount_ml")
             .eq("user_id", userId)
             .eq("date", today),
-          5000,
+          undefined,
           "Hydration logs query"
         )
       ]);
+
+      if (!isMounted()) return;
 
       // Only update state and cache for queries that succeeded — don't overwrite cached data with empty arrays on failure
       const logsOk = results[0].status === 'fulfilled';
@@ -243,12 +248,12 @@ export default function Dashboard() {
     } catch (error) {
       console.error("Error loading dashboard data:", error);
       if (!hasCachedData) {
-        setWeightLogs([]);
-        setTodayCalories(0);
-        setTodayHydration(0);
+        safeAsync(setWeightLogs)([]);
+        safeAsync(setTodayCalories)(0);
+        safeAsync(setTodayHydration)(0);
       }
     } finally {
-      setLoading(false);
+      safeAsync(setLoading)(false);
     }
   };
 
@@ -326,8 +331,16 @@ export default function Dashboard() {
   return (
     <ErrorBoundary>
       <div className="space-y-5 sm:space-y-6 p-4 sm:p-5 md:p-6 w-full max-w-7xl mx-auto">
-        {/* Greeting header */}
+        {/* Countdown + Greeting header */}
         <div className="dashboard-card-enter dashboard-stagger-1">
+          {daysUntilTarget > 0 && (
+            <div className="flex items-center gap-2 mb-1.5">
+              <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+              <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                <span className="text-sm text-foreground font-bold display-number">{daysUntilTarget}</span> days until target
+              </span>
+            </div>
+          )}
           <h1 className="text-2xl font-bold">{getGreeting()}, {userName || "Fighter"}</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Your weight cut journey dashboard</p>
         </div>
@@ -415,7 +428,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        <div className="flex flex-col gap-4 lg:grid lg:grid-cols-3">
+        <div className="flex flex-col gap-4 lg:grid lg:grid-cols-2">
           {/* Weight Progress Ring - Takes 1 column on desktop, order 1 on mobile */}
           {profile && (
             <div className="order-1 lg:order-none">
@@ -427,128 +440,94 @@ export default function Dashboard() {
             </div>
           )}
 
-          {/* Calorie Progress - Order 2 on mobile, takes full width on mobile */}
-          <div className="order-2 lg:hidden">
-            <CalorieProgressRing
-              consumed={todayCalories}
-              target={dailyCalorieGoal}
-            />
-          </div>
-
-          {/* Stats Grid - Takes 1 column on desktop, hidden on mobile */}
-          <div className="hidden lg:grid lg:col-span-1 gap-4 grid-cols-1">
-            {/* Calorie Progress - Takes 2 rows on desktop */}
-            <div className="row-span-2">
-              <CalorieProgressRing
-                consumed={todayCalories}
-                target={dailyCalorieGoal}
-              />
-            </div>
-
-            <Card className="glass-card">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Days Until Target</CardTitle>
-                <Calendar className="h-4 w-4 text-muted-foreground" />
+          {/* Weight History Chart - Order 2 on mobile */}
+          <div className="order-2 lg:order-none">
+            <Card className="glass-card h-full">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Weight History</CardTitle>
+                  <div className="flex gap-1 bg-muted rounded-lg p-1">
+                    <Button
+                      variant={weightUnit === 'kg' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setWeightUnit('kg')}
+                      className="h-9 min-h-[36px] text-xs sm:h-8 sm:min-h-[32px] touch-target"
+                    >
+                      kg
+                    </Button>
+                    <Button
+                      variant={weightUnit === 'lb' ? 'default' : 'ghost'}
+                      size="sm"
+                      onClick={() => setWeightUnit('lb')}
+                      className="h-9 min-h-[36px] text-xs sm:h-8 sm:min-h-[32px] touch-target"
+                    >
+                      lb
+                    </Button>
+                  </div>
+                </div>
               </CardHeader>
-              <CardContent className="p-4 sm:p-6">
-                <div className="text-3xl sm:text-4xl font-bold display-number">{daysUntilTarget}</div>
-                <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mt-1">days remaining</p>
+              <CardContent className="p-3 sm:p-6">
+                {chartData.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={250} className="sm:h-[300px]">
+                    <ComposedChart data={chartData}>
+                      <defs>
+                        <linearGradient id="weightGradient" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
+                          <stop offset="50%" stopColor="hsl(var(--primary))" stopOpacity={0.2} />
+                          <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+                      <XAxis
+                        dataKey="date"
+                        stroke="hsl(var(--muted-foreground))"
+                        fontSize={12}
+                      />
+                      <YAxis
+                        stroke="hsl(var(--muted-foreground))"
+                        fontSize={12}
+                        label={{ value: weightUnit, position: 'insideLeft', style: { fill: 'hsl(var(--muted-foreground))' } }}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: "hsl(var(--background))",
+                          border: "1px solid hsl(var(--border))",
+                          borderRadius: "8px"
+                        }}
+                        formatter={(value: number) => [`${value.toFixed(1)} ${weightUnit}`, 'Weight']}
+                      />
+                      <Area
+                        type="monotone"
+                        dataKey="weight"
+                        stroke="none"
+                        fill="url(#weightGradient)"
+                        animationDuration={1000}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="weight"
+                        stroke="hsl(var(--secondary))"
+                        strokeWidth={3}
+                        dot={{ fill: "hsl(var(--primary))", r: 4, strokeWidth: 2, stroke: "hsl(var(--background))" }}
+                        activeDot={{ r: 6, strokeWidth: 2 }}
+                        animationDuration={1000}
+                      />
+                    </ComposedChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="text-center py-12 text-muted-foreground">
+                    No weight data yet. Start logging your weight to see your progress!
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
-
-          {/* Days Until Target - Order 3 on mobile only */}
-          <Card className="order-3 lg:hidden glass-card">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Days Until Target</CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent className="p-4 sm:p-6">
-              <div className="text-3xl sm:text-4xl font-bold">{daysUntilTarget}</div>
-              <p className="text-xs sm:text-sm text-muted-foreground mt-1">days remaining</p>
-            </CardContent>
-          </Card>
         </div>
 
-        <Card className="glass-card">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Weight History</CardTitle>
-              <div className="flex gap-1 bg-muted rounded-lg p-1">
-                <Button
-                  variant={weightUnit === 'kg' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setWeightUnit('kg')}
-                  className="h-9 min-h-[36px] text-xs sm:h-8 sm:min-h-[32px] touch-target"
-                >
-                  kg
-                </Button>
-                <Button
-                  variant={weightUnit === 'lb' ? 'default' : 'ghost'}
-                  size="sm"
-                  onClick={() => setWeightUnit('lb')}
-                  className="h-9 min-h-[36px] text-xs sm:h-8 sm:min-h-[32px] touch-target"
-                >
-                  lb
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="p-3 sm:p-6">
-            {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={250} className="sm:h-[300px]">
-                <ComposedChart data={chartData}>
-                  <defs>
-                    <linearGradient id="weightGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
-                      <stop offset="50%" stopColor="hsl(var(--primary))" stopOpacity={0.2} />
-                      <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
-                  <XAxis
-                    dataKey="date"
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={12}
-                  />
-                  <YAxis
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={12}
-                    label={{ value: weightUnit, position: 'insideLeft', style: { fill: 'hsl(var(--muted-foreground))' } }}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--background))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: "8px"
-                    }}
-                    formatter={(value: number) => [`${value.toFixed(1)} ${weightUnit}`, 'Weight']}
-                  />
-                  <Area
-                    type="monotone"
-                    dataKey="weight"
-                    stroke="none"
-                    fill="url(#weightGradient)"
-                    animationDuration={1000}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="weight"
-                    stroke="hsl(var(--secondary))"
-                    strokeWidth={3}
-                    dot={{ fill: "hsl(var(--primary))", r: 4, strokeWidth: 2, stroke: "hsl(var(--background))" }}
-                    activeDot={{ r: 6, strokeWidth: 2 }}
-                    animationDuration={1000}
-                  />
-                </ComposedChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="text-center py-12 text-muted-foreground">
-                No weight data yet. Start logging your weight to see your progress!
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <CalorieProgressRing
+          consumed={todayCalories}
+          target={dailyCalorieGoal}
+        />
       </div>
 
       {/* Wisdom Detail Bottom Sheet */}

@@ -16,6 +16,10 @@ function buildDataContext(results: {
   trainingLogs: any[];
   fightWeekPlan: any;
   dietPrefs: any;
+  wellnessLogs: any[];
+  insights: any[];
+  fightCamps: any[];
+  fightWeekLogs: any[];
 }): string {
   const sections: string[] = [];
   const today = new Date().toISOString().split('T')[0];
@@ -101,6 +105,77 @@ function buildDataContext(results: {
     if (parts.length) sections.push(`DIET: ${parts.join(', ')}`);
   }
 
+  // Wellness / Readiness (7d)
+  if (results.wellnessLogs?.length) {
+    const logs = results.wellnessLogs;
+    const avg = (key: string) => {
+      const vals = logs.filter((l: any) => l[key] != null);
+      return vals.length ? (vals.reduce((s: number, l: any) => s + l[key], 0) / vals.length).toFixed(1) : 'N/A';
+    };
+    const avgSleepHrs = avg('sleep_hours');
+    sections.push(`WELLNESS (${logs.length}d): avg Hooper ${avg('hooper_index')}/28, sleep ${avgSleepHrs}h (quality ${avg('sleep_quality')}/7), stress ${avg('stress_level')}/7, fatigue ${avg('fatigue_level')}/7, soreness ${avg('soreness_level')}/7, energy ${avg('energy_level')}/7, motivation ${avg('motivation_level')}/7`);
+    const todayWellness = logs.find((l: any) => l.date === today);
+    if (todayWellness) {
+      sections.push(`TODAY WELLNESS: Hooper ${todayWellness.hooper_index}, readiness ${todayWellness.readiness_score ?? 'N/A'}`);
+    }
+  }
+
+  // Body Insights
+  if (results.insights?.length) {
+    const parts: string[] = [];
+    for (const ins of results.insights) {
+      const d = ins.insight_data || {};
+      const conf = ins.confidence_score != null ? ` (conf ${Math.round(ins.confidence_score * 100)}%)` : '';
+      if (ins.insight_type === 'metabolism') {
+        parts.push(`metabolism=${d.estimatedRate || d.estimatedTDEE || '?'}kcal${conf}`);
+      } else if (ins.insight_type === 'weekly_loss') {
+        parts.push(`weekly_loss=${d.rate || d.averageWeeklyLoss || '?'}kg/wk${conf}`);
+      } else if (ins.insight_type === 'plateau') {
+        parts.push(`plateau=${d.detected ? 'yes' : 'no'}${conf}`);
+      } else {
+        parts.push(`${ins.insight_type}=${JSON.stringify(d).slice(0, 60)}${conf}`);
+      }
+    }
+    sections.push(`INSIGHTS: ${parts.join(', ')}`);
+  }
+
+  // Fight Camp History
+  if (results.fightCamps?.length) {
+    const camps = results.fightCamps.map((c: any) => {
+      const w = c.starting_weight_kg && c.end_weight_kg ? `${c.starting_weight_kg}→${c.end_weight_kg}kg` : 'no weight data';
+      const feel = c.performance_feeling ? `, feeling=${c.performance_feeling}` : '';
+      return `${c.name} (${c.fight_date}): ${w}${feel}`;
+    });
+    sections.push(`FIGHT CAMPS: ${camps.join(' | ')}`);
+  }
+
+  // Fight Week Logs
+  if (results.fightWeekLogs?.length) {
+    const entries = results.fightWeekLogs.map((l: any) => {
+      const d = l.log_date.slice(5);
+      const parts: string[] = [];
+      if (l.weight_kg != null) parts.push(`${l.weight_kg}kg`);
+      if (l.carbs_g != null) parts.push(`carbs:${l.carbs_g}g`);
+      if (l.fluid_intake_ml != null) parts.push(`fluid:${l.fluid_intake_ml}ml`);
+      if (l.sweat_session_min != null) parts.push(`sweat:${l.sweat_session_min}min`);
+      return `${d}:${parts.join(' ')}`;
+    });
+    sections.push(`FIGHT WEEK LOGS: ${entries.join(', ')}`);
+  }
+
+  // Today's Meals (individual meal names)
+  if (results.nutritionLogs?.length) {
+    const todayMeals = results.nutritionLogs.filter((l: any) => l.date === today && l.meal_name);
+    if (todayMeals.length) {
+      const meals = todayMeals.map((m: any) => {
+        const type = m.meal_type || 'meal';
+        const cal = m.calories ? ` (${m.calories}cal)` : '';
+        return `${type}: ${m.meal_name}${cal}`;
+      });
+      sections.push(`TODAY'S MEALS: ${meals.join(' | ')}`);
+    }
+  }
+
   return sections.join('\n');
 }
 
@@ -149,6 +224,10 @@ serve(async (req) => {
       trainingRes,
       fightWeekRes,
       dietRes,
+      wellnessRes,
+      insightsRes,
+      fightCampsRes,
+      fightWeekLogsRes,
     ] = await Promise.allSettled([
       supabaseClient.from('profiles').select('*').eq('id', user.id).single(),
       supabaseClient.from('weight_logs').select('date, weight_kg').eq('user_id', user.id).gte('date', thirtyDaysAgo).order('date', { ascending: false }).limit(15),
@@ -157,6 +236,10 @@ serve(async (req) => {
       supabaseClient.from('fight_camp_calendar').select('date, session_type, duration_minutes, rpe, soreness_level, sleep_hours').eq('user_id', user.id).gte('date', sevenDaysAgo).order('date', { ascending: false }),
       supabaseClient.from('fight_week_plans').select('fight_date, starting_weight_kg, target_weight_kg').eq('user_id', user.id).gte('fight_date', today).order('fight_date', { ascending: true }).limit(1).maybeSingle(),
       supabaseClient.from('user_dietary_preferences').select('dietary_restrictions, disliked_foods, favorite_cuisines').eq('user_id', user.id).maybeSingle(),
+      supabaseClient.from('daily_wellness_checkins').select('date, sleep_quality, stress_level, fatigue_level, soreness_level, energy_level, motivation_level, sleep_hours, hooper_index, readiness_score').eq('user_id', user.id).gte('date', sevenDaysAgo).order('date', { ascending: false }),
+      supabaseClient.from('user_insights').select('insight_type, insight_data, confidence_score').eq('user_id', user.id),
+      supabaseClient.from('fight_camps').select('name, event_name, fight_date, starting_weight_kg, end_weight_kg, is_completed, performance_feeling').eq('user_id', user.id).order('fight_date', { ascending: false }).limit(4),
+      supabaseClient.from('fight_week_logs').select('log_date, weight_kg, carbs_g, fluid_intake_ml, sweat_session_min, notes').eq('user_id', user.id).gte('log_date', sevenDaysAgo).order('log_date', { ascending: false }),
     ]);
 
     const getData = (res: PromiseSettledResult<any>) =>
@@ -170,6 +253,10 @@ serve(async (req) => {
       trainingLogs: getData(trainingRes) || [],
       fightWeekPlan: getData(fightWeekRes),
       dietPrefs: getData(dietRes),
+      wellnessLogs: getData(wellnessRes) || [],
+      insights: getData(insightsRes) || [],
+      fightCamps: getData(fightCampsRes) || [],
+      fightWeekLogs: getData(fightWeekLogsRes) || [],
     });
 
     const { messages } = await req.json();
@@ -201,6 +288,11 @@ RULES:
 - Performance focus — making weight with no energy = losing the fight.
 - If asked about training load, reference their recent sessions and RPE trends.
 - If asked about nutrition, reference their actual logged meals and macro averages.
+- If asked about recovery, sleep, or readiness, reference their Hooper index and wellness trends.
+- If asked about body patterns, reference their stored insights (metabolism, plateau, adaptation).
+- If asked "what did I eat today?", list their actual logged meals by name and calories.
+- If asked about fight camp history, reference past camps and performance outcomes.
+- If asked about their current weight cut, reference fight week logs (daily weight, fluid, carbs).
 - Format: short paragraphs, bullet points for lists, bold key terms. No walls of text.`;
 
     console.log("Calling Grok API with full athlete data context...");
@@ -218,7 +310,7 @@ RULES:
           ...cappedMessages
         ],
         temperature: 0.5,
-        max_completion_tokens: 1024
+        max_completion_tokens: 1200
       })
     });
 
