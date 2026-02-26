@@ -346,12 +346,13 @@ export default function Dashboard() {
         </div>
 
         {/* Wizard's Daily Wisdom card — conditional states */}
+        <div data-tutorial="daily-wisdom-card">
         {!hasTodayLog ? (
           /* State 1: Locked — no today weight log */
           <div className="rounded-lg glass-card p-3 sm:p-4 border-primary/20 bg-gradient-to-r from-primary/5 to-secondary/5">
             <div className="flex items-start gap-3 sm:gap-4">
               <div className="rounded-full bg-primary/20 p-2 sm:p-3 flex-shrink-0 opacity-40 mix-blend-screen">
-                <img src={wizardLogo} alt="Wizard" className="w-12 h-12 sm:w-16 sm:h-16" />
+                <img src={wizardLogo} alt="Wizard" className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
@@ -376,7 +377,7 @@ export default function Dashboard() {
           <div className="rounded-lg glass-card p-3 sm:p-4 border-primary/20 bg-gradient-to-r from-primary/5 to-secondary/5">
             <div className="flex items-start gap-3 sm:gap-4">
               <div className="rounded-full bg-primary/20 p-2 sm:p-3 flex-shrink-0 animate-pulse mix-blend-screen">
-                <img src={wizardLogo} alt="Wizard" className="w-12 h-12 sm:w-16 sm:h-16 opacity-60" />
+                <img src={wizardLogo} alt="Wizard" className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover opacity-60" />
               </div>
               <div className="flex-1 min-w-0 space-y-2 pt-1">
                 <div className="h-3 rounded bg-muted/50 animate-pulse w-1/3" />
@@ -393,7 +394,7 @@ export default function Dashboard() {
           >
             <div className="flex items-start gap-3 sm:gap-4">
               <div className="rounded-full bg-primary/20 p-2 sm:p-3 flex-shrink-0 mix-blend-screen">
-                <img src={wizardLogo} alt="Wizard" className="w-12 h-12 sm:w-16 sm:h-16" />
+                <img src={wizardLogo} alt="Wizard" className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
@@ -416,7 +417,7 @@ export default function Dashboard() {
           <div className="rounded-lg glass-card p-3 sm:p-4 border-primary/20 bg-gradient-to-r from-primary/5 to-secondary/5">
             <div className="flex items-start gap-3 sm:gap-4">
               <div className="rounded-full bg-primary/20 p-2 sm:p-3 flex-shrink-0 mix-blend-screen">
-                <img src={wizardLogo} alt="Wizard" className="w-12 h-12 sm:w-16 sm:h-16" />
+                <img src={wizardLogo} alt="Wizard" className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover" />
               </div>
               <div className="flex-1 min-w-0">
                 <h3 className="font-semibold text-sm sm:text-base text-foreground">Wizard's Daily Wisdom</h3>
@@ -427,11 +428,12 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+        </div>
 
         <div className="flex flex-col gap-4 lg:grid lg:grid-cols-2">
           {/* Weight Progress Ring - Takes 1 column on desktop, order 1 on mobile */}
           {profile && (
-            <div className="order-1 lg:order-none">
+            <div className="order-1 lg:order-none" data-tutorial="weight-progress-ring">
               <WeightProgressRing
                 currentWeight={currentWeightValue}
                 startingWeight={weightLogs.length > 0 ? parseFloat(weightLogs[0].weight_kg) : currentWeightValue}
@@ -524,10 +526,12 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <CalorieProgressRing
-          consumed={todayCalories}
-          target={dailyCalorieGoal}
-        />
+        <div data-tutorial="calorie-progress-ring">
+          <CalorieProgressRing
+            consumed={todayCalories}
+            target={dailyCalorieGoal}
+          />
+        </div>
       </div>
 
       {/* Wisdom Detail Bottom Sheet */}
@@ -537,7 +541,7 @@ export default function Dashboard() {
             <SheetHeader className="mb-4">
               <div className="flex items-center gap-3">
                 <div className="rounded-full bg-primary/20 p-2 flex-shrink-0">
-                  <img src={wizardLogo} alt="Wizard" className="w-10 h-10" />
+                  <img src={wizardLogo} alt="Wizard" className="w-10 h-10 rounded-full object-cover" />
                 </div>
                 <div>
                   <SheetTitle className="text-base">Wizard's Daily Wisdom</SheetTitle>

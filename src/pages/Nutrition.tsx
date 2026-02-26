@@ -2038,7 +2038,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         >
           <div className="flex items-center gap-3">
             <div className="rounded-full bg-primary/15 p-2 flex-shrink-0 group-hover:bg-primary/20 transition-colors">
-              <img src={wizardLogo} alt="Wizard" className="w-10 h-10" />
+              <img src={wizardLogo} alt="Wizard" className="w-10 h-10 rounded-full object-cover" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-2">
@@ -3395,7 +3395,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           <SheetHeader className="mb-4">
             <div className="flex items-center gap-3">
               <div className="rounded-full bg-primary/15 p-2 flex-shrink-0">
-                <img src={wizardLogo} alt="Wizard" className="w-10 h-10" />
+                <img src={wizardLogo} alt="Wizard" className="w-10 h-10 rounded-full object-cover" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">

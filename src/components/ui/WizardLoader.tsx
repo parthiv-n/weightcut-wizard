@@ -50,7 +50,7 @@ export function WizardLoader({
           <div className="absolute inset-0 rounded-full border-2 border-primary/40 animate-ping" />
           <div className="absolute inset-3 rounded-full border border-primary/20" />
           <div className="relative rounded-full bg-primary/10 p-4">
-            <img src={wizardLogo} alt="Wizard" className="w-16 h-16" />
+            <img src={wizardLogo} alt="Wizard" className="w-16 h-16 rounded-full object-cover" />
           </div>
         </div>
 
