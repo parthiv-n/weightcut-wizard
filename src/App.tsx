@@ -13,6 +13,7 @@ import { UserProvider } from "@/contexts/UserContext";
 import { WizardBackgroundProvider } from "@/contexts/WizardBackgroundContext";
 import { PageTransition } from "@/components/PageTransition";
 import { NavigationDirectionProvider } from "@/hooks/useNavigationDirection";
+import { TutorialProvider } from "@/tutorial/TutorialContext";
 import { BottomNav } from "@/components/BottomNav";
 import { FloatingWizardChat } from "@/components/FloatingWizardChat";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -168,6 +169,7 @@ const App = () => (
             <Sonner />
             <BrowserRouter>
               <NavigationDirectionProvider>
+              <TutorialProvider>
               <RouteTracker />
               <Routes>
                 <Route path="/" element={<Index />} />
@@ -260,6 +262,7 @@ const App = () => (
                 } />
                 <Route path="*" element={<NotFound />} />
               </Routes>
+              </TutorialProvider>
               </NavigationDirectionProvider>
             </BrowserRouter>
           </WizardBackgroundProvider>

@@ -1,4 +1,4 @@
-import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Settings, LogOut, Droplets, Calendar, Moon, Sun, ChevronRight } from "lucide-react";
+import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Settings, LogOut, Droplets, Calendar, Moon, Sun, ChevronRight, BookOpen } from "lucide-react";
 import { motion } from "motion/react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { Input } from "@/components/ui/input";
 import { ProfilePictureUpload } from "@/components/ProfilePictureUpload";
+import { useTutorial } from "@/tutorial/useTutorial";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -41,6 +42,7 @@ export function BottomNav() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { userName, avatarUrl, setUserName, setAvatarUrl } = useUser();
+  const { replayTutorial } = useTutorial();
   const [quickLogOpen, setQuickLogOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
@@ -87,6 +89,14 @@ export function BottomNav() {
     setSettingsDialogOpen(true);
   };
 
+  const handleReplayTutorial = () => {
+    setSettingsDialogOpen(false);
+    setMoreMenuOpen(false);
+    navigate("/dashboard");
+    // Small delay to let navigation complete before starting tutorial
+    setTimeout(() => replayTutorial("onboarding"), 600);
+  };
+
   const handleUpdateProfile = async () => {
     try {
       setUserName(editedName);
@@ -124,6 +134,7 @@ export function BottomNav() {
           {/* Dashboard */}
           <NavLink
             to={mainNavItems[0].url}
+            data-tutorial="nav-dashboard"
             className={({ isActive }) =>
               `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 ${isActive
                 ? "text-primary"
@@ -142,6 +153,7 @@ export function BottomNav() {
           {/* Nutrition */}
           <NavLink
             to={mainNavItems[1].url}
+            data-tutorial="nav-nutrition"
             className={({ isActive }) =>
               `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 ${isActive
                 ? "text-primary"
@@ -160,6 +172,7 @@ export function BottomNav() {
           {/* Center plus button - floating FAB */}
           <button
             onClick={() => setQuickLogOpen(true)}
+            data-tutorial="nav-quick-log"
             className="flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target"
             aria-label="Quick Log"
           >
@@ -171,6 +184,7 @@ export function BottomNav() {
           {/* Weight */}
           <NavLink
             to={mainNavItems[2].url}
+            data-tutorial="nav-weight"
             className={({ isActive }) =>
               `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 ${isActive
                 ? "text-primary"
@@ -189,6 +203,7 @@ export function BottomNav() {
           {/* More button */}
           <button
             onClick={() => setMoreMenuOpen(true)}
+            data-tutorial="nav-more"
             className="flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 text-muted-foreground active:scale-95"
             aria-label="More"
           >
@@ -388,6 +403,26 @@ export function BottomNav() {
                     <div>
                       <p className="text-[15px] font-medium text-foreground">Appearance</p>
                       <p className="text-xs text-muted-foreground">{theme === "dark" ? "Dark mode" : "Light mode"}</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+                </div>
+              </button>
+
+              {/* Replay Tutorial */}
+              <button
+                type="button"
+                onClick={handleReplayTutorial}
+                className="w-full rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left"
+              >
+                <div className="flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
+                      <BookOpen className="h-5 w-5 text-primary" />
+                    </span>
+                    <div>
+                      <p className="text-[15px] font-medium text-foreground">Replay Tutorial</p>
+                      <p className="text-xs text-muted-foreground">Walk through the app again</p>
                     </div>
                   </div>
                   <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
