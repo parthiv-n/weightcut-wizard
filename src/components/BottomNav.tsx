@@ -1,6 +1,5 @@
 import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Settings, LogOut, Droplets, Calendar, Moon, Sun, ChevronRight } from "lucide-react";
 import { motion } from "motion/react";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -47,10 +46,21 @@ export function BottomNav() {
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [editedName, setEditedName] = useState(userName);
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    const saved = localStorage.getItem("theme") as "light" | "dark" | null;
+    return saved || "dark";
+  });
 
   useEffect(() => {
     setEditedName(userName);
   }, [userName]);
+
+  const toggleTheme = () => {
+    const newTheme = theme === "light" ? "dark" : "light";
+    setTheme(newTheme);
+    localStorage.setItem("theme", newTheme);
+    document.documentElement.classList.toggle("dark", newTheme === "dark");
+  };
 
   if (!isMobile) {
     return null;
@@ -361,21 +371,28 @@ export function BottomNav() {
               </div>
 
               {/* Appearance */}
-              <div className="rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden">
+              <button
+                type="button"
+                onClick={toggleTheme}
+                className="w-full rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left"
+              >
                 <div className="flex items-center justify-between px-4 py-3">
                   <div className="flex items-center gap-3">
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
-                      <Sun className="h-5 w-5 text-primary dark:hidden" />
-                      <Moon className="h-5 w-5 text-primary hidden dark:block" />
+                      {theme === "light" ? (
+                        <Sun className="h-5 w-5 text-primary" />
+                      ) : (
+                        <Moon className="h-5 w-5 text-primary" />
+                      )}
                     </span>
                     <div>
                       <p className="text-[15px] font-medium text-foreground">Appearance</p>
-                      <p className="text-xs text-muted-foreground">Dark / light mode</p>
+                      <p className="text-xs text-muted-foreground">{theme === "dark" ? "Dark mode" : "Light mode"}</p>
                     </div>
                   </div>
-                  <ThemeToggle />
+                  <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
                 </div>
-              </div>
+              </button>
 
               {/* Save */}
               <Button
