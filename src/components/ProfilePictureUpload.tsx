@@ -1,7 +1,6 @@
 import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { Upload, X } from "lucide-react";
 import Cropper from "react-easy-crop";
@@ -222,48 +221,60 @@ export function ProfilePictureUpload({ currentAvatarUrl, onUploadSuccess }: Prof
         </div>
       </div>
 
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Crop Profile Picture</DialogTitle>
-          </DialogHeader>
-          <div className="relative h-96 w-full">
-            {imageSrc && (
-              <Cropper
-                image={imageSrc}
-                crop={crop}
-                zoom={zoom}
-                aspect={1}
-                cropShape="round"
-                showGrid={false}
-                onCropChange={setCrop}
-                onZoomChange={setZoom}
-                onCropComplete={onCropComplete}
+      {isOpen && (
+        <>
+          <div
+            className="fixed inset-0 z-[10003] bg-black/80 animate-in fade-in duration-200"
+            onClick={() => setIsOpen(false)}
+          />
+          <div className="fixed left-1/2 top-[env(safe-area-inset-top,1rem)] z-[10004] -translate-x-1/2 w-[calc(100vw-2rem)] sm:max-w-lg sm:top-1/2 sm:-translate-y-1/2 max-h-[calc(100vh-2rem)] overflow-y-auto border bg-background p-4 sm:p-6 shadow-lg rounded-2xl space-y-3 sm:space-y-4 mt-2 sm:mt-0">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base sm:text-lg font-semibold">Crop Profile Picture</h3>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="rounded-sm opacity-70 hover:opacity-100 transition-opacity min-h-[44px] min-w-[44px] flex items-center justify-center"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="relative h-[55vw] max-h-64 sm:max-h-80 w-full">
+              {imageSrc && (
+                <Cropper
+                  image={imageSrc}
+                  crop={crop}
+                  zoom={zoom}
+                  aspect={1}
+                  cropShape="round"
+                  showGrid={false}
+                  onCropChange={setCrop}
+                  onZoomChange={setZoom}
+                  onCropComplete={onCropComplete}
+                />
+              )}
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Zoom</label>
+              <input
+                type="range"
+                min={1}
+                max={3}
+                step={0.1}
+                value={zoom}
+                onChange={(e) => setZoom(Number(e.target.value))}
+                className="w-full"
               />
-            )}
+            </div>
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2">
+              <Button variant="outline" onClick={() => setIsOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleUpload} disabled={uploading}>
+                {uploading ? "Uploading..." : "Upload"}
+              </Button>
+            </div>
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Zoom</label>
-            <input
-              type="range"
-              min={1}
-              max={3}
-              step={0.1}
-              value={zoom}
-              onChange={(e) => setZoom(Number(e.target.value))}
-              className="w-full"
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleUpload} disabled={uploading}>
-              {uploading ? "Uploading..." : "Upload"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </>
+      )}
     </>
   );
 }
