@@ -33,9 +33,18 @@ export interface DailyStrainEntry {
   sessionCount: number;
 }
 
+export type LoadZone = 'detraining' | 'optimal' | 'pushing' | 'overreaching';
+
+export interface LoadZoneInfo {
+  zone: LoadZone;
+  label: string;
+  description: string;
+}
+
 export interface ForecastResult {
   predictedStrain: number;
   predictedLoadRatio: number;
+  predictedLoadZone: LoadZoneInfo;
   predictedOvertrainingScore: number;
   isRestDay: boolean;
 }
@@ -69,10 +78,76 @@ export interface ReadinessBreakdown {
   consistencyScore: number;
 }
 
+export interface EnhancedReadinessBreakdown extends ReadinessBreakdown {
+  wellnessScore?: number;
+  priorRecoveryScore?: number;
+  deficitImpactScore?: number;
+  stabilityScore?: number;
+  hydrationScore?: number;
+  tier: 1 | 2 | 3;
+}
+
 export interface ReadinessResult {
   score: number;
   label: 'peaked' | 'ready' | 'recovering' | 'strained';
-  breakdown: ReadinessBreakdown;
+  breakdown: EnhancedReadinessBreakdown;
+}
+
+// ─── Wellness / Baseline Types ────────────────────────────────
+
+export interface WellnessCheckIn {
+  sleep_quality: number;   // 1-7
+  stress_level: number;    // 1-7
+  fatigue_level: number;   // 1-7
+  soreness_level: number;  // 1-7
+  energy_level?: number | null;
+  motivation_level?: number | null;
+  sleep_hours?: number | null;
+  hydration_feeling?: number | null;  // 1-5
+  appetite_level?: number | null;     // 1-5
+  hooper_index: number;    // 4-28
+}
+
+export type BalanceDirection = 'improving' | 'stable' | 'declining';
+export type BalanceSeverity = 'normal' | 'warning' | 'alert';
+
+export interface BalanceMetric {
+  metric: string;
+  recent14d: number;
+  baseline60d: number;
+  zScore: number;
+  direction: BalanceDirection;
+  severity: BalanceSeverity;
+}
+
+export interface PersonalBaseline {
+  sleep_hours_mean_14d: number | null;
+  sleep_hours_std_14d: number | null;
+  soreness_mean_14d: number | null;
+  soreness_std_14d: number | null;
+  fatigue_mean_14d: number | null;
+  fatigue_std_14d: number | null;
+  stress_mean_14d: number | null;
+  stress_std_14d: number | null;
+  hooper_mean_14d: number | null;
+  hooper_std_14d: number | null;
+  daily_load_mean_14d: number | null;
+  daily_load_std_14d: number | null;
+  sleep_hours_mean_60d: number | null;
+  sleep_hours_std_60d: number | null;
+  soreness_mean_60d: number | null;
+  soreness_std_60d: number | null;
+  fatigue_mean_60d: number | null;
+  fatigue_std_60d: number | null;
+  stress_mean_60d: number | null;
+  stress_std_60d: number | null;
+  hooper_mean_60d: number | null;
+  hooper_std_60d: number | null;
+  daily_load_mean_60d: number | null;
+  daily_load_std_60d: number | null;
+  hooper_cv_14d: number | null;
+  avg_deficit_7d: number | null;
+  avg_deficit_14d: number | null;
 }
 
 export interface AllMetrics {
@@ -81,6 +156,7 @@ export interface AllMetrics {
   acuteLoad: number;        // Sum of last 7 daily loads
   chronicLoad: number;      // Average of last 28 daily loads
   loadRatio: number;        // acuteLoad / (chronicLoad + 1)
+  loadZone: LoadZoneInfo;   // User-friendly interpretation
   overtrainingRisk: OvertrainingRisk;
   weeklySessionCount: number;
   avgSleep: number;
@@ -93,12 +169,19 @@ export interface AllMetrics {
   strainHistory: DailyStrainEntry[]; // Last 7 days for chart
   forecast: ForecastResult;
   recentSessions: SessionRow[];
-  // New fields
+  // Core fields
   readiness: ReadinessResult;
   trends: TrendAlerts;
   calibration: AthleteCalibration;
   sleepScore: number;
   avgSleepLast3: number;
+  // Enhanced fields (populated when wellness data available)
+  balanceMetrics?: BalanceMetric[];
+  deficitImpactScore?: number;
+  wellnessScore?: number;
+  hooperIndex?: number;
+  hooperComponents?: { sleep: number; stress: number; fatigue: number; soreness: number };
+  stabilityScore?: number;
 }
 
 // ─── Utility Functions ──────────────────────────────────────
@@ -140,6 +223,95 @@ export function getRecentSorenessValues(sessions: SessionRow[], count: number): 
     if (withSoreness) values.push(withSoreness.soreness_level);
   }
   return values;
+}
+
+// ─── Z-Score & Enhanced Scoring Utilities ────────────────────
+
+export function zScore(value: number, mean: number, std: number): number {
+  if (std < 0.01) return 0;
+  return (value - mean) / std;
+}
+
+export function computeBalanceMetrics(baseline: PersonalBaseline): BalanceMetric[] {
+  const metrics: BalanceMetric[] = [];
+
+  const pairs: { metric: string; mean14d: number | null; mean60d: number | null; std60d: number | null }[] = [
+    { metric: 'Sleep Hours', mean14d: baseline.sleep_hours_mean_14d, mean60d: baseline.sleep_hours_mean_60d, std60d: baseline.sleep_hours_std_60d },
+    { metric: 'Soreness', mean14d: baseline.soreness_mean_14d, mean60d: baseline.soreness_mean_60d, std60d: baseline.soreness_std_60d },
+    { metric: 'Fatigue', mean14d: baseline.fatigue_mean_14d, mean60d: baseline.fatigue_mean_60d, std60d: baseline.fatigue_std_60d },
+    { metric: 'Stress', mean14d: baseline.stress_mean_14d, mean60d: baseline.stress_mean_60d, std60d: baseline.stress_std_60d },
+    { metric: 'Hooper Index', mean14d: baseline.hooper_mean_14d, mean60d: baseline.hooper_mean_60d, std60d: baseline.hooper_std_60d },
+    { metric: 'Daily Load', mean14d: baseline.daily_load_mean_14d, mean60d: baseline.daily_load_mean_60d, std60d: baseline.daily_load_std_60d },
+  ];
+
+  for (const { metric, mean14d, mean60d, std60d } of pairs) {
+    if (mean14d == null || mean60d == null) continue;
+
+    const z = zScore(mean14d, mean60d, std60d ?? 0);
+
+    // For negative metrics (soreness, fatigue, stress), increasing is bad
+    const isNegativeMetric = ['Soreness', 'Fatigue', 'Stress'].includes(metric);
+    const effectiveZ = isNegativeMetric ? -z : z;
+
+    let direction: BalanceDirection;
+    if (effectiveZ > 0.5) direction = 'improving';
+    else if (effectiveZ < -0.5) direction = 'declining';
+    else direction = 'stable';
+
+    let severity: BalanceSeverity;
+    if (Math.abs(effectiveZ) > 1.5) severity = 'alert';
+    else if (Math.abs(effectiveZ) > 0.8) severity = 'warning';
+    else severity = 'normal';
+
+    metrics.push({ metric, recent14d: mean14d, baseline60d: mean60d, zScore: z, direction, severity });
+  }
+
+  return metrics;
+}
+
+export function computeDeficitImpactScore(avgDeficit7d: number | null): number {
+  if (avgDeficit7d == null) return 100; // No data = assume no impact
+  const deficit = Math.abs(avgDeficit7d);
+  if (deficit <= 200) return 100;
+  if (deficit <= 500) return Math.round(mapRange(deficit, 200, 500, 100, 60));
+  if (deficit <= 800) return Math.round(mapRange(deficit, 500, 800, 60, 30));
+  return Math.round(mapRange(deficit, 800, 1200, 30, 10));
+}
+
+export function computeWellnessScore(hooperIndex: number, baseline: PersonalBaseline | null): number {
+  if (baseline && baseline.hooper_mean_60d != null && baseline.hooper_std_60d != null && baseline.hooper_std_60d >= 0.01) {
+    // Z-score based: 0 SD = 50, +2 SD = 100, -2 SD = 0
+    const z = zScore(hooperIndex, baseline.hooper_mean_60d, baseline.hooper_std_60d);
+    return Math.round(clamp(0, 100, mapRange(z, -2, 2, 0, 100)));
+  }
+  // Absolute mapping: Hooper 4-28 → 0-100
+  return Math.round(clamp(0, 100, mapRange(hooperIndex, 4, 28, 0, 100)));
+}
+
+export function computeStabilityScore(hooperCV14d: number | null): number {
+  if (hooperCV14d == null) return 50; // Neutral when no data
+  // Lower CV = more stable = better. CV<0.08 = 100, CV>0.35 = 20
+  return Math.round(clamp(20, 100, mapRange(hooperCV14d, 0.08, 0.35, 100, 20)));
+}
+
+export function autoRegressiveSmooth(rawScore: number, previousDayScore: number | null, alpha: number = 0.6): number {
+  if (previousDayScore == null) return rawScore;
+  return Math.round(alpha * rawScore + (1 - alpha) * previousDayScore);
+}
+
+export function getLoadZone(loadRatio: number, calibration: AthleteCalibration): LoadZoneInfo {
+  const { caution, danger } = calibration.loadRatioThresholds;
+
+  if (loadRatio < 0.8) {
+    return { zone: 'detraining', label: 'Low', description: 'Volume is dropping — risk of losing fitness' };
+  }
+  if (loadRatio <= caution) {
+    return { zone: 'optimal', label: 'Optimal', description: 'Training is well balanced' };
+  }
+  if (loadRatio <= danger) {
+    return { zone: 'pushing', label: 'High', description: 'Recent load is higher than usual — monitor recovery' };
+  }
+  return { zone: 'overreaching', label: 'Spike', description: 'Training spike detected — high injury risk' };
 }
 
 // ─── Intensity Multiplier ────────────────────────────────────
@@ -663,6 +835,152 @@ export function computeReadiness(
   };
 }
 
+// ─── Enhanced Readiness (3-Tier Progressive) ────────────────
+
+export function computeEnhancedReadiness(
+  sessions28d: SessionRow[],
+  dailyLoadsArr: { date: string; load: number; sessions: SessionRow[] }[],
+  loadRatio: number,
+  calibration: AthleteCalibration,
+  todayCheckIn?: WellnessCheckIn | null,
+  baseline?: PersonalBaseline | null,
+  previousDayReadiness?: number | null,
+): ReadinessResult {
+  // Always compute base components (same as Tier 1)
+  const baseResult = computeReadiness(sessions28d, dailyLoadsArr, loadRatio, calibration);
+  const { sleepScore, sorenessScore, loadBalanceScore, recoveryScore, consistencyScore } = baseResult.breakdown;
+
+  // Tier 1: No check-in data — exact current behavior
+  if (!todayCheckIn) {
+    return {
+      ...baseResult,
+      breakdown: { ...baseResult.breakdown, tier: 1 },
+    };
+  }
+
+  const wellnessScore = computeWellnessScore(todayCheckIn.hooper_index, baseline ?? null);
+
+  // Hydration sub-score from check-in
+  const hydrationScore = todayCheckIn.hydration_feeling != null
+    ? Math.round(mapRange(todayCheckIn.hydration_feeling, 1, 5, 20, 100))
+    : 50;
+
+  // Tier 2: Check-in but no baseline yet (<14 days of data)
+  const hasBaseline = baseline != null && baseline.hooper_mean_60d != null;
+  if (!hasBaseline) {
+    const raw = clamp(0, 100, Math.round(
+      wellnessScore * 0.25 +
+      sleepScore * 0.20 +
+      sorenessScore * 0.20 +
+      loadBalanceScore * 0.15 +
+      recoveryScore * 0.10 +
+      consistencyScore * 0.10
+    ));
+
+    const score = autoRegressiveSmooth(raw, previousDayReadiness ?? null);
+
+    let label: ReadinessResult['label'];
+    if (score >= 80) label = 'peaked';
+    else if (score >= 55) label = 'ready';
+    else if (score >= 35) label = 'recovering';
+    else label = 'strained';
+
+    return {
+      score,
+      label,
+      breakdown: {
+        sleepScore: Math.round(sleepScore),
+        sorenessScore: Math.round(sorenessScore),
+        loadBalanceScore: Math.round(loadBalanceScore),
+        recoveryScore: Math.round(recoveryScore),
+        consistencyScore: Math.round(consistencyScore),
+        wellnessScore: Math.round(wellnessScore),
+        hydrationScore: Math.round(hydrationScore),
+        tier: 2,
+      },
+    };
+  }
+
+  // Tier 3: Full model (14+ days, baseline available)
+  const deficitImpactScore = computeDeficitImpactScore(baseline!.avg_deficit_7d);
+  const stabilityScore = computeStabilityScore(baseline!.hooper_cv_14d);
+  const priorRecoveryScore = previousDayReadiness != null
+    ? clamp(0, 100, previousDayReadiness)
+    : 50;
+
+  const raw = clamp(0, 100, Math.round(
+    wellnessScore * 0.30 +
+    priorRecoveryScore * 0.15 +
+    loadBalanceScore * 0.15 +
+    sleepScore * 0.10 +
+    sorenessScore * 0.10 +
+    deficitImpactScore * 0.08 +
+    stabilityScore * 0.05 +
+    hydrationScore * 0.04 +
+    recoveryScore * 0.03
+  ));
+
+  const score = autoRegressiveSmooth(raw, previousDayReadiness ?? null);
+
+  let label: ReadinessResult['label'];
+  if (score >= 80) label = 'peaked';
+  else if (score >= 55) label = 'ready';
+  else if (score >= 35) label = 'recovering';
+  else label = 'strained';
+
+  return {
+    score,
+    label,
+    breakdown: {
+      sleepScore: Math.round(sleepScore),
+      sorenessScore: Math.round(sorenessScore),
+      loadBalanceScore: Math.round(loadBalanceScore),
+      recoveryScore: Math.round(recoveryScore),
+      consistencyScore: Math.round(consistencyScore),
+      wellnessScore: Math.round(wellnessScore),
+      priorRecoveryScore: Math.round(priorRecoveryScore),
+      deficitImpactScore: Math.round(deficitImpactScore),
+      stabilityScore: Math.round(stabilityScore),
+      hydrationScore: Math.round(hydrationScore),
+      tier: 3,
+    },
+  };
+}
+
+// ─── Enhanced Trend Detection ────────────────────────────────
+
+export function detectEnhancedTrends(
+  sessions28d: SessionRow[],
+  dailyLoadsArr: { date: string; load: number }[],
+  baseline?: PersonalBaseline | null,
+): TrendAlerts {
+  const baseTrends = detectTrends(sessions28d, dailyLoadsArr);
+
+  if (!baseline) return baseTrends;
+
+  const alerts = [...baseTrends.alerts];
+
+  // Multi-timescale: 14d vs 60d wellness comparison
+  if (baseline.hooper_mean_14d != null && baseline.hooper_mean_60d != null && baseline.hooper_std_60d != null) {
+    const wellnessZ = zScore(baseline.hooper_mean_14d, baseline.hooper_mean_60d, baseline.hooper_std_60d);
+    if (wellnessZ < -1.0) {
+      alerts.push(`Wellness declining: 14-day avg below 60-day baseline by ${Math.abs(wellnessZ).toFixed(1)} SD`);
+    }
+  }
+
+  // Stability worsening
+  if (baseline.hooper_cv_14d != null && baseline.hooper_cv_14d > 0.25) {
+    alerts.push(`Recovery stability worsening: CV at ${(baseline.hooper_cv_14d * 100).toFixed(0)}%`);
+  }
+
+  // Caloric deficit impact
+  if (baseline.avg_deficit_7d != null && Math.abs(baseline.avg_deficit_7d) > 500) {
+    alerts.push(`Caloric deficit impacting recovery: ${Math.abs(baseline.avg_deficit_7d).toFixed(0)}kcal avg deficit over 7 days`);
+  }
+
+  return { ...baseTrends, alerts };
+}
+
 // ─── Helper: Get 7-day strain history ────────────────────────
 function getStrainHistory(
   dailyLoads: { date: string; load: number; sessions: SessionRow[] }[],
@@ -848,6 +1166,7 @@ function computeForecast(
   return {
     predictedStrain,
     predictedLoadRatio,
+    predictedLoadZone: getLoadZone(predictedLoadRatio, calibration),
     predictedOvertrainingScore,
     isRestDay: avgLoad === 0,
   };
@@ -885,10 +1204,14 @@ function getAvgSleepLast3(sessions28d: SessionRow[]): number {
 }
 
 // ─── Master Function ─────────────────────────────────────────
+// Backward compatible: callers that don't pass new args get identical behavior
 export function computeAllMetrics(
   sessions28d: SessionRow[],
   profileFreq?: number | null,
   activityLevel?: string | null,
+  todayCheckIn?: WellnessCheckIn | null,
+  baseline?: PersonalBaseline | null,
+  previousDayReadiness?: number | null,
 ): AllMetrics {
   // Derive calibration
   const calibration = deriveCalibration(
@@ -908,8 +1231,10 @@ export function computeAllMetrics(
   const consecutiveHighDays = getConsecutiveHighStrainDays(dailyLoadsArr, calibration.strainDivisor);
   const sessionsLast7d = getSessionsLast7d(sessions28d);
 
-  // Detect trends
-  const trends = detectTrends(sessions28d, dailyLoadsArr);
+  // Detect trends (enhanced when baseline available)
+  const trends = baseline
+    ? detectEnhancedTrends(sessions28d, dailyLoadsArr, baseline)
+    : detectTrends(sessions28d, dailyLoadsArr);
 
   // Adaptive overtraining score
   const overtrainingRisk = computeAdaptiveOvertrainingScore(
@@ -935,20 +1260,42 @@ export function computeAllMetrics(
       restSession.mobility_done ?? null,
     );
     overtrainingRisk.score = adjusted;
-    // Recalculate zone
     if (adjusted <= 30) overtrainingRisk.zone = 'low';
     else if (adjusted <= 60) overtrainingRisk.zone = 'moderate';
     else if (adjusted <= 80) overtrainingRisk.zone = 'high';
     else overtrainingRisk.zone = 'critical';
   }
 
-  // Readiness
-  const readiness = computeReadiness(sessions28d, dailyLoadsArr, loadRatio, calibration);
+  // Enhanced readiness (uses check-in + baseline when available, falls back to Tier 1)
+  const readiness = computeEnhancedReadiness(
+    sessions28d, dailyLoadsArr, loadRatio, calibration,
+    todayCheckIn, baseline, previousDayReadiness,
+  );
 
   const forecast = computeForecast(dailyLoadsArr, overtrainingRisk.score, calibration);
 
   const sleepScore = computeSleepScore(sessions28d);
   const avgSleepLast3 = getAvgSleepLast3(sessions28d);
+
+  // Compute enhanced fields when wellness data is available
+  const enhancedFields: Partial<AllMetrics> = {};
+
+  if (todayCheckIn) {
+    enhancedFields.hooperIndex = todayCheckIn.hooper_index;
+    enhancedFields.hooperComponents = {
+      sleep: todayCheckIn.sleep_quality,
+      stress: todayCheckIn.stress_level,
+      fatigue: todayCheckIn.fatigue_level,
+      soreness: todayCheckIn.soreness_level,
+    };
+    enhancedFields.wellnessScore = computeWellnessScore(todayCheckIn.hooper_index, baseline ?? null);
+  }
+
+  if (baseline) {
+    enhancedFields.balanceMetrics = computeBalanceMetrics(baseline);
+    enhancedFields.deficitImpactScore = computeDeficitImpactScore(baseline.avg_deficit_7d);
+    enhancedFields.stabilityScore = computeStabilityScore(baseline.hooper_cv_14d);
+  }
 
   if (import.meta.env.DEV) {
     console.log('[PE] allMetrics:', {
@@ -959,6 +1306,7 @@ export function computeAllMetrics(
       overtrainingScore: overtrainingRisk.score,
       overtrainingZone: overtrainingRisk.zone,
       readiness: readiness.score,
+      readinessTier: readiness.breakdown.tier,
       tier: calibration.tier,
     });
   }
@@ -969,6 +1317,7 @@ export function computeAllMetrics(
     acuteLoad,
     chronicLoad,
     loadRatio,
+    loadZone: getLoadZone(loadRatio, calibration),
     overtrainingRisk,
     weeklySessionCount: sessionsLast7d,
     avgSleep: getAvgSleep(sessions28d),
@@ -981,11 +1330,11 @@ export function computeAllMetrics(
     strainHistory: getStrainHistory(dailyLoadsArr, calibration.strainDivisor),
     forecast,
     recentSessions: getRecentSessions(sessions28d),
-    // New fields
     readiness,
     trends,
     calibration,
     sleepScore,
     avgSleepLast3,
+    ...enhancedFields,
   };
 }

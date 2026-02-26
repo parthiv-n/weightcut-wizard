@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import { AIGeneratingOverlay } from "@/components/AIGeneratingOverlay";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -204,6 +205,7 @@ export default function Hydration() {
   const [electrolyteGuideOpen, setElectrolyteGuideOpen] = useState(false);
   const { toast } = useToast();
   const { userId, profile: contextProfile, userName } = useUser();
+  const { safeAsync, isMounted } = useSafeAsync();
 
   const currentWeight = contextProfile?.current_weight_kg ?? 0;
 
@@ -248,7 +250,7 @@ export default function Hydration() {
     e.preventDefault();
     if (!currentWeight) return;
 
-    setLoading(true);
+    safeAsync(setLoading)(true);
 
     try {
       const { data, error } = await supabase.functions.invoke("rehydration-protocol", {
@@ -268,6 +270,7 @@ export default function Hydration() {
         },
       });
 
+      if (!isMounted()) return;
       if (error) throw error;
 
       if (data?.protocol) {
@@ -291,6 +294,7 @@ export default function Hydration() {
         });
       }
     } catch (error) {
+      if (!isMounted()) return;
       console.error("Error generating protocol:", error);
       toast({
         title: "Error",
@@ -299,7 +303,7 @@ export default function Hydration() {
       });
     }
 
-    setLoading(false);
+    safeAsync(setLoading)(false);
   };
 
   const toggleStep = (idx: number) => setExpandedStep((prev) => (prev === idx ? null : idx));
@@ -411,7 +415,7 @@ export default function Hydration() {
         </div>
 
         {/* ── Input Form ────────────────────────────────────────────────── */}
-        <div className="rounded-3xl bg-card border border-border/50 p-6 mb-6 shadow-2xl relative overflow-hidden">
+        <div className="rounded-3xl border border-white/[0.06] p-6 mb-6 shadow-2xl relative overflow-hidden bg-white/[0.02] backdrop-blur-xl">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[200px] h-[200px] bg-blue-500/20 opacity-40 blur-[80px] rounded-full pointer-events-none"></div>
 
           <form onSubmit={handleGenerateProtocol} className="space-y-6 relative z-10">
@@ -471,7 +475,7 @@ export default function Hydration() {
 
             <div className="grid grid-cols-2 gap-4">
               {/* Weigh-in Type Toggle */}
-              <div className="flex flex-col justify-center space-y-2 bg-muted rounded-2xl p-4 border border-border/30 shadow-inner col-span-1">
+              <div className="flex flex-col justify-center space-y-2 rounded-2xl p-4 col-span-1 bg-white/[0.04] border border-white/[0.08] backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_4px_20px_rgba(0,0,0,0.2)]">
                 <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest text-center">
                   Weigh-In
                 </p>
@@ -479,14 +483,14 @@ export default function Hydration() {
                   <button
                     type="button"
                     onClick={() => setWeighInTiming("same-day")}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${weighInTiming === "same-day" ? "bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.3)]" : "bg-muted/80 text-muted-foreground hover:bg-muted"}`}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${weighInTiming === "same-day" ? "bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.3)]" : "bg-white/5 text-muted-foreground hover:bg-white/10"}`}
                   >
                     Same Day
                   </button>
                   <button
                     type="button"
                     onClick={() => setWeighInTiming("day-before")}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${weighInTiming === "day-before" ? "bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.3)]" : "bg-muted/80 text-muted-foreground hover:bg-muted"}`}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${weighInTiming === "day-before" ? "bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.3)]" : "bg-white/5 text-muted-foreground hover:bg-white/10"}`}
                   >
                     Day Before
                   </button>
@@ -494,7 +498,7 @@ export default function Hydration() {
               </div>
 
               {/* Start Time */}
-              <div className="flex flex-col items-center justify-center space-y-2 bg-muted rounded-2xl p-4 border border-border/30 shadow-inner col-span-1">
+              <div className="flex flex-col items-center justify-center space-y-2 rounded-2xl p-4 col-span-1 bg-white/[0.04] border border-white/[0.08] backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_4px_20px_rgba(0,0,0,0.2)]">
                 <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest text-center">
                   Time
                 </p>
@@ -510,7 +514,7 @@ export default function Hydration() {
             </div>
 
             {/* Glycogen Depletion Calculator */}
-            <div className="bg-muted rounded-2xl p-3 border border-border/30 shadow-inner">
+            <div className="rounded-2xl p-3 bg-white/[0.04] border border-white/[0.08] backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_4px_20px_rgba(0,0,0,0.2)]">
               <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest text-center mb-2">
                 Glycogen Depletion
               </p>
@@ -525,7 +529,7 @@ export default function Hydration() {
                     placeholder="300"
                     value={normalCarbs}
                     onChange={(e) => setNormalCarbs(e.target.value)}
-                    className="text-center text-base font-bold bg-background/50 border-border/30 rounded-xl h-9"
+                    className="text-center text-base font-bold bg-white/5 border-white/10 rounded-xl h-9"
                   />
                 </div>
                 <div>
@@ -538,7 +542,7 @@ export default function Hydration() {
                     placeholder="50"
                     value={fightWeekCarbs}
                     onChange={(e) => setFightWeekCarbs(e.target.value)}
-                    className="text-center text-base font-bold bg-background/50 border-border/30 rounded-xl h-9"
+                    className="text-center text-base font-bold bg-white/5 border-white/10 rounded-xl h-9"
                   />
                 </div>
               </div>

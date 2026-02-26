@@ -40,6 +40,163 @@ export type Database = {
   }
   public: {
     Tables: {
+      daily_wellness_checkins: {
+        Row: {
+          id: string
+          user_id: string
+          date: string
+          sleep_quality: number
+          stress_level: number
+          fatigue_level: number
+          soreness_level: number
+          energy_level: number | null
+          motivation_level: number | null
+          sleep_hours: number | null
+          hydration_feeling: number | null
+          appetite_level: number | null
+          hooper_index: number
+          readiness_score: number | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          date: string
+          sleep_quality: number
+          stress_level: number
+          fatigue_level: number
+          soreness_level: number
+          energy_level?: number | null
+          motivation_level?: number | null
+          sleep_hours?: number | null
+          hydration_feeling?: number | null
+          appetite_level?: number | null
+          readiness_score?: number | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          date?: string
+          sleep_quality?: number
+          stress_level?: number
+          fatigue_level?: number
+          soreness_level?: number
+          energy_level?: number | null
+          motivation_level?: number | null
+          sleep_hours?: number | null
+          hydration_feeling?: number | null
+          appetite_level?: number | null
+          readiness_score?: number | null
+          created_at?: string | null
+        }
+        Relationships: []
+      }
+      personal_baselines: {
+        Row: {
+          id: string
+          user_id: string
+          baseline_date: string
+          sleep_hours_mean_14d: number | null
+          sleep_hours_std_14d: number | null
+          soreness_mean_14d: number | null
+          soreness_std_14d: number | null
+          fatigue_mean_14d: number | null
+          fatigue_std_14d: number | null
+          stress_mean_14d: number | null
+          stress_std_14d: number | null
+          hooper_mean_14d: number | null
+          hooper_std_14d: number | null
+          daily_load_mean_14d: number | null
+          daily_load_std_14d: number | null
+          sleep_hours_mean_60d: number | null
+          sleep_hours_std_60d: number | null
+          soreness_mean_60d: number | null
+          soreness_std_60d: number | null
+          fatigue_mean_60d: number | null
+          fatigue_std_60d: number | null
+          stress_mean_60d: number | null
+          stress_std_60d: number | null
+          hooper_mean_60d: number | null
+          hooper_std_60d: number | null
+          daily_load_mean_60d: number | null
+          daily_load_std_60d: number | null
+          hooper_cv_14d: number | null
+          avg_deficit_7d: number | null
+          avg_deficit_14d: number | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          baseline_date: string
+          sleep_hours_mean_14d?: number | null
+          sleep_hours_std_14d?: number | null
+          soreness_mean_14d?: number | null
+          soreness_std_14d?: number | null
+          fatigue_mean_14d?: number | null
+          fatigue_std_14d?: number | null
+          stress_mean_14d?: number | null
+          stress_std_14d?: number | null
+          hooper_mean_14d?: number | null
+          hooper_std_14d?: number | null
+          daily_load_mean_14d?: number | null
+          daily_load_std_14d?: number | null
+          sleep_hours_mean_60d?: number | null
+          sleep_hours_std_60d?: number | null
+          soreness_mean_60d?: number | null
+          soreness_std_60d?: number | null
+          fatigue_mean_60d?: number | null
+          fatigue_std_60d?: number | null
+          stress_mean_60d?: number | null
+          stress_std_60d?: number | null
+          hooper_mean_60d?: number | null
+          hooper_std_60d?: number | null
+          daily_load_mean_60d?: number | null
+          daily_load_std_60d?: number | null
+          hooper_cv_14d?: number | null
+          avg_deficit_7d?: number | null
+          avg_deficit_14d?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          baseline_date?: string
+          sleep_hours_mean_14d?: number | null
+          sleep_hours_std_14d?: number | null
+          soreness_mean_14d?: number | null
+          soreness_std_14d?: number | null
+          fatigue_mean_14d?: number | null
+          fatigue_std_14d?: number | null
+          stress_mean_14d?: number | null
+          stress_std_14d?: number | null
+          hooper_mean_14d?: number | null
+          hooper_std_14d?: number | null
+          daily_load_mean_14d?: number | null
+          daily_load_std_14d?: number | null
+          sleep_hours_mean_60d?: number | null
+          sleep_hours_std_60d?: number | null
+          soreness_mean_60d?: number | null
+          soreness_std_60d?: number | null
+          fatigue_mean_60d?: number | null
+          fatigue_std_60d?: number | null
+          stress_mean_60d?: number | null
+          stress_std_60d?: number | null
+          hooper_mean_60d?: number | null
+          hooper_std_60d?: number | null
+          daily_load_mean_60d?: number | null
+          daily_load_std_60d?: number | null
+          hooper_cv_14d?: number | null
+          avg_deficit_7d?: number | null
+          avg_deficit_14d?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       chat_messages: {
         Row: {
           content: string

@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
@@ -39,7 +40,7 @@ type FightCampCalendarRow = FightCampCalendarInsert & {
 };
 
 const SESSION_TYPES = [
-    "BJJ", "Muay Thai", "Wrestling", "Sparring", "Strength", "Conditioning", "Recovery", "Rest"
+    "BJJ", "Muay Thai", "Boxing", "Wrestling", "Sparring", "Strength", "Conditioning", "Run", "Recovery", "Rest", "Other"
 ];
 
 export default function FightCampCalendar() {
@@ -55,6 +56,7 @@ export default function FightCampCalendar() {
 
     // Form State
     const [sessionType, setSessionType] = useState(SESSION_TYPES[0]);
+    const [customType, setCustomType] = useState("");
     const [duration, setDuration] = useState("60");
     const [rpe, setRpe] = useState([5]);
     const [intensityLevel, setIntensityLevel] = useState([3]);
@@ -129,6 +131,7 @@ export default function FightCampCalendar() {
 
     const resetForm = () => {
         setSessionType(SESSION_TYPES[0]);
+        setCustomType("");
         setDuration("60");
         setRpe([5]);
         setIntensityLevel([3]);
@@ -143,7 +146,13 @@ export default function FightCampCalendar() {
 
     const handleEditSession = (session: FightCampCalendarRow) => {
         setEditingSession(session);
-        setSessionType(session.session_type);
+        if (SESSION_TYPES.includes(session.session_type)) {
+            setSessionType(session.session_type);
+            setCustomType("");
+        } else {
+            setSessionType("Other");
+            setCustomType(session.session_type);
+        }
         setDuration(String(session.duration_minutes));
         setRpe([session.rpe]);
         const il = session.intensity_level ?? (session.intensity === 'high' ? 5 : session.intensity === 'moderate' ? 3 : 1);
@@ -166,7 +175,7 @@ export default function FightCampCalendar() {
             const payload: FightCampCalendarInsert = {
                 user_id: userId,
                 date: format(selectedDate, "yyyy-MM-dd"),
-                session_type: sessionType,
+                session_type: sessionType === 'Other' ? (customType.trim() || 'Other') : sessionType,
                 duration_minutes: isRestDay ? 0 : (parseInt(duration) || 0),
                 rpe: isRestDay ? 1 : rpe[0],
                 intensity: intensityMap[intensityLevel[0]] || 'moderate',
@@ -274,6 +283,7 @@ export default function FightCampCalendar() {
                             trainingFrequency: profile.training_frequency ?? null,
                             activityLevel: profile.activity_level ?? null,
                         } : undefined}
+                        tdee={profile?.tdee ?? null}
                     />
                 )}
 
@@ -364,6 +374,15 @@ export default function FightCampCalendar() {
                                                 </button>
                                             ))}
                                         </div>
+                                        {sessionType === 'Other' && (
+                                            <Input
+                                                placeholder="e.g. Swimming, Yoga, MMA..."
+                                                value={customType}
+                                                onChange={(e) => setCustomType(e.target.value)}
+                                                className="mt-2 rounded-xl"
+                                                autoFocus
+                                            />
+                                        )}
                                     </div>
 
                                     {!isRestDay && (

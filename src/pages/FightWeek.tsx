@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useUser } from "@/contexts/UserContext";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { localCache } from "@/lib/localCache";
 import { computeFightWeekPlan, type FightWeekProjection } from "@/utils/fightWeekEngine";
 import { WeightCutBreakdownCard } from "@/components/fightweek/WeightCutBreakdownCard";
@@ -40,6 +41,7 @@ export default function FightWeek() {
 
   const { toast } = useToast();
   const { userId, profile } = useUser();
+  const { safeAsync, isMounted } = useSafeAsync();
 
   // Compute projection synchronously from inputs
   const projection: FightWeekProjection | null = useMemo(() => {
@@ -92,7 +94,7 @@ export default function FightWeek() {
     const cached = localCache.get<DBPlan>(userId, "fight_week_plan");
     if (cached) {
       hydrateFromPlan(cached);
-      setInitialLoading(false);
+      safeAsync(setInitialLoading)(false);
     }
 
     // Then refresh from DB in background
@@ -105,9 +107,11 @@ export default function FightWeek() {
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle(),
-        4000,
+        undefined,
         "Load fight week plan"
       );
+
+      if (!isMounted()) return;
 
       if (data) {
         hydrateFromPlan(data);
@@ -116,7 +120,7 @@ export default function FightWeek() {
     } catch {
       // Timeout or network error — cached data (if any) is already showing
     } finally {
-      setInitialLoading(false);
+      safeAsync(setInitialLoading)(false);
     }
   };
 
@@ -128,7 +132,7 @@ export default function FightWeek() {
 
   const savePlan = async () => {
     if (!userId || !projection) return;
-    setSaving(true);
+    safeAsync(setSaving)(true);
 
     const cw = parseFloat(currentWeight);
     const tw = parseFloat(targetWeight);
@@ -146,6 +150,8 @@ export default function FightWeek() {
       ? await supabase.from("fight_week_plans").update(planData).eq("id", dbPlan.id).select().single()
       : await supabase.from("fight_week_plans").insert(planData).select().single();
 
+    if (!isMounted()) return;
+
     if (error) {
       toast({ title: "Error saving plan", description: error.message, variant: "destructive" });
     } else {
@@ -158,10 +164,10 @@ export default function FightWeek() {
 
   const generateAdvice = async () => {
     if (!userId || !projection) return;
-    setIsGeneratingAdvice(true);
+    safeAsync(setIsGeneratingAdvice)(true);
 
     // Clear stale advice when generating new
-    setAiAdvice(null);
+    safeAsync(setAiAdvice)(null);
 
     const { data, error } = await supabase.functions.invoke("fight-week-analysis", {
       body: {
@@ -173,6 +179,8 @@ export default function FightWeek() {
         projection,
       },
     });
+
+    if (!isMounted()) return;
 
     if (error) {
       toast({ title: "AI advice unavailable", description: error.message, variant: "destructive" });
