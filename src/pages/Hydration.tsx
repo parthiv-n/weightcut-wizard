@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,6 +18,7 @@ import {
   Coffee,
   Shield,
   User,
+  Clock,
 } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import { AIGeneratingOverlay } from "@/components/AIGeneratingOverlay";
@@ -188,8 +189,10 @@ function getPhaseBadge(phase?: string) {
 
 export default function Hydration() {
   const [weightLost, setWeightLost] = useState("");
-  const [weighInTiming, setWeighInTiming] = useState<string>("same-day");
-  const [startTime, setStartTime] = useState<string>("16:00");
+  const [weighInDate, setWeighInDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
+  const [weighInTime, setWeighInTime] = useState<string>("16:00");
+  const [fightDate, setFightDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
+  const [fightTime, setFightTime] = useState<string>("21:00");
   const [glycogenDepletion, setGlycogenDepletion] = useState<string>("moderate");
   const [normalCarbs, setNormalCarbs] = useState<string>("");
   const [fightWeekCarbs, setFightWeekCarbs] = useState<string>("");
@@ -208,6 +211,15 @@ export default function Hydration() {
   const { safeAsync, isMounted } = useSafeAsync();
 
   const currentWeight = contextProfile?.current_weight_kg ?? 0;
+
+  const availableHours = useMemo(() => {
+    const weighIn = new Date(`${weighInDate}T${weighInTime}`);
+    const fight = new Date(`${fightDate}T${fightTime}`);
+    let diffMs = fight.getTime() - weighIn.getTime();
+    if (diffMs <= 0) diffMs += 24 * 60 * 60 * 1000;
+    const hours = diffMs / (1000 * 60 * 60);
+    return Math.max(1, Math.round(hours * 2) / 2);
+  }, [weighInDate, weighInTime, fightDate, fightTime]);
 
   // Auto-derive glycogen depletion from carb inputs
   useEffect(() => {
@@ -234,8 +246,10 @@ export default function Hydration() {
         setProtocol(persistedData.protocol);
         if (persistedData.inputs) {
           setWeightLost(persistedData.inputs.weightLost || "");
-          setWeighInTiming(persistedData.inputs.weighInTiming || "same-day");
-          setStartTime(persistedData.inputs.startTime || "16:00");
+          if (persistedData.inputs.weighInDate) setWeighInDate(persistedData.inputs.weighInDate);
+          setWeighInTime(persistedData.inputs.weighInTime || persistedData.inputs.startTime || "16:00");
+          if (persistedData.inputs.fightDate) setFightDate(persistedData.inputs.fightDate);
+          setFightTime(persistedData.inputs.fightTime || "21:00");
           setGlycogenDepletion(persistedData.inputs.glycogenDepletion || "moderate");
           setNormalCarbs(persistedData.inputs.normalCarbs || "");
           setFightWeekCarbs(persistedData.inputs.fightWeekCarbs || "");
@@ -256,7 +270,8 @@ export default function Hydration() {
       const { data, error } = await supabase.functions.invoke("rehydration-protocol", {
         body: {
           weightLostKg: parseFloat(weightLost),
-          weighInTiming,
+          availableHours,
+          weighInTiming: availableHours <= 6 ? "same-day" : "day-before",
           currentWeightKg: currentWeight,
           glycogenDepletion,
           sex: contextProfile?.sex,
@@ -282,7 +297,7 @@ export default function Hydration() {
             "rehydration_protocol",
             {
               protocol: data.protocol,
-              inputs: { weightLost, weighInTiming, startTime, glycogenDepletion, normalCarbs, fightWeekCarbs },
+              inputs: { weightLost, weighInDate, weighInTime, fightDate, fightTime, glycogenDepletion, normalCarbs, fightWeekCarbs },
             },
             168
           );
@@ -474,42 +489,62 @@ export default function Hydration() {
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              {/* Weigh-in Type Toggle */}
-              <div className="glass-card flex flex-col justify-center space-y-2 rounded-2xl p-4 col-span-1">
+              {/* Weigh-In */}
+              <div className="glass-card flex flex-col items-center justify-center space-y-1.5 rounded-2xl p-4 col-span-1">
                 <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest text-center">
                   Weigh-In
                 </p>
-                <div className="w-full h-full flex flex-col gap-1.5 justify-center">
-                  <button
-                    type="button"
-                    onClick={() => setWeighInTiming("same-day")}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${weighInTiming === "same-day" ? "bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.3)]" : "bg-white/5 text-muted-foreground hover:bg-white/10"}`}
-                  >
-                    Same Day
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setWeighInTiming("day-before")}
-                    className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${weighInTiming === "day-before" ? "bg-emerald-500 text-black shadow-[0_0_10px_rgba(16,185,129,0.3)]" : "bg-white/5 text-muted-foreground hover:bg-white/10"}`}
-                  >
-                    Day Before
-                  </button>
-                </div>
-              </div>
-
-              {/* Start Time */}
-              <div className="glass-card flex flex-col items-center justify-center space-y-2 rounded-2xl p-4 col-span-1">
-                <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest text-center">
-                  Time
-                </p>
+                <Input
+                  type="date"
+                  value={weighInDate}
+                  onChange={(e) => setWeighInDate(e.target.value)}
+                  required
+                  className="w-full text-center text-xs font-medium bg-transparent border-none text-muted-foreground focus-visible:ring-0 p-0 h-auto [&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-datetime-edit]:text-center [&::-webkit-datetime-edit-fields-wrapper]:justify-center"
+                />
                 <Input
                   type="time"
-                  value={startTime}
-                  onChange={(e) => setStartTime(e.target.value)}
+                  value={weighInTime}
+                  onChange={(e) => setWeighInTime(e.target.value)}
                   required
-                  className="text-center text-2xl font-black bg-transparent border-none text-foreground focus-visible:ring-0 p-0 h-auto [&::-webkit-calendar-picker-indicator]:opacity-50 mt-2"
+                  className="w-full text-center text-2xl font-black bg-transparent border-none text-foreground focus-visible:ring-0 p-0 h-auto [&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-datetime-edit]:text-center [&::-webkit-datetime-edit-fields-wrapper]:justify-center"
                   title="Weigh-in time"
                 />
+              </div>
+
+              {/* Fight */}
+              <div className="glass-card flex flex-col items-center justify-center space-y-1.5 rounded-2xl p-4 col-span-1">
+                <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest text-center">
+                  Fight
+                </p>
+                <Input
+                  type="date"
+                  value={fightDate}
+                  onChange={(e) => setFightDate(e.target.value)}
+                  required
+                  className="w-full text-center text-xs font-medium bg-transparent border-none text-muted-foreground focus-visible:ring-0 p-0 h-auto [&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-datetime-edit]:text-center [&::-webkit-datetime-edit-fields-wrapper]:justify-center"
+                />
+                <Input
+                  type="time"
+                  value={fightTime}
+                  onChange={(e) => setFightTime(e.target.value)}
+                  required
+                  className="w-full text-center text-2xl font-black bg-transparent border-none text-foreground focus-visible:ring-0 p-0 h-auto [&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-datetime-edit]:text-center [&::-webkit-datetime-edit-fields-wrapper]:justify-center"
+                  title="Fight time"
+                />
+              </div>
+            </div>
+
+            {/* Rehydration Window Badge */}
+            <div className="flex items-center justify-center">
+              <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${
+                availableHours <= 5
+                  ? "bg-red-500/10 border-red-500/30 text-red-400"
+                  : availableHours <= 10
+                    ? "bg-amber-500/10 border-amber-500/30 text-amber-400"
+                    : "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"
+              }`}>
+                <Clock className="w-3 h-3" />
+                {availableHours}h rehydration window
               </div>
             </div>
 
@@ -583,7 +618,7 @@ export default function Hydration() {
 
             <Button
               type="submit"
-              className="w-full h-12 mt-2 font-bold text-base rounded-2xl transition-all active:scale-[0.98]"
+              className="w-full h-12 mt-2 font-bold text-base rounded-2xl transition-all active:scale-[0.98] bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90"
               disabled={loading || !currentWeight}
             >
               {loading ? "Generating Protocol..." : "Generate Protocol"}
@@ -909,6 +944,13 @@ export default function Hydration() {
                       </div>
                     </div>
                   )}
+                  {/* Sip tip */}
+                  <div className="mx-4 mb-2 flex items-start gap-2 px-3 py-2 rounded-xl bg-blue-500/5 border border-blue-500/20">
+                    <Droplets className="h-3.5 w-3.5 text-blue-400 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-blue-300 leading-snug">
+                      <span className="font-semibold">Sip, don't chug.</span> Spread each hour's fluids into small sips over the full 60 minutes for better absorption and less GI distress.
+                    </p>
+                  </div>
                   {protocol.hourlyProtocol.map((step, idx) => {
                     const cumulativeML = getCumulativeFluid(idx);
                     const totalML = totals?.totalFluidLitres
@@ -929,7 +971,7 @@ export default function Hydration() {
                               Hour {step.hour}
                             </span>
                             <span className="text-xs font-bold text-foreground">
-                              {formatTime(startTime, step.hour)}
+                              {formatTime(weighInTime, step.hour)}
                             </span>
                           </div>
                           <div className="flex-1 min-w-0">
@@ -1103,17 +1145,17 @@ export default function Hydration() {
                       {SUGGESTED_FOODS.map((food, idx) => (
                         <div
                           key={idx}
-                          className="rounded-lg bg-card border border-border/50 p-2"
+                          className="rounded-lg bg-card border border-border/50 p-2 space-y-1"
                         >
-                          <p className="text-[11px] font-medium text-foreground/90 leading-tight">
-                            {food.name}
-                          </p>
-                          <div className="flex items-center justify-between mt-1">
-                            <span className="text-[10px] text-emerald-400 font-bold tabular-nums">
+                          <div className="flex items-start justify-between gap-1.5">
+                            <p className="text-[11px] font-medium text-foreground/90 leading-tight min-w-0">
+                              {food.name}
+                            </p>
+                            <span className="text-[10px] text-emerald-400 font-bold tabular-nums shrink-0">
                               {food.carbsG}g
                             </span>
-                            <span className="text-[9px] text-muted-foreground">{food.notes}</span>
                           </div>
+                          <p className="text-[9px] text-muted-foreground leading-snug">{food.notes}</p>
                         </div>
                       ))}
                     </div>
