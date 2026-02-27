@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -86,6 +86,7 @@ export default function Nutrition() {
   const loading = generatingPlan || loggingMeal !== null || savingAllMeals;
   const [aiPrompt, setAiPrompt] = useState("");
   const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
+  const [expandedMealIdeas, setExpandedMealIdeas] = useState<Set<string>>(new Set());
   const [isQuickAddSheetOpen, setIsQuickAddSheetOpen] = useState(false);
   const [quickAddTab, setQuickAddTab] = useState<"ai" | "manual">("ai");
   const [aiLineItems, setAiLineItems] = useState<AiLineItem[]>([]);
@@ -2271,7 +2272,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
               onClick={() => setIsAiDialogOpen(true)}
               size="sm"
               variant="outline"
-              className="h-8 text-xs gap-1.5"
+              className="h-8 text-xs gap-1.5 rounded-xl border-primary/20 text-primary hover:bg-primary/10"
             >
               <Sparkles className="h-3 w-3" />
               Generate
@@ -2330,10 +2331,24 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                       { type: "snack", Icon: Apple, color: "text-green-400", label: "Snack" },
                     ];
 
+                    const isExpanded = expandedMealIdeas.has(meal.id);
+                    const hasDetails = (meal.ingredients && Array.isArray(meal.ingredients) && meal.ingredients.length > 0) || meal.recipe_notes;
+
                     return (
                       <div key={meal.id} className="glass-card overflow-hidden transition-all duration-300">
-                        {/* Top section: donut + name + macros */}
-                        <div className="p-4">
+                        {/* Tappable top section: donut + name + macros */}
+                        <div
+                          className={`p-4 ${hasDetails ? "cursor-pointer active:bg-white/[0.02] transition-colors" : ""}`}
+                          onClick={() => {
+                            if (!hasDetails) return;
+                            setExpandedMealIdeas(prev => {
+                              const next = new Set(prev);
+                              if (next.has(meal.id)) next.delete(meal.id);
+                              else next.add(meal.id);
+                              return next;
+                            });
+                          }}
+                        >
                           <div className="flex items-start gap-3">
                             {/* Mini macro donut */}
                             <div className="relative flex-shrink-0" style={{ width: 56, height: 56 }}>
@@ -2364,9 +2379,9 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                               </div>
                             </div>
 
-                            {/* Name + macro bars */}
+                            {/* Name + macro dots + chevron */}
                             <div className="flex-1 min-w-0">
-                              <h4 className="font-semibold text-sm leading-tight truncate text-foreground">{meal.meal_name}</h4>
+                              <h4 className="font-semibold text-sm leading-tight text-foreground">{meal.meal_name}</h4>
                               {meal.portion_size && (
                                 <p className="text-[10px] text-foreground/80 mt-0.5">{meal.portion_size}</p>
                               )}
@@ -2385,28 +2400,36 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                                 </div>
                               </div>
                             </div>
+
+                            {/* Expand/collapse chevron */}
+                            {hasDetails && (
+                              <ChevronDown className={`h-4 w-4 text-muted-foreground/50 flex-shrink-0 mt-1 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
+                            )}
                           </div>
 
-                          {/* Ingredients */}
-                          {meal.ingredients && Array.isArray(meal.ingredients) && meal.ingredients.length > 0 && (
-                            <div className="mt-3">
-                              <p className="text-[10px] font-semibold uppercase tracking-wider text-foreground/50 mb-1.5">Ingredients</p>
-                              <div className="space-y-0.5">
-                                {meal.ingredients.map((ing: Ingredient, idx: number) => (
-                                  <div key={idx} className="flex items-center justify-between text-[11px] py-0.5">
-                                    <span className="text-foreground/80">{ing.name}</span>
-                                    <span className="text-foreground/60 tabular-nums ml-2 flex-shrink-0">{ing.grams}g</span>
+                          {/* Expanded details */}
+                          {isExpanded && (
+                            <div className="mt-3 pt-3 border-t border-border/20 animate-in fade-in-0 slide-in-from-top-1 duration-200">
+                              {meal.ingredients && Array.isArray(meal.ingredients) && meal.ingredients.length > 0 && (
+                                <div>
+                                  <p className="text-[10px] font-semibold uppercase tracking-wider text-foreground/50 mb-1.5">Ingredients</p>
+                                  <div className="space-y-0.5">
+                                    {meal.ingredients.map((ing: Ingredient, idx: number) => (
+                                      <div key={idx} className="flex items-center justify-between text-[11px] py-0.5">
+                                        <span className="text-foreground/80">{ing.name}</span>
+                                        <span className="text-foreground/60 tabular-nums ml-2 flex-shrink-0">{ing.grams}g</span>
+                                      </div>
+                                    ))}
                                   </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
+                                </div>
+                              )}
 
-                          {/* Method / Recipe */}
-                          {meal.recipe_notes && (
-                            <div className="mt-3">
-                              <p className="text-[10px] font-semibold uppercase tracking-wider text-foreground/50 mb-1">Method</p>
-                              <p className="text-[11px] text-foreground/80 leading-relaxed">{meal.recipe_notes}</p>
+                              {meal.recipe_notes && (
+                                <div className="mt-3">
+                                  <p className="text-[10px] font-semibold uppercase tracking-wider text-foreground/50 mb-1">Method</p>
+                                  <p className="text-[11px] text-foreground/80 leading-relaxed">{meal.recipe_notes}</p>
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -2901,28 +2924,48 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           </SheetContent>
         </Sheet>
 
-        {/* AI Meal Plan Dialog */}
-        <Dialog open={isAiDialogOpen} onOpenChange={setIsAiDialogOpen}>
-          <DialogContent className="max-w-2xl w-[95vw] sm:w-full">
-            <DialogHeader>
-              <div className="flex items-center justify-between">
-                <DialogTitle>Generate Meal Plan Ideas for {format(new Date(selectedDate), "MMM d, yyyy")}</DialogTitle>
+        {/* AI Meal Plan Bottom Sheet */}
+        <Sheet open={isAiDialogOpen} onOpenChange={(open) => {
+          setIsAiDialogOpen(open);
+          if (!open) setShowDevInput(false);
+        }}>
+          <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto px-5 pt-0 pb-[max(2rem,env(safe-area-inset-bottom,2rem))]">
+            {/* Drag handle */}
+            <div className="flex justify-center pt-3 pb-3">
+              <div className="w-8 h-1 rounded-full bg-muted-foreground/30" />
+            </div>
+
+            <SheetHeader className="pb-3">
+              <SheetTitle className="flex items-center gap-2 text-base">
+                <Sparkles className="h-4 w-4 text-primary" />
+                Meal ideas · {format(new Date(selectedDate), "MMM d")}
+              </SheetTitle>
+            </SheetHeader>
+
+            <div className="space-y-3 pb-2">
+              {/* Suggestion chips */}
+              <div className="flex flex-wrap gap-2">
+                {["High protein", "Low carb", "Mediterranean", "Fight week prep"].map((chip) => (
+                  <button
+                    key={chip}
+                    onClick={() => setAiPrompt(prev => prev ? `${prev.trimEnd()} ${chip.toLowerCase()}` : chip)}
+                    className="px-3 py-1.5 rounded-full text-xs border border-primary/20 bg-primary/5 text-primary/90 active:scale-95 transition-transform"
+                  >
+                    {chip}
+                  </button>
+                ))}
               </div>
-              <DialogDescription>
-                Describe what kind of meals you'd like. These will be created as suggestions that you can log to your day.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="aiPrompt">What would you like to eat?</Label>
-                <Textarea
-                  id="aiPrompt"
-                  placeholder="E.g., 'I want high-protein meals with chicken and vegetables, no dairy' or 'Mediterranean diet with fish'"
-                  value={aiPrompt}
-                  onChange={(e) => setAiPrompt(e.target.value)}
-                  rows={4}
-                />
-              </div>
+
+              {/* Compact textarea */}
+              <Textarea
+                placeholder="Describe what you'd like to eat..."
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                rows={2}
+                className="resize-none rounded-xl border-primary/15 bg-primary/5"
+              />
+
+              {/* Remaining count */}
               {!devUnlocked && (
                 <p className="text-xs text-muted-foreground text-center">
                   {DAILY_LIMIT - mealPlanUsageCount > 0
@@ -2930,34 +2973,53 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                     : "Daily limit reached. Try again after 11:59 PM."}
                 </p>
               )}
-              <Button onClick={handleGenerateMealPlan} disabled={generatingPlan || (!devUnlocked && mealPlanUsageCount >= DAILY_LIMIT)} className="w-full">
+
+              {/* Blue gradient generate button */}
+              <Button
+                onClick={handleGenerateMealPlan}
+                disabled={generatingPlan || (!devUnlocked && mealPlanUsageCount >= DAILY_LIMIT)}
+                className="w-full bg-gradient-to-r from-primary to-secondary shadow-lg shadow-primary/20 rounded-xl h-11 text-sm font-semibold"
+              >
                 <Sparkles className="mr-2 h-4 w-4" />
                 {generatingPlan ? "Generating..." : "Generate Meal Ideas"}
               </Button>
+
+              {/* Dev password — hidden behind tiny toggle */}
               {!devUnlocked && (
-                <div className="flex gap-2 items-center pt-2">
-                  <Input
-                    type="password"
-                    placeholder="Dev passcode to bypass limits"
-                    value={devPasswordInput}
-                    onChange={(e) => setDevPasswordInput(e.target.value)}
-                    className="h-8 text-xs flex-1"
-                  />
-                  <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => {
-                    if (devPasswordInput === DEV_PASSWORD) {
-                      setDevUnlocked(true);
-                      toast({ title: "Dev mode unlocked" });
-                    } else {
-                      toast({ title: "Wrong password", variant: "destructive" });
-                    }
-                  }}>
-                    Unlock
-                  </Button>
+                <div className="flex flex-col items-center gap-2">
+                  <button
+                    onClick={() => setShowDevInput(v => !v)}
+                    className="text-[10px] text-muted-foreground/40 hover:text-muted-foreground transition-colors"
+                  >
+                    Dev
+                  </button>
+                  {showDevInput && (
+                    <div className="flex gap-2 items-center w-full animate-in fade-in-0 slide-in-from-top-1 duration-200">
+                      <Input
+                        type="password"
+                        placeholder="Dev passcode"
+                        value={devPasswordInput}
+                        onChange={(e) => setDevPasswordInput(e.target.value)}
+                        className="h-8 text-xs flex-1 rounded-xl"
+                      />
+                      <Button size="sm" variant="outline" className="h-8 text-xs rounded-xl" onClick={() => {
+                        if (devPasswordInput === DEV_PASSWORD) {
+                          setDevUnlocked(true);
+                          setShowDevInput(false);
+                          toast({ title: "Dev mode unlocked" });
+                        } else {
+                          toast({ title: "Wrong password", variant: "destructive" });
+                        }
+                      }}>
+                        Unlock
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          </DialogContent>
-        </Dialog>
+          </SheetContent>
+        </Sheet>
 
         {/* Manual Nutrition Input Dialog */}
         <Dialog open={manualNutritionDialog.open} onOpenChange={(open) => {

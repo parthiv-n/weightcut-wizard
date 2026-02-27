@@ -8,6 +8,10 @@ import { Droplets, TrendingDown, Calendar, Lock, ChevronRight, Flame, Zap, Check
 import wizardLogo from "@/assets/wizard-logo.png";
 import { WeightProgressRing } from "@/components/dashboard/WeightProgressRing";
 import { CalorieProgressRing } from "@/components/dashboard/CalorieProgressRing";
+import { StreakBadge } from "@/components/dashboard/StreakBadge";
+import { ConsistencyRing } from "@/components/dashboard/ConsistencyRing";
+import { MilestoneBadges } from "@/components/dashboard/MilestoneBadges";
+import { useGamification } from "@/hooks/useGamification";
 import { useUser } from "@/contexts/UserContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { withSupabaseTimeout, withRetry } from "@/lib/timeoutWrapper";
@@ -45,6 +49,7 @@ export default function Dashboard() {
   const { userName, currentWeight, userId, profile } = useUser();
   const navigate = useNavigate();
   const { safeAsync, isMounted } = useSafeAsync();
+  const { streak, streakIncludesToday, weeklyConsistency, badges, badgesLoading } = useGamification(userId, weightLogs, todayCalories);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -341,8 +346,16 @@ export default function Dashboard() {
               </span>
             </div>
           )}
-          <h1 className="text-2xl font-bold">{getGreeting()}, {userName || "Fighter"}</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold">{getGreeting()}, {userName || "Fighter"}</h1>
+            {streak > 0 && <StreakBadge streak={streak} isActive={streakIncludesToday} />}
+          </div>
           <p className="text-sm text-muted-foreground mt-0.5">Your weight cut journey dashboard</p>
+        </div>
+
+        {/* Weekly Consistency Ring */}
+        <div className="dashboard-card-enter dashboard-stagger-2">
+          <ConsistencyRing {...weeklyConsistency} />
         </div>
 
         {/* Wizard's Daily Wisdom card — conditional states */}
@@ -531,6 +544,11 @@ export default function Dashboard() {
             consumed={todayCalories}
             target={dailyCalorieGoal}
           />
+        </div>
+
+        {/* Milestone Badges */}
+        <div className="dashboard-card-enter dashboard-stagger-7">
+          <MilestoneBadges badges={badges} loading={badgesLoading} />
         </div>
       </div>
 
