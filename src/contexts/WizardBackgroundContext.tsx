@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { useUser } from "./UserContext";
+import { syncWeightReminder } from "@/lib/weightReminder";
 
 interface Message {
   role: "system" | "user" | "assistant";
@@ -27,7 +28,9 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
   // Initialize notifications (native only — web requires a user gesture)
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
-      LocalNotifications.requestPermissions();
+      LocalNotifications.requestPermissions().then(() => {
+        syncWeightReminder();
+      });
     }
   }, []);
 

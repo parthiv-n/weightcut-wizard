@@ -1,4 +1,4 @@
-import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Settings, LogOut, Droplets, Calendar, Moon, Sun, ChevronRight, BookOpen, Dumbbell } from "lucide-react";
+import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Settings, LogOut, Droplets, Calendar, Moon, Sun, ChevronRight, BookOpen, Dumbbell, Bell } from "lucide-react";
 import { motion } from "motion/react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
@@ -11,6 +11,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { Input } from "@/components/ui/input";
 import { ProfilePictureUpload } from "@/components/ProfilePictureUpload";
+import { Switch } from "@/components/ui/switch";
+import { Capacitor } from "@capacitor/core";
+import { getSettings, saveSettings, scheduleReminder, cancelReminder, type ReminderSettings } from "@/lib/weightReminder";
 import { useTutorial } from "@/tutorial/useTutorial";
 import {
   AlertDialog,
@@ -52,6 +55,8 @@ export function BottomNav() {
     const saved = localStorage.getItem("theme") as "light" | "dark" | null;
     return saved || "dark";
   });
+  const [reminderSettings, setReminderSettings] = useState<ReminderSettings>(getSettings);
+  const [timePickerOpen, setTimePickerOpen] = useState(false);
 
   useEffect(() => {
     setEditedName(userName);
@@ -422,6 +427,115 @@ export function BottomNav() {
                   <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
                 </div>
               </button>
+
+              {/* Weight Reminder (native only) */}
+              {Capacitor.isNativePlatform() && (() => {
+                const h = reminderSettings.hour;
+                const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h;
+                const ampm = h < 12 ? "AM" : "PM";
+                const displayMinute = String(reminderSettings.minute).padStart(2, "0");
+                const timeLabel = `Daily at ${displayHour}:${displayMinute} ${ampm}`;
+
+                const handleToggle = async (checked: boolean) => {
+                  const next = { ...reminderSettings, enabled: checked };
+                  setReminderSettings(next);
+                  saveSettings(next);
+                  if (checked) {
+                    await scheduleReminder(next.hour, next.minute);
+                  } else {
+                    await cancelReminder();
+                    setTimePickerOpen(false);
+                  }
+                };
+
+                const handleTimeChange = async (field: "hour12" | "minute" | "ampm", value: number | string) => {
+                  let { hour, minute } = reminderSettings;
+                  const currentAmpm = hour < 12 ? "AM" : "PM";
+                  let hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+
+                  if (field === "hour12") hour12 = value as number;
+                  if (field === "minute") minute = value as number;
+                  const newAmpm = field === "ampm" ? (value as string) : currentAmpm;
+
+                  // Convert 12h → 24h
+                  if (newAmpm === "AM") {
+                    hour = hour12 === 12 ? 0 : hour12;
+                  } else {
+                    hour = hour12 === 12 ? 12 : hour12 + 12;
+                  }
+
+                  const next: ReminderSettings = { enabled: true, hour, minute };
+                  setReminderSettings(next);
+                  saveSettings(next);
+                  await scheduleReminder(hour, minute);
+                };
+
+                return (
+                  <div className="rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden">
+                    <div
+                      className="flex items-center justify-between px-4 py-3 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation cursor-pointer"
+                      onClick={() => { if (reminderSettings.enabled) setTimePickerOpen(!timePickerOpen); }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
+                          <Bell className="h-5 w-5 text-primary" />
+                        </span>
+                        <div>
+                          <p className="text-[15px] font-medium text-foreground">Weight Reminder</p>
+                          <p className="text-xs text-muted-foreground">
+                            {reminderSettings.enabled ? timeLabel : "Off"}
+                          </p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={reminderSettings.enabled}
+                        onCheckedChange={handleToggle}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </div>
+
+                    {timePickerOpen && reminderSettings.enabled && (() => {
+                      const curHour24 = reminderSettings.hour;
+                      const curHour12 = curHour24 === 0 ? 12 : curHour24 > 12 ? curHour24 - 12 : curHour24;
+                      const curAmpm = curHour24 < 12 ? "AM" : "PM";
+
+                      const selectClass = "h-10 rounded-xl bg-background/60 dark:bg-white/5 border border-border/40 text-sm font-medium px-3 appearance-none text-foreground";
+
+                      return (
+                        <div className="flex items-center gap-2 px-4 pb-3 pt-1">
+                          <select
+                            value={curHour12}
+                            onChange={(e) => handleTimeChange("hour12", Number(e.target.value))}
+                            className={selectClass}
+                          >
+                            {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
+                              <option key={h} value={h}>{h}</option>
+                            ))}
+                          </select>
+                          <span className="text-muted-foreground font-medium">:</span>
+                          <select
+                            value={reminderSettings.minute}
+                            onChange={(e) => handleTimeChange("minute", Number(e.target.value))}
+                            className={selectClass}
+                          >
+                            {[0, 15, 30, 45].map((m) => (
+                              <option key={m} value={m}>{String(m).padStart(2, "0")}</option>
+                            ))}
+                          </select>
+                          <select
+                            value={curAmpm}
+                            onChange={(e) => handleTimeChange("ampm", e.target.value)}
+                            className={selectClass}
+                          >
+                            <option value="AM">AM</option>
+                            <option value="PM">PM</option>
+                          </select>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                );
+              })()}
 
               {/* Replay Tutorial */}
               <button

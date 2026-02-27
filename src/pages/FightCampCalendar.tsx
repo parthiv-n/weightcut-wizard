@@ -78,7 +78,7 @@ export default function FightCampCalendar() {
     const [editingSession, setEditingSession] = useState<FightCampCalendarRow | null>(null);
     // Share state
     const [shareOpen, setShareOpen] = useState(false);
-    const [shareTimeRange, setShareTimeRange] = useState<"1W" | "1M" | "1Y">("1M");
+    const [shareTimeRange, setShareTimeRange] = useState<"day" | "week" | "month">("week");
 
     const isRestDay = sessionType === 'Rest';
 
@@ -693,14 +693,17 @@ export default function FightCampCalendar() {
                         seen.add(s.id);
                         return true;
                     });
-                    if (shareTimeRange === "1W") {
+                    if (shareTimeRange === "day") {
+                        const todayStr = now.toISOString().split("T")[0];
+                        filtered = filtered.filter((s) => s.date === todayStr);
+                    } else if (shareTimeRange === "week") {
                         const cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
                         filtered = filtered.filter((s) => new Date(s.date) >= cutoff);
-                    } else if (shareTimeRange === "1M") {
-                        const cutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                    } else {
+                        // month: last 35 days
+                        const cutoff = new Date(now.getTime() - 35 * 24 * 60 * 60 * 1000);
                         filtered = filtered.filter((s) => new Date(s.date) >= cutoff);
                     }
-                    // 1Y uses all available data
 
                     return (
                         <div>
@@ -713,7 +716,7 @@ export default function FightCampCalendar() {
                                 gap: 8,
                                 zIndex: 10,
                             }}>
-                                {(["1W", "1M", "1Y"] as const).map((t) => (
+                                {(["day", "week", "month"] as const).map((t) => (
                                     <button
                                         key={t}
                                         onClick={() => setShareTimeRange(t)}
@@ -726,9 +729,10 @@ export default function FightCampCalendar() {
                                             color: shareTimeRange === t ? "#ffffff" : "rgba(255,255,255,0.5)",
                                             border: "none",
                                             cursor: "pointer",
+                                            textTransform: "capitalize",
                                         }}
                                     >
-                                        {t}
+                                        {t === "day" ? "Day" : t === "week" ? "Week" : "Month"}
                                     </button>
                                 ))}
                             </div>
