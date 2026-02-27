@@ -260,7 +260,7 @@ export function BottomNav() {
       <Sheet open={moreMenuOpen} onOpenChange={setMoreMenuOpen}>
         <SheetContent
           side="bottom"
-          className="h-[65vh] max-h-[85vh] rounded-t-3xl flex flex-col p-0 gap-0 bg-background/95 dark:bg-background/98 backdrop-blur-xl border-t border-border/50 [&>button]:hidden pb-[env(safe-area-inset-bottom)]"
+          className="h-[70vh] max-h-[85vh] rounded-t-3xl flex flex-col p-0 gap-0 bg-background/95 dark:bg-background/98 backdrop-blur-xl border-t border-border/50 [&>button]:hidden"
         >
           {/* Drag handle */}
           <div className="flex justify-center pt-3 pb-1 shrink-0">
@@ -269,7 +269,7 @@ export function BottomNav() {
           <SheetHeader className="px-5 pb-2 pt-1 text-left shrink-0">
             <SheetTitle className="text-lg font-semibold text-foreground">More</SheetTitle>
           </SheetHeader>
-          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 scrollbar-hide scroll-touch pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 scrollbar-hide scroll-touch overscroll-contain" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 2rem)" }}>
             {/* Nav links group */}
             <motion.div
               className="rounded-2xl bg-muted/30 dark:bg-white/5 overflow-hidden border border-border/50 dark:border-white/10"
