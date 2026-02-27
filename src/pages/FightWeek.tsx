@@ -18,6 +18,9 @@ import { ProjectionChart } from "@/components/fightweek/ProjectionChart";
 import { DayTimelineCard } from "@/components/fightweek/DayTimelineCard";
 import { AIAdviceCard, type FightWeekAIAdvice } from "@/components/fightweek/AIAdviceCard";
 import { TrendingDown, Target, Calendar } from "lucide-react";
+import { ShareButton } from "@/components/share/ShareButton";
+import { ShareCardDialog } from "@/components/share/ShareCardDialog";
+import { FightWeekSummaryCard } from "@/components/share/cards/FightWeekSummaryCard";
 
 interface DBPlan {
   id: string;
@@ -38,6 +41,7 @@ export default function FightWeek() {
   const [isGeneratingAdvice, setIsGeneratingAdvice] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   const { toast } = useToast();
   const { userId, profile } = useUser();
@@ -220,11 +224,14 @@ export default function FightWeek() {
             <h1 className="text-3xl font-bold tracking-tight">Fight Week</h1>
             <p className="text-muted-foreground text-sm font-medium">Protocol Generator</p>
           </div>
-          {safetyBadge && (
-            <div className={`px-3 py-1 rounded-full text-xs font-bold border ${safetyBadge.cls}`}>
-              {safetyBadge.label}
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            {projection && <ShareButton onClick={() => setShareOpen(true)} />}
+            {safetyBadge && (
+              <div className={`px-3 py-1 rounded-full text-xs font-bold border ${safetyBadge.cls}`}>
+                {safetyBadge.label}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Input card */}
@@ -358,6 +365,27 @@ export default function FightWeek() {
           </>
         )}
       </div>
+
+      {projection && (
+        <ShareCardDialog
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+          title="Share Fight Week"
+          shareTitle="Fight Week Plan"
+          shareText="Check out my weight cut protocol on WeightCut Wizard"
+        >
+          {({ cardRef, aspect }) => (
+            <FightWeekSummaryCard
+              ref={cardRef}
+              projection={projection}
+              currentWeight={parseFloat(currentWeight)}
+              targetWeight={parseFloat(targetWeight)}
+              daysOut={parseInt(daysUntilWeighIn)}
+              aspect={aspect}
+            />
+          )}
+        </ShareCardDialog>
+      )}
     </div>
   );
 }

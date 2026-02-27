@@ -38,6 +38,9 @@ import { triggerHapticSuccess, celebrateSuccess } from "@/lib/haptics";
 import { DietAnalysisCard } from "@/components/nutrition/DietAnalysisCard";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import type { DietAnalysisResult } from "@/types/dietAnalysis";
+import { ShareButton } from "@/components/share/ShareButton";
+import { ShareCardDialog } from "@/components/share/ShareCardDialog";
+import { NutritionCard } from "@/components/share/cards/NutritionCard";
 
 interface Ingredient {
   name: string;
@@ -176,6 +179,11 @@ export default function Nutrition() {
   // Diet analysis state
   const [dietAnalysis, setDietAnalysis] = useState<DietAnalysisResult | null>(null);
   const [dietAnalysisLoading, setDietAnalysisLoading] = useState(false);
+
+  // Share card state
+  const [shareOpen, setShareOpen] = useState(false);
+  const [nutritionStreak, setNutritionStreak] = useState(0);
+  const [totalMealsLogged, setTotalMealsLogged] = useState(0);
 
   // Dynamic macro-aware wisdom text (fallback)
   const getNutritionWisdom = () => {
@@ -398,6 +406,43 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     }
   };
   const [expandedMealActions, setExpandedMealActions] = useState<string | null>(null);
+
+  // Fetch share stats (streak + total meals) — lazy, only when dialog opens
+  const fetchShareStats = useCallback(async () => {
+    if (!userId) return;
+    try {
+      const { data, error } = await supabase
+        .from("nutrition_logs")
+        .select("logged_at")
+        .eq("user_id", userId);
+      if (error || !data) return;
+
+      setTotalMealsLogged(data.length);
+
+      // Deduplicate dates
+      const dates = [...new Set(data.map((r) => r.logged_at?.slice(0, 10)))].filter(Boolean).sort().reverse();
+      // Count consecutive days backwards from today
+      let streak = 0;
+      let cursor = new Date();
+      for (let i = 0; i < dates.length + 1; i++) {
+        const expected = format(cursor, "yyyy-MM-dd");
+        if (dates.includes(expected)) {
+          streak++;
+        } else if (i > 0) {
+          break;
+        }
+        cursor = subDays(cursor, 1);
+      }
+      setNutritionStreak(streak);
+    } catch {
+      // silent
+    }
+  }, [userId]);
+
+  const handleShareOpen = useCallback(() => {
+    setShareOpen(true);
+    fetchShareStats();
+  }, [fetchShareStats]);
 
   const [newIngredient, setNewIngredient] = useState({ name: "", grams: "" });
   const [lookingUpIngredient, setLookingUpIngredient] = useState(false);
@@ -2295,7 +2340,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         />
 
         {/* ═══ Date Navigator ═══ */}
-        <div className="flex items-center justify-center gap-3">
+        <div className="relative flex items-center justify-center gap-3">
           <button
             onClick={() => setSelectedDate(format(subDays(new Date(selectedDate), 1), "yyyy-MM-dd"))}
             className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 active:scale-95 transition-all"
@@ -2317,6 +2362,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
+          <ShareButton onClick={handleShareOpen} className="absolute right-0" />
         </div>
 
         {/* ═══ Meal Sections (MFP-style) ═══ */}
@@ -3824,6 +3870,33 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           )}
         </SheetContent>
       </Sheet>
+
+      <ShareCardDialog
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        title="Share Nutrition"
+        shareTitle="My Nutrition Stats"
+        shareText="Check out my nutrition tracking on WeightCut Wizard!"
+      >
+        {({ cardRef, aspect }) => (
+          <NutritionCard
+            ref={cardRef}
+            date={selectedDate}
+            calories={totalCalories}
+            calorieTarget={dailyCalorieTarget}
+            protein={totalProtein}
+            carbs={totalCarbs}
+            fats={totalFats}
+            proteinGoal={aiMacroGoals?.proteinGrams ?? 0}
+            carbsGoal={aiMacroGoals?.carbsGrams ?? 0}
+            fatsGoal={aiMacroGoals?.fatsGrams ?? 0}
+            mealCount={meals.length}
+            streak={nutritionStreak}
+            totalMealsLogged={totalMealsLogged}
+            aspect={aspect}
+          />
+        )}
+      </ShareCardDialog>
     </>
   );
 }

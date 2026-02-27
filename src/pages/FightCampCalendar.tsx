@@ -15,6 +15,9 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { RecoveryDashboard } from "@/components/fightcamp/RecoveryDashboard";
 import { TrainingSummarySection } from "@/components/fightcamp/TrainingSummarySection";
+import { ShareButton } from "@/components/share/ShareButton";
+import { ShareCardDialog } from "@/components/share/ShareCardDialog";
+import { FightCampCalendarCard } from "@/components/share/cards/FightCampCalendarCard";
 
 // Type definitions for fight_camp_calendar table
 type FightCampCalendarInsert = {
@@ -73,6 +76,9 @@ export default function FightCampCalendar() {
 
     // Edit state
     const [editingSession, setEditingSession] = useState<FightCampCalendarRow | null>(null);
+    // Share state
+    const [shareOpen, setShareOpen] = useState(false);
+    const [shareTimeRange, setShareTimeRange] = useState<"1W" | "1M" | "1Y">("1M");
 
     const isRestDay = sessionType === 'Rest';
 
@@ -303,7 +309,8 @@ export default function FightCampCalendar() {
                 <Card className="p-4 rounded-[20px] shadow-sm glass-card mb-6">
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-xl font-bold">{format(currentDate, "MMMM yyyy")}</h2>
-                        <div className="flex gap-2">
+                        <div className="flex items-center gap-1">
+                            {sessions.length > 0 && <ShareButton onClick={() => setShareOpen(true)} />}
                             <Button variant="ghost" size="icon" onClick={prevMonth} className="rounded-full h-8 w-8">
                                 <ChevronLeft className="h-5 w-5" />
                             </Button>
@@ -666,6 +673,75 @@ export default function FightCampCalendar() {
                         />
                     )}
                 </div>
+
+            {/* Share dialog with time range */}
+            <ShareCardDialog
+                open={shareOpen}
+                onOpenChange={setShareOpen}
+                title="Share Training Log"
+                shareTitle="Training Log"
+                shareText="Check out my training log on WeightCut Wizard"
+            >
+                {({ cardRef, aspect }) => {
+                    // Filter sessions by share time range
+                    const now = new Date();
+                    let filtered = [...sessions, ...sessions28d];
+                    // Deduplicate by id
+                    const seen = new Set<string>();
+                    filtered = filtered.filter((s) => {
+                        if (seen.has(s.id)) return false;
+                        seen.add(s.id);
+                        return true;
+                    });
+                    if (shareTimeRange === "1W") {
+                        const cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                        filtered = filtered.filter((s) => new Date(s.date) >= cutoff);
+                    } else if (shareTimeRange === "1M") {
+                        const cutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+                        filtered = filtered.filter((s) => new Date(s.date) >= cutoff);
+                    }
+                    // 1Y uses all available data
+
+                    return (
+                        <div>
+                            {/* Time range pills inside the share dialog */}
+                            <div style={{
+                                position: "absolute",
+                                top: 100,
+                                right: 48,
+                                display: "flex",
+                                gap: 8,
+                                zIndex: 10,
+                            }}>
+                                {(["1W", "1M", "1Y"] as const).map((t) => (
+                                    <button
+                                        key={t}
+                                        onClick={() => setShareTimeRange(t)}
+                                        style={{
+                                            padding: "4px 12px",
+                                            borderRadius: 999,
+                                            fontSize: 12,
+                                            fontWeight: 600,
+                                            background: shareTimeRange === t ? "#2563eb" : "rgba(255,255,255,0.08)",
+                                            color: shareTimeRange === t ? "#ffffff" : "rgba(255,255,255,0.5)",
+                                            border: "none",
+                                            cursor: "pointer",
+                                        }}
+                                    >
+                                        {t}
+                                    </button>
+                                ))}
+                            </div>
+                            <FightCampCalendarCard
+                                ref={cardRef}
+                                sessions={filtered}
+                                timeRange={shareTimeRange}
+                                aspect={aspect}
+                            />
+                        </div>
+                    );
+                }}
+            </ShareCardDialog>
 
         </div>
     );

@@ -28,6 +28,10 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { AIGeneratingOverlay } from "@/components/AIGeneratingOverlay";
+import { ShareButton } from "@/components/share/ShareButton";
+import { ShareCardDialog } from "@/components/share/ShareCardDialog";
+import { WeightTrackerCard } from "@/components/share/cards/WeightTrackerCard";
+import { WeighInResultCard } from "@/components/share/cards/WeighInResultCard";
 
 interface WeightLog {
   id: string;
@@ -99,6 +103,8 @@ export default function WeightTracker() {
   const [searchParams, setSearchParams] = useSearchParams();
   const weightInputRef = useRef<HTMLInputElement>(null);
   const [timeFilter, setTimeFilter] = useState<"1W" | "1M" | "ALL">("1M");
+  const [shareOpen, setShareOpen] = useState(false);
+  const [weighInShareOpen, setWeighInShareOpen] = useState(false);
 
   useEffect(() => {
     if (!userId) return;
@@ -265,6 +271,13 @@ export default function WeightTracker() {
         description: "Your weight has been recorded",
       });
       celebrateSuccess();
+
+      // Offer weigh-in share card if weight is at or below target
+      const fwt = profile?.fight_week_target_kg ?? profile?.goal_weight_kg;
+      if (fwt && loggedWeight <= fwt && !editingLogId) {
+        setWeighInShareOpen(true);
+      }
+
       setNewWeight("");
       setEditingLogId(null);
       fetchData();
@@ -677,6 +690,8 @@ export default function WeightTracker() {
         <div className="glass-card p-4 space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Progress Chart</p>
+            <div className="flex items-center gap-2">
+            {weightLogs.length >= 2 && <ShareButton onClick={() => setShareOpen(true)} />}
             {/* Time Filter Toggle */}
             <div className="flex bg-muted rounded-full p-0.5 border border-white/5">
               {(["1W", "1M", "ALL"] as const).map((filter) => (
@@ -691,6 +706,7 @@ export default function WeightTracker() {
                   {filter}
                 </button>
               ))}
+            </div>
             </div>
           </div>
           {getChartData().length > 0 ? (
@@ -1351,6 +1367,44 @@ export default function WeightTracker() {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Share weight tracker card */}
+      <ShareCardDialog
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        title="Share Weight Progress"
+        shareTitle="Weight Journey"
+        shareText="Check out my weight progress on WeightCut Wizard"
+      >
+        {({ cardRef, aspect }) => (
+          <WeightTrackerCard
+            ref={cardRef}
+            weightLogs={weightLogs}
+            goalWeight={profile?.fight_week_target_kg ?? profile?.goal_weight_kg}
+            timeFilter={timeFilter}
+            aspect={aspect}
+          />
+        )}
+      </ShareCardDialog>
+
+      {/* Share weigh-in result card */}
+      <ShareCardDialog
+        open={weighInShareOpen}
+        onOpenChange={setWeighInShareOpen}
+        title="Share Weigh-In Result"
+        shareTitle="Made Weight!"
+        shareText="I made weight on WeightCut Wizard"
+      >
+        {({ cardRef, aspect }) => (
+          <WeighInResultCard
+            ref={cardRef}
+            startWeight={weightLogs.length > 0 ? weightLogs[0].weight_kg : profile?.current_weight_kg ?? 0}
+            endWeight={weightLogs.length > 0 ? weightLogs[weightLogs.length - 1].weight_kg : 0}
+            targetWeight={profile?.fight_week_target_kg ?? profile?.goal_weight_kg ?? 0}
+            aspect={aspect}
+          />
+        )}
+      </ShareCardDialog>
     </>
   );
 }
