@@ -7,11 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Save, Trophy, Scale, Droplets, TrendingDown, Upload, Camera, CheckCircle2, FileText, Zap } from "lucide-react";
+import { ArrowLeft, Save, Trophy, Scale, Droplets, TrendingDown, Upload, Camera, CheckCircle2, FileText, Zap, Share2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
+import { ShareCardDialog } from "@/components/share/ShareCardDialog";
+import { FightCampSummaryCard } from "@/components/share/cards/FightCampSummaryCard";
 
 interface FightCamp {
   id: string;
@@ -38,6 +40,7 @@ export default function FightCampDetail() {
   const [camp, setCamp] = useState<FightCamp | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
     fetchCampDetails();
@@ -96,6 +99,7 @@ export default function FightCampDetail() {
       toast({ title: "Error", description: "Failed to update camp", variant: "destructive" });
     } else {
       toast({ title: "Success", description: "Camp updated successfully" });
+      navigate("/fight-camps");
     }
   };
 
@@ -173,6 +177,9 @@ export default function FightCampDetail() {
             {format(new Date(camp.fight_date), "MMM dd, yyyy")}
           </p>
         </div>
+        <Button variant="ghost" size="icon" onClick={() => setShareOpen(true)} className="h-9 w-9 rounded-full bg-muted hover:bg-muted/80 border border-border/50 shrink-0">
+          <Share2 className="w-4 h-4" />
+        </Button>
       </div>
 
       {/* Hero Card — Camp Picture + Quick Stats */}
@@ -400,6 +407,18 @@ export default function FightCampDetail() {
           </Button>
         </div>
       </div>
+
+      <ShareCardDialog
+        open={shareOpen}
+        onOpenChange={setShareOpen}
+        title="Share Camp"
+        shareTitle={camp.name}
+        shareText={`Check out my fight camp: ${camp.name}`}
+      >
+        {({ cardRef, aspect }) => (
+          <FightCampSummaryCard ref={cardRef} camp={camp} aspect={aspect} />
+        )}
+      </ShareCardDialog>
     </div>
   );
 }

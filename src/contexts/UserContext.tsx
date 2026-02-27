@@ -24,6 +24,7 @@ export interface ProfileData {
   ai_recommended_fats_g?: number;
   manual_nutrition_override?: boolean;
   avatar_url?: string;
+  is_premium?: boolean;
   [key: string]: any;
 }
 

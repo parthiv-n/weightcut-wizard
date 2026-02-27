@@ -7,10 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Trophy, Trash2 } from "lucide-react";
+import { Plus, Trophy, Trash2, GitCompareArrows, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
+import { ShareCardDialog } from "@/components/share/ShareCardDialog";
+import { CampComparisonCard } from "@/components/share/cards/CampComparisonCard";
 
 interface FightCamp {
   id: string;
@@ -38,6 +40,9 @@ export default function FightCamps() {
     event_name: "",
     fight_date: "",
   });
+  const [compareMode, setCompareMode] = useState(false);
+  const [selectedCamps, setSelectedCamps] = useState<string[]>([]);
+  const [compareDialogOpen, setCompareDialogOpen] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
   const { userId } = useUser();
@@ -154,7 +159,21 @@ export default function FightCamps() {
 
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold">Fight Camps</h1>
+          <h1 className="text-xl font-bold">{compareMode ? "Compare Camps" : "Fight Camps"}</h1>
+          <div className="flex items-center gap-2">
+            {camps.length >= 2 && (
+              <Button
+                size="icon"
+                variant={compareMode ? "default" : "ghost"}
+                onClick={() => {
+                  setCompareMode(!compareMode);
+                  setSelectedCamps([]);
+                }}
+                className="rounded-full h-9 w-9"
+              >
+                {compareMode ? <X className="h-4 w-4" /> : <GitCompareArrows className="h-4 w-4" />}
+              </Button>
+            )}
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button size="icon" className="rounded-full h-9 w-9 bg-muted hover:bg-muted/80 text-foreground border border-border/50">
@@ -202,7 +221,15 @@ export default function FightCamps() {
               </div>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
+
+        {/* Compare mode hint */}
+        {compareMode && (
+          <p className="text-sm text-muted-foreground">
+            Select 2 camps to compare ({selectedCamps.length}/2)
+          </p>
+        )}
 
         {/* Camp List */}
         {camps.length === 0 ? (
@@ -223,9 +250,23 @@ export default function FightCamps() {
             {camps.map((camp) => (
               <div
                 key={camp.id}
-                className="group relative glass-card p-4 active:scale-[0.98] transition-all duration-200 overflow-hidden"
+                className={`group relative glass-card p-4 active:scale-[0.98] transition-all duration-200 overflow-hidden ${
+                  compareMode && selectedCamps.includes(camp.id) ? "ring-2 ring-primary" : ""
+                }`}
               >
-                <div onClick={() => navigate(`/fight-camps/${camp.id}`)} className="cursor-pointer">
+                <div onClick={() => {
+                  if (compareMode) {
+                    setSelectedCamps((prev) => {
+                      if (prev.includes(camp.id)) return prev.filter((id) => id !== camp.id);
+                      if (prev.length >= 2) return prev;
+                      const next = [...prev, camp.id];
+                      if (next.length === 2) setCompareDialogOpen(true);
+                      return next;
+                    });
+                  } else {
+                    navigate(`/fight-camps/${camp.id}`);
+                  }
+                }} className="cursor-pointer">
                   <div className="flex items-start gap-3.5">
                     {camp.profile_pic_url ? (
                       <img
@@ -293,6 +334,32 @@ export default function FightCamps() {
         title="Delete Fight Camp"
         itemName={campToDelete?.name}
       />
+
+      {/* Camp comparison share dialog */}
+      {selectedCamps.length === 2 && (() => {
+        const campA = camps.find((c) => c.id === selectedCamps[0]);
+        const campB = camps.find((c) => c.id === selectedCamps[1]);
+        if (!campA || !campB) return null;
+        return (
+          <ShareCardDialog
+            open={compareDialogOpen}
+            onOpenChange={(open) => {
+              setCompareDialogOpen(open);
+              if (!open) {
+                setSelectedCamps([]);
+                setCompareMode(false);
+              }
+            }}
+            title="Compare Camps"
+            shareTitle="Camp Comparison"
+            shareText="Check out my camp comparison on WeightCut Wizard"
+          >
+            {({ cardRef, aspect }) => (
+              <CampComparisonCard ref={cardRef} campA={campA} campB={campB} aspect={aspect} />
+            )}
+          </ShareCardDialog>
+        );
+      })()}
     </div>
   );
 }
