@@ -73,8 +73,6 @@ export function PageTransition({ children }: PageTransitionProps) {
             if (isFirstRender.current) {
               isFirstRender.current = false;
             }
-            // Ensure entering page scrolls to top
-            window.scrollTo(0, 0);
           }}
           style={{ width: "100%", top: 0, left: 0 }}
         >

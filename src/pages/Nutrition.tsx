@@ -600,7 +600,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         if (cachedMacroGoals.dailyCalorieTarget) {
           safeAsync(setDailyCalorieTarget)(cachedMacroGoals.dailyCalorieTarget);
         }
-        if (cachedMacroGoals.profileUpdate && profile) {
+        if (cachedMacroGoals.profileUpdate && profile && profile.manual_nutrition_override !== cachedMacroGoals.profileUpdate.manual_nutrition_override) {
           safeAsync(setProfile)({ ...profile, manual_nutrition_override: cachedMacroGoals.profileUpdate.manual_nutrition_override });
         }
         safeAsync(setFetchingMacroGoals)(false);
@@ -628,7 +628,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
 
         setAiMacroGoals(macroGoals);
         setDailyCalorieTarget(profileData.ai_recommended_calories);
-        if (profile) {
+        if (profile && profile.manual_nutrition_override !== profileData.manual_nutrition_override) {
           setProfile({ ...profile, manual_nutrition_override: profileData.manual_nutrition_override });
         }
 
@@ -2240,10 +2240,14 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         </div>
 
         {/* ═══ Diet Analysis Section ═══ */}
+        <div data-tutorial="analyse-diet">
         {dietAnalysis ? (
           <DietAnalysisCard
             analysis={dietAnalysis}
-            onDismiss={() => setDietAnalysis(null)}
+            onDismiss={() => {
+              setDietAnalysis(null);
+              if (userId) AIPersistence.remove(userId, `diet_analysis_${selectedDate}`);
+            }}
             onRefresh={() => handleAnalyseDiet(true)}
             refreshing={dietAnalysisLoading}
           />
@@ -2257,9 +2261,10 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
             <span className="text-sm font-medium text-foreground">Analyse Diet</span>
           </button>
         )}
+        </div>
 
         {/* ═══ AI Meal Ideas Section ═══ */}
-        <div className="space-y-3">
+        <div className="space-y-3" data-tutorial="generate-meal-plan">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Meal Plan Ideas</h2>
             <Button
@@ -2505,15 +2510,17 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
             {/* ── AI Tab ── */}
             {quickAddTab === "ai" && (
               <div className={`space-y-3 ${!aiAnalysisComplete ? "flex flex-col items-center justify-center min-h-[40vh]" : ""}`}>
-                <div className={`flex gap-2 ${!aiAnalysisComplete ? "w-full max-w-md" : ""}`}>
-                  <Input
-                    placeholder="e.g. 2 slices tiger bread with nutella…"
+                <div className={`flex flex-col gap-2 ${!aiAnalysisComplete ? "w-full max-w-md" : ""}`}>
+                  <Textarea
+                    placeholder={"e.g. 2 slices tiger bread with nutella, a glass of whole milk, and a banana\n\nBe as descriptive as possible — portions, brands, and prep details help get more accurate results"}
                     value={aiMealDescription}
                     onChange={(e) => setAiMealDescription(e.target.value)}
                     disabled={aiAnalyzing}
-                    className="flex-1 text-sm"
+                    className="flex-1 text-sm min-h-[80px] resize-none"
+                    rows={3}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && aiMealDescription.trim() && !aiAnalyzing) {
+                      if (e.key === "Enter" && !e.shiftKey && aiMealDescription.trim() && !aiAnalyzing) {
+                        e.preventDefault();
                         handleAiAnalyzeMeal();
                       }
                     }}
@@ -2523,7 +2530,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                     size="sm"
                     onClick={handleAiAnalyzeMeal}
                     disabled={aiAnalyzing || !aiMealDescription.trim()}
-                    className="shrink-0"
+                    className="w-full"
                   >
                     <Sparkles className="h-3.5 w-3.5 mr-1.5" />
                     {aiAnalyzing ? "Analyzing…" : "Analyze"}

@@ -58,7 +58,7 @@ serve(async (req) => {
 
 Return ONLY valid JSON with this exact structure:
 {
-  "summary": "2-3 sentence overview of the day's nutrition quality, balance, and suitability for combat sport training/recovery",
+  "summary": "1 punchy sentence: what's good and what's missing. No fluff.",
   "micronutrients": [
     { "name": "Vitamin A", "percentRDA": number, "amount": "string with unit", "rdaTarget": "string with unit" },
     { "name": "Vitamin C", "percentRDA": number, "amount": "string with unit", "rdaTarget": "string with unit" },

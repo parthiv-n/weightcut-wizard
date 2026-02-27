@@ -10,7 +10,7 @@ import { WeightProgressRing } from "@/components/dashboard/WeightProgressRing";
 import { CalorieProgressRing } from "@/components/dashboard/CalorieProgressRing";
 import { useUser } from "@/contexts/UserContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
+import { withSupabaseTimeout, withRetry } from "@/lib/timeoutWrapper";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { Button } from "@/components/ui/button";
 import { calculateCalorieTarget } from "@/lib/calorieCalculation";
@@ -171,7 +171,7 @@ export default function Dashboard() {
     // --- Fetch fresh data from Supabase (3 queries — profile comes from context) ---
     try {
       const results = await Promise.allSettled([
-        withSupabaseTimeout(
+        withRetry(() => withSupabaseTimeout(
           supabase
             .from("weight_logs")
             .select("date, weight_kg")
@@ -180,9 +180,9 @@ export default function Dashboard() {
             .limit(30),
           undefined,
           "Weight logs query"
-        ),
+        )),
 
-        withSupabaseTimeout(
+        withRetry(() => withSupabaseTimeout(
           supabase
             .from("nutrition_logs")
             .select("calories")
@@ -190,9 +190,9 @@ export default function Dashboard() {
             .eq("date", today),
           undefined,
           "Nutrition logs query"
-        ),
+        )),
 
-        withSupabaseTimeout(
+        withRetry(() => withSupabaseTimeout(
           supabase
             .from("hydration_logs")
             .select("amount_ml")
@@ -200,7 +200,7 @@ export default function Dashboard() {
             .eq("date", today),
           undefined,
           "Hydration logs query"
-        )
+        ))
       ]);
 
       if (!isMounted()) return;

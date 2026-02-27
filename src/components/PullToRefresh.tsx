@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useLayoutEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { usePullToRefresh } from '@/hooks/usePullToRefresh';
 
 interface PullToRefreshProps {
@@ -9,6 +10,15 @@ interface PullToRefreshProps {
 
 export const PullToRefresh: React.FC<PullToRefreshProps> = ({ children, className = '', disabled = false }) => {
     const { pullDistance, isRefreshing, containerRef, PULL_THRESHOLD } = usePullToRefresh();
+    const { pathname } = useLocation();
+
+    // Reset scroll position before paint when navigating to a new page
+    useLayoutEffect(() => {
+        if (containerRef.current) {
+            containerRef.current.scrollTop = 0;
+        }
+        window.scrollTo(0, 0);
+    }, [pathname]);
 
     if (disabled) {
         return <main className={className}>{children}</main>;

@@ -1,4 +1,4 @@
-import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Settings, LogOut, Droplets, Calendar, Moon, Sun, ChevronRight, BookOpen } from "lucide-react";
+import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Settings, LogOut, Droplets, Calendar, Moon, Sun, ChevronRight, BookOpen, Dumbbell } from "lucide-react";
 import { motion } from "motion/react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
@@ -76,6 +76,11 @@ export function BottomNav() {
   const handleLogWeight = () => {
     setQuickLogOpen(false);
     navigate("/weight?focusWeightInput=true");
+  };
+
+  const handleLogTraining = () => {
+    setQuickLogOpen(false);
+    navigate("/fight-camp-calendar?openLogSession=true");
   };
 
   const handleMoreItemClick = (url: string) => {
@@ -237,6 +242,15 @@ export function BottomNav() {
             >
               <Weight className="h-6 w-6 text-blue-500" />
               <span className="text-lg font-semibold">Log Weight</span>
+            </Button>
+            <Button
+              onClick={handleLogTraining}
+              size="lg"
+              className="h-16 flex items-center justify-start gap-4 px-6"
+              variant="outline"
+            >
+              <Dumbbell className="h-6 w-6 text-orange-500" />
+              <span className="text-lg font-semibold">Log Training</span>
             </Button>
           </div>
         </DialogContent>

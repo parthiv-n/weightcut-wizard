@@ -2,7 +2,7 @@ import type { TutorialFlow } from "../types";
 
 export const onboardingFlow: TutorialFlow = {
   id: "onboarding",
-  version: 2,
+  version: 3,
   steps: [
     // ── Dashboard overview ──
     {
@@ -51,6 +51,24 @@ export const onboardingFlow: TutorialFlow = {
       navigateTo: "/nutrition",
     },
     {
+      id: "analyse-diet",
+      target: "analyse-diet",
+      title: "Analyse Your Diet",
+      description:
+        "Tap here to get an AI breakdown of your day's nutrition. Find out which micronutrients you're missing — like iron, magnesium and B-vitamins — so you can optimise your performance and recovery.",
+      position: "top",
+      route: "/nutrition",
+    },
+    {
+      id: "generate-meal-plan",
+      target: "generate-meal-plan",
+      title: "Generate Meal Plans",
+      description:
+        "Need meal ideas? Tap Generate and describe what you're after — the AI will create personalised meals tailored to your calorie and macro targets that you can log in one tap.",
+      position: "top",
+      route: "/nutrition",
+    },
+    {
       id: "weight-tracker-page",
       title: "Weight Tracker",
       description:
@@ -97,13 +115,22 @@ export const onboardingFlow: TutorialFlow = {
 
     // ── Back to dashboard — bottom nav tips ──
     {
+      id: "wizard-chat",
+      target: "wizard-chat",
+      title: "AI Chatbot",
+      description:
+        "Tap the sparkle button to chat with your AI coach. Ask anything — training advice, recovery tips, nutrition questions, or help with your weight cut.",
+      position: "top",
+      navigateTo: "/dashboard",
+    },
+    {
       id: "nav-quick-log",
       target: "nav-quick-log",
       title: "Quick Log",
       description:
         "Tap the + button anytime to quickly log food or weight in one tap.",
       position: "top",
-      navigateTo: "/dashboard",
+      route: "/dashboard",
     },
     {
       id: "all-done",

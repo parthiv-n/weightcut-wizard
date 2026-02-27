@@ -2,7 +2,6 @@ import { useRef, useState, useCallback, useEffect } from 'react';
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 
 const PULL_THRESHOLD = 80;
-const SCROLL_COOLDOWN_MS = 300;
 
 const triggerHaptic = async (style: ImpactStyle = ImpactStyle.Medium) => {
     try {
@@ -23,7 +22,8 @@ export function usePullToRefresh() {
     const isPulling = useRef(false);
     const isGestureLocked = useRef(false); // Once locked, we either refresh or ignore
     const hasTriggeredHaptic = useRef(false);
-    const lastScrollTime = useRef(0);
+    const isSettledAtTop = useRef(true); // Page starts at top
+    const settledTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const handleRefresh = useCallback(async () => {
         setIsRefreshing(true);
@@ -46,9 +46,8 @@ export function usePullToRefresh() {
         if (!el) return;
 
         const onTouchStart = (e: TouchEvent) => {
-            // STRICT RULE: User MUST be at the absolute top of the scroll container to even begin a pull
-            const scrollCooledDown = Date.now() - lastScrollTime.current > SCROLL_COOLDOWN_MS;
-            if (el.scrollTop <= 0 && !isRefreshing && scrollCooledDown) {
+            // STRICT RULE: User MUST be at the absolute top AND scroll must have settled
+            if (el.scrollTop <= 0 && !isRefreshing && isSettledAtTop.current) {
                 startY.current = e.touches[0].clientY;
                 startX.current = e.touches[0].clientX;
                 isPulling.current = true;
@@ -120,7 +119,19 @@ export function usePullToRefresh() {
         };
 
         const onScroll = () => {
-            lastScrollTime.current = Date.now();
+            // Any scroll means we're not settled
+            isSettledAtTop.current = false;
+            if (settledTimer.current) clearTimeout(settledTimer.current);
+
+            // If at top, start a debounce to mark as settled once momentum stops
+            if (el.scrollTop <= 0) {
+                settledTimer.current = setTimeout(() => {
+                    if (el.scrollTop <= 0) {
+                        isSettledAtTop.current = true;
+                    }
+                }, 400);
+            }
+
             // Failsafe: if the container scrolls natively, terminate the artificial pull
             if (el.scrollTop > 0 && isPulling.current) {
                 isPulling.current = false;
@@ -135,6 +146,7 @@ export function usePullToRefresh() {
         el.addEventListener('scroll', onScroll, { passive: true });
 
         return () => {
+            if (settledTimer.current) clearTimeout(settledTimer.current);
             el.removeEventListener('touchstart', onTouchStart);
             el.removeEventListener('touchmove', onTouchMove);
             el.removeEventListener('touchend', onTouchEnd);

@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, ReactNode, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { useUser } from "./UserContext";
 
@@ -23,9 +24,11 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Initialize notifications
+  // Initialize notifications (native only — web requires a user gesture)
   useEffect(() => {
-    LocalNotifications.requestPermissions();
+    if (Capacitor.isNativePlatform()) {
+      LocalNotifications.requestPermissions();
+    }
   }, []);
 
   const loadHistory = () => {

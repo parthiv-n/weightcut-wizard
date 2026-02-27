@@ -673,7 +673,6 @@ export default function WeightTracker() {
         subtitle="Reviewing your weight data..."
       />
       <div className="space-y-5 px-4 pb-4 pt-16 sm:p-5 sm:pt-16 max-w-2xl mx-auto">
-        <h1 className="text-xl font-bold">Weight</h1>
         {/* Chart + History */}
         <div className="glass-card p-4 space-y-4">
           <div className="flex items-center justify-between">

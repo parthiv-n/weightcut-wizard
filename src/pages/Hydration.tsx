@@ -475,7 +475,7 @@ export default function Hydration() {
 
             <div className="grid grid-cols-2 gap-4">
               {/* Weigh-in Type Toggle */}
-              <div className="flex flex-col justify-center space-y-2 rounded-2xl p-4 col-span-1 bg-white/[0.04] border border-white/[0.08] backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_4px_20px_rgba(0,0,0,0.2)]">
+              <div className="glass-card flex flex-col justify-center space-y-2 rounded-2xl p-4 col-span-1">
                 <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest text-center">
                   Weigh-In
                 </p>
@@ -498,7 +498,7 @@ export default function Hydration() {
               </div>
 
               {/* Start Time */}
-              <div className="flex flex-col items-center justify-center space-y-2 rounded-2xl p-4 col-span-1 bg-white/[0.04] border border-white/[0.08] backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_4px_20px_rgba(0,0,0,0.2)]">
+              <div className="glass-card flex flex-col items-center justify-center space-y-2 rounded-2xl p-4 col-span-1">
                 <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest text-center">
                   Time
                 </p>
@@ -514,7 +514,7 @@ export default function Hydration() {
             </div>
 
             {/* Glycogen Depletion Calculator */}
-            <div className="rounded-2xl p-3 bg-white/[0.04] border border-white/[0.08] backdrop-blur-md shadow-[inset_0_1px_1px_rgba(255,255,255,0.06),0_4px_20px_rgba(0,0,0,0.2)]">
+            <div className="glass-card rounded-2xl p-3">
               <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest text-center mb-2">
                 Glycogen Depletion
               </p>

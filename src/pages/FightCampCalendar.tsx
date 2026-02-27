@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, subMonths, addMonths, subDays } from "date-fns";
 import { ChevronLeft, ChevronRight, Plus, Activity, Moon, Ruler, Trash2, CircleX } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -46,6 +47,7 @@ const SESSION_TYPES = [
 export default function FightCampCalendar() {
     const { userId, profile } = useUser();
     const { toast } = useToast();
+    const [searchParams, setSearchParams] = useSearchParams();
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [sessions, setSessions] = useState<FightCampCalendarRow[]>([]);
@@ -128,6 +130,16 @@ export default function FightCampCalendar() {
     useEffect(() => {
         fetch28DaySessions();
     }, [fetch28DaySessions]);
+
+    // Auto-open Log Session dialog when navigated from Quick Log
+    useEffect(() => {
+        if (searchParams.get("openLogSession") === "true") {
+            setSelectedDate(new Date());
+            setIsAddModalOpen(true);
+            searchParams.delete("openLogSession");
+            setSearchParams(searchParams, { replace: true });
+        }
+    }, [searchParams, setSearchParams]);
 
     const resetForm = () => {
         setSessionType(SESSION_TYPES[0]);
