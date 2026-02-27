@@ -52,6 +52,11 @@ class SyncQueue {
     this.writeOps(userId, ops);
   }
 
+  dequeueByRecordId(userId: string, recordId: string): void {
+    const ops = this.readOps(userId).filter((o) => o.recordId !== recordId);
+    this.writeOps(userId, ops);
+  }
+
   peek(userId: string): SyncOp[] {
     return this.readOps(userId);
   }

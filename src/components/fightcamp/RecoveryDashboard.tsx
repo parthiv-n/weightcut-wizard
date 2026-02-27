@@ -454,24 +454,24 @@ export function RecoveryDashboard({ sessions28d, userId, sessionLoggedAt = 0, at
         </div>
 
         {/* Stats bar — 4 columns */}
-        <div className="grid grid-cols-4 gap-2 mt-4">
-          <div className="text-center p-2 rounded-xl bg-accent/20">
-            <div className="text-lg font-bold display-number text-foreground">{metrics.weeklySessionCount}</div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Sessions/wk</div>
+        <div className="grid grid-cols-4 gap-1.5 mt-4">
+          <div className="text-center p-1.5 rounded-xl bg-accent/20">
+            <div className="text-sm font-bold display-number text-foreground">{metrics.weeklySessionCount}</div>
+            <div className="text-[8px] text-muted-foreground uppercase tracking-wider leading-tight">Sessions/wk</div>
           </div>
-          <div className={`text-center p-2 rounded-xl overflow-hidden ${getLoadZoneStyle(metrics.loadZone.zone).bg}`}>
-            <div className={`text-lg font-bold display-number truncate ${getLoadZoneStyle(metrics.loadZone.zone).color}`}>{metrics.loadZone.label}</div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Training Load</div>
+          <div className={`text-center p-1.5 rounded-xl overflow-hidden ${getLoadZoneStyle(metrics.loadZone.zone).bg}`}>
+            <div className={`text-sm font-bold display-number truncate ${getLoadZoneStyle(metrics.loadZone.zone).color}`}>{metrics.loadZone.label}</div>
+            <div className="text-[8px] text-muted-foreground uppercase tracking-wider leading-tight">Training Load</div>
           </div>
-          <div className="text-center p-2 rounded-xl bg-accent/20">
-            <div className="text-lg font-bold display-number text-foreground">{metrics.sleepScore}</div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider">Sleep Score</div>
+          <div className="text-center p-1.5 rounded-xl bg-accent/20">
+            <div className="text-sm font-bold display-number text-foreground">{metrics.sleepScore}</div>
+            <div className="text-[8px] text-muted-foreground uppercase tracking-wider leading-tight">Sleep Score</div>
           </div>
-          <div className="text-center p-2 rounded-xl bg-accent/20">
-            <div className="text-lg font-bold display-number text-foreground">
+          <div className="text-center p-1.5 rounded-xl bg-accent/20">
+            <div className="text-sm font-bold display-number text-foreground">
               {metrics.avgSleepLast3 > 0 ? `${metrics.avgSleepLast3.toFixed(1)}h` : "—"}
             </div>
-            <div className="text-[10px] text-muted-foreground uppercase tracking-wider">3-Night Avg</div>
+            <div className="text-[8px] text-muted-foreground uppercase tracking-wider leading-tight">3-Night Avg</div>
           </div>
         </div>
       </div>

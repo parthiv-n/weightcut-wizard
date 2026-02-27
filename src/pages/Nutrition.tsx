@@ -27,9 +27,11 @@ import { calculateCalorieTarget as calculateCalorieTargetUtil } from "@/lib/calo
 import { useUser } from "@/contexts/UserContext";
 import { AIPersistence } from "@/lib/aiPersistence";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import { optimisticUpdateManager, createNutritionTargetUpdate, createMealLogUpdate } from "@/lib/optimisticUpdates";
+import { optimisticUpdateManager, createNutritionTargetUpdate } from "@/lib/optimisticUpdates";
 import { useDebouncedCallback } from "@/hooks/useDebounce";
 import { nutritionCache, cacheHelpers } from "@/lib/nutritionCache";
+import { localCache } from "@/lib/localCache";
+import { syncQueue } from "@/lib/syncQueue";
 import { preloadAdjacentDates } from "@/lib/backgroundSync";
 import { AIGeneratingOverlay } from "@/components/AIGeneratingOverlay";
 import { triggerHapticSuccess, celebrateSuccess } from "@/lib/haptics";
@@ -657,15 +659,25 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       AIPersistence.remove(userId, `diet_analysis_${selectedDate}`);
     }
 
-    // Check cache first (unless explicitly skipped after mutations)
+    let servedFromCache = false;
+
+    // 1. Check in-memory nutritionCache first (hot cache, fastest)
     if (!skipCache) {
       const cachedMeals = nutritionCache.getMeals(userId, selectedDate);
       if (cachedMeals) {
         setMeals(cachedMeals);
-        return;
+        return; // Hot cache hit — skip network entirely
       }
     }
 
+    // 2. Check localStorage localCache (survives app kills)
+    const localMeals = localCache.getForDate<Meal[]>(userId, "nutrition_logs", selectedDate);
+    if (localMeals && localMeals.length > 0) {
+      setMeals(localMeals);
+      servedFromCache = true;
+    }
+
+    // 3. Fetch fresh from Supabase (background revalidation)
     const { data, error } = await supabase
       .from("nutrition_logs")
       .select("*")
@@ -677,6 +689,14 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
 
     if (error) {
       console.error("Error loading meals:", error);
+      // If we already served cached data, keep showing it (no empty flash)
+      if (!servedFromCache) {
+        toast({
+          title: "Couldn't load meals",
+          description: "Check your connection and try again.",
+          variant: "destructive",
+        });
+      }
       return;
     }
 
@@ -686,9 +706,48 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       ingredients: (meal.ingredients as unknown) as Ingredient[] | undefined,
     }));
 
-    setMeals(typedMeals as Meal[]);
-    // Cache the meals data
-    nutritionCache.setMeals(userId, selectedDate, typedMeals as Meal[]);
+    // Merge pending syncQueue ops so in-flight inserts/deletes aren't lost
+    const pendingOps = syncQueue.peek(userId);
+    const dbIds = new Set(typedMeals.map(m => m.id));
+
+    // Remove meals that have a pending delete
+    const pendingDeleteIds = new Set(
+      pendingOps
+        .filter(op => op.table === "nutrition_logs" && op.action === "delete")
+        .map(op => op.recordId)
+    );
+    let mergedMeals = typedMeals.filter(m => !pendingDeleteIds.has(m.id));
+
+    // Add pending inserts not yet in DB result
+    const pendingInserts = pendingOps.filter(
+      op =>
+        op.table === "nutrition_logs" &&
+        op.action === "insert" &&
+        (op.payload as any).date === selectedDate &&
+        !dbIds.has(op.recordId)
+    );
+    for (const op of pendingInserts) {
+      const p = op.payload as any;
+      mergedMeals.push({
+        id: op.recordId,
+        meal_name: p.meal_name,
+        calories: p.calories,
+        protein_g: p.protein_g ?? undefined,
+        carbs_g: p.carbs_g ?? undefined,
+        fats_g: p.fats_g ?? undefined,
+        meal_type: p.meal_type,
+        portion_size: p.portion_size ?? undefined,
+        recipe_notes: p.recipe_notes ?? undefined,
+        ingredients: p.ingredients ?? undefined,
+        is_ai_generated: p.is_ai_generated,
+        date: p.date,
+      } as Meal);
+    }
+
+    setMeals(mergedMeals as Meal[]);
+    // Write to both caches
+    nutritionCache.setMeals(userId, selectedDate, mergedMeals as Meal[]);
+    localCache.setForDate(userId, "nutrition_logs", selectedDate, mergedMeals);
   };
 
   const handleGenerateMealPlan = async () => {
@@ -929,10 +988,36 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     try {
       if (!userId) throw new Error("Not authenticated");
 
+      const mealId = crypto.randomUUID();
+
       // Recalculate calories from macros to ensure consistency
       const consistentCalories = (mealIdea.protein_g || 0) * 4 + (mealIdea.carbs_g || 0) * 4 + (mealIdea.fats_g || 0) * 9;
 
-      const { error } = await supabase.from("nutrition_logs").insert({
+      const optimisticMeal: Meal = {
+        id: mealId,
+        meal_name: mealIdea.meal_name,
+        calories: consistentCalories || mealIdea.calories,
+        protein_g: mealIdea.protein_g,
+        carbs_g: mealIdea.carbs_g,
+        fats_g: mealIdea.fats_g,
+        meal_type: mealTypeOverride || mealIdea.meal_type,
+        portion_size: mealIdea.portion_size,
+        recipe_notes: mealIdea.recipe_notes,
+        ingredients: mealIdea.ingredients,
+        is_ai_generated: true,
+        date: selectedDate,
+      };
+
+      // 1. Optimistic UI update
+      const updatedMeals = [...meals, optimisticMeal];
+      setMeals(updatedMeals);
+
+      // 2. Persist to localCache (survives app kill)
+      localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
+
+      // 3. Enqueue to syncQueue (survives app kill)
+      const dbPayload = {
+        id: mealId,
         user_id: userId,
         date: selectedDate,
         meal_name: mealIdea.meal_name,
@@ -945,17 +1030,35 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         recipe_notes: mealIdea.recipe_notes,
         ingredients: mealIdea.ingredients,
         is_ai_generated: true,
-      } as any);
-
-      if (error) throw error;
-
-      celebrateSuccess();
-      toast({
-        title: "Meal logged!",
-        description: `${mealIdea.meal_name} added to your day`,
+      };
+      syncQueue.enqueue(userId, {
+        table: "nutrition_logs",
+        action: "insert",
+        payload: dbPayload,
+        recordId: mealId,
+        timestamp: Date.now(),
       });
 
-      await loadMeals(true);
+      // 4. Attempt inline Supabase insert
+      try {
+        const { error } = await supabase.from("nutrition_logs").insert({
+          ...dbPayload,
+        } as any);
+
+        if (error) throw error;
+
+        syncQueue.dequeueByRecordId(userId, mealId);
+        celebrateSuccess();
+        toast({
+          title: "Meal logged!",
+          description: `${mealIdea.meal_name} added to your day`,
+        });
+        await loadMeals(true);
+      } catch (error) {
+        console.error("Error logging meal (queued for sync):", error);
+        celebrateSuccess();
+        toast({ title: "Saved offline", description: "Will sync when connected." });
+      }
     } catch (error) {
       console.error("Error logging meal:", error);
       toast({
@@ -975,10 +1078,34 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     try {
       if (!userId) throw new Error("Not authenticated");
 
-      // Prepare meals for database insertion (recalculate calories from macros for consistency)
-      const mealsToInsert = mealIdeas.map(meal => {
+      // Generate stable IDs and build optimistic meals + DB payloads
+      const mealIds: string[] = [];
+      const optimisticMeals: Meal[] = [];
+      const dbPayloads: Record<string, unknown>[] = [];
+
+      for (const meal of mealIdeas) {
+        const mealId = crypto.randomUUID();
+        mealIds.push(mealId);
+
         const recalcCal = (meal.protein_g || 0) * 4 + (meal.carbs_g || 0) * 4 + (meal.fats_g || 0) * 9;
-        return {
+
+        optimisticMeals.push({
+          id: mealId,
+          meal_name: meal.meal_name,
+          calories: recalcCal || meal.calories,
+          protein_g: meal.protein_g,
+          carbs_g: meal.carbs_g,
+          fats_g: meal.fats_g,
+          meal_type: meal.meal_type,
+          portion_size: meal.portion_size,
+          recipe_notes: meal.recipe_notes,
+          ingredients: meal.ingredients,
+          is_ai_generated: true,
+          date: selectedDate,
+        });
+
+        const dbPayload = {
+          id: mealId,
           user_id: userId,
           date: selectedDate,
           meal_name: meal.meal_name,
@@ -989,27 +1116,53 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           meal_type: meal.meal_type,
           portion_size: meal.portion_size,
           recipe_notes: meal.recipe_notes,
-          ingredients: meal.ingredients as any, // Cast to Json type for Supabase
+          ingredients: meal.ingredients as any,
           is_ai_generated: true,
         };
-      });
+        dbPayloads.push(dbPayload);
 
-      const { error } = await supabase.from("nutrition_logs").insert(mealsToInsert);
+        // Enqueue each individually so each retries independently
+        syncQueue.enqueue(userId, {
+          table: "nutrition_logs",
+          action: "insert",
+          payload: dbPayload,
+          recordId: mealId,
+          timestamp: Date.now(),
+        });
+      }
 
-      if (error) throw error;
+      // 1. Optimistic UI update
+      const updatedMeals = [...meals, ...optimisticMeals];
+      setMeals(updatedMeals);
 
-      celebrateSuccess();
-      toast({
-        title: "All meals saved!",
-        description: `${mealIdeas.length} meals added to your day`,
-      });
+      // 2. Persist to localCache
+      localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
 
-      // Clear meal ideas after saving all + clear localStorage
+      // 3. Clear meal ideas immediately (user intent captured)
       setMealPlanIdeas([]);
       AIPersistence.remove(userId, 'meal_plans');
 
-      // Reload meals to show the new entries
-      await loadMeals(true);
+      // 4. Attempt bulk Supabase insert
+      try {
+        const { error } = await supabase.from("nutrition_logs").insert(dbPayloads as any);
+
+        if (error) throw error;
+
+        // Success — dequeue all
+        for (const mealId of mealIds) {
+          syncQueue.dequeueByRecordId(userId, mealId);
+        }
+        celebrateSuccess();
+        toast({
+          title: "All meals saved!",
+          description: `${mealIdeas.length} meals added to your day`,
+        });
+        await loadMeals(true);
+      } catch (error) {
+        console.error("Error saving meals (queued for sync):", error);
+        celebrateSuccess();
+        toast({ title: "Saved offline", description: "Will sync when connected." });
+      }
     } catch (error: any) {
       console.error("Error saving meal ideas:", error);
       toast({
@@ -1136,49 +1289,62 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
   }) => {
     if (!userId) throw new Error("Not authenticated");
 
-    const optimisticMeal = {
-      id: `temp-${Date.now()}`,
+    const mealId = crypto.randomUUID();
+
+    const optimisticMeal: Meal = {
+      id: mealId,
+      meal_name: mealData.meal_name,
+      calories: mealData.calories,
+      protein_g: mealData.protein_g ?? undefined,
+      carbs_g: mealData.carbs_g ?? undefined,
+      fats_g: mealData.fats_g ?? undefined,
+      meal_type: mealData.meal_type,
+      portion_size: mealData.portion_size ?? undefined,
+      recipe_notes: mealData.recipe_notes ?? undefined,
+      ingredients: mealData.ingredients ?? undefined,
+      is_ai_generated: mealData.is_ai_generated,
+      date: selectedDate,
+    };
+
+    // 1. Optimistic UI update
+    const updatedMeals = [...meals, optimisticMeal];
+    setMeals(updatedMeals);
+
+    // 2. Persist to localCache (survives app kill)
+    localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
+
+    // 3. Enqueue to syncQueue (survives app kill)
+    const dbPayload = {
+      id: mealId,
       user_id: userId,
       date: selectedDate,
       ...mealData,
-      created_at: new Date().toISOString(),
     };
+    syncQueue.enqueue(userId, {
+      table: "nutrition_logs",
+      action: "insert",
+      payload: dbPayload,
+      recordId: mealId,
+      timestamp: Date.now(),
+    });
 
-    setMeals(prevMeals => [...prevMeals, optimisticMeal]);
+    // 4. Attempt inline Supabase insert
+    try {
+      const { error } = await supabase.from("nutrition_logs").insert(dbPayload as any);
 
-    celebrateSuccess();
-    toast({ title: "Meal added successfully" });
-
-    const insertOperation = async () => {
-      const { error } = await supabase.from("nutrition_logs").insert({
-        user_id: userId,
-        date: selectedDate,
-        ...mealData,
-      } as any);
       if (error) throw error;
-    };
 
-    const update = createMealLogUpdate(
-      optimisticMeal.id,
-      optimisticMeal,
-      insertOperation
-    );
-
-    update.onSuccess = () => {
-      loadMeals(true);
-    };
-
-    update.onError = (error: any) => {
-      setMeals(prevMeals => prevMeals.filter(meal => meal.id !== optimisticMeal.id));
-      console.error("Error adding meal:", error);
-      toast({
-        title: "Error",
-        description: "Failed to add meal. Please try again.",
-        variant: "destructive",
-      });
-    };
-
-    await optimisticUpdateManager.executeOptimisticUpdate(update);
+      // Success — dequeue (syncQueue won't duplicate thanks to 23505 handling)
+      syncQueue.dequeueByRecordId(userId, mealId);
+      celebrateSuccess();
+      toast({ title: "Meal added successfully" });
+      await loadMeals(true);
+    } catch (error) {
+      console.error("Error adding meal (queued for sync):", error);
+      // Meal stays in state + localCache + syncQueue — will retry on resume
+      celebrateSuccess();
+      toast({ title: "Saved offline", description: "Will sync when connected." });
+    }
   };
 
   const handleAddManualMeal = async () => {
@@ -1800,27 +1966,43 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
   };
 
   const handleDeleteMeal = async () => {
-    if (!mealToDelete) return;
+    if (!mealToDelete || !userId) return;
 
+    const deletedId = mealToDelete.id;
+
+    // 1. Optimistic UI removal
+    const updatedMeals = meals.filter(m => m.id !== deletedId);
+    setMeals(updatedMeals);
+    setDeleteDialogOpen(false);
+    setMealToDelete(null);
+
+    // 2. Update localCache with meal removed
+    localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
+
+    // 3. Enqueue delete to syncQueue
+    syncQueue.enqueue(userId, {
+      table: "nutrition_logs",
+      action: "delete",
+      payload: {},
+      recordId: deletedId,
+      timestamp: Date.now(),
+    });
+
+    // 4. Attempt inline Supabase delete
     try {
       const { error } = await supabase
         .from("nutrition_logs")
         .delete()
-        .eq("id", mealToDelete.id);
+        .eq("id", deletedId);
 
       if (error) throw error;
 
+      syncQueue.dequeueByRecordId(userId, deletedId);
       toast({ title: "Meal deleted" });
       await loadMeals(true);
-      setDeleteDialogOpen(false);
-      setMealToDelete(null);
     } catch (error) {
-      console.error("Error deleting meal:", error);
-      toast({
-        title: "Error",
-        description: "Failed to delete meal",
-        variant: "destructive",
-      });
+      console.error("Error deleting meal (queued for sync):", error);
+      toast({ title: "Deleted offline", description: "Will sync when connected." });
     }
   };
 
@@ -1964,53 +2146,68 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     serving_size: string;
     portion_size: string;
   }) => {
+    if (!userId) return;
+
+    const mealId = crypto.randomUUID();
+
+    const optimisticMeal: Meal = {
+      id: mealId,
+      meal_name: food.meal_name,
+      calories: food.calories,
+      protein_g: food.protein_g,
+      carbs_g: food.carbs_g,
+      fats_g: food.fats_g,
+      meal_type: foodSearchMealType,
+      portion_size: food.portion_size,
+      date: selectedDate,
+      is_ai_generated: false,
+    };
+
+    // 1. Optimistic UI update
+    const updatedMeals = [...meals, optimisticMeal];
+    setMeals(updatedMeals);
+
+    // 2. Persist to localCache (survives app kill)
+    localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
+
+    // 3. Enqueue to syncQueue (survives app kill)
+    const dbPayload = {
+      id: mealId,
+      user_id: userId,
+      date: selectedDate,
+      meal_name: food.meal_name,
+      calories: food.calories,
+      protein_g: food.protein_g,
+      carbs_g: food.carbs_g,
+      fats_g: food.fats_g,
+      meal_type: foodSearchMealType,
+      portion_size: food.portion_size,
+      recipe_notes: null,
+      ingredients: null,
+      is_ai_generated: false,
+    };
+    syncQueue.enqueue(userId, {
+      table: "nutrition_logs",
+      action: "insert",
+      payload: dbPayload,
+      recordId: mealId,
+      timestamp: Date.now(),
+    });
+
+    // 4. Attempt inline Supabase insert
     try {
-      if (!userId) throw new Error("Not authenticated");
+      const { error } = await supabase.from("nutrition_logs").insert(dbPayload as any);
 
-      const optimisticMeal = {
-        id: `temp-${Date.now()}`,
-        user_id: userId,
-        date: selectedDate,
-        meal_name: food.meal_name,
-        calories: food.calories,
-        protein_g: food.protein_g,
-        carbs_g: food.carbs_g,
-        fats_g: food.fats_g,
-        meal_type: foodSearchMealType,
-        portion_size: food.portion_size,
-        recipe_notes: null,
-        ingredients: null,
-        is_ai_generated: false,
-        created_at: new Date().toISOString(),
-      };
+      if (error) throw error;
 
-      setMeals(prevMeals => [...prevMeals, optimisticMeal]);
+      syncQueue.dequeueByRecordId(userId, mealId);
       celebrateSuccess();
       toast({ title: "Food logged!", description: `${food.meal_name} · ${food.calories} kcal` });
-
-      const { error } = await supabase.from("nutrition_logs").insert({
-        user_id: userId,
-        date: selectedDate,
-        meal_name: food.meal_name,
-        calories: food.calories,
-        protein_g: food.protein_g,
-        carbs_g: food.carbs_g,
-        fats_g: food.fats_g,
-        meal_type: foodSearchMealType,
-        portion_size: food.portion_size,
-        recipe_notes: null,
-        ingredients: null,
-        is_ai_generated: false,
-      } as any);
-
-      if (error) {
-        setMeals(prevMeals => prevMeals.filter(m => m.id !== optimisticMeal.id));
-        throw error;
-      }
       await loadMeals(true);
     } catch (error) {
-      console.error("Error logging food:", error);
-      toast({ title: "Error", description: "Failed to log food", variant: "destructive" });
+      console.error("Error logging food (queued for sync):", error);
+      celebrateSuccess();
+      toast({ title: "Saved offline", description: "Will sync when connected." });
     }
   };
 
