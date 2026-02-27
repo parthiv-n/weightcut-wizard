@@ -2925,24 +2925,19 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         </Sheet>
 
         {/* AI Meal Plan Bottom Sheet */}
-        <Sheet open={isAiDialogOpen} onOpenChange={(open) => {
+        <Dialog open={isAiDialogOpen} onOpenChange={(open) => {
           setIsAiDialogOpen(open);
           if (!open) setShowDevInput(false);
         }}>
-          <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto px-5 pt-0 pb-[max(2rem,env(safe-area-inset-bottom,2rem))]">
-            {/* Drag handle */}
-            <div className="flex justify-center pt-3 pb-3">
-              <div className="w-8 h-1 rounded-full bg-muted-foreground/30" />
-            </div>
-
-            <SheetHeader className="pb-3">
-              <SheetTitle className="flex items-center gap-2 text-base">
+          <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto rounded-2xl">
+            <DialogHeader className="pb-1">
+              <DialogTitle className="flex items-center gap-2 text-base">
                 <Sparkles className="h-4 w-4 text-primary" />
                 Meal ideas · {format(new Date(selectedDate), "MMM d")}
-              </SheetTitle>
-            </SheetHeader>
+              </DialogTitle>
+            </DialogHeader>
 
-            <div className="space-y-3 pb-2">
+            <div className="space-y-3">
               {/* Suggestion chips */}
               <div className="flex flex-wrap gap-2">
                 {["High protein", "Low carb", "Mediterranean", "Fight week prep"].map((chip) => (
@@ -3018,8 +3013,8 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                 </div>
               )}
             </div>
-          </SheetContent>
-        </Sheet>
+          </DialogContent>
+        </Dialog>
 
         {/* Manual Nutrition Input Dialog */}
         <Dialog open={manualNutritionDialog.open} onOpenChange={(open) => {
