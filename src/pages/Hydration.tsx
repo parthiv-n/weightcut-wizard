@@ -23,6 +23,7 @@ import {
 import { useUser } from "@/contexts/UserContext";
 import { AIGeneratingOverlay } from "@/components/AIGeneratingOverlay";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
+import { withTimeout } from "@/lib/timeoutWrapper";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -267,7 +268,8 @@ export default function Hydration() {
     safeAsync(setLoading)(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke("rehydration-protocol", {
+      const { data, error } = await withTimeout(
+        supabase.functions.invoke("rehydration-protocol", {
         body: {
           weightLostKg: parseFloat(weightLost),
           availableHours,
@@ -283,7 +285,10 @@ export default function Hydration() {
           goalWeightKg: contextProfile?.goal_weight_kg,
           fightWeekTargetKg: contextProfile?.fight_week_target_kg,
         },
-      });
+      }),
+        15000,
+        "Rehydration protocol timed out"
+      );
 
       if (!isMounted()) return;
       if (error) throw error;
@@ -346,17 +351,24 @@ export default function Hydration() {
     return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
   };
 
-  // Cumulative fluid for progress
+  // Cumulative fluid per step (memoized)
+  const cumulativeFluidByStep = useMemo(() => {
+    if (!protocol) return [];
+    let sum = 0;
+    return protocol.hourlyProtocol.map((step) => { sum += step.fluidML; return sum; });
+  }, [protocol]);
+
   const getCumulativeFluid = (upToIndex: number) => {
-    if (!protocol) return 0;
-    return protocol.hourlyProtocol.slice(0, upToIndex + 1).reduce((s, step) => s + step.fluidML, 0);
+    return cumulativeFluidByStep[upToIndex] ?? 0;
   };
 
-  // Cumulative carbs from meals
-  const getCumulativeCarbs = () => {
+  // Cumulative carbs from meals (memoized)
+  const cumulativeCarbs = useMemo(() => {
     if (!protocol) return 0;
     return protocol.carbRefuelPlan.meals.reduce((s, m) => s + m.carbsG, 0);
-  };
+  }, [protocol]);
+
+  const getCumulativeCarbs = () => cumulativeCarbs;
 
   const totals = protocol?.totals;
   const education = protocol?.education;

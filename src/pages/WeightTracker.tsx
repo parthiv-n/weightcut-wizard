@@ -214,20 +214,28 @@ export default function WeightTracker() {
     let opError = null;
 
     if (editingLogId) {
-      const { error } = await supabase
-        .from("weight_logs")
-        .update({
-          weight_kg: parseFloat(newWeight),
-          date: newDate,
-        })
-        .eq("id", editingLogId);
+      const { error } = await withSupabaseTimeout(
+        supabase
+          .from("weight_logs")
+          .update({
+            weight_kg: parseFloat(newWeight),
+            date: newDate,
+          })
+          .eq("id", editingLogId),
+        undefined,
+        "Weight log update"
+      );
       opError = error;
     } else {
-      const { error } = await supabase.from("weight_logs").insert({
-        user_id: user.id,
-        weight_kg: parseFloat(newWeight),
-        date: newDate,
-      });
+      const { error } = await withSupabaseTimeout(
+        supabase.from("weight_logs").insert({
+          user_id: user.id,
+          weight_kg: parseFloat(newWeight),
+          date: newDate,
+        }),
+        undefined,
+        "Weight log insert"
+      );
       opError = error;
     }
 
@@ -240,10 +248,14 @@ export default function WeightTracker() {
     } else {
       const loggedWeight = parseFloat(newWeight);
 
-      await supabase
-        .from("profiles")
-        .update({ current_weight_kg: loggedWeight })
-        .eq("id", user.id);
+      await withSupabaseTimeout(
+        supabase
+          .from("profiles")
+          .update({ current_weight_kg: loggedWeight })
+          .eq("id", user.id),
+        undefined,
+        "Profile weight update"
+      );
 
       await updateCurrentWeight(loggedWeight);
 
@@ -290,10 +302,14 @@ export default function WeightTracker() {
     if (!logToDelete) return;
 
     setLoading(true);
-    const { error } = await supabase
-      .from("weight_logs")
-      .delete()
-      .eq("id", logToDelete.id);
+    const { error } = await withSupabaseTimeout(
+      supabase
+        .from("weight_logs")
+        .delete()
+        .eq("id", logToDelete.id),
+      undefined,
+      "Weight log delete"
+    );
 
     if (error) {
       toast({

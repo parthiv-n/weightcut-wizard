@@ -11,6 +11,8 @@ import { Plus, Trophy, Trash2, GitCompareArrows, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
+import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
+import { localCache } from "@/lib/localCache";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { CampComparisonCard } from "@/components/share/cards/CampComparisonCard";
 
@@ -57,26 +59,43 @@ export default function FightCamps() {
 
   const fetchCamps = async () => {
     if (!userId) return;
-    try {
-      setLoading(true);
 
-      const { data, error } = await supabase
-        .from("fight_camps")
-        .select("*")
-        .eq("user_id", userId)
-        .order("fight_date", { ascending: false });
+    // Cache-first: show cached data instantly
+    const cached = localCache.get<FightCamp[]>(userId, 'fight_camps');
+    if (cached) {
+      setCamps(cached);
+      setLoading(false);
+    }
+
+    try {
+      if (!cached) setLoading(true);
+
+      const { data, error } = await withSupabaseTimeout(
+        supabase
+          .from("fight_camps")
+          .select("*")
+          .eq("user_id", userId)
+          .order("fight_date", { ascending: false }),
+        undefined,
+        "Load fight camps"
+      );
 
       if (error) {
         console.error("Error loading fight camps:", error);
-        toast({ title: "Error", description: "Failed to load fight camps", variant: "destructive" });
-        setCamps([]);
+        if (!cached) {
+          toast({ title: "Error", description: "Failed to load fight camps", variant: "destructive" });
+          setCamps([]);
+        }
       } else {
         setCamps(data || []);
+        localCache.set(userId, 'fight_camps', data || []);
       }
     } catch (error) {
       console.error("Unexpected error loading fight camps:", error);
-      toast({ title: "Error", description: "An unexpected error occurred", variant: "destructive" });
-      setCamps([]);
+      if (!cached) {
+        toast({ title: "Error", description: "An unexpected error occurred", variant: "destructive" });
+        setCamps([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -90,14 +109,18 @@ export default function FightCamps() {
 
     if (!userId) return;
 
-    const { error } = await supabase
-      .from("fight_camps")
-      .insert([{
-        user_id: userId,
-        name: newCamp.name,
-        event_name: newCamp.event_name || null,
-        fight_date: newCamp.fight_date,
-      }]);
+    const { error } = await withSupabaseTimeout(
+      supabase
+        .from("fight_camps")
+        .insert([{
+          user_id: userId,
+          name: newCamp.name,
+          event_name: newCamp.event_name || null,
+          fight_date: newCamp.fight_date,
+        }]),
+      undefined,
+      "Create fight camp"
+    );
 
     if (error) {
       toast({ title: "Error", description: "Failed to create fight camp", variant: "destructive" });
@@ -112,10 +135,14 @@ export default function FightCamps() {
   const handleDeleteCamp = async () => {
     if (!campToDelete) return;
 
-    const { error } = await supabase
-      .from("fight_camps")
-      .delete()
-      .eq("id", campToDelete.id);
+    const { error } = await withSupabaseTimeout(
+      supabase
+        .from("fight_camps")
+        .delete()
+        .eq("id", campToDelete.id),
+      undefined,
+      "Delete fight camp"
+    );
 
     if (error) {
       toast({ title: "Error", description: "Failed to delete fight camp", variant: "destructive" });

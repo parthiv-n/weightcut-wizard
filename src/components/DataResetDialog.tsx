@@ -14,7 +14,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Download, Loader2, AlertTriangle, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import * as XLSX from 'xlsx';
 import { format } from "date-fns";
 
 interface DataResetDialogProps {
@@ -31,6 +30,7 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
   const exportAllData = async () => {
     setExporting(true);
     try {
+      const XLSX = await import('xlsx');
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 

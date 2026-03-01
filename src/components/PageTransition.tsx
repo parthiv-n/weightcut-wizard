@@ -74,7 +74,7 @@ export function PageTransition({ children }: PageTransitionProps) {
               isFirstRender.current = false;
             }
           }}
-          style={{ width: "100%", top: 0, left: 0 }}
+          style={{ width: "100%", top: 0, left: 0, willChange: "transform, opacity" }}
         >
           {children}
         </motion.div>

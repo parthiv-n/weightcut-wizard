@@ -26,6 +26,24 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+// Module-level motion variant constants — avoids re-creating objects on every render
+const menuGroupVariants = {
+  open: { transition: { staggerChildren: 0.032, delayChildren: 0.06 } },
+  closed: { transition: { staggerChildren: 0.02, staggerDirection: -1 } },
+} as const;
+
+const settingsGroupVariants = {
+  open: { transition: { staggerChildren: 0.04, delayChildren: 0.2 } },
+  closed: { transition: { staggerChildren: 0.02, staggerDirection: -1 } },
+} as const;
+
+const menuItemVariants = {
+  open: { opacity: 1, y: 0 },
+  closed: { opacity: 0, y: 6 },
+} as const;
+
+const menuItemTransition = { duration: 0.28, ease: [0.25, 0.46, 0.45, 0.94] } as const;
+
 const mainNavItems = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
   { title: "Nutrition", url: "/nutrition", icon: Utensils },
@@ -280,10 +298,7 @@ export function BottomNav() {
               className="rounded-2xl bg-muted/30 dark:bg-white/5 overflow-hidden border border-border/50 dark:border-white/10"
               initial="closed"
               animate="open"
-              variants={{
-                open: { transition: { staggerChildren: 0.032, delayChildren: 0.06 } },
-                closed: { transition: { staggerChildren: 0.02, staggerDirection: -1 } },
-              }}
+              variants={menuGroupVariants}
             >
               {moreMenuItems.map((item, index) => {
                 const Icon = item.icon;
@@ -293,11 +308,8 @@ export function BottomNav() {
                     type="button"
                     onClick={() => handleMoreItemClick(item.url)}
                     className="w-full flex items-center gap-3 px-4 py-3.5 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left border-b border-border/40 dark:border-white/5 last:border-b-0"
-                    variants={{
-                      open: { opacity: 1, y: 0 },
-                      closed: { opacity: 0, y: 6 },
-                    }}
-                    transition={{ duration: 0.28, ease: [0.25, 0.46, 0.45, 0.94] }}
+                    variants={menuItemVariants}
+                    transition={menuItemTransition}
                   >
                     <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
                       <Icon className="h-5 w-5 text-primary" />
@@ -314,10 +326,7 @@ export function BottomNav() {
               className="mt-3 rounded-2xl bg-muted/30 dark:bg-white/5 overflow-hidden border border-border/50 dark:border-white/10"
               initial="closed"
               animate="open"
-              variants={{
-                open: { transition: { staggerChildren: 0.04, delayChildren: 0.2 } },
-                closed: { transition: { staggerChildren: 0.02, staggerDirection: -1 } },
-              }}
+              variants={settingsGroupVariants}
             >
               <motion.button
                 type="button"

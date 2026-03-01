@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
@@ -52,6 +52,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { safeAsync, isMounted } = useSafeAsync();
   const { streak, streakIncludesToday, weeklyConsistency, badges, badgesLoading, allAchievements } = useGamification(userId, weightLogs, todayCalories, profile);
+  const lastFetchRef = useRef(0);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -66,10 +67,11 @@ export default function Dashboard() {
     }
   }, [userId]);
 
-  // Refetch when user navigates back to this page
+  // Refetch when user navigates back to this page (throttled to avoid duplicate requests)
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === 'visible' && userId) {
+        if (Date.now() - lastFetchRef.current < 2000) return;
         loadDashboardData();
       }
     };
@@ -153,6 +155,7 @@ export default function Dashboard() {
       return;
     }
 
+    lastFetchRef.current = Date.now();
     const today = new Date().toISOString().split('T')[0];
 
     // --- Cache-first: serve cached data instantly, then refresh in background ---
@@ -264,14 +267,23 @@ export default function Dashboard() {
     }
   };
 
+  const daysUntilTarget = useMemo(() => profile ? Math.ceil((new Date(profile.target_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : 0, [profile?.target_date]);
+  const currentWeightValue = currentWeight ?? profile?.current_weight_kg ?? 0;
+  const weightToLose = useMemo(() => profile ? (currentWeightValue - (profile.fight_week_target_kg || profile.goal_weight_kg)).toFixed(1) : 0, [currentWeightValue, profile?.fight_week_target_kg, profile?.goal_weight_kg]);
+  const dailyCalorieGoal = useMemo(() => profile ? calculateCalorieTarget(profile) : 0, [profile]);
+
+  const convertWeight = useCallback((kg: number) => {
+    return weightUnit === 'kg' ? kg : kg * 2.20462;
+  }, [weightUnit]);
+
+  const chartData = useMemo(() => weightLogs.map((log) => ({
+    date: new Date(log.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    weight: convertWeight(parseFloat(log.weight_kg)),
+  })), [weightLogs, convertWeight]);
+
   if (loading) {
     return <DashboardSkeleton />;
   }
-
-  const daysUntilTarget = profile ? Math.ceil((new Date(profile.target_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : 0;
-  const currentWeightValue = currentWeight ?? profile?.current_weight_kg ?? 0;
-  const weightToLose = profile ? (currentWeightValue - (profile.fight_week_target_kg || profile.goal_weight_kg)).toFixed(1) : 0;
-  const dailyCalorieGoal = profile ? calculateCalorieTarget(profile) : 0;
 
   // Fallback static wisdom (kept for when AI fails)
   const getWizardWisdom = () => {
@@ -289,15 +301,6 @@ export default function Dashboard() {
       return "You're making excellent progress! Trust the process. Your body is adapting to this journey.";
     }
   };
-
-  const convertWeight = (kg: number) => {
-    return weightUnit === 'kg' ? kg : kg * 2.20462;
-  };
-
-  const chartData = weightLogs.map((log) => ({
-    date: new Date(log.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-    weight: convertWeight(parseFloat(log.weight_kg)),
-  }));
 
   const hasTodayLog = weightLogs.some((l: any) => l.date === new Date().toISOString().split('T')[0]);
 

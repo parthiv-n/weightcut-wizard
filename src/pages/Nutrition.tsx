@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -40,6 +40,7 @@ import { useSafeAsync } from "@/hooks/useSafeAsync";
 import type { DietAnalysisResult } from "@/types/dietAnalysis";
 import { ShareButton } from "@/components/share/ShareButton";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
+import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { NutritionCard } from "@/components/share/cards/NutritionCard";
 
 interface Ingredient {
@@ -79,6 +80,14 @@ interface Meal {
   is_ai_generated?: boolean;
   ingredients?: Ingredient[];
   date: string;
+}
+
+// Smooth-scroll the PullToRefresh <main> container to top (iOS-native feel)
+function scrollToTop() {
+  const main = document.querySelector('main');
+  if (main && main.scrollTop > 0) {
+    main.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 }
 
 export default function Nutrition() {
@@ -173,6 +182,7 @@ export default function Nutrition() {
   const [shareOpen, setShareOpen] = useState(false);
   const [nutritionStreak, setNutritionStreak] = useState(0);
   const [totalMealsLogged, setTotalMealsLogged] = useState(0);
+  const lastFetchRef = useRef(0);
 
   // Dynamic macro-aware wisdom text (fallback)
   const getNutritionWisdom = () => {
@@ -471,10 +481,13 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     }
   }, [userId]);
 
-  // Visibility-based revalidation
+  // Visibility-based revalidation (throttled to avoid duplicate requests)
   useEffect(() => {
     const handleVis = () => {
-      if (document.visibilityState === 'visible' && userId) loadMeals(true);
+      if (document.visibilityState === 'visible' && userId) {
+        if (Date.now() - lastFetchRef.current < 2000) return;
+        loadMeals(true);
+      }
     };
     document.addEventListener('visibilitychange', handleVis);
     return () => document.removeEventListener('visibilitychange', handleVis);
@@ -644,16 +657,10 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         return;
       }
 
-      // Fetch recommendations/overrides from profiles table
-      const { data: profileData, error } = await supabase
-        .from("profiles")
-        .select("ai_recommended_calories, ai_recommended_protein_g, ai_recommended_carbs_g, ai_recommended_fats_g, manual_nutrition_override")
-        .eq("id", userId)
-        .single();
+      // Use profile from UserContext instead of fetching from DB (deduplication)
+      const profileData = contextProfile;
 
-      if (!isMounted()) return;
-
-      if (error) {
+      if (!profileData) {
         setAiMacroGoals(null);
       } else if (profileData?.ai_recommended_calories) {
         const macroGoals = {
@@ -686,6 +693,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
 
   const loadMeals = async (skipCache = false) => {
     if (!userId) return;
+    lastFetchRef.current = Date.now();
 
     // Invalidate diet analysis when meals change (mutation triggered reload)
     if (skipCache) {
@@ -712,12 +720,16 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     }
 
     // 3. Fetch fresh from Supabase (background revalidation)
-    const { data, error } = await supabase
-      .from("nutrition_logs")
-      .select("*")
-      .eq("user_id", userId)
-      .eq("date", selectedDate)
-      .order("created_at", { ascending: true });
+    const { data, error } = await withSupabaseTimeout(
+      supabase
+        .from("nutrition_logs")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("date", selectedDate)
+        .order("created_at", { ascending: true }),
+      undefined,
+      "Load meals"
+    );
 
     if (!isMounted()) return;
 
@@ -1059,9 +1071,13 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
 
       // 4. Attempt inline Supabase insert
       try {
-        const { error } = await supabase.from("nutrition_logs").insert({
-          ...dbPayload,
-        } as any);
+        const { error } = await withSupabaseTimeout(
+          supabase.from("nutrition_logs").insert({
+            ...dbPayload,
+          } as any),
+          undefined,
+          "Log meal"
+        );
 
         if (error) throw error;
 
@@ -1072,10 +1088,12 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           description: `${mealIdea.meal_name} added to your day`,
         });
         await loadMeals(true);
+        scrollToTop();
       } catch (error) {
         console.error("Error logging meal (queued for sync):", error);
         celebrateSuccess();
         toast({ title: "Saved offline", description: "Will sync when connected." });
+        scrollToTop();
       }
     } catch (error) {
       console.error("Error logging meal:", error);
@@ -1162,7 +1180,11 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
 
       // 4. Attempt bulk Supabase insert
       try {
-        const { error } = await supabase.from("nutrition_logs").insert(dbPayloads as any);
+        const { error } = await withSupabaseTimeout(
+          supabase.from("nutrition_logs").insert(dbPayloads as any),
+          undefined,
+          "Bulk log meals"
+        );
 
         if (error) throw error;
 
@@ -1176,10 +1198,12 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           description: `${mealIdeas.length} meals added to your day`,
         });
         await loadMeals(true);
+        scrollToTop();
       } catch (error) {
         console.error("Error saving meals (queued for sync):", error);
         celebrateSuccess();
         toast({ title: "Saved offline", description: "Will sync when connected." });
+        scrollToTop();
       }
     } catch (error: any) {
       console.error("Error saving meal ideas:", error);
@@ -1348,7 +1372,11 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
 
     // 4. Attempt inline Supabase insert
     try {
-      const { error } = await supabase.from("nutrition_logs").insert(dbPayload as any);
+      const { error } = await withSupabaseTimeout(
+        supabase.from("nutrition_logs").insert(dbPayload as any),
+        undefined,
+        "Add manual meal"
+      );
 
       if (error) throw error;
 
@@ -1357,11 +1385,13 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       celebrateSuccess();
       toast({ title: "Meal added successfully" });
       await loadMeals(true);
+      scrollToTop();
     } catch (error) {
       console.error("Error adding meal (queued for sync):", error);
       // Meal stays in state + localCache + syncQueue — will retry on resume
       celebrateSuccess();
       toast({ title: "Saved offline", description: "Will sync when connected." });
+      scrollToTop();
     }
   };
 
@@ -2008,19 +2038,25 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
 
     // 4. Attempt inline Supabase delete
     try {
-      const { error } = await supabase
-        .from("nutrition_logs")
-        .delete()
-        .eq("id", deletedId);
+      const { error } = await withSupabaseTimeout(
+        supabase
+          .from("nutrition_logs")
+          .delete()
+          .eq("id", deletedId),
+        undefined,
+        "Delete meal"
+      );
 
       if (error) throw error;
 
       syncQueue.dequeueByRecordId(userId, deletedId);
       toast({ title: "Meal deleted" });
       await loadMeals(true);
+      scrollToTop();
     } catch (error) {
       console.error("Error deleting meal (queued for sync):", error);
       toast({ title: "Deleted offline", description: "Will sync when connected." });
+      scrollToTop();
     }
   };
 
@@ -2214,7 +2250,11 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
 
     // 4. Attempt inline Supabase insert
     try {
-      const { error } = await supabase.from("nutrition_logs").insert(dbPayload as any);
+      const { error } = await withSupabaseTimeout(
+        supabase.from("nutrition_logs").insert(dbPayload as any),
+        undefined,
+        "Log food"
+      );
 
       if (error) throw error;
 
@@ -2222,10 +2262,12 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       celebrateSuccess();
       toast({ title: "Food logged!", description: `${food.meal_name} · ${food.calories} kcal` });
       await loadMeals(true);
+      scrollToTop();
     } catch (error) {
       console.error("Error logging food (queued for sync):", error);
       celebrateSuccess();
       toast({ title: "Saved offline", description: "Will sync when connected." });
+      scrollToTop();
     }
   };
 
@@ -3557,10 +3599,14 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                           }
                         }
 
-                        const { error } = await supabase
-                          .from("profiles")
-                          .update(updateData)
-                          .eq("id", userId);
+                        const { error } = await withSupabaseTimeout(
+                          supabase
+                            .from("profiles")
+                            .update(updateData)
+                            .eq("id", userId),
+                          undefined,
+                          "Update nutrition targets"
+                        );
 
                         if (error) {
                           console.error("Supabase update error:", error);
