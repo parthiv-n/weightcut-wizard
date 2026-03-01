@@ -1,7 +1,7 @@
 import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Settings, LogOut, Droplets, Calendar, Moon, Sun, ChevronRight, BookOpen, Dumbbell, Bell } from "lucide-react";
-import { motion } from "motion/react";
+import { motion, LayoutGroup } from "motion/react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -14,6 +14,8 @@ import { ProfilePictureUpload } from "@/components/ProfilePictureUpload";
 import { Switch } from "@/components/ui/switch";
 import { Capacitor } from "@capacitor/core";
 import { getSettings, saveSettings, scheduleReminder, cancelReminder, type ReminderSettings } from "@/lib/weightReminder";
+import { triggerHapticSelection } from "@/lib/haptics";
+import { prefetchRoute } from "@/lib/routePrefetch";
 import { useTutorial } from "@/tutorial/useTutorial";
 import {
   AlertDialog,
@@ -58,6 +60,15 @@ const moreMenuItems = [
   { title: "Fight Week", url: "/fight-week", icon: Calendar },
 ];
 
+// Route import map for touch-start prefetching
+const routeImportMap: Record<string, () => Promise<any>> = {
+  "/goals": () => import("@/pages/Goals"),
+  "/fight-camps": () => import("@/pages/FightCamps"),
+  "/fight-camp-calendar": () => import("@/pages/FightCampCalendar"),
+  "/hydration": () => import("@/pages/Hydration"),
+  "/fight-week": () => import("@/pages/FightWeek"),
+};
+
 export function BottomNav() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
@@ -79,6 +90,16 @@ export function BottomNav() {
   useEffect(() => {
     setEditedName(userName);
   }, [userName]);
+
+  // Prefetch top-3 route chunks after 2s
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      prefetchRoute(() => import("@/pages/Dashboard"), "Dashboard");
+      prefetchRoute(() => import("@/pages/Nutrition"), "Nutrition");
+      prefetchRoute(() => import("@/pages/WeightTracker"), "WeightTracker");
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const toggleTheme = () => {
     const newTheme = theme === "light" ? "dark" : "light";
@@ -158,13 +179,15 @@ export function BottomNav() {
   return (
     <>
       <nav className="fixed bottom-0 left-0 right-0 z-[9999] md:hidden bg-background/80 backdrop-blur-2xl border-t border-border/40 safe-area-inset-bottom">
+        <LayoutGroup>
         <div className="flex items-center justify-around h-16 px-2 relative">
           {/* Dashboard */}
           <NavLink
             to={mainNavItems[0].url}
             data-tutorial="nav-dashboard"
+            onClick={() => triggerHapticSelection()}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 ${isActive
+              `relative flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 ${isActive
                 ? "text-primary"
                 : "text-muted-foreground active:scale-95"
               }`
@@ -174,6 +197,13 @@ export function BottomNav() {
               <>
                 <DashboardIcon className="h-6 w-6" />
                 <span className={`text-[10px] tracking-wide leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[0].title}</span>
+                {isActive && (
+                  <motion.div
+                    layoutId="bottomNavIndicator"
+                    className="absolute -bottom-0.5 inset-x-0 mx-auto w-5 h-[3px] rounded-full bg-primary"
+                    transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                  />
+                )}
               </>
             )}
           </NavLink>
@@ -182,8 +212,9 @@ export function BottomNav() {
           <NavLink
             to={mainNavItems[1].url}
             data-tutorial="nav-nutrition"
+            onClick={() => triggerHapticSelection()}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 ${isActive
+              `relative flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 ${isActive
                 ? "text-primary"
                 : "text-muted-foreground active:scale-95"
               }`
@@ -193,6 +224,13 @@ export function BottomNav() {
               <>
                 <NutritionIcon className="h-6 w-6" />
                 <span className={`text-[10px] tracking-wide leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[1].title}</span>
+                {isActive && (
+                  <motion.div
+                    layoutId="bottomNavIndicator"
+                    className="absolute -bottom-0.5 inset-x-0 mx-auto w-5 h-[3px] rounded-full bg-primary"
+                    transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                  />
+                )}
               </>
             )}
           </NavLink>
@@ -213,8 +251,9 @@ export function BottomNav() {
           <NavLink
             to={mainNavItems[2].url}
             data-tutorial="nav-weight"
+            onClick={() => triggerHapticSelection()}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 ${isActive
+              `relative flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 ${isActive
                 ? "text-primary"
                 : "text-muted-foreground active:scale-95"
               }`
@@ -224,6 +263,13 @@ export function BottomNav() {
               <>
                 <WeightIcon className="h-6 w-6" />
                 <span className={`text-[10px] tracking-wide leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[2].title}</span>
+                {isActive && (
+                  <motion.div
+                    layoutId="bottomNavIndicator"
+                    className="absolute -bottom-0.5 inset-x-0 mx-auto w-5 h-[3px] rounded-full bg-primary"
+                    transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                  />
+                )}
               </>
             )}
           </NavLink>
@@ -239,6 +285,7 @@ export function BottomNav() {
             <span className="text-[10px] font-medium tracking-wide leading-tight">More</span>
           </button>
         </div>
+        </LayoutGroup>
       </nav>
 
       {/* Quick Log Dialog */}
@@ -307,6 +354,10 @@ export function BottomNav() {
                     key={item.url}
                     type="button"
                     onClick={() => handleMoreItemClick(item.url)}
+                    onTouchStart={() => {
+                      const importFn = routeImportMap[item.url];
+                      if (importFn) prefetchRoute(importFn, item.url);
+                    }}
                     className="w-full flex items-center gap-3 px-4 py-3.5 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left border-b border-border/40 dark:border-white/5 last:border-b-0"
                     variants={menuItemVariants}
                     transition={menuItemTransition}

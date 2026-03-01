@@ -135,8 +135,7 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
       if (barcode === lastScannedBarcode) return;
       
       setLastScannedBarcode(barcode);
-      console.log("Barcode scanned:", barcode);
-      
+
       // Clear any existing timeout
       if (scanTimeoutRef.current) {
         clearTimeout(scanTimeoutRef.current);
