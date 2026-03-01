@@ -1,16 +1,14 @@
-import { Flame, Calendar, Utensils, Trophy, Check } from "lucide-react";
+import { Flame, Calendar, Utensils, Trophy, Scale, TrendingUp, Award, Zap, Star, Dumbbell, Crown, Check, ChevronRight } from "lucide-react";
 import type { MilestoneBadge } from "@/hooks/useGamification";
 
 const iconMap = {
-  Flame,
-  Calendar,
-  Utensils,
-  Trophy,
+  Flame, Calendar, Utensils, Trophy, Scale, TrendingUp, Award, Zap, Star, Dumbbell, Crown,
 } as const;
 
 interface MilestoneBadgesProps {
   badges: MilestoneBadge[];
   loading: boolean;
+  onTap?: () => void;
 }
 
 function BadgeSkeleton() {
@@ -23,7 +21,7 @@ function BadgeSkeleton() {
   );
 }
 
-export function MilestoneBadges({ badges, loading }: MilestoneBadgesProps) {
+export function MilestoneBadges({ badges, loading, onTap }: MilestoneBadgesProps) {
   if (loading) {
     return (
       <div>
@@ -39,10 +37,18 @@ export function MilestoneBadges({ badges, loading }: MilestoneBadgesProps) {
     );
   }
 
+  const Wrapper = onTap ? "button" : "div";
+
   return (
-    <div>
-      <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
-        Achievements
+    <Wrapper
+      {...(onTap ? { onClick: onTap, type: "button" as const } : {})}
+      className={onTap ? "w-full text-left active:scale-[0.98] transition-transform" : undefined}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+          Achievements
+        </div>
+        {onTap && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
       </div>
       <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
         {badges.map((badge) => {
@@ -95,6 +101,6 @@ export function MilestoneBadges({ badges, loading }: MilestoneBadgesProps) {
           );
         })}
       </div>
-    </div>
+    </Wrapper>
   );
 }

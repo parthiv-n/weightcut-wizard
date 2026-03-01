@@ -22,6 +22,7 @@ import { AIPersistence } from "@/lib/aiPersistence";
 import { localCache } from "@/lib/localCache";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { WeightIncreaseQuestionnaire } from "@/components/dashboard/WeightIncreaseQuestionnaire";
+import { AchievementSheet } from "@/components/achievements/AchievementSheet";
 
 interface DailyWisdom {
   summary: string;
@@ -46,10 +47,11 @@ export default function Dashboard() {
   const [wisdomLoading, setWisdomLoading] = useState(false);
   const [wisdomSheetOpen, setWisdomSheetOpen] = useState(false);
   const [questionnaireOpen, setQuestionnaireOpen] = useState(false);
+  const [achievementSheetOpen, setAchievementSheetOpen] = useState(false);
   const { userName, currentWeight, userId, profile } = useUser();
   const navigate = useNavigate();
   const { safeAsync, isMounted } = useSafeAsync();
-  const { streak, streakIncludesToday, weeklyConsistency, badges, badgesLoading } = useGamification(userId, weightLogs, todayCalories);
+  const { streak, streakIncludesToday, weeklyConsistency, badges, badgesLoading, allAchievements } = useGamification(userId, weightLogs, todayCalories, profile);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -548,7 +550,7 @@ export default function Dashboard() {
 
         {/* Milestone Badges */}
         <div className="dashboard-card-enter dashboard-stagger-7">
-          <MilestoneBadges badges={badges} loading={badgesLoading} />
+          <MilestoneBadges badges={badges} loading={badgesLoading} onTap={() => setAchievementSheetOpen(true)} />
         </div>
       </div>
 
@@ -654,6 +656,12 @@ export default function Dashboard() {
         open={questionnaireOpen}
         onOpenChange={setQuestionnaireOpen}
         onComplete={() => setWisdomSheetOpen(true)}
+      />
+
+      <AchievementSheet
+        open={achievementSheetOpen}
+        onOpenChange={setAchievementSheetOpen}
+        categories={allAchievements}
       />
     </ErrorBoundary>
   );

@@ -124,17 +124,6 @@ export default function Nutrition() {
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // AI meal plan rate limiting
-  const DAILY_LIMIT = 5;
-  const DEV_PASSWORD = "ben10boy";
-  const [mealPlanUsageCount, setMealPlanUsageCount] = useState(() => {
-    const key = `meal_plan_usage_${format(new Date(), "yyyy-MM-dd")}`;
-    return parseInt(localStorage.getItem(key) || "0", 10);
-  });
-  const [devUnlocked, setDevUnlocked] = useState(false);
-  const [showDevInput, setShowDevInput] = useState(false);
-  const [devPasswordInput, setDevPasswordInput] = useState("");
-
   // Manual meal form
   const [manualMeal, setManualMeal] = useState({
     meal_name: "",
@@ -805,16 +794,6 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       return;
     }
 
-    // Rate limit check
-    if (mealPlanUsageCount >= DAILY_LIMIT && !devUnlocked) {
-      toast({
-        title: "Daily limit reached",
-        description: "You've used all 5 meal plan generations for today. Try again after 11:59 PM.",
-        variant: "destructive",
-      });
-      return;
-    }
-
     setGeneratingPlan(true);
     setIsAiDialogOpen(false); // Close dialog immediately so overlay is visible without input box
     try {
@@ -958,12 +937,6 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       setDailyCalorieTarget(target || dailyCalorieTarget);
       setSafetyStatus(status || safetyStatus);
       setSafetyMessage(message || safetyMessage);
-
-      // Increment rate limit counter
-      const newCount = mealPlanUsageCount + 1;
-      setMealPlanUsageCount(newCount);
-      const usageKey = `meal_plan_usage_${format(new Date(), "yyyy-MM-dd")}`;
-      localStorage.setItem(usageKey, newCount.toString());
 
       // Save accumulated ideas to localStorage for persistence
       const accumulatedIdeas = [...mealPlanIdeas, ...ideasToStore];
@@ -3203,58 +3176,15 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                 className="resize-none rounded-xl border-primary/15 bg-primary/5"
               />
 
-              {/* Remaining count */}
-              {!devUnlocked && (
-                <p className="text-xs text-muted-foreground text-center">
-                  {DAILY_LIMIT - mealPlanUsageCount > 0
-                    ? `${DAILY_LIMIT - mealPlanUsageCount} generation${DAILY_LIMIT - mealPlanUsageCount === 1 ? '' : 's'} remaining today`
-                    : "Daily limit reached. Try again after 11:59 PM."}
-                </p>
-              )}
-
               {/* Blue gradient generate button */}
               <Button
                 onClick={handleGenerateMealPlan}
-                disabled={generatingPlan || (!devUnlocked && mealPlanUsageCount >= DAILY_LIMIT)}
+                disabled={generatingPlan}
                 className="w-full bg-gradient-to-r from-primary to-secondary shadow-lg shadow-primary/20 rounded-xl h-11 text-sm font-semibold"
               >
                 <Sparkles className="mr-2 h-4 w-4" />
                 {generatingPlan ? "Generating..." : "Generate Meal Ideas"}
               </Button>
-
-              {/* Dev password — hidden behind tiny toggle */}
-              {!devUnlocked && (
-                <div className="flex flex-col items-center gap-2">
-                  <button
-                    onClick={() => setShowDevInput(v => !v)}
-                    className="text-[10px] text-muted-foreground/40 hover:text-muted-foreground transition-colors"
-                  >
-                    Dev
-                  </button>
-                  {showDevInput && (
-                    <div className="flex gap-2 items-center w-full animate-in fade-in-0 slide-in-from-top-1 duration-200">
-                      <Input
-                        type="password"
-                        placeholder="Dev passcode"
-                        value={devPasswordInput}
-                        onChange={(e) => setDevPasswordInput(e.target.value)}
-                        className="h-8 text-xs flex-1 rounded-xl"
-                      />
-                      <Button size="sm" variant="outline" className="h-8 text-xs rounded-xl" onClick={() => {
-                        if (devPasswordInput === DEV_PASSWORD) {
-                          setDevUnlocked(true);
-                          setShowDevInput(false);
-                          toast({ title: "Dev mode unlocked" });
-                        } else {
-                          toast({ title: "Wrong password", variant: "destructive" });
-                        }
-                      }}>
-                        Unlock
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
             </div>
           </DialogContent>
         </Dialog>
