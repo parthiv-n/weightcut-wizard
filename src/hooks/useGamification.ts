@@ -317,11 +317,12 @@ export function useGamification(
           .from("fight_camps")
           .select("*", { count: "exact", head: true })
           .eq("user_id", userId),
-        // All weight log dates (no limit — needed for accurate streaks)
+        // Weight log dates — capped to 1 year (streak can never exceed 365)
         supabase
           .from("weight_logs")
           .select("date")
           .eq("user_id", userId)
+          .gte("date", getDateString(new Date(Date.now() - 366 * 24 * 60 * 60 * 1000)))
           .order("date", { ascending: true }),
       ]);
 

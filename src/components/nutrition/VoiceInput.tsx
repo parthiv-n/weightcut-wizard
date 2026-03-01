@@ -2,7 +2,6 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Mic, Square, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { pipeline } from "@huggingface/transformers";
 
 interface VoiceInputProps {
   onTranscription: (text: string) => void;
@@ -37,6 +36,8 @@ export function VoiceInput({ onTranscription, disabled, className }: VoiceInputP
         description: "This may take a moment on first use",
       });
 
+      const { pipeline } = await import("@huggingface/transformers");
+
       transcriberRef.current = await pipeline(
         "automatic-speech-recognition",
         "onnx-community/whisper-tiny.en",
@@ -50,6 +51,7 @@ export function VoiceInput({ onTranscription, disabled, className }: VoiceInputP
     } catch (error) {
       // Fallback to CPU if WebGPU fails
       try {
+        const { pipeline } = await import("@huggingface/transformers");
         transcriberRef.current = await pipeline(
           "automatic-speech-recognition",
           "onnx-community/whisper-tiny.en"
