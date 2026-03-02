@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { Droplets, TrendingDown, Calendar, Lock, ChevronRight, Flame, Zap, CheckCircle2 } from "lucide-react";
+import { Droplets, TrendingDown, Calendar, Lock, ChevronRight, Flame, Zap, CheckCircle2, Scale } from "lucide-react";
 import wizardLogo from "@/assets/wizard-logo.png";
 import { WeightProgressRing } from "@/components/dashboard/WeightProgressRing";
 import { CalorieProgressRing } from "@/components/dashboard/CalorieProgressRing";
@@ -373,6 +373,32 @@ export default function Dashboard() {
           <p className="text-sm text-muted-foreground mt-0.5">Your weight cut journey dashboard</p>
         </motion.div>
 
+        {weightLogs.length === 0 && (
+          <motion.div variants={prefersReducedMotion ? undefined : staggerItem} transition={springs.responsive}>
+            <div className="glass-card rounded-2xl border border-border/50 p-4">
+              <div className="flex items-start gap-3">
+                <div className="rounded-full bg-primary/15 p-2.5 flex-shrink-0">
+                  <Scale className="h-5 w-5 text-primary" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="font-semibold text-sm">Welcome, Fighter</h3>
+                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                    Log your first weigh-in to unlock your progress chart, daily AI wisdom, and weight cut tracking.
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3 h-8 text-xs font-semibold"
+                    onClick={() => navigate('/weight')}
+                  >
+                    Log Weigh-In
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+
         {/* Weekly Consistency Ring */}
         <motion.div variants={prefersReducedMotion ? undefined : staggerItem} transition={springs.responsive}>
           <ConsistencyRing {...weeklyConsistency} />
@@ -556,8 +582,12 @@ export default function Dashboard() {
                   </ResponsiveContainer>
                   </motion.div>
                 ) : (
-                  <div className="text-center py-12 text-muted-foreground">
-                    No weight data yet. Start logging your weight to see your progress!
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
+                    <div className="rounded-full bg-muted/50 p-3 mb-3">
+                      <TrendingDown className="h-6 w-6 text-muted-foreground" />
+                    </div>
+                    <p className="text-sm font-medium text-foreground">No weight data yet</p>
+                    <p className="text-xs text-muted-foreground mt-1">Your progress chart will appear here.</p>
                   </div>
                 )}
               </CardContent>

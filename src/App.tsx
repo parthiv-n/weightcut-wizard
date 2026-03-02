@@ -18,7 +18,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { FloatingWizardChat } from "@/components/FloatingWizardChat";
 import * as Sentry from "@sentry/react";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
+import { DashboardSkeleton, NutritionPageSkeleton, HydrationSkeleton, GoalsSkeleton } from "@/components/ui/skeleton-loader";
 import { RefreshCw } from "lucide-react";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
@@ -201,7 +201,7 @@ const App = () => (
                   <ProtectedRoute>
                     <ProfileCompletionGuard>
                       <AppLayout>
-                        <Dashboard />
+                        <Suspense fallback={<DashboardSkeleton />}><Dashboard /></Suspense>
                       </AppLayout>
                     </ProfileCompletionGuard>
                   </ProtectedRoute>
@@ -210,7 +210,7 @@ const App = () => (
                   <ProtectedRoute>
                     <ProfileCompletionGuard>
                       <AppLayout>
-                        <Goals />
+                        <Suspense fallback={<GoalsSkeleton />}><Goals /></Suspense>
                       </AppLayout>
                     </ProfileCompletionGuard>
                   </ProtectedRoute>
@@ -219,7 +219,7 @@ const App = () => (
                   <ProtectedRoute>
                     <ProfileCompletionGuard>
                       <AppLayout>
-                        <Nutrition />
+                        <Suspense fallback={<NutritionPageSkeleton />}><Nutrition /></Suspense>
                       </AppLayout>
                     </ProfileCompletionGuard>
                   </ProtectedRoute>
@@ -237,7 +237,7 @@ const App = () => (
                   <ProtectedRoute>
                     <ProfileCompletionGuard>
                       <AppLayout>
-                        <Hydration />
+                        <Suspense fallback={<HydrationSkeleton />}><Hydration /></Suspense>
                       </AppLayout>
                     </ProfileCompletionGuard>
                   </ProtectedRoute>

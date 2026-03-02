@@ -2375,6 +2375,31 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           <ShareButton onClick={handleShareOpen} className="absolute right-0" />
         </div>
 
+        {meals.length === 0 && selectedDate === format(new Date(), "yyyy-MM-dd") && !loading && (
+          <div className="glass-card rounded-2xl border border-border/50 p-4">
+            <div className="flex items-start gap-3">
+              <div className="rounded-full bg-primary/15 p-2.5 flex-shrink-0">
+                <Utensils className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-sm">No Meals Logged Today</h3>
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  Describe what you ate and AI will calculate the macros for you.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3 h-8 text-xs font-semibold"
+                  onClick={() => { setQuickAddTab("ai"); setIsQuickAddSheetOpen(true); }}
+                >
+                  <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                  Quick Add with AI
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ═══ Meal Sections (MFP-style) ═══ */}
         <div className="space-y-2">
           {(["breakfast", "lunch", "dinner", "snack"] as const).map((mealType) => {

@@ -8,7 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Sparkles, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
+import { Sparkles, AlertTriangle, CheckCircle, Loader2, Target } from "lucide-react";
+import { GoalsSkeleton } from "@/components/ui/skeleton-loader";
 import { profileSchema } from "@/lib/validation";
 import { useUser } from "@/contexts/UserContext";
 import { celebrateSuccess } from "@/lib/haptics";
@@ -197,11 +198,7 @@ export default function Goals() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <GoalsSkeleton />;
   }
 
   return (
@@ -211,6 +208,22 @@ export default function Goals() {
           <h1 className="text-3xl font-bold tracking-tight">Goals</h1>
           <p className="text-muted-foreground mt-1 text-sm">Update your profile and targets</p>
         </div>
+
+        {!contextProfile?.goal_weight_kg && (
+          <div className="glass-card rounded-2xl border border-border/50 p-4">
+            <div className="flex items-start gap-3">
+              <div className="rounded-full bg-primary/15 p-2.5 flex-shrink-0">
+                <Target className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-sm">Set Up Your Fight Profile</h3>
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  Fill in your details below so the Wizard can calculate your calorie targets, track your cut, and give you daily guidance.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="space-y-6">
           {/* Section: Personal Details */}

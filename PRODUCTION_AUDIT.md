@@ -72,13 +72,13 @@ DONE ### 2.1 TypeScript Strictness DISABLED
 
 **Need**: Decompose into focused sub-components (max 300-400 lines each)
 
-### 2.3 Empty States Missing
+DONE ### 2.3 Empty States Missing
 - **Nutrition**: Blank page when `meals.length === 0` — no "Log your first meal" CTA
 - **Dashboard**: No guidance for new users with no weight logs
 - **Goals**: No empty state for first-time users
 - **Need**: Empty state components with CTAs on all data-driven pages
 
-### 2.4 Loading State Inconsistency
+DONE ## 2.4 Loading State Inconsistency
 | Page | Loading State | Quality |
 |------|--------------|---------|
 | Dashboard | DashboardSkeleton | Good |
