@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 
 interface BatchOperation {
   id: string;
-  operation: () => Promise<any>;
+  operation: () => PromiseLike<any>;
   priority?: number; // Higher number = higher priority
 }
 

@@ -273,9 +273,9 @@ export default function Dashboard() {
     }
   };
 
-  const daysUntilTarget = useMemo(() => profile ? Math.ceil((new Date(profile.target_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : 0, [profile?.target_date]);
+  const daysUntilTarget = useMemo(() => profile?.target_date ? Math.ceil((new Date(profile.target_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)) : 0, [profile?.target_date]);
   const currentWeightValue = currentWeight ?? profile?.current_weight_kg ?? 0;
-  const weightToLose = useMemo(() => profile ? (currentWeightValue - (profile.fight_week_target_kg || profile.goal_weight_kg)).toFixed(1) : 0, [currentWeightValue, profile?.fight_week_target_kg, profile?.goal_weight_kg]);
+  const weightToLose = useMemo(() => profile ? (currentWeightValue - (profile.fight_week_target_kg || profile.goal_weight_kg || 0)).toFixed(1) : 0, [currentWeightValue, profile?.fight_week_target_kg, profile?.goal_weight_kg]);
   const dailyCalorieGoal = useMemo(() => profile ? calculateCalorieTarget(profile) : 0,
     [profile?.ai_recommended_calories, profile?.tdee, profile?.bmr,
      profile?.current_weight_kg, profile?.goal_weight_kg,
@@ -470,7 +470,7 @@ export default function Dashboard() {
               <WeightProgressRing
                 currentWeight={currentWeightValue}
                 startingWeight={weightLogs.length > 0 ? parseFloat(weightLogs[0].weight_kg) : currentWeightValue}
-                goalWeight={profile.goal_weight_kg}
+                goalWeight={profile.goal_weight_kg ?? 0}
               />
             </div>
           )}

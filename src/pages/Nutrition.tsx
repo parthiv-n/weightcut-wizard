@@ -413,14 +413,14 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     try {
       const { data, error } = await supabase
         .from("nutrition_logs")
-        .select("logged_at")
+        .select("date")
         .eq("user_id", userId);
       if (error || !data) return;
 
       setTotalMealsLogged(data.length);
 
       // Deduplicate dates
-      const dates = [...new Set(data.map((r) => r.logged_at?.slice(0, 10)))].filter(Boolean).sort().reverse();
+      const dates = [...new Set(data.map((r) => r.date?.slice(0, 10)))].filter(Boolean).sort().reverse();
       // Count consecutive days backwards from today
       let streak = 0;
       let cursor = new Date();
@@ -757,7 +757,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         .filter(op => op.table === "nutrition_logs" && op.action === "delete")
         .map(op => op.recordId)
     );
-    let mergedMeals = typedMeals.filter(m => !pendingDeleteIds.has(m.id));
+    let mergedMeals: Meal[] = typedMeals.filter(m => !pendingDeleteIds.has(m.id)) as Meal[];
 
     // Add pending inserts not yet in DB result
     const pendingInserts = pendingOps.filter(
@@ -781,8 +781,8 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         recipe_notes: p.recipe_notes ?? undefined,
         ingredients: p.ingredients ?? undefined,
         is_ai_generated: p.is_ai_generated,
-        date: p.date,
-      } as Meal);
+        date: p.date ?? selectedDate,
+      });
     }
 
     setMeals(mergedMeals as Meal[]);
@@ -826,9 +826,9 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         currentWeight: profile.current_weight_kg,
         goalWeight: profile.goal_weight_kg,
         tdee: profile.tdee,
-        daysToWeighIn: Math.ceil(
+        daysToWeighIn: profile.target_date ? Math.ceil(
           (new Date(profile.target_date).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
-        ),
+        ) : 0,
       } : null;
 
       const response = await supabase.functions.invoke("meal-planner", {
@@ -3180,7 +3180,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         {/* AI Meal Plan Bottom Sheet */}
         <Dialog open={isAiDialogOpen} onOpenChange={(open) => {
           setIsAiDialogOpen(open);
-          if (!open) setShowDevInput(false);
+          // Dialog closing handler
         }}>
           <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto rounded-2xl">
             <DialogHeader className="pb-1">

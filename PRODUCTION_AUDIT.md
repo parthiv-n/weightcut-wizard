@@ -42,12 +42,12 @@ DONE ### 1.4 Security — Auth Gaps
 - Fine for dev but not for production with payments
 - **Need**: Dynamic CORS that allows production domain + localhost for dev
 
-### 1.7 Critical Dependencies
+DONE ### 1.7 Critical Dependencies
 - `xlsx` (429 KB): HIGH severity vulnerability with **no fix available**
 - `minimatch`, `rollup`: HIGH severity ReDoS
 - **Need**: Replace `xlsx` with lightweight alternative or remove; run `npm audit fix`
 
-### 1.8 Remove Debug Code
+DONE ### 1.8 Remove Debug Code
 - `src/debug-meal-api.tsx` — Full debug component with emoji console.logs, must be deleted
 - 23+ files have console.log statements left in production code
 
@@ -55,7 +55,7 @@ DONE ### 1.4 Security — Auth Gaps
 
 ## PHASE 2 — HIGH PRIORITY (Fix before public release)
 
-### 2.1 TypeScript Strictness DISABLED
+DONE ### 2.1 TypeScript Strictness DISABLED
 - `tsconfig.json`: `strict: false`, `noImplicitAny: false`, `strictNullChecks: false`
 - Massive type safety gap — bugs slip through silently
 - **Need**: Enable `strict: true` incrementally, fix type errors

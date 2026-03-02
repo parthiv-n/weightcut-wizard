@@ -89,7 +89,7 @@ class SyncQueue {
         try {
           if (op.action === "insert") {
             const { error } = await withSupabaseTimeout(
-              supabase.from(op.table).insert(op.payload as any),
+              supabase.from(op.table as any).insert(op.payload as any),
               10000,
               `SyncQueue insert ${op.table}`
             );
@@ -112,14 +112,14 @@ class SyncQueue {
           } else if (op.action === "update") {
             // Last-write-wins: check if DB row is newer
             const { data: existing, error: fetchError } = await withSupabaseTimeout(
-              supabase.from(op.table).select("updated_at").eq("id", op.recordId).maybeSingle(),
+              supabase.from(op.table as any).select("updated_at").eq("id", op.recordId).maybeSingle(),
               10000,
               `SyncQueue fetch-for-update ${op.table}`
             );
 
             if (!fetchError && existing) {
-              const dbTime = existing.updated_at
-                ? new Date(existing.updated_at).getTime()
+              const dbTime = (existing as any).updated_at
+                ? new Date((existing as any).updated_at).getTime()
                 : 0;
               if (dbTime > op.timestamp) {
                 // Server is newer — discard our stale op
@@ -129,7 +129,7 @@ class SyncQueue {
             }
 
             const { error } = await withSupabaseTimeout(
-              supabase.from(op.table).update(op.payload as any).eq("id", op.recordId),
+              supabase.from(op.table as any).update(op.payload as any).eq("id", op.recordId),
               10000,
               `SyncQueue update ${op.table}`
             );
@@ -142,7 +142,7 @@ class SyncQueue {
             }
           } else if (op.action === "delete") {
             const { error } = await withSupabaseTimeout(
-              supabase.from(op.table).delete().eq("id", op.recordId),
+              supabase.from(op.table as any).delete().eq("id", op.recordId),
               10000,
               `SyncQueue delete ${op.table}`
             );

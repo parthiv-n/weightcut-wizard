@@ -136,8 +136,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
       if (data) {
         const changed = JSON.stringify(data) !== JSON.stringify(profileRef.current);
         if (changed) {
-          setProfile(data);
-          profileRef.current = data;
+          setProfile(data as ProfileData);
+          profileRef.current = data as ProfileData;
           setHasProfile(true);
           if (data.avatar_url) setAvatarUrl(data.avatar_url);
           const weight = data.current_weight_kg ?? null;
@@ -252,8 +252,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
       if (profileData) {
         const changed = JSON.stringify(profileData) !== JSON.stringify(profileRef.current);
         if (changed) {
-          setProfile(profileData);
-          profileRef.current = profileData;
+          setProfile(profileData as ProfileData);
+          profileRef.current = profileData as ProfileData;
           if (profileData.avatar_url) {
             setAvatarUrl(profileData.avatar_url);
           }

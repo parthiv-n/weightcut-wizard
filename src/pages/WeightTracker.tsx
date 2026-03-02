@@ -509,7 +509,7 @@ export default function WeightTracker() {
       filteredLogs = [weightLogs[weightLogs.length - 1]];
     }
 
-    const data = filteredLogs.map((log, idx) => ({
+    const data: { date: string; weight: number | null; projected: number | null; fightWeekGoal: number | undefined; fightNightGoal: number | undefined; logId: string | null; fullDate: string }[] = filteredLogs.map((log, idx) => ({
       date: format(new Date(log.date), "MMM dd"),
       weight: log.weight_kg,
       // Last actual point gets projected value too so the lines connect

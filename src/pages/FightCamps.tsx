@@ -88,7 +88,7 @@ export default function FightCamps() {
           setCamps([]);
         }
       } else {
-        setCamps(data || []);
+        setCamps((data || []) as FightCamp[]);
         localCache.set(userId, 'fight_camps', data || []);
       }
     } catch (error) {

@@ -42,8 +42,8 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
     if (!Capacitor.isNativePlatform()) return true;
     try {
       const status = await CapCamera.requestPermissions({ permissions: ["camera"] });
-      const granted: CameraPermissionState = status.camera;
-      if (granted === "denied" || granted === "restricted") {
+      const granted = status.camera;
+      if (granted === "denied" || granted === ("restricted" as string)) {
         setPermissionDenied(true);
         setCameraError("Camera access was denied. Go to iOS Settings > WeightCut Wizard > Camera and enable it.");
         return false;
@@ -244,7 +244,7 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
             {/* Camera viewfinder */}
             <div className="relative aspect-[4/3] bg-black overflow-hidden">
               <video
-                ref={ref}
+                ref={ref as React.RefObject<HTMLVideoElement>}
                 className="w-full h-full object-cover"
                 autoPlay
                 playsInline

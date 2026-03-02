@@ -825,6 +825,7 @@ export function computeReadiness(
       loadBalanceScore: Math.round(loadBalanceScore),
       recoveryScore: Math.round(recoveryScore),
       consistencyScore: Math.round(consistencyScore),
+      tier: 1 as const,
     },
   };
 }
