@@ -66,7 +66,7 @@ export default function FightWeek() {
       if (cw) setCurrentWeight(cw.toString());
       if (tw) setTargetWeight(tw.toString());
     }
-  }, [profile?.current_weight_kg, profile?.goal_weight_kg, dbPlan]);
+  }, [profile, dbPlan]);
 
   // Load existing plan from DB
   useEffect(() => {

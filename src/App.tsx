@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, lazy, Suspense } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -17,7 +17,7 @@ import { TutorialProvider } from "@/tutorial/TutorialContext";
 import { BottomNav } from "@/components/BottomNav";
 import { FloatingWizardChat } from "@/components/FloatingWizardChat";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import { RefreshCw } from "lucide-react";
+import { PullToRefresh } from "@/components/PullToRefresh";
 import { RouteSkeleton } from "@/components/RouteSkeleton";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
@@ -33,10 +33,6 @@ const FightCamps = lazy(() => import("./pages/FightCamps"));
 const FightCampDetail = lazy(() => import("./pages/FightCampDetail"));
 const FightCampCalendar = lazy(() => import("./pages/FightCampCalendar"));
 const NotFound = lazy(() => import("./pages/NotFound"));
-
-// Pre-parse Dashboard chunk during idle time so Suspense fallback is skipped
-const _idle = window.requestIdleCallback || ((cb: IdleRequestCallback) => setTimeout(cb, 50));
-_idle(() => { import("./pages/Dashboard").catch(() => {}); });
 
 const queryClient = new QueryClient();
 
@@ -123,15 +119,6 @@ function RouteTracker() {
 const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
   const { openMobile } = useSidebar();
   const location = useLocation();
-  const mainRef = useRef<HTMLElement>(null);
-
-  // Reset scroll position before paint when navigating to a new page
-  useLayoutEffect(() => {
-    if (mainRef.current) {
-      mainRef.current.scrollTop = 0;
-    }
-    window.scrollTo(0, 0);
-  }, [location.pathname]);
 
   return (
     <>
@@ -148,24 +135,13 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
             <ThemeToggle className="touch-target" />
           </header>
           {/* Main content with mobile-first responsive padding - bottom padding for bottom nav */}
-          <main
-            ref={mainRef}
-            className="flex-1 overflow-auto overflow-x-hidden relative min-h-0 w-full pt-2 pb-24 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right"
-          >
-            {/* Manual refresh button — top-right floating pill */}
-            <button
-              onClick={() => window.location.reload()}
-              className="fixed top-3 right-3 z-50 h-8 w-8 flex items-center justify-center rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm active:scale-90 transition-transform md:hidden safe-area-inset-top"
-              aria-label="Refresh page"
-            >
-              <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
-            </button>
+          <PullToRefresh className="flex-1 overflow-auto overflow-x-hidden relative min-h-0 w-full pt-2 pb-24 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right">
             <PageTransition>
               <Suspense fallback={<RouteSkeleton />}>
                 {children}
               </Suspense>
             </PageTransition>
-          </main>
+          </PullToRefresh>
         </div>
       </div>
       {/* Bottom Navigation - Mobile Only */}

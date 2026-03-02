@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, subMonths, addMonths, subDays } from "date-fns";
 import { ChevronLeft, ChevronRight, Plus, Activity, Moon, Ruler, Trash2, CircleX } from "lucide-react";
@@ -81,11 +81,6 @@ export default function FightCampCalendar() {
     const [shareTimeRange, setShareTimeRange] = useState<"day" | "week" | "month">("week");
 
     const isRestDay = sessionType === 'Rest';
-
-    const athleteProfile = useMemo(() => profile ? {
-        trainingFrequency: profile.training_frequency ?? null,
-        activityLevel: profile.activity_level ?? null,
-    } : undefined, [profile?.training_frequency, profile?.activity_level]);
 
     const fetchSessions = useCallback(async () => {
         if (!userId) return;
@@ -302,7 +297,10 @@ export default function FightCampCalendar() {
                         sessions28d={sessions28d as any}
                         userId={userId}
                         sessionLoggedAt={sessionLoggedTrigger}
-                        athleteProfile={athleteProfile}
+                        athleteProfile={profile ? {
+                            trainingFrequency: profile.training_frequency ?? null,
+                            activityLevel: profile.activity_level ?? null,
+                        } : undefined}
                         tdee={profile?.tdee ?? null}
                     />
                 )}
