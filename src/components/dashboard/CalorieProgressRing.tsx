@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 
 interface CalorieProgressRingProps {
@@ -6,29 +5,28 @@ interface CalorieProgressRingProps {
   target: number;
 }
 
-const RADIUS = 45;
-
 export function CalorieProgressRing({ consumed, target }: CalorieProgressRingProps) {
-  const { percentage, circumference, strokeDashoffset, statusColor, statusText } = useMemo(() => {
-    const pct = target > 0 ? Math.min((consumed / target) * 100, 100) : 0;
-    const circ = 2 * Math.PI * RADIUS;
-    const offset = circ - (pct / 100) * circ;
+  const percentage = target > 0 ? Math.min((consumed / target) * 100, 100) : 0;
+  const radius = 45;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (percentage / 100) * circumference;
+  const remaining = Math.max(target - consumed, 0);
 
-    let color: string;
-    let text: string;
-    if (consumed < target * 0.8) {
-      color = "hsl(var(--chart-1))";
-      text = "Under Target";
-    } else if (consumed <= target * 1.1) {
-      color = "hsl(var(--success))";
-      text = "On Track";
-    } else {
-      color = "hsl(var(--destructive))";
-      text = "Over Target";
-    }
+  // Debug logging
+  console.log('CalorieProgressRing:', { consumed, target, percentage, circumference, strokeDashoffset });
 
-    return { percentage: pct, circumference: circ, strokeDashoffset: offset, statusColor: color, statusText: text };
-  }, [consumed, target]);
+  // Determine status color based on consumption
+  const getStatusColor = () => {
+    if (consumed < target * 0.8) return "hsl(var(--chart-1))"; // Under target
+    if (consumed <= target * 1.1) return "hsl(var(--success))"; // On track
+    return "hsl(var(--destructive))"; // Over target
+  };
+
+  const getStatusText = () => {
+    if (consumed < target * 0.8) return "Under Target";
+    if (consumed <= target * 1.1) return "On Track";
+    return "Over Target";
+  };
 
   return (
     <Card className="glass-card overflow-hidden h-full">
@@ -37,8 +35,8 @@ export function CalorieProgressRing({ consumed, target }: CalorieProgressRingPro
           <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">Calorie Progress</div>
           <div className="text-4xl font-bold display-number mb-1">{consumed}</div>
           <p className="text-xs text-muted-foreground">of {target} kcal</p>
-          <p className="text-xs font-medium mt-2" style={{ color: statusColor }}>
-            {statusText}
+          <p className="text-xs font-medium mt-2" style={{ color: getStatusColor() }}>
+            {getStatusText()}
           </p>
         </div>
 
@@ -46,12 +44,12 @@ export function CalorieProgressRing({ consumed, target }: CalorieProgressRingPro
           <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
             <defs>
               <linearGradient id="calorieGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor={statusColor} stopOpacity="1" />
-                <stop offset="50%" stopColor={statusColor} stopOpacity="0.8" />
-                <stop offset="100%" stopColor={statusColor} stopOpacity="0.6" />
+                <stop offset="0%" stopColor={getStatusColor()} stopOpacity="1" />
+                <stop offset="50%" stopColor={getStatusColor()} stopOpacity="0.8" />
+                <stop offset="100%" stopColor={getStatusColor()} stopOpacity="0.6" />
               </linearGradient>
               <filter id="calorieGlow">
-                <feDropShadow dx="0" dy="0" stdDeviation="2" floodColor={statusColor} floodOpacity="0.5" />
+                <feDropShadow dx="0" dy="0" stdDeviation="2" floodColor={getStatusColor()} floodOpacity="0.5" />
               </filter>
             </defs>
 
@@ -59,9 +57,9 @@ export function CalorieProgressRing({ consumed, target }: CalorieProgressRingPro
             <circle
               cx="50"
               cy="50"
-              r={RADIUS}
+              r={radius}
               fill="none"
-              stroke={statusColor}
+              stroke={getStatusColor()}
               strokeWidth="8"
               opacity="0.15"
             />
@@ -70,7 +68,7 @@ export function CalorieProgressRing({ consumed, target }: CalorieProgressRingPro
             <circle
               cx="50"
               cy="50"
-              r={RADIUS}
+              r={radius}
               fill="none"
               stroke="url(#calorieGradient)"
               strokeWidth="8"

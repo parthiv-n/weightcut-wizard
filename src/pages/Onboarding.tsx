@@ -82,6 +82,7 @@ export default function Onboarding() {
 
   const handleSubmit = async () => {
     const startTime = performance.now();
+    console.log("🚀 Starting onboarding profile creation...");
 
     // Validate input
     const validationResult = profileSchema.safeParse({
@@ -138,6 +139,8 @@ export default function Onboarding() {
       if (error) throw error;
 
       const endTime = performance.now();
+      const duration = Math.round(endTime - startTime);
+      console.log(`✅ Onboarding completed in ${duration}ms`);
 
       // Ensure all 3 animation steps have had time to play (step 3 fires at 2200ms)
       const minAnimMs = 2400;

@@ -208,20 +208,6 @@ All colors MUST be HSL.
 
 @layer components {
 
-  /* Skeleton shimmer effect */
-  @keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-  }
-  .skeleton-shimmer {
-    background: linear-gradient(90deg, hsl(var(--muted)) 25%, hsl(var(--muted-foreground) / 0.08) 50%, hsl(var(--muted)) 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s ease-in-out infinite;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .skeleton-shimmer { animation: none; background: hsl(var(--muted)); }
-  }
-
   /* GLOBAL MODERN GLASSMORPHISM FOR CONTENT CONTAINERS (Only applies fully in dark mode, fallback for light) */
   .glass-card,
   .bg-card,
@@ -477,25 +463,6 @@ All colors MUST be HSL.
     animation-delay: 0.35s;
   }
 
-  /* List item stagger entrance */
-  @keyframes listItemEnter {
-    from { opacity: 0; transform: translateY(12px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  .list-item-enter {
-    animation: listItemEnter 0.35s cubic-bezier(0.16, 1, 0.3, 1) backwards;
-  }
-
-  /* Reusable card stagger entrance (reuses dashboardCardEnter) */
-  .card-enter {
-    animation: dashboardCardEnter 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards;
-    will-change: transform, opacity;
-  }
-  .card-stagger-1 { animation-delay: 0.05s; }
-  .card-stagger-2 { animation-delay: 0.1s; }
-  .card-stagger-3 { animation-delay: 0.15s; }
-  .card-stagger-4 { animation-delay: 0.2s; }
-
   /* Optimize animations for reduced motion preferences */
   @media (prefers-reduced-motion: reduce) {
     .page-transition-page {
@@ -505,9 +472,7 @@ All colors MUST be HSL.
       transform: none !important;
     }
 
-    .dashboard-card-enter,
-    .card-enter,
-    .list-item-enter {
+    .dashboard-card-enter {
       animation: none !important;
       opacity: 1;
       transform: none;

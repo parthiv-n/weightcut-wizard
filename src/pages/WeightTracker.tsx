@@ -837,11 +837,10 @@ export default function WeightTracker() {
                   </div>
                   <CollapsibleContent className="space-y-2 pt-2">
                     <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
-                      {weightLogs.slice().reverse().map((log, index) => (
+                      {weightLogs.slice().reverse().map((log) => (
                         <div
                           key={log.id}
-                          className="list-item-enter flex items-center justify-between p-3 rounded-xl border border-white/5 bg-background/50 hover:bg-background/80 transition-colors"
-                          style={{ animationDelay: `${Math.min(index * 50, 300)}ms` }}
+                          className="flex items-center justify-between p-3 rounded-xl border border-white/5 bg-background/50 hover:bg-background/80 transition-colors"
                         >
                           <div>
                             <span className="text-base font-bold text-primary mr-3">{log.weight_kg} kg</span>

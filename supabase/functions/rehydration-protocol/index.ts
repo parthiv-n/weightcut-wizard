@@ -1,7 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
 import { RESEARCH_SUMMARY } from "../_shared/researchSummary.ts";
-import { corsHeaders } from "../_shared/cors.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 
 // ── Deterministic calculations (not LLM-generated) ─────────────────────────
 function computeTargets(
@@ -143,7 +147,7 @@ Constraints: total fluid ≈${targets.totalFluidML}ml, total carbs ≈${targets.
           { role: "user", content: userPrompt },
         ],
         temperature: 0.1,
-        max_completion_tokens: 8192,
+        max_completion_tokens: 3000,
       }),
     });
 
