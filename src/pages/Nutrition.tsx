@@ -82,7 +82,7 @@ interface Meal {
   date: string;
 }
 
-// Smooth-scroll the PullToRefresh <main> container to top (iOS-native feel)
+// Smooth-scroll the main container to top (iOS-native feel)
 function scrollToTop() {
   const main = document.querySelector('main');
   if (main && main.scrollTop > 0) {
