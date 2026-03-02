@@ -18,7 +18,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { FloatingWizardChat } from "@/components/FloatingWizardChat";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { PullToRefresh } from "@/components/PullToRefresh";
-import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
+import { RouteSkeleton } from "@/components/RouteSkeleton";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Onboarding from "./pages/Onboarding";
@@ -54,8 +54,6 @@ function RouteTracker() {
   // Handle Deep Links (Supabase Auth)
   useEffect(() => {
     CapacitorApp.addListener('appUrlOpen', async ({ url }) => {
-      console.log('App opened with URL:', url);
-
       // 1. Handle Supabase Auth (PKCE Code)
       if (url.includes('code=')) {
         try {
@@ -139,7 +137,7 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
           {/* Main content with mobile-first responsive padding - bottom padding for bottom nav */}
           <PullToRefresh className="flex-1 overflow-auto overflow-x-hidden relative min-h-0 w-full pt-2 pb-24 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right">
             <PageTransition>
-              <Suspense fallback={<DashboardSkeleton />}>
+              <Suspense fallback={<RouteSkeleton />}>
                 {children}
               </Suspense>
             </PageTransition>

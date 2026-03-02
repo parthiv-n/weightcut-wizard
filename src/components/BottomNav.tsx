@@ -1,7 +1,7 @@
-import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Settings, LogOut, Droplets, Calendar, Moon, Sun, ChevronRight, BookOpen, Dumbbell, Bell } from "lucide-react";
-import { motion } from "motion/react";
+import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Settings, LogOut, Droplets, Calendar, Moon, Sun, ChevronRight, BookOpen, Dumbbell, Bell, Lock, Loader2 } from "lucide-react";
+import { motion, LayoutGroup } from "motion/react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -14,6 +14,8 @@ import { ProfilePictureUpload } from "@/components/ProfilePictureUpload";
 import { Switch } from "@/components/ui/switch";
 import { Capacitor } from "@capacitor/core";
 import { getSettings, saveSettings, scheduleReminder, cancelReminder, type ReminderSettings } from "@/lib/weightReminder";
+import { triggerHapticSelection } from "@/lib/haptics";
+import { prefetchRoute } from "@/lib/routePrefetch";
 import { useTutorial } from "@/tutorial/useTutorial";
 import {
   AlertDialog,
@@ -58,6 +60,15 @@ const moreMenuItems = [
   { title: "Fight Week", url: "/fight-week", icon: Calendar },
 ];
 
+// Route import map for touch-start prefetching
+const routeImportMap: Record<string, () => Promise<any>> = {
+  "/goals": () => import("@/pages/Goals"),
+  "/fight-camps": () => import("@/pages/FightCamps"),
+  "/fight-camp-calendar": () => import("@/pages/FightCampCalendar"),
+  "/hydration": () => import("@/pages/Hydration"),
+  "/fight-week": () => import("@/pages/FightWeek"),
+};
+
 export function BottomNav() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
@@ -75,10 +86,25 @@ export function BottomNav() {
   });
   const [reminderSettings, setReminderSettings] = useState<ReminderSettings>(getSettings);
   const [timePickerOpen, setTimePickerOpen] = useState(false);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordLoading, setPasswordLoading] = useState(false);
 
   useEffect(() => {
     setEditedName(userName);
   }, [userName]);
+
+  // Prefetch top-3 route chunks after 2s
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      prefetchRoute(() => import("@/pages/Dashboard"), "Dashboard");
+      prefetchRoute(() => import("@/pages/Nutrition"), "Nutrition");
+      prefetchRoute(() => import("@/pages/WeightTracker"), "WeightTracker");
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const toggleTheme = () => {
     const newTheme = theme === "light" ? "dark" : "light";
@@ -150,6 +176,44 @@ export function BottomNav() {
     });
   };
 
+  const handleChangePassword = async () => {
+    if (newPassword.length < 6) {
+      toast({ description: "Password must be at least 6 characters", variant: "destructive" });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({ description: "New passwords don't match", variant: "destructive" });
+      return;
+    }
+    setPasswordLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) throw new Error("Unable to verify account");
+
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      });
+      if (signInError) {
+        toast({ description: "Current password is incorrect", variant: "destructive" });
+        return;
+      }
+
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+      if (updateError) throw updateError;
+
+      toast({ description: "Password updated successfully" });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordDialogOpen(false);
+    } catch (error: any) {
+      toast({ description: error.message || "Failed to update password", variant: "destructive" });
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
   // Extract icon components for JSX
   const DashboardIcon = mainNavItems[0].icon;
   const NutritionIcon = mainNavItems[1].icon;
@@ -158,13 +222,15 @@ export function BottomNav() {
   return (
     <>
       <nav className="fixed bottom-0 left-0 right-0 z-[9999] md:hidden bg-background/80 backdrop-blur-2xl border-t border-border/40 safe-area-inset-bottom">
+        <LayoutGroup>
         <div className="flex items-center justify-around h-16 px-2 relative">
           {/* Dashboard */}
           <NavLink
             to={mainNavItems[0].url}
             data-tutorial="nav-dashboard"
+            onClick={() => triggerHapticSelection()}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 ${isActive
+              `relative flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 ${isActive
                 ? "text-primary"
                 : "text-muted-foreground active:scale-95"
               }`
@@ -174,6 +240,13 @@ export function BottomNav() {
               <>
                 <DashboardIcon className="h-6 w-6" />
                 <span className={`text-[10px] tracking-wide leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[0].title}</span>
+                {isActive && (
+                  <motion.div
+                    layoutId="bottomNavIndicator"
+                    className="absolute -bottom-0.5 inset-x-0 mx-auto w-5 h-[3px] rounded-full bg-primary"
+                    transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                  />
+                )}
               </>
             )}
           </NavLink>
@@ -182,8 +255,9 @@ export function BottomNav() {
           <NavLink
             to={mainNavItems[1].url}
             data-tutorial="nav-nutrition"
+            onClick={() => triggerHapticSelection()}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 ${isActive
+              `relative flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 ${isActive
                 ? "text-primary"
                 : "text-muted-foreground active:scale-95"
               }`
@@ -193,6 +267,13 @@ export function BottomNav() {
               <>
                 <NutritionIcon className="h-6 w-6" />
                 <span className={`text-[10px] tracking-wide leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[1].title}</span>
+                {isActive && (
+                  <motion.div
+                    layoutId="bottomNavIndicator"
+                    className="absolute -bottom-0.5 inset-x-0 mx-auto w-5 h-[3px] rounded-full bg-primary"
+                    transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                  />
+                )}
               </>
             )}
           </NavLink>
@@ -213,8 +294,9 @@ export function BottomNav() {
           <NavLink
             to={mainNavItems[2].url}
             data-tutorial="nav-weight"
+            onClick={() => triggerHapticSelection()}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 ${isActive
+              `relative flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 ${isActive
                 ? "text-primary"
                 : "text-muted-foreground active:scale-95"
               }`
@@ -224,6 +306,13 @@ export function BottomNav() {
               <>
                 <WeightIcon className="h-6 w-6" />
                 <span className={`text-[10px] tracking-wide leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[2].title}</span>
+                {isActive && (
+                  <motion.div
+                    layoutId="bottomNavIndicator"
+                    className="absolute -bottom-0.5 inset-x-0 mx-auto w-5 h-[3px] rounded-full bg-primary"
+                    transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                  />
+                )}
               </>
             )}
           </NavLink>
@@ -239,6 +328,7 @@ export function BottomNav() {
             <span className="text-[10px] font-medium tracking-wide leading-tight">More</span>
           </button>
         </div>
+        </LayoutGroup>
       </nav>
 
       {/* Quick Log Dialog */}
@@ -307,6 +397,10 @@ export function BottomNav() {
                     key={item.url}
                     type="button"
                     onClick={() => handleMoreItemClick(item.url)}
+                    onTouchStart={() => {
+                      const importFn = routeImportMap[item.url];
+                      if (importFn) prefetchRoute(importFn, item.url);
+                    }}
                     className="w-full flex items-center gap-3 px-4 py-3.5 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left border-b border-border/40 dark:border-white/5 last:border-b-0"
                     variants={menuItemVariants}
                     transition={menuItemTransition}
@@ -566,6 +660,29 @@ export function BottomNav() {
                 </div>
               </button>
 
+              {/* Change Password */}
+              <button
+                type="button"
+                onClick={() => {
+                  setSettingsDialogOpen(false);
+                  setPasswordDialogOpen(true);
+                }}
+                className="w-full rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left"
+              >
+                <div className="flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
+                      <Lock className="h-5 w-5 text-primary" />
+                    </span>
+                    <div>
+                      <p className="text-[15px] font-medium text-foreground">Change Password</p>
+                      <p className="text-xs text-muted-foreground">Update your account password</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+                </div>
+              </button>
+
               {/* Save */}
               <Button
                 onClick={handleUpdateProfile}
@@ -601,6 +718,79 @@ export function BottomNav() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Change Password Dialog */}
+      <Dialog
+        open={passwordDialogOpen}
+        onOpenChange={(open) => {
+          setPasswordDialogOpen(open);
+          if (!open) {
+            setCurrentPassword("");
+            setNewPassword("");
+            setConfirmPassword("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
+                <Lock className="h-5 w-5 text-primary" />
+              </div>
+              <DialogTitle>Change Password</DialogTitle>
+            </div>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-muted-foreground">Current Password</label>
+              <Input
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="Enter current password"
+                className="h-10 rounded-xl bg-background/60 dark:bg-white/5 border-border/40 text-sm font-medium"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-muted-foreground">New Password</label>
+              <Input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Enter new password"
+                className="h-10 rounded-xl bg-background/60 dark:bg-white/5 border-border/40 text-sm font-medium"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-muted-foreground">Confirm New Password</label>
+              <Input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirm new password"
+                className="h-10 rounded-xl bg-background/60 dark:bg-white/5 border-border/40 text-sm font-medium"
+              />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setPasswordDialogOpen(false)}
+              className="flex-1 h-11 rounded-2xl"
+              disabled={passwordLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleChangePassword}
+              disabled={passwordLoading}
+              className="flex-1 h-11 rounded-2xl bg-gradient-to-r from-primary to-secondary text-primary-foreground font-bold"
+            >
+              {passwordLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Update Password"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

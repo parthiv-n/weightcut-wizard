@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -847,17 +847,17 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       if (response.error) {
         throw response.error;
       }
+      if (response.data?.error) {
+        throw new Error(response.data.error);
+      }
 
       const { mealPlan, dailyCalorieTarget: target, safetyStatus: status, safetyMessage: message } = response.data;
 
       // Store as meal plan ideas instead of logging them
       const ideasToStore: Meal[] = [];
 
-      console.log("Meal plan response structure:", { mealPlan, target, status, message });
-
       // Handle the actual response structure: mealPlan contains meals array
       if (mealPlan && mealPlan.meals && Array.isArray(mealPlan.meals)) {
-        console.log("Processing meals array:", mealPlan.meals.length, "meals found");
 
         mealPlan.meals.forEach((meal: any, idx: number) => {
           const mealType = meal.type || "meal";
@@ -883,7 +883,6 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         });
       } else if (mealPlan && typeof mealPlan === 'object') {
         // Fallback: check if it's the old structure with individual meal objects
-        console.log("Checking for fallback structure...");
 
         const mealTypes = ['breakfast', 'lunch', 'dinner'];
         mealTypes.forEach(mealType => {
@@ -932,8 +931,6 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           });
         }
       }
-
-      console.log("Final meal ideas to store:", ideasToStore.length);
 
       if (ideasToStore.length === 0) {
         console.warn("No meals were parsed from the response");
@@ -1866,8 +1863,6 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       }
 
       if (data?.error) {
-        // Edge function returned an error (e.g., not found)
-        console.log("Ingredient not found:", data.error);
         return null;
       }
 
@@ -2060,10 +2055,12 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     }
   };
 
-  const totalCalories = meals.reduce((sum, meal) => sum + meal.calories, 0);
-  const totalProtein = meals.reduce((sum, meal) => sum + (meal.protein_g || 0), 0);
-  const totalCarbs = meals.reduce((sum, meal) => sum + (meal.carbs_g || 0), 0);
-  const totalFats = meals.reduce((sum, meal) => sum + (meal.fats_g || 0), 0);
+  const { totalCalories, totalProtein, totalCarbs, totalFats } = useMemo(() => ({
+    totalCalories: meals.reduce((sum, meal) => sum + meal.calories, 0),
+    totalProtein: meals.reduce((sum, meal) => sum + (meal.protein_g || 0), 0),
+    totalCarbs: meals.reduce((sum, meal) => sum + (meal.carbs_g || 0), 0),
+    totalFats: meals.reduce((sum, meal) => sum + (meal.fats_g || 0), 0),
+  }), [meals]);
 
   // Trigger AI wisdom after meals change (debounced)
   useEffect(() => {
@@ -2407,12 +2404,13 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                 {/* Food items */}
                 {groupMeals.length > 0 && (
                   <div className="px-2">
-                    {groupMeals.map((meal) => (
-                      <MealCard
-                        key={meal.id}
-                        meal={meal}
-                        onDelete={() => initiateDeleteMeal(meal)}
-                      />
+                    {groupMeals.map((meal, index) => (
+                      <div key={meal.id} className="list-item-enter" style={{ animationDelay: `${Math.min(index * 50, 300)}ms` }}>
+                        <MealCard
+                          meal={meal}
+                          onDelete={() => initiateDeleteMeal(meal)}
+                        />
+                      </div>
                     ))}
                   </div>
                 )}
