@@ -19,6 +19,7 @@ import { triggerHapticSelection } from "@/lib/haptics";
 import { ShareButton } from "@/components/share/ShareButton";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { FightCampCalendarCard } from "@/components/share/cards/FightCampCalendarCard";
+import { logger } from "@/lib/logger";
 
 // Type definitions for fight_camp_calendar table
 type FightCampCalendarInsert = {
@@ -103,7 +104,7 @@ export default function FightCampCalendar() {
             if (error) throw error;
             setSessions((data as FightCampCalendarRow[]) || []);
         } catch (error) {
-            console.error("Error fetching sessions:", error);
+            logger.error("Error fetching sessions", error);
             toast({
                 title: "Error fetching sessions",
                 description: "Could not load your calendar data.",
@@ -130,7 +131,7 @@ export default function FightCampCalendar() {
             if (error) throw error;
             setSessions28d((data as FightCampCalendarRow[]) || []);
         } catch (error) {
-            console.error("Error fetching 28-day sessions:", error);
+            logger.error("Error fetching 28-day sessions", error);
         }
     }, [userId]);
 
@@ -247,7 +248,7 @@ export default function FightCampCalendar() {
             resetForm();
 
         } catch (error) {
-            console.error("Error saving session:", error);
+            logger.error("Error saving session", error);
             toast({
                 title: "Error saving session",
                 description: "Could not save your session. Please try again.",
@@ -275,7 +276,7 @@ export default function FightCampCalendar() {
             setSessions(sessions.filter(s => s.id !== id));
             fetch28DaySessions();
         } catch (error) {
-            console.error("Error deleting session:", error);
+            logger.error("Error deleting session", error);
             toast({
                 title: "Error deleting session",
                 description: "Could not remove the session. Please try again.",

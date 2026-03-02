@@ -42,6 +42,7 @@ import { ShareButton } from "@/components/share/ShareButton";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { NutritionCard } from "@/components/share/cards/NutritionCard";
+import { logger } from "@/lib/logger";
 
 interface Ingredient {
   name: string;
@@ -292,7 +293,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         wisdomGenRef.lastHash = hash;
       }
     } catch (err) {
-      console.error("Wisdom advice error:", err);
+      logger.error("Wisdom advice error", err);
       // Keep fallback text, no toast needed
     } finally {
       safeAsync(setAiWisdomLoading)(false);
@@ -398,7 +399,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         }
       }
     } catch (err) {
-      console.error("Training food ideas error:", err);
+      logger.error("Training food ideas error", err);
       toast({ title: "Could not generate ideas", description: "Please try again later", variant: "destructive" });
     } finally {
       safeAsync(setTrainingWisdomLoading)(false);
@@ -728,7 +729,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     if (!isMounted()) return;
 
     if (error) {
-      console.error("Error loading meals:", error);
+      logger.error("Error loading meals", error);
       // If we already served cached data, keep showing it (no empty flash)
       if (!servedFromCache) {
         toast({
@@ -847,11 +848,11 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       // Store as meal plan ideas instead of logging them
       const ideasToStore: Meal[] = [];
 
-      console.log("Meal plan response structure:", { mealPlan, target, status, message });
+      logger.info("Meal plan response structure", { mealPlan, target, status, message });
 
       // Handle the actual response structure: mealPlan contains meals array
       if (mealPlan && mealPlan.meals && Array.isArray(mealPlan.meals)) {
-        console.log("Processing meals array:", mealPlan.meals.length, "meals found");
+        logger.info("Processing meals array", { count: mealPlan.meals.length });
 
         mealPlan.meals.forEach((meal: any, idx: number) => {
           const mealType = meal.type || "meal";
@@ -877,7 +878,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         });
       } else if (mealPlan && typeof mealPlan === 'object') {
         // Fallback: check if it's the old structure with individual meal objects
-        console.log("Checking for fallback structure...");
+        logger.info("Checking for fallback structure");
 
         const mealTypes = ['breakfast', 'lunch', 'dinner'];
         mealTypes.forEach(mealType => {
@@ -927,10 +928,10 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         }
       }
 
-      console.log("Final meal ideas to store:", ideasToStore.length);
+      logger.info("Final meal ideas to store", { count: ideasToStore.length });
 
       if (ideasToStore.length === 0) {
-        console.warn("No meals were parsed from the response");
+        logger.warn("No meals were parsed from the response");
         toast({
           title: "⚠️ No meals found",
           description: "The AI response didn't contain parseable meal data. Please try a different prompt.",
@@ -964,7 +965,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       setIsAiDialogOpen(false);
       setAiPrompt("");
     } catch (error: any) {
-      console.error("Error generating meal plan:", error);
+      logger.error("Error generating meal plan", error);
 
       let errorMsg = "Failed to generate meal plan";
       let shouldRetry = false;
@@ -1084,13 +1085,13 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         await loadMeals(true);
         scrollToTop();
       } catch (error) {
-        console.error("Error logging meal (queued for sync):", error);
+        logger.error("Error logging meal (queued for sync)", error);
         celebrateSuccess();
         toast({ title: "Saved offline", description: "Will sync when connected." });
         scrollToTop();
       }
     } catch (error) {
-      console.error("Error logging meal:", error);
+      logger.error("Error logging meal", error);
       toast({
         title: "Error",
         description: "Failed to log meal",
@@ -1194,13 +1195,13 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         await loadMeals(true);
         scrollToTop();
       } catch (error) {
-        console.error("Error saving meals (queued for sync):", error);
+        logger.error("Error saving meals (queued for sync)", error);
         celebrateSuccess();
         toast({ title: "Saved offline", description: "Will sync when connected." });
         scrollToTop();
       }
     } catch (error: any) {
-      console.error("Error saving meal ideas:", error);
+      logger.error("Error saving meal ideas", error);
       toast({
         title: "Error saving meals",
         description: error.message || "Failed to save meals",
@@ -1216,7 +1217,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     try {
       if (userId) AIPersistence.remove(userId, 'meal_plans');
     } catch (e) {
-      console.warn("Failed to clear persisted meal plans:", e);
+      logger.warn("Failed to clear persisted meal plans", { error: String(e) });
     }
   };
 
@@ -1381,7 +1382,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       await loadMeals(true);
       scrollToTop();
     } catch (error) {
-      console.error("Error adding meal (queued for sync):", error);
+      logger.error("Error adding meal (queued for sync)", error);
       // Meal stays in state + localCache + syncQueue — will retry on resume
       celebrateSuccess();
       toast({ title: "Saved offline", description: "Will sync when connected." });
@@ -1441,7 +1442,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       setBarcodeBaseMacros(null);
       setServingMultiplier(1);
     } catch (error) {
-      console.error("Error in optimistic meal update setup:", error);
+      logger.error("Error in optimistic meal update setup", error);
       toast({
         title: "Error",
         description: "Failed to add meal",
@@ -1513,7 +1514,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         description: "Review the items below and tap Add Meal",
       });
     } catch (error: any) {
-      console.error("Error analyzing meal:", error);
+      logger.error("Error analyzing meal", error);
       toast({
         title: "Analysis failed",
         description: error.message || "Failed to analyze meal",
@@ -1568,7 +1569,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       setAiMealDescription("");
       setManualMeal(prev => ({ ...prev, meal_name: "" }));
     } catch (error) {
-      console.error("Error saving AI meal:", error);
+      logger.error("Error saving AI meal", error);
       toast({
         title: "Error",
         description: "Failed to add meal",
@@ -1733,7 +1734,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         description: `${ingredientName} (${ingredientGrams}g) added. Meal totals updated.`,
       });
     } catch (error: any) {
-      console.error("Error analyzing ingredient:", error);
+      logger.error("Error analyzing ingredient", error);
       toast({
         title: "Analysis failed",
         description: error.message || "Failed to analyze ingredient. Please try again or add manually.",
@@ -1786,7 +1787,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       setAiAnalysisComplete(true);
       toast({ title: "Analysis complete!", description: "Review the items below and tap Add Meal" });
     } catch (error: any) {
-      console.error("Error processing voice input:", error);
+      logger.error("Error processing voice input", error);
       toast({
         title: "Analysis failed",
         description: error.message || "Failed to process voice input",
@@ -1850,7 +1851,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       });
 
       if (error) {
-        console.error("Ingredient lookup error:", error);
+        logger.error("Ingredient lookup error", error);
         // If it's a 404, the ingredient wasn't found - return null to trigger manual entry
         if (error.message?.includes("404") || error.message?.includes("not found")) {
           return null;
@@ -1861,7 +1862,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
 
       if (data?.error) {
         // Edge function returned an error (e.g., not found)
-        console.log("Ingredient not found:", data.error);
+        logger.info("Ingredient not found", { error: data.error });
         return null;
       }
 
@@ -1871,7 +1872,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
 
       return null;
     } catch (error) {
-      console.error("Error looking up ingredient:", error);
+      logger.error("Error looking up ingredient", error);
       return null;
     }
   };
@@ -2048,7 +2049,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       await loadMeals(true);
       scrollToTop();
     } catch (error) {
-      console.error("Error deleting meal (queued for sync):", error);
+      logger.error("Error deleting meal (queued for sync)", error);
       toast({ title: "Deleted offline", description: "Will sync when connected." });
       scrollToTop();
     }
@@ -2122,7 +2123,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       AIPersistence.save(userId, cacheKey, result, 6);
       triggerHapticSuccess();
     } catch (error) {
-      console.error("Error analysing diet:", error);
+      logger.error("Error analysing diet", error);
       toast({
         title: "Analysis failed",
         description: error instanceof Error ? error.message : "Could not analyse your diet",
@@ -2258,7 +2259,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       await loadMeals(true);
       scrollToTop();
     } catch (error) {
-      console.error("Error logging food (queued for sync):", error);
+      logger.error("Error logging food (queued for sync)", error);
       celebrateSuccess();
       toast({ title: "Saved offline", description: "Will sync when connected." });
       scrollToTop();
@@ -3607,7 +3608,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                         );
 
                         if (error) {
-                          console.error("Supabase update error:", error);
+                          logger.error("Supabase update error", error);
                           if (error.code === "PGRST204") {
                             throw new Error(
                               "Database schema is missing required columns. Please run the migration: " +
@@ -3628,7 +3629,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
 
                       update.onError = (error: any, _rollbackData: any) => {
                         refreshProfile();
-                        console.error("Error updating targets:", error);
+                        logger.error("Error updating targets", error);
                         toast({
                           title: "Error",
                           description: error.message || "Failed to update nutrition targets. Changes have been reverted.",
@@ -3645,7 +3646,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                       }
 
                     } catch (error: any) {
-                      console.error("Error in optimistic update setup:", error);
+                      logger.error("Error in optimistic update setup", error);
                       toast({
                         title: "Error",
                         description: error.message || "Failed to update nutrition targets",

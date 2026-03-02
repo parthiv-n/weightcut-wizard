@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { logger } from "@/lib/logger";
 
 type TrainingSummary = {
     sportSections: {
@@ -95,7 +96,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
             .order("week_start", { ascending: false });
 
         if (error) {
-            console.error("Error fetching summaries:", error);
+            logger.error("Error fetching summaries", error);
             return;
         }
         setSavedSummaries((data as SavedSummaryRow[]) || []);
@@ -114,7 +115,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
             .lte("date", format(we, "yyyy-MM-dd"));
 
         if (error) {
-            console.error("Error fetching week sessions:", error);
+            logger.error("Error fetching week sessions", error);
             return;
         }
         setWeekSessions((data as SessionRow[]) || []);
@@ -210,7 +211,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
             await fetchAllSummaries();
             setIsSummaryOpen(true);
         } catch (error) {
-            console.error("Error generating training summary:", error);
+            logger.error("Error generating training summary", error);
             toast({
                 title: "Error generating summary",
                 description: "Could not generate your training summary. Please try again.",
@@ -231,7 +232,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
             .eq("id", id);
 
         if (error) {
-            console.error("Error deleting summary:", error);
+            logger.error("Error deleting summary", error);
             toast({
                 title: "Error deleting summary",
                 description: "Could not delete the summary. Please try again.",

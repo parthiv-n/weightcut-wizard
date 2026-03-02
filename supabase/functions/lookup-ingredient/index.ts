@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
+import { edgeLogger } from "../_shared/errorReporter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -53,7 +54,7 @@ serve(async (req) => {
       throw new Error("GROK_API_KEY is not configured");
     }
 
-    console.log("Looking up nutrition for ingredient:", ingredientName);
+    edgeLogger.info("Looking up nutrition for ingredient", { ingredientName });
 
     const systemPrompt = `Nutrition database expert. Return ONLY valid JSON — no markdown, no text.
 Use USDA/authoritative food databases. Values per 100g. Calories as integer, macros 1 decimal.
@@ -89,7 +90,7 @@ If ambiguous, specify most common preparation (e.g., "chicken" → "chicken brea
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error("Grok API error:", response.status, errorData);
+      edgeLogger.error("Grok API error", undefined, { functionName: "lookup-ingredient", status: response.status, errorData });
 
       if (response.status === 429) {
         return new Response(
@@ -116,7 +117,7 @@ If ambiguous, specify most common preparation (e.g., "chicken" → "chicken brea
     }
 
     const data = await response.json();
-    console.log("Grok response:", JSON.stringify(data));
+    edgeLogger.info("Grok response received");
 
     const { content, filtered } = extractContent(data);
     if (!content) {
@@ -126,7 +127,7 @@ If ambiguous, specify most common preparation (e.g., "chicken" → "chicken brea
 
     try {
       const nutritionData = parseJSON(content);
-      console.log("Parsed nutrition data:", nutritionData);
+      edgeLogger.info("Parsed nutrition data");
 
       // Validate the nutrition data
       if (!nutritionData.calories_per_100g || nutritionData.calories_per_100g < 0) {
@@ -145,14 +146,14 @@ If ambiguous, specify most common preparation (e.g., "chicken" → "chicken brea
         source: nutritionData.data_source || "Nutrition Database",
       };
 
-      console.log("Returning nutrition data:", result);
+      edgeLogger.info("Returning nutrition data");
 
       return new Response(
         JSON.stringify({ nutritionData: result }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     } catch (parseError) {
-      console.error("Error parsing nutrition data:", parseError);
+      edgeLogger.error("Error parsing nutrition data", parseError, { functionName: "lookup-ingredient" });
       return new Response(
         JSON.stringify({ error: "Could not parse nutrition data. Please enter manually." }),
         { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -160,7 +161,7 @@ If ambiguous, specify most common preparation (e.g., "chicken" → "chicken brea
     }
 
   } catch (error) {
-    console.error("Error in lookup-ingredient function:", error);
+    edgeLogger.error("Error in lookup-ingredient function", error, { functionName: "lookup-ingredient" });
     return new Response(
       JSON.stringify({
         error: error instanceof Error ? error.message : "Unknown error occurred"

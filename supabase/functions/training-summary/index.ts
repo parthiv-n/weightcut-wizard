@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
+import { edgeLogger } from "../_shared/errorReporter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -90,7 +91,7 @@ Return ONLY valid JSON in this exact format:
         );
       }
       const errorText = await response.text();
-      console.error("Grok API error:", response.status, errorText);
+      edgeLogger.error("Grok API error", undefined, { functionName: "training-summary", status: response.status, errorText });
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -98,7 +99,7 @@ Return ONLY valid JSON in this exact format:
     }
 
     const data = await response.json();
-    console.log("Grok training-summary response:", JSON.stringify(data, null, 2));
+    edgeLogger.info("Grok training-summary response received", { responseKeys: Object.keys(data) });
 
     const { content, filtered } = extractContent(data);
     if (!content) {
@@ -112,7 +113,7 @@ Return ONLY valid JSON in this exact format:
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Error in training-summary:", error);
+    edgeLogger.error("training-summary error", error, { functionName: "training-summary" });
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

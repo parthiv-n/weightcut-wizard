@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
+import { edgeLogger } from "../_shared/errorReporter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -52,7 +53,7 @@ serve(async (req) => {
       throw new Error("GROK_API_KEY is not configured");
     }
 
-    console.log("Analysing diet for date:", date, "meals:", meals.length);
+    edgeLogger.info("Analysing diet", { date, mealCount: meals.length });
 
     const systemPrompt = `You are a professional combat sports nutritionist. Analyse the athlete's full day of eating and estimate micronutrient intake based on known food composition profiles.
 
@@ -119,7 +120,7 @@ Athlete profile: ${profile?.age || "?"} years, ${profile?.sex || "?"}, ${profile
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error("Grok API error:", response.status, errorData);
+      edgeLogger.error("Grok API error", undefined, { functionName: "analyse-diet", status: response.status, errorData });
 
       if (response.status === 429) {
         return new Response(
@@ -139,7 +140,7 @@ Athlete profile: ${profile?.age || "?"} years, ${profile?.sex || "?"}, ${profile
     }
 
     const data = await response.json();
-    console.log("Grok diet analysis response received");
+    edgeLogger.info("Grok diet analysis response received");
 
     const { content, filtered } = extractContent(data);
     if (!content) {
@@ -148,7 +149,7 @@ Athlete profile: ${profile?.age || "?"} years, ${profile?.sex || "?"}, ${profile
     }
 
     const analysisData = parseJSON(content);
-    console.log("Parsed diet analysis data");
+    edgeLogger.info("Parsed diet analysis data");
 
     return new Response(
       JSON.stringify({ analysisData }),
@@ -156,7 +157,7 @@ Athlete profile: ${profile?.age || "?"} years, ${profile?.sex || "?"}, ${profile
     );
 
   } catch (error) {
-    console.error("Error in analyse-diet function:", error);
+    edgeLogger.error("Error in analyse-diet function", error, { functionName: "analyse-diet" });
     return new Response(
       JSON.stringify({
         error: error instanceof Error ? error.message : "Unknown error occurred"

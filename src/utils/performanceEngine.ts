@@ -2,6 +2,8 @@
 // All strain/load/overtraining calculations are non-AI
 // LLM only interprets — never calculates
 
+import { logger } from "@/lib/logger";
+
 export interface SessionRow {
   id: string;
   date: string;
@@ -361,14 +363,12 @@ export function dailyLoad(sessions: SessionRow[]): number {
   const total = trainingSessions.reduce((sum, s) => sum + sessionLoad(s), 0);
   const withCNS = trainingSessions.length > 1 ? total * 1.1 : total;
 
-  if (import.meta.env.DEV) {
-    console.log('[PE] dailyLoad:', {
-      sessions: trainingSessions.length,
-      rawTotal: total,
-      cnsMultiplied: trainingSessions.length > 1,
-      result: withCNS,
-    });
-  }
+  logger.info('[PE] dailyLoad', {
+    sessions: trainingSessions.length,
+    rawTotal: total,
+    cnsMultiplied: trainingSessions.length > 1,
+    result: withCNS,
+  });
 
   return withCNS;
 }
@@ -380,9 +380,7 @@ export function calculateStrain(load: number, divisor: number = 1000): number {
   const strain = 21 * (1 - Math.exp(-load / divisor));
   const clamped = Math.min(21, Math.max(0, strain));
 
-  if (import.meta.env.DEV) {
-    console.log('[PE] strain:', { load, divisor, strain: clamped });
-  }
+  logger.info('[PE] strain', { load, divisor, strain: clamped });
 
   return clamped;
 }
@@ -505,9 +503,7 @@ function computeLoadMetrics(dailyLoads: { date: string; load: number }[]) {
   const chronicLoad = dailyLoads.reduce((sum, d) => sum + d.load, 0) / 28;
   const loadRatio = acuteLoad / (chronicLoad + 1);
 
-  if (import.meta.env.DEV) {
-    console.log('[PE] loadMetrics:', { acuteLoad, chronicLoad, loadRatio });
-  }
+  logger.info('[PE] loadMetrics', { acuteLoad, chronicLoad, loadRatio });
 
   return { acuteLoad, chronicLoad, loadRatio };
 }
@@ -652,9 +648,7 @@ function computeAdaptiveOvertrainingScore(
   else if (score <= 80) zone = 'high';
   else zone = 'critical';
 
-  if (import.meta.env.DEV) {
-    console.log('[PE] adaptiveOvertrainingScore:', { score, zone, factors, tier: calibration.tier });
-  }
+  logger.info('[PE] adaptiveOvertrainingScore', { score, zone, factors, tier: calibration.tier });
 
   return { score, zone, factors };
 }
@@ -1297,19 +1291,17 @@ export function computeAllMetrics(
     enhancedFields.stabilityScore = computeStabilityScore(baseline.hooper_cv_14d);
   }
 
-  if (import.meta.env.DEV) {
-    console.log('[PE] allMetrics:', {
-      strain: todayStrain,
-      acuteLoad,
-      chronicLoad,
-      loadRatio,
-      overtrainingScore: overtrainingRisk.score,
-      overtrainingZone: overtrainingRisk.zone,
-      readiness: readiness.score,
-      readinessTier: readiness.breakdown.tier,
-      tier: calibration.tier,
-    });
-  }
+  logger.info('[PE] allMetrics', {
+    strain: todayStrain,
+    acuteLoad,
+    chronicLoad,
+    loadRatio,
+    overtrainingScore: overtrainingRisk.score,
+    overtrainingZone: overtrainingRisk.zone,
+    readiness: readiness.score,
+    readinessTier: readiness.breakdown.tier,
+    tier: calibration.tier,
+  });
 
   return {
     strain: todayStrain,

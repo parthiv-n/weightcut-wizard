@@ -10,6 +10,7 @@ import { BalanceMetricsCard } from "./BalanceMetricsCard";
 import { WellnessCheckIn } from "./WellnessCheckIn";
 import { computeAllMetrics, type SessionRow, type AllMetrics, type ReadinessResult, type WellnessCheckIn as WellnessCheckInData, type PersonalBaseline } from "@/utils/performanceEngine";
 import { loadOrComputeBaseline, computeAndStoreBaseline, storeReadinessScore } from "@/utils/baselineComputer";
+import { logger } from "@/lib/logger";
 
 interface FeelCheckIn {
   energy: 'high' | 'moderate' | 'low' | 'empty';
@@ -349,7 +350,7 @@ export function RecoveryDashboard({ sessions28d, userId, sessionLoggedAt = 0, at
         throw new Error("Invalid response from coach");
       }
     } catch (err: any) {
-      console.error("Coach error:", err);
+      logger.error("Coach error", err);
       const msg = err?.message || err?.error || "Unknown error";
       setCoachError(`Coach error: ${msg}`);
     } finally {

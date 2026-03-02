@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { edgeLogger } from "../_shared/errorReporter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -113,7 +114,7 @@ serve(async (req) => {
 
     if (!usdaResponse.ok) {
       const errText = await usdaResponse.text();
-      console.error("USDA API error:", usdaResponse.status, errText);
+      edgeLogger.error("USDA API error", undefined, { functionName: "food-search", status: usdaResponse.status, errText });
       throw new Error(`USDA API returned ${usdaResponse.status}`);
     }
 
@@ -129,7 +130,7 @@ serve(async (req) => {
 
     return json({ results });
   } catch (err) {
-    console.error("food-search error:", err);
+    edgeLogger.error("food-search error", err, { functionName: "food-search" });
     return json({ error: "Search failed" }, 500);
   }
 });

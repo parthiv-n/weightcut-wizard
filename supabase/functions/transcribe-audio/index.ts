@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { edgeLogger } from "../_shared/errorReporter.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -67,14 +68,14 @@ serve(async (req) => {
       throw new Error('No audio data provided');
     }
 
-    console.log('Received audio data for transcription');
+    edgeLogger.info("Received audio data for transcription");
 
     const GOOGLE_API_KEY = Deno.env.get('GOOGLE_GEMINI_API_KEY');
     if (!GOOGLE_API_KEY) {
       throw new Error('GOOGLE_GEMINI_API_KEY is not configured');
     }
 
-    console.log('Sending to Google Speech-to-Text API...');
+    edgeLogger.info("Sending to Google Speech-to-Text API");
 
     // Send to Google Speech-to-Text API
     const response = await fetch(`https://speech.googleapis.com/v1/speech:recognize?key=${GOOGLE_API_KEY}`, {
@@ -97,13 +98,13 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Google API error:', response.status, errorText);
+      edgeLogger.error("Google API error", undefined, { functionName: "transcribe-audio", status: response.status, errorText });
       throw new Error(`Google API error: ${errorText}`);
     }
 
     const result = await response.json();
     const transcription = result.results?.[0]?.alternatives?.[0]?.transcript || '';
-    console.log('Transcription successful:', transcription);
+    edgeLogger.info("Transcription successful", { transcription });
 
     return new Response(
       JSON.stringify({ text: transcription }),
@@ -111,7 +112,7 @@ serve(async (req) => {
     );
 
   } catch (error) {
-    console.error('Error in transcribe-audio:', error);
+    edgeLogger.error("transcribe-audio error", error, { functionName: "transcribe-audio" });
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : 'Unknown error' }),
       {

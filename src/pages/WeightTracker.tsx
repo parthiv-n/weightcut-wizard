@@ -32,6 +32,7 @@ import { ShareButton } from "@/components/share/ShareButton";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { WeightTrackerCard } from "@/components/share/cards/WeightTrackerCard";
 import { WeighInResultCard } from "@/components/share/cards/WeighInResultCard";
+import { logger } from "@/lib/logger";
 
 interface WeightLog {
   id: string;
@@ -132,7 +133,7 @@ export default function WeightTracker() {
         setAiAnalysisTarget(fightWeekTarget);
       }
     } catch (error) {
-      console.error("Error loading persisted analysis:", error);
+      logger.error("Error loading persisted analysis", error);
     }
   };
 
@@ -172,7 +173,7 @@ export default function WeightTracker() {
         localCache.set(userId, 'weight_logs', logsData);
       }
     } catch (err) {
-      console.error("Error fetching weight logs:", err);
+      logger.error("Error fetching weight logs", err);
       // Cached data (if any) is already showing
     }
   };

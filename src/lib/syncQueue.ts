@@ -1,6 +1,8 @@
 // Persistent offline write queue — survives page refreshes.
 // Stored in localStorage as: wcw_syncqueue_{userId}
 
+import { logger } from "./logger";
+
 export interface SyncOp {
   id: string;
   table: string;
@@ -162,7 +164,7 @@ class SyncQueue {
             }
           }
         } catch (err) {
-          console.warn(`SyncQueue: op ${op.id} threw`, err);
+          logger.warn(`SyncQueue: op ${op.id} threw`, { error: err });
           this._incrementRetry(userId, op);
         }
       }
@@ -180,7 +182,7 @@ class SyncQueue {
 
     ops[idx].retries++;
     if (ops[idx].retries >= MAX_RETRIES) {
-      console.warn(`SyncQueue: discarding op ${op.id} after ${MAX_RETRIES} retries`, op);
+      logger.warn(`SyncQueue: discarding op ${op.id} after ${MAX_RETRIES} retries`, { op });
       ops.splice(idx, 1);
     }
     this.writeOps(userId, ops);

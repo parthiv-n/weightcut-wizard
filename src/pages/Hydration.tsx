@@ -24,6 +24,7 @@ import { useUser } from "@/contexts/UserContext";
 import { AIGeneratingOverlay } from "@/components/AIGeneratingOverlay";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { withTimeout } from "@/lib/timeoutWrapper";
+import { logger } from "@/lib/logger";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -257,7 +258,7 @@ export default function Hydration() {
         }
       }
     } catch (error) {
-      console.error("Error loading persisted protocol:", error);
+      logger.error("Error loading persisted protocol", error);
     }
   };
 
@@ -315,7 +316,7 @@ export default function Hydration() {
       }
     } catch (error) {
       if (!isMounted()) return;
-      console.error("Error generating protocol:", error);
+      logger.error("Error generating protocol", error);
       toast({
         title: "Error",
         description: "Failed to generate rehydration protocol",

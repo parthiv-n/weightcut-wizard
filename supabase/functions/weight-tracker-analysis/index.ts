@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
+import { edgeLogger } from "../_shared/errorReporter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -205,7 +206,7 @@ OUTPUT:
     }
 
     // Call Grok API
-    console.log("Calling Grok API for weight tracker analysis...");
+    edgeLogger.info("Calling Grok API for weight tracker analysis");
     const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -243,7 +244,7 @@ OUTPUT:
         );
       }
       const errorText = await response.text();
-      console.error("Grok API error:", response.status, errorText);
+      edgeLogger.error("Grok API error", undefined, { functionName: "weight-tracker-analysis", status: response.status, errorText });
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -251,7 +252,7 @@ OUTPUT:
     }
 
     const data = await response.json();
-    console.log("Grok weight tracker response:", JSON.stringify(data, null, 2));
+    edgeLogger.info("Grok weight tracker response received", { responseKeys: Object.keys(data) });
 
     const { content, filtered } = extractContent(data);
     if (!content) {
@@ -323,7 +324,7 @@ OUTPUT:
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Error in weight-tracker-analysis:", error);
+    edgeLogger.error("weight-tracker-analysis error", error, { functionName: "weight-tracker-analysis" });
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

@@ -4,6 +4,7 @@ import { withAuthTimeout, withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { localCache } from "@/lib/localCache";
+import { logger } from "@/lib/logger";
 
 export interface ProfileData {
   id?: string;
@@ -121,7 +122,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const refreshProfile = useCallback(async (): Promise<boolean> => {
     const uid = userIdRef.current;
     if (!uid) {
-      console.warn("refreshProfile: skipped — no userId yet");
+      logger.warn("refreshProfile: skipped — no userId yet");
       return false;
     }
 
@@ -151,13 +152,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
     try {
       return await attempt();
     } catch (error) {
-      console.warn("refreshProfile: first attempt failed, retrying...", error);
+      logger.warn("refreshProfile: first attempt failed, retrying...", { error: String(error) });
       // Single retry after short delay
       try {
         await new Promise(r => setTimeout(r, 500));
         return await attempt();
       } catch (retryError) {
-        console.error("refreshProfile: retry also failed:", retryError);
+        logger.error("refreshProfile: retry also failed", retryError);
         return false;
       }
     }
@@ -172,7 +173,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       );
 
       if (error) {
-        console.error("Auth session error:", error);
+        logger.error("Auth session error", error);
         return 'error';
       }
 
@@ -265,7 +266,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
       return 'success';
     } catch (error) {
-      console.error("Error loading user data:", error);
+      logger.error("Error loading user data", error);
       return 'error';
     }
   };
@@ -298,7 +299,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     // All retries failed
     // If cache already served content, don't show error screen — just stay with cached data
     if (isUserLoadedRef.current) {
-      console.warn("loadUserData: DB unreachable, serving cached data");
+      logger.warn("loadUserData: DB unreachable, serving cached data");
       return;
     }
 

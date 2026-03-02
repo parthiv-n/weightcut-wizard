@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Download, Loader2, AlertTriangle, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { logger } from "@/lib/logger";
 
 interface DataResetDialogProps {
   open: boolean;
@@ -229,7 +230,7 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
         description: "Your data has been exported successfully",
       });
     } catch (error) {
-      console.error("Export error:", error);
+      logger.error("Export error", error);
       toast({
         title: "Export Failed",
         description: "Failed to export data. Please try again.",
@@ -277,7 +278,7 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
         onOpenChange(false);
       }, 1500);
     } catch (error) {
-      console.error("Reset error:", error);
+      logger.error("Reset error", error);
       toast({
         title: "Reset Failed",
         description: "Failed to reset data. Please try again.",

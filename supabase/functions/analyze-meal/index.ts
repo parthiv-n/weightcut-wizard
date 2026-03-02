@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
+import { edgeLogger } from "../_shared/errorReporter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -57,7 +58,7 @@ serve(async (req) => {
       throw new Error("GROK_API_KEY is not configured");
     }
 
-    console.log("Analyzing meal:", mealDescription);
+    edgeLogger.info("Analyzing meal", { mealDescription });
 
     const systemPrompt = `Nutrition analysis expert. Return ONLY valid JSON.
 
@@ -99,7 +100,7 @@ Rules:
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error("Grok API error:", response.status, errorData);
+      edgeLogger.error("Grok API error", undefined, { functionName: "analyze-meal", status: response.status, errorData });
 
       if (response.status === 429) {
         return new Response(
@@ -126,7 +127,7 @@ Rules:
     }
 
     const data = await response.json();
-    console.log("Grok response:", JSON.stringify(data));
+    edgeLogger.info("Grok response received");
 
     const { content, filtered } = extractContent(data);
     if (!content) {
@@ -135,7 +136,7 @@ Rules:
     }
 
     const nutritionData = parseJSON(content);
-    console.log("Parsed nutrition data:", nutritionData);
+    edgeLogger.info("Parsed nutrition data");
 
     return new Response(
       JSON.stringify({ nutritionData }),
@@ -143,7 +144,7 @@ Rules:
     );
 
   } catch (error) {
-    console.error("Error in analyze-meal function:", error);
+    edgeLogger.error("Error in analyze-meal function", error, { functionName: "analyze-meal" });
     return new Response(
       JSON.stringify({
         error: error instanceof Error ? error.message : "Unknown error occurred"

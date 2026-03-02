@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
+import { edgeLogger } from "../_shared/errorReporter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -285,7 +286,7 @@ ${sessionsText}${checkInText}${athleteBaselineText}`;
         );
       }
       const errorText = await response.text();
-      console.error("Grok API error:", response.status, errorText);
+      edgeLogger.error("Grok API error", undefined, { functionName: "fight-camp-coach", status: response.status, errorText });
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -293,7 +294,7 @@ ${sessionsText}${checkInText}${athleteBaselineText}`;
     }
 
     const data = await response.json();
-    console.log("Grok fight-camp-coach response:", JSON.stringify(data, null, 2));
+    edgeLogger.info("Grok fight-camp-coach response received");
 
     const { content, filtered } = extractContent(data);
     if (!content) {
@@ -307,7 +308,7 @@ ${sessionsText}${checkInText}${athleteBaselineText}`;
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Error in fight-camp-coach:", error);
+    edgeLogger.error("Error in fight-camp-coach", error, { functionName: "fight-camp-coach" });
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

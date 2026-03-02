@@ -1,5 +1,6 @@
 import { toBlob } from "html-to-image";
 import { Capacitor } from "@capacitor/core";
+import { logger } from "./logger";
 
 export async function captureCardAsBlob(
   element: HTMLElement,
@@ -62,7 +63,7 @@ export async function shareCardImage(
       });
       return;
     } catch (e) {
-      console.warn("Native share failed, falling back:", e);
+      logger.warn("Native share failed, falling back", { error: e });
     }
   }
 

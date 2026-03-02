@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Mic, Square, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { logger } from "@/lib/logger";
 
 interface VoiceInputProps {
   onTranscription: (text: string) => void;
@@ -57,7 +58,7 @@ export function VoiceInput({ onTranscription, disabled, className }: VoiceInputP
           "onnx-community/whisper-tiny.en"
         );
       } catch (fallbackError) {
-        console.error('Fallback loading failed:', fallbackError);
+        logger.error("Fallback loading failed", fallbackError);
         toast({
           title: "Failed to load model",
           description: "Please refresh and try again",
@@ -104,7 +105,7 @@ export function VoiceInput({ onTranscription, disabled, className }: VoiceInputP
         description: "Speak what you ate",
       });
     } catch (error) {
-      console.error('Error starting recording:', error);
+      logger.error("Error starting recording", error);
       toast({
         title: "Microphone access denied",
         description: "Please allow microphone access to use voice input",
@@ -151,7 +152,7 @@ export function VoiceInput({ onTranscription, disabled, className }: VoiceInputP
         throw new Error("No transcription returned");
       }
     } catch (error: any) {
-      console.error('Error processing recording:', error);
+      logger.error("Error processing recording", error);
       toast({
         title: "Transcription failed",
         description: error.message || "Failed to transcribe audio",

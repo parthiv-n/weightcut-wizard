@@ -1,6 +1,7 @@
 import { useRef, useState, useCallback } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { captureCardAsBlob, downloadCardImage, shareCardImage } from "@/lib/shareUtils";
+import { logger } from "@/lib/logger";
 
 export function useShareCard() {
   const cardRef = useRef<HTMLDivElement>(null);
@@ -15,7 +16,7 @@ export function useShareCard() {
       downloadCardImage(blob, filename ?? `weightcut-wizard-${Date.now()}.png`);
       toast({ title: "Image saved" });
     } catch (e) {
-      console.error("Capture failed:", e);
+      logger.error("Capture failed", e);
       toast({ title: "Failed to capture image", variant: "destructive" });
     } finally {
       setIsCapturing(false);
@@ -33,7 +34,7 @@ export function useShareCard() {
         text ?? "Check out my stats on WeightCut Wizard"
       );
     } catch (e) {
-      console.error("Share failed:", e);
+      logger.error("Share failed", e);
       toast({ title: "Failed to share image", variant: "destructive" });
     } finally {
       setIsCapturing(false);

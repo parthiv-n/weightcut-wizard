@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { edgeLogger } from "../_shared/errorReporter.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -36,7 +37,7 @@ serve(async (req) => {
       throw new Error("Barcode is required");
     }
 
-    console.log("Fetching product data for barcode:", barcode);
+    edgeLogger.info("Fetching product data for barcode", { barcode });
 
     // Call OpenFoodFacts API
     const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
@@ -60,7 +61,7 @@ serve(async (req) => {
 
     const productName = product.product_name || product.product_name_en || "Unknown Product";
 
-    console.log("Product found:", productName);
+    edgeLogger.info("Product found", { productName });
 
     return new Response(
       JSON.stringify({
@@ -75,7 +76,7 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("Error in scan-barcode function:", error);
+    edgeLogger.error("scan-barcode error", error, { functionName: "scan-barcode" });
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

@@ -27,6 +27,7 @@ import { AchievementSheet } from "@/components/achievements/AchievementSheet";
 import { staggerContainer, staggerItem, springs } from "@/lib/motion";
 import { triggerHaptic, triggerHapticSelection } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
+import { logger } from "@/lib/logger";
 
 interface DailyWisdom {
   summary: string;
@@ -124,13 +125,13 @@ export default function Dashboard() {
       const { data, error } = await supabase.functions.invoke("daily-wisdom", { body: payload });
       if (!isMounted()) return;
       if (error || !data?.wisdom) {
-        console.error("daily-wisdom error:", error);
+        logger.error("daily-wisdom error", error);
         return;
       }
       AIPersistence.save(userId, cacheKey, data.wisdom, 25);
       setWisdom(data.wisdom);
     } catch (err) {
-      console.error("generateWisdom error:", err);
+      logger.error("generateWisdom error", err);
     } finally {
       safeAsync(setWisdomLoading)(false);
     }
@@ -227,7 +228,7 @@ export default function Dashboard() {
 
       results.forEach((result, index) => {
         if (result.status === 'rejected') {
-          console.error(`Dashboard query ${index} failed:`, result.reason);
+          logger.error(`Dashboard query ${index} failed`, result.reason);
         }
       });
 
@@ -261,7 +262,7 @@ export default function Dashboard() {
         : todayHydration;
       checkAndGenerateWisdom(profile, wisdomLogs, wisdomCals, wisdomHydration);
     } catch (error) {
-      console.error("Error loading dashboard data:", error);
+      logger.error("Error loading dashboard data", error);
       if (!hasCachedData) {
         safeAsync(setWeightLogs)([]);
         safeAsync(setTodayCalories)(0);

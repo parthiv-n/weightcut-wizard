@@ -15,18 +15,18 @@ Full app survey before closing beta and accepting payments. Three parallel audit
 - **Need**: Stripe checkout, webhook edge function, subscription table, paywall UI, billing portal
 - **Need**: Terms of service, privacy policy, refund policy, GDPR data export/deletion
 
-### 1.2 Error Monitoring (NONE)
+DONE ### 1.2 Error Monitoring (NONE)
 - Zero observability — no Sentry, no LogRocket, no crash reporting
 - Production errors are invisible; 23+ files use raw `console.log/error`
 - **Need**: Sentry integration (client + edge functions), structured logging, alerting
 
-### 1.3 Testing (ALMOST NONE)
+DONE ### 1.3 Testing (ALMOST NONE) 
 - Only 1 test file: `performanceEngine.test.ts` (638 lines)
 - Zero tests for: auth flow, API calls, components, AI features, offline sync
 - No vitest config, no CI test runner
 - **Need**: vitest setup, tests for critical paths (auth, payments, data writes), 60%+ coverage target
 
-### 1.4 Security — Auth Gaps
+DONE ### 1.4 Security — Auth Gaps 
 - `scan-barcode/index.ts` — **NO auth verification** (anyone can call it)
 - `transcribe-audio/index.ts` — **NO auth verification** (exposes Google API key usage)
 - `food-search/index.ts` — Weak JWT validation (decodes without signature verification)
@@ -37,7 +37,10 @@ Full app survey before closing beta and accepting payments. Three parallel audit
 - A single user can spam Grok API calls and exhaust quota
 - **Need**: Per-user rate limits (e.g., Upstash or Deno KV) on all AI functions
 
-   
+### 1.6 Security — CORS
+- Currently `"*"` (wildcard) on all functions — allows any website to call APIs
+- Fine for dev but not for production with payments
+- **Need**: Dynamic CORS that allows production domain + localhost for dev
 
 ### 1.7 Critical Dependencies
 - `xlsx` (429 KB): HIGH severity vulnerability with **no fix available**

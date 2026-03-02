@@ -1,6 +1,8 @@
 // Simple localStorage-based persistence for AI content
 // This replaces the complex database approach with a simple, reliable solution
 
+import { logger } from "./logger";
+
 interface StoredAIContent {
   data: any;
   timestamp: number;
@@ -23,7 +25,7 @@ export class AIPersistence {
       const key = this.getStorageKey(userId, type);
       localStorage.setItem(key, JSON.stringify(content));
     } catch (error) {
-      console.warn('Failed to save AI content to localStorage:', error);
+      logger.warn("Failed to save AI content to localStorage", { error });
     }
   }
 
@@ -44,7 +46,7 @@ export class AIPersistence {
       
       return content.data;
     } catch (error) {
-      console.warn('Failed to load AI content from localStorage:', error);
+      logger.warn("Failed to load AI content from localStorage", { error });
       return null;
     }
   }
@@ -54,7 +56,7 @@ export class AIPersistence {
       const key = this.getStorageKey(userId, type);
       localStorage.removeItem(key);
     } catch (error) {
-      console.warn('Failed to remove AI content from localStorage:', error);
+      logger.warn("Failed to remove AI content from localStorage", { error });
     }
   }
 
@@ -82,7 +84,7 @@ export class AIPersistence {
       
       keysToRemove.forEach(key => localStorage.removeItem(key));
     } catch (error) {
-      console.warn('Failed to cleanup AI content:', error);
+      logger.warn("Failed to cleanup AI content", { error });
     }
   }
 }

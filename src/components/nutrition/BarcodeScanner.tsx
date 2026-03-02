@@ -10,6 +10,7 @@ import { AIPersistence } from "@/lib/aiPersistence";
 import { useUser } from "@/contexts/UserContext";
 import { Capacitor } from "@capacitor/core";
 import { Camera as CapCamera, CameraPermissionState } from "@capacitor/camera";
+import { logger } from "@/lib/logger";
 
 interface BarcodeScannerProps {
   onFoodScanned: (foodData: {
@@ -95,7 +96,7 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
         description: `${data.productName} scanned successfully`,
       });
     } catch (error: any) {
-      console.error("Error scanning barcode:", error);
+      logger.error("Error scanning barcode", error);
 
       let errorMessage = "Failed to get product information";
       if (error.message?.includes("network") || error.message?.includes("fetch")) {
@@ -131,7 +132,7 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
       if (barcode === lastScannedBarcode) return;
 
       setLastScannedBarcode(barcode);
-      console.log("Barcode scanned:", barcode);
+      logger.info("Barcode scanned", { barcode });
 
       if (scanTimeoutRef.current) {
         clearTimeout(scanTimeoutRef.current);
@@ -142,7 +143,7 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
       }, 500);
     },
     onError(error) {
-      console.error("Scanner error:", error);
+      logger.error("Scanner error", error);
       const errorName = error instanceof Error ? error.name : String(error);
 
       // Fall back to ideal constraint on OverconstrainedError

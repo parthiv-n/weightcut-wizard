@@ -4,6 +4,7 @@ import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { useUser } from "./UserContext";
 import { syncWeightReminder } from "@/lib/weightReminder";
+import { logger } from "@/lib/logger";
 
 interface Message {
   role: "system" | "user" | "assistant";
@@ -74,7 +75,7 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
         ]
       });
     } catch (e) {
-      console.warn("Could not schedule local notification", e);
+      logger.warn("Could not schedule local notification", { error: e });
     }
   };
 
@@ -121,7 +122,7 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
       triggerNotification();
 
     } catch (error) {
-      console.error("Chat error:", error);
+      logger.error("Chat error", error);
       const fallbackMessages: Message[] = [...newMessages, { role: "assistant", content: "Sorry, my crystal ball is cloudy right now. Try again in a moment." }];
       setMessages(fallbackMessages);
       localStorage.setItem(`wizard_chat_history_${userId}`, JSON.stringify(fallbackMessages));

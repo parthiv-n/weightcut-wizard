@@ -16,6 +16,7 @@ import { NavigationDirectionProvider } from "@/hooks/useNavigationDirection";
 import { TutorialProvider } from "@/tutorial/TutorialContext";
 import { BottomNav } from "@/components/BottomNav";
 import { FloatingWizardChat } from "@/components/FloatingWizardChat";
+import * as Sentry from "@sentry/react";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
 import { RefreshCw } from "lucide-react";
@@ -43,6 +44,7 @@ const SKIP_ROUTES = ['/', '/auth', '/onboarding'];
 
 import { App as CapacitorApp } from '@capacitor/app';
 import { supabase } from "@/integrations/supabase/client";
+import { logger } from "@/lib/logger";
 
 function RouteTracker() {
   const location = useLocation();
@@ -57,7 +59,7 @@ function RouteTracker() {
   // Handle Deep Links (Supabase Auth)
   useEffect(() => {
     CapacitorApp.addListener('appUrlOpen', async ({ url }) => {
-      console.log('App opened with URL:', url);
+      logger.info('App opened with URL', { url });
 
       // 1. Handle Supabase Auth (PKCE Code)
       if (url.includes('code=')) {
@@ -78,7 +80,7 @@ function RouteTracker() {
             }
           }
         } catch (e) {
-          console.error("Error exchanging code:", e);
+          logger.error("Error exchanging code", e);
         }
         return; // specific auth handling done
       }
@@ -93,7 +95,7 @@ function RouteTracker() {
             navigate('/dashboard');
           }
         } catch (e) {
-          console.error("Error handling implicit flow:", e);
+          logger.error("Error handling implicit flow", e);
         }
         return;
       }
@@ -174,7 +176,11 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => (
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <ErrorBoundary>
+      <ErrorBoundary onError={(error, errorInfo) => {
+        Sentry.captureException(error, {
+          extra: { componentStack: errorInfo.componentStack },
+        });
+      }}>
         <UserProvider>
           <WizardBackgroundProvider>
             <Toaster />

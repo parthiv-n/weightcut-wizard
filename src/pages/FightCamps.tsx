@@ -15,6 +15,7 @@ import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { localCache } from "@/lib/localCache";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { CampComparisonCard } from "@/components/share/cards/CampComparisonCard";
+import { logger } from "@/lib/logger";
 
 interface FightCamp {
   id: string;
@@ -81,7 +82,7 @@ export default function FightCamps() {
       );
 
       if (error) {
-        console.error("Error loading fight camps:", error);
+        logger.error("Error loading fight camps", error);
         if (!cached) {
           toast({ title: "Error", description: "Failed to load fight camps", variant: "destructive" });
           setCamps([]);
@@ -91,7 +92,7 @@ export default function FightCamps() {
         localCache.set(userId, 'fight_camps', data || []);
       }
     } catch (error) {
-      console.error("Unexpected error loading fight camps:", error);
+      logger.error("Unexpected error loading fight camps", error);
       if (!cached) {
         toast({ title: "Error", description: "An unexpected error occurred", variant: "destructive" });
         setCamps([]);

@@ -1,4 +1,6 @@
 // Utility to wrap database operations with timeout to prevent hanging
+import { logger } from "./logger";
+
 export function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number = 10000, // 10 second default timeout
@@ -34,7 +36,7 @@ export function withRetry<T>(
   return factory().catch(async (err) => {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       const delay = baseDelayMs * Math.pow(2, attempt - 1);
-      console.warn(`withRetry: attempt ${attempt + 1}/${maxRetries + 1} after ${delay}ms`, err?.message ?? err);
+      logger.warn(`withRetry: attempt ${attempt + 1}/${maxRetries + 1} after ${delay}ms`, { error: err?.message ?? err });
       await new Promise((r) => setTimeout(r, delay));
       try {
         return await factory();

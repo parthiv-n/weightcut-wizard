@@ -12,6 +12,7 @@ import { Sparkles, AlertTriangle, CheckCircle, Zap, Shield, Activity } from "luc
 import { profileSchema } from "@/lib/validation";
 import wizardLogo from "@/assets/wizard-logo.png";
 import { celebrateSuccess } from "@/lib/haptics";
+import { logger } from "@/lib/logger";
 
 const ACTIVITY_MULTIPLIERS = {
   sedentary: 1.2,
@@ -83,7 +84,6 @@ export default function Onboarding() {
 
   const handleSubmit = async () => {
     const startTime = performance.now();
-    console.log("🚀 Starting onboarding profile creation...");
 
     // Validate input
     const validationResult = profileSchema.safeParse({
@@ -141,7 +141,7 @@ export default function Onboarding() {
 
       const endTime = performance.now();
       const duration = Math.round(endTime - startTime);
-      console.log(`✅ Onboarding completed in ${duration}ms`);
+      logger.info("Onboarding completed", { ms: duration });
 
       // Ensure all 3 animation steps have had time to play (step 3 fires at 2200ms)
       const minAnimMs = 2400;
@@ -158,7 +158,7 @@ export default function Onboarding() {
     } catch (error: any) {
       const endTime = performance.now();
       const duration = Math.round(endTime - startTime);
-      console.error(`❌ Onboarding failed after ${duration}ms:`, error);
+      logger.error("Onboarding failed", error, { ms: duration });
 
       stepTimers.forEach(clearTimeout);
       setGeneratingPlan(false);

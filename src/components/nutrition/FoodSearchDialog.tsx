@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Search, Loader2, ChevronRight, Minus, Plus, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { logger } from "@/lib/logger";
 
 interface FoodSearchResult {
     id: string;
@@ -82,7 +83,7 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
             setResults(data.results || []);
         } catch (err: any) {
             if (err.name !== "AbortError") {
-                console.error("Food search error:", err);
+                logger.error("Food search error", err);
             }
         } finally {
             setSearching(false);

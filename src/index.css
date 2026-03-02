@@ -305,6 +305,16 @@ All colors MUST be HSL.
     100% { transform: translateX(100%); }
   }
 
+  @keyframes progressShimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  @keyframes pulseRing {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5); }
+    50% { box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.25); }
+  }
+
   /* Glass card hover depth — desktop only */
   @media (hover: hover) {
     .dark .glass-card:hover {

@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { supabase } from "@/integrations/supabase/client";
 import type { WellnessCheckIn as WellnessCheckInData } from "@/utils/performanceEngine";
+import { logger } from "@/lib/logger";
 
 interface WellnessCheckInProps {
   userId: string;
@@ -104,7 +105,7 @@ export function WellnessCheckIn({ userId, onSubmit, isSubmitting }: WellnessChec
         appetite_level: optionalValues.appetite_level,
       }, { onConflict: 'user_id,date' });
     } catch (err) {
-      console.error('Failed to persist wellness check-in:', err);
+      logger.error("Failed to persist wellness check-in", err);
     }
 
     onSubmit(checkInData);

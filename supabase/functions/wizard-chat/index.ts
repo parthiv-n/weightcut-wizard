@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { extractContent } from "../_shared/parseResponse.ts";
 import { RESEARCH_SUMMARY } from "../_shared/researchSummary.ts";
+import { edgeLogger } from "../_shared/errorReporter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -295,7 +296,7 @@ RULES:
 - If asked about their current weight cut, reference fight week logs (daily weight, fluid, carbs).
 - Format: short paragraphs, bullet points for lists, bold key terms. No walls of text.`;
 
-    console.log("Calling Grok API with full athlete data context...");
+    edgeLogger.info("Calling Grok API with full athlete data context");
 
     const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
@@ -316,7 +317,7 @@ RULES:
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error("Grok API error:", response.status, errorData);
+      edgeLogger.error("Grok API error", undefined, { functionName: "wizard-chat", status: response.status, errorData });
 
       if (response.status === 429) {
         return new Response(
@@ -346,7 +347,7 @@ RULES:
     }
 
     const data = await response.json();
-    console.log("Wizard chat Grok response:", JSON.stringify(data, null, 2));
+    edgeLogger.info("Wizard chat Grok response received", { responseKeys: Object.keys(data) });
 
     let { content: generatedText, filtered } = extractContent(data);
 
@@ -375,7 +376,7 @@ RULES:
       }
     );
   } catch (error) {
-    console.error("wizard-chat error:", error);
+    edgeLogger.error("wizard-chat error", error, { functionName: "wizard-chat" });
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
