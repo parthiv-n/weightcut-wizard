@@ -1,4 +1,4 @@
-import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Settings, LogOut, Droplets, Calendar, Moon, Sun, ChevronRight, BookOpen, Dumbbell, Bell } from "lucide-react";
+import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Settings, LogOut, Droplets, Calendar, Moon, Sun, ChevronRight, BookOpen, Dumbbell, Bell, Lock, Loader2 } from "lucide-react";
 import { motion, LayoutGroup } from "motion/react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useState, useEffect, useCallback } from "react";
@@ -86,6 +86,11 @@ export function BottomNav() {
   });
   const [reminderSettings, setReminderSettings] = useState<ReminderSettings>(getSettings);
   const [timePickerOpen, setTimePickerOpen] = useState(false);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordLoading, setPasswordLoading] = useState(false);
 
   useEffect(() => {
     setEditedName(userName);
@@ -169,6 +174,44 @@ export function BottomNav() {
       title: "Signed out",
       description: "You have been successfully signed out.",
     });
+  };
+
+  const handleChangePassword = async () => {
+    if (newPassword.length < 6) {
+      toast({ description: "Password must be at least 6 characters", variant: "destructive" });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({ description: "New passwords don't match", variant: "destructive" });
+      return;
+    }
+    setPasswordLoading(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) throw new Error("Unable to verify account");
+
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: currentPassword,
+      });
+      if (signInError) {
+        toast({ description: "Current password is incorrect", variant: "destructive" });
+        return;
+      }
+
+      const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+      if (updateError) throw updateError;
+
+      toast({ description: "Password updated successfully" });
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setPasswordDialogOpen(false);
+    } catch (error: any) {
+      toast({ description: error.message || "Failed to update password", variant: "destructive" });
+    } finally {
+      setPasswordLoading(false);
+    }
   };
 
   // Extract icon components for JSX
@@ -617,6 +660,29 @@ export function BottomNav() {
                 </div>
               </button>
 
+              {/* Change Password */}
+              <button
+                type="button"
+                onClick={() => {
+                  setSettingsDialogOpen(false);
+                  setPasswordDialogOpen(true);
+                }}
+                className="w-full rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left"
+              >
+                <div className="flex items-center justify-between px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
+                      <Lock className="h-5 w-5 text-primary" />
+                    </span>
+                    <div>
+                      <p className="text-[15px] font-medium text-foreground">Change Password</p>
+                      <p className="text-xs text-muted-foreground">Update your account password</p>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+                </div>
+              </button>
+
               {/* Save */}
               <Button
                 onClick={handleUpdateProfile}
@@ -652,6 +718,79 @@ export function BottomNav() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Change Password Dialog */}
+      <Dialog
+        open={passwordDialogOpen}
+        onOpenChange={(open) => {
+          setPasswordDialogOpen(open);
+          if (!open) {
+            setCurrentPassword("");
+            setNewPassword("");
+            setConfirmPassword("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
+                <Lock className="h-5 w-5 text-primary" />
+              </div>
+              <DialogTitle>Change Password</DialogTitle>
+            </div>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-muted-foreground">Current Password</label>
+              <Input
+                type="password"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="Enter current password"
+                className="h-10 rounded-xl bg-background/60 dark:bg-white/5 border-border/40 text-sm font-medium"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-muted-foreground">New Password</label>
+              <Input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Enter new password"
+                className="h-10 rounded-xl bg-background/60 dark:bg-white/5 border-border/40 text-sm font-medium"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-muted-foreground">Confirm New Password</label>
+              <Input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Confirm new password"
+                className="h-10 rounded-xl bg-background/60 dark:bg-white/5 border-border/40 text-sm font-medium"
+              />
+            </div>
+          </div>
+          <div className="flex gap-3 pt-2">
+            <Button
+              variant="outline"
+              onClick={() => setPasswordDialogOpen(false)}
+              className="flex-1 h-11 rounded-2xl"
+              disabled={passwordLoading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleChangePassword}
+              disabled={passwordLoading}
+              className="flex-1 h-11 rounded-2xl bg-gradient-to-r from-primary to-secondary text-primary-foreground font-bold"
+            >
+              {passwordLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Update Password"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
