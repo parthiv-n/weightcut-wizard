@@ -1,4 +1,3 @@
-import { memo } from "react";
 import { cn } from "@/lib/utils";
 
 interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {}
@@ -6,7 +5,7 @@ interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {}
 function Skeleton({ className, ...props }: SkeletonProps) {
   return (
     <div
-      className={cn("skeleton-shimmer rounded-md", className)}
+      className={cn("animate-pulse rounded-md bg-muted", className)}
       {...props}
     />
   );
@@ -14,7 +13,7 @@ function Skeleton({ className, ...props }: SkeletonProps) {
 
 // Specific skeleton components for common UI patterns
 
-export const MealCardSkeleton = memo(function MealCardSkeleton() {
+export function MealCardSkeleton() {
   return (
     <div className="p-4 border rounded-lg space-y-3">
       <div className="flex justify-between items-start">
@@ -33,9 +32,9 @@ export const MealCardSkeleton = memo(function MealCardSkeleton() {
       <Skeleton className="h-4 w-2/3" />
     </div>
   );
-});
+}
 
-export const ProfileCardSkeleton = memo(function ProfileCardSkeleton() {
+export function ProfileCardSkeleton() {
   return (
     <div className="p-6 border rounded-lg space-y-4">
       <div className="flex items-center space-x-4">
@@ -57,9 +56,9 @@ export const ProfileCardSkeleton = memo(function ProfileCardSkeleton() {
       </div>
     </div>
   );
-});
+}
 
-export const MacroProgressSkeleton = memo(function MacroProgressSkeleton() {
+export function MacroProgressSkeleton() {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -77,7 +76,7 @@ export const MacroProgressSkeleton = memo(function MacroProgressSkeleton() {
       </div>
     </div>
   );
-});
+}
 
 export function DashboardSkeleton() {
   return (
@@ -87,7 +86,7 @@ export function DashboardSkeleton() {
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-4 w-32" />
       </div>
-
+      
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[1, 2, 3].map((i) => (
@@ -101,7 +100,7 @@ export function DashboardSkeleton() {
           </div>
         ))}
       </div>
-
+      
       {/* Main Content */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="space-y-4">
@@ -129,10 +128,10 @@ export function NutritionPageSkeleton() {
         <Skeleton className="h-8 w-40" />
         <Skeleton className="h-10 w-32" />
       </div>
-
+      
       {/* Macro Progress */}
       <MacroProgressSkeleton />
-
+      
       {/* Tabs */}
       <div className="space-y-4">
         <div className="flex space-x-4">
@@ -140,7 +139,7 @@ export function NutritionPageSkeleton() {
           <Skeleton className="h-10 w-24" />
           <Skeleton className="h-10 w-28" />
         </div>
-
+        
         {/* Meal List */}
         <div className="space-y-3">
           {[1, 2, 3, 4].map((i) => (
@@ -215,76 +214,5 @@ export function HydrationSkeleton() {
   );
 }
 
-export function FightWeekSkeleton() {
-  return (
-    <div className="space-y-6 p-4">
-      {/* Header */}
-      <div className="space-y-2">
-        <Skeleton className="h-8 w-44" />
-        <Skeleton className="h-4 w-56" />
-      </div>
-      {/* Countdown card */}
-      <div className="p-4 border rounded-lg space-y-3">
-        <Skeleton className="h-5 w-36" />
-        <Skeleton className="h-16 w-full" />
-      </div>
-      {/* Phase cards */}
-      {[1, 2].map((i) => (
-        <div key={i} className="p-4 border rounded-lg space-y-3">
-          <Skeleton className="h-5 w-32" />
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-3/4" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-export function FightCampsSkeleton() {
-  return (
-    <div className="space-y-6 p-4">
-      {/* Header */}
-      <div className="space-y-2">
-        <Skeleton className="h-8 w-40" />
-        <Skeleton className="h-4 w-48" />
-      </div>
-      {/* Camp cards */}
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="p-4 border rounded-lg space-y-3">
-          <div className="flex justify-between items-center">
-            <Skeleton className="h-5 w-36" />
-            <Skeleton className="h-6 w-16 rounded-full" />
-          </div>
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-2 w-full" />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-export function GoalsSkeleton() {
-  return (
-    <div className="space-y-6 p-4">
-      {/* Header */}
-      <div className="space-y-2">
-        <Skeleton className="h-8 w-32" />
-        <Skeleton className="h-4 w-44" />
-      </div>
-      {/* Goal cards */}
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="p-4 border rounded-lg space-y-3">
-          <Skeleton className="h-5 w-28" />
-          <div className="flex gap-2">
-            <Skeleton className="h-10 flex-1" />
-            <Skeleton className="h-10 w-20" />
-          </div>
-        </div>
-      ))}
-      {/* Save button */}
-      <Skeleton className="h-12 w-full rounded-2xl" />
-    </div>
-  );
-}
-
 export { Skeleton };
+

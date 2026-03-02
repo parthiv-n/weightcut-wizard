@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -82,7 +82,7 @@ interface Meal {
   date: string;
 }
 
-// Smooth-scroll the PullToRefresh <main> container to top (iOS-native feel)
+// Smooth-scroll the main container to top (iOS-native feel)
 function scrollToTop() {
   const main = document.querySelector('main');
   if (main && main.scrollTop > 0) {
@@ -106,7 +106,6 @@ export default function Nutrition() {
   const [aiLineItems, setAiLineItems] = useState<AiLineItem[]>([]);
   const [aiAnalysisComplete, setAiAnalysisComplete] = useState(false);
   const [isManualMacrosDialogOpen, setIsManualMacrosDialogOpen] = useState(false);
-  const [profile, setProfile] = useState<any>(null);
   const [dailyCalorieTarget, setDailyCalorieTarget] = useState(2000);
   const [safetyStatus, setSafetyStatus] = useState<"green" | "yellow" | "red">("green");
   const [safetyMessage, setSafetyMessage] = useState("");
@@ -115,6 +114,7 @@ export default function Nutrition() {
 
   // Enhanced authentication state management
   const { isSessionValid, checkSessionValidity, refreshSession, userId, profile: contextProfile, refreshProfile } = useUser();
+  const profile = contextProfile;
   const { safeAsync, isMounted } = useSafeAsync();
   const [aiMacroGoals, setAiMacroGoals] = useState<{
     proteinGrams: number;
@@ -461,13 +461,12 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     if (userId) preloadAdjacentDates(userId, selectedDate);
   }, [selectedDate, userId]);
 
-  // Sync profile from context — only when nutrition-relevant fields change
+  // Recalculate calorie target when relevant profile fields change
   useEffect(() => {
-    if (contextProfile) {
-      setProfile(contextProfile);
-      calculateCalorieTarget(contextProfile);
-    }
-  }, [contextProfile?.current_weight_kg, contextProfile?.goal_weight_kg, contextProfile?.target_date, contextProfile?.ai_recommended_calories, contextProfile?.tdee, contextProfile?.fight_week_target_kg]);
+    if (contextProfile) calculateCalorieTarget(contextProfile);
+  }, [contextProfile?.ai_recommended_calories, contextProfile?.tdee, contextProfile?.bmr,
+      contextProfile?.current_weight_kg, contextProfile?.goal_weight_kg,
+      contextProfile?.manual_nutrition_override]);
 
   // Load persisted meal plans once on mount
   useEffect(() => {
@@ -517,10 +516,12 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
   }, [selectedDate, userId]);
 
   useEffect(() => {
-    if (profile) {
+    if (contextProfile) {
       fetchMacroGoals();
     }
-  }, [profile?.fight_week_target_kg, profile?.ai_recommended_calories, profile?.ai_recommended_protein_g, profile?.ai_recommended_carbs_g, profile?.ai_recommended_fats_g, profile?.manual_nutrition_override]);
+  }, [contextProfile?.ai_recommended_protein_g, contextProfile?.ai_recommended_carbs_g,
+      contextProfile?.ai_recommended_fats_g, contextProfile?.ai_recommended_calories,
+      contextProfile?.manual_nutrition_override]);
 
   // Auto-open add meal dialog if URL param is present
   useEffect(() => {
@@ -576,13 +577,6 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       supabase.removeChannel(channel);
     };
   }, [userId]);
-
-  const loadProfile = () => {
-    if (contextProfile) {
-      setProfile(contextProfile);
-      calculateCalorieTarget(contextProfile);
-    }
-  };
 
   const calculateCalorieTarget = (profileData: any) => {
     // Use shared utility function for calorie calculation
@@ -651,7 +645,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           safeAsync(setDailyCalorieTarget)(cachedMacroGoals.dailyCalorieTarget);
         }
         if (cachedMacroGoals.profileUpdate && profile && profile.manual_nutrition_override !== cachedMacroGoals.profileUpdate.manual_nutrition_override) {
-          safeAsync(setProfile)({ ...profile, manual_nutrition_override: cachedMacroGoals.profileUpdate.manual_nutrition_override });
+          refreshProfile();
         }
         safeAsync(setFetchingMacroGoals)(false);
         return;
@@ -673,7 +667,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         setAiMacroGoals(macroGoals);
         setDailyCalorieTarget(profileData.ai_recommended_calories);
         if (profile && profile.manual_nutrition_override !== profileData.manual_nutrition_override) {
-          setProfile({ ...profile, manual_nutrition_override: profileData.manual_nutrition_override });
+          refreshProfile();
         }
 
         nutritionCache.setMacroGoals(userId, {
@@ -847,17 +841,17 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       if (response.error) {
         throw response.error;
       }
-      if (response.data?.error) {
-        throw new Error(response.data.error);
-      }
 
       const { mealPlan, dailyCalorieTarget: target, safetyStatus: status, safetyMessage: message } = response.data;
 
       // Store as meal plan ideas instead of logging them
       const ideasToStore: Meal[] = [];
 
+      console.log("Meal plan response structure:", { mealPlan, target, status, message });
+
       // Handle the actual response structure: mealPlan contains meals array
       if (mealPlan && mealPlan.meals && Array.isArray(mealPlan.meals)) {
+        console.log("Processing meals array:", mealPlan.meals.length, "meals found");
 
         mealPlan.meals.forEach((meal: any, idx: number) => {
           const mealType = meal.type || "meal";
@@ -883,6 +877,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         });
       } else if (mealPlan && typeof mealPlan === 'object') {
         // Fallback: check if it's the old structure with individual meal objects
+        console.log("Checking for fallback structure...");
 
         const mealTypes = ['breakfast', 'lunch', 'dinner'];
         mealTypes.forEach(mealType => {
@@ -931,6 +926,8 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           });
         }
       }
+
+      console.log("Final meal ideas to store:", ideasToStore.length);
 
       if (ideasToStore.length === 0) {
         console.warn("No meals were parsed from the response");
@@ -1863,6 +1860,8 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       }
 
       if (data?.error) {
+        // Edge function returned an error (e.g., not found)
+        console.log("Ingredient not found:", data.error);
         return null;
       }
 
@@ -2055,12 +2054,10 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     }
   };
 
-  const { totalCalories, totalProtein, totalCarbs, totalFats } = useMemo(() => ({
-    totalCalories: meals.reduce((sum, meal) => sum + meal.calories, 0),
-    totalProtein: meals.reduce((sum, meal) => sum + (meal.protein_g || 0), 0),
-    totalCarbs: meals.reduce((sum, meal) => sum + (meal.carbs_g || 0), 0),
-    totalFats: meals.reduce((sum, meal) => sum + (meal.fats_g || 0), 0),
-  }), [meals]);
+  const totalCalories = meals.reduce((sum, meal) => sum + meal.calories, 0);
+  const totalProtein = meals.reduce((sum, meal) => sum + (meal.protein_g || 0), 0);
+  const totalCarbs = meals.reduce((sum, meal) => sum + (meal.carbs_g || 0), 0);
+  const totalFats = meals.reduce((sum, meal) => sum + (meal.fats_g || 0), 0);
 
   // Trigger AI wisdom after meals change (debounced)
   useEffect(() => {
@@ -2404,13 +2401,12 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                 {/* Food items */}
                 {groupMeals.length > 0 && (
                   <div className="px-2">
-                    {groupMeals.map((meal, index) => (
-                      <div key={meal.id} className="list-item-enter" style={{ animationDelay: `${Math.min(index * 50, 300)}ms` }}>
-                        <MealCard
-                          meal={meal}
-                          onDelete={() => initiateDeleteMeal(meal)}
-                        />
-                      </div>
+                    {groupMeals.map((meal) => (
+                      <MealCard
+                        key={meal.id}
+                        meal={meal}
+                        onDelete={() => initiateDeleteMeal(meal)}
+                      />
                     ))}
                   </div>
                 )}
@@ -3559,7 +3555,11 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                         ai_recommended_fats_g: editingTargets.fats ? parseFloat(editingTargets.fats) : profile?.ai_recommended_fats_g,
                       };
 
-                      setProfile(optimisticProfile);
+                      // Optimistically update display values
+                      setDailyCalorieTarget(Math.round(calories));
+                      if (editingTargets.protein) setAiMacroGoals(prev => prev ? { ...prev, proteinGrams: parseFloat(editingTargets.protein) } : prev);
+                      if (editingTargets.carbs) setAiMacroGoals(prev => prev ? { ...prev, carbsGrams: parseFloat(editingTargets.carbs) } : prev);
+                      if (editingTargets.fats) setAiMacroGoals(prev => prev ? { ...prev, fatsGrams: parseFloat(editingTargets.fats) } : prev);
                       setIsEditTargetsDialogOpen(false);
                       toast({
                         title: "Targets updated!",
@@ -3626,8 +3626,8 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                         updateOperation
                       );
 
-                      update.onError = (error: any, rollbackData: any) => {
-                        setProfile(rollbackData);
+                      update.onError = (error: any, _rollbackData: any) => {
+                        refreshProfile();
                         console.error("Error updating targets:", error);
                         toast({
                           title: "Error",
@@ -3641,6 +3641,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                       if (success) {
                         nutritionCache.remove(userId, 'profile');
                         nutritionCache.remove(userId, 'macroGoals');
+                        refreshProfile();
                       }
 
                     } catch (error: any) {

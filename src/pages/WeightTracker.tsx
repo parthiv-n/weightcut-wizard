@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -98,7 +98,7 @@ export default function WeightTracker() {
   const [showProjected, setShowProjected] = useState(true);
   const { toast } = useToast();
   const { updateCurrentWeight, userId, profile: contextProfile } = useUser();
-  const profile = contextProfile as unknown as Profile | null;
+  const profile = contextProfile as unknown as Profile;
   const { safeAsync, isMounted } = useSafeAsync();
   const [searchParams, setSearchParams] = useSearchParams();
   const weightInputRef = useRef<HTMLInputElement>(null);
@@ -468,7 +468,7 @@ export default function WeightTracker() {
     return requiredWeeklyLoss > 1.5;
   };
 
-  const chartData = useMemo(() => {
+  const getChartData = () => {
     if (!profile) return [];
 
     // Show both fight week target (diet goal) and weigh-in day weight (final weigh-in) on chart
@@ -553,9 +553,9 @@ export default function WeightTracker() {
     }
 
     return data;
-  }, [weightLogs, profile?.fight_week_target_kg, profile?.goal_weight_kg, profile?.current_weight_kg, profile?.target_date, timeFilter, aiAnalysis]);
+  };
 
-  const handleChartClick = useCallback((data: any) => {
+  const handleChartClick = (data: any) => {
     if (data && data.activePayload && data.activePayload[0]) {
       const payload = data.activePayload[0].payload;
       const log = weightLogs.find(l => l.id === payload.logId);
@@ -563,7 +563,7 @@ export default function WeightTracker() {
         initiateDelete(log);
       }
     }
-  }, [weightLogs]);
+  };
 
   const getCurrentWeight = () => {
     if (!weightLogs.length) return profile?.current_weight_kg || 0;
@@ -713,10 +713,10 @@ export default function WeightTracker() {
             </div>
             </div>
           </div>
-          {chartData.length > 0 ? (
+          {getChartData().length > 0 ? (
             <>
               <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={chartData} onClick={handleChartClick}>
+                <LineChart data={getChartData()} onClick={handleChartClick}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.2} />
                   <XAxis
                     dataKey="date"
@@ -825,11 +825,10 @@ export default function WeightTracker() {
                   </div>
                   <CollapsibleContent className="space-y-2 pt-2">
                     <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
-                      {weightLogs.slice().reverse().map((log, index) => (
+                      {weightLogs.slice().reverse().map((log) => (
                         <div
                           key={log.id}
-                          className="list-item-enter flex items-center justify-between p-3 rounded-xl border border-white/5 bg-background/50 hover:bg-background/80 transition-colors"
-                          style={{ animationDelay: `${Math.min(index * 50, 300)}ms` }}
+                          className="flex items-center justify-between p-3 rounded-xl border border-white/5 bg-background/50 hover:bg-background/80 transition-colors"
                         >
                           <div>
                             <span className="text-base font-bold text-primary mr-3">{log.weight_kg} kg</span>

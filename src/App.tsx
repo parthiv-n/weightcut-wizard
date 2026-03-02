@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, lazy, Suspense } from "react";
+import { useEffect, lazy, Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -17,8 +17,8 @@ import { TutorialProvider } from "@/tutorial/TutorialContext";
 import { BottomNav } from "@/components/BottomNav";
 import { FloatingWizardChat } from "@/components/FloatingWizardChat";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
 import { RefreshCw } from "lucide-react";
-import { RouteSkeleton } from "@/components/RouteSkeleton";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Onboarding from "./pages/Onboarding";
@@ -34,7 +34,6 @@ const FightCampDetail = lazy(() => import("./pages/FightCampDetail"));
 const FightCampCalendar = lazy(() => import("./pages/FightCampCalendar"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
-// Pre-parse Dashboard chunk during idle time so Suspense fallback is skipped
 const _idle = window.requestIdleCallback || ((cb: IdleRequestCallback) => setTimeout(cb, 50));
 _idle(() => { import("./pages/Dashboard").catch(() => {}); });
 
@@ -58,6 +57,8 @@ function RouteTracker() {
   // Handle Deep Links (Supabase Auth)
   useEffect(() => {
     CapacitorApp.addListener('appUrlOpen', async ({ url }) => {
+      console.log('App opened with URL:', url);
+
       // 1. Handle Supabase Auth (PKCE Code)
       if (url.includes('code=')) {
         try {
@@ -123,15 +124,6 @@ function RouteTracker() {
 const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
   const { openMobile } = useSidebar();
   const location = useLocation();
-  const mainRef = useRef<HTMLElement>(null);
-
-  // Reset scroll position before paint when navigating to a new page
-  useLayoutEffect(() => {
-    if (mainRef.current) {
-      mainRef.current.scrollTop = 0;
-    }
-    window.scrollTo(0, 0);
-  }, [location.pathname]);
 
   return (
     <>
@@ -148,20 +140,18 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
             <ThemeToggle className="touch-target" />
           </header>
           {/* Main content with mobile-first responsive padding - bottom padding for bottom nav */}
-          <main
-            ref={mainRef}
-            className="flex-1 overflow-auto overflow-x-hidden relative min-h-0 w-full pt-2 pb-24 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right"
-          >
-            {/* Manual refresh button — top-right floating pill */}
+          <main className="flex-1 overflow-auto overflow-x-hidden relative min-h-0 w-full pt-2 pb-24 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right">
+            {/* Manual refresh button — top-left, below iOS safe area */}
             <button
               onClick={() => window.location.reload()}
-              className="fixed top-3 right-3 z-50 h-8 w-8 flex items-center justify-center rounded-full bg-background/80 backdrop-blur-md border border-border/50 shadow-sm active:scale-90 transition-transform md:hidden safe-area-inset-top"
+              style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
+              className="fixed right-3 z-50 h-9 w-9 flex items-center justify-center rounded-xl bg-background/80 backdrop-blur-md border border-border/50 shadow-sm active:scale-90 transition-transform md:hidden"
               aria-label="Refresh page"
             >
-              <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
+              <RefreshCw className="h-4 w-4 text-muted-foreground" />
             </button>
             <PageTransition>
-              <Suspense fallback={<RouteSkeleton />}>
+              <Suspense fallback={<DashboardSkeleton />}>
                 {children}
               </Suspense>
             </PageTransition>
