@@ -73,7 +73,6 @@ interface AIAnalysis {
 
 export default function WeightTracker() {
   const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
-  const [profile, setProfile] = useState<Profile | null>(null);
   const [newWeight, setNewWeight] = useState("");
   const [newDate, setNewDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [loading, setLoading] = useState(false);
@@ -99,6 +98,7 @@ export default function WeightTracker() {
   const [showProjected, setShowProjected] = useState(true);
   const { toast } = useToast();
   const { updateCurrentWeight, userId, profile: contextProfile } = useUser();
+  const profile = contextProfile as unknown as Profile;
   const { safeAsync, isMounted } = useSafeAsync();
   const [searchParams, setSearchParams] = useSearchParams();
   const weightInputRef = useRef<HTMLInputElement>(null);
@@ -113,13 +113,6 @@ export default function WeightTracker() {
     const stored = localStorage.getItem(`weight_tracker_show_projected_${userId}`);
     if (stored !== null) setShowProjected(JSON.parse(stored));
   }, [userId]);
-
-  // Sync contextProfile → local profile state
-  useEffect(() => {
-    if (contextProfile) {
-      setProfile(contextProfile as unknown as Profile);
-    }
-  }, [contextProfile]);
 
   const loadPersistedAnalysis = () => {
     if (!userId) return;
@@ -153,11 +146,6 @@ export default function WeightTracker() {
 
   const fetchData = async () => {
     if (!userId) return;
-
-    // Use contextProfile instead of fetching from DB
-    if (contextProfile) {
-      safeAsync(setProfile)(contextProfile as unknown as Profile);
-    }
 
     // Cache-first: show cached logs instantly
     const cachedLogs = localCache.get<WeightLog[]>(userId, 'weight_logs');

@@ -106,7 +106,6 @@ export default function Nutrition() {
   const [aiLineItems, setAiLineItems] = useState<AiLineItem[]>([]);
   const [aiAnalysisComplete, setAiAnalysisComplete] = useState(false);
   const [isManualMacrosDialogOpen, setIsManualMacrosDialogOpen] = useState(false);
-  const [profile, setProfile] = useState<any>(null);
   const [dailyCalorieTarget, setDailyCalorieTarget] = useState(2000);
   const [safetyStatus, setSafetyStatus] = useState<"green" | "yellow" | "red">("green");
   const [safetyMessage, setSafetyMessage] = useState("");
@@ -115,6 +114,7 @@ export default function Nutrition() {
 
   // Enhanced authentication state management
   const { isSessionValid, checkSessionValidity, refreshSession, userId, profile: contextProfile, refreshProfile } = useUser();
+  const profile = contextProfile;
   const { safeAsync, isMounted } = useSafeAsync();
   const [aiMacroGoals, setAiMacroGoals] = useState<{
     proteinGrams: number;
@@ -461,13 +461,12 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     if (userId) preloadAdjacentDates(userId, selectedDate);
   }, [selectedDate, userId]);
 
-  // Sync profile from context (always keep in sync)
+  // Recalculate calorie target when relevant profile fields change
   useEffect(() => {
-    if (contextProfile) {
-      setProfile(contextProfile);
-      calculateCalorieTarget(contextProfile);
-    }
-  }, [contextProfile]);
+    if (contextProfile) calculateCalorieTarget(contextProfile);
+  }, [contextProfile?.ai_recommended_calories, contextProfile?.tdee, contextProfile?.bmr,
+      contextProfile?.current_weight_kg, contextProfile?.goal_weight_kg,
+      contextProfile?.manual_nutrition_override]);
 
   // Load persisted meal plans once on mount
   useEffect(() => {
@@ -517,10 +516,12 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
   }, [selectedDate, userId]);
 
   useEffect(() => {
-    if (profile) {
+    if (contextProfile) {
       fetchMacroGoals();
     }
-  }, [profile]);
+  }, [contextProfile?.ai_recommended_protein_g, contextProfile?.ai_recommended_carbs_g,
+      contextProfile?.ai_recommended_fats_g, contextProfile?.ai_recommended_calories,
+      contextProfile?.manual_nutrition_override]);
 
   // Auto-open add meal dialog if URL param is present
   useEffect(() => {
@@ -576,13 +577,6 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       supabase.removeChannel(channel);
     };
   }, [userId]);
-
-  const loadProfile = () => {
-    if (contextProfile) {
-      setProfile(contextProfile);
-      calculateCalorieTarget(contextProfile);
-    }
-  };
 
   const calculateCalorieTarget = (profileData: any) => {
     // Use shared utility function for calorie calculation
@@ -651,7 +645,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           safeAsync(setDailyCalorieTarget)(cachedMacroGoals.dailyCalorieTarget);
         }
         if (cachedMacroGoals.profileUpdate && profile && profile.manual_nutrition_override !== cachedMacroGoals.profileUpdate.manual_nutrition_override) {
-          safeAsync(setProfile)({ ...profile, manual_nutrition_override: cachedMacroGoals.profileUpdate.manual_nutrition_override });
+          refreshProfile();
         }
         safeAsync(setFetchingMacroGoals)(false);
         return;
@@ -673,7 +667,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         setAiMacroGoals(macroGoals);
         setDailyCalorieTarget(profileData.ai_recommended_calories);
         if (profile && profile.manual_nutrition_override !== profileData.manual_nutrition_override) {
-          setProfile({ ...profile, manual_nutrition_override: profileData.manual_nutrition_override });
+          refreshProfile();
         }
 
         nutritionCache.setMacroGoals(userId, {
@@ -3561,7 +3555,11 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                         ai_recommended_fats_g: editingTargets.fats ? parseFloat(editingTargets.fats) : profile?.ai_recommended_fats_g,
                       };
 
-                      setProfile(optimisticProfile);
+                      // Optimistically update display values
+                      setDailyCalorieTarget(Math.round(calories));
+                      if (editingTargets.protein) setAiMacroGoals(prev => prev ? { ...prev, proteinGrams: parseFloat(editingTargets.protein) } : prev);
+                      if (editingTargets.carbs) setAiMacroGoals(prev => prev ? { ...prev, carbsGrams: parseFloat(editingTargets.carbs) } : prev);
+                      if (editingTargets.fats) setAiMacroGoals(prev => prev ? { ...prev, fatsGrams: parseFloat(editingTargets.fats) } : prev);
                       setIsEditTargetsDialogOpen(false);
                       toast({
                         title: "Targets updated!",
@@ -3628,8 +3626,8 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                         updateOperation
                       );
 
-                      update.onError = (error: any, rollbackData: any) => {
-                        setProfile(rollbackData);
+                      update.onError = (error: any, _rollbackData: any) => {
+                        refreshProfile();
                         console.error("Error updating targets:", error);
                         toast({
                           title: "Error",
@@ -3643,6 +3641,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                       if (success) {
                         nutritionCache.remove(userId, 'profile');
                         nutritionCache.remove(userId, 'macroGoals');
+                        refreshProfile();
                       }
 
                     } catch (error: any) {

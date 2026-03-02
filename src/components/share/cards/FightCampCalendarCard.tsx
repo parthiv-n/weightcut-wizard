@@ -46,7 +46,10 @@ function getColor(type: string): string {
 }
 
 function formatDateStr(d: Date): string {
-  return d.toISOString().split("T")[0];
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function getDayOfWeekLabel(d: Date): string {

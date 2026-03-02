@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { withAuthTimeout, withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { Capacitor } from "@capacitor/core";
@@ -66,7 +66,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const userIdRef = useRef<string | null>(null);
   const profileRef = useRef<ProfileData | null>(null);
 
-  const checkSessionValidity = async (): Promise<boolean> => {
+  const checkSessionValidity = useCallback(async (): Promise<boolean> => {
     try {
       const { data: { session }, error } = await withAuthTimeout(
         supabase.auth.getSession()
@@ -97,9 +97,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
       setIsSessionValid(false);
       return false;
     }
-  };
+  }, []);
 
-  const refreshSession = async (): Promise<boolean> => {
+  const refreshSession = useCallback(async (): Promise<boolean> => {
     try {
       const { data, error } = await withAuthTimeout(
         supabase.auth.refreshSession()
@@ -116,9 +116,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
       setIsSessionValid(false);
       return false;
     }
-  };
+  }, []);
 
-  const refreshProfile = async (): Promise<boolean> => {
+  const refreshProfile = useCallback(async (): Promise<boolean> => {
     const uid = userIdRef.current;
     if (!uid) {
       console.warn("refreshProfile: skipped — no userId yet");
@@ -133,13 +133,16 @@ export function UserProvider({ children }: { children: ReactNode }) {
       );
 
       if (data) {
-        setProfile(data);
-        profileRef.current = data;
-        setHasProfile(true);
-        if (data.avatar_url) setAvatarUrl(data.avatar_url);
-        const weight = data.current_weight_kg ?? null;
-        if (weight !== null) setCurrentWeight(weight);
-        localCache.set(uid, 'profiles', data);
+        const changed = JSON.stringify(data) !== JSON.stringify(profileRef.current);
+        if (changed) {
+          setProfile(data);
+          profileRef.current = data;
+          setHasProfile(true);
+          if (data.avatar_url) setAvatarUrl(data.avatar_url);
+          const weight = data.current_weight_kg ?? null;
+          if (weight !== null) setCurrentWeight(weight);
+          localCache.set(uid, 'profiles', data);
+        }
         return true;
       }
       return false;
@@ -158,7 +161,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         return false;
       }
     }
-  };
+  }, []);
 
   // Internal: performs one load attempt. Returns 'success' | 'no_session' | 'error'.
   // Does NOT touch isLoading, authError, or isUserLoadedRef.
@@ -246,12 +249,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
       setHasProfile(!!profileData);
 
       if (profileData) {
-        setProfile(profileData);
-        profileRef.current = profileData;
-        if (profileData.avatar_url) {
-          setAvatarUrl(profileData.avatar_url);
+        const changed = JSON.stringify(profileData) !== JSON.stringify(profileRef.current);
+        if (changed) {
+          setProfile(profileData);
+          profileRef.current = profileData;
+          if (profileData.avatar_url) {
+            setAvatarUrl(profileData.avatar_url);
+          }
+          localCache.set(user.id, 'profiles', profileData);
         }
-        localCache.set(user.id, 'profiles', profileData);
       }
 
       const weight = latestWeightLog?.weight_kg || profileData?.current_weight_kg || null;
@@ -264,7 +270,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const loadUserData = async () => {
+  const loadUserData = useCallback(async () => {
     setAuthError(false);
     // Only show loading spinner if cache hasn't already resolved it
     if (!isUserLoadedRef.current) {
@@ -304,15 +310,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
     setHasProfile(false);
     isUserLoadedRef.current = true;
     setIsLoading(false);
-  };
+  }, []);
 
-  const retryAuth = async () => {
+  const retryAuth = useCallback(async () => {
     setAuthError(false);
     setIsLoading(true);
     await loadUserData();
-  };
+  }, [loadUserData]);
 
-  const updateCurrentWeight = async (weight: number) => {
+  const updateCurrentWeight = useCallback(async (weight: number) => {
     setCurrentWeight(weight);
     setProfile(prev => {
       const updated = prev ? { ...prev, current_weight_kg: weight } : prev;
@@ -320,24 +326,24 @@ export function UserProvider({ children }: { children: ReactNode }) {
       return updated;
     });
 
-    if (userId) {
+    if (userIdRef.current) {
       await supabase
         .from("profiles")
         .update({ current_weight_kg: weight })
-        .eq("id", userId);
+        .eq("id", userIdRef.current);
     }
-  };
+  }, []);
 
-  const updateUserName = (name: string) => {
+  const updateUserName = useCallback((name: string) => {
     setUserName(name);
-    if (userId) {
-      localStorage.setItem(`user_name_${userId}`, name);
+    if (userIdRef.current) {
+      localStorage.setItem(`user_name_${userIdRef.current}`, name);
     }
-  };
+  }, []);
 
-  const updateAvatarUrl = (url: string) => {
+  const updateAvatarUrl = useCallback((url: string) => {
     setAvatarUrl(url);
-  };
+  }, []);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -450,29 +456,33 @@ export function UserProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const contextValue = useMemo(() => ({
+    userName,
+    avatarUrl,
+    userId,
+    currentWeight,
+    profile,
+    isSessionValid,
+    isLoading,
+    hasProfile,
+    authError,
+    isOffline,
+    setUserName: updateUserName,
+    setAvatarUrl: updateAvatarUrl,
+    updateCurrentWeight,
+    loadUserData,
+    refreshProfile,
+    refreshSession,
+    checkSessionValidity,
+    retryAuth,
+  }), [userName, avatarUrl, userId, currentWeight, profile,
+       isSessionValid, isLoading, hasProfile, authError, isOffline,
+       updateUserName, updateAvatarUrl, updateCurrentWeight,
+       loadUserData, refreshProfile, refreshSession,
+       checkSessionValidity, retryAuth]);
+
   return (
-    <UserContext.Provider
-      value={{
-        userName,
-        avatarUrl,
-        userId,
-        currentWeight,
-        profile,
-        isSessionValid,
-        isLoading,
-        hasProfile,
-        authError,
-        isOffline,
-        setUserName: updateUserName,
-        setAvatarUrl: updateAvatarUrl,
-        updateCurrentWeight,
-        loadUserData,
-        refreshProfile,
-        refreshSession,
-        checkSessionValidity,
-        retryAuth,
-      }}
-    >
+    <UserContext.Provider value={contextValue}>
       {children}
     </UserContext.Provider>
   );

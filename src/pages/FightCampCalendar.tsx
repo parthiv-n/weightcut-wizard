@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, subMonths, addMonths, subDays } from "date-fns";
 import { ChevronLeft, ChevronRight, Plus, Activity, Moon, Ruler, Trash2, CircleX } from "lucide-react";
@@ -49,6 +49,10 @@ const SESSION_TYPES = [
 
 export default function FightCampCalendar() {
     const { userId, profile } = useUser();
+    const athleteProfile = useMemo(() => profile ? {
+        trainingFrequency: profile.training_frequency ?? null,
+        activityLevel: profile.activity_level ?? null,
+    } : undefined, [profile?.training_frequency, profile?.activity_level]);
     const { toast } = useToast();
     const [searchParams, setSearchParams] = useSearchParams();
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -297,10 +301,7 @@ export default function FightCampCalendar() {
                         sessions28d={sessions28d as any}
                         userId={userId}
                         sessionLoggedAt={sessionLoggedTrigger}
-                        athleteProfile={profile ? {
-                            trainingFrequency: profile.training_frequency ?? null,
-                            activityLevel: profile.activity_level ?? null,
-                        } : undefined}
+                        athleteProfile={athleteProfile}
                         tdee={profile?.tdee ?? null}
                     />
                 )}
@@ -694,15 +695,19 @@ export default function FightCampCalendar() {
                         return true;
                     });
                     if (shareTimeRange === "day") {
-                        const todayStr = now.toISOString().split("T")[0];
+                        const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
                         filtered = filtered.filter((s) => s.date === todayStr);
                     } else if (shareTimeRange === "week") {
-                        const cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-                        filtered = filtered.filter((s) => new Date(s.date) >= cutoff);
+                        const cutoff = new Date(now);
+                        cutoff.setDate(cutoff.getDate() - 7);
+                        const cutoffStr = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, "0")}-${String(cutoff.getDate()).padStart(2, "0")}`;
+                        filtered = filtered.filter((s) => s.date >= cutoffStr);
                     } else {
                         // month: last 35 days
-                        const cutoff = new Date(now.getTime() - 35 * 24 * 60 * 60 * 1000);
-                        filtered = filtered.filter((s) => new Date(s.date) >= cutoff);
+                        const cutoff = new Date(now);
+                        cutoff.setDate(cutoff.getDate() - 35);
+                        const cutoffStr = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, "0")}-${String(cutoff.getDate()).padStart(2, "0")}`;
+                        filtered = filtered.filter((s) => s.date >= cutoffStr);
                     }
 
                     return (
