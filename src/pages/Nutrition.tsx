@@ -461,13 +461,13 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     if (userId) preloadAdjacentDates(userId, selectedDate);
   }, [selectedDate, userId]);
 
-  // Sync profile from context (always keep in sync)
+  // Sync profile from context — only when nutrition-relevant fields change
   useEffect(() => {
     if (contextProfile) {
       setProfile(contextProfile);
       calculateCalorieTarget(contextProfile);
     }
-  }, [contextProfile]);
+  }, [contextProfile?.current_weight_kg, contextProfile?.goal_weight_kg, contextProfile?.target_date, contextProfile?.ai_recommended_calories, contextProfile?.tdee, contextProfile?.fight_week_target_kg]);
 
   // Load persisted meal plans once on mount
   useEffect(() => {
@@ -520,7 +520,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     if (profile) {
       fetchMacroGoals();
     }
-  }, [profile]);
+  }, [profile?.fight_week_target_kg, profile?.ai_recommended_calories, profile?.ai_recommended_protein_g, profile?.ai_recommended_carbs_g, profile?.ai_recommended_fats_g, profile?.manual_nutrition_override]);
 
   // Auto-open add meal dialog if URL param is present
   useEffect(() => {

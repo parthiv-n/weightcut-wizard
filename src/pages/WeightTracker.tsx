@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -73,7 +73,6 @@ interface AIAnalysis {
 
 export default function WeightTracker() {
   const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
-  const [profile, setProfile] = useState<Profile | null>(null);
   const [newWeight, setNewWeight] = useState("");
   const [newDate, setNewDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [loading, setLoading] = useState(false);
@@ -99,6 +98,7 @@ export default function WeightTracker() {
   const [showProjected, setShowProjected] = useState(true);
   const { toast } = useToast();
   const { updateCurrentWeight, userId, profile: contextProfile } = useUser();
+  const profile = contextProfile as unknown as Profile | null;
   const { safeAsync, isMounted } = useSafeAsync();
   const [searchParams, setSearchParams] = useSearchParams();
   const weightInputRef = useRef<HTMLInputElement>(null);
@@ -113,13 +113,6 @@ export default function WeightTracker() {
     const stored = localStorage.getItem(`weight_tracker_show_projected_${userId}`);
     if (stored !== null) setShowProjected(JSON.parse(stored));
   }, [userId]);
-
-  // Sync contextProfile → local profile state
-  useEffect(() => {
-    if (contextProfile) {
-      setProfile(contextProfile as unknown as Profile);
-    }
-  }, [contextProfile]);
 
   const loadPersistedAnalysis = () => {
     if (!userId) return;
@@ -153,11 +146,6 @@ export default function WeightTracker() {
 
   const fetchData = async () => {
     if (!userId) return;
-
-    // Use contextProfile instead of fetching from DB
-    if (contextProfile) {
-      safeAsync(setProfile)(contextProfile as unknown as Profile);
-    }
 
     // Cache-first: show cached logs instantly
     const cachedLogs = localCache.get<WeightLog[]>(userId, 'weight_logs');
@@ -480,7 +468,7 @@ export default function WeightTracker() {
     return requiredWeeklyLoss > 1.5;
   };
 
-  const getChartData = () => {
+  const chartData = useMemo(() => {
     if (!profile) return [];
 
     // Show both fight week target (diet goal) and weigh-in day weight (final weigh-in) on chart
@@ -565,9 +553,9 @@ export default function WeightTracker() {
     }
 
     return data;
-  };
+  }, [weightLogs, profile?.fight_week_target_kg, profile?.goal_weight_kg, profile?.current_weight_kg, profile?.target_date, timeFilter, aiAnalysis]);
 
-  const handleChartClick = (data: any) => {
+  const handleChartClick = useCallback((data: any) => {
     if (data && data.activePayload && data.activePayload[0]) {
       const payload = data.activePayload[0].payload;
       const log = weightLogs.find(l => l.id === payload.logId);
@@ -575,7 +563,7 @@ export default function WeightTracker() {
         initiateDelete(log);
       }
     }
-  };
+  }, [weightLogs]);
 
   const getCurrentWeight = () => {
     if (!weightLogs.length) return profile?.current_weight_kg || 0;
@@ -725,10 +713,10 @@ export default function WeightTracker() {
             </div>
             </div>
           </div>
-          {getChartData().length > 0 ? (
+          {chartData.length > 0 ? (
             <>
               <ResponsiveContainer width="100%" height={200}>
-                <LineChart data={getChartData()} onClick={handleChartClick}>
+                <LineChart data={chartData} onClick={handleChartClick}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.2} />
                   <XAxis
                     dataKey="date"

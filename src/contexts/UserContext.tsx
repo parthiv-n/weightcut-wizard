@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useRef, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { withAuthTimeout, withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { Capacitor } from "@capacitor/core";
@@ -51,20 +51,53 @@ interface UserContextType {
 
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
+const PROFILE_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+interface CachedState {
+  userId: string;
+  profile: ProfileData;
+  userName: string;
+  avatarUrl: string;
+  currentWeight: number | null;
+}
+
+/** Synchronously reads cached auth state from localStorage so returning users
+ *  see their dashboard on the first render frame — no loading spinner. */
+function getInitialCachedState(): CachedState | null {
+  try {
+    const userId = localStorage.getItem('wcw_last_userId');
+    if (!userId) return null;
+
+    const profile = localCache.get<ProfileData>(userId, 'profiles', PROFILE_CACHE_TTL);
+    if (!profile) return null;
+
+    const savedName = localStorage.getItem(`user_name_${userId}`);
+    const userName = savedName || 'Fighter';
+    const avatarUrl = profile.avatar_url || '';
+    const currentWeight = profile.current_weight_kg ?? null;
+
+    return { userId, profile, userName, avatarUrl, currentWeight };
+  } catch {
+    return null;
+  }
+}
+
 export function UserProvider({ children }: { children: ReactNode }) {
-  const [userName, setUserName] = useState<string>("");
-  const [avatarUrl, setAvatarUrl] = useState<string>("");
-  const [userId, setUserId] = useState<string | null>(null);
-  const [currentWeight, setCurrentWeight] = useState<number | null>(null);
-  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [cached] = useState(() => getInitialCachedState());
+  const [userName, setUserName] = useState<string>(cached?.userName ?? "");
+  const [avatarUrl, setAvatarUrl] = useState<string>(cached?.avatarUrl ?? "");
+  const [userId, setUserId] = useState<string | null>(cached?.userId ?? null);
+  const [currentWeight, setCurrentWeight] = useState<number | null>(cached?.currentWeight ?? null);
+  const [profile, setProfile] = useState<ProfileData | null>(cached?.profile ?? null);
   const [isSessionValid, setIsSessionValid] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [hasProfile, setHasProfile] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(!cached);
+  const [hasProfile, setHasProfile] = useState<boolean>(!!cached);
   const [authError, setAuthError] = useState<boolean>(false);
   const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
-  const isUserLoadedRef = useRef(false);
-  const userIdRef = useRef<string | null>(null);
-  const profileRef = useRef<ProfileData | null>(null);
+  const isUserLoadedRef = useRef(!!cached);
+  const userIdRef = useRef<string | null>(cached?.userId ?? null);
+  const profileRef = useRef<ProfileData | null>(cached?.profile ?? null);
+  const currentWeightRef = useRef<number | null>(cached?.currentWeight ?? null);
 
   const checkSessionValidity = async (): Promise<boolean> => {
     try {
@@ -133,12 +166,19 @@ export function UserProvider({ children }: { children: ReactNode }) {
       );
 
       if (data) {
-        setProfile(data);
-        profileRef.current = data;
+        const prev = profileRef.current;
+        const changed = !prev || JSON.stringify(prev) !== JSON.stringify(data);
+        if (changed) {
+          setProfile(data);
+          profileRef.current = data;
+          if (data.avatar_url) setAvatarUrl(data.avatar_url);
+          const weight = data.current_weight_kg ?? null;
+          if (weight !== null && weight !== currentWeightRef.current) {
+            setCurrentWeight(weight);
+            currentWeightRef.current = weight;
+          }
+        }
         setHasProfile(true);
-        if (data.avatar_url) setAvatarUrl(data.avatar_url);
-        const weight = data.current_weight_kg ?? null;
-        if (weight !== null) setCurrentWeight(weight);
         localCache.set(uid, 'profiles', data);
         return true;
       }
@@ -165,7 +205,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const _performLoad = async (): Promise<'success' | 'no_session' | 'error'> => {
     try {
       const { data: { session }, error } = await withAuthTimeout(
-        supabase.auth.getSession()
+        supabase.auth.getSession(),
+        5000
       );
 
       if (error) {
@@ -182,33 +223,41 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
 
       const user = session.user;
-      setIsSessionValid(true);
-      setUserId(user.id);
       userIdRef.current = user.id;
+      localStorage.setItem('wcw_last_userId', user.id);
 
-      // Load name from localStorage first for instant display
-      const savedName = localStorage.getItem(`user_name_${user.id}`);
-      if (savedName) {
-        setUserName(savedName);
+      // Skip redundant setState calls when already hydrated from cache
+      if (!isUserLoadedRef.current) {
+        setIsSessionValid(true);
+        setUserId(user.id);
+
+        // Load name from localStorage first for instant display
+        const savedName = localStorage.getItem(`user_name_${user.id}`);
+        if (savedName) {
+          setUserName(savedName);
+        } else {
+          const emailName = user.email?.split("@")[0] || "Fighter";
+          const formattedName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
+          setUserName(formattedName);
+        }
       } else {
-        const emailName = user.email?.split("@")[0] || "Fighter";
-        const formattedName = emailName.charAt(0).toUpperCase() + emailName.slice(1);
-        setUserName(formattedName);
+        setIsSessionValid(true);
       }
 
       // Cold-start seed: serve from cache immediately so the app never blocks on DB
-      // Profile cache expires after 1 hour to prevent serving very stale data
-      const PROFILE_CACHE_TTL = 60 * 60 * 1000;
-      const cachedProfile = localCache.get<ProfileData>(user.id, 'profiles', PROFILE_CACHE_TTL);
-      if (cachedProfile) {
-        setProfile(cachedProfile);
-        profileRef.current = cachedProfile;
-        setHasProfile(true);
-        if (cachedProfile.avatar_url) setAvatarUrl(cachedProfile.avatar_url);
-        if (cachedProfile.current_weight_kg) setCurrentWeight(cachedProfile.current_weight_kg);
-        // Resolve loading now so ProtectedRoute renders without waiting for DB
-        isUserLoadedRef.current = true;
-        setIsLoading(false);
+      // Skip if already hydrated from synchronous cache (getInitialCachedState)
+      if (!isUserLoadedRef.current) {
+        const cachedProfile = localCache.get<ProfileData>(user.id, 'profiles', PROFILE_CACHE_TTL);
+        if (cachedProfile) {
+          setProfile(cachedProfile);
+          profileRef.current = cachedProfile;
+          setHasProfile(true);
+          if (cachedProfile.avatar_url) setAvatarUrl(cachedProfile.avatar_url);
+          if (cachedProfile.current_weight_kg) setCurrentWeight(cachedProfile.current_weight_kg);
+          // Resolve loading now so ProtectedRoute renders without waiting for DB
+          isUserLoadedRef.current = true;
+          setIsLoading(false);
+        }
       }
 
       // Parallelize profile + weight queries
@@ -243,19 +292,32 @@ export function UserProvider({ children }: { children: ReactNode }) {
       const profileData = profileResult.status === "fulfilled" ? profileResult.value.data : null;
       const latestWeightLog = weightResult.status === "fulfilled" ? weightResult.value.data : null;
 
-      setHasProfile(!!profileData);
+      const shouldHaveProfile = !!profileData;
+      if (shouldHaveProfile !== !!profileRef.current && !shouldHaveProfile) {
+        // Only transition hasProfile false→true or true→false when it actually changes
+        setHasProfile(false);
+      }
 
       if (profileData) {
-        setProfile(profileData);
-        profileRef.current = profileData;
-        if (profileData.avatar_url) {
-          setAvatarUrl(profileData.avatar_url);
+        // Only update state if profile actually changed (avoid redundant re-renders)
+        const prev = profileRef.current;
+        const changed = !prev || JSON.stringify(prev) !== JSON.stringify(profileData);
+        if (changed) {
+          setProfile(profileData);
+          profileRef.current = profileData;
+          setHasProfile(true);
+          if (profileData.avatar_url) {
+            setAvatarUrl(profileData.avatar_url);
+          }
         }
         localCache.set(user.id, 'profiles', profileData);
       }
 
       const weight = latestWeightLog?.weight_kg || profileData?.current_weight_kg || null;
-      setCurrentWeight(weight);
+      if (weight !== currentWeightRef.current) {
+        setCurrentWeight(weight);
+        currentWeightRef.current = weight;
+      }
 
       return 'success';
     } catch (error) {
@@ -314,6 +376,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const updateCurrentWeight = async (weight: number) => {
     setCurrentWeight(weight);
+    currentWeightRef.current = weight;
     setProfile(prev => {
       const updated = prev ? { ...prev, current_weight_kg: weight } : prev;
       profileRef.current = updated;
@@ -343,7 +406,26 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'INITIAL_SESSION') {
         if (session?.user) {
-          await loadUserData();
+          if (isUserLoadedRef.current) {
+            // Already hydrated from cache — silent background refresh, no spinner
+            _performLoad().catch(() => {});
+          } else {
+            await loadUserData();
+          }
+        } else if (isUserLoadedRef.current) {
+          // No valid session but we hydrated from cache — stale login, reset everything
+          localStorage.removeItem('wcw_last_userId');
+          isUserLoadedRef.current = false;
+          setUserId(null);
+          userIdRef.current = null;
+          setUserName("");
+          setAvatarUrl("");
+          setCurrentWeight(null);
+          setProfile(null);
+          profileRef.current = null;
+          setHasProfile(false);
+          setIsSessionValid(false);
+          setIsLoading(false);
         } else {
           setIsLoading(false);
         }
@@ -351,6 +433,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         // Clear all cached data for this user before resetting refs
         const uid = userIdRef.current;
         if (uid) localCache.clearUser(uid);
+        localStorage.removeItem('wcw_last_userId');
         isUserLoadedRef.current = false;
         setIsSessionValid(false);
         setUserId(null);
@@ -377,6 +460,23 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
     });
 
+    // Safety net: if INITIAL_SESSION never fires (iOS Keychain hang), prevent
+    // the user from being stuck on the loading screen forever.
+    const safetyTimer = setTimeout(() => {
+      if (!isUserLoadedRef.current) {
+        console.warn("Safety timeout (5s): INITIAL_SESSION never fired, calling loadUserData()");
+        loadUserData();
+      }
+    }, 5000);
+
+    const hardReleaseTimer = setTimeout(() => {
+      if (!isUserLoadedRef.current) {
+        console.warn("Hard release (10s): forcing isLoading=false");
+        isUserLoadedRef.current = true;
+        setIsLoading(false);
+      }
+    }, 10000);
+
     // Periodic session validity checks (every 30 minutes)
     const sessionCheckInterval = setInterval(async () => {
       await checkSessionValidity();
@@ -387,14 +487,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
     let visibilityHandler: (() => void) | null = null;
 
     const handleAppResume = () => {
-      // If profile failed to load initially, do a full reload on resume
-      if (!userIdRef.current || !profileRef.current) {
-        loadUserData();
+      if (isUserLoadedRef.current) {
+        // User was already loaded — silent refresh without touching isLoading
+        _performLoad().catch(() => {});
       } else {
-        // Verify session is still valid, then refresh profile data from DB
-        checkSessionValidity().then(valid => {
-          if (valid) refreshProfile();
-        });
+        // Nothing loaded yet — full load with loading spinner
+        loadUserData();
       }
       // Flush any offline writes queued while the app was backgrounded
       if (userIdRef.current) {
@@ -417,6 +515,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     return () => {
       subscription.unsubscribe();
+      clearTimeout(safetyTimer);
+      clearTimeout(hardReleaseTimer);
       clearInterval(sessionCheckInterval);
       appResumeHandle?.remove();
       if (visibilityHandler) {
@@ -450,29 +550,29 @@ export function UserProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const contextValue = useMemo<UserContextType>(() => ({
+    userName,
+    avatarUrl,
+    userId,
+    currentWeight,
+    profile,
+    isSessionValid,
+    isLoading,
+    hasProfile,
+    authError,
+    isOffline,
+    setUserName: updateUserName,
+    setAvatarUrl: updateAvatarUrl,
+    updateCurrentWeight,
+    loadUserData,
+    refreshProfile,
+    refreshSession,
+    checkSessionValidity,
+    retryAuth,
+  }), [userName, avatarUrl, userId, currentWeight, profile, isSessionValid, isLoading, hasProfile, authError, isOffline]);
+
   return (
-    <UserContext.Provider
-      value={{
-        userName,
-        avatarUrl,
-        userId,
-        currentWeight,
-        profile,
-        isSessionValid,
-        isLoading,
-        hasProfile,
-        authError,
-        isOffline,
-        setUserName: updateUserName,
-        setAvatarUrl: updateAvatarUrl,
-        updateCurrentWeight,
-        loadUserData,
-        refreshProfile,
-        refreshSession,
-        checkSessionValidity,
-        retryAuth,
-      }}
-    >
+    <UserContext.Provider value={contextValue}>
       {children}
     </UserContext.Provider>
   );
