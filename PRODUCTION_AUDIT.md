@@ -37,10 +37,7 @@ Full app survey before closing beta and accepting payments. Three parallel audit
 - A single user can spam Grok API calls and exhaust quota
 - **Need**: Per-user rate limits (e.g., Upstash or Deno KV) on all AI functions
 
-### 1.6 Security — CORS
-- Currently `"*"` (wildcard) on all functions — allows any website to call APIs
-- Fine for dev but not for production with payments
-- **Need**: Dynamic CORS that allows production domain + localhost for dev
+   
 
 ### 1.7 Critical Dependencies
 - `xlsx` (429 KB): HIGH severity vulnerability with **no fix available**
