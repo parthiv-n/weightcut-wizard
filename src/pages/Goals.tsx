@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Sparkles, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
 import { profileSchema } from "@/lib/validation";
 import { useUser } from "@/contexts/UserContext";
+import { celebrateSuccess } from "@/lib/haptics";
 
 const ACTIVITY_MULTIPLIERS = {
   sedentary: 1.2,
@@ -177,6 +178,7 @@ export default function Goals() {
       if (error) throw error;
 
       await refreshProfile();
+      celebrateSuccess();
 
       toast({
         title: "Goals updated!",

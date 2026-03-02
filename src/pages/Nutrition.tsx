@@ -34,7 +34,7 @@ import { localCache } from "@/lib/localCache";
 import { syncQueue } from "@/lib/syncQueue";
 import { preloadAdjacentDates } from "@/lib/backgroundSync";
 import { AIGeneratingOverlay } from "@/components/AIGeneratingOverlay";
-import { triggerHapticSuccess, celebrateSuccess } from "@/lib/haptics";
+import { triggerHapticSuccess, triggerHapticSelection, celebrateSuccess } from "@/lib/haptics";
 import { DietAnalysisCard } from "@/components/nutrition/DietAnalysisCard";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import type { DietAnalysisResult } from "@/types/dietAnalysis";
@@ -2351,13 +2351,13 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         {/* ═══ Date Navigator ═══ */}
         <div className="relative flex items-center justify-center gap-3">
           <button
-            onClick={() => setSelectedDate(format(subDays(new Date(selectedDate), 1), "yyyy-MM-dd"))}
+            onClick={() => { setSelectedDate(format(subDays(new Date(selectedDate), 1), "yyyy-MM-dd")); triggerHapticSelection(); }}
             className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 active:scale-95 transition-all"
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 4L6 8l4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
           <button
-            onClick={() => setSelectedDate(format(new Date(), "yyyy-MM-dd"))}
+            onClick={() => { setSelectedDate(format(new Date(), "yyyy-MM-dd")); triggerHapticSelection(); }}
             className="flex items-center gap-2 text-sm font-semibold px-4 py-1.5 rounded-full bg-muted/40 hover:bg-muted/70 active:scale-[0.97] transition-all"
           >
             <CalendarIcon className="h-3.5 w-3.5 text-primary" />
@@ -2366,7 +2366,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
               : format(new Date(selectedDate), "EEE, MMM d")}
           </button>
           <button
-            onClick={() => setSelectedDate(format(addDays(new Date(selectedDate), 1), "yyyy-MM-dd"))}
+            onClick={() => { setSelectedDate(format(addDays(new Date(selectedDate), 1), "yyyy-MM-dd")); triggerHapticSelection(); }}
             className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 active:scale-95 transition-all"
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>

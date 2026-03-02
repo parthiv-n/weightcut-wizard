@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { motion, useReducedMotion } from "motion/react";
 import { supabase } from "@/integrations/supabase/client";
 import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +24,9 @@ import { localCache } from "@/lib/localCache";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { WeightIncreaseQuestionnaire } from "@/components/dashboard/WeightIncreaseQuestionnaire";
 import { AchievementSheet } from "@/components/achievements/AchievementSheet";
+import { staggerContainer, staggerItem, springs } from "@/lib/motion";
+import { triggerHaptic, triggerHapticSelection } from "@/lib/haptics";
+import { ImpactStyle } from "@capacitor/haptics";
 
 interface DailyWisdom {
   summary: string;
@@ -52,6 +56,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { safeAsync, isMounted } = useSafeAsync();
   const { streak, streakIncludesToday, weeklyConsistency, badges, badgesLoading, allAchievements } = useGamification(userId, weightLogs, todayCalories, profile);
+  const prefersReducedMotion = useReducedMotion();
   const lastFetchRef = useRef(0);
 
   const getGreeting = () => {
@@ -320,6 +325,7 @@ export default function Dashboard() {
   const trendIsUp = todayLog && latestPrevLog && parseFloat(todayLog.weight_kg) > parseFloat(latestPrevLog.weight_kg);
 
   const handleWisdomClick = () => {
+    triggerHaptic(ImpactStyle.Light);
     if (trendIsUp) {
       setQuestionnaireOpen(true);
     } else {
@@ -343,9 +349,14 @@ export default function Dashboard() {
 
   return (
     <ErrorBoundary>
-      <div className="space-y-5 sm:space-y-6 p-4 sm:p-5 md:p-6 w-full max-w-7xl mx-auto">
+      <motion.div
+        className="space-y-5 sm:space-y-6 p-4 sm:p-5 md:p-6 w-full max-w-7xl mx-auto"
+        variants={prefersReducedMotion ? undefined : staggerContainer(60)}
+        initial="hidden"
+        animate="visible"
+      >
         {/* Countdown + Greeting header */}
-        <div className="dashboard-card-enter dashboard-stagger-1">
+        <motion.div variants={prefersReducedMotion ? undefined : staggerItem} transition={springs.responsive}>
           {daysUntilTarget > 0 && (
             <div className="flex items-center gap-2 mb-1.5">
               <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
@@ -359,12 +370,12 @@ export default function Dashboard() {
             {streak > 0 && <StreakBadge streak={streak} isActive={streakIncludesToday} />}
           </div>
           <p className="text-sm text-muted-foreground mt-0.5">Your weight cut journey dashboard</p>
-        </div>
+        </motion.div>
 
         {/* Weekly Consistency Ring */}
-        <div className="dashboard-card-enter dashboard-stagger-2">
+        <motion.div variants={prefersReducedMotion ? undefined : staggerItem} transition={springs.responsive}>
           <ConsistencyRing {...weeklyConsistency} />
-        </div>
+        </motion.div>
 
         {/* Wizard's Daily Wisdom card — conditional states */}
         <div data-tutorial="daily-wisdom-card">
@@ -401,9 +412,9 @@ export default function Dashboard() {
                 <img src={wizardLogo} alt="Wizard" className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover opacity-60" />
               </div>
               <div className="flex-1 min-w-0 space-y-2 pt-1">
-                <div className="h-3 rounded bg-muted/50 animate-pulse w-1/3" />
-                <div className="h-3 rounded bg-muted/50 animate-pulse w-full" />
-                <div className="h-3 rounded bg-muted/50 animate-pulse w-4/5" />
+                <div className="h-3 rounded shimmer-skeleton w-1/3" />
+                <div className="h-3 rounded shimmer-skeleton w-full" />
+                <div className="h-3 rounded shimmer-skeleton w-4/5" />
               </div>
             </div>
           </div>
@@ -473,7 +484,7 @@ export default function Dashboard() {
                     <Button
                       variant={weightUnit === 'kg' ? 'default' : 'ghost'}
                       size="sm"
-                      onClick={() => setWeightUnit('kg')}
+                      onClick={() => { setWeightUnit('kg'); triggerHapticSelection(); }}
                       className="h-9 min-h-[36px] text-xs sm:h-8 sm:min-h-[32px] touch-target"
                     >
                       kg
@@ -481,7 +492,7 @@ export default function Dashboard() {
                     <Button
                       variant={weightUnit === 'lb' ? 'default' : 'ghost'}
                       size="sm"
-                      onClick={() => setWeightUnit('lb')}
+                      onClick={() => { setWeightUnit('lb'); triggerHapticSelection(); }}
                       className="h-9 min-h-[36px] text-xs sm:h-8 sm:min-h-[32px] touch-target"
                     >
                       lb
@@ -491,6 +502,11 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent className="p-3 sm:p-6">
                 {chartData.length > 0 ? (
+                  <motion.div
+                    initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.97 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={springs.gentle}
+                  >
                   <ResponsiveContainer width="100%" height={250} className="sm:h-[300px]">
                     <ComposedChart data={chartData}>
                       <defs>
@@ -524,7 +540,7 @@ export default function Dashboard() {
                         dataKey="weight"
                         stroke="none"
                         fill="url(#weightGradient)"
-                        animationDuration={1000}
+                        animationDuration={1200}
                       />
                       <Line
                         type="monotone"
@@ -533,10 +549,11 @@ export default function Dashboard() {
                         strokeWidth={3}
                         dot={{ fill: "hsl(var(--primary))", r: 4, strokeWidth: 2, stroke: "hsl(var(--background))" }}
                         activeDot={{ r: 6, strokeWidth: 2 }}
-                        animationDuration={1000}
+                        animationDuration={1200}
                       />
                     </ComposedChart>
                   </ResponsiveContainer>
+                  </motion.div>
                 ) : (
                   <div className="text-center py-12 text-muted-foreground">
                     No weight data yet. Start logging your weight to see your progress!
@@ -555,10 +572,10 @@ export default function Dashboard() {
         </div>
 
         {/* Milestone Badges */}
-        <div className="dashboard-card-enter dashboard-stagger-7">
+        <motion.div variants={prefersReducedMotion ? undefined : staggerItem} transition={springs.responsive}>
           <MilestoneBadges badges={badges} loading={badgesLoading} onTap={() => setAchievementSheetOpen(true)} />
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
       {/* Wisdom Detail Bottom Sheet */}
       {wisdom && (

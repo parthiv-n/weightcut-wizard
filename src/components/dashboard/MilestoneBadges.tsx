@@ -1,5 +1,7 @@
 import { Flame, Calendar, Utensils, Trophy, Scale, TrendingUp, Award, Zap, Star, Dumbbell, Crown, Check, ChevronRight } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 import type { MilestoneBadge } from "@/hooks/useGamification";
+import { staggerContainer, staggerItem, springs } from "@/lib/motion";
 
 const iconMap = {
   Flame, Calendar, Utensils, Trophy, Scale, TrendingUp, Award, Zap, Star, Dumbbell, Crown,
@@ -14,14 +16,16 @@ interface MilestoneBadgesProps {
 function BadgeSkeleton() {
   return (
     <div className="w-28 flex-shrink-0 rounded-xl border border-border/50 p-3 text-center glass-card">
-      <div className="w-10 h-10 rounded-full mx-auto bg-muted/20 animate-pulse" />
-      <div className="h-3 w-16 mx-auto mt-2 rounded bg-muted/20 animate-pulse" />
-      <div className="h-1 w-full mt-2 rounded-full bg-muted/20 animate-pulse" />
+      <div className="w-10 h-10 rounded-full mx-auto shimmer-skeleton" />
+      <div className="h-3 w-16 mx-auto mt-2 rounded shimmer-skeleton" />
+      <div className="h-1 w-full mt-2 rounded-full shimmer-skeleton" />
     </div>
   );
 }
 
 export function MilestoneBadges({ badges, loading, onTap }: MilestoneBadgesProps) {
+  const prefersReducedMotion = useReducedMotion();
+
   if (loading) {
     return (
       <div>
@@ -42,7 +46,7 @@ export function MilestoneBadges({ badges, loading, onTap }: MilestoneBadgesProps
   return (
     <Wrapper
       {...(onTap ? { onClick: onTap, type: "button" as const } : {})}
-      className={onTap ? "w-full text-left active:scale-[0.98] transition-transform" : undefined}
+      className={onTap ? "w-full text-left" : undefined}
     >
       <div className="flex items-center justify-between mb-3">
         <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
@@ -50,13 +54,20 @@ export function MilestoneBadges({ badges, loading, onTap }: MilestoneBadgesProps
         </div>
         {onTap && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
       </div>
-      <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
+      <motion.div
+        className="flex gap-3 overflow-x-auto scrollbar-hide pb-1"
+        variants={prefersReducedMotion ? undefined : staggerContainer(60)}
+        initial="hidden"
+        animate="visible"
+      >
         {badges.map((badge) => {
           const Icon = iconMap[badge.icon];
           return (
-            <div
+            <motion.div
               key={badge.id}
               className="w-28 flex-shrink-0 rounded-xl border border-border/50 p-3 text-center glass-card"
+              variants={prefersReducedMotion ? undefined : staggerItem}
+              transition={springs.responsive}
             >
               {/* Icon circle */}
               <div
@@ -91,16 +102,18 @@ export function MilestoneBadges({ badges, loading, onTap }: MilestoneBadgesProps
               {/* Progress bar */}
               {!badge.unlocked && (
                 <div className="h-1 rounded-full bg-muted mt-2 overflow-hidden">
-                  <div
-                    className="h-full rounded-full bg-primary transition-all duration-500"
-                    style={{ width: `${badge.progress * 100}%` }}
+                  <motion.div
+                    className="h-full rounded-full bg-primary"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${badge.progress * 100}%` }}
+                    transition={springs.gentle}
                   />
                 </div>
               )}
-            </div>
+            </motion.div>
           );
         })}
-      </div>
+      </motion.div>
     </Wrapper>
   );
 }

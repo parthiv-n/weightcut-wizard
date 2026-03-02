@@ -279,6 +279,54 @@ All colors MUST be HSL.
     letter-spacing: -0.02em;
   }
 
+  /* Shimmer skeleton — replaces animate-pulse for premium feel */
+  .shimmer-skeleton {
+    position: relative;
+    overflow: hidden;
+    background: hsl(var(--muted));
+  }
+
+  .shimmer-skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      hsl(var(--foreground) / 0.06) 40%,
+      hsl(var(--foreground) / 0.06) 60%,
+      transparent 100%
+    );
+    animation: shimmer 1.8s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+
+  /* Glass card hover depth — desktop only */
+  @media (hover: hover) {
+    .dark .glass-card:hover {
+      border-color: rgba(255, 255, 255, 0.14) !important;
+      box-shadow:
+        inset 0 1px 1px rgba(255, 255, 255, 0.12),
+        0 12px 40px rgba(0, 0, 0, 0.4);
+    }
+  }
+
+  /* Toast spring entrance — overshoot bounce */
+  @keyframes toast-spring-in {
+    0% { transform: translateY(-100%) scale(0.95); opacity: 0; }
+    60% { transform: translateY(6%) scale(1.02); opacity: 1; }
+    80% { transform: translateY(-2%) scale(1); }
+    100% { transform: translateY(0) scale(1); opacity: 1; }
+  }
+
+  .toast-spring-in {
+    animation: toast-spring-in 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
 }
 
 @layer utilities {
@@ -381,39 +429,6 @@ All colors MUST be HSL.
     }
   }
 
-  .dashboard-card-enter {
-    animation: dashboardCardEnter 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards;
-    will-change: transform, opacity;
-  }
-
-  .dashboard-stagger-1 {
-    animation-delay: 0.05s;
-  }
-
-  .dashboard-stagger-2 {
-    animation-delay: 0.1s;
-  }
-
-  .dashboard-stagger-3 {
-    animation-delay: 0.15s;
-  }
-
-  .dashboard-stagger-4 {
-    animation-delay: 0.2s;
-  }
-
-  .dashboard-stagger-5 {
-    animation-delay: 0.25s;
-  }
-
-  .dashboard-stagger-6 {
-    animation-delay: 0.3s;
-  }
-
-  .dashboard-stagger-7 {
-    animation-delay: 0.35s;
-  }
-
   /* Optimize animations for reduced motion preferences */
   @media (prefers-reduced-motion: reduce) {
     .page-transition-page {
@@ -423,10 +438,8 @@ All colors MUST be HSL.
       transform: none !important;
     }
 
-    .dashboard-card-enter {
+    .shimmer-skeleton::after {
       animation: none !important;
-      opacity: 1;
-      transform: none;
     }
   }
 }

@@ -1,4 +1,7 @@
 import { Flame } from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
+import { springs } from "@/lib/motion";
+import { AnimatedNumber } from "@/components/motion";
 
 interface StreakBadgeProps {
   streak: number;
@@ -6,8 +9,15 @@ interface StreakBadgeProps {
 }
 
 export function StreakBadge({ streak, isActive }: StreakBadgeProps) {
+  const prefersReducedMotion = useReducedMotion();
+
   return (
-    <div className="inline-flex flex-col items-center">
+    <motion.div
+      className="inline-flex flex-col items-center"
+      initial={prefersReducedMotion ? false : { scale: 0.8, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={springs.bouncy}
+    >
       <div
         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${
           isActive
@@ -15,20 +25,33 @@ export function StreakBadge({ streak, isActive }: StreakBadgeProps) {
             : "bg-orange-500/5 border-orange-500/10"
         }`}
       >
-        <Flame
-          className={`h-4 w-4 ${
+        <motion.div
+          animate={
+            isActive && !prefersReducedMotion
+              ? { rotate: [-3, 3, -2, 2, 0], scale: [1, 1.1, 1] }
+              : undefined
+          }
+          transition={
             isActive
-              ? "text-orange-400"
-              : "text-muted-foreground animate-pulse"
-          }`}
-        />
-        <span className="text-sm font-bold display-number">{streak}</span>
+              ? { duration: 2, repeat: Infinity, ease: "easeInOut" }
+              : undefined
+          }
+        >
+          <Flame
+            className={`h-4 w-4 ${
+              isActive ? "text-orange-400" : "text-muted-foreground"
+            }`}
+          />
+        </motion.div>
+        <span className="text-sm font-bold display-number">
+          <AnimatedNumber value={streak} />
+        </span>
       </div>
       {!isActive && streak > 0 && (
         <span className="text-[10px] text-muted-foreground mt-0.5">
           Log today!
         </span>
       )}
-    </div>
+    </motion.div>
   );
 }

@@ -1,6 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Edit2, Trash2, ChevronDown, ChevronUp, Sparkles } from "lucide-react";
 import { useState } from "react";
+import { motion, useReducedMotion } from "motion/react";
+import { springs } from "@/lib/motion";
 
 interface Ingredient {
   name: string;
@@ -44,8 +46,14 @@ export function MealCard({ meal, onEdit, onDelete }: MealCardProps) {
     }
   };
 
+  const prefersReducedMotion = useReducedMotion();
+
   return (
-    <div className="glass-card mb-3 overflow-hidden animate-fade-in transition-all duration-300">
+    <motion.div
+      className="glass-card mb-3 overflow-hidden"
+      whileTap={prefersReducedMotion ? undefined : { scale: 0.98 }}
+      transition={springs.snappy}
+    >
       {/* Main row */}
       <div className="flex items-center gap-3 p-4">
         {/* Meal type dot */}
@@ -153,6 +161,6 @@ export function MealCard({ meal, onEdit, onDelete }: MealCardProps) {
         </div>
       )}
 
-    </div>
+    </motion.div>
   );
 }

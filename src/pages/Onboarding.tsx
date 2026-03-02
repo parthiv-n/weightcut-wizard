@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Sparkles, AlertTriangle, CheckCircle, Zap, Shield, Activity } from "lucide-react";
 import { profileSchema } from "@/lib/validation";
 import wizardLogo from "@/assets/wizard-logo.png";
+import { celebrateSuccess } from "@/lib/haptics";
 
 const ACTIVITY_MULTIPLIERS = {
   sedentary: 1.2,
@@ -151,6 +152,7 @@ export default function Onboarding() {
       setTimeout(async () => {
         setGenerationStep(4);
         await refreshProfile(); // update hasProfile=true before navigating
+        celebrateSuccess();
         setTimeout(() => navigate("/dashboard"), 1000);
       }, remainingAnim);
     } catch (error: any) {

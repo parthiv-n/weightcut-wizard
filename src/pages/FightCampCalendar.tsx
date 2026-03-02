@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { RecoveryDashboard } from "@/components/fightcamp/RecoveryDashboard";
 import { TrainingSummarySection } from "@/components/fightcamp/TrainingSummarySection";
+import { triggerHapticSelection } from "@/lib/haptics";
 import { ShareButton } from "@/components/share/ShareButton";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { FightCampCalendarCard } from "@/components/share/cards/FightCampCalendarCard";
@@ -288,8 +289,8 @@ export default function FightCampCalendar() {
         end: endOfMonth(currentDate)
     });
 
-    const nextMonth = () => setCurrentDate(addMonths(currentDate, 1));
-    const prevMonth = () => setCurrentDate(subMonths(currentDate, 1));
+    const nextMonth = () => { setCurrentDate(addMonths(currentDate, 1)); triggerHapticSelection(); };
+    const prevMonth = () => { setCurrentDate(subMonths(currentDate, 1)); triggerHapticSelection(); };
 
     const sessionsForSelectedDate = sessions.filter(s => s.date === format(selectedDate, 'yyyy-MM-dd'));
 
@@ -338,7 +339,7 @@ export default function FightCampCalendar() {
                                 <div
                                     key={day.toISOString()}
                                     className="aspect-square flex flex-col items-center justify-center relative touch-target"
-                                    onClick={() => setSelectedDate(day)}
+                                    onClick={() => { setSelectedDate(day); triggerHapticSelection(); }}
                                 >
                                     <div className={`
                     w-8 h-8 flex items-center justify-center rounded-full text-sm font-medium transition-all

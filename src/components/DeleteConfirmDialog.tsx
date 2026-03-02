@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Trash2 } from "lucide-react";
 import {
   AlertDialog,
@@ -9,6 +10,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { triggerHapticWarning } from "@/lib/haptics";
 
 interface DeleteConfirmDialogProps {
   open: boolean;
@@ -30,6 +32,10 @@ export function DeleteConfirmDialog({
   const defaultDescription = itemName
     ? `Are you sure you want to delete "${itemName}"?`
     : "Are you sure you want to delete this entry?";
+
+  useEffect(() => {
+    if (open) triggerHapticWarning();
+  }, [open]);
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
