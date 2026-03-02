@@ -143,7 +143,7 @@ Constraints: total fluid ≈${targets.totalFluidML}ml, total carbs ≈${targets.
           { role: "user", content: userPrompt },
         ],
         temperature: 0.1,
-        max_completion_tokens: 3000,
+        max_completion_tokens: 8192,
       }),
     });
 

@@ -847,6 +847,9 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       if (response.error) {
         throw response.error;
       }
+      if (response.data?.error) {
+        throw new Error(response.data.error);
+      }
 
       const { mealPlan, dailyCalorieTarget: target, safetyStatus: status, safetyMessage: message } = response.data;
 

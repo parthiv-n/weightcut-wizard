@@ -209,49 +209,24 @@ Respond ONLY with this exact JSON structure:
 
     const userPrompt = `User Request: ${prompt}`;
 
-    // Add timeout to prevent hanging - increased for more reliable responses
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 55000); // 55 second timeout
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${GROK_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "grok-4-1-fast-reasoning",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.3,
+        max_completion_tokens: 8192
+      }),
+    });
 
-    let response;
-    try {
-      response = await fetch("https://api.x.ai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${GROK_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "grok-4-1-fast-reasoning",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt }
-          ],
-          temperature: 0.3,
-          max_completion_tokens: 4096
-        }),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-      console.log("Grok API response status:", response.status);
-    } catch (fetchError) {
-      clearTimeout(timeoutId);
-
-      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-        console.error("Grok API request timed out after 55 seconds");
-        return new Response(
-          JSON.stringify({ error: "AI request timed out after 55 seconds. The service may be busy. Please try again in a moment." }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      console.error("Grok API fetch error:", fetchError);
-      return new Response(
-        JSON.stringify({ error: "Failed to connect to AI service" }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    console.log("Grok API response status:", response.status);
 
     if (!response.ok) {
       const errorData = await response.json();

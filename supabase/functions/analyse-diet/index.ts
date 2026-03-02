@@ -109,7 +109,7 @@ Athlete profile: ${profile?.age || "?"} years, ${profile?.sex || "?"}, ${profile
           { role: "user", content: userPrompt }
         ],
         temperature: 0.3,
-        max_completion_tokens: 1500
+        max_completion_tokens: 4096
       })
     });
 

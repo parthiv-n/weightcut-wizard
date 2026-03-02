@@ -23,7 +23,7 @@ import {
 import { useUser } from "@/contexts/UserContext";
 import { AIGeneratingOverlay } from "@/components/AIGeneratingOverlay";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
-import { withTimeout } from "@/lib/timeoutWrapper";
+
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -268,8 +268,7 @@ export default function Hydration() {
     safeAsync(setLoading)(true);
 
     try {
-      const { data, error } = await withTimeout(
-        supabase.functions.invoke("rehydration-protocol", {
+      const { data, error } = await supabase.functions.invoke("rehydration-protocol", {
         body: {
           weightLostKg: parseFloat(weightLost),
           availableHours,
@@ -285,10 +284,7 @@ export default function Hydration() {
           goalWeightKg: contextProfile?.goal_weight_kg,
           fightWeekTargetKg: contextProfile?.fight_week_target_kg,
         },
-      }),
-        15000,
-        "Rehydration protocol timed out"
-      );
+      });
 
       if (!isMounted()) return;
       if (error) throw error;
