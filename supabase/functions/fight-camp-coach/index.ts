@@ -261,32 +261,55 @@ CRITICAL — recovery_focus must be exactly 5 items, each one addressing a DIFFE
 Recent sessions:
 ${sessionsText}${checkInText}${athleteBaselineText}`;
 
-    const response = await fetch("https://api.x.ai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${GROK_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "grok-4-1-fast-reasoning",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.3,
-        max_completion_tokens: 2400,
-      }),
+    const grokBody = JSON.stringify({
+      model: "grok-4-1-fast-reasoning",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.3,
+      max_completion_tokens: 4096,
     });
 
-    if (!response.ok) {
-      if (response.status === 429) {
+    const grokHeaders = {
+      "Authorization": `Bearer ${GROK_API_KEY}`,
+      "Content-Type": "application/json",
+    };
+
+    let response: Response | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      response = await fetch("https://api.x.ai/v1/chat/completions", {
+        method: "POST",
+        headers: grokHeaders,
+        body: grokBody,
+      });
+
+      if (response.status !== 429) break;
+
+      // Retry after backoff: 3s, 6s
+      if (attempt < 2) {
+        const retryAfter = parseInt(response.headers.get("retry-after") || "0", 10);
+        const delay = retryAfter > 0 ? retryAfter * 1000 : (attempt + 1) * 3000;
+        edgeLogger.info(`Rate limited, retrying in ${delay}ms (attempt ${attempt + 1}/3)`);
+        await new Promise(r => setTimeout(r, delay));
+      }
+    }
+
+    if (!response!.ok) {
+      if (response!.status === 429) {
+        let detail = "Rate limit exceeded. Please try again in a minute.";
+        try {
+          const body = await response!.json();
+          detail = body?.error?.message || body?.error || detail;
+          edgeLogger.error("Grok 429 detail", undefined, { functionName: "fight-camp-coach", detail });
+        } catch { /* body already consumed or not JSON */ }
         return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
+          JSON.stringify({ error: detail }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      const errorText = await response.text();
-      edgeLogger.error("Grok API error", undefined, { functionName: "fight-camp-coach", status: response.status, errorText });
+      const errorText = await response!.text();
+      edgeLogger.error("Grok API error", undefined, { functionName: "fight-camp-coach", status: response!.status, errorText });
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

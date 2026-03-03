@@ -36,6 +36,7 @@ export default defineConfig(() => ({
           'vendor-supabase': ['@supabase/supabase-js'],
           'vendor-ui': ['@radix-ui/react-dialog', '@radix-ui/react-select'],
           'vendor-motion': ['motion'],
+          'vendor-barcode': ['react-zxing'],
         }
       }
     }

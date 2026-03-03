@@ -268,7 +268,7 @@ export default function Hydration() {
     if (!currentWeight) return;
 
     aiAbortRef.current?.abort();
-    const { controller, cleanup } = createAIAbortController(30000);
+    const { controller, cleanup } = createAIAbortController();
     aiAbortRef.current = controller;
 
     safeAsync(setLoading)(true);
@@ -659,7 +659,7 @@ export default function Hydration() {
             {/* ── Summary ───────────────────────────────────────────────── */}
             <div className="rounded-2xl bg-muted/50 border border-border/50 p-4">
               <div className="flex items-start justify-between gap-3">
-                <p className="text-sm text-foreground/90 leading-snug">{protocol.summary}</p>
+                <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-line">{protocol.summary}</p>
                 <button
                   onClick={() => handleGenerateProtocol(new Event("submit") as any)}
                   disabled={loading}

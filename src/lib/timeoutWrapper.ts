@@ -48,20 +48,14 @@ export function withRetry<T>(
   });
 }
 
-// Creates an AbortController with a hard timeout safety net for AI calls.
-// The overlay's 20s stuck detection provides the soft timeout UX;
-// this hard timeout (default 30s) is the safety net.
-export function createAIAbortController(hardTimeoutMs: number = 30000): {
+// Creates an AbortController for AI calls.
+// No auto-timeout — the user cancels manually via the overlay's Cancel button.
+export function createAIAbortController(): {
   controller: AbortController;
   cleanup: () => void;
 } {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), hardTimeoutMs);
-
-  const cleanup = () => clearTimeout(timer);
-
-  // If the user (or anything else) aborts early, clear the timeout
-  controller.signal.addEventListener("abort", cleanup, { once: true });
+  const cleanup = () => {}; // No auto-timeout; user cancels manually
 
   return { controller, cleanup };
 }

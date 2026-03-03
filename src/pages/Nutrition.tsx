@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,8 +17,8 @@ import { MealCard } from "@/components/nutrition/MealCard";
 import { CalorieBudgetIndicator } from "@/components/nutrition/CalorieBudgetIndicator";
 import { MacroPieChart } from "@/components/nutrition/MacroPieChart";
 import { FoodSearchDialog } from "@/components/nutrition/FoodSearchDialog";
-import { VoiceInput } from "@/components/nutrition/VoiceInput";
-import { BarcodeScanner } from "@/components/nutrition/BarcodeScanner";
+const VoiceInput = lazy(() => import("@/components/nutrition/VoiceInput").then(m => ({ default: m.VoiceInput })));
+const BarcodeScanner = lazy(() => import("@/components/nutrition/BarcodeScanner").then(m => ({ default: m.BarcodeScanner })));
 import { format, subDays, addDays } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
@@ -853,6 +853,10 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         throw new Error(await extractEdgeFunctionError(response.error, "Failed to generate meal plan"));
       }
 
+      if (response.data?.error) {
+        throw new Error(response.data.error);
+      }
+
       const { mealPlan, dailyCalorieTarget: target, safetyStatus: status, safetyMessage: message } = response.data;
 
       // Store as meal plan ideas instead of logging them
@@ -995,10 +999,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           errorMsg = "Authentication failed. Please refresh the page and log in again.";
         }
       } else if (error?.message) {
-        if (error.message.includes('timeout') || error.message.includes('408')) {
-          errorMsg = "The AI service is taking longer than usual. Please try again in a moment.";
-          shouldRetry = true;
-        } else if (error.message.includes('429') || error.message.includes('quota')) {
+        if (error.message.includes('429') || error.message.includes('quota')) {
           errorMsg = "AI service is temporarily busy. Please try again in a few minutes.";
           shouldRetry = true;
         } else if (error.message.includes('404')) {
@@ -2196,7 +2197,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           { icon: Sparkles, label: "Generating recommendations", color: "text-blue-400" },
         ],
         title: "Analysing Diet",
-        subtitle: "Evaluating your full day of eating...",
+        subtitle: "This usually takes 20–40 seconds...",
         retry: () => handleAnalyseDiet(),
       };
     }
@@ -2208,7 +2209,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           { icon: Sparkles, label: "Optimizing recipes", color: "text-yellow-400" },
         ],
         title: "Generating Meal Plan",
-        subtitle: "Creating a personalized nutrition strategy...",
+        subtitle: "This usually takes 30–60 seconds...",
         retry: () => handleGenerateMealPlan(),
       };
     }
@@ -2220,7 +2221,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           { icon: CheckCircle, label: "Finalizing log", color: "text-green-400" },
         ],
         title: "Analyzing Meal",
-        subtitle: "Processing your input...",
+        subtitle: "This usually takes 10–20 seconds...",
         retry: null, // meal text varies, can't auto-retry
       };
     }
@@ -2231,7 +2232,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           { icon: PieChartIcon, label: "Calculating portion macros", color: "text-yellow-500" },
         ],
         title: "Analyzing Ingredient",
-        subtitle: "Looking up nutritional data...",
+        subtitle: "This usually takes 10–20 seconds...",
         retry: null, // ingredient text varies, can't auto-retry
       };
     }
@@ -2520,11 +2521,13 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                         <Search className="h-4 w-4 text-blue-500" />
                         <span className="text-[10px] text-muted-foreground">Search</span>
                       </button>
-                      <BarcodeScanner
-                        onFoodScanned={handleBarcodeScanned}
-                        disabled={generatingPlan || savingAllMeals}
-                        className="flex flex-col items-center gap-1 py-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors !h-auto !border-0 !bg-transparent !px-0"
-                      />
+                      <Suspense fallback={<div className="flex flex-col items-center gap-1 py-2"><ScanLine className="h-4 w-4 text-muted-foreground" /><span className="text-[10px] text-muted-foreground">Scan</span></div>}>
+                        <BarcodeScanner
+                          onFoodScanned={handleBarcodeScanned}
+                          disabled={generatingPlan || savingAllMeals}
+                          className="flex flex-col items-center gap-1 py-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors !h-auto !border-0 !bg-transparent !px-0"
+                        />
+                      </Suspense>
                       <button
                         onClick={() => {
                           setManualMeal(prev => ({ ...prev, meal_type: mealType }));
@@ -2537,11 +2540,13 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
                         <Sparkles className="h-4 w-4 text-blue-500" />
                         <span className="text-[10px] text-muted-foreground">Quick</span>
                       </button>
-                      <VoiceInput
-                        onTranscription={handleVoiceInput}
-                        disabled={generatingPlan || savingAllMeals || aiAnalyzing}
-                        className="flex flex-col items-center gap-1 py-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors !h-auto !border-0 !bg-transparent !px-0"
-                      />
+                      <Suspense fallback={<div className="flex flex-col items-center gap-1 py-2"><Mic className="h-4 w-4 text-muted-foreground" /><span className="text-[10px] text-muted-foreground">Voice</span></div>}>
+                        <VoiceInput
+                          onTranscription={handleVoiceInput}
+                          disabled={generatingPlan || savingAllMeals || aiAnalyzing}
+                          className="flex flex-col items-center gap-1 py-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors !h-auto !border-0 !bg-transparent !px-0"
+                        />
+                      </Suspense>
                       <button
                         onClick={() => {
                           setManualMeal(prev => ({

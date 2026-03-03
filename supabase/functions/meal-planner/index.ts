@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { edgeLogger } from "../_shared/errorReporter.ts";
+import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -215,10 +216,6 @@ Respond ONLY with this exact JSON structure:
 
     const userPrompt = `User Request: ${prompt}`;
 
-    // Add timeout to prevent hanging - increased for more reliable responses
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 55000); // 55 second timeout
-
     let response;
     try {
       response = await fetch("https://api.x.ai/v1/chat/completions", {
@@ -236,26 +233,14 @@ Respond ONLY with this exact JSON structure:
           temperature: 0.3,
           max_completion_tokens: 4096
         }),
-        signal: controller.signal
       });
 
-      clearTimeout(timeoutId);
       edgeLogger.info("Grok API response status", { status: response.status });
     } catch (fetchError) {
-      clearTimeout(timeoutId);
-
-      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-        edgeLogger.error("Grok API request timed out after 55 seconds", fetchError, { functionName: "meal-planner" });
-        return new Response(
-          JSON.stringify({ error: "AI request timed out after 55 seconds. The service may be busy. Please try again in a moment." }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
       edgeLogger.error("Grok API fetch error", fetchError, { functionName: "meal-planner" });
       return new Response(
         JSON.stringify({ error: "Failed to connect to AI service" }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -266,27 +251,27 @@ Respond ONLY with this exact JSON structure:
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
       if (response.status === 401) {
         return new Response(
           JSON.stringify({ error: "Invalid API key." }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
       if (response.status === 403) {
         return new Response(
           JSON.stringify({ error: "API key invalid or quota exceeded." }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
       return new Response(
         JSON.stringify({ error: `Grok API error: ${errorData.error?.message || 'Unknown error'}` }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -294,10 +279,7 @@ Respond ONLY with this exact JSON structure:
     edgeLogger.info("Full Grok response received", { responseKeys: Object.keys(data) });
 
     // Extract content from Grok response and strip <think> tags
-    let content = data.choices?.[0]?.message?.content;
-    if (content) {
-      content = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-    }
+    const { content, filtered } = extractContent(data);
 
     edgeLogger.info("Grok response debug", { contentType: typeof content, contentLength: content?.length });
 
@@ -308,22 +290,21 @@ Respond ONLY with this exact JSON structure:
         firstChoiceFields: data.choices?.[0] ? Object.keys(data.choices[0]) : [],
       });
 
-      // Check for specific finish reasons
-      const finishReason = data.choices?.[0]?.finish_reason;
-      if (finishReason) {
-        edgeLogger.warn("Grok finish reason", { functionName: "meal-planner", finishReason });
+      if (filtered) {
+        edgeLogger.warn("Grok finish reason", { functionName: "meal-planner", finishReason: 'content_filter' });
+        return new Response(
+          JSON.stringify({ error: "Content was filtered for safety. Please try a different prompt." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
-        if (finishReason === 'content_filter') {
-          return new Response(
-            JSON.stringify({ error: "Content was filtered for safety. Please try a different prompt." }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        } else if (finishReason === 'length') {
-          return new Response(
-            JSON.stringify({ error: "Response was too long. Please try a shorter prompt." }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
+      const finishReason = data.choices?.[0]?.finish_reason;
+      if (finishReason === 'length') {
+        edgeLogger.warn("Grok finish reason", { functionName: "meal-planner", finishReason });
+        return new Response(
+          JSON.stringify({ error: "Response was too long. Please try a shorter prompt." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
       // Try fallback extraction from any available text
@@ -362,21 +343,7 @@ Respond ONLY with this exact JSON structure:
     try {
       edgeLogger.info("Parsing Grok JSON response");
 
-      // Clean trailing text or markdown
-      let cleanContent = content.trim();
-      if (cleanContent.startsWith('```json')) cleanContent = cleanContent.substring(7);
-      if (cleanContent.startsWith('```')) cleanContent = cleanContent.substring(3);
-      if (cleanContent.endsWith('```')) cleanContent = cleanContent.substring(0, cleanContent.length - 3);
-      cleanContent = cleanContent.trim();
-
-      // Robust JSON extraction
-      const firstCurly = cleanContent.indexOf('{');
-      const lastCurly = cleanContent.lastIndexOf('}');
-      if (firstCurly !== -1 && lastCurly !== -1 && lastCurly > firstCurly) {
-        cleanContent = cleanContent.substring(firstCurly, lastCurly + 1);
-      }
-
-      mealPlanData = JSON.parse(cleanContent);
+      mealPlanData = parseJSON(content);
       edgeLogger.info("Successfully parsed Grok response", { structure: Object.keys(mealPlanData), mealCount: mealPlanData.meals?.length || 0 });
     } catch (e) {
       edgeLogger.error("Failed to parse AI response as JSON", e, { functionName: "meal-planner", rawContentPreview: typeof content === 'string' ? content.substring(0, 500) : JSON.stringify(content) });

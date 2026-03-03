@@ -113,7 +113,7 @@ Distribute fluid & electrolyte totals across hourly protocol. Sum of fluidML ≈
 
 Respond with valid JSON only:
 {
-  "summary": "Brief protocol overview",
+  "summary": "Multi-line overview. Put each phase on its own line like:\nPhase 1 – Rapid Rehydration (Hours 1-2): ...\nPhase 2 – Active Rehydration (Hours 3-4): ...",
   "hourlyProtocol": [{ "hour": 1, "timeLabel": "str", "phase": "str", "fluidML": 0, "sodiumMg": 0, "potassiumMg": 0, "magnesiumMg": 0, "carbsG": 0, "drinkRecipe": "str", "notes": "str", "foods": [] }],
   "carbRefuelPlan": { "strategy": "str", "meals": [{ "timing": "str", "carbsG": 0, "foods": [], "rationale": "str" }] },
   "warnings": ["str"],
@@ -148,7 +148,7 @@ Constraints: total fluid ≈${targets.totalFluidML}ml, total carbs ≈${targets.
           { role: "user", content: userPrompt },
         ],
         temperature: 0.1,
-        max_completion_tokens: 3000,
+        max_completion_tokens: 16384,
       }),
     });
 

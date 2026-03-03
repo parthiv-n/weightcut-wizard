@@ -1,7 +1,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
-import { CheckCircle2, Loader2, LucideIcon, X, RotateCcw } from "lucide-react";
+import { CheckCircle2, Loader2, LucideIcon, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface AIStep {
@@ -34,9 +34,8 @@ export function AIGeneratingOverlay({
     const [currentStep, setCurrentStep] = useState(0);
     const [isComplete, setIsComplete] = useState(false);
     const [showCancel, setShowCancel] = useState(false);
-    const [isStuck, setIsStuck] = useState(false);
+    const [elapsed, setElapsed] = useState(0);
     const cancelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-    const stuckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Reset state when opening
     useEffect(() => {
@@ -44,27 +43,30 @@ export function AIGeneratingOverlay({
             setCurrentStep(0);
             setIsComplete(false);
             setShowCancel(false);
-            setIsStuck(false);
+            setElapsed(0);
         }
     }, [isOpen]);
 
-    // Cancel button timer (5s) and stuck detection timer (20s)
+    // Cancel button timer (5s)
     useEffect(() => {
         if (cancelTimerRef.current) clearTimeout(cancelTimerRef.current);
-        if (stuckTimerRef.current) clearTimeout(stuckTimerRef.current);
 
         if (isOpen && isGenerating) {
             cancelTimerRef.current = setTimeout(() => setShowCancel(true), 5000);
-            stuckTimerRef.current = setTimeout(() => setIsStuck(true), 20000);
         } else {
             setShowCancel(false);
-            setIsStuck(false);
         }
 
         return () => {
             if (cancelTimerRef.current) clearTimeout(cancelTimerRef.current);
-            if (stuckTimerRef.current) clearTimeout(stuckTimerRef.current);
         };
+    }, [isOpen, isGenerating]);
+
+    // Elapsed timer
+    useEffect(() => {
+        if (!isOpen || !isGenerating) { setElapsed(0); return; }
+        const t = setInterval(() => setElapsed(s => s + 1), 1000);
+        return () => clearInterval(t);
     }, [isOpen, isGenerating]);
 
     // Handle step progression
@@ -98,11 +100,6 @@ export function AIGeneratingOverlay({
     }, [isGenerating, isOpen, steps.length, onCompletion]);
 
     if (!isOpen) return null;
-
-    const handleRetry = () => {
-        onCancel?.();
-        setTimeout(() => onRetry?.(), 100);
-    };
 
     return createPortal(
         <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
@@ -159,20 +156,11 @@ export function AIGeneratingOverlay({
                     })}
                 </div>
 
-                {/* Stuck banner */}
-                {isStuck && !isComplete && (
-                    <div className="mt-4 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex items-center justify-between gap-3 animate-in fade-in duration-300">
-                        <p className="text-sm text-amber-400">Taking longer than expected...</p>
-                        {onRetry && (
-                            <button
-                                onClick={handleRetry}
-                                className="flex items-center gap-1.5 text-sm font-medium text-amber-400 hover:text-amber-300 transition-colors shrink-0"
-                            >
-                                <RotateCcw className="h-3.5 w-3.5" />
-                                Retry
-                            </button>
-                        )}
-                    </div>
+                {/* Elapsed timer */}
+                {!isComplete && elapsed >= 5 && (
+                    <p className="mt-4 text-center text-xs text-zinc-500">
+                        {elapsed}s elapsed
+                    </p>
                 )}
 
                 {/* Cancel button */}
