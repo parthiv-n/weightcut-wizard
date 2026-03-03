@@ -40,7 +40,7 @@ import { useSafeAsync } from "@/hooks/useSafeAsync";
 import type { DietAnalysisResult } from "@/types/dietAnalysis";
 import { ShareButton } from "@/components/share/ShareButton";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
-import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
+import { withSupabaseTimeout, createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 import { NutritionCard } from "@/components/share/cards/NutritionCard";
 import { logger } from "@/lib/logger";
 
@@ -184,6 +184,7 @@ export default function Nutrition() {
   const [nutritionStreak, setNutritionStreak] = useState(0);
   const [totalMealsLogged, setTotalMealsLogged] = useState(0);
   const lastFetchRef = useRef(0);
+  const aiAbortRef = useRef<AbortController | null>(null);
 
   // Dynamic macro-aware wisdom text (fallback)
   const getNutritionWisdom = () => {
@@ -801,6 +802,10 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       return;
     }
 
+    aiAbortRef.current?.abort();
+    const { controller, cleanup } = createAIAbortController(30000);
+    aiAbortRef.current = controller;
+
     setGeneratingPlan(true);
     setIsAiDialogOpen(false); // Close dialog immediately so overlay is visible without input box
     try {
@@ -814,11 +819,13 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
             variant: "destructive",
           });
           setGeneratingPlan(false);
+          cleanup();
           return;
         }
       }
 
       if (!userId) {
+        cleanup();
         throw new Error("Authentication required. Please log in again.");
       }
 
@@ -837,10 +844,13 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           userData,
           action: "generate"
         },
+        signal: controller.signal,
       });
 
+      if (controller.signal.aborted) return;
+
       if (response.error) {
-        throw response.error;
+        throw new Error(await extractEdgeFunctionError(response.error, "Failed to generate meal plan"));
       }
 
       const { mealPlan, dailyCalorieTarget: target, safetyStatus: status, safetyMessage: message } = response.data;
@@ -965,6 +975,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       setIsAiDialogOpen(false);
       setAiPrompt("");
     } catch (error: any) {
+      if (error?.name === 'AbortError' || controller.signal.aborted) return;
       logger.error("Error generating meal plan", error);
 
       let errorMsg = "Failed to generate meal plan";
@@ -1004,6 +1015,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         variant: "destructive",
       });
     } finally {
+      cleanup();
       setGeneratingPlan(false);
     }
   };
@@ -1461,6 +1473,10 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       return;
     }
 
+    aiAbortRef.current?.abort();
+    const { controller, cleanup } = createAIAbortController(30000);
+    aiAbortRef.current = controller;
+
     setAiAnalyzing(true);
     setAiAnalysisComplete(false);
     try {
@@ -1470,9 +1486,11 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       if (!nutritionData) {
         const { data, error } = await supabase.functions.invoke("analyze-meal", {
           body: { mealDescription: aiMealDescription },
+          signal: controller.signal,
         });
 
-        if (error) throw error;
+        if (controller.signal.aborted) return;
+        if (error) throw new Error(await extractEdgeFunctionError(error, "Failed to analyze meal"));
         nutritionData = data.nutritionData;
         if (userId && nutritionData) {
           AIPersistence.save(userId, mealCacheKey, nutritionData, 24 * 7);
@@ -1514,6 +1532,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         description: "Review the items below and tap Add Meal",
       });
     } catch (error: any) {
+      if (error?.name === 'AbortError' || controller.signal.aborted) return;
       logger.error("Error analyzing meal", error);
       toast({
         title: "Analysis failed",
@@ -1521,6 +1540,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         variant: "destructive",
       });
     } finally {
+      cleanup();
       setAiAnalyzing(false);
     }
   };
@@ -1612,13 +1632,19 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       return;
     }
 
+    aiAbortRef.current?.abort();
+    const { controller: ingController, cleanup: ingCleanup } = createAIAbortController(30000);
+    aiAbortRef.current = ingController;
+
     setAiAnalyzingIngredient(true);
     try {
       const { data, error } = await supabase.functions.invoke("analyze-meal", {
         body: { mealDescription: aiIngredientDescription },
+        signal: ingController.signal,
       });
 
-      if (error) throw error;
+      if (ingController.signal.aborted) return;
+      if (error) throw new Error(await extractEdgeFunctionError(error, "Failed to analyze ingredient"));
 
       const { nutritionData } = data;
 
@@ -1734,6 +1760,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         description: `${ingredientName} (${ingredientGrams}g) added. Meal totals updated.`,
       });
     } catch (error: any) {
+      if (error?.name === 'AbortError' || ingController.signal.aborted) return;
       logger.error("Error analyzing ingredient", error);
       toast({
         title: "Analysis failed",
@@ -1741,6 +1768,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         variant: "destructive",
       });
     } finally {
+      ingCleanup();
       setAiAnalyzingIngredient(false);
     }
   };
@@ -1753,14 +1781,20 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     setExpandedMealActions(null);
 
     // Auto-trigger analysis so user can review line items before saving
+    aiAbortRef.current?.abort();
+    const { controller: voiceController, cleanup: voiceCleanup } = createAIAbortController(30000);
+    aiAbortRef.current = voiceController;
+
     setAiAnalyzing(true);
     setAiAnalysisComplete(false);
     try {
       const { data, error } = await supabase.functions.invoke("analyze-meal", {
         body: { mealDescription: transcribedText },
+        signal: voiceController.signal,
       });
 
-      if (error) throw error;
+      if (voiceController.signal.aborted) return;
+      if (error) throw new Error(await extractEdgeFunctionError(error, "Failed to process voice input"));
       const { nutritionData } = data;
 
       if (nutritionData.items && Array.isArray(nutritionData.items) && nutritionData.items.length > 0) {
@@ -1787,6 +1821,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       setAiAnalysisComplete(true);
       toast({ title: "Analysis complete!", description: "Review the items below and tap Add Meal" });
     } catch (error: any) {
+      if (error?.name === 'AbortError' || voiceController.signal.aborted) return;
       logger.error("Error processing voice input", error);
       toast({
         title: "Analysis failed",
@@ -1794,6 +1829,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         variant: "destructive",
       });
     } finally {
+      voiceCleanup();
       setAiAnalyzing(false);
     }
   };
@@ -2084,6 +2120,10 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
       }
     }
 
+    aiAbortRef.current?.abort();
+    const { controller: dietController, cleanup: dietCleanup } = createAIAbortController(30000);
+    aiAbortRef.current = dietController;
+
     setDietAnalysisLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("analyse-diet", {
@@ -2113,16 +2153,19 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           } : {},
           date: selectedDate,
         },
+        signal: dietController.signal,
       });
 
-      if (error) throw error;
+      if (dietController.signal.aborted) return;
+      if (error) throw new Error(await extractEdgeFunctionError(error, "Could not analyse your diet"));
       if (data?.error) throw new Error(data.error);
 
       const result = data.analysisData as DietAnalysisResult;
       setDietAnalysis(result);
       AIPersistence.save(userId, cacheKey, result, 6);
       triggerHapticSuccess();
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.name === 'AbortError' || dietController.signal.aborted) return;
       logger.error("Error analysing diet", error);
       toast({
         title: "Analysis failed",
@@ -2130,11 +2173,20 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         variant: "destructive",
       });
     } finally {
+      dietCleanup();
       setDietAnalysisLoading(false);
     }
   };
 
-  const getOverlayProps = () => {
+  const cancelAI = () => {
+    aiAbortRef.current?.abort();
+    setGeneratingPlan(false);
+    setAiAnalyzing(false);
+    setAiAnalyzingIngredient(false);
+    setDietAnalysisLoading(false);
+  };
+
+  const getOverlayProps = (): { steps: any[]; title: string; subtitle: string; retry: (() => void) | null } => {
     if (dietAnalysisLoading) {
       return {
         steps: [
@@ -2144,7 +2196,8 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           { icon: Sparkles, label: "Generating recommendations", color: "text-blue-400" },
         ],
         title: "Analysing Diet",
-        subtitle: "Evaluating your full day of eating..."
+        subtitle: "Evaluating your full day of eating...",
+        retry: () => handleAnalyseDiet(),
       };
     }
     if (generatingPlan) {
@@ -2155,7 +2208,8 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           { icon: Sparkles, label: "Optimizing recipes", color: "text-yellow-400" },
         ],
         title: "Generating Meal Plan",
-        subtitle: "Creating a personalized nutrition strategy..."
+        subtitle: "Creating a personalized nutrition strategy...",
+        retry: () => handleGenerateMealPlan(),
       };
     }
     if (aiAnalyzing) {
@@ -2166,7 +2220,8 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           { icon: CheckCircle, label: "Finalizing log", color: "text-green-400" },
         ],
         title: "Analyzing Meal",
-        subtitle: "Processing your input..."
+        subtitle: "Processing your input...",
+        retry: null, // meal text varies, can't auto-retry
       };
     }
     if (aiAnalyzingIngredient) {
@@ -2176,10 +2231,11 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
           { icon: PieChartIcon, label: "Calculating portion macros", color: "text-yellow-500" },
         ],
         title: "Analyzing Ingredient",
-        subtitle: "Looking up nutritional data..."
+        subtitle: "Looking up nutritional data...",
+        retry: null, // ingredient text varies, can't auto-retry
       };
     }
-    return { steps: [], title: "", subtitle: "" };
+    return { steps: [], title: "", subtitle: "", retry: null };
   };
 
   const overlayProps = getOverlayProps();
@@ -2281,6 +2337,8 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         title={overlayProps.title}
         subtitle={overlayProps.subtitle}
         onCompletion={() => { }}
+        onCancel={cancelAI}
+        onRetry={overlayProps.retry ?? undefined}
       />
       <div className="space-y-4 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto overflow-x-hidden">
 

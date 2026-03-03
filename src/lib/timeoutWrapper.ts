@@ -48,6 +48,40 @@ export function withRetry<T>(
   });
 }
 
+// Creates an AbortController with a hard timeout safety net for AI calls.
+// The overlay's 20s stuck detection provides the soft timeout UX;
+// this hard timeout (default 30s) is the safety net.
+export function createAIAbortController(hardTimeoutMs: number = 30000): {
+  controller: AbortController;
+  cleanup: () => void;
+} {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), hardTimeoutMs);
+
+  const cleanup = () => clearTimeout(timer);
+
+  // If the user (or anything else) aborts early, clear the timeout
+  controller.signal.addEventListener("abort", cleanup, { once: true });
+
+  return { controller, cleanup };
+}
+
+// Extracts the real error message from a Supabase FunctionsHttpError.
+// When an edge function returns a non-2xx status, the Supabase client wraps it
+// in FunctionsHttpError with a generic message. The actual error is in the
+// Response body (error.context), which we read here.
+export async function extractEdgeFunctionError(error: any, fallback = "Something went wrong"): Promise<string> {
+  try {
+    if (error?.context && typeof error.context.json === "function") {
+      const body = await error.context.json();
+      if (body?.error) return body.error;
+    }
+  } catch {
+    // body already consumed or not JSON — fall through
+  }
+  return error?.message || fallback;
+}
+
 // Wrapper for authentication operations
 export function withAuthTimeout<T>(
   authOperation: Promise<T>,

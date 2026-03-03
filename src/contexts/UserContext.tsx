@@ -4,6 +4,7 @@ import { withAuthTimeout, withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { localCache } from "@/lib/localCache";
+import { AIPersistence } from "@/lib/aiPersistence";
 import { logger } from "@/lib/logger";
 
 export interface ProfileData {
@@ -27,6 +28,17 @@ export interface ProfileData {
   avatar_url?: string;
   is_premium?: boolean;
   [key: string]: any;
+}
+
+const AI_RELEVANT_FIELDS: (keyof ProfileData)[] = [
+  'goal_weight_kg', 'fight_week_target_kg', 'target_date',
+  'activity_level', 'tdee', 'bmr', 'current_weight_kg',
+  'age', 'sex', 'height_cm', 'training_frequency',
+];
+
+function haveAIFieldsChanged(prev: ProfileData | null, next: ProfileData): boolean {
+  if (!prev) return false; // first load — nothing to invalidate
+  return AI_RELEVANT_FIELDS.some(f => prev[f] !== next[f]);
 }
 
 interface UserContextType {
@@ -136,6 +148,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
       if (data) {
         const changed = JSON.stringify(data) !== JSON.stringify(profileRef.current);
         if (changed) {
+          // Invalidate AI caches if AI-relevant profile fields changed
+          if (haveAIFieldsChanged(profileRef.current, data as ProfileData)) {
+            AIPersistence.clearAllForUser(uid);
+          }
           setProfile(data as ProfileData);
           profileRef.current = data as ProfileData;
           setHasProfile(true);
@@ -320,12 +336,19 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, [loadUserData]);
 
   const updateCurrentWeight = useCallback(async (weight: number) => {
+    const previousWeight = profileRef.current?.current_weight_kg;
+
     setCurrentWeight(weight);
     setProfile(prev => {
       const updated = prev ? { ...prev, current_weight_kg: weight } : prev;
       profileRef.current = updated;
       return updated;
     });
+
+    // Invalidate AI caches if weight changed meaningfully (>0.1kg)
+    if (userIdRef.current && previousWeight != null && Math.abs(weight - previousWeight) > 0.1) {
+      AIPersistence.clearAllForUser(userIdRef.current);
+    }
 
     if (userIdRef.current) {
       await supabase

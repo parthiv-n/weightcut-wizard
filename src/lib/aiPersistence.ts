@@ -60,6 +60,24 @@ export class AIPersistence {
     }
   }
 
+  static clearAllForUser(userId: string): void {
+    try {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('ai_') && key.endsWith(`_${userId}`)) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+      if (keysToRemove.length > 0) {
+        logger.info(`Cleared ${keysToRemove.length} AI cache entries for user`, { userId: userId.slice(0, 8) });
+      }
+    } catch (error) {
+      logger.warn("Failed to clear AI content for user", { error });
+    }
+  }
+
   static cleanup(): void {
     try {
       const keysToRemove: string[] = [];

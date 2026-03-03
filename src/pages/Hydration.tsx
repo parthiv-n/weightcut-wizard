@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,7 +23,7 @@ import {
 import { useUser } from "@/contexts/UserContext";
 import { AIGeneratingOverlay } from "@/components/AIGeneratingOverlay";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
-import { withTimeout } from "@/lib/timeoutWrapper";
+import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -211,6 +211,7 @@ export default function Hydration() {
   const { toast } = useToast();
   const { userId, profile: contextProfile, userName } = useUser();
   const { safeAsync, isMounted } = useSafeAsync();
+  const aiAbortRef = useRef<AbortController | null>(null);
 
   const currentWeight = contextProfile?.current_weight_kg ?? 0;
 
@@ -266,11 +267,14 @@ export default function Hydration() {
     e.preventDefault();
     if (!currentWeight) return;
 
+    aiAbortRef.current?.abort();
+    const { controller, cleanup } = createAIAbortController(30000);
+    aiAbortRef.current = controller;
+
     safeAsync(setLoading)(true);
 
     try {
-      const { data, error } = await withTimeout(
-        supabase.functions.invoke("rehydration-protocol", {
+      const { data, error } = await supabase.functions.invoke("rehydration-protocol", {
         body: {
           weightLostKg: parseFloat(weightLost),
           availableHours,
@@ -286,13 +290,12 @@ export default function Hydration() {
           goalWeightKg: contextProfile?.goal_weight_kg,
           fightWeekTargetKg: contextProfile?.fight_week_target_kg,
         },
-      }),
-        15000,
-        "Rehydration protocol timed out"
-      );
+        signal: controller.signal,
+      });
 
+      if (controller.signal.aborted) return;
       if (!isMounted()) return;
-      if (error) throw error;
+      if (error) throw new Error(await extractEdgeFunctionError(error, "Failed to generate protocol"));
 
       if (data?.protocol) {
         setProtocol(data.protocol);
@@ -314,7 +317,8 @@ export default function Hydration() {
           description: "Your personalised rehydration plan is ready",
         });
       }
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.name === 'AbortError' || controller.signal.aborted) return;
       if (!isMounted()) return;
       logger.error("Error generating protocol", error);
       toast({
@@ -322,8 +326,14 @@ export default function Hydration() {
         description: "Failed to generate rehydration protocol",
         variant: "destructive",
       });
+    } finally {
+      cleanup();
+      safeAsync(setLoading)(false);
     }
+  };
 
+  const handleAICancel = () => {
+    aiAbortRef.current?.abort();
     safeAsync(setLoading)(false);
   };
 
@@ -408,6 +418,8 @@ export default function Hydration() {
         title="Generating Protocol"
         subtitle="Designing your optimal recovery strategy"
         onCompletion={() => {}}
+        onCancel={handleAICancel}
+        onRetry={() => handleGenerateProtocol(new Event("submit") as any)}
       />
       <div className="space-y-4 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto pb-20 md:pb-6">
         {/* Header */}
