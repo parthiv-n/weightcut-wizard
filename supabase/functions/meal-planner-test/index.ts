@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { edgeLogger } from "../_shared/errorReporter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,10 +13,10 @@ serve(async (req) => {
   }
 
   try {
-    console.log("Test function called with method:", req.method);
+    edgeLogger.info("Test function called", { method: req.method });
     
     const body = await req.json();
-    console.log("Request body:", body);
+    edgeLogger.info("Request body", { body });
 
     return new Response(
       JSON.stringify({ 
@@ -29,7 +30,7 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error("Test function error:", error);
+    edgeLogger.error("Test function error", error, { functionName: "meal-planner-test" });
     
     return new Response(
       JSON.stringify({ 

@@ -5,6 +5,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { logger } from "@/lib/logger";
+import { getSessionColor } from "@/lib/sessionColors";
 
 type TrainingSummary = {
     sportSections: {
@@ -39,16 +41,8 @@ interface TrainingSummarySectionProps {
     userId: string;
     selectedDate: Date;
     sessionLoggedTrigger: number;
+    customColors?: Record<string, string>;
 }
-
-const sportColors: Record<string, string> = {
-    "BJJ": "bg-blue-500",
-    "Muay Thai": "bg-red-500",
-    "Wrestling": "bg-amber-500",
-    "Sparring": "bg-orange-500",
-    "Strength": "bg-green-500",
-    "Conditioning": "bg-emerald-500",
-};
 
 function computeFingerprint(sessions: SessionRow[]): string {
     return sessions
@@ -68,7 +62,7 @@ function weekLabel(weekStartStr: string): string {
     return `${format(start, "MMM d")}-${format(end, "MMM d")}`;
 }
 
-export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrigger }: TrainingSummarySectionProps) {
+export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrigger, customColors }: TrainingSummarySectionProps) {
     const { toast } = useToast();
     const [savedSummaries, setSavedSummaries] = useState<SavedSummaryRow[]>([]);
     const [weekSessions, setWeekSessions] = useState<SessionRow[]>([]);
@@ -95,7 +89,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
             .order("week_start", { ascending: false });
 
         if (error) {
-            console.error("Error fetching summaries:", error);
+            logger.error("Error fetching summaries", error);
             return;
         }
         setSavedSummaries((data as SavedSummaryRow[]) || []);
@@ -114,7 +108,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
             .lte("date", format(we, "yyyy-MM-dd"));
 
         if (error) {
-            console.error("Error fetching week sessions:", error);
+            logger.error("Error fetching week sessions", error);
             return;
         }
         setWeekSessions((data as SessionRow[]) || []);
@@ -210,7 +204,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
             await fetchAllSummaries();
             setIsSummaryOpen(true);
         } catch (error) {
-            console.error("Error generating training summary:", error);
+            logger.error("Error generating training summary", error);
             toast({
                 title: "Error generating summary",
                 description: "Could not generate your training summary. Please try again.",
@@ -231,7 +225,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
             .eq("id", id);
 
         if (error) {
-            console.error("Error deleting summary:", error);
+            logger.error("Error deleting summary", error);
             toast({
                 title: "Error deleting summary",
                 description: "Could not delete the summary. Please try again.",
@@ -350,14 +344,12 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
                             )}
 
                             {summaryToDisplay.sportSections?.map(section => {
-                                const barColor = sportColors[section.sport] || "bg-primary";
-
                                 return (
                                     <Card
                                         key={section.sport}
                                         className="p-4 rounded-[20px] shadow-sm glass-card overflow-hidden relative border-border/10"
                                     >
-                                        <div className={`absolute top-0 left-0 w-2 h-full ${barColor}`} />
+                                        <div className="absolute top-0 left-0 w-2 h-full" style={{ backgroundColor: getSessionColor(section.sport, customColors) }} />
                                         <div className="ml-2">
                                             <h4 className="font-bold text-base text-foreground mb-3">
                                                 {section.sport}

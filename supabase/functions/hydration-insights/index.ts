@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { extractContent } from "../_shared/parseResponse.ts";
+import { edgeLogger } from "../_shared/errorReporter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -51,7 +52,7 @@ Provide evidence-based, gradual hydration strategies. Keep responses concise (2-
 
 Brief insight + one actionable recommendation.`;
 
-    console.log("Calling Grok API for hydration insights...");
+    edgeLogger.info("Calling Grok API for hydration insights");
 
     const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
@@ -90,7 +91,7 @@ Brief insight + one actionable recommendation.`;
         );
       }
       const errorData = await response.json();
-      console.error("Grok API error:", response.status, errorData);
+      edgeLogger.error("Grok API error", undefined, { functionName: "hydration-insights", status: response.status, errorData });
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -98,7 +99,7 @@ Brief insight + one actionable recommendation.`;
     }
 
     const data = await response.json();
-    console.log("Grok hydration response:", JSON.stringify(data, null, 2));
+    edgeLogger.info("Grok hydration response received");
 
     const { content: insight, filtered } = extractContent(data);
     if (!insight) {
@@ -110,7 +111,7 @@ Brief insight + one actionable recommendation.`;
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Error in hydration-insights:", error);
+    edgeLogger.error("Error in hydration-insights", error, { functionName: "hydration-insights" });
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

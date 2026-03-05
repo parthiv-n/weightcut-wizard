@@ -22,3 +22,6 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     }
   }
 });
+
+// Warm the TCP/TLS connection immediately so the first real query is fast
+supabase.from("profiles").select("id", { head: true, count: "exact" }).limit(0).then(() => {}, () => {});

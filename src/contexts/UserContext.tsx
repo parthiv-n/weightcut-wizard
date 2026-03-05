@@ -4,6 +4,8 @@ import { withAuthTimeout, withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { localCache } from "@/lib/localCache";
+import { AIPersistence } from "@/lib/aiPersistence";
+import { logger } from "@/lib/logger";
 
 export interface ProfileData {
   id?: string;
@@ -28,28 +30,45 @@ export interface ProfileData {
   [key: string]: any;
 }
 
-interface UserContextType {
-  userName: string;
-  avatarUrl: string;
+const AI_RELEVANT_FIELDS: (keyof ProfileData)[] = [
+  'goal_weight_kg', 'fight_week_target_kg', 'target_date',
+  'activity_level', 'tdee', 'bmr', 'current_weight_kg',
+  'age', 'sex', 'height_cm', 'training_frequency',
+];
+
+function haveAIFieldsChanged(prev: ProfileData | null, next: ProfileData): boolean {
+  if (!prev) return false; // first load — nothing to invalidate
+  return AI_RELEVANT_FIELDS.some(f => prev[f] !== next[f]);
+}
+
+interface AuthContextType {
   userId: string | null;
-  currentWeight: number | null;
-  profile: ProfileData | null;
   isSessionValid: boolean;
   isLoading: boolean;
   hasProfile: boolean;
   authError: boolean;
   isOffline: boolean;
-  setUserName: (name: string) => void;
-  setAvatarUrl: (url: string) => void;
-  updateCurrentWeight: (weight: number) => Promise<void>;
-  loadUserData: () => Promise<void>;
-  refreshProfile: () => Promise<boolean>;
-  refreshSession: () => Promise<boolean>;
-  checkSessionValidity: () => Promise<boolean>;
   retryAuth: () => Promise<void>;
+  checkSessionValidity: () => Promise<boolean>;
+  refreshSession: () => Promise<boolean>;
+  loadUserData: () => Promise<void>;
 }
 
-const UserContext = createContext<UserContextType | undefined>(undefined);
+interface ProfileContextType {
+  profile: ProfileData | null;
+  userName: string;
+  avatarUrl: string;
+  currentWeight: number | null;
+  setUserName: (name: string) => void;
+  setAvatarUrl: (url: string) => void;
+  refreshProfile: () => Promise<boolean>;
+  updateCurrentWeight: (weight: number) => Promise<void>;
+}
+
+type UserContextType = AuthContextType & ProfileContextType;
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const [userName, setUserName] = useState<string>("");
@@ -121,7 +140,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const refreshProfile = useCallback(async (): Promise<boolean> => {
     const uid = userIdRef.current;
     if (!uid) {
-      console.warn("refreshProfile: skipped — no userId yet");
+      logger.warn("refreshProfile: skipped — no userId yet");
       return false;
     }
 
@@ -135,8 +154,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
       if (data) {
         const changed = JSON.stringify(data) !== JSON.stringify(profileRef.current);
         if (changed) {
-          setProfile(data);
-          profileRef.current = data;
+          // Invalidate AI caches if AI-relevant profile fields changed
+          if (haveAIFieldsChanged(profileRef.current, data as ProfileData)) {
+            AIPersistence.clearAllForUser(uid);
+          }
+          setProfile(data as ProfileData);
+          profileRef.current = data as ProfileData;
           setHasProfile(true);
           if (data.avatar_url) setAvatarUrl(data.avatar_url);
           const weight = data.current_weight_kg ?? null;
@@ -151,13 +174,13 @@ export function UserProvider({ children }: { children: ReactNode }) {
     try {
       return await attempt();
     } catch (error) {
-      console.warn("refreshProfile: first attempt failed, retrying...", error);
+      logger.warn("refreshProfile: first attempt failed, retrying...", { error: String(error) });
       // Single retry after short delay
       try {
         await new Promise(r => setTimeout(r, 500));
         return await attempt();
       } catch (retryError) {
-        console.error("refreshProfile: retry also failed:", retryError);
+        logger.error("refreshProfile: retry also failed", retryError);
         return false;
       }
     }
@@ -165,15 +188,19 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   // Internal: performs one load attempt. Returns 'success' | 'no_session' | 'error'.
   // Does NOT touch isLoading, authError, or isUserLoadedRef.
-  const _performLoad = async (): Promise<'success' | 'no_session' | 'error'> => {
+  // When `providedSession` is given (from auth events), skips the redundant getSession() call.
+  const _performLoad = async (providedSession?: { user: any; expires_at?: number } | null): Promise<'success' | 'no_session' | 'error'> => {
     try {
-      const { data: { session }, error } = await withAuthTimeout(
-        supabase.auth.getSession()
-      );
-
-      if (error) {
-        console.error("Auth session error:", error);
-        return 'error';
+      let session = providedSession;
+      if (!session) {
+        const { data, error } = await withAuthTimeout(
+          supabase.auth.getSession()
+        );
+        if (error) {
+          logger.error("Auth session error", error);
+          return 'error';
+        }
+        session = data.session;
       }
 
       if (!session?.user) {
@@ -251,8 +278,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
       if (profileData) {
         const changed = JSON.stringify(profileData) !== JSON.stringify(profileRef.current);
         if (changed) {
-          setProfile(profileData);
-          profileRef.current = profileData;
+          setProfile(profileData as ProfileData);
+          profileRef.current = profileData as ProfileData;
           if (profileData.avatar_url) {
             setAvatarUrl(profileData.avatar_url);
           }
@@ -265,23 +292,24 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
       return 'success';
     } catch (error) {
-      console.error("Error loading user data:", error);
+      logger.error("Error loading user data", error);
       return 'error';
     }
   };
 
-  const loadUserData = useCallback(async () => {
+  const loadUserData = useCallback(async (providedSession?: { user: any; expires_at?: number } | null) => {
     setAuthError(false);
     // Only show loading spinner if cache hasn't already resolved it
     if (!isUserLoadedRef.current) {
       setIsLoading(true);
     }
 
-    // Aggressive exponential backoff for faster recovery from short network drops
-    const DELAYS = [100, 500, 1500, 3000];
+    // Tight backoff for faster recovery from short network drops
+    const DELAYS = [100, 300, 800, 1500];
 
     for (let attempt = 0; attempt <= DELAYS.length; attempt++) {
-      const result = await _performLoad();
+      // Use provided session on first attempt; subsequent retries fetch fresh
+      const result = await _performLoad(attempt === 0 ? providedSession : undefined);
 
       if (result === 'success' || result === 'no_session') {
         isUserLoadedRef.current = true;
@@ -298,7 +326,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     // All retries failed
     // If cache already served content, don't show error screen — just stay with cached data
     if (isUserLoadedRef.current) {
-      console.warn("loadUserData: DB unreachable, serving cached data");
+      logger.warn("loadUserData: DB unreachable, serving cached data");
       return;
     }
 
@@ -319,12 +347,19 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, [loadUserData]);
 
   const updateCurrentWeight = useCallback(async (weight: number) => {
+    const previousWeight = profileRef.current?.current_weight_kg;
+
     setCurrentWeight(weight);
     setProfile(prev => {
       const updated = prev ? { ...prev, current_weight_kg: weight } : prev;
       profileRef.current = updated;
       return updated;
     });
+
+    // Invalidate AI caches if weight changed meaningfully (>0.1kg)
+    if (userIdRef.current && previousWeight != null && Math.abs(weight - previousWeight) > 0.1) {
+      AIPersistence.clearAllForUser(userIdRef.current);
+    }
 
     if (userIdRef.current) {
       await supabase
@@ -349,7 +384,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'INITIAL_SESSION') {
         if (session?.user) {
-          await loadUserData();
+          await loadUserData(session);
         } else {
           setIsLoading(false);
         }
@@ -379,7 +414,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         if (!isUserLoadedRef.current) {
           setIsLoading(true); // only for fresh logins, not token refreshes
         }
-        await loadUserData();
+        await loadUserData(session);
       }
     });
 
@@ -456,42 +491,59 @@ export function UserProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const contextValue = useMemo(() => ({
-    userName,
-    avatarUrl,
+  const authValue = useMemo(() => ({
     userId,
-    currentWeight,
-    profile,
     isSessionValid,
     isLoading,
     hasProfile,
     authError,
     isOffline,
+    retryAuth,
+    checkSessionValidity,
+    refreshSession,
+    loadUserData,
+  }), [userId, isSessionValid, isLoading, hasProfile, authError, isOffline,
+       retryAuth, checkSessionValidity, refreshSession, loadUserData]);
+
+  const profileValue = useMemo(() => ({
+    profile,
+    userName,
+    avatarUrl,
+    currentWeight,
     setUserName: updateUserName,
     setAvatarUrl: updateAvatarUrl,
-    updateCurrentWeight,
-    loadUserData,
     refreshProfile,
-    refreshSession,
-    checkSessionValidity,
-    retryAuth,
-  }), [userName, avatarUrl, userId, currentWeight, profile,
-       isSessionValid, isLoading, hasProfile, authError, isOffline,
-       updateUserName, updateAvatarUrl, updateCurrentWeight,
-       loadUserData, refreshProfile, refreshSession,
-       checkSessionValidity, retryAuth]);
+    updateCurrentWeight,
+  }), [profile, userName, avatarUrl, currentWeight,
+       updateUserName, updateAvatarUrl, refreshProfile, updateCurrentWeight]);
 
   return (
-    <UserContext.Provider value={contextValue}>
-      {children}
-    </UserContext.Provider>
+    <AuthContext.Provider value={authValue}>
+      <ProfileContext.Provider value={profileValue}>
+        {children}
+      </ProfileContext.Provider>
+    </AuthContext.Provider>
   );
 }
 
-export function useUser() {
-  const context = useContext(UserContext);
+export function useAuth() {
+  const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error("useUser must be used within a UserProvider");
+    throw new Error("useAuth must be used within a UserProvider");
   }
   return context;
+}
+
+export function useProfile() {
+  const context = useContext(ProfileContext);
+  if (context === undefined) {
+    throw new Error("useProfile must be used within a UserProvider");
+  }
+  return context;
+}
+
+export function useUser(): UserContextType {
+  const auth = useAuth();
+  const profile = useProfile();
+  return { ...auth, ...profile };
 }

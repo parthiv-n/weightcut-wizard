@@ -17,20 +17,21 @@ export function WizardLoader({
   const [showRefresh, setShowRefresh] = useState(false);
 
   useEffect(() => {
-    // Smoothly animate progress bar up to 90%
+    // Fast start, gradual slowdown — feels snappy
     const timer = setInterval(() => {
-      setProgress((oldProgress) => {
-        // Slow down progress as it gets closer to 90
-        const diff = 90 - oldProgress;
-        const jump = Math.max(1, diff * 0.1);
-        return Math.min(90, oldProgress + jump);
+      setProgress((old) => {
+        if (old < 30) return old + 4;          // 0-30%: fast ramp
+        if (old < 60) return old + 2.5;        // 30-60%: steady
+        if (old < 80) return old + 1;          // 60-80%: slowing
+        const diff = 92 - old;
+        return Math.min(92, old + Math.max(0.3, diff * 0.08)); // 80-92%: crawl
       });
-    }, 200);
+    }, 100);
 
-    // Show force refresh button after 1 second if still loading
+    // Show force refresh button after 4 seconds if still loading
     const refreshTimer = setTimeout(() => {
       setShowRefresh(true);
-    }, 1000);
+    }, 4000);
 
     return () => {
       clearInterval(timer);
@@ -60,7 +61,11 @@ export function WizardLoader({
             {message && <p className="text-sm text-muted-foreground">{message}</p>}
           </div>
 
-          <Progress value={progress} className="h-2 w-full max-w-[200px] mx-auto opacity-70" />
+          <Progress
+            value={progress}
+            className="h-2 w-full max-w-[200px] mx-auto"
+            indicatorClassName="bg-gradient-to-r from-primary via-primary/60 to-primary bg-[length:200%_100%] animate-[progressShimmer_1.5s_ease-in-out_infinite]"
+          />
         </div>
 
         {/* Force refresh button - fades in after a delay to resolve connection hangs */}
@@ -75,7 +80,7 @@ export function WizardLoader({
             Force Refresh
           </Button>
           <p className="text-[10px] text-muted-foreground/60 text-center max-w-[200px]">
-            Tip: Multiple force refreshes may load the app faster if your connection to the database dropped (this issue is currently in process of being resolved).
+            Taking longer than usual? Try refreshing.
           </p>
         </div>
       </div>

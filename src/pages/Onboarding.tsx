@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useUser } from "@/contexts/UserContext";
+import { useProfile } from "@/contexts/UserContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Sparkles, AlertTriangle, CheckCircle, Zap, Shield, Activity } from "lucide-react";
 import { profileSchema } from "@/lib/validation";
 import wizardLogo from "@/assets/wizard-logo.png";
+import { celebrateSuccess } from "@/lib/haptics";
+import { logger } from "@/lib/logger";
 
 const ACTIVITY_MULTIPLIERS = {
   sedentary: 1.2,
@@ -26,7 +28,7 @@ export default function Onboarding() {
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const [generationStep, setGenerationStep] = useState(0);
   const navigate = useNavigate();
-  const { refreshProfile } = useUser();
+  const { refreshProfile } = useProfile();
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -82,7 +84,6 @@ export default function Onboarding() {
 
   const handleSubmit = async () => {
     const startTime = performance.now();
-    console.log("🚀 Starting onboarding profile creation...");
 
     // Validate input
     const validationResult = profileSchema.safeParse({
@@ -140,7 +141,7 @@ export default function Onboarding() {
 
       const endTime = performance.now();
       const duration = Math.round(endTime - startTime);
-      console.log(`✅ Onboarding completed in ${duration}ms`);
+      logger.info("Onboarding completed", { ms: duration });
 
       // Ensure all 3 animation steps have had time to play (step 3 fires at 2200ms)
       const minAnimMs = 2400;
@@ -151,12 +152,13 @@ export default function Onboarding() {
       setTimeout(async () => {
         setGenerationStep(4);
         await refreshProfile(); // update hasProfile=true before navigating
+        celebrateSuccess();
         setTimeout(() => navigate("/dashboard"), 1000);
       }, remainingAnim);
     } catch (error: any) {
       const endTime = performance.now();
       const duration = Math.round(endTime - startTime);
-      console.error(`❌ Onboarding failed after ${duration}ms:`, error);
+      logger.error("Onboarding failed", error, { ms: duration });
 
       stepTimers.forEach(clearTimeout);
       setGeneratingPlan(false);

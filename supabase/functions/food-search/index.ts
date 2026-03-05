@@ -1,4 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { edgeLogger } from "../_shared/errorReporter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,22 +52,6 @@ function normalizeFood(food: USDAFood) {
   };
 }
 
-// Lightweight JWT check — decode payload and verify not expired.
-// Supabase gateway already validates the signature, so we just
-// need to confirm structure + expiry without a network round-trip.
-function isValidJwt(authHeader: string): boolean {
-  try {
-    const token = authHeader.replace("Bearer ", "");
-    const parts = token.split(".");
-    if (parts.length !== 3) return false;
-    const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
-    if (payload.exp && payload.exp < Date.now() / 1000) return false;
-    return !!payload.sub;
-  } catch {
-    return false;
-  }
-}
-
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
@@ -82,12 +68,23 @@ serve(async (req) => {
     return json({ status: "warm" });
   }
 
-  try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader || !isValidJwt(authHeader)) {
-      return json({ error: "Unauthorized" }, 401);
-    }
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) {
+    return json({ error: "Unauthorized" }, 401);
+  }
 
+  const supabaseClient = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+    { global: { headers: { Authorization: authHeader } } }
+  );
+
+  const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
+  if (userError || !user) {
+    return json({ error: "Invalid token" }, 401);
+  }
+
+  try {
     const { query } = await req.json();
     if (!query || typeof query !== "string" || query.trim().length < 2) {
       return json({ error: "Query is required (min 2 chars)" }, 400);
@@ -117,7 +114,7 @@ serve(async (req) => {
 
     if (!usdaResponse.ok) {
       const errText = await usdaResponse.text();
-      console.error("USDA API error:", usdaResponse.status, errText);
+      edgeLogger.error("USDA API error", undefined, { functionName: "food-search", status: usdaResponse.status, errText });
       throw new Error(`USDA API returned ${usdaResponse.status}`);
     }
 
@@ -133,7 +130,7 @@ serve(async (req) => {
 
     return json({ results });
   } catch (err) {
-    console.error("food-search error:", err);
+    edgeLogger.error("food-search error", err, { functionName: "food-search" });
     return json({ error: "Search failed" }, 500);
   }
 });

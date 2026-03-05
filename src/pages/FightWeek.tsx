@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -8,7 +8,7 @@ import { addDays, differenceInDays, format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUser } from "@/contexts/UserContext";
 import { AIPersistence } from "@/lib/aiPersistence";
-import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
+import { withSupabaseTimeout, createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { localCache } from "@/lib/localCache";
 import { computeFightWeekPlan, type FightWeekProjection } from "@/utils/fightWeekEngine";
@@ -46,6 +46,7 @@ export default function FightWeek() {
   const { toast } = useToast();
   const { userId, profile } = useUser();
   const { safeAsync, isMounted } = useSafeAsync();
+  const aiAbortRef = useRef<AbortController | null>(null);
 
   // Compute projection synchronously from inputs
   const projection: FightWeekProjection | null = useMemo(() => {
@@ -106,7 +107,7 @@ export default function FightWeek() {
       const { data } = await withSupabaseTimeout(
         supabase
           .from("fight_week_plans")
-          .select("*")
+          .select("id, fight_date, starting_weight_kg, target_weight_kg")
           .eq("user_id", userId)
           .order("created_at", { ascending: false })
           .limit(1)
@@ -168,31 +169,49 @@ export default function FightWeek() {
 
   const generateAdvice = async () => {
     if (!userId || !projection) return;
-    safeAsync(setIsGeneratingAdvice)(true);
 
-    // Clear stale advice when generating new
+    aiAbortRef.current?.abort();
+    const { controller, cleanup } = createAIAbortController(30000);
+    aiAbortRef.current = controller;
+
+    safeAsync(setIsGeneratingAdvice)(true);
     safeAsync(setAiAdvice)(null);
 
-    const { data, error } = await supabase.functions.invoke("fight-week-analysis", {
-      body: {
-        currentWeight: parseFloat(currentWeight),
-        targetWeight: parseFloat(targetWeight),
-        daysUntilWeighIn: parseInt(daysUntilWeighIn),
-        sex: profile?.sex || "male",
-        age: profile?.age,
-        projection,
-      },
-    });
+    try {
+      const { data, error } = await supabase.functions.invoke("fight-week-analysis", {
+        body: {
+          currentWeight: parseFloat(currentWeight),
+          targetWeight: parseFloat(targetWeight),
+          daysUntilWeighIn: parseInt(daysUntilWeighIn),
+          sex: profile?.sex || "male",
+          age: profile?.age,
+          projection,
+        },
+        signal: controller.signal,
+      });
 
-    if (!isMounted()) return;
+      if (controller.signal.aborted) return;
+      if (!isMounted()) return;
 
-    if (error) {
-      toast({ title: "AI advice unavailable", description: error.message, variant: "destructive" });
-    } else if (data?.advice) {
-      setAiAdvice(data.advice);
-      AIPersistence.save(userId, "fight_week_advice", data.advice, 48);
+      if (error) {
+        const msg = await extractEdgeFunctionError(error, "AI advice unavailable");
+        toast({ title: "AI advice unavailable", description: msg, variant: "destructive" });
+      } else if (data?.advice) {
+        setAiAdvice(data.advice);
+        AIPersistence.save(userId, "fight_week_advice", data.advice, 48);
+      }
+    } catch (err: any) {
+      if (err?.name === 'AbortError' || controller.signal.aborted) return;
+      toast({ title: "AI advice unavailable", description: err?.message || "Something went wrong", variant: "destructive" });
+    } finally {
+      cleanup();
+      safeAsync(setIsGeneratingAdvice)(false);
     }
-    setIsGeneratingAdvice(false);
+  };
+
+  const handleAICancel = () => {
+    aiAbortRef.current?.abort();
+    safeAsync(setIsGeneratingAdvice)(false);
   };
 
   // Loading skeleton
@@ -361,6 +380,8 @@ export default function FightWeek() {
               advice={aiAdvice}
               isGenerating={isGeneratingAdvice}
               onGenerate={generateAdvice}
+              onCancel={handleAICancel}
+              onRetry={generateAdvice}
             />
           </>
         )}

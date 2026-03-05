@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import { Download, Loader2, AlertTriangle, Shield } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { logger } from "@/lib/logger";
 
 interface DataResetDialogProps {
   open: boolean;
@@ -30,11 +31,9 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
   const exportAllData = async () => {
     setExporting(true);
     try {
-      const XLSX = await import('xlsx');
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Fetch all user data
       const [
         { data: profile },
         { data: weightLogs },
@@ -53,14 +52,23 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
         supabase.from("fight_week_logs").select("*").eq("user_id", user.id).order("log_date", { ascending: true })
       ]);
 
-      // Create workbook
-      const wb = XLSX.utils.book_new();
+      // CSV helper: escape cells containing commas, quotes, or newlines
+      const escapeCell = (val: string) => {
+        if (val.includes(",") || val.includes('"') || val.includes("\n")) {
+          return `"${val.replace(/"/g, '""')}"`;
+        }
+        return val;
+      };
+      const rowToCSV = (row: string[]) => row.map(escapeCell).join(",");
 
-      // Profile Summary Sheet
+      const sections: string[][] = [];
+      const blankRow = [""];
+
+      // Profile Summary
       if (profile) {
-        const profileData = [
+        sections.push(
           ["Profile Summary"],
-          [""],
+          blankRow,
           ["Field", "Value"],
           ["Age", String(profile.age)],
           ["Sex", String(profile.sex)],
@@ -71,38 +79,36 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
           ["BMR", String(profile.bmr || "N/A")],
           ["TDEE", String(profile.tdee || "N/A")],
           ["Target Date", String(profile.target_date)],
-        ];
-        const ws = XLSX.utils.aoa_to_sheet(profileData);
-        XLSX.utils.book_append_sheet(wb, ws, "Profile");
+          blankRow, blankRow
+        );
       }
 
       // Weight Logs Timeline
       if (weightLogs && weightLogs.length > 0) {
-        const weightData = [
+        sections.push(
           ["Weight Tracking Timeline"],
-          [""],
-          ["Date", "Weight (kg)", "Days in Timeline"],
-        ];
+          blankRow,
+          ["Date", "Weight (kg)", "Days in Timeline"]
+        );
         weightLogs.forEach((log, idx) => {
-          weightData.push([
+          sections.push([
             format(new Date(log.date), "yyyy-MM-dd"),
             String(log.weight_kg),
             String(idx + 1)
           ]);
         });
-        const ws = XLSX.utils.aoa_to_sheet(weightData);
-        XLSX.utils.book_append_sheet(wb, ws, "Weight Timeline");
+        sections.push(blankRow, blankRow);
       }
 
       // Fight Camps Summary
       if (fightCamps && fightCamps.length > 0) {
-        const campsData = [
+        sections.push(
           ["Fight Camps Summary"],
-          [""],
-          ["Camp Name", "Event", "Fight Date", "Starting Weight", "End Weight", "Total Cut", "Via Dehydration", "Via Carb Reduction", "Weigh-In Timing", "Completed"],
-        ];
+          blankRow,
+          ["Camp Name", "Event", "Fight Date", "Starting Weight", "End Weight", "Total Cut", "Via Dehydration", "Via Carb Reduction", "Weigh-In Timing", "Completed"]
+        );
         fightCamps.forEach(camp => {
-          campsData.push([
+          sections.push([
             camp.name,
             camp.event_name || "N/A",
             format(new Date(camp.fight_date), "yyyy-MM-dd"),
@@ -116,34 +122,32 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
           ]);
         });
 
-        // Add rehydration and performance notes section
-        campsData.push([]);
-        campsData.push(["Camp Details"]);
-        campsData.push([]);
+        // Camp details (rehydration & performance notes)
+        sections.push(blankRow, ["Camp Details"], blankRow);
         fightCamps.forEach(camp => {
           if (camp.rehydration_notes || camp.performance_feeling) {
-            campsData.push([`${camp.name} - Rehydration Notes`]);
-            campsData.push([camp.rehydration_notes || "No notes"]);
-            campsData.push([]);
-            campsData.push([`${camp.name} - Performance Feeling`]);
-            campsData.push([camp.performance_feeling || "No notes"]);
-            campsData.push([]);
+            sections.push(
+              [`${camp.name} - Rehydration Notes`],
+              [camp.rehydration_notes || "No notes"],
+              blankRow,
+              [`${camp.name} - Performance Feeling`],
+              [camp.performance_feeling || "No notes"],
+              blankRow
+            );
           }
         });
-
-        const ws = XLSX.utils.aoa_to_sheet(campsData);
-        XLSX.utils.book_append_sheet(wb, ws, "Fight Camps");
+        sections.push(blankRow);
       }
 
       // Fight Week Logs
       if (fightWeekLogs && fightWeekLogs.length > 0) {
-        const fightWeekData = [
+        sections.push(
           ["Fight Week Timeline"],
-          [""],
-          ["Date", "Weight (kg)", "Carbs (g)", "Fluid Intake (ml)", "Sweat Session (min)", "Notes"],
-        ];
+          blankRow,
+          ["Date", "Weight (kg)", "Carbs (g)", "Fluid Intake (ml)", "Sweat Session (min)", "Notes"]
+        );
         fightWeekLogs.forEach(log => {
-          fightWeekData.push([
+          sections.push([
             format(new Date(log.log_date), "yyyy-MM-dd"),
             log.weight_kg ? String(log.weight_kg) : "N/A",
             log.carbs_g ? String(log.carbs_g) : "N/A",
@@ -152,19 +156,18 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
             log.notes || ""
           ]);
         });
-        const ws = XLSX.utils.aoa_to_sheet(fightWeekData);
-        XLSX.utils.book_append_sheet(wb, ws, "Fight Week Logs");
+        sections.push(blankRow, blankRow);
       }
 
       // Nutrition Logs
       if (nutritionLogs && nutritionLogs.length > 0) {
-        const nutritionData = [
+        sections.push(
           ["Nutrition Timeline"],
-          [""],
-          ["Date", "Meal Name", "Meal Type", "Calories", "Protein (g)", "Carbs (g)", "Fats (g)", "Portion Size"],
-        ];
+          blankRow,
+          ["Date", "Meal Name", "Meal Type", "Calories", "Protein (g)", "Carbs (g)", "Fats (g)", "Portion Size"]
+        );
         nutritionLogs.forEach(log => {
-          nutritionData.push([
+          sections.push([
             format(new Date(log.date), "yyyy-MM-dd"),
             log.meal_name,
             log.meal_type || "N/A",
@@ -175,19 +178,18 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
             log.portion_size || "N/A"
           ]);
         });
-        const ws = XLSX.utils.aoa_to_sheet(nutritionData);
-        XLSX.utils.book_append_sheet(wb, ws, "Nutrition Timeline");
+        sections.push(blankRow, blankRow);
       }
 
       // Hydration Logs
       if (hydrationLogs && hydrationLogs.length > 0) {
-        const hydrationData = [
+        sections.push(
           ["Hydration & Rehydration Timeline"],
-          [""],
-          ["Date", "Amount (ml)", "Pre-Training Weight", "Post-Training Weight", "Sweat Loss %", "Sodium (mg)", "Notes"],
-        ];
+          blankRow,
+          ["Date", "Amount (ml)", "Pre-Training Weight", "Post-Training Weight", "Sweat Loss %", "Sodium (mg)", "Notes"]
+        );
         hydrationLogs.forEach(log => {
-          hydrationData.push([
+          sections.push([
             format(new Date(log.date), "yyyy-MM-dd"),
             String(log.amount_ml),
             log.training_weight_pre ? String(log.training_weight_pre) : "N/A",
@@ -197,15 +199,14 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
             log.notes || ""
           ]);
         });
-        const ws = XLSX.utils.aoa_to_sheet(hydrationData);
-        XLSX.utils.book_append_sheet(wb, ws, "Hydration Timeline");
+        sections.push(blankRow, blankRow);
       }
 
-      // Generate comparison summary
+      // Fight Camps Comparison
       if (fightCamps && fightCamps.length > 1) {
-        const comparisonData = [
+        sections.push(
           ["Fight Camps Comparison"],
-          [""],
+          blankRow,
           ["Metric", ...fightCamps.map(c => c.name)],
           ["Fight Date", ...fightCamps.map(c => format(new Date(c.fight_date), "yyyy-MM-dd"))],
           ["Total Weight Cut (kg)", ...fightCamps.map(c => c.total_weight_cut ? String(c.total_weight_cut) : "N/A")],
@@ -214,22 +215,26 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
           ["Starting Weight (kg)", ...fightCamps.map(c => c.starting_weight_kg ? String(c.starting_weight_kg) : "N/A")],
           ["End Weight (kg)", ...fightCamps.map(c => c.end_weight_kg ? String(c.end_weight_kg) : "N/A")],
           ["Weigh-In Timing", ...fightCamps.map(c => c.weigh_in_timing === "day_before" ? "Day Before" : c.weigh_in_timing === "day_of" ? "Day Of" : "N/A")],
-          ["Completed", ...fightCamps.map(c => c.is_completed ? "Yes" : "No")],
-        ];
-        const ws = XLSX.utils.aoa_to_sheet(comparisonData);
-        XLSX.utils.book_append_sheet(wb, ws, "Camps Comparison");
+          ["Completed", ...fightCamps.map(c => c.is_completed ? "Yes" : "No")]
+        );
       }
 
-      // Export file
-      const fileName = `weight-cut-wizard-export-${format(new Date(), "yyyy-MM-dd-HHmmss")}.xlsx`;
-      XLSX.writeFile(wb, fileName);
+      // Build CSV string and trigger download
+      const csvContent = sections.map(rowToCSV).join("\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `weight-cut-wizard-export-${format(new Date(), "yyyy-MM-dd-HHmmss")}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
 
       toast({
         title: "Export Complete",
         description: "Your data has been exported successfully",
       });
     } catch (error) {
-      console.error("Export error:", error);
+      logger.error("Export error", error);
       toast({
         title: "Export Failed",
         description: "Failed to export data. Please try again.",
@@ -277,7 +282,7 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
         onOpenChange(false);
       }, 1500);
     } catch (error) {
-      console.error("Reset error:", error);
+      logger.error("Reset error", error);
       toast({
         title: "Reset Failed",
         description: "Failed to reset data. Please try again.",

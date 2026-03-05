@@ -1,14 +1,17 @@
 import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Settings, LogOut, Droplets, Calendar, Moon, Sun, ChevronRight, BookOpen, Dumbbell, Bell } from "lucide-react";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
+import { triggerHaptic, triggerHapticSelection, triggerHapticWarning } from "@/lib/haptics";
+import { ImpactStyle } from "@capacitor/haptics";
+import { springs } from "@/lib/motion";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { useUser } from "@/contexts/UserContext";
+import { useProfile } from "@/contexts/UserContext";
 import { Input } from "@/components/ui/input";
 import { ProfilePictureUpload } from "@/components/ProfilePictureUpload";
 import { Switch } from "@/components/ui/switch";
@@ -61,8 +64,9 @@ const moreMenuItems = [
 export function BottomNav() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
+  const prefersReducedMotion = useReducedMotion();
   const { toast } = useToast();
-  const { userName, avatarUrl, setUserName, setAvatarUrl } = useUser();
+  const { userName, avatarUrl, setUserName, setAvatarUrl } = useProfile();
   const { replayTutorial } = useTutorial();
   const [quickLogOpen, setQuickLogOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
@@ -85,6 +89,7 @@ export function BottomNav() {
     setTheme(newTheme);
     localStorage.setItem("theme", newTheme);
     document.documentElement.classList.toggle("dark", newTheme === "dark");
+    triggerHapticSelection();
   };
 
   if (!isMobile) {
@@ -157,24 +162,32 @@ export function BottomNav() {
 
   return (
     <>
-      <nav className="fixed bottom-0 left-0 right-0 z-[9999] md:hidden bg-background/80 backdrop-blur-2xl border-t border-border/40 safe-area-inset-bottom">
+      <nav className="fixed bottom-0 left-0 right-0 z-[9999] md:hidden bg-background/95 border-t border-border/40 safe-area-inset-bottom">
         <div className="flex items-center justify-around h-16 px-2 relative">
           {/* Dashboard */}
           <NavLink
             to={mainNavItems[0].url}
             data-tutorial="nav-dashboard"
+            onClick={() => triggerHaptic(ImpactStyle.Light)}
             className={({ isActive }) =>
               `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 ${isActive
                 ? "text-primary"
-                : "text-muted-foreground active:scale-95"
+                : "text-muted-foreground"
               }`
             }
           >
             {({ isActive }) => (
-              <>
-                <DashboardIcon className="h-6 w-6" />
-                <span className={`text-[10px] tracking-wide leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[0].title}</span>
-              </>
+              <span className="relative flex flex-col items-center gap-1">
+                {isActive && (
+                  <motion.span
+                    layoutId="nav-active-bg"
+                    className="absolute inset-0 -mx-3 -my-1 rounded-2xl bg-primary/15"
+                    transition={springs.snappy}
+                  />
+                )}
+                <DashboardIcon className="relative z-10 h-6 w-6" />
+                <span className={`relative z-10 text-[10px] tracking-wide leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[0].title}</span>
+              </span>
             )}
           </NavLink>
 
@@ -182,57 +195,76 @@ export function BottomNav() {
           <NavLink
             to={mainNavItems[1].url}
             data-tutorial="nav-nutrition"
+            onClick={() => triggerHaptic(ImpactStyle.Light)}
             className={({ isActive }) =>
               `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 ${isActive
                 ? "text-primary"
-                : "text-muted-foreground active:scale-95"
+                : "text-muted-foreground"
               }`
             }
           >
             {({ isActive }) => (
-              <>
-                <NutritionIcon className="h-6 w-6" />
-                <span className={`text-[10px] tracking-wide leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[1].title}</span>
-              </>
+              <span className="relative flex flex-col items-center gap-1">
+                {isActive && (
+                  <motion.span
+                    layoutId="nav-active-bg"
+                    className="absolute inset-0 -mx-3 -my-1 rounded-2xl bg-primary/15"
+                    transition={springs.snappy}
+                  />
+                )}
+                <NutritionIcon className="relative z-10 h-6 w-6" />
+                <span className={`relative z-10 text-[10px] tracking-wide leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[1].title}</span>
+              </span>
             )}
           </NavLink>
 
           {/* Center plus button - floating FAB */}
-          <button
-            onClick={() => setQuickLogOpen(true)}
+          <motion.button
+            onClick={() => { setQuickLogOpen(true); triggerHaptic(ImpactStyle.Medium); }}
             data-tutorial="nav-quick-log"
             className="flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target"
             aria-label="Quick Log"
+            animate={prefersReducedMotion ? undefined : { scale: [1, 1.04, 1] }}
+            transition={prefersReducedMotion ? undefined : { duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+            whileTap={{ scale: 0.9 }}
           >
-            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/30 active:scale-95 transition-transform duration-150 flex items-center justify-center">
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/30 flex items-center justify-center">
               <Plus className="h-7 w-7" strokeWidth={2.5} />
             </div>
-          </button>
+          </motion.button>
 
           {/* Weight */}
           <NavLink
             to={mainNavItems[2].url}
             data-tutorial="nav-weight"
+            onClick={() => triggerHaptic(ImpactStyle.Light)}
             className={({ isActive }) =>
               `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 ${isActive
                 ? "text-primary"
-                : "text-muted-foreground active:scale-95"
+                : "text-muted-foreground"
               }`
             }
           >
             {({ isActive }) => (
-              <>
-                <WeightIcon className="h-6 w-6" />
-                <span className={`text-[10px] tracking-wide leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[2].title}</span>
-              </>
+              <span className="relative flex flex-col items-center gap-1">
+                {isActive && (
+                  <motion.span
+                    layoutId="nav-active-bg"
+                    className="absolute inset-0 -mx-3 -my-1 rounded-2xl bg-primary/15"
+                    transition={springs.snappy}
+                  />
+                )}
+                <WeightIcon className="relative z-10 h-6 w-6" />
+                <span className={`relative z-10 text-[10px] tracking-wide leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[2].title}</span>
+              </span>
             )}
           </NavLink>
 
           {/* More button */}
           <button
-            onClick={() => setMoreMenuOpen(true)}
+            onClick={() => { setMoreMenuOpen(true); triggerHapticSelection(); }}
             data-tutorial="nav-more"
-            className="flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 text-muted-foreground active:scale-95"
+            className="flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 text-muted-foreground"
             aria-label="More"
           >
             <MoreHorizontal className="h-6 w-6" />
@@ -283,7 +315,7 @@ export function BottomNav() {
       <Sheet open={moreMenuOpen} onOpenChange={setMoreMenuOpen}>
         <SheetContent
           side="bottom"
-          className="h-[70vh] max-h-[85vh] rounded-t-3xl flex flex-col p-0 gap-0 bg-background/95 dark:bg-background/98 backdrop-blur-xl border-t border-border/50 [&>button]:hidden"
+          className="h-[70vh] max-h-[85vh] rounded-t-3xl flex flex-col p-0 gap-0 bg-background/95 dark:bg-background/98 backdrop-blur-md border-t border-border/50 [&>button]:hidden"
         >
           {/* Drag handle */}
           <div className="flex justify-center pt-3 pb-1 shrink-0">
@@ -307,7 +339,7 @@ export function BottomNav() {
                     key={item.url}
                     type="button"
                     onClick={() => handleMoreItemClick(item.url)}
-                    className="w-full flex items-center gap-3 px-4 py-3.5 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left border-b border-border/40 dark:border-white/5 last:border-b-0"
+                    className="w-full flex items-center gap-3 px-4 py-3.5 touch-manipulation text-left border-b border-border/40 dark:border-white/5 last:border-b-0"
                     variants={menuItemVariants}
                     transition={menuItemTransition}
                   >
@@ -331,7 +363,7 @@ export function BottomNav() {
               <motion.button
                 type="button"
                 onClick={handleSettings}
-                className="w-full flex items-center gap-3 px-4 py-3.5 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left border-b border-border/40 dark:border-white/5"
+                className="w-full flex items-center gap-3 px-4 py-3.5 touch-manipulation text-left border-b border-border/40 dark:border-white/5"
                 variants={{
                   open: { opacity: 1, y: 0 },
                   closed: { opacity: 0, y: 6 },
@@ -346,8 +378,8 @@ export function BottomNav() {
               </motion.button>
               <motion.button
                 type="button"
-                onClick={() => setLogoutDialogOpen(true)}
-                className="w-full flex items-center gap-3 px-4 py-3.5 active:bg-destructive/10 transition-colors touch-manipulation text-left"
+                onClick={() => { setLogoutDialogOpen(true); triggerHapticWarning(); }}
+                className="w-full flex items-center gap-3 px-4 py-3.5 touch-manipulation text-left"
                 variants={{
                   open: { opacity: 1, y: 0 },
                   closed: { opacity: 0, y: 6 },
@@ -372,7 +404,7 @@ export function BottomNav() {
             className="fixed inset-0 z-[10001] bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
             onClick={() => setSettingsDialogOpen(false)}
           />
-          <div className="fixed inset-x-0 bottom-0 z-[10002] bg-background/95 dark:bg-background/98 backdrop-blur-xl border-t border-border/50 rounded-t-3xl animate-in slide-in-from-bottom duration-300 safe-area-inset-bottom">
+          <div className="fixed inset-x-0 bottom-0 z-[10002] bg-background/95 dark:bg-background/98 backdrop-blur-md border-t border-border/50 rounded-t-3xl animate-in slide-in-from-bottom duration-300 safe-area-inset-bottom">
             {/* Drag handle */}
             <div className="flex justify-center pt-3 pb-1">
               <div className="w-10 h-1 rounded-full bg-muted-foreground/25" />

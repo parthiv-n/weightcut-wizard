@@ -22,6 +22,8 @@ interface AIAdviceCardProps {
   advice: FightWeekAIAdvice | null;
   isGenerating: boolean;
   onGenerate: () => void;
+  onCancel?: () => void;
+  onRetry?: () => void;
 }
 
 const AI_STEPS = [
@@ -30,7 +32,7 @@ const AI_STEPS = [
   { icon: Sparkles, label: "Generating protocol advice", color: "text-yellow-400" },
 ];
 
-export function AIAdviceCard({ advice, isGenerating, onGenerate }: AIAdviceCardProps) {
+export function AIAdviceCard({ advice, isGenerating, onGenerate, onCancel, onRetry }: AIAdviceCardProps) {
   const [tipsOpen, setTipsOpen] = useState(false);
 
   return (
@@ -41,6 +43,8 @@ export function AIAdviceCard({ advice, isGenerating, onGenerate }: AIAdviceCardP
         steps={AI_STEPS}
         title="Generating Advice"
         subtitle="Building your research-backed protocol..."
+        onCancel={onCancel}
+        onRetry={onRetry}
       />
 
       <div className="glass-card rounded-2xl border border-border/50 overflow-hidden">

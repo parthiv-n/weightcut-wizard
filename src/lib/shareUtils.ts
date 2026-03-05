@@ -1,16 +1,17 @@
 import { toBlob } from "html-to-image";
 import { Capacitor } from "@capacitor/core";
+import { logger } from "./logger";
 
 export async function captureCardAsBlob(
   element: HTMLElement,
-  options?: { pixelRatio?: number }
+  options?: { pixelRatio?: number; transparent?: boolean }
 ): Promise<Blob> {
   const blob = await toBlob(element, {
     pixelRatio: options?.pixelRatio ?? 2,
     cacheBust: true,
     // Inline styles for reliable capture
     skipAutoScale: true,
-    backgroundColor: "#080808",
+    ...(options?.transparent ? {} : { backgroundColor: "#080808" }),
   });
   if (!blob) throw new Error("Failed to capture card image");
   return blob;
@@ -62,7 +63,7 @@ export async function shareCardImage(
       });
       return;
     } catch (e) {
-      console.warn("Native share failed, falling back:", e);
+      logger.warn("Native share failed, falling back", { error: e });
     }
   }
 

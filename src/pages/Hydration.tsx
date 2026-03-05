@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,7 +23,8 @@ import {
 import { useUser } from "@/contexts/UserContext";
 import { AIGeneratingOverlay } from "@/components/AIGeneratingOverlay";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
-import { withTimeout } from "@/lib/timeoutWrapper";
+import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
+import { logger } from "@/lib/logger";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -210,6 +211,7 @@ export default function Hydration() {
   const { toast } = useToast();
   const { userId, profile: contextProfile, userName } = useUser();
   const { safeAsync, isMounted } = useSafeAsync();
+  const aiAbortRef = useRef<AbortController | null>(null);
 
   const currentWeight = contextProfile?.current_weight_kg ?? 0;
 
@@ -239,6 +241,15 @@ export default function Hydration() {
     loadPersistedProtocol();
   }, [userId]);
 
+  // Warmup ping — pre-warm edge function to avoid cold start
+  useEffect(() => {
+    if (!userId) return;
+    const timer = setTimeout(() => {
+      supabase.functions.invoke("rehydration-protocol", { method: "GET" } as any).catch(() => {});
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [userId]);
+
   const loadPersistedProtocol = () => {
     if (!userId || protocol) return;
     try {
@@ -257,7 +268,7 @@ export default function Hydration() {
         }
       }
     } catch (error) {
-      console.error("Error loading persisted protocol:", error);
+      logger.error("Error loading persisted protocol", error);
     }
   };
 
@@ -265,11 +276,14 @@ export default function Hydration() {
     e.preventDefault();
     if (!currentWeight) return;
 
+    aiAbortRef.current?.abort();
+    const { controller, cleanup } = createAIAbortController();
+    aiAbortRef.current = controller;
+
     safeAsync(setLoading)(true);
 
     try {
-      const { data, error } = await withTimeout(
-        supabase.functions.invoke("rehydration-protocol", {
+      const { data, error } = await supabase.functions.invoke("rehydration-protocol", {
         body: {
           weightLostKg: parseFloat(weightLost),
           availableHours,
@@ -285,13 +299,12 @@ export default function Hydration() {
           goalWeightKg: contextProfile?.goal_weight_kg,
           fightWeekTargetKg: contextProfile?.fight_week_target_kg,
         },
-      }),
-        15000,
-        "Rehydration protocol timed out"
-      );
+        signal: controller.signal,
+      });
 
+      if (controller.signal.aborted) return;
       if (!isMounted()) return;
-      if (error) throw error;
+      if (error) throw new Error(await extractEdgeFunctionError(error, "Failed to generate protocol"));
 
       if (data?.protocol) {
         setProtocol(data.protocol);
@@ -313,16 +326,23 @@ export default function Hydration() {
           description: "Your personalised rehydration plan is ready",
         });
       }
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.name === 'AbortError' || controller.signal.aborted) return;
       if (!isMounted()) return;
-      console.error("Error generating protocol:", error);
+      logger.error("Error generating protocol", error);
       toast({
         title: "Error",
         description: "Failed to generate rehydration protocol",
         variant: "destructive",
       });
+    } finally {
+      cleanup();
+      safeAsync(setLoading)(false);
     }
+  };
 
+  const handleAICancel = () => {
+    aiAbortRef.current?.abort();
     safeAsync(setLoading)(false);
   };
 
@@ -405,8 +425,10 @@ export default function Hydration() {
         isGenerating={loading}
         steps={REHYDRATION_STEPS}
         title="Generating Protocol"
-        subtitle="Designing your optimal recovery strategy"
+        subtitle="This usually takes 30–60 seconds..."
         onCompletion={() => {}}
+        onCancel={handleAICancel}
+        onRetry={() => handleGenerateProtocol(new Event("submit") as any)}
       />
       <div className="space-y-4 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto pb-20 md:pb-6">
         {/* Header */}
@@ -442,7 +464,7 @@ export default function Hydration() {
         </div>
 
         {/* ── Input Form ────────────────────────────────────────────────── */}
-        <div className="rounded-3xl border border-white/[0.06] p-6 mb-6 shadow-2xl relative overflow-hidden bg-white/[0.02] backdrop-blur-xl">
+        <div className="rounded-3xl border border-white/[0.06] p-6 mb-6 shadow-2xl relative overflow-hidden bg-white/[0.02] backdrop-blur-sm">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[200px] h-[200px] bg-blue-500/20 opacity-40 blur-[80px] rounded-full pointer-events-none"></div>
 
           <form onSubmit={handleGenerateProtocol} className="space-y-6 relative z-10">
@@ -646,7 +668,7 @@ export default function Hydration() {
             {/* ── Summary ───────────────────────────────────────────────── */}
             <div className="rounded-2xl bg-muted/50 border border-border/50 p-4">
               <div className="flex items-start justify-between gap-3">
-                <p className="text-sm text-foreground/90 leading-snug">{protocol.summary}</p>
+                <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-line">{protocol.summary}</p>
                 <button
                   onClick={() => handleGenerateProtocol(new Event("submit") as any)}
                   disabled={loading}

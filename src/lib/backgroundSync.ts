@@ -1,4 +1,6 @@
 // Background data synchronization utility
+import { logger } from "./logger";
+
 interface SyncTask {
   id: string;
   operation: () => Promise<any>;
@@ -58,7 +60,7 @@ class BackgroundSyncManager {
         this.isProcessing = false;
       }
     } catch (error) {
-      console.error('Background sync error:', error);
+      logger.error("Background sync error", error);
       this.isProcessing = false;
     }
   }
@@ -73,7 +75,7 @@ class BackgroundSyncManager {
       task.onSuccess?.(result);
       
     } catch (error) {
-      console.error(`Background sync task ${task.id} failed:`, error);
+      logger.error(`Background sync task ${task.id} failed`, error);
       
       // Increment retry count
       task.retryCount++;
@@ -126,7 +128,7 @@ export const syncProfileInBackground = (userId: string, profileData: any) => {
     maxRetries: 3,
     priority: 5,
     onError: (error) => {
-      console.error('Failed to sync profile data:', error);
+      logger.error("Failed to sync profile data", error);
     },
   });
 };
@@ -144,7 +146,7 @@ export const syncNutritionInBackground = (userId: string, nutritionData: any) =>
     maxRetries: 2,
     priority: 3,
     onError: (error) => {
-      console.error('Failed to sync nutrition data:', error);
+      logger.error("Failed to sync nutrition data", error);
     },
   });
 };

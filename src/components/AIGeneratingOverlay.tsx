@@ -1,7 +1,7 @@
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
-import { CheckCircle2, Loader2, LucideIcon } from "lucide-react";
+import { CheckCircle2, Loader2, LucideIcon, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export interface AIStep {
@@ -17,6 +17,8 @@ interface AIGeneratingOverlayProps {
     title?: string;
     subtitle?: string;
     onCompletion?: () => void;
+    onCancel?: () => void;
+    onRetry?: () => void;
 }
 
 export function AIGeneratingOverlay({
@@ -25,18 +27,47 @@ export function AIGeneratingOverlay({
     steps,
     title = "Analyzing Data",
     subtitle = "AI is processing your request...",
-    onCompletion
+    onCompletion,
+    onCancel,
+    onRetry,
 }: AIGeneratingOverlayProps) {
     const [currentStep, setCurrentStep] = useState(0);
     const [isComplete, setIsComplete] = useState(false);
+    const [showCancel, setShowCancel] = useState(false);
+    const [elapsed, setElapsed] = useState(0);
+    const cancelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Reset state when opening
     useEffect(() => {
         if (isOpen) {
             setCurrentStep(0);
             setIsComplete(false);
+            setShowCancel(false);
+            setElapsed(0);
         }
     }, [isOpen]);
+
+    // Cancel button timer (5s)
+    useEffect(() => {
+        if (cancelTimerRef.current) clearTimeout(cancelTimerRef.current);
+
+        if (isOpen && isGenerating) {
+            cancelTimerRef.current = setTimeout(() => setShowCancel(true), 3000);
+        } else {
+            setShowCancel(false);
+        }
+
+        return () => {
+            if (cancelTimerRef.current) clearTimeout(cancelTimerRef.current);
+        };
+    }, [isOpen, isGenerating]);
+
+    // Elapsed timer
+    useEffect(() => {
+        if (!isOpen || !isGenerating) { setElapsed(0); return; }
+        const t = setInterval(() => setElapsed(s => s + 1), 1000);
+        return () => clearInterval(t);
+    }, [isOpen, isGenerating]);
 
     // Handle step progression
     useEffect(() => {
@@ -49,7 +80,7 @@ export function AIGeneratingOverlay({
                 }
                 return prev;
             });
-        }, 2000); // Advance every 2 seconds roughly
+        }, 1200); // Advance every 1.2 seconds
 
         return () => clearInterval(interval);
     }, [isOpen, isGenerating, steps.length]);
@@ -96,7 +127,6 @@ export function AIGeneratingOverlay({
                                 className={cn(
                                     "flex items-center gap-3 p-3 rounded-xl transition-all duration-500",
                                     isActive ? "bg-zinc-800/50 border border-zinc-700/50 translate-x-0 opacity-100" : "opacity-50",
-                                    // Simple stagger effect simulation with delay would require inline styles or more complex CSS, keeping it simple here
                                 )}
                             >
                                 <div className={cn(
@@ -125,6 +155,24 @@ export function AIGeneratingOverlay({
                         );
                     })}
                 </div>
+
+                {/* Elapsed timer */}
+                {!isComplete && elapsed >= 5 && (
+                    <p className="mt-4 text-center text-xs text-zinc-500">
+                        {elapsed}s elapsed
+                    </p>
+                )}
+
+                {/* Cancel button */}
+                {showCancel && !isComplete && onCancel && (
+                    <button
+                        onClick={onCancel}
+                        className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-800/50 border border-zinc-800 rounded-xl transition-all duration-200 animate-in fade-in duration-300"
+                    >
+                        <X className="h-4 w-4" />
+                        Cancel
+                    </button>
+                )}
             </div>
         </div>,
         document.body

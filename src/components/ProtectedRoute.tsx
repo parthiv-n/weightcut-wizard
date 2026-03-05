@@ -1,12 +1,12 @@
 import { Navigate } from "react-router-dom";
-import { useUser } from "@/contexts/UserContext";
+import { useAuth } from "@/contexts/UserContext";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { WizardLoader } from "@/components/ui/WizardLoader";
 import wizardLogo from "@/assets/wizard-logo.png";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { userId, isLoading, authError, retryAuth } = useUser();
+  const { userId, isLoading, authError, retryAuth } = useAuth();
 
   if (isLoading) {
     return <WizardLoader message="Loading your profile..." />;

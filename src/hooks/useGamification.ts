@@ -53,7 +53,7 @@ interface GamificationData {
 }
 
 const CACHE_KEY = "gamification_data";
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 const DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
 
@@ -306,16 +306,10 @@ export function useGamification(
           .from("fight_week_plans")
           .select("*", { count: "exact", head: true })
           .eq("user_id", userId),
-        // Completed camps count
+        // All camps — derive completed + total client-side
         supabase
           .from("fight_camps")
-          .select("*", { count: "exact", head: true })
-          .eq("user_id", userId)
-          .eq("is_completed", true),
-        // Total camp count
-        supabase
-          .from("fight_camps")
-          .select("*", { count: "exact", head: true })
+          .select("is_completed")
           .eq("user_id", userId),
         // Weight log dates — capped to 1 year (streak can never exceed 365)
         supabase
@@ -336,13 +330,13 @@ export function useGamification(
         results[1].status === "fulfilled" ? results[1].value.count || 0 : 0;
       const fightWeekCount =
         results[2].status === "fulfilled" ? results[2].value.count || 0 : 0;
-      const completedCampCount =
-        results[3].status === "fulfilled" ? results[3].value.count || 0 : 0;
-      const totalCampCount =
-        results[4].status === "fulfilled" ? results[4].value.count || 0 : 0;
+      const campsData =
+        results[3].status === "fulfilled" ? results[3].value.data || [] : [];
+      const totalCampCount = campsData.length;
+      const completedCampCount = campsData.filter((c: any) => c.is_completed).length;
       const allWeightDates =
-        results[5].status === "fulfilled"
-          ? (results[5].value.data || []).map((r: any) => r.date)
+        results[4].status === "fulfilled"
+          ? (results[4].value.data || []).map((r: any) => r.date)
           : [];
 
       const data: GamificationData = {

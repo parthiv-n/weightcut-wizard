@@ -16,8 +16,9 @@ import { NavigationDirectionProvider } from "@/hooks/useNavigationDirection";
 import { TutorialProvider } from "@/tutorial/TutorialContext";
 import { BottomNav } from "@/components/BottomNav";
 import { FloatingWizardChat } from "@/components/FloatingWizardChat";
+import * as Sentry from "@sentry/react";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
+import { DashboardSkeleton, NutritionPageSkeleton, HydrationSkeleton, GoalsSkeleton } from "@/components/ui/skeleton-loader";
 import { RefreshCw } from "lucide-react";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
@@ -43,6 +44,7 @@ const SKIP_ROUTES = ['/', '/auth', '/onboarding'];
 
 import { App as CapacitorApp } from '@capacitor/app';
 import { supabase } from "@/integrations/supabase/client";
+import { logger } from "@/lib/logger";
 
 function RouteTracker() {
   const location = useLocation();
@@ -57,7 +59,7 @@ function RouteTracker() {
   // Handle Deep Links (Supabase Auth)
   useEffect(() => {
     CapacitorApp.addListener('appUrlOpen', async ({ url }) => {
-      console.log('App opened with URL:', url);
+      logger.info('App opened with URL', { url });
 
       // 1. Handle Supabase Auth (PKCE Code)
       if (url.includes('code=')) {
@@ -78,7 +80,7 @@ function RouteTracker() {
             }
           }
         } catch (e) {
-          console.error("Error exchanging code:", e);
+          logger.error("Error exchanging code", e);
         }
         return; // specific auth handling done
       }
@@ -93,7 +95,7 @@ function RouteTracker() {
             navigate('/dashboard');
           }
         } catch (e) {
-          console.error("Error handling implicit flow:", e);
+          logger.error("Error handling implicit flow", e);
         }
         return;
       }
@@ -145,7 +147,7 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
             <button
               onClick={() => window.location.reload()}
               style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
-              className="fixed right-3 z-50 h-9 w-9 flex items-center justify-center rounded-xl bg-background/80 backdrop-blur-md border border-border/50 shadow-sm active:scale-90 transition-transform md:hidden"
+              className="fixed right-3 z-50 h-9 w-9 flex items-center justify-center rounded-xl bg-background/95 border border-border/50 shadow-sm active:scale-90 transition-transform md:hidden"
               aria-label="Refresh page"
             >
               <RefreshCw className="h-4 w-4 text-muted-foreground" />
@@ -174,7 +176,11 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => (
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <ErrorBoundary>
+      <ErrorBoundary onError={(error, errorInfo) => {
+        Sentry.captureException(error, {
+          extra: { componentStack: errorInfo.componentStack },
+        });
+      }}>
         <UserProvider>
           <WizardBackgroundProvider>
             <Toaster />
@@ -195,7 +201,7 @@ const App = () => (
                   <ProtectedRoute>
                     <ProfileCompletionGuard>
                       <AppLayout>
-                        <Dashboard />
+                        <Suspense fallback={<DashboardSkeleton />}><Dashboard /></Suspense>
                       </AppLayout>
                     </ProfileCompletionGuard>
                   </ProtectedRoute>
@@ -204,7 +210,7 @@ const App = () => (
                   <ProtectedRoute>
                     <ProfileCompletionGuard>
                       <AppLayout>
-                        <Goals />
+                        <Suspense fallback={<GoalsSkeleton />}><Goals /></Suspense>
                       </AppLayout>
                     </ProfileCompletionGuard>
                   </ProtectedRoute>
@@ -213,7 +219,7 @@ const App = () => (
                   <ProtectedRoute>
                     <ProfileCompletionGuard>
                       <AppLayout>
-                        <Nutrition />
+                        <Suspense fallback={<NutritionPageSkeleton />}><Nutrition /></Suspense>
                       </AppLayout>
                     </ProfileCompletionGuard>
                   </ProtectedRoute>
@@ -231,7 +237,7 @@ const App = () => (
                   <ProtectedRoute>
                     <ProfileCompletionGuard>
                       <AppLayout>
-                        <Hydration />
+                        <Suspense fallback={<HydrationSkeleton />}><Hydration /></Suspense>
                       </AppLayout>
                     </ProfileCompletionGuard>
                   </ProtectedRoute>

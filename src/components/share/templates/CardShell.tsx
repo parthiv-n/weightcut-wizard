@@ -8,6 +8,7 @@ interface CardShellProps {
   children: ReactNode;
   aspect?: AspectRatio;
   isPremium?: boolean;
+  transparent?: boolean;
 }
 
 const DIMENSIONS: Record<AspectRatio, { width: number; height: number }> = {
@@ -16,7 +17,7 @@ const DIMENSIONS: Record<AspectRatio, { width: number; height: number }> = {
 };
 
 export const CardShell = forwardRef<HTMLDivElement, CardShellProps>(
-  ({ children, aspect = "square", isPremium = false }, ref) => {
+  ({ children, aspect = "square", isPremium = false, transparent = false }, ref) => {
     const { width, height } = DIMENSIONS[aspect];
     const s = aspect === "story";
 
@@ -31,10 +32,12 @@ export const CardShell = forwardRef<HTMLDivElement, CardShellProps>(
           fontFamily:
             '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
           color: "#ffffff",
-          background:
-            "radial-gradient(ellipse at 20% 0%, rgba(37,99,235,0.15) 0%, transparent 50%), " +
-            "radial-gradient(ellipse at 80% 100%, rgba(96,165,250,0.1) 0%, transparent 50%), " +
-            "linear-gradient(180deg, #0a0a0a 0%, #080808 50%, #050505 100%)",
+          ...(transparent && { textShadow: "0 2px 8px rgba(0,0,0,1), 0 0 24px rgba(0,0,0,0.7)" }),
+          background: transparent
+            ? "none"
+            : "radial-gradient(ellipse at 20% 0%, rgba(37,99,235,0.15) 0%, transparent 50%), " +
+              "radial-gradient(ellipse at 80% 100%, rgba(96,165,250,0.1) 0%, transparent 50%), " +
+              "linear-gradient(180deg, #0a0a0a 0%, #080808 50%, #050505 100%)",
           display: "flex",
           flexDirection: "column",
         }}
@@ -59,10 +62,10 @@ export const CardShell = forwardRef<HTMLDivElement, CardShellProps>(
           />
           <span
             style={{
-              fontSize: s ? 28 : 18,
+              fontSize: s ? 32 : 20,
               fontWeight: 700,
               letterSpacing: "-0.01em",
-              color: "rgba(255,255,255,0.6)",
+              color: transparent ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.75)",
             }}
           >
             WeightCut Wizard

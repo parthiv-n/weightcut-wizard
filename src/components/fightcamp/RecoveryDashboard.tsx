@@ -10,6 +10,8 @@ import { BalanceMetricsCard } from "./BalanceMetricsCard";
 import { WellnessCheckIn } from "./WellnessCheckIn";
 import { computeAllMetrics, type SessionRow, type AllMetrics, type ReadinessResult, type WellnessCheckIn as WellnessCheckInData, type PersonalBaseline } from "@/utils/performanceEngine";
 import { loadOrComputeBaseline, computeAndStoreBaseline, storeReadinessScore } from "@/utils/baselineComputer";
+import { logger } from "@/lib/logger";
+import { extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 
 interface FeelCheckIn {
   energy: 'high' | 'moderate' | 'low' | 'empty';
@@ -149,6 +151,8 @@ export function RecoveryDashboard({ sessions28d, userId, sessionLoggedAt = 0, at
   const [coachData, setCoachData] = useState<CoachResponse | null>(null);
   const [isCoachLoading, setIsCoachLoading] = useState(false);
   const [coachError, setCoachError] = useState<string | null>(null);
+  const [rateLimitUntil, setRateLimitUntil] = useState<number>(0);
+  const [cooldownLeft, setCooldownLeft] = useState(0);
   const [checkIn, setCheckIn] = useState<Partial<FeelCheckIn>>({});
 
   // Enhanced wellness state
@@ -246,6 +250,25 @@ export function RecoveryDashboard({ sessions28d, userId, sessionLoggedAt = 0, at
     }, 2000);
     return () => clearTimeout(timer);
   }, []);
+
+  // Countdown timer for rate limit cooldown
+  useEffect(() => {
+    if (rateLimitUntil <= Date.now()) {
+      setCooldownLeft(0);
+      return;
+    }
+    const tick = () => {
+      const remaining = Math.ceil((rateLimitUntil - Date.now()) / 1000);
+      if (remaining <= 0) {
+        setCooldownLeft(0);
+      } else {
+        setCooldownLeft(remaining);
+      }
+    };
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [rateLimitUntil]);
 
   const checkInComplete = checkIn.energy && checkIn.soreness && checkIn.sleep && checkIn.mental;
 
@@ -349,8 +372,12 @@ export function RecoveryDashboard({ sessions28d, userId, sessionLoggedAt = 0, at
         throw new Error("Invalid response from coach");
       }
     } catch (err: any) {
-      console.error("Coach error:", err);
-      const msg = err?.message || err?.error || "Unknown error";
+      logger.error("Coach error", err);
+      const msg = await extractEdgeFunctionError(err, "Coach unavailable");
+      // Detect rate limit errors and set 60s cooldown
+      if (/rate.?limit/i.test(msg) || /rate.?limit/i.test(err?.message ?? '')) {
+        setRateLimitUntil(Date.now() + 60_000);
+      }
       setCoachError(`Coach error: ${msg}`);
     } finally {
       setIsCoachLoading(false);
@@ -570,9 +597,10 @@ export function RecoveryDashboard({ sessions28d, userId, sessionLoggedAt = 0, at
                 onClick={askCoach}
                 className="w-full rounded-2xl h-12 font-semibold gap-2"
                 variant="outline"
+                disabled={cooldownLeft > 0}
               >
                 <Brain className="h-4 w-4" />
-                Get Coach Advice
+                {cooldownLeft > 0 ? `Try again in ${cooldownLeft}s` : "Get Coach Advice"}
               </Button>
             )
           ) : (
@@ -590,12 +618,26 @@ export function RecoveryDashboard({ sessions28d, userId, sessionLoggedAt = 0, at
         {isCoachLoading && (
           <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span className="text-sm">Analyzing your training data...</span>
+            <span className="text-sm">Analyzing your training data (usually 15–30 seconds)...</span>
           </div>
         )}
 
         {coachError && (
-          <div className="text-sm text-red-400 text-center py-2">{coachError}</div>
+          <div className="text-center py-2 space-y-2">
+            <div className="text-sm text-red-400">{coachError}</div>
+            {!isCoachLoading && !coachData && (
+              <Button
+                onClick={askCoach}
+                className="rounded-2xl h-10 font-semibold gap-2"
+                variant="outline"
+                size="sm"
+                disabled={cooldownLeft > 0}
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+                {cooldownLeft > 0 ? `Try again in ${cooldownLeft}s` : "Retry"}
+              </Button>
+            )}
+          </div>
         )}
 
         {coachData && <CoachResultCard coach={coachData} onRefresh={refreshCoach} />}

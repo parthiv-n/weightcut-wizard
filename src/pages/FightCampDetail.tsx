@@ -67,7 +67,7 @@ export default function FightCampDetail() {
         toast({ title: "Error", description: "Failed to load fight camp", variant: "destructive" });
         navigate("/fight-camps");
       } else {
-        setCamp(data);
+        setCamp(data as FightCamp);
       }
     } catch {
       if (!isMounted()) return;

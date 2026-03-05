@@ -3,6 +3,7 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { AIPersistence } from "@/lib/aiPersistence";
+import { logger } from "@/lib/logger";
 import type { PersonalBaseline } from "./performanceEngine";
 
 const BASELINE_CACHE_KEY = 'personal_baseline';
@@ -194,7 +195,7 @@ export async function computeAndStoreBaseline(userId: string, tdee?: number | nu
 
     return baseline;
   } catch (err) {
-    console.error('[BaselineComputer] Error computing baseline:', err);
+    logger.error("[BaselineComputer] Error computing baseline", err);
     return null;
   }
 }
@@ -220,6 +221,6 @@ export async function storeReadinessScore(userId: string, date: string, score: n
       .eq('user_id', userId)
       .eq('date', date);
   } catch (err) {
-    console.error('[BaselineComputer] Error storing readiness score:', err);
+    logger.error("[BaselineComputer] Error storing readiness score", err);
   }
 }

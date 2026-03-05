@@ -1,6 +1,8 @@
 // Simple localStorage-based persistence for AI content
 // This replaces the complex database approach with a simple, reliable solution
 
+import { logger } from "./logger";
+
 interface StoredAIContent {
   data: any;
   timestamp: number;
@@ -23,7 +25,7 @@ export class AIPersistence {
       const key = this.getStorageKey(userId, type);
       localStorage.setItem(key, JSON.stringify(content));
     } catch (error) {
-      console.warn('Failed to save AI content to localStorage:', error);
+      logger.warn("Failed to save AI content to localStorage", { error });
     }
   }
 
@@ -44,7 +46,7 @@ export class AIPersistence {
       
       return content.data;
     } catch (error) {
-      console.warn('Failed to load AI content from localStorage:', error);
+      logger.warn("Failed to load AI content from localStorage", { error });
       return null;
     }
   }
@@ -54,7 +56,25 @@ export class AIPersistence {
       const key = this.getStorageKey(userId, type);
       localStorage.removeItem(key);
     } catch (error) {
-      console.warn('Failed to remove AI content from localStorage:', error);
+      logger.warn("Failed to remove AI content from localStorage", { error });
+    }
+  }
+
+  static clearAllForUser(userId: string): void {
+    try {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('ai_') && key.endsWith(`_${userId}`)) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+      if (keysToRemove.length > 0) {
+        logger.info(`Cleared ${keysToRemove.length} AI cache entries for user`, { userId: userId.slice(0, 8) });
+      }
+    } catch (error) {
+      logger.warn("Failed to clear AI content for user", { error });
     }
   }
 
@@ -82,10 +102,14 @@ export class AIPersistence {
       
       keysToRemove.forEach(key => localStorage.removeItem(key));
     } catch (error) {
-      console.warn('Failed to cleanup AI content:', error);
+      logger.warn("Failed to cleanup AI content", { error });
     }
   }
 }
 
-// Cleanup expired items on page load
-AIPersistence.cleanup();
+// Cleanup expired items — deferred to avoid blocking page load
+if (typeof requestIdleCallback !== 'undefined') {
+  requestIdleCallback(() => AIPersistence.cleanup());
+} else {
+  setTimeout(() => AIPersistence.cleanup(), 5000);
+}

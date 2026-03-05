@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
 import { RESEARCH_SUMMARY } from "../_shared/researchSummary.ts";
+import { edgeLogger } from "../_shared/errorReporter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -112,7 +113,7 @@ Distribute fluid & electrolyte totals across hourly protocol. Sum of fluidML ≈
 
 Respond with valid JSON only:
 {
-  "summary": "Brief protocol overview",
+  "summary": "Multi-line overview. Put each phase on its own line like:\nPhase 1 – Rapid Rehydration (Hours 1-2): ...\nPhase 2 – Active Rehydration (Hours 3-4): ...",
   "hourlyProtocol": [{ "hour": 1, "timeLabel": "str", "phase": "str", "fluidML": 0, "sodiumMg": 0, "potassiumMg": 0, "magnesiumMg": 0, "carbsG": 0, "drinkRecipe": "str", "notes": "str", "foods": [] }],
   "carbRefuelPlan": { "strategy": "str", "meals": [{ "timing": "str", "carbsG": 0, "foods": [], "rationale": "str" }] },
   "warnings": ["str"],
@@ -132,7 +133,7 @@ ${availableHours <= 6
 
 Constraints: total fluid ≈${targets.totalFluidML}ml, total carbs ≈${targets.totalCarbsG}g, no hour >${targets.hourlyFluidML}ml or >${targets.maxCarbsPerHour}g carbs. Include drink recipes every hour, food suggestions, 3-5 safety warnings.`;
 
-    console.log("Calling Grok API for rehydration protocol...");
+    edgeLogger.info("Calling Grok API for rehydration protocol");
 
     const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
@@ -147,7 +148,7 @@ Constraints: total fluid ≈${targets.totalFluidML}ml, total carbs ≈${targets.
           { role: "user", content: userPrompt },
         ],
         temperature: 0.1,
-        max_completion_tokens: 3000,
+        max_completion_tokens: 16384,
       }),
     });
 
@@ -165,7 +166,7 @@ Constraints: total fluid ≈${targets.totalFluidML}ml, total carbs ≈${targets.
         );
       }
       const errorData = await response.json();
-      console.error("Grok API error:", response.status, errorData);
+      edgeLogger.error("Grok API error", undefined, { functionName: "rehydration-protocol", status: response.status, errorData });
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -173,7 +174,7 @@ Constraints: total fluid ≈${targets.totalFluidML}ml, total carbs ≈${targets.
     }
 
     const data = await response.json();
-    console.log("Grok rehydration response received");
+    edgeLogger.info("Grok rehydration response received");
 
     const { content, filtered } = extractContent(data);
     if (!content) {
@@ -202,7 +203,7 @@ Constraints: total fluid ≈${targets.totalFluidML}ml, total carbs ≈${targets.
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Error in rehydration-protocol:", error);
+    edgeLogger.error("rehydration-protocol error", error, { functionName: "rehydration-protocol" });
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

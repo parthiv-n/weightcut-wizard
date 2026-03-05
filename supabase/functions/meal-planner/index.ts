@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { edgeLogger } from "../_shared/errorReporter.ts";
+import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,7 +52,7 @@ function extractMealsFromText(text: string): any[] {
     }
 
   } catch (error) {
-    console.error("Error in extractMealsFromText:", error);
+    edgeLogger.error("Error in extractMealsFromText", error, { functionName: "meal-planner" });
     // Return empty array if extraction fails completely
   }
 
@@ -106,14 +108,14 @@ serve(async (req) => {
     const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
 
     if (!GROK_API_KEY) {
-      console.error("GROK_API_KEY environment variable is not configured");
+      edgeLogger.error("GROK_API_KEY environment variable is not configured", undefined, { functionName: "meal-planner" });
       return new Response(
         JSON.stringify({ error: "AI service not configured" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log("Request data:", { prompt: prompt?.substring(0, 100), action, userData });
+    edgeLogger.info("Request data", { prompt: prompt?.substring(0, 100), action, userData });
 
     // Calculate safe calorie target
     const currentWeight = profileUserData?.currentWeight || 70;
@@ -210,13 +212,9 @@ Respond ONLY with this exact JSON structure:
   "tips": "Brief tips"
 }`;
 
-    console.log("Calling Grok API for meal planning...");
+    edgeLogger.info("Calling Grok API for meal planning");
 
     const userPrompt = `User Request: ${prompt}`;
-
-    // Add timeout to prevent hanging - increased for more reliable responses
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 55000); // 55 second timeout
 
     let response;
     try {
@@ -235,106 +233,85 @@ Respond ONLY with this exact JSON structure:
           temperature: 0.3,
           max_completion_tokens: 4096
         }),
-        signal: controller.signal
       });
 
-      clearTimeout(timeoutId);
-      console.log("Grok API response status:", response.status);
+      edgeLogger.info("Grok API response status", { status: response.status });
     } catch (fetchError) {
-      clearTimeout(timeoutId);
-
-      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
-        console.error("Grok API request timed out after 55 seconds");
-        return new Response(
-          JSON.stringify({ error: "AI request timed out after 55 seconds. The service may be busy. Please try again in a moment." }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      console.error("Grok API fetch error:", fetchError);
+      edgeLogger.error("Grok API fetch error", fetchError, { functionName: "meal-planner" });
       return new Response(
         JSON.stringify({ error: "Failed to connect to AI service" }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error("Grok API error:", response.status, errorData);
+      edgeLogger.error("Grok API error", undefined, { functionName: "meal-planner", status: response.status, errorData });
 
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
       if (response.status === 401) {
         return new Response(
           JSON.stringify({ error: "Invalid API key." }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
       if (response.status === 403) {
         return new Response(
           JSON.stringify({ error: "API key invalid or quota exceeded." }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
       return new Response(
         JSON.stringify({ error: `Grok API error: ${errorData.error?.message || 'Unknown error'}` }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     const data = await response.json();
-    console.log("Full Grok response:", JSON.stringify(data, null, 2));
+    edgeLogger.info("Full Grok response received", { responseKeys: Object.keys(data) });
 
     // Extract content from Grok response and strip <think> tags
-    let content = data.choices?.[0]?.message?.content;
-    if (content) {
-      content = content.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
-    }
+    const { content, filtered } = extractContent(data);
 
-    console.log("=== GROK RESPONSE DEBUG ===");
-    console.log("Raw Grok content:", content);
-    console.log("Content type:", typeof content);
-    console.log("Content length:", content?.length);
-    console.log("=== END DEBUG ===");
+    edgeLogger.info("Grok response debug", { contentType: typeof content, contentLength: content?.length });
 
     if (!content) {
-      console.error("❌ No content found in Grok response");
-      console.error("Available fields in response:", Object.keys(data));
-      if (data.choices?.[0]) {
-        console.error("Available fields in first choice:", Object.keys(data.choices[0]));
-        console.error("First choice content:", data.choices[0]);
+      edgeLogger.error("No content found in Grok response", undefined, {
+        functionName: "meal-planner",
+        availableFields: Object.keys(data),
+        firstChoiceFields: data.choices?.[0] ? Object.keys(data.choices[0]) : [],
+      });
+
+      if (filtered) {
+        edgeLogger.warn("Grok finish reason", { functionName: "meal-planner", finishReason: 'content_filter' });
+        return new Response(
+          JSON.stringify({ error: "Content was filtered for safety. Please try a different prompt." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
-      // Check for specific finish reasons
       const finishReason = data.choices?.[0]?.finish_reason;
-      if (finishReason) {
-        console.error("Finish reason:", finishReason);
-
-        if (finishReason === 'content_filter') {
-          return new Response(
-            JSON.stringify({ error: "Content was filtered for safety. Please try a different prompt." }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        } else if (finishReason === 'length') {
-          return new Response(
-            JSON.stringify({ error: "Response was too long. Please try a shorter prompt." }),
-            { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
+      if (finishReason === 'length') {
+        edgeLogger.warn("Grok finish reason", { functionName: "meal-planner", finishReason });
+        return new Response(
+          JSON.stringify({ error: "Response was too long. Please try a shorter prompt." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
       // Try fallback extraction from any available text
-      console.log("🔄 Attempting fallback content extraction...");
+      edgeLogger.info("Attempting fallback content extraction");
       const fallbackMeals = extractMealsFromText(JSON.stringify(data));
       if (fallbackMeals.length > 0) {
-        console.log("✅ Fallback extraction found", fallbackMeals.length, "meals");
+        edgeLogger.info("Fallback extraction found meals", { count: fallbackMeals.length });
         const mealPlanData = {
           meals: fallbackMeals,
           totalCalories: fallbackMeals.reduce((sum, meal) => sum + (meal.calories || 0), 0),
@@ -364,33 +341,15 @@ Respond ONLY with this exact JSON structure:
     // Parse JSON from Grok response
     let mealPlanData;
     try {
-      console.log("=== JSON PARSING DEBUG ===");
-      console.log("Parsing Grok JSON response...");
+      edgeLogger.info("Parsing Grok JSON response");
 
-      // Clean trailing text or markdown
-      let cleanContent = content.trim();
-      if (cleanContent.startsWith('```json')) cleanContent = cleanContent.substring(7);
-      if (cleanContent.startsWith('```')) cleanContent = cleanContent.substring(3);
-      if (cleanContent.endsWith('```')) cleanContent = cleanContent.substring(0, cleanContent.length - 3);
-      cleanContent = cleanContent.trim();
-
-      // Robust JSON extraction
-      const firstCurly = cleanContent.indexOf('{');
-      const lastCurly = cleanContent.lastIndexOf('}');
-      if (firstCurly !== -1 && lastCurly !== -1 && lastCurly > firstCurly) {
-        cleanContent = cleanContent.substring(firstCurly, lastCurly + 1);
-      }
-
-      mealPlanData = JSON.parse(cleanContent);
-      console.log("Successfully parsed Grok response");
-      console.log("Meal plan structure:", Object.keys(mealPlanData));
-      console.log("Number of meals:", mealPlanData.meals?.length || 0);
+      mealPlanData = parseJSON(content);
+      edgeLogger.info("Successfully parsed Grok response", { structure: Object.keys(mealPlanData), mealCount: mealPlanData.meals?.length || 0 });
     } catch (e) {
-      console.error("Failed to parse AI response as JSON:", e);
-      console.error("Raw content:", typeof content === 'string' ? content.substring(0, 500) : JSON.stringify(content));
+      edgeLogger.error("Failed to parse AI response as JSON", e, { functionName: "meal-planner", rawContentPreview: typeof content === 'string' ? content.substring(0, 500) : JSON.stringify(content) });
 
       // Enhanced fallback: try to extract any meal information from text
-      console.log("Attempting fallback meal extraction...");
+      edgeLogger.info("Attempting fallback meal extraction");
 
       try {
         // Try to extract meal information from plain text
@@ -403,9 +362,9 @@ Respond ONLY with this exact JSON structure:
           totalFats: fallbackMeals.reduce((sum, meal) => sum + (meal.fats || 0), 0),
           note: "Extracted from text due to JSON parsing failure"
         };
-        console.log("Fallback extraction successful, found", fallbackMeals.length, "meals");
+        edgeLogger.info("Fallback extraction successful", { mealCount: fallbackMeals.length });
       } catch (fallbackError) {
-        console.error("Fallback extraction also failed:", fallbackError);
+        edgeLogger.error("Fallback extraction also failed", fallbackError, { functionName: "meal-planner" });
 
         // Return error response that frontend can handle
         return new Response(
@@ -468,8 +427,7 @@ Respond ONLY with this exact JSON structure:
       }
     );
   } catch (error) {
-    console.error("meal-planner error:", error);
-    console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace");
+    edgeLogger.error("meal-planner error", error, { functionName: "meal-planner" });
 
     return new Response(
       JSON.stringify({

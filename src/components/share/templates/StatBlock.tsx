@@ -4,24 +4,25 @@ interface StatBlockProps {
   unit?: string;
   color?: string;
   size?: "default" | "medium" | "large";
+  transparent?: boolean;
 }
 
 const SIZES = {
-  default: { radius: 16, padding: "16px 20px", labelFs: 12, labelMb: 6, valueFs: 28, unitFs: 14, gap: 4, square: false },
-  medium:  { radius: 20, padding: "22px 24px", labelFs: 15, labelMb: 8,  valueFs: 34, unitFs: 16, gap: 5, square: false },
+  default: { radius: 16, padding: "16px 20px", labelFs: 13, labelMb: 6, valueFs: 32, unitFs: 15, gap: 4, square: false },
+  medium:  { radius: 20, padding: "22px 24px", labelFs: 16, labelMb: 8,  valueFs: 40, unitFs: 18, gap: 5, square: false },
   large:   { radius: 24, padding: "28px 28px", labelFs: 16, labelMb: 12, valueFs: 44, unitFs: 20, gap: 6, square: true },
 };
 
-export function StatBlock({ label, value, unit, color, size = "default" }: StatBlockProps) {
+export function StatBlock({ label, value, unit, color, size = "default", transparent }: StatBlockProps) {
   const t = SIZES[size];
 
   return (
     <div
       style={{
-        background: "rgba(255,255,255,0.05)",
+        background: transparent ? "rgba(0,0,0,0.4)" : "rgba(255,255,255,0.07)",
         borderRadius: t.radius,
         padding: t.padding,
-        border: "1px solid rgba(255,255,255,0.08)",
+        border: transparent ? "1px solid rgba(255,255,255,0.15)" : "1px solid rgba(255,255,255,0.12)",
         aspectRatio: t.square ? "1/1" : undefined,
         display: "flex",
         flexDirection: "column",
@@ -31,10 +32,10 @@ export function StatBlock({ label, value, unit, color, size = "default" }: StatB
       <div
         style={{
           fontSize: t.labelFs,
-          fontWeight: 600,
+          fontWeight: 700,
           textTransform: "uppercase",
           letterSpacing: "0.08em",
-          color: "rgba(255,255,255,0.45)",
+          color: transparent ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.65)",
           marginBottom: t.labelMb,
         }}
       >
@@ -56,8 +57,8 @@ export function StatBlock({ label, value, unit, color, size = "default" }: StatB
           <span
             style={{
               fontSize: t.unitFs,
-              fontWeight: 600,
-              color: "rgba(255,255,255,0.4)",
+              fontWeight: 700,
+              color: transparent ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.65)",
             }}
           >
             {unit}

@@ -1,12 +1,13 @@
 import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { Capacitor } from '@capacitor/core';
+import { logger } from "./logger";
 
 export const triggerHaptic = async (style: ImpactStyle = ImpactStyle.Medium) => {
     if (Capacitor.isNativePlatform()) {
         try {
             await Haptics.impact({ style });
         } catch (error) {
-            console.warn("Haptics not available:", error);
+            logger.warn("Haptics not available", { error });
         }
     }
 };
@@ -16,7 +17,7 @@ export const triggerHapticSuccess = async () => {
         try {
             await Haptics.notification({ type: 'SUCCESS' as any });
         } catch (error) {
-            console.warn("Haptics not available:", error);
+            logger.warn("Haptics not available", { error });
         }
     }
 };
@@ -26,7 +27,7 @@ export const triggerHapticWarning = async () => {
         try {
             await Haptics.notification({ type: 'WARNING' as any });
         } catch (error) {
-            console.warn("Haptics not available:", error);
+            logger.warn("Haptics not available", { error });
         }
     }
 };
@@ -36,7 +37,7 @@ export const triggerHapticSelection = async () => {
         try {
             await Haptics.selectionStart();
         } catch (error) {
-            console.warn("Haptics not available:", error);
+            logger.warn("Haptics not available", { error });
         }
     }
 };

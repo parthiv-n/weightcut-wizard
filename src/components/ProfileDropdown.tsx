@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { User, LogOut, Settings } from "lucide-react";
-import { useUser } from "@/contexts/UserContext";
+import { useProfile } from "@/contexts/UserContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -21,7 +21,7 @@ import { ProfilePictureUpload } from "./ProfilePictureUpload";
 
 export function ProfileDropdown() {
   const [user, setUser] = useState<any>(null);
-  const { userName, avatarUrl, setUserName, setAvatarUrl } = useUser();
+  const { userName, avatarUrl, setUserName, setAvatarUrl } = useProfile();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [editedName, setEditedName] = useState("");
   const { toast } = useToast();

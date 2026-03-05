@@ -11,9 +11,11 @@ interface ShareCardDialogProps {
   title?: string;
   shareTitle?: string;
   shareText?: string;
+  transparent?: boolean;
   children: (props: {
     cardRef: React.RefObject<HTMLDivElement>;
     aspect: AspectRatio;
+    transparent?: boolean;
   }) => ReactNode;
 }
 
@@ -30,6 +32,7 @@ export function ShareCardDialog({
   title = "Share Card",
   shareTitle,
   shareText,
+  transparent,
   children,
 }: ShareCardDialogProps) {
   const [aspect, setAspect] = useState<AspectRatio>("square");
@@ -90,8 +93,23 @@ export function ShareCardDialog({
         {/* Preview — fixed max height, no gaps */}
         <div ref={wrapperRef} className="w-full shrink-0 flex justify-center">
           <div
-            className="overflow-hidden rounded-2xl border border-border/50 bg-black"
-            style={{ width: dims.w, height: dims.h }}
+            className="overflow-hidden rounded-2xl border border-border/50"
+            style={{
+              width: dims.w,
+              height: dims.h,
+              ...(transparent
+                ? {
+                    backgroundImage:
+                      "linear-gradient(45deg, #1a1a1a 25%, transparent 25%), " +
+                      "linear-gradient(-45deg, #1a1a1a 25%, transparent 25%), " +
+                      "linear-gradient(45deg, transparent 75%, #1a1a1a 75%), " +
+                      "linear-gradient(-45deg, transparent 75%, #1a1a1a 75%)",
+                    backgroundSize: "16px 16px",
+                    backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px",
+                    backgroundColor: "#111111",
+                  }
+                : { backgroundColor: "#000000" }),
+            }}
           >
             <div
               style={{
@@ -101,7 +119,7 @@ export function ShareCardDialog({
                 height: CARD_H[aspect],
               }}
             >
-              {children({ cardRef, aspect })}
+              {children({ cardRef, aspect, transparent })}
             </div>
           </div>
         </div>
@@ -111,7 +129,7 @@ export function ShareCardDialog({
           <Button
             variant="outline"
             className="flex-1 h-12 rounded-2xl text-sm font-bold"
-            onClick={() => captureAndDownload()}
+            onClick={() => captureAndDownload(undefined, transparent)}
             disabled={isCapturing}
           >
             {isCapturing ? (
@@ -123,7 +141,7 @@ export function ShareCardDialog({
           </Button>
           <Button
             className="flex-1 h-12 rounded-2xl text-sm font-bold"
-            onClick={() => captureAndShare(shareTitle, shareText)}
+            onClick={() => captureAndShare(shareTitle, shareText, transparent)}
             disabled={isCapturing}
           >
             {isCapturing ? (

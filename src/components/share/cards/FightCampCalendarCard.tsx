@@ -2,6 +2,7 @@ import { forwardRef, useMemo } from "react";
 import { CardShell, type AspectRatio } from "../templates/CardShell";
 import { StatBlock } from "../templates/StatBlock";
 import { usePremium } from "@/hooks/usePremium";
+import { getSessionColor } from "@/lib/sessionColors";
 
 interface Session {
   id: string;
@@ -17,21 +18,9 @@ interface FightCampCalendarCardProps {
   sessions: Session[];
   timeRange: "day" | "week" | "month";
   aspect?: AspectRatio;
+  customColors?: Record<string, string>;
+  transparent?: boolean;
 }
-
-const SPORT_COLORS: Record<string, string> = {
-  BJJ: "#3b82f6",
-  "Muay Thai": "#ef4444",
-  Boxing: "#f97316",
-  Wrestling: "#f59e0b",
-  Sparring: "#fb923c",
-  Strength: "#22c55e",
-  Conditioning: "#10b981",
-  Run: "#06b6d4",
-  Recovery: "#8b5cf6",
-  Rest: "#60a5fa",
-  Other: "#6b7280",
-};
 
 const TIME_LABELS: Record<string, string> = {
   day: "Today",
@@ -40,10 +29,6 @@ const TIME_LABELS: Record<string, string> = {
 };
 
 type DayData = { date: string; dayLabel: string; sessions: Session[] };
-
-function getColor(type: string): string {
-  return SPORT_COLORS[type] ?? "#6b7280";
-}
 
 function formatDateStr(d: Date): string {
   const year = d.getFullYear();
@@ -61,7 +46,7 @@ function getShortDayLabel(d: Date): string {
 }
 
 export const FightCampCalendarCard = forwardRef<HTMLDivElement, FightCampCalendarCardProps>(
-  ({ sessions, timeRange, aspect = "square" }, ref) => {
+  ({ sessions, timeRange, aspect = "square", customColors, transparent }, ref) => {
     const { isPremium } = usePremium();
     const s = aspect === "story";
 
@@ -157,14 +142,14 @@ export const FightCampCalendarCard = forwardRef<HTMLDivElement, FightCampCalenda
     }, [sessions, timeRange]);
 
     return (
-      <CardShell ref={ref} aspect={aspect} isPremium={isPremium}>
+      <CardShell ref={ref} aspect={aspect} isPremium={isPremium} transparent={transparent}>
         {/* Header */}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: s ? 40 : 12 }}>
           <div>
             <div
               style={{
-                fontSize: s ? 24 : 13,
-                fontWeight: 700,
+                fontSize: s ? 28 : 15,
+                fontWeight: 800,
                 letterSpacing: "0.15em",
                 textTransform: "uppercase",
                 color: "#2563eb",
@@ -173,7 +158,7 @@ export const FightCampCalendarCard = forwardRef<HTMLDivElement, FightCampCalenda
             >
               TRAINING LOG
             </div>
-            <div style={{ fontSize: s ? 22 : 14, color: "rgba(255,255,255,0.5)", fontWeight: 500 }}>
+            <div style={{ fontSize: s ? 24 : 15, color: transparent ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.7)", fontWeight: 700 }}>
               {TIME_LABELS[timeRange] ?? timeRange}
             </div>
           </div>
@@ -183,7 +168,7 @@ export const FightCampCalendarCard = forwardRef<HTMLDivElement, FightCampCalenda
         <div style={{ textAlign: "center", marginBottom: s ? 48 : 14 }}>
           <div
             style={{
-              fontSize: s ? 112 : 56,
+              fontSize: s ? 128 : 72,
               fontWeight: 800,
               letterSpacing: "-0.03em",
               lineHeight: 1,
@@ -192,7 +177,7 @@ export const FightCampCalendarCard = forwardRef<HTMLDivElement, FightCampCalenda
           >
             {stats.total}
           </div>
-          <div style={{ fontSize: s ? 18 : 12, color: "rgba(255,255,255,0.45)", marginTop: s ? 14 : 6, fontWeight: 600, letterSpacing: "0.1em" }}>
+          <div style={{ fontSize: s ? 20 : 14, color: transparent ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.6)", marginTop: s ? 14 : 6, fontWeight: 700, letterSpacing: "0.1em" }}>
             SESSIONS
           </div>
         </div>
@@ -216,8 +201,8 @@ export const FightCampCalendarCard = forwardRef<HTMLDivElement, FightCampCalenda
                 gap: s ? 12 : 8,
                 padding: s ? "12px 24px" : "6px 14px",
                 borderRadius: 999,
-                background: `${getColor(type)}20`,
-                border: `1px solid ${getColor(type)}40`,
+                background: `${getSessionColor(type, customColors)}30`,
+                border: `1px solid ${getSessionColor(type, customColors)}60`,
               }}
             >
               <div
@@ -225,13 +210,13 @@ export const FightCampCalendarCard = forwardRef<HTMLDivElement, FightCampCalenda
                   width: s ? 12 : 8,
                   height: s ? 12 : 8,
                   borderRadius: s ? 6 : 4,
-                  backgroundColor: getColor(type),
+                  backgroundColor: getSessionColor(type, customColors),
                 }}
               />
-              <span style={{ fontSize: s ? 18 : 12, fontWeight: 600, color: "#ffffff" }}>
+              <span style={{ fontSize: s ? 20 : 13, fontWeight: 700, color: "#ffffff" }}>
                 {type}
               </span>
-              <span style={{ fontSize: s ? 18 : 12, fontWeight: 700, color: "rgba(255,255,255,0.5)" }}>
+              <span style={{ fontSize: s ? 20 : 13, fontWeight: 800, color: transparent ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.8)" }}>
                 {count}
               </span>
             </div>
@@ -239,9 +224,9 @@ export const FightCampCalendarCard = forwardRef<HTMLDivElement, FightCampCalenda
         </div>
 
         {/* Timeline visual */}
-        {timeRange === "day" && <DayView days={days} s={s} />}
-        {timeRange === "week" && <WeekView days={days} maxDayMinutes={maxDayMinutes} s={s} />}
-        {timeRange === "month" && <MonthView days={days} s={s} />}
+        {timeRange === "day" && <DayView days={days} s={s} customColors={customColors} />}
+        {timeRange === "week" && <WeekView days={days} maxDayMinutes={maxDayMinutes} s={s} customColors={customColors} transparent={transparent} />}
+        {timeRange === "month" && <MonthView days={days} s={s} customColors={customColors} transparent={transparent} />}
 
         {/* Stat blocks */}
         <div style={{ display: "grid", gridTemplateColumns: s ? "1fr 1fr 1fr 1fr" : "1fr 1fr", gap: s ? 12 : 8 }}>
@@ -250,10 +235,11 @@ export const FightCampCalendarCard = forwardRef<HTMLDivElement, FightCampCalenda
             value={stats.totalDuration >= 60 ? `${Math.round(stats.totalDuration / 60)}` : `${stats.totalDuration}`}
             unit={stats.totalDuration >= 60 ? "hrs" : "min"}
             size={s ? "medium" : "default"}
+            transparent={transparent}
           />
-          <StatBlock label="Avg RPE" value={stats.avgRpe.toFixed(1)} unit="/10" size={s ? "medium" : "default"} />
-          <StatBlock label="Intensity" value={stats.avgIntensity.toFixed(1)} unit="/5" size={s ? "medium" : "default"} />
-          <StatBlock label="Per Week" value={stats.sessionsPerWeek.toFixed(1)} size={s ? "medium" : "default"} />
+          <StatBlock label="Avg RPE" value={stats.avgRpe.toFixed(1)} unit="/10" size={s ? "medium" : "default"} transparent={transparent} />
+          <StatBlock label="Intensity" value={stats.avgIntensity.toFixed(1)} unit="/5" size={s ? "medium" : "default"} transparent={transparent} />
+          <StatBlock label="Per Week" value={stats.sessionsPerWeek.toFixed(1)} size={s ? "medium" : "default"} transparent={transparent} />
         </div>
       </CardShell>
     );
@@ -263,7 +249,7 @@ export const FightCampCalendarCard = forwardRef<HTMLDivElement, FightCampCalenda
 FightCampCalendarCard.displayName = "FightCampCalendarCard";
 
 /* ─── Day View: horizontal session bars ─── */
-function DayView({ days, s }: { days: DayData[]; s: boolean }) {
+function DayView({ days, s, customColors }: { days: DayData[]; s: boolean; customColors?: Record<string, string> }) {
   const daySessions = days[0]?.sessions ?? [];
   const barHeight = s ? 80 : 44;
   const barGap = s ? 12 : 6;
@@ -282,17 +268,17 @@ function DayView({ days, s }: { days: DayData[]; s: boolean }) {
           style={{
             height: barHeight,
             borderRadius: barRadius,
-            backgroundColor: getColor(sess.session_type) + "E6", // ~90% opacity
+            backgroundColor: getSessionColor(sess.session_type, customColors) + "E6", // ~90% opacity
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
             padding: s ? "0 32px" : "0 16px",
           }}
         >
-          <span style={{ fontSize: s ? 22 : 14, fontWeight: 700, color: "#ffffff" }}>
+          <span style={{ fontSize: s ? 24 : 16, fontWeight: 700, color: "#ffffff" }}>
             {sess.session_type}
           </span>
-          <span style={{ fontSize: s ? 20 : 13, fontWeight: 600, color: "rgba(255,255,255,0.85)" }}>
+          <span style={{ fontSize: s ? 22 : 15, fontWeight: 700, color: "#ffffff" }}>
             {sess.duration_minutes} min
           </span>
         </div>
@@ -302,7 +288,7 @@ function DayView({ days, s }: { days: DayData[]; s: boolean }) {
 }
 
 /* ─── Week View: stacked column chart (SVG) ─── */
-function WeekView({ days, maxDayMinutes, s }: { days: DayData[]; maxDayMinutes: number; s: boolean }) {
+function WeekView({ days, maxDayMinutes, s, customColors, transparent }: { days: DayData[]; maxDayMinutes: number; s: boolean; customColors?: Record<string, string>; transparent?: boolean }) {
   const colWidth = s ? 120 : 100;
   const colGap = s ? 18 : 12;
   const maxColHeight = s ? 600 : 240;
@@ -316,8 +302,8 @@ function WeekView({ days, maxDayMinutes, s }: { days: DayData[]; maxDayMinutes: 
     <div
       style={{
         marginBottom: s ? 48 : 14,
-        background: "rgba(255,255,255,0.03)",
-        border: "1px solid rgba(255,255,255,0.06)",
+        background: transparent ? "rgba(0,0,0,0.3)" : "rgba(255,255,255,0.03)",
+        border: transparent ? "1px solid rgba(255,255,255,0.15)" : "1px solid rgba(255,255,255,0.06)",
         borderRadius: s ? 24 : 12,
         padding: s ? "32px 16px" : "12px 10px",
         display: "flex",
@@ -340,15 +326,15 @@ function WeekView({ days, maxDayMinutes, s }: { days: DayData[]; maxDayMinutes: 
                   width={colWidth}
                   height={4}
                   rx={2}
-                  fill="rgba(255,255,255,0.06)"
+                  fill={transparent ? "rgba(255,255,255,0.15)" : "rgba(255,255,255,0.06)"}
                 />
                 <text
                   x={x + colWidth / 2}
                   y={maxColHeight + (s ? 30 : 18)}
                   textAnchor="middle"
-                  fill="rgba(255,255,255,0.35)"
-                  fontSize={s ? 20 : 14}
-                  fontWeight={600}
+                  fill={transparent ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.5)"}
+                  fontSize={s ? 22 : 16}
+                  fontWeight={700}
                 >
                   {day.dayLabel}
                 </text>
@@ -356,8 +342,8 @@ function WeekView({ days, maxDayMinutes, s }: { days: DayData[]; maxDayMinutes: 
                   x={x + colWidth / 2}
                   y={maxColHeight + (s ? 56 : 34)}
                   textAnchor="middle"
-                  fill="rgba(255,255,255,0.2)"
-                  fontSize={s ? 18 : 12}
+                  fill={transparent ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.4)"}
+                  fontSize={s ? 20 : 14}
                 >
                   {dateNum}
                 </text>
@@ -382,7 +368,7 @@ function WeekView({ days, maxDayMinutes, s }: { days: DayData[]; maxDayMinutes: 
                 width={colWidth}
                 height={segHeight}
                 rx={segHeight > 8 ? 6 : 3}
-                fill={getColor(sess.session_type)}
+                fill={getSessionColor(sess.session_type, customColors)}
               />
             );
             currentY -= segGap;
@@ -396,9 +382,9 @@ function WeekView({ days, maxDayMinutes, s }: { days: DayData[]; maxDayMinutes: 
                 x={x + colWidth / 2}
                 y={maxColHeight + (s ? 30 : 18)}
                 textAnchor="middle"
-                fill="rgba(255,255,255,0.5)"
-                fontSize={s ? 20 : 14}
-                fontWeight={600}
+                fill={transparent ? "rgba(255,255,255,1)" : "rgba(255,255,255,0.7)"}
+                fontSize={s ? 22 : 16}
+                fontWeight={700}
               >
                 {day.dayLabel}
               </text>
@@ -406,8 +392,8 @@ function WeekView({ days, maxDayMinutes, s }: { days: DayData[]; maxDayMinutes: 
                 x={x + colWidth / 2}
                 y={maxColHeight + (s ? 56 : 34)}
                 textAnchor="middle"
-                fill="rgba(255,255,255,0.3)"
-                fontSize={s ? 18 : 12}
+                fill={transparent ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.5)"}
+                fontSize={s ? 20 : 14}
               >
                 {dateNum}
               </text>
@@ -420,7 +406,7 @@ function WeekView({ days, maxDayMinutes, s }: { days: DayData[]; maxDayMinutes: 
 }
 
 /* ─── Month View: calendar heatmap with multi-color cells ─── */
-function MonthView({ days, s }: { days: DayData[]; s: boolean }) {
+function MonthView({ days, s, customColors, transparent }: { days: DayData[]; s: boolean; customColors?: Record<string, string>; transparent?: boolean }) {
   const cellSize = s ? 40 : 24;
   const cellGap = s ? 6 : 3;
   const cellRadius = s ? 8 : 4;
@@ -472,8 +458,8 @@ function MonthView({ days, s }: { days: DayData[]; s: boolean }) {
             x={labelWidth + i * (cellSize + cellGap) + cellSize / 2}
             y={headerHeight - (s ? 8 : 6)}
             textAnchor="middle"
-            fill="rgba(255,255,255,0.35)"
-            fontSize={s ? 16 : 11}
+            fill={transparent ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.55)"}
+            fontSize={s ? 18 : 13}
             fontWeight={600}
           >
             {label}
@@ -495,8 +481,8 @@ function MonthView({ days, s }: { days: DayData[]; s: boolean }) {
                 x={labelWidth - (s ? 12 : 8)}
                 y={cy + cellSize / 2 + (s ? 5 : 4)}
                 textAnchor="end"
-                fill="rgba(255,255,255,0.25)"
-                fontSize={s ? 14 : 10}
+                fill={transparent ? "rgba(255,255,255,0.8)" : "rgba(255,255,255,0.45)"}
+                fontSize={s ? 16 : 12}
               >
                 {weekLabel}
               </text>
@@ -514,7 +500,7 @@ function MonthView({ days, s }: { days: DayData[]; s: boolean }) {
                       width={cellSize}
                       height={cellSize}
                       rx={cellRadius}
-                      fill="rgba(255,255,255,0.06)"
+                      fill={transparent ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.1)"}
                     />
                   );
                 }
@@ -532,7 +518,7 @@ function MonthView({ days, s }: { days: DayData[]; s: boolean }) {
                         y={cy + si * sliceHeight}
                         width={cellSize}
                         height={sliceHeight}
-                        fill={getColor(sess.session_type)}
+                        fill={getSessionColor(sess.session_type, customColors)}
                       />
                     ))}
                   </g>

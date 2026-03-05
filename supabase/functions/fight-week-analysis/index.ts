@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
+import { edgeLogger } from "../_shared/errorReporter.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -55,7 +56,7 @@ PRE-COMPUTED PROJECTION (deterministic — do not override):
 
 Provide: 1) 2-3 sentence summary, 2) 5-8 day-by-day tips, 3) safety warning if orange/red (null if green), 4) post weigh-in recovery protocol, 5) risk level.`;
 
-    console.log("Calling Grok API for fight week advice...");
+    edgeLogger.info("Calling Grok API for fight week advice");
 
     const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
@@ -88,7 +89,7 @@ Provide: 1) 2-3 sentence summary, 2) 5-8 day-by-day tips, 3) safety warning if o
         );
       }
       const errorData = await response.json();
-      console.error("Grok API error:", response.status, errorData);
+      edgeLogger.error("Grok API error", undefined, { functionName: "fight-week-analysis", status: response.status, errorData });
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -107,7 +108,7 @@ Provide: 1) 2-3 sentence summary, 2) 5-8 day-by-day tips, 3) safety warning if o
     try {
       advice = parseJSON(content);
     } catch {
-      console.error("Failed to parse Grok response as JSON:", content);
+      edgeLogger.error("Failed to parse Grok response as JSON", undefined, { functionName: "fight-week-analysis", contentPreview: content.substring(0, 200) });
       return new Response(
         JSON.stringify({
           error: "AI returned invalid response format. Please try again.",
@@ -121,7 +122,7 @@ Provide: 1) 2-3 sentence summary, 2) 5-8 day-by-day tips, 3) safety warning if o
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
-    console.error("Error in fight-week-analysis:", error);
+    edgeLogger.error("Error in fight-week-analysis", error, { functionName: "fight-week-analysis" });
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
