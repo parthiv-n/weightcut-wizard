@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useUser } from "@/contexts/UserContext";
+import { useProfile } from "@/contexts/UserContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,7 +28,7 @@ export default function Onboarding() {
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const [generationStep, setGenerationStep] = useState(0);
   const navigate = useNavigate();
-  const { refreshProfile } = useUser();
+  const { refreshProfile } = useProfile();
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({

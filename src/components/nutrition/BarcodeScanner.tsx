@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { AIPersistence } from "@/lib/aiPersistence";
-import { useUser } from "@/contexts/UserContext";
+import { useAuth } from "@/contexts/UserContext";
 import { Capacitor } from "@capacitor/core";
 import { Camera as CapCamera, CameraPermissionState } from "@capacitor/camera";
 import { logger } from "@/lib/logger";
@@ -36,7 +36,7 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
   const [permissionDenied, setPermissionDenied] = useState(false);
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
-  const { userId } = useUser();
+  const { userId } = useAuth();
 
   const requestNativePermission = async (): Promise<boolean> => {
     if (!Capacitor.isNativePlatform()) return true;

@@ -2,7 +2,7 @@ import { createContext, useContext, useState, ReactNode, useEffect } from "react
 import { supabase } from "@/integrations/supabase/client";
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
-import { useUser } from "./UserContext";
+import { useAuth } from "./UserContext";
 import { syncWeightReminder } from "@/lib/weightReminder";
 import { logger } from "@/lib/logger";
 
@@ -22,7 +22,7 @@ interface WizardBackgroundContextType {
 const WizardBackgroundContext = createContext<WizardBackgroundContextType | undefined>(undefined);
 
 export function WizardBackgroundProvider({ children }: { children: ReactNode }) {
-  const { userId } = useUser();
+  const { userId } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 

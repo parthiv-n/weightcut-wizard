@@ -411,17 +411,30 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
   // Fetch share stats (streak + total meals) — lazy, only when dialog opens
   const fetchShareStats = useCallback(async () => {
     if (!userId) return;
-    try {
-      const { data, error } = await supabase
-        .from("nutrition_logs")
-        .select("date")
-        .eq("user_id", userId);
-      if (error || !data) return;
 
-      setTotalMealsLogged(data.length);
+    // Check cache first (1 hour TTL)
+    const cached = localCache.get<{ totalMeals: number; streak: number }>(userId, "share_stats", 60 * 60 * 1000);
+    if (cached) {
+      setTotalMealsLogged(cached.totalMeals);
+      setNutritionStreak(cached.streak);
+      return;
+    }
+
+    try {
+      const [countResult, datesResult] = await Promise.allSettled([
+        supabase.from("nutrition_logs").select("*", { count: "exact", head: true }).eq("user_id", userId),
+        supabase.from("nutrition_logs").select("date").eq("user_id", userId)
+          .gte("date", format(subDays(new Date(), 90), "yyyy-MM-dd"))
+          .order("date", { ascending: false }),
+      ]);
+
+      const totalMeals = countResult.status === "fulfilled" ? countResult.value.count || 0 : 0;
+      const dateRows = datesResult.status === "fulfilled" ? datesResult.value.data || [] : [];
+
+      setTotalMealsLogged(totalMeals);
 
       // Deduplicate dates
-      const dates = [...new Set(data.map((r) => r.date?.slice(0, 10)))].filter(Boolean).sort().reverse();
+      const dates = [...new Set(dateRows.map((r: any) => r.date?.slice(0, 10)))].filter(Boolean).sort().reverse();
       // Count consecutive days backwards from today
       let streak = 0;
       let cursor = new Date();
@@ -435,6 +448,8 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
         cursor = subDays(cursor, 1);
       }
       setNutritionStreak(streak);
+
+      localCache.set(userId, "share_stats", { totalMeals, streak });
     } catch {
       // silent
     }
@@ -719,7 +734,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     const { data, error } = await withSupabaseTimeout(
       supabase
         .from("nutrition_logs")
-        .select("*")
+        .select("id, meal_name, calories, protein_g, carbs_g, fats_g, meal_type, portion_size, recipe_notes, is_ai_generated, ingredients, date, created_at")
         .eq("user_id", userId)
         .eq("date", selectedDate)
         .order("created_at", { ascending: true }),

@@ -1,9 +1,9 @@
 import { Navigate } from "react-router-dom";
-import { useUser } from "@/contexts/UserContext";
+import { useAuth } from "@/contexts/UserContext";
 import { WizardLoader } from "@/components/ui/WizardLoader";
 
 export function ProfileCompletionGuard({ children }: { children: React.ReactNode }) {
-  const { hasProfile, isLoading } = useUser();
+  const { hasProfile, isLoading } = useAuth();
 
   if (isLoading) {
     return <WizardLoader message="Loading your profile..." />;

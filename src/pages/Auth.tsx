@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { useUser } from "@/contexts/UserContext";
+import { useAuth } from "@/contexts/UserContext";
 import wizardLogo from "@/assets/wizard-logo.png";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ChevronLeft } from "lucide-react";
@@ -19,7 +19,7 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { userId } = useUser();
+  const { userId } = useAuth();
 
   // Redirect when user is authenticated (handles both fresh logins and already-logged-in).
   // UserContext's onAuthStateChange calls loadUserData() first, then sets userId —

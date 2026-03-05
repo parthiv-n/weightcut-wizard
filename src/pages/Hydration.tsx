@@ -464,7 +464,7 @@ export default function Hydration() {
         </div>
 
         {/* ── Input Form ────────────────────────────────────────────────── */}
-        <div className="rounded-3xl border border-white/[0.06] p-6 mb-6 shadow-2xl relative overflow-hidden bg-white/[0.02] backdrop-blur-xl">
+        <div className="rounded-3xl border border-white/[0.06] p-6 mb-6 shadow-2xl relative overflow-hidden bg-white/[0.02] backdrop-blur-sm">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[200px] h-[200px] bg-blue-500/20 opacity-40 blur-[80px] rounded-full pointer-events-none"></div>
 
           <form onSubmit={handleGenerateProtocol} className="space-y-6 relative z-10">

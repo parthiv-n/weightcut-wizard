@@ -80,7 +80,7 @@ export function FloatingWizardChat() {
       {/* Chat Panel */}
       {open && (
         <div
-          className="fixed inset-x-0 bottom-0 z-[10002] flex flex-col glass-card bg-background/95 backdrop-blur-xl border-t border-border/50 rounded-t-3xl animate-in slide-in-from-bottom duration-300"
+          className="fixed inset-x-0 bottom-0 z-[10002] flex flex-col glass-card bg-background/98 backdrop-blur-md border-t border-border/50 rounded-t-3xl animate-in slide-in-from-bottom duration-300"
           style={{ height: "85dvh" }}
         >
           {/* Drag handle */}

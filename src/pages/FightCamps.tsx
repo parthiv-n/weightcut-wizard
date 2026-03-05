@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
-import { useUser } from "@/contexts/UserContext";
+import { useAuth } from "@/contexts/UserContext";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -48,7 +48,7 @@ export default function FightCamps() {
   const [compareDialogOpen, setCompareDialogOpen] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { userId } = useUser();
+  const { userId } = useAuth();
 
   useEffect(() => {
     if (userId) {
@@ -74,7 +74,7 @@ export default function FightCamps() {
       const { data, error } = await withSupabaseTimeout(
         supabase
           .from("fight_camps")
-          .select("*")
+          .select("id, name, event_name, fight_date, profile_pic_url, is_completed, starting_weight_kg, end_weight_kg, total_weight_cut, weight_via_dehydration, weight_via_carb_reduction, weigh_in_timing")
           .eq("user_id", userId)
           .order("fight_date", { ascending: false }),
         undefined,

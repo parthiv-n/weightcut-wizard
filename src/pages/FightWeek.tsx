@@ -107,7 +107,7 @@ export default function FightWeek() {
       const { data } = await withSupabaseTimeout(
         supabase
           .from("fight_week_plans")
-          .select("*")
+          .select("id, fight_date, starting_weight_kg, target_weight_kg")
           .eq("user_id", userId)
           .order("created_at", { ascending: false })
           .limit(1)

@@ -147,7 +147,7 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
             <button
               onClick={() => window.location.reload()}
               style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
-              className="fixed right-3 z-50 h-9 w-9 flex items-center justify-center rounded-xl bg-background/80 backdrop-blur-md border border-border/50 shadow-sm active:scale-90 transition-transform md:hidden"
+              className="fixed right-3 z-50 h-9 w-9 flex items-center justify-center rounded-xl bg-background/95 border border-border/50 shadow-sm active:scale-90 transition-transform md:hidden"
               aria-label="Refresh page"
             >
               <RefreshCw className="h-4 w-4 text-muted-foreground" />

@@ -166,7 +166,7 @@ export default function WeightTracker() {
       const { data: logsData } = await withSupabaseTimeout(
         supabase
           .from("weight_logs")
-          .select("*")
+          .select("id, date, weight_kg")
           .eq("user_id", userId)
           .order("date", { ascending: true }),
         undefined,

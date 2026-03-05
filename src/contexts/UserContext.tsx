@@ -41,28 +41,34 @@ function haveAIFieldsChanged(prev: ProfileData | null, next: ProfileData): boole
   return AI_RELEVANT_FIELDS.some(f => prev[f] !== next[f]);
 }
 
-interface UserContextType {
-  userName: string;
-  avatarUrl: string;
+interface AuthContextType {
   userId: string | null;
-  currentWeight: number | null;
-  profile: ProfileData | null;
   isSessionValid: boolean;
   isLoading: boolean;
   hasProfile: boolean;
   authError: boolean;
   isOffline: boolean;
-  setUserName: (name: string) => void;
-  setAvatarUrl: (url: string) => void;
-  updateCurrentWeight: (weight: number) => Promise<void>;
-  loadUserData: () => Promise<void>;
-  refreshProfile: () => Promise<boolean>;
-  refreshSession: () => Promise<boolean>;
-  checkSessionValidity: () => Promise<boolean>;
   retryAuth: () => Promise<void>;
+  checkSessionValidity: () => Promise<boolean>;
+  refreshSession: () => Promise<boolean>;
+  loadUserData: () => Promise<void>;
 }
 
-const UserContext = createContext<UserContextType | undefined>(undefined);
+interface ProfileContextType {
+  profile: ProfileData | null;
+  userName: string;
+  avatarUrl: string;
+  currentWeight: number | null;
+  setUserName: (name: string) => void;
+  setAvatarUrl: (url: string) => void;
+  refreshProfile: () => Promise<boolean>;
+  updateCurrentWeight: (weight: number) => Promise<void>;
+}
+
+type UserContextType = AuthContextType & ProfileContextType;
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const [userName, setUserName] = useState<string>("");
@@ -485,42 +491,59 @@ export function UserProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const contextValue = useMemo(() => ({
-    userName,
-    avatarUrl,
+  const authValue = useMemo(() => ({
     userId,
-    currentWeight,
-    profile,
     isSessionValid,
     isLoading,
     hasProfile,
     authError,
     isOffline,
+    retryAuth,
+    checkSessionValidity,
+    refreshSession,
+    loadUserData,
+  }), [userId, isSessionValid, isLoading, hasProfile, authError, isOffline,
+       retryAuth, checkSessionValidity, refreshSession, loadUserData]);
+
+  const profileValue = useMemo(() => ({
+    profile,
+    userName,
+    avatarUrl,
+    currentWeight,
     setUserName: updateUserName,
     setAvatarUrl: updateAvatarUrl,
-    updateCurrentWeight,
-    loadUserData,
     refreshProfile,
-    refreshSession,
-    checkSessionValidity,
-    retryAuth,
-  }), [userName, avatarUrl, userId, currentWeight, profile,
-       isSessionValid, isLoading, hasProfile, authError, isOffline,
-       updateUserName, updateAvatarUrl, updateCurrentWeight,
-       loadUserData, refreshProfile, refreshSession,
-       checkSessionValidity, retryAuth]);
+    updateCurrentWeight,
+  }), [profile, userName, avatarUrl, currentWeight,
+       updateUserName, updateAvatarUrl, refreshProfile, updateCurrentWeight]);
 
   return (
-    <UserContext.Provider value={contextValue}>
-      {children}
-    </UserContext.Provider>
+    <AuthContext.Provider value={authValue}>
+      <ProfileContext.Provider value={profileValue}>
+        {children}
+      </ProfileContext.Provider>
+    </AuthContext.Provider>
   );
 }
 
-export function useUser() {
-  const context = useContext(UserContext);
+export function useAuth() {
+  const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error("useUser must be used within a UserProvider");
+    throw new Error("useAuth must be used within a UserProvider");
   }
   return context;
+}
+
+export function useProfile() {
+  const context = useContext(ProfileContext);
+  if (context === undefined) {
+    throw new Error("useProfile must be used within a UserProvider");
+  }
+  return context;
+}
+
+export function useUser(): UserContextType {
+  const auth = useAuth();
+  const profile = useProfile();
+  return { ...auth, ...profile };
 }
