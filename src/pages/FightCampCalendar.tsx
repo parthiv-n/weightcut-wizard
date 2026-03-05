@@ -19,7 +19,10 @@ import { triggerHapticSelection } from "@/lib/haptics";
 import { ShareButton } from "@/components/share/ShareButton";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { FightCampCalendarCard } from "@/components/share/cards/FightCampCalendarCard";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { logger } from "@/lib/logger";
+import { getUserColors, setUserColor, getSessionColor, COLOR_PALETTE } from "@/lib/sessionColors";
+import { Check } from "lucide-react";
 
 // Type definitions for fight_camp_calendar table
 type FightCampCalendarInsert = {
@@ -85,6 +88,8 @@ export default function FightCampCalendar() {
     // Share state
     const [shareOpen, setShareOpen] = useState(false);
     const [shareTimeRange, setShareTimeRange] = useState<"day" | "week" | "month">("week");
+    // Custom session colors
+    const [customColors, setCustomColors] = useState<Record<string, string>>({});
 
     const isRestDay = sessionType === 'Rest';
 
@@ -142,6 +147,11 @@ export default function FightCampCalendar() {
     useEffect(() => {
         fetch28DaySessions();
     }, [fetch28DaySessions]);
+
+    // Load custom session colors from localStorage
+    useEffect(() => {
+        if (userId) setCustomColors(getUserColors(userId));
+    }, [userId]);
 
     // Auto-open Log Session dialog when navigated from Quick Log
     useEffect(() => {
@@ -604,16 +614,44 @@ export default function FightCampCalendar() {
                         ) : (
                             sessionsForSelectedDate.map(session => {
                                 const isRest = session.session_type === 'Rest';
-                                const il = session.intensity_level ?? (session.intensity === 'high' ? 5 : session.intensity === 'moderate' ? 3 : 1);
-                                const barColor = il >= 4 ? 'bg-red-500' : il >= 3 ? 'bg-yellow-500' : 'bg-green-500';
+                                const sessionColor = getSessionColor(session.session_type, customColors);
 
                                 return (
                                     <Card key={session.id} className="p-4 rounded-[20px] shadow-sm glass-card overflow-hidden relative border-border/10 cursor-pointer active:scale-[0.98] transition-transform" onClick={() => handleEditSession(session)}>
-                                        <div className={`absolute top-0 left-0 w-2 h-full ${isRest ? 'bg-blue-500' : barColor}`} />
+                                        <div className="absolute top-0 left-0 w-2 h-full" style={{ backgroundColor: sessionColor }} />
 
                                         <div className="flex justify-between items-start ml-2">
-                                            <div>
+                                            <div className="flex items-center gap-2">
+                                                <Popover>
+                                                    <PopoverTrigger asChild>
+                                                        <button
+                                                            className="w-5 h-5 rounded-full flex-shrink-0 ring-1 ring-white/20 hover:ring-white/40 transition-all"
+                                                            style={{ backgroundColor: sessionColor }}
+                                                            onClick={(e) => e.stopPropagation()}
+                                                        />
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-auto p-3" side="bottom" align="start" onClick={(e) => e.stopPropagation()}>
+                                                        <div className="grid grid-cols-4 gap-2">
+                                                            {COLOR_PALETTE.map(color => (
+                                                                <button
+                                                                    key={color}
+                                                                    className="w-8 h-8 rounded-full flex items-center justify-center ring-1 ring-white/10 hover:scale-110 transition-transform"
+                                                                    style={{ backgroundColor: color }}
+                                                                    onClick={() => {
+                                                                        if (!userId) return;
+                                                                        setUserColor(userId, session.session_type, color);
+                                                                        setCustomColors(prev => ({ ...prev, [session.session_type]: color }));
+                                                                    }}
+                                                                >
+                                                                    {sessionColor === color && <Check className="w-4 h-4 text-white drop-shadow-md" />}
+                                                                </button>
+                                                            ))}
+                                                        </div>
+                                                    </PopoverContent>
+                                                </Popover>
                                                 <h4 className="font-bold text-lg text-foreground">{session.session_type}</h4>
+                                            </div>
+                                            <div>
                                                 {isRest ? (
                                                     <div className="flex items-center gap-3 text-sm text-foreground/80 mt-1 font-medium flex-wrap">
                                                         {session.sleep_quality && <span>Sleep: {session.sleep_quality}</span>}
@@ -626,7 +664,7 @@ export default function FightCampCalendar() {
                                                         <span>•</span>
                                                         <span>RPE {session.rpe}</span>
                                                         <span>•</span>
-                                                        <span>Int {il}/5</span>
+                                                        <span>Int {session.intensity_level ?? (session.intensity === 'high' ? 5 : session.intensity === 'moderate' ? 3 : 1)}/5</span>
                                                     </div>
                                                 )}
                                             </div>
@@ -673,6 +711,7 @@ export default function FightCampCalendar() {
                             userId={userId}
                             selectedDate={selectedDate}
                             sessionLoggedTrigger={sessionLoggedTrigger}
+                            customColors={customColors}
                         />
                     )}
                 </div>
@@ -748,6 +787,7 @@ export default function FightCampCalendar() {
                                 sessions={filtered}
                                 timeRange={shareTimeRange}
                                 aspect={aspect}
+                                customColors={customColors}
                             />
                         </div>
                     );

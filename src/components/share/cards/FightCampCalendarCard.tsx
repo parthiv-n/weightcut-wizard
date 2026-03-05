@@ -2,6 +2,7 @@ import { forwardRef, useMemo } from "react";
 import { CardShell, type AspectRatio } from "../templates/CardShell";
 import { StatBlock } from "../templates/StatBlock";
 import { usePremium } from "@/hooks/usePremium";
+import { getSessionColor } from "@/lib/sessionColors";
 
 interface Session {
   id: string;
@@ -17,21 +18,8 @@ interface FightCampCalendarCardProps {
   sessions: Session[];
   timeRange: "day" | "week" | "month";
   aspect?: AspectRatio;
+  customColors?: Record<string, string>;
 }
-
-const SPORT_COLORS: Record<string, string> = {
-  BJJ: "#3b82f6",
-  "Muay Thai": "#ef4444",
-  Boxing: "#f97316",
-  Wrestling: "#f59e0b",
-  Sparring: "#fb923c",
-  Strength: "#22c55e",
-  Conditioning: "#10b981",
-  Run: "#06b6d4",
-  Recovery: "#8b5cf6",
-  Rest: "#60a5fa",
-  Other: "#6b7280",
-};
 
 const TIME_LABELS: Record<string, string> = {
   day: "Today",
@@ -40,10 +28,6 @@ const TIME_LABELS: Record<string, string> = {
 };
 
 type DayData = { date: string; dayLabel: string; sessions: Session[] };
-
-function getColor(type: string): string {
-  return SPORT_COLORS[type] ?? "#6b7280";
-}
 
 function formatDateStr(d: Date): string {
   const year = d.getFullYear();
@@ -61,7 +45,7 @@ function getShortDayLabel(d: Date): string {
 }
 
 export const FightCampCalendarCard = forwardRef<HTMLDivElement, FightCampCalendarCardProps>(
-  ({ sessions, timeRange, aspect = "square" }, ref) => {
+  ({ sessions, timeRange, aspect = "square", customColors }, ref) => {
     const { isPremium } = usePremium();
     const s = aspect === "story";
 
@@ -216,8 +200,8 @@ export const FightCampCalendarCard = forwardRef<HTMLDivElement, FightCampCalenda
                 gap: s ? 12 : 8,
                 padding: s ? "12px 24px" : "6px 14px",
                 borderRadius: 999,
-                background: `${getColor(type)}20`,
-                border: `1px solid ${getColor(type)}40`,
+                background: `${getSessionColor(type, customColors)}20`,
+                border: `1px solid ${getSessionColor(type, customColors)}40`,
               }}
             >
               <div
@@ -225,7 +209,7 @@ export const FightCampCalendarCard = forwardRef<HTMLDivElement, FightCampCalenda
                   width: s ? 12 : 8,
                   height: s ? 12 : 8,
                   borderRadius: s ? 6 : 4,
-                  backgroundColor: getColor(type),
+                  backgroundColor: getSessionColor(type, customColors),
                 }}
               />
               <span style={{ fontSize: s ? 18 : 12, fontWeight: 600, color: "#ffffff" }}>
@@ -239,9 +223,9 @@ export const FightCampCalendarCard = forwardRef<HTMLDivElement, FightCampCalenda
         </div>
 
         {/* Timeline visual */}
-        {timeRange === "day" && <DayView days={days} s={s} />}
-        {timeRange === "week" && <WeekView days={days} maxDayMinutes={maxDayMinutes} s={s} />}
-        {timeRange === "month" && <MonthView days={days} s={s} />}
+        {timeRange === "day" && <DayView days={days} s={s} customColors={customColors} />}
+        {timeRange === "week" && <WeekView days={days} maxDayMinutes={maxDayMinutes} s={s} customColors={customColors} />}
+        {timeRange === "month" && <MonthView days={days} s={s} customColors={customColors} />}
 
         {/* Stat blocks */}
         <div style={{ display: "grid", gridTemplateColumns: s ? "1fr 1fr 1fr 1fr" : "1fr 1fr", gap: s ? 12 : 8 }}>
@@ -263,7 +247,7 @@ export const FightCampCalendarCard = forwardRef<HTMLDivElement, FightCampCalenda
 FightCampCalendarCard.displayName = "FightCampCalendarCard";
 
 /* ─── Day View: horizontal session bars ─── */
-function DayView({ days, s }: { days: DayData[]; s: boolean }) {
+function DayView({ days, s, customColors }: { days: DayData[]; s: boolean; customColors?: Record<string, string> }) {
   const daySessions = days[0]?.sessions ?? [];
   const barHeight = s ? 80 : 44;
   const barGap = s ? 12 : 6;
@@ -282,7 +266,7 @@ function DayView({ days, s }: { days: DayData[]; s: boolean }) {
           style={{
             height: barHeight,
             borderRadius: barRadius,
-            backgroundColor: getColor(sess.session_type) + "E6", // ~90% opacity
+            backgroundColor: getSessionColor(sess.session_type, customColors) + "E6", // ~90% opacity
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -302,7 +286,7 @@ function DayView({ days, s }: { days: DayData[]; s: boolean }) {
 }
 
 /* ─── Week View: stacked column chart (SVG) ─── */
-function WeekView({ days, maxDayMinutes, s }: { days: DayData[]; maxDayMinutes: number; s: boolean }) {
+function WeekView({ days, maxDayMinutes, s, customColors }: { days: DayData[]; maxDayMinutes: number; s: boolean; customColors?: Record<string, string> }) {
   const colWidth = s ? 120 : 100;
   const colGap = s ? 18 : 12;
   const maxColHeight = s ? 600 : 240;
@@ -382,7 +366,7 @@ function WeekView({ days, maxDayMinutes, s }: { days: DayData[]; maxDayMinutes: 
                 width={colWidth}
                 height={segHeight}
                 rx={segHeight > 8 ? 6 : 3}
-                fill={getColor(sess.session_type)}
+                fill={getSessionColor(sess.session_type, customColors)}
               />
             );
             currentY -= segGap;
@@ -420,7 +404,7 @@ function WeekView({ days, maxDayMinutes, s }: { days: DayData[]; maxDayMinutes: 
 }
 
 /* ─── Month View: calendar heatmap with multi-color cells ─── */
-function MonthView({ days, s }: { days: DayData[]; s: boolean }) {
+function MonthView({ days, s, customColors }: { days: DayData[]; s: boolean; customColors?: Record<string, string> }) {
   const cellSize = s ? 40 : 24;
   const cellGap = s ? 6 : 3;
   const cellRadius = s ? 8 : 4;
@@ -532,7 +516,7 @@ function MonthView({ days, s }: { days: DayData[]; s: boolean }) {
                         y={cy + si * sliceHeight}
                         width={cellSize}
                         height={sliceHeight}
-                        fill={getColor(sess.session_type)}
+                        fill={getSessionColor(sess.session_type, customColors)}
                       />
                     ))}
                   </g>
