@@ -28,10 +28,10 @@ export function WizardLoader({
       });
     }, 100);
 
-    // Show force refresh button after 1 second if still loading
+    // Show force refresh button after 4 seconds if still loading
     const refreshTimer = setTimeout(() => {
       setShowRefresh(true);
-    }, 1000);
+    }, 4000);
 
     return () => {
       clearInterval(timer);
@@ -80,7 +80,7 @@ export function WizardLoader({
             Force Refresh
           </Button>
           <p className="text-[10px] text-muted-foreground/60 text-center max-w-[200px]">
-            Tip: Multiple force refreshes may load the app faster if your connection to the database dropped (this issue is currently in process of being resolved).
+            Taking longer than usual? Try refreshing.
           </p>
         </div>
       </div>

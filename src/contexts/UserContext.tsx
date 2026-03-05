@@ -182,15 +182,19 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   // Internal: performs one load attempt. Returns 'success' | 'no_session' | 'error'.
   // Does NOT touch isLoading, authError, or isUserLoadedRef.
-  const _performLoad = async (): Promise<'success' | 'no_session' | 'error'> => {
+  // When `providedSession` is given (from auth events), skips the redundant getSession() call.
+  const _performLoad = async (providedSession?: { user: any; expires_at?: number } | null): Promise<'success' | 'no_session' | 'error'> => {
     try {
-      const { data: { session }, error } = await withAuthTimeout(
-        supabase.auth.getSession()
-      );
-
-      if (error) {
-        logger.error("Auth session error", error);
-        return 'error';
+      let session = providedSession;
+      if (!session) {
+        const { data, error } = await withAuthTimeout(
+          supabase.auth.getSession()
+        );
+        if (error) {
+          logger.error("Auth session error", error);
+          return 'error';
+        }
+        session = data.session;
       }
 
       if (!session?.user) {
@@ -287,18 +291,19 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const loadUserData = useCallback(async () => {
+  const loadUserData = useCallback(async (providedSession?: { user: any; expires_at?: number } | null) => {
     setAuthError(false);
     // Only show loading spinner if cache hasn't already resolved it
     if (!isUserLoadedRef.current) {
       setIsLoading(true);
     }
 
-    // Aggressive exponential backoff for faster recovery from short network drops
-    const DELAYS = [100, 500, 1500, 3000];
+    // Tight backoff for faster recovery from short network drops
+    const DELAYS = [100, 300, 800, 1500];
 
     for (let attempt = 0; attempt <= DELAYS.length; attempt++) {
-      const result = await _performLoad();
+      // Use provided session on first attempt; subsequent retries fetch fresh
+      const result = await _performLoad(attempt === 0 ? providedSession : undefined);
 
       if (result === 'success' || result === 'no_session') {
         isUserLoadedRef.current = true;
@@ -373,7 +378,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'INITIAL_SESSION') {
         if (session?.user) {
-          await loadUserData();
+          await loadUserData(session);
         } else {
           setIsLoading(false);
         }
@@ -403,7 +408,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         if (!isUserLoadedRef.current) {
           setIsLoading(true); // only for fresh logins, not token refreshes
         }
-        await loadUserData();
+        await loadUserData(session);
       }
     });
 

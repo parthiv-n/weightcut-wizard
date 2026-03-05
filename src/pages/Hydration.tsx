@@ -416,7 +416,7 @@ export default function Hydration() {
         isGenerating={loading}
         steps={REHYDRATION_STEPS}
         title="Generating Protocol"
-        subtitle="Designing your optimal recovery strategy"
+        subtitle="This usually takes 30–60 seconds..."
         onCompletion={() => {}}
         onCancel={handleAICancel}
         onRetry={() => handleGenerateProtocol(new Event("submit") as any)}
