@@ -1,210 +1,133 @@
-# WeightCut Wizard — Production Readiness Audit
+# Production Audit — WeightCut Wizard
 
-## Context
-Full app survey before closing beta and accepting payments. Three parallel audits covered: (1) UI/UX & user-facing quality, (2) backend, security & data, (3) performance & code quality. Current state: functionally complete but significant gaps for a paid product.
-
-**Overall Score: 4/10 — NOT production-ready for paying users.**
+Living checklist of everything to resolve before App Store submission. Consolidated from infrastructure audit + code-level audit. Items marked **DONE** have been addressed.
 
 ---
 
-## PHASE 1 — BLOCKING (Must fix before accepting payment)
+## CRITICAL (ship-blockers)
 
-### 1.1 Payment Infrastructure (NOT IMPLEMENTED)
-- No Stripe integration, no subscription management, no webhooks
-- `is_premium` field exists in profiles but is never checked/enforced
-- **Need**: Stripe checkout, webhook edge function, subscription table, paywall UI, billing portal
-- **Need**: Terms of service, privacy policy, refund policy, GDPR data export/deletion
+- [ ] **`createAIAbortController` accepts no params but called with `30000` everywhere** — `src/lib/timeoutWrapper.ts:53`. Called at 8+ sites across Nutrition.tsx, WeightTracker.tsx, FightWeek.tsx. The timeout value is silently ignored — AI operations have zero timeout protection. **Fix:** Either make the function accept a timeout param and wire it up, or remove the phantom arguments from all call sites.
 
-DONE ### 1.2 Error Monitoring (NONE)
-- Zero observability — no Sentry, no LogRocket, no crash reporting
-- Production errors are invisible; 23+ files use raw `console.log/error`
-- **Need**: Sentry integration (client + edge functions), structured logging, alerting
+- [ ] **AIGeneratingOverlay completion animation never fires** — `src/components/AIGeneratingOverlay.tsx:88-100`. The `!isGenerating && isOpen` condition is never true because both props are always the same value (`isAiActive`). Users never see "Complete!" feedback. **Fix:** Decouple `isOpen` from `isGenerating` in callers (Nutrition.tsx, Hydration.tsx, etc.) so `isOpen` stays true briefly after `isGenerating` goes false.
 
-DONE ### 1.3 Testing (ALMOST NONE) 
-- Only 1 test file: `performanceEngine.test.ts` (638 lines)
-- Zero tests for: auth flow, API calls, components, AI features, offline sync
-- No vitest config, no CI test runner
-- **Need**: vitest setup, tests for critical paths (auth, payments, data writes), 60%+ coverage target
+- [ ] **No privacy policy or terms of service links in-app** — Required for App Store. No links exist anywhere in the UI. **Fix:** Add links to Settings sheet/page and onboarding footer.
 
-DONE ### 1.4 Security — Auth Gaps 
-- `scan-barcode/index.ts` — **NO auth verification** (anyone can call it)
-- `transcribe-audio/index.ts` — **NO auth verification** (exposes Google API key usage)
-- `food-search/index.ts` — Weak JWT validation (decodes without signature verification)
-- **Need**: Add `supabase.auth.getUser()` check to all 3 functions
+- [ ] **Payment infrastructure not implemented** — No Stripe integration, no subscription management, no webhooks. `is_premium` field exists in profiles but is never checked/enforced. **Need:** Stripe checkout, webhook edge function, subscription table, paywall UI, billing portal.
 
-### 1.5 Security — Rate Limiting (NONE)
-- Zero rate limiting on all 16 edge functions
-- A single user can spam Grok API calls and exhaust quota
-- **Need**: Per-user rate limits (e.g., Upstash or Deno KV) on all AI functions
+- [ ] **No rate limiting on edge functions** — Zero rate limiting on all 16 edge functions. A single user can spam Grok API calls and exhaust quota. **Need:** Per-user rate limits (e.g., Upstash or Deno KV) on all AI functions.
 
-### 1.6 Security — CORS
-- Currently `"*"` (wildcard) on all functions — allows any website to call APIs
-- Fine for dev but not for production with payments
-- **Need**: Dynamic CORS that allows production domain + localhost for dev
-
-DONE ### 1.7 Critical Dependencies
-- `xlsx` (429 KB): HIGH severity vulnerability with **no fix available**
-- `minimatch`, `rollup`: HIGH severity ReDoS
-- **Need**: Replace `xlsx` with lightweight alternative or remove; run `npm audit fix`
-
-DONE ### 1.8 Remove Debug Code
-- `src/debug-meal-api.tsx` — Full debug component with emoji console.logs, must be deleted
-- 23+ files have console.log statements left in production code
+- [ ] **Wildcard CORS on all functions** — Currently `"*"` on all functions — allows any website to call APIs. **Need:** Dynamic CORS that allows production domain + localhost for dev.
 
 ---
 
-## PHASE 2 — HIGH PRIORITY (Fix before public release)
+## HIGH
 
-DONE ### 2.1 TypeScript Strictness DISABLED
-- `tsconfig.json`: `strict: false`, `noImplicitAny: false`, `strictNullChecks: false`
-- Massive type safety gap — bugs slip through silently
-- **Need**: Enable `strict: true` incrementally, fix type errors
+- [ ] **Race condition in `refreshProfile()`** — `src/contexts/UserContext.tsx:140-187`. No abort signal or staleness check. If called twice rapidly, the slower first call can overwrite the faster second call's result with stale data. **Fix:** Capture userId at call start, verify it hasn't changed before setting state.
 
-### 2.2 Massive Single-File Components
-| File | Lines | Problem |
-|------|-------|---------|
-| `Nutrition.tsx` | 3,878 | Meal logging + AI + barcode + voice + planning in one file |
-| `WeightTracker.tsx` | 1,414 | Weight + AI + charts + sharing |
-| `Hydration.tsx` | 1,206 | Monolithic page |
-| `performanceEngine.ts` | 1,340 | Utility file should be split |
-| `FightCampCalendar.tsx` | 758 | Calendar + sharing mixed |
-| `BottomNav.tsx` | 632 | Too large for nav |
+- [ ] **Missing `userId` dependency in Nutrition.tsx warmup useEffect** — `src/pages/Nutrition.tsx:517`. Effect uses `userId` in its body but omits it from the dependency array — stale closure. **Fix:** Add `userId` to the dependency array.
 
-**Need**: Decompose into focused sub-components (max 300-400 lines each)
+- [ ] **Missing input validation in `fight-camp-coach` edge function** — `supabase/functions/fight-camp-coach/index.ts:49-94`. Extracts many payload fields with zero type/range validation. Bad client data produces garbage LLM prompts. **Fix:** Add validation for required fields and numeric ranges before building the prompt.
 
-DONE ### 2.3 Empty States Missing
-- **Nutrition**: Blank page when `meals.length === 0` — no "Log your first meal" CTA
-- **Dashboard**: No guidance for new users with no weight logs
-- **Goals**: No empty state for first-time users
-- **Need**: Empty state components with CTAs on all data-driven pages
+- [ ] **Missing `finish_reason` check in `analyse-diet` edge function** — `supabase/functions/analyse-diet/index.ts:142`. If Grok truncates the response (`finish_reason: "length"`), `parseJSON` will silently fail with a generic error. No logging to detect this. **Fix:** Check `data.choices[0].finish_reason` after the Grok call and log a warning if `"length"`.
 
-DONE ## 2.4 Loading State Inconsistency
-| Page | Loading State | Quality |
-|------|--------------|---------|
-| Dashboard | DashboardSkeleton | Good |
-| WeightTracker | Skeleton | Good |
-| FightWeek | Skeleton | Good |
-| Nutrition | Generic spinner | Bad |
-| Goals | Generic spinner | Bad |
-| Hydration | Generic spinner | Bad |
+- [ ] **Untyped Supabase casts in FightCampCalendar** — `src/pages/FightCampCalendar.tsx` (lines 97, 124, 218, 226, 263, 313). Multiple `(supabase as any)` casts for `fight_camp_calendar` table. **Fix:** Extend Supabase type definitions to include this table.
 
-**Need**: Skeleton loaders for Nutrition, Goals, Hydration pages
+- [ ] **Missing ARIA labels on interactive elements** — Many icon-only buttons (edit, delete, expand/collapse in nutrition, weight unit toggles, settings toggles) lack `aria-label`. Only ~26 ARIA labels across entire codebase. **Fix:** Audit all icon-only buttons and add descriptive aria-labels.
 
-### 2.5 Silent Async Errors
-- `Dashboard.tsx`: `.catch(() => {})` — swallows errors silently
-- Multiple pages: `if (!data) return;` without user feedback
-- `JSON.parse()` without try-catch in: `localCache.ts`, `aiPersistence.ts`, `syncQueue.ts`
-- **Need**: Error toasts/states on all async operations, wrap all JSON.parse
+- [ ] **Color contrast below WCAG AA** — `src/index.css`. `--muted-foreground: 220 15% 65%` on near-black background yields ~3.5:1 ratio (AA requires 4.5:1). Affects secondary text, chart labels, muted icons. **Fix:** Adjust to `220 15% 55%` or similar for ≥4.5:1 ratio.
 
-### 2.6 Bundle Size (>2.5MB uncompressed JS)
-- `@huggingface/transformers`: 870 KB — used for barcode/ML, should lazy-load
-- `xlsx`: 429 KB — evaluate if actually needed
-- `Nutrition.tsx` chunk: 520 KB
-- **Need**: Lazy-load transformers to barcode route only; replace/remove xlsx
+- [ ] **No offline indicator UI** — Network events are listened to and a sync queue exists, but users see no visual indication they're offline or that data is pending sync. **Fix:** Add a thin banner component that shows when `navigator.onLine` is false.
 
-### 2.7 Source Maps in Production
-- `vite.config.ts` doesn't disable sourcemaps for production builds
-- **Need**: Add `build: { sourcemap: false }`
+- [ ] **Massive single-file components** — `Nutrition.tsx` (3,878 lines), `WeightTracker.tsx` (1,414), `Hydration.tsx` (1,206), `performanceEngine.ts` (1,340), `FightCampCalendar.tsx` (758), `BottomNav.tsx` (632). **Need:** Decompose into focused sub-components (max 300-400 lines each).
 
-### 2.8 No CI/CD Pipeline
-- No `.github/workflows/` found
-- Manual deployment only
-- **Need**: GitHub Actions for build, test, lint, deploy
+- [ ] **Silent async errors** — `Dashboard.tsx`: `.catch(() => {})` swallows errors. Multiple pages: `if (!data) return;` without user feedback. `JSON.parse()` without try-catch in: `localCache.ts`, `aiPersistence.ts`, `syncQueue.ts`. **Need:** Error toasts/states on all async operations, wrap all JSON.parse.
 
-### 2.9 Sensitive Data in localStorage
-- Profile data (weight, age, sex, health metrics) cached unencrypted
-- AI cache contains meal descriptions, health data
-- Not cleared on logout
-- **Need**: Clear sensitive data on logout, minimize PII caching, use Capacitor secure storage for iOS
+- [ ] **Bundle size >2.5MB uncompressed JS** — `@huggingface/transformers`: 870 KB (used for barcode/ML, should lazy-load), `xlsx`: 429 KB. **Need:** Lazy-load transformers to barcode route only; replace/remove xlsx.
 
-### 2.10 Input Validation on Edge Functions
-- `rehydration-protocol`: No schema validation, no range checks on numeric values
-- `meal-planner`: No validation on prompt input
-- Most functions trust client data
-- **Need**: Zod schemas on all edge functions
+- [ ] **Input validation missing on most edge functions** — `rehydration-protocol`: no schema validation, `meal-planner`: no validation on prompt input. Most functions trust client data. **Need:** Zod schemas on all edge functions.
+
+- [ ] **Sensitive data in localStorage** — Profile data (weight, age, sex, health metrics) cached unencrypted. AI cache contains meal descriptions, health data. Not cleared on logout. **Need:** Clear on logout, minimize PII caching, use Capacitor secure storage for iOS.
 
 ---
 
-## PHASE 3 — MEDIUM PRIORITY (Fix for quality release)
+## MEDIUM
 
-### 3.1 Accessibility
-- Only ~26 ARIA labels across entire codebase
-- Missing: `aria-required`, `aria-invalid` on forms, screen reader descriptions for charts
-- No keyboard navigation testing for modals/complex forms
-- Color contrast concerns with `text-muted-foreground` on dark glass cards
-- `NotFound.tsx` uses `bg-gray-100` instead of design system dark theme
+- [ ] **Missing NaN guard in FightWeek projections** — `src/pages/FightWeek.tsx:53-56`. `parseFloat("")` returns `NaN`. The `!cw` check works but is implicit and doesn't cover `0` values. **Fix:** Use explicit `isNaN()` checks.
 
-### 3.2 Missing Confirmation Dialogs
-- Goal updates (could break cut plan)
-- Nutrition target overrides
-- No "unsaved changes" warning on any form
+- [ ] **Null dereference risk in RecoveryDashboard cooldown timer** — `src/components/fightcamp/RecoveryDashboard.tsx:269-271`. `rateLimitUntil` can be falsy, but `tick()` does arithmetic on it without a guard. **Fix:** Add `if (!rateLimitUntil) return` at top of `tick()`.
 
-### 3.3 Mobile/iOS Issues
-- Refresh button uses hardcoded CSS instead of Tailwind safe-area classes
-- Some modal close buttons have small touch targets
-- No landscape mode handling
-- No iPad breakpoints
-- No offline indicator surfaced to user
+- [ ] **Event listener leak in ProfilePictureUpload** — `src/components/ProfilePictureUpload.tsx:17-19`. Image load/error listeners are never removed. **Fix:** Remove listeners in both resolve and reject paths.
 
-### 3.4 Missing React.memo
-- Zero instances of `React.memo()` in entire codebase
-- Heavy components re-render on every parent update
-- **Need**: Memo on MealCard, chart components, RecoveryDashboard, AI overlays
+- [ ] **Missing barcode format validation** — `supabase/functions/scan-barcode/index.ts:36`. Only checks if barcode is truthy — no length, digit, or format validation. **Fix:** Validate 8-18 digit string before API call.
 
-### 3.5 Event Listener Leaks
-- `ui/sidebar.tsx`: Missing keydown listener cleanup
-- `use-mobile.tsx`: Missing MQL listener cleanup
-- `ProfilePictureUpload.tsx`: Image event listeners not removed
+- [ ] **`parseFloat(log.weight_kg)` without NaN check in Dashboard** — `src/pages/Dashboard.tsx:290`. If `weight_kg` is null/undefined, produces NaN in the chart. **Fix:** Default to 0 or skip entry.
 
-### 3.6 API Resilience
-- No fallback if Grok API is down (11+ functions affected)
-- No circuit breaker pattern
-- No retry with backoff
-- food-search has in-memory cache (lost on function restart)
+- [ ] **No focus indicators for keyboard navigation** — No `focus-visible:ring` styles globally. Keyboard users can't see which element is focused. **Fix:** Add global `focus-visible` outline styles in `src/index.css`.
 
-### 3.7 No Pagination
-- Nutrition meals: could load thousands of records
-- Weight logs: no pagination
-- Fight camp calendar: loads full month at once
+- [ ] **Missing empty states** — Nutrition page (0 meals), FightCamps page (0 camps), and Hydration page show blank content with no guidance for new users. **Fix:** Add empty state components with CTAs.
 
-### 3.8 AI Features UX
-- `AIGeneratingOverlay`: No cancel button, no estimated time, no "stuck" detection
-- No partial response recovery if stream cuts off
-- AI cache not invalidated when user profile changes
+- [ ] **No app version display** — `package.json` version is "0.0.0", not shown anywhere in the UI. **Fix:** Set real version and display it in Settings.
+
+- [ ] **Status bar styling doesn't match dark theme** — `index.html:11` has `content="default"`. On dark theme, white status bar is jarring. **Fix:** Change to `black-translucent`.
+
+- [ ] **Inconsistent error status codes across edge functions** — Some return 404 for "not found", others return 500 for similar failures. Client must handle both. **Fix:** Standardize error response format and status codes.
+
+- [ ] **Missing confirmation dialogs** — Goal updates (could break cut plan), nutrition target overrides, no "unsaved changes" warning on any form.
+
+- [ ] **No React.memo anywhere** — Zero instances of `React.memo()` in entire codebase. Heavy components re-render on every parent update. **Need:** Memo on MealCard, chart components, RecoveryDashboard, AI overlays.
+
+- [ ] **No pagination** — Nutrition meals could load thousands of records. Weight logs have no pagination. Fight camp calendar loads full month at once.
+
+- [ ] **Source maps in production** — `vite.config.ts` doesn't disable sourcemaps for production builds. **Fix:** Add `build: { sourcemap: false }`.
+
+- [ ] **No CI/CD pipeline** — No `.github/workflows/` found. Manual deployment only. **Need:** GitHub Actions for build, test, lint, deploy.
 
 ---
 
-## PHASE 4 — LOW PRIORITY (Polish for post-launch)
+## LOW
 
-### 4.1 Incomplete Features
-- **Onboarding**: Missing welcome screen, nutrition preferences, confirmation review, post-onboarding tutorial
-- **Goals**: No progress tracking, milestones, notifications on goal reached
-- **Dashboard**: No CTAs for inactive users, no weekly recap
-- **Nutrition**: No meal history, macro trends, shopping list generation
-- **Hydration**: No tracking of actual intake vs plan, no checklist UI, no hourly reminders
-- **Fight Week**: No day-by-day checklist, no hydration integration
+- [ ] **Global `setInterval` in nutritionCache never cleared** — `src/lib/nutritionCache.ts:186-188`. Runs every 5 min with no cleanup mechanism. Harmless in browser but not clean. **Fix:** Export start/stop functions, call on login/logout.
 
-### 4.2 Design Consistency
-- Inconsistent spacing (`p-4` vs `px-5 py-3.5`)
-- Mixed border radius (`rounded-2xl`, `rounded-full`, `rounded-xl`)
-- Inconsistent toast notification styles
-- Haptic feedback missing on many interactions
+- [ ] **Empty `cleanup()` in `createAIAbortController`** — `src/lib/timeoutWrapper.ts:58`. The returned cleanup function is a no-op. All callers invoke it in `finally` blocks for nothing. **Fix:** Remove the phantom cleanup or implement actual timeout cleanup.
 
-### 4.3 ESLint Config Too Permissive
-- `@typescript-eslint/no-unused-vars: "off"` — dead code not flagged
-- 10+ `eslint-disable` comments scattered through components
+- [ ] **Inconsistent haptic feedback** — Some interactions have haptics (BottomNav, Settings), others don't (meal delete, weight log, goal saves). **Fix:** Audit all user actions and apply consistent haptic patterns.
 
-### 4.4 Token Refresh Race Condition
-- `UserContext.tsx`: Multiple concurrent requests can trigger simultaneous `refreshSession()` calls
-- **Need**: Refresh lock/mutex
+- [ ] **No pull-to-refresh gesture** — Manual refresh button exists but no native iOS pull-to-refresh. **Fix:** Implement using Capacitor plugin or library.
 
-### 4.5 Dependency Updates
-- 29 packages outdated (React 18→19, supabase-js 2.85→2.98, etc.)
-- Image asset: `wizard-logo.png` (432 KB) should be SVG/WebP
+- [ ] **No scroll-to-top on active tab tap** — `scrollToTop()` exists in Nutrition.tsx but isn't wired to BottomNav. Standard iOS pattern. **Fix:** Wire BottomNav active-tab tap to scroll to top.
+
+- [ ] **Very long meal names can overflow** — MealCard uses `truncate` but no `line-clamp`. Multi-word names may clip awkwardly. **Fix:** Use `line-clamp-2`.
+
+- [ ] **No timezone awareness** — Dates use local `new Date().toISOString().split('T')[0]`. Crossing midnight or changing timezone can cause date misalignment. **Fix:** Store timezone in profile, use consistently.
+
+- [ ] **Crash recovery UI is too technical** — ErrorBoundary shows raw error details. **Fix:** Show user-friendly copy with "Try Again" and "Contact Support" options; hide tech details behind a `<details>` toggle.
+
+- [ ] **Token refresh race condition** — `UserContext.tsx`: Multiple concurrent requests can trigger simultaneous `refreshSession()` calls. **Need:** Refresh lock/mutex.
+
+- [ ] **ESLint config too permissive** — `@typescript-eslint/no-unused-vars: "off"` — dead code not flagged. 10+ `eslint-disable` comments scattered through components.
+
+- [ ] **Dependency updates** — 29 packages outdated (React 18→19, supabase-js 2.85→2.98, etc.). Image asset `wizard-logo.png` (432 KB) should be SVG/WebP.
+
+- [ ] **Incomplete features** — Onboarding missing welcome screen; Goals has no progress tracking/milestones; Dashboard has no CTAs for inactive users; Hydration has no intake tracking vs plan; Fight Week has no day-by-day checklist.
+
+- [ ] **API resilience** — No fallback if Grok API is down (11+ functions affected). No circuit breaker pattern, no retry with backoff. `food-search` has in-memory cache only (lost on function restart).
 
 ---
 
-## COMPLIANCE CHECKLIST (Required for payments)
+## DONE (resolved)
+
+- [x] **Error monitoring** — Sentry integration added (client + edge functions).
+- [x] **Testing setup** — vitest configured, critical path tests added.
+- [x] **Security — auth on scan-barcode, transcribe-audio, food-search** — `supabase.auth.getUser()` checks added.
+- [x] **Critical dependency vulnerability** — `xlsx` replaced/removed; `npm audit fix` run.
+- [x] **Debug code removed** — `src/debug-meal-api.tsx` deleted; console.logs cleaned up.
+- [x] **TypeScript strict mode** — `strict: true` enabled incrementally.
+- [x] **Empty states** — Added to data-driven pages.
+- [x] **Loading state consistency** — Skeleton loaders added for Nutrition, Goals, Hydration.
+
+---
+
+## COMPLIANCE CHECKLIST (Required for App Store / payments)
 
 - [ ] Privacy policy published and linked in app
 - [ ] Terms of service published and linked in app
@@ -216,33 +139,3 @@ DONE ## 2.4 Loading State Inconsistency
 - [ ] Tax handling configured (Stripe Tax or manual)
 - [ ] Cookie/tracking consent (if applicable)
 - [ ] Incident response plan documented
-
----
-
-## ESTIMATED EFFORT
-
-| Phase | Items | Effort |
-|-------|-------|--------|
-| Phase 1 (Blocking) | 8 items | 3-4 weeks |
-| Phase 2 (High) | 10 items | 2-3 weeks |
-| Phase 3 (Medium) | 8 items | 2 weeks |
-| Phase 4 (Polish) | 5 items | Ongoing |
-| **Total to launch** | **~26 items** | **7-9 weeks** |
-
----
-
-## FILES REQUIRING MOST WORK
-
-| File | Issues |
-|------|--------|
-| `src/pages/Nutrition.tsx` (3,878 lines) | Decompose, remove console.logs, add empty states, add skeletons |
-| `src/pages/Hydration.tsx` (1,206 lines) | Decompose, add skeleton loader |
-| `src/pages/WeightTracker.tsx` (1,414 lines) | Decompose, remove console.logs |
-| `supabase/functions/_shared/cors.ts` | Dynamic CORS for production |
-| `supabase/functions/scan-barcode/index.ts` | Add auth verification |
-| `supabase/functions/transcribe-audio/index.ts` | Add auth, fix API key in URL |
-| `supabase/functions/meal-planner/index.ts` | Fix HTTP 200 error responses, add validation |
-| `src/integrations/supabase/client.ts` | Secure storage for iOS |
-| `vite.config.ts` | Disable sourcemaps, optimize chunks |
-| `tsconfig.json` | Enable strict mode |
-| `src/debug-meal-api.tsx` | DELETE entirely |

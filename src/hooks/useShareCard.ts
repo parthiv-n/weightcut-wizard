@@ -8,11 +8,11 @@ export function useShareCard() {
   const [isCapturing, setIsCapturing] = useState(false);
   const { toast } = useToast();
 
-  const captureAndDownload = useCallback(async (filename?: string) => {
+  const captureAndDownload = useCallback(async (filename?: string, transparent?: boolean) => {
     if (!cardRef.current) return;
     setIsCapturing(true);
     try {
-      const blob = await captureCardAsBlob(cardRef.current);
+      const blob = await captureCardAsBlob(cardRef.current, { transparent });
       downloadCardImage(blob, filename ?? `weightcut-wizard-${Date.now()}.png`);
       toast({ title: "Image saved" });
     } catch (e) {
@@ -23,11 +23,11 @@ export function useShareCard() {
     }
   }, [toast]);
 
-  const captureAndShare = useCallback(async (title?: string, text?: string) => {
+  const captureAndShare = useCallback(async (title?: string, text?: string, transparent?: boolean) => {
     if (!cardRef.current) return;
     setIsCapturing(true);
     try {
-      const blob = await captureCardAsBlob(cardRef.current);
+      const blob = await captureCardAsBlob(cardRef.current, { transparent });
       await shareCardImage(
         blob,
         title ?? "WeightCut Wizard",

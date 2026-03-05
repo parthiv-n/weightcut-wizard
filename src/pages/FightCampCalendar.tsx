@@ -23,6 +23,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { logger } from "@/lib/logger";
 import { getUserColors, setUserColor, getSessionColor, COLOR_PALETTE } from "@/lib/sessionColors";
 import { Check } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton-loader";
 
 // Type definitions for fight_camp_calendar table
 type FightCampCalendarInsert = {
@@ -88,6 +89,7 @@ export default function FightCampCalendar() {
     // Share state
     const [shareOpen, setShareOpen] = useState(false);
     const [shareTimeRange, setShareTimeRange] = useState<"day" | "week" | "month">("week");
+    const [cardVariant, setCardVariant] = useState<"dark" | "transparent">("dark");
     // Custom session colors
     const [customColors, setCustomColors] = useState<Record<string, string>>({});
 
@@ -606,7 +608,27 @@ export default function FightCampCalendar() {
 
                     <div className="space-y-3">
                         {isLoading ? (
-                            <div className="text-center py-8 text-muted-foreground">Loading...</div>
+                            <div className="flex flex-col gap-3">
+                                {[1, 2, 3].map(i => (
+                                    <Card key={i} className="p-4 rounded-[20px] glass-card overflow-hidden relative border-border/10">
+                                        <Skeleton className="w-2 h-full absolute left-0 top-0 rounded-l-[20px]" />
+                                        <div className="ml-2 space-y-3">
+                                            <div className="flex justify-between items-center">
+                                                <div className="flex items-center gap-2">
+                                                    <Skeleton className="w-5 h-5 rounded-full" />
+                                                    <Skeleton className="h-4 w-24" />
+                                                </div>
+                                                <Skeleton className="h-4 w-4 rounded" />
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <Skeleton className="h-6 w-16 rounded-full" />
+                                                <Skeleton className="h-6 w-14 rounded-full" />
+                                                <Skeleton className="h-6 w-20 rounded-full" />
+                                            </div>
+                                        </div>
+                                    </Card>
+                                ))}
+                            </div>
                         ) : sessionsForSelectedDate.length === 0 ? (
                             <Card className="p-8 rounded-[20px] glass-card border-dashed flex flex-col items-center justify-center text-foreground/70">
                                 <p>No sessions logged today.</p>
@@ -719,12 +741,13 @@ export default function FightCampCalendar() {
             {/* Share dialog with time range */}
             <ShareCardDialog
                 open={shareOpen}
-                onOpenChange={setShareOpen}
+                onOpenChange={(v) => { setShareOpen(v); if (v) setCardVariant("dark"); }}
+                transparent={cardVariant === "transparent"}
                 title="Share Training Log"
                 shareTitle="Training Log"
                 shareText="Check out my training log on WeightCut Wizard"
             >
-                {({ cardRef, aspect }) => {
+                {({ cardRef, aspect, transparent }) => {
                     // Filter sessions by share time range
                     const now = new Date();
                     let filtered = [...sessions, ...sessions28d];
@@ -751,8 +774,18 @@ export default function FightCampCalendar() {
                         filtered = filtered.filter((s) => s.date >= cutoffStr);
                     }
 
+                    let touchStartX = 0;
+
                     return (
-                        <div>
+                        <div
+                            onTouchStart={(e) => { touchStartX = e.touches[0].clientX; }}
+                            onTouchEnd={(e) => {
+                                const delta = e.changedTouches[0].clientX - touchStartX;
+                                if (Math.abs(delta) > 40) {
+                                    setCardVariant((v) => v === "dark" ? "transparent" : "dark");
+                                }
+                            }}
+                        >
                             {/* Time range pills inside the share dialog */}
                             <div style={{
                                 position: "absolute",
@@ -788,7 +821,66 @@ export default function FightCampCalendar() {
                                 timeRange={shareTimeRange}
                                 aspect={aspect}
                                 customColors={customColors}
+                                transparent={transparent}
                             />
+                            {/* Variant mode toggle labels */}
+                            <div style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                gap: 10,
+                                marginTop: 10,
+                            }}>
+                                <button
+                                    onClick={() => setCardVariant("dark")}
+                                    style={{
+                                        background: "none",
+                                        border: "none",
+                                        padding: 0,
+                                        cursor: "pointer",
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        color: cardVariant === "dark" ? "#ffffff" : "rgba(255,255,255,0.35)",
+                                        transition: "color 0.2s",
+                                    }}
+                                >
+                                    Dark
+                                </button>
+                                <div style={{ display: "flex", gap: 6 }}>
+                                    {(["dark", "transparent"] as const).map((v) => (
+                                        <button
+                                            key={v}
+                                            onClick={() => setCardVariant(v)}
+                                            aria-label={`${v} style`}
+                                            style={{
+                                                width: 8,
+                                                height: 8,
+                                                borderRadius: 4,
+                                                border: "none",
+                                                padding: 0,
+                                                cursor: "pointer",
+                                                background: cardVariant === v ? "#ffffff" : "rgba(255,255,255,0.3)",
+                                                transition: "background 0.2s",
+                                            }}
+                                        />
+                                    ))}
+                                </div>
+                                <button
+                                    onClick={() => setCardVariant("transparent")}
+                                    style={{
+                                        background: "none",
+                                        border: "none",
+                                        padding: 0,
+                                        cursor: "pointer",
+                                        fontSize: 12,
+                                        fontWeight: 600,
+                                        color: cardVariant === "transparent" ? "#ffffff" : "rgba(255,255,255,0.35)",
+                                        transition: "color 0.2s",
+                                    }}
+                                >
+                                    Transparent
+                                </button>
+                            </div>
                         </div>
                     );
                 }}
