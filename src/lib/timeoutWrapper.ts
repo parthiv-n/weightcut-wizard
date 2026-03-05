@@ -55,7 +55,7 @@ export function createAIAbortController(): {
   cleanup: () => void;
 } {
   const controller = new AbortController();
-  const cleanup = () => {}; // No auto-timeout; user cancels manually
+  const cleanup = () => {};
 
   return { controller, cleanup };
 }

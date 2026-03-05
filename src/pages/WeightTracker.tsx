@@ -117,6 +117,15 @@ export default function WeightTracker() {
     if (stored !== null) setShowProjected(JSON.parse(stored));
   }, [userId]);
 
+  // Warmup ping — pre-warm edge function to avoid cold start on first AI call
+  useEffect(() => {
+    if (!userId) return;
+    const timer = setTimeout(() => {
+      supabase.functions.invoke("weight-tracker-analysis", { method: "GET" } as any).catch(() => {});
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [userId]);
+
   const loadPersistedAnalysis = () => {
     if (!userId) return;
 
@@ -351,27 +360,9 @@ export default function WeightTracker() {
     setAnalyzingWeight(true);
 
     try {
-      // Fetch fresh weight from database to ensure we have the latest
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setAnalyzingWeight(false);
-        cleanup();
-        return;
-      }
-
-      const { data: latestWeightLog } = await supabase
-        .from("weight_logs")
-        .select("weight_kg, date")
-        .eq("user_id", user.id)
-        .order("date", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (controller.signal.aborted) return;
-
-      // Use latest weight log if available, otherwise use profile weight
-      const currentWeight = latestWeightLog?.weight_kg || profile.current_weight_kg;
-      const currentWeightSource = latestWeightLog?.weight_kg ? "weight_logs (latest log)" : "profile.current_weight_kg";
+      // Use profile weight directly — kept current by updateCurrentWeight()
+      const currentWeight = profile.current_weight_kg;
+      const currentWeightSource = "profile.current_weight_kg";
 
       // Show medical warning for aggressive goals (>1.5kg/week) but always proceed with analysis
       if (isGoalUnrealistic(currentWeight, fightWeekTarget, profile.target_date)) {
@@ -406,10 +397,6 @@ export default function WeightTracker() {
         parsedResponse: data?.analysis || null,
         currentWeightSource,
         currentWeightValue: currentWeight,
-        latestWeightLog: latestWeightLog ? {
-          weight_kg: latestWeightLog.weight_kg,
-          date: latestWeightLog.date || "N/A"
-        } : null,
         profileData: {
           current_weight_kg: profile.current_weight_kg,
           goal_weight_kg: profile.goal_weight_kg,

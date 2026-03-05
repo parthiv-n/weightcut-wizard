@@ -107,5 +107,9 @@ export class AIPersistence {
   }
 }
 
-// Cleanup expired items on page load
-AIPersistence.cleanup();
+// Cleanup expired items — deferred to avoid blocking page load
+if (typeof requestIdleCallback !== 'undefined') {
+  requestIdleCallback(() => AIPersistence.cleanup());
+} else {
+  setTimeout(() => AIPersistence.cleanup(), 5000);
+}

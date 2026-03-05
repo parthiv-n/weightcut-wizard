@@ -241,6 +241,15 @@ export default function Hydration() {
     loadPersistedProtocol();
   }, [userId]);
 
+  // Warmup ping — pre-warm edge function to avoid cold start
+  useEffect(() => {
+    if (!userId) return;
+    const timer = setTimeout(() => {
+      supabase.functions.invoke("rehydration-protocol", { method: "GET" } as any).catch(() => {});
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [userId]);
+
   const loadPersistedProtocol = () => {
     if (!userId || protocol) return;
     try {

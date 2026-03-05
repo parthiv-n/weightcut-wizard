@@ -52,7 +52,7 @@ export function AIGeneratingOverlay({
         if (cancelTimerRef.current) clearTimeout(cancelTimerRef.current);
 
         if (isOpen && isGenerating) {
-            cancelTimerRef.current = setTimeout(() => setShowCancel(true), 5000);
+            cancelTimerRef.current = setTimeout(() => setShowCancel(true), 3000);
         } else {
             setShowCancel(false);
         }
@@ -80,7 +80,7 @@ export function AIGeneratingOverlay({
                 }
                 return prev;
             });
-        }, 2000); // Advance every 2 seconds roughly
+        }, 1200); // Advance every 1.2 seconds
 
         return () => clearInterval(interval);
     }, [isOpen, isGenerating, steps.length]);
