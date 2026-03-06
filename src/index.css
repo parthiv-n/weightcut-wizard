@@ -83,7 +83,7 @@ All colors MUST be HSL.
 
     /* Neutral muted tones */
     --muted: 220 10% 13%;
-    --muted-foreground: 220 15% 65%;
+    --muted-foreground: 220 15% 75%;
 
     /* Blue-500 Accent */
     --accent: 217 91% 60%;

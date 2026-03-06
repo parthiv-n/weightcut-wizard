@@ -25,29 +25,10 @@ import { getUserColors, setUserColor, getSessionColor, COLOR_PALETTE } from "@/l
 import { Check } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton-loader";
 
-// Type definitions for fight_camp_calendar table
-type FightCampCalendarInsert = {
-    date: string;
-    session_type: string;
-    duration_minutes: number;
-    rpe: number;
-    intensity: string;
-    intensity_level: number;
-    soreness_level: number;
-    sleep_hours: number;
-    user_id: string;
-    notes?: string | null;
-    // Rest day fields
-    fatigue_level?: number | null;
-    sleep_quality?: string | null;
-    mobility_done?: boolean | null;
-};
+import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 
-type FightCampCalendarRow = FightCampCalendarInsert & {
-    id: string;
-    created_at: string;
-    notes?: string | null;
-};
+type FightCampCalendarRow = Tables<"fight_camp_calendar">;
+type FightCampCalendarInsert = TablesInsert<"fight_camp_calendar">;
 
 const SESSION_TYPES = [
     "BJJ", "Muay Thai", "Boxing", "Wrestling", "Sparring", "Strength", "Conditioning", "Run", "Recovery", "Rest", "Other"
@@ -100,8 +81,7 @@ export default function FightCampCalendar() {
 
         setIsLoading(true);
         try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { data, error } = await (supabase as any)
+            const { data, error } = await supabase
                 .from('fight_camp_calendar')
                 .select('*')
                 .eq('user_id', userId)
@@ -109,7 +89,7 @@ export default function FightCampCalendar() {
                 .lte('date', format(endOfMonth(currentDate), "yyyy-MM-dd"));
 
             if (error) throw error;
-            setSessions((data as FightCampCalendarRow[]) || []);
+            setSessions(data || []);
         } catch (error) {
             logger.error("Error fetching sessions", error);
             toast({
@@ -127,8 +107,7 @@ export default function FightCampCalendar() {
         try {
             const from = format(subDays(new Date(), 28), "yyyy-MM-dd");
             const to = format(new Date(), "yyyy-MM-dd");
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { data, error } = await (supabase as any)
+            const { data, error } = await supabase
                 .from('fight_camp_calendar')
                 .select('*')
                 .eq('user_id', userId)
@@ -136,7 +115,7 @@ export default function FightCampCalendar() {
                 .lte('date', to);
 
             if (error) throw error;
-            setSessions28d((data as FightCampCalendarRow[]) || []);
+            setSessions28d(data || []);
         } catch (error) {
             logger.error("Error fetching 28-day sessions", error);
         }
@@ -226,16 +205,14 @@ export default function FightCampCalendar() {
             };
 
             if (editingSession) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const { error } = await (supabase as any)
+                const { error } = await supabase
                     .from('fight_camp_calendar')
                     .update(payload)
                     .eq('id', editingSession.id);
 
                 if (error) throw error;
             } else {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const { error } = await (supabase as any)
+                const { error } = await supabase
                     .from('fight_camp_calendar')
                     .insert([payload]);
 
@@ -271,8 +248,7 @@ export default function FightCampCalendar() {
 
     const handleDeleteSession = async (id: string) => {
         try {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const { error } = await (supabase as any)
+            const { error } = await supabase
                 .from('fight_camp_calendar')
                 .delete()
                 .eq('id', id);
@@ -326,10 +302,10 @@ export default function FightCampCalendar() {
                         <h2 className="text-xl font-bold">{format(currentDate, "MMMM yyyy")}</h2>
                         <div className="flex items-center gap-1">
                             {sessions.length > 0 && <ShareButton onClick={() => setShareOpen(true)} />}
-                            <Button variant="ghost" size="icon" onClick={prevMonth} className="rounded-full h-8 w-8">
+                            <Button variant="ghost" size="icon" onClick={prevMonth} aria-label="Previous month" className="rounded-full h-8 w-8">
                                 <ChevronLeft className="h-5 w-5" />
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={nextMonth} className="rounded-full h-8 w-8">
+                            <Button variant="ghost" size="icon" onClick={nextMonth} aria-label="Next month" className="rounded-full h-8 w-8">
                                 <ChevronRight className="h-5 w-5" />
                             </Button>
                         </div>

@@ -514,7 +514,7 @@ Return ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific
     if (isQuickAddSheetOpen && quickAddTab === "ai" && userId) {
       supabase.functions.invoke("analyze-meal", { method: "GET" } as any).catch(() => { });
     }
-  }, [isQuickAddSheetOpen, quickAddTab]);
+  }, [isQuickAddSheetOpen, quickAddTab, userId]);
 
   // Warmup analyse-diet edge function on mount
   useEffect(() => {

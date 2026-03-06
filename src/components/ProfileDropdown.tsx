@@ -135,6 +135,17 @@ export function ProfileDropdown() {
               />
             </div>
           </div>
+          {/* TODO: Replace placeholder URLs with real privacy policy and terms of service URLs before App Store submission */}
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground/70">Legal</span>
+            <a href="#privacy-policy" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">
+              Privacy Policy
+            </a>
+            <span>·</span>
+            <a href="#terms-of-service" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">
+              Terms of Service
+            </a>
+          </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setIsProfileOpen(false)}>
               Cancel

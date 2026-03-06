@@ -20,6 +20,7 @@ import * as Sentry from "@sentry/react";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { DashboardSkeleton, NutritionPageSkeleton, HydrationSkeleton, GoalsSkeleton } from "@/components/ui/skeleton-loader";
 import { RefreshCw } from "lucide-react";
+import { OfflineBanner } from "@/components/OfflineBanner";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Onboarding from "./pages/Onboarding";
@@ -141,6 +142,7 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
             <SidebarTrigger className="touch-target" />
             <ThemeToggle className="touch-target" />
           </header>
+          <OfflineBanner />
           {/* Main content with mobile-first responsive padding - bottom padding for bottom nav */}
           <main className="flex-1 overflow-auto overflow-x-hidden relative min-h-0 w-full pt-2 pb-24 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right">
             {/* Manual refresh button — top-left, below iOS safe area */}

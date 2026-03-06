@@ -167,7 +167,7 @@ export default function FightCampDetail() {
 
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/fight-camps")} className="h-9 w-9 rounded-full bg-muted hover:bg-muted/80 border border-border/50 shrink-0">
+        <Button variant="ghost" size="icon" onClick={() => navigate("/fight-camps")} aria-label="Back to fight camps" className="h-9 w-9 rounded-full bg-muted hover:bg-muted/80 border border-border/50 shrink-0">
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div className="min-w-0 flex-1">
@@ -177,7 +177,7 @@ export default function FightCampDetail() {
             {format(new Date(camp.fight_date), "MMM dd, yyyy")}
           </p>
         </div>
-        <Button variant="ghost" size="icon" onClick={() => setShareOpen(true)} className="h-9 w-9 rounded-full bg-muted hover:bg-muted/80 border border-border/50 shrink-0">
+        <Button variant="ghost" size="icon" onClick={() => setShareOpen(true)} aria-label="Share camp" className="h-9 w-9 rounded-full bg-muted hover:bg-muted/80 border border-border/50 shrink-0">
           <Share2 className="w-4 h-4" />
         </Button>
       </div>

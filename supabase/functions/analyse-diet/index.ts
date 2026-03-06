@@ -142,6 +142,11 @@ Athlete profile: ${profile?.age || "?"} years, ${profile?.sex || "?"}, ${profile
     const data = await response.json();
     edgeLogger.info("Grok diet analysis response received");
 
+    const finishReason = data.choices?.[0]?.finish_reason;
+    if (finishReason === 'length') {
+      edgeLogger.warn("Grok response truncated", { functionName: "analyse-diet", finishReason });
+    }
+
     const { content, filtered } = extractContent(data);
     if (!content) {
       if (filtered) throw new Error("Content was filtered for safety.");

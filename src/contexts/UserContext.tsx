@@ -152,6 +152,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
       );
 
       if (data) {
+        // Stale-call guard: if userId changed during the async query, discard result
+        if (userIdRef.current !== uid) {
+          logger.warn("refreshProfile: userId changed during fetch, discarding stale result");
+          return false;
+        }
         const changed = JSON.stringify(data) !== JSON.stringify(profileRef.current);
         if (changed) {
           // Invalidate AI caches if AI-relevant profile fields changed

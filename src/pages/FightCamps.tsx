@@ -193,6 +193,7 @@ export default function FightCamps() {
               <Button
                 size="icon"
                 variant={compareMode ? "default" : "ghost"}
+                aria-label={compareMode ? "Exit compare mode" : "Compare camps"}
                 onClick={() => {
                   setCompareMode(!compareMode);
                   setSelectedCamps([]);
@@ -204,7 +205,7 @@ export default function FightCamps() {
             )}
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button size="icon" className="rounded-full h-9 w-9 bg-muted hover:bg-muted/80 text-foreground border border-border/50">
+              <Button size="icon" aria-label="New fight camp" className="rounded-full h-9 w-9 bg-muted hover:bg-muted/80 text-foreground border border-border/50">
                 <Plus className="h-4 w-4" />
               </Button>
             </DialogTrigger>
@@ -346,6 +347,7 @@ export default function FightCamps() {
                     e.stopPropagation();
                     initiateDelete(camp);
                   }}
+                  aria-label="Delete camp"
                   className="absolute top-3 right-3 h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-muted/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
