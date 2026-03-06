@@ -1,38 +1,30 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, subMonths, addMonths, subDays } from "date-fns";
-import { ChevronLeft, ChevronRight, Plus, Activity, Moon, Ruler, Trash2, CircleX } from "lucide-react";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, subMonths, addMonths, subDays } from "date-fns";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useUser } from "@/contexts/UserContext";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
-import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { RecoveryDashboard } from "@/components/fightcamp/RecoveryDashboard";
 import { TrainingSummarySection } from "@/components/fightcamp/TrainingSummarySection";
+import { CalendarMonthGrid } from "@/components/fightcamp/CalendarMonthGrid";
+import { SessionCard } from "@/components/fightcamp/SessionCard";
+import { FightCampLogForm, SESSION_TYPES } from "@/components/fightcamp/FightCampLogForm";
 import { triggerHapticSelection } from "@/lib/haptics";
 import { ShareButton } from "@/components/share/ShareButton";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { FightCampCalendarCard } from "@/components/share/cards/FightCampCalendarCard";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { logger } from "@/lib/logger";
-import { getUserColors, setUserColor, getSessionColor, COLOR_PALETTE } from "@/lib/sessionColors";
-import { Check } from "lucide-react";
+import { getUserColors, setUserColor } from "@/lib/sessionColors";
 import { Skeleton } from "@/components/ui/skeleton-loader";
 
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 
 type FightCampCalendarRow = Tables<"fight_camp_calendar">;
 type FightCampCalendarInsert = TablesInsert<"fight_camp_calendar">;
-
-const SESSION_TYPES = [
-    "BJJ", "Muay Thai", "Boxing", "Wrestling", "Sparring", "Strength", "Conditioning", "Run", "Recovery", "Rest", "Other"
-];
 
 export default function FightCampCalendar() {
     const { userId, profile } = useUser();
@@ -60,7 +52,6 @@ export default function FightCampCalendar() {
     const [sorenessLevel, setSorenessLevel] = useState([5]);
     const [sleepHours, setSleepHours] = useState("8");
     const [notes, setNotes] = useState("");
-    // Rest day form state
     const [fatigue, setFatigue] = useState([5]);
     const [sleepQuality, setSleepQuality] = useState<'good' | 'poor'>('good');
     const [mobilityDone, setMobilityDone] = useState(false);
@@ -121,18 +112,9 @@ export default function FightCampCalendar() {
         }
     }, [userId]);
 
-    useEffect(() => {
-        fetchSessions();
-    }, [fetchSessions]);
-
-    useEffect(() => {
-        fetch28DaySessions();
-    }, [fetch28DaySessions]);
-
-    // Load custom session colors from localStorage
-    useEffect(() => {
-        if (userId) setCustomColors(getUserColors(userId));
-    }, [userId]);
+    useEffect(() => { fetchSessions(); }, [fetchSessions]);
+    useEffect(() => { fetch28DaySessions(); }, [fetch28DaySessions]);
+    useEffect(() => { if (userId) setCustomColors(getUserColors(userId)); }, [userId]);
 
     // Auto-open Log Session dialog when navigated from Quick Log
     useEffect(() => {
@@ -198,7 +180,6 @@ export default function FightCampCalendar() {
                 soreness_level: hasSoreness ? sorenessLevel[0] : 0,
                 sleep_hours: parseFloat(sleepHours) || 0,
                 notes: isRestDay ? null : (notes.trim() || null),
-                // Rest day fields
                 fatigue_level: isRestDay ? fatigue[0] : null,
                 sleep_quality: isRestDay ? sleepQuality : null,
                 mobility_done: isRestDay ? mobilityDone : null,
@@ -209,13 +190,11 @@ export default function FightCampCalendar() {
                     .from('fight_camp_calendar')
                     .update(payload)
                     .eq('id', editingSession.id);
-
                 if (error) throw error;
             } else {
                 const { error } = await supabase
                     .from('fight_camp_calendar')
                     .insert([payload]);
-
                 if (error) throw error;
             }
 
@@ -235,7 +214,6 @@ export default function FightCampCalendar() {
             fetch28DaySessions();
             setSessionLoggedTrigger(prev => prev + 1);
             resetForm();
-
         } catch (error) {
             logger.error("Error saving session", error);
             toast({
@@ -252,15 +230,9 @@ export default function FightCampCalendar() {
                 .from('fight_camp_calendar')
                 .delete()
                 .eq('id', id);
-
             if (error) throw error;
 
-            toast({
-                title: "Session Deleted",
-                description: "Your training session has been removed.",
-            });
-
-            // Optimistic update
+            toast({ title: "Session Deleted", description: "Your training session has been removed." });
             setSessions(sessions.filter(s => s.id !== id));
             fetch28DaySessions();
         } catch (error) {
@@ -271,6 +243,12 @@ export default function FightCampCalendar() {
                 variant: "destructive"
             });
         }
+    };
+
+    const handleColorChange = (sessionType: string, color: string) => {
+        if (!userId) return;
+        setUserColor(userId, sessionType, color);
+        setCustomColors(prev => ({ ...prev, [sessionType]: color }));
     };
 
     const daysInMonth = eachDayOfInterval({
@@ -311,39 +289,12 @@ export default function FightCampCalendar() {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-7 gap-1 text-center mb-2">
-                        {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-                            <div key={i} className="text-xs font-semibold text-muted-foreground">{day}</div>
-                        ))}
-                    </div>
-
-                    <div className="grid grid-cols-7 gap-1">
-                        {daysInMonth.map((day, i) => {
-                            const dateStr = format(day, 'yyyy-MM-dd');
-                            const hasSession = sessions.some(s => s.date === dateStr);
-                            const isSelected = isSameDay(day, selectedDate);
-                            const isToday = isSameDay(day, new Date());
-
-                            return (
-                                <div
-                                    key={day.toISOString()}
-                                    className="aspect-square flex flex-col items-center justify-center relative touch-target"
-                                    onClick={() => { setSelectedDate(day); triggerHapticSelection(); }}
-                                >
-                                    <div className={`
-                    w-8 h-8 flex items-center justify-center rounded-full text-sm font-medium transition-all
-                    ${isSelected ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'}
-                    ${isToday && !isSelected ? 'text-primary font-bold' : ''}
-                  `}>
-                                        {format(day, 'd')}
-                                    </div>
-                                    {hasSession && (
-                                        <div className="absolute bottom-1 w-1 h-1 rounded-full bg-primary drop-shadow-sm" />
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
+                    <CalendarMonthGrid
+                        daysInMonth={daysInMonth}
+                        selectedDate={selectedDate}
+                        sessions={sessions}
+                        onSelectDate={setSelectedDate}
+                    />
                 </Card>
 
                 {/* Selected Date Details */}
@@ -365,219 +316,22 @@ export default function FightCampCalendar() {
                                         {editingSession ? 'Edit Session' : 'Log Session'}
                                     </DialogTitle>
                                 </DialogHeader>
-                                <div className="grid gap-4 py-3">
-
-                                    {/* Session Type — pill chips */}
-                                    <div className="space-y-2">
-                                        <Label className="text-sm font-semibold text-muted-foreground">SESSION TYPE</Label>
-                                        <div className="flex flex-wrap gap-2">
-                                            {SESSION_TYPES.map(type => (
-                                                <button
-                                                    key={type}
-                                                    onClick={() => setSessionType(type)}
-                                                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all
-                                                        ${sessionType === type
-                                                            ? 'bg-primary text-primary-foreground shadow-sm'
-                                                            : 'bg-accent/40 text-foreground/70 hover:bg-accent/60'}`}
-                                                >
-                                                    {type}
-                                                </button>
-                                            ))}
-                                        </div>
-                                        {sessionType === 'Other' && (
-                                            <Input
-                                                placeholder="e.g. Swimming, Yoga, MMA..."
-                                                value={customType}
-                                                onChange={(e) => setCustomType(e.target.value)}
-                                                className="mt-2 rounded-xl"
-                                                autoFocus
-                                            />
-                                        )}
-                                    </div>
-
-                                    {!isRestDay && (
-                                        <>
-                                            {/* Duration — compact stepper */}
-                                            <div className="flex items-center justify-between bg-accent/20 px-4 py-3 rounded-2xl border border-border/50">
-                                                <Label className="text-sm font-semibold text-muted-foreground">DURATION</Label>
-                                                <div className="flex items-center gap-3">
-                                                    <button onClick={() => setDuration(String(Math.max(0, parseInt(duration) - 5)))}
-                                                        className="h-7 w-7 rounded-full border border-border flex items-center justify-center text-base font-medium hover:bg-muted transition-colors">
-                                                        −
-                                                    </button>
-                                                    <span className="text-xl font-bold display-number w-12 text-center">{duration}<span className="text-xs text-muted-foreground ml-0.5">m</span></span>
-                                                    <button onClick={() => setDuration(String(parseInt(duration) + 5))}
-                                                        className="h-7 w-7 rounded-full border border-border flex items-center justify-center text-base font-medium hover:bg-muted transition-colors">
-                                                        +
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            {/* Intensity — 1-5 slider */}
-                                            <div className="space-y-2 bg-accent/30 p-3 rounded-2xl">
-                                                <div className="flex justify-between items-center">
-                                                    <Label className="text-sm font-semibold flex items-center gap-1">
-                                                        <Ruler className="h-4 w-4 text-primary" /> INTENSITY
-                                                    </Label>
-                                                    <span className="font-bold text-lg">{intensityLevel[0]}</span>
-                                                </div>
-                                                <Slider
-                                                    value={intensityLevel}
-                                                    onValueChange={setIntensityLevel}
-                                                    max={5}
-                                                    min={1}
-                                                    step={1}
-                                                    className="py-2"
-                                                />
-                                                <div className="flex justify-between text-xs text-muted-foreground font-medium">
-                                                    <span>1 (Easy)</span>
-                                                    <span>3 (Mod)</span>
-                                                    <span>5 (Max)</span>
-                                                </div>
-                                            </div>
-
-                                            {/* RPE */}
-                                            <div className="space-y-2 bg-accent/30 p-3 rounded-2xl">
-                                                <div className="flex justify-between items-center">
-                                                    <Label className="text-sm font-semibold flex items-center gap-1">
-                                                        <Activity className="h-4 w-4 text-primary" /> RPE
-                                                    </Label>
-                                                    <span className="font-bold text-lg">{rpe[0]}</span>
-                                                </div>
-                                                <Slider
-                                                    value={rpe}
-                                                    onValueChange={setRpe}
-                                                    max={10}
-                                                    min={1}
-                                                    step={1}
-                                                    className="py-2"
-                                                />
-                                                <div className="flex justify-between text-xs text-muted-foreground font-medium">
-                                                    <span>1 (Light)</span>
-                                                    <span>10 (Max)</span>
-                                                </div>
-                                            </div>
-                                        </>
-                                    )}
-
-                                    {/* Soreness — shown for both training and rest days */}
-                                    <div className="space-y-2 bg-accent/30 p-3 rounded-2xl">
-                                        <div className="flex items-center justify-between">
-                                            <Label className="text-sm font-semibold">SORENESS</Label>
-                                            {!isRestDay && <Switch checked={hasSoreness} onCheckedChange={setHasSoreness} />}
-                                        </div>
-
-                                        {(isRestDay || hasSoreness) && (
-                                            <div className="pt-2">
-                                                <div className="flex justify-between items-center mb-2">
-                                                    <span className="text-sm font-medium">Level</span>
-                                                    <span className="font-bold text-lg">{sorenessLevel[0]}</span>
-                                                </div>
-                                                <Slider
-                                                    value={sorenessLevel}
-                                                    onValueChange={setSorenessLevel}
-                                                    max={10}
-                                                    min={1}
-                                                    step={1}
-                                                    className="py-2"
-                                                />
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Rest Day specific fields */}
-                                    {isRestDay && (
-                                        <>
-                                            {/* Fatigue */}
-                                            <div className="space-y-2 bg-accent/30 p-3 rounded-2xl">
-                                                <div className="flex justify-between items-center">
-                                                    <Label className="text-sm font-semibold">FATIGUE</Label>
-                                                    <span className="font-bold text-lg">{fatigue[0]}</span>
-                                                </div>
-                                                <Slider
-                                                    value={fatigue}
-                                                    onValueChange={setFatigue}
-                                                    max={10}
-                                                    min={1}
-                                                    step={1}
-                                                    className="py-2"
-                                                />
-                                                <div className="flex justify-between text-xs text-muted-foreground font-medium">
-                                                    <span>1 (Fresh)</span>
-                                                    <span>10 (Exhausted)</span>
-                                                </div>
-                                            </div>
-
-                                            {/* Sleep Quality */}
-                                            <div className="space-y-2">
-                                                <Label className="text-sm font-semibold text-muted-foreground">SLEEP QUALITY</Label>
-                                                <div className="flex gap-1.5">
-                                                    {(['good', 'poor'] as const).map(quality => (
-                                                        <button
-                                                            key={quality}
-                                                            onClick={() => setSleepQuality(quality)}
-                                                            className={`flex-1 py-2 rounded-full text-sm font-medium capitalize transition-all
-                                                                ${sleepQuality === quality
-                                                                    ? 'bg-primary text-primary-foreground shadow-sm'
-                                                                    : 'bg-accent/40 text-foreground/70 hover:bg-accent/60'}`}
-                                                        >
-                                                            <span className="flex items-center justify-center gap-1.5">
-                                                                {quality === 'good'
-                                                                  ? <Moon className="h-3.5 w-3.5" />
-                                                                  : <CircleX className="h-3.5 w-3.5" />}
-                                                                {quality === 'good' ? 'Good' : 'Poor'}
-                                                            </span>
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </div>
-
-                                            {/* Mobility */}
-                                            <div className="flex items-center justify-between bg-accent/20 px-4 py-3 rounded-2xl border border-border/50">
-                                                <Label className="text-sm font-semibold text-muted-foreground">MOBILITY WORK DONE?</Label>
-                                                <Switch checked={mobilityDone} onCheckedChange={setMobilityDone} />
-                                            </div>
-                                        </>
-                                    )}
-
-                                    {/* Sleep — compact stepper (shown for all) */}
-                                    <div className="flex items-center justify-between bg-accent/20 px-4 py-3 rounded-2xl border border-border/50">
-                                        <Label className="text-sm font-semibold text-muted-foreground flex items-center gap-1">
-                                            <Moon className="h-3.5 w-3.5" /> SLEEP
-                                        </Label>
-                                        <div className="flex items-center gap-3">
-                                            <button onClick={() => setSleepHours(String(Math.max(0, parseFloat(sleepHours) - 0.5)))}
-                                                className="h-7 w-7 rounded-full border border-border flex items-center justify-center text-base font-medium hover:bg-muted transition-colors">
-                                                −
-                                            </button>
-                                            <span className="text-xl font-bold display-number w-12 text-center">{sleepHours}<span className="text-xs text-muted-foreground ml-0.5">h</span></span>
-                                            <button onClick={() => setSleepHours(String(parseFloat(sleepHours) + 0.5))}
-                                                className="h-7 w-7 rounded-full border border-border flex items-center justify-center text-base font-medium hover:bg-muted transition-colors">
-                                                +
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {/* Session Notes — training days only */}
-                                    {!isRestDay && (
-                                        <div className="space-y-2">
-                                            <Label className="text-sm font-semibold text-muted-foreground">SESSION NOTES</Label>
-                                            <Textarea
-                                                value={notes}
-                                                onChange={(e) => setNotes(e.target.value)}
-                                                placeholder="What did you work on? Techniques, drills, combos..."
-                                                className="bg-accent/20 border-border/50 rounded-2xl min-h-[80px] resize-none text-sm"
-                                            />
-                                        </div>
-                                    )}
-
-                                    <Button
-                                        className="w-full h-12 rounded-2xl text-lg font-bold mt-2 shadow-lg"
-                                        onClick={handleSaveSession}
-                                    >
-                                        {editingSession ? 'Update Session' : isRestDay ? 'Log Rest Day' : 'Save Session'}
-                                    </Button>
-                                </div>
+                                <FightCampLogForm
+                                    isEditing={!!editingSession}
+                                    sessionType={sessionType} setSessionType={setSessionType}
+                                    customType={customType} setCustomType={setCustomType}
+                                    duration={duration} setDuration={setDuration}
+                                    rpe={rpe} setRpe={setRpe}
+                                    intensityLevel={intensityLevel} setIntensityLevel={setIntensityLevel}
+                                    hasSoreness={hasSoreness} setHasSoreness={setHasSoreness}
+                                    sorenessLevel={sorenessLevel} setSorenessLevel={setSorenessLevel}
+                                    sleepHours={sleepHours} setSleepHours={setSleepHours}
+                                    notes={notes} setNotes={setNotes}
+                                    fatigue={fatigue} setFatigue={setFatigue}
+                                    sleepQuality={sleepQuality} setSleepQuality={setSleepQuality}
+                                    mobilityDone={mobilityDone} setMobilityDone={setMobilityDone}
+                                    onSave={handleSaveSession}
+                                />
                             </DialogContent>
                         </Dialog>
                     </div>
@@ -610,96 +364,17 @@ export default function FightCampCalendar() {
                                 <p>No sessions logged today.</p>
                             </Card>
                         ) : (
-                            sessionsForSelectedDate.map(session => {
-                                const isRest = session.session_type === 'Rest';
-                                const sessionColor = getSessionColor(session.session_type, customColors);
-
-                                return (
-                                    <Card key={session.id} className="p-4 rounded-[20px] shadow-sm glass-card overflow-hidden relative border-border/10 cursor-pointer active:scale-[0.98] transition-transform" onClick={() => handleEditSession(session)}>
-                                        <div className="absolute top-0 left-0 w-2 h-full" style={{ backgroundColor: sessionColor }} />
-
-                                        <div className="flex justify-between items-start ml-2">
-                                            <div className="flex items-center gap-2">
-                                                <Popover>
-                                                    <PopoverTrigger asChild>
-                                                        <button
-                                                            className="w-5 h-5 rounded-full flex-shrink-0 ring-1 ring-white/20 hover:ring-white/40 transition-all"
-                                                            style={{ backgroundColor: sessionColor }}
-                                                            onClick={(e) => e.stopPropagation()}
-                                                        />
-                                                    </PopoverTrigger>
-                                                    <PopoverContent className="w-auto p-3" side="bottom" align="start" onClick={(e) => e.stopPropagation()}>
-                                                        <div className="grid grid-cols-4 gap-2">
-                                                            {COLOR_PALETTE.map(color => (
-                                                                <button
-                                                                    key={color}
-                                                                    className="w-8 h-8 rounded-full flex items-center justify-center ring-1 ring-white/10 hover:scale-110 transition-transform"
-                                                                    style={{ backgroundColor: color }}
-                                                                    onClick={() => {
-                                                                        if (!userId) return;
-                                                                        setUserColor(userId, session.session_type, color);
-                                                                        setCustomColors(prev => ({ ...prev, [session.session_type]: color }));
-                                                                    }}
-                                                                >
-                                                                    {sessionColor === color && <Check className="w-4 h-4 text-white drop-shadow-md" />}
-                                                                </button>
-                                                            ))}
-                                                        </div>
-                                                    </PopoverContent>
-                                                </Popover>
-                                                <h4 className="font-bold text-lg text-foreground">{session.session_type}</h4>
-                                            </div>
-                                            <div>
-                                                {isRest ? (
-                                                    <div className="flex items-center gap-3 text-sm text-foreground/80 mt-1 font-medium flex-wrap">
-                                                        {session.sleep_quality && <span>Sleep: {session.sleep_quality}</span>}
-                                                        {session.fatigue_level && <><span>•</span><span>Fatigue: {session.fatigue_level}/10</span></>}
-                                                        {session.mobility_done && <><span>•</span><span>Mobility ✓</span></>}
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex items-center gap-3 text-sm text-foreground/80 mt-1 font-medium">
-                                                        <span className="flex items-center gap-1"><Activity className="w-3 h-3" /> {session.duration_minutes} min</span>
-                                                        <span>•</span>
-                                                        <span>RPE {session.rpe}</span>
-                                                        <span>•</span>
-                                                        <span>Int {session.intensity_level ?? (session.intensity === 'high' ? 5 : session.intensity === 'moderate' ? 3 : 1)}/5</span>
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="text-right">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 -mt-1 -mr-2"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        handleDeleteSession(session.id);
-                                                    }}
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
-                                                {session.sleep_hours > 0 && (
-                                                    <div className="text-xs text-foreground/80 flex items-center justify-end gap-1 mt-1 font-medium">
-                                                        <Moon className="w-3 h-3 text-primary" /> {session.sleep_hours}h
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {session.soreness_level > 0 && (
-                                            <div className="mt-3 ml-2 text-xs bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 px-2 py-1 rounded-md inline-block font-medium">
-                                                Soreness Level: {session.soreness_level}/10
-                                            </div>
-                                        )}
-
-                                        {session.notes && (
-                                            <p className="mt-2 ml-2 text-xs text-muted-foreground italic line-clamp-2">
-                                                {session.notes}
-                                            </p>
-                                        )}
-                                    </Card>
-                                );
-                            })
+                            sessionsForSelectedDate.map(session => (
+                                <SessionCard
+                                    key={session.id}
+                                    session={session}
+                                    customColors={customColors}
+                                    userId={userId}
+                                    onEdit={handleEditSession}
+                                    onDelete={handleDeleteSession}
+                                    onColorChange={handleColorChange}
+                                />
+                            ))
                         )}
                     </div>
 
@@ -724,10 +399,8 @@ export default function FightCampCalendar() {
                 shareText="Check out my training log on WeightCut Wizard"
             >
                 {({ cardRef, aspect, transparent }) => {
-                    // Filter sessions by share time range
                     const now = new Date();
                     let filtered = [...sessions, ...sessions28d];
-                    // Deduplicate by id
                     const seen = new Set<string>();
                     filtered = filtered.filter((s) => {
                         if (seen.has(s.id)) return false;
@@ -743,7 +416,6 @@ export default function FightCampCalendar() {
                         const cutoffStr = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, "0")}-${String(cutoff.getDate()).padStart(2, "0")}`;
                         filtered = filtered.filter((s) => s.date >= cutoffStr);
                     } else {
-                        // month: last 35 days
                         const cutoff = new Date(now);
                         cutoff.setDate(cutoff.getDate() - 35);
                         const cutoffStr = `${cutoff.getFullYear()}-${String(cutoff.getMonth() + 1).padStart(2, "0")}-${String(cutoff.getDate()).padStart(2, "0")}`;
@@ -762,7 +434,7 @@ export default function FightCampCalendar() {
                                 }
                             }}
                         >
-                            {/* Time range pills inside the share dialog */}
+                            {/* Time range pills */}
                             <div style={{
                                 position: "absolute",
                                 top: 100,
@@ -799,7 +471,7 @@ export default function FightCampCalendar() {
                                 customColors={customColors}
                                 transparent={transparent}
                             />
-                            {/* Variant mode toggle labels */}
+                            {/* Variant mode toggle */}
                             <div style={{
                                 display: "flex",
                                 alignItems: "center",

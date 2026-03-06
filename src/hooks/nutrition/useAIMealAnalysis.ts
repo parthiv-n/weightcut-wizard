@@ -1,0 +1,480 @@
+import { useState, useRef } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { useUser } from "@/contexts/UserContext";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
+import { AIPersistence } from "@/lib/aiPersistence";
+import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
+import { logger } from "@/lib/logger";
+import type { AiLineItem, Ingredient, ManualMealForm, ManualNutritionDialogState, BarcodeBaseMacros, INITIAL_MANUAL_MEAL, INITIAL_MANUAL_NUTRITION_DIALOG } from "@/pages/nutrition/types";
+
+interface UseAIMealAnalysisParams {
+  manualMeal: ManualMealForm;
+  setManualMeal: React.Dispatch<React.SetStateAction<ManualMealForm>>;
+  saveMealToDb: (mealData: any) => Promise<void>;
+  setIsQuickAddSheetOpen: (open: boolean) => void;
+  setQuickAddTab: (tab: "ai" | "manual") => void;
+}
+
+export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
+  const { manualMeal, setManualMeal, saveMealToDb, setIsQuickAddSheetOpen, setQuickAddTab } = params;
+  const { userId } = useUser();
+  const { toast } = useToast();
+  const { isMounted } = useSafeAsync();
+  const aiAbortRef = useRef<AbortController | null>(null);
+
+  const [aiAnalyzing, setAiAnalyzing] = useState(false);
+  const [aiLineItems, setAiLineItems] = useState<AiLineItem[]>([]);
+  const [aiAnalysisComplete, setAiAnalysisComplete] = useState(false);
+  const [aiMealDescription, setAiMealDescription] = useState("");
+  const [aiIngredientDescription, setAiIngredientDescription] = useState("");
+  const [aiAnalyzingIngredient, setAiAnalyzingIngredient] = useState(false);
+  const [barcodeBaseMacros, setBarcodeBaseMacros] = useState<BarcodeBaseMacros | null>(null);
+  const [servingMultiplier, setServingMultiplier] = useState(1);
+
+  // Ingredient lookup state
+  const [newIngredient, setNewIngredient] = useState({ name: "", grams: "" });
+  const [lookingUpIngredient, setLookingUpIngredient] = useState(false);
+  const [ingredientLookupError, setIngredientLookupError] = useState<string | null>(null);
+  const [manualNutritionDialog, setManualNutritionDialog] = useState<ManualNutritionDialogState>({
+    open: false,
+    ingredientName: "",
+    grams: 0,
+    calories_per_100g: "",
+    protein_per_100g: "",
+    carbs_per_100g: "",
+    fats_per_100g: "",
+  });
+
+  const extractIngredientName = (userInput: string): string => {
+    let cleaned = userInput.trim();
+    cleaned = cleaned.replace(/(\d+(?:\.\d+)?)\s*(g|kg|oz|lb|cup|cups|tbsp|tsp|tablespoon|teaspoon|ml|l|gram|grams|kilogram|kilograms|ounce|ounces|pound|pounds)/gi, "");
+    cleaned = cleaned.replace(/^(one|two|three|four|five|six|seven|eight|nine|ten|\d+|a|an)\s+/i, "");
+    cleaned = cleaned.replace(/^(about|approximately|around|roughly)\s+/i, "");
+    cleaned = cleaned.replace(/\s+/g, " ").trim();
+    cleaned = cleaned.split(" ").map(word =>
+      word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+    ).join(" ");
+    return cleaned || userInput;
+  };
+
+  const handleAiAnalyzeMeal = async () => {
+    if (!aiMealDescription.trim()) {
+      toast({ title: "Missing description", description: "Please describe your meal", variant: "destructive" });
+      return;
+    }
+
+    aiAbortRef.current?.abort();
+    const { controller, cleanup } = createAIAbortController(30000);
+    aiAbortRef.current = controller;
+
+    setAiAnalyzing(true);
+    setAiAnalysisComplete(false);
+    try {
+      const mealCacheKey = `meal_${aiMealDescription.toLowerCase().trim().replace(/\s+/g, '_').slice(0, 60)}`;
+      let nutritionData = userId ? AIPersistence.load(userId, mealCacheKey) : null;
+
+      if (!nutritionData) {
+        const { data, error } = await supabase.functions.invoke("analyze-meal", {
+          body: { mealDescription: aiMealDescription },
+          signal: controller.signal,
+        });
+
+        if (controller.signal.aborted) return;
+        if (error) throw new Error(await extractEdgeFunctionError(error, "Failed to analyze meal"));
+        nutritionData = data.nutritionData;
+        if (userId && nutritionData) {
+          AIPersistence.save(userId, mealCacheKey, nutritionData, 24 * 7);
+        }
+      }
+
+      if (nutritionData.items && Array.isArray(nutritionData.items) && nutritionData.items.length > 0) {
+        setAiLineItems(nutritionData.items.map((item: any) => ({
+          name: item.name,
+          quantity: item.quantity || "",
+          calories: item.calories || 0,
+          protein_g: item.protein_g || 0,
+          carbs_g: item.carbs_g || 0,
+          fats_g: item.fats_g || 0,
+        })));
+      } else {
+        setAiLineItems([{
+          name: nutritionData.meal_name,
+          quantity: nutritionData.portion_size || "1 serving",
+          calories: nutritionData.calories || 0,
+          protein_g: nutritionData.protein_g || 0,
+          carbs_g: nutritionData.carbs_g || 0,
+          fats_g: nutritionData.fats_g || 0,
+        }]);
+      }
+
+      setManualMeal(prev => ({ ...prev, meal_name: nutritionData.meal_name }));
+      setAiAnalysisComplete(true);
+      toast({ title: "Analysis complete!", description: "Review the items below and tap Add Meal" });
+    } catch (error: any) {
+      if (error?.name === 'AbortError' || controller.signal.aborted) return;
+      logger.error("Error analyzing meal", error);
+      toast({ title: "Analysis failed", description: error.message || "Failed to analyze meal", variant: "destructive" });
+    } finally {
+      cleanup();
+      setAiAnalyzing(false);
+    }
+  };
+
+  const handleSaveAiMeal = async () => {
+    if (aiLineItems.length === 0) return;
+
+    const totalCalories = aiLineItems.reduce((s, i) => s + i.calories, 0);
+    const totalProtein = aiLineItems.reduce((s, i) => s + i.protein_g, 0);
+    const totalCarbs = aiLineItems.reduce((s, i) => s + i.carbs_g, 0);
+    const totalFats = aiLineItems.reduce((s, i) => s + i.fats_g, 0);
+
+    const itemBreakdown = aiLineItems
+      .map(i => `${i.quantity} ${i.name} (${i.calories} cal)`)
+      .join(", ");
+
+    const ingredients: Ingredient[] = aiLineItems.map(item => ({
+      name: item.name,
+      grams: 0,
+      calories: Math.round(item.calories),
+      protein_g: Math.round(item.protein_g * 10) / 10,
+      carbs_g: Math.round(item.carbs_g * 10) / 10,
+      fats_g: Math.round(item.fats_g * 10) / 10,
+      quantity: item.quantity,
+    }));
+
+    try {
+      await saveMealToDb({
+        meal_name: manualMeal.meal_name || aiMealDescription,
+        calories: Math.round(totalCalories),
+        protein_g: Math.round(totalProtein * 10) / 10,
+        carbs_g: Math.round(totalCarbs * 10) / 10,
+        fats_g: Math.round(totalFats * 10) / 10,
+        meal_type: manualMeal.meal_type,
+        portion_size: null,
+        recipe_notes: itemBreakdown,
+        ingredients: ingredients,
+        is_ai_generated: true,
+      });
+
+      setIsQuickAddSheetOpen(false);
+      setAiLineItems([]);
+      setAiAnalysisComplete(false);
+      setAiMealDescription("");
+      setManualMeal(prev => ({ ...prev, meal_name: "" }));
+    } catch (error) {
+      logger.error("Error saving AI meal", error);
+      toast({ title: "Error", description: "Failed to add meal", variant: "destructive" });
+    }
+  };
+
+  const handleAiAnalyzeIngredient = async () => {
+    if (!aiIngredientDescription.trim()) {
+      toast({ title: "Input Required", description: "Please describe the ingredient", variant: "destructive" });
+      return;
+    }
+
+    aiAbortRef.current?.abort();
+    const { controller: ingController, cleanup: ingCleanup } = createAIAbortController(30000);
+    aiAbortRef.current = ingController;
+
+    setAiAnalyzingIngredient(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("analyze-meal", {
+        body: { mealDescription: aiIngredientDescription },
+        signal: ingController.signal,
+      });
+
+      if (ingController.signal.aborted) return;
+      if (error) throw new Error(await extractEdgeFunctionError(error, "Failed to analyze ingredient"));
+
+      const { nutritionData } = data;
+
+      let ingredientName = "";
+      let ingredientGrams = 0;
+      let ingredientSource = "";
+      let caloriesPer100g = 0;
+      let proteinPer100g = 0;
+      let carbsPer100g = 0;
+      let fatsPer100g = 0;
+
+      if (nutritionData.ingredients && nutritionData.ingredients.length > 0) {
+        const ingredient = nutritionData.ingredients[0];
+        ingredientName = extractIngredientName(aiIngredientDescription);
+        if (ingredientName.length < 3 || ingredientName.toLowerCase() === aiIngredientDescription.toLowerCase().trim()) {
+          ingredientName = ingredient.name || nutritionData.meal_name;
+        }
+        ingredientGrams = ingredient.grams || 0;
+        ingredientSource = ingredient.source || nutritionData.data_source || "AI Analysis";
+      } else {
+        ingredientName = extractIngredientName(aiIngredientDescription);
+        if (ingredientName.length < 3) {
+          ingredientName = nutritionData.meal_name;
+        }
+        ingredientSource = nutritionData.data_source || "AI Analysis";
+
+        const portionSize = nutritionData.portion_size || "";
+        const gramsMatch = portionSize.match(/(\d+(?:\.\d+)?)\s*g/i);
+        if (gramsMatch) {
+          ingredientGrams = parseFloat(gramsMatch[1]);
+        } else {
+          toast({ title: "Weight Required", description: "Could not determine ingredient weight. Please specify weight (e.g., '250g chicken breast')", variant: "destructive" });
+          return;
+        }
+      }
+
+      if (ingredientGrams <= 0) {
+        toast({ title: "Invalid Weight", description: "Could not determine ingredient weight. Please specify weight (e.g., '250g chicken breast')", variant: "destructive" });
+        return;
+      }
+
+      const mealCalories = nutritionData.calories || 0;
+      const mealProtein = nutritionData.protein_g || 0;
+      const mealCarbs = nutritionData.carbs_g || 0;
+      const mealFats = nutritionData.fats_g || 0;
+
+      caloriesPer100g = (mealCalories / ingredientGrams) * 100;
+      proteinPer100g = (mealProtein / ingredientGrams) * 100;
+      carbsPer100g = (mealCarbs / ingredientGrams) * 100;
+      fatsPer100g = (mealFats / ingredientGrams) * 100;
+
+      const newIngredients = [
+        ...manualMeal.ingredients,
+        {
+          name: ingredientName,
+          grams: ingredientGrams,
+          calories_per_100g: Math.round(caloriesPer100g),
+          protein_per_100g: Math.round(proteinPer100g * 10) / 10,
+          carbs_per_100g: Math.round(carbsPer100g * 10) / 10,
+          fats_per_100g: Math.round(fatsPer100g * 10) / 10,
+          source: ingredientSource,
+        }
+      ];
+
+      const tc = newIngredients.reduce((sum, ing) => sum + (ing.calories_per_100g || 0) * ing.grams / 100, 0);
+      const tp = newIngredients.reduce((sum, ing) => sum + (ing.protein_per_100g || 0) * ing.grams / 100, 0);
+      const tcarb = newIngredients.reduce((sum, ing) => sum + (ing.carbs_per_100g || 0) * ing.grams / 100, 0);
+      const tf = newIngredients.reduce((sum, ing) => sum + (ing.fats_per_100g || 0) * ing.grams / 100, 0);
+
+      setManualMeal({
+        ...manualMeal,
+        ingredients: newIngredients,
+        calories: Math.round(tc).toString(),
+        protein_g: Math.round(tp * 10) / 10 !== 0 ? (Math.round(tp * 10) / 10).toString() : "",
+        carbs_g: Math.round(tcarb * 10) / 10 !== 0 ? (Math.round(tcarb * 10) / 10).toString() : "",
+        fats_g: Math.round(tf * 10) / 10 !== 0 ? (Math.round(tf * 10) / 10).toString() : "",
+      });
+
+      setAiIngredientDescription("");
+      toast({ title: "Ingredient Added", description: `${ingredientName} (${ingredientGrams}g) added. Meal totals updated.` });
+    } catch (error: any) {
+      if (error?.name === 'AbortError' || ingController.signal.aborted) return;
+      logger.error("Error analyzing ingredient", error);
+      toast({ title: "Analysis failed", description: error.message || "Failed to analyze ingredient. Please try again or add manually.", variant: "destructive" });
+    } finally {
+      ingCleanup();
+      setAiAnalyzingIngredient(false);
+    }
+  };
+
+  const handleVoiceInput = async (transcribedText: string) => {
+    setAiMealDescription(transcribedText);
+    setQuickAddTab("ai");
+    setIsQuickAddSheetOpen(true);
+
+    aiAbortRef.current?.abort();
+    const { controller: voiceController, cleanup: voiceCleanup } = createAIAbortController(30000);
+    aiAbortRef.current = voiceController;
+
+    setAiAnalyzing(true);
+    setAiAnalysisComplete(false);
+    try {
+      const { data, error } = await supabase.functions.invoke("analyze-meal", {
+        body: { mealDescription: transcribedText },
+        signal: voiceController.signal,
+      });
+
+      if (voiceController.signal.aborted) return;
+      if (error) throw new Error(await extractEdgeFunctionError(error, "Failed to process voice input"));
+      const { nutritionData } = data;
+
+      if (nutritionData.items && Array.isArray(nutritionData.items) && nutritionData.items.length > 0) {
+        setAiLineItems(nutritionData.items.map((item: any) => ({
+          name: item.name,
+          quantity: item.quantity || "",
+          calories: item.calories || 0,
+          protein_g: item.protein_g || 0,
+          carbs_g: item.carbs_g || 0,
+          fats_g: item.fats_g || 0,
+        })));
+      } else {
+        setAiLineItems([{
+          name: nutritionData.meal_name,
+          quantity: nutritionData.portion_size || "1 serving",
+          calories: nutritionData.calories || 0,
+          protein_g: nutritionData.protein_g || 0,
+          carbs_g: nutritionData.carbs_g || 0,
+          fats_g: nutritionData.fats_g || 0,
+        }]);
+      }
+
+      setManualMeal(prev => ({ ...prev, meal_name: nutritionData.meal_name }));
+      setAiAnalysisComplete(true);
+      toast({ title: "Analysis complete!", description: "Review the items below and tap Add Meal" });
+    } catch (error: any) {
+      if (error?.name === 'AbortError' || voiceController.signal.aborted) return;
+      logger.error("Error processing voice input", error);
+      toast({ title: "Analysis failed", description: error.message || "Failed to process voice input", variant: "destructive" });
+    } finally {
+      voiceCleanup();
+      setAiAnalyzing(false);
+    }
+  };
+
+  const parseServingGrams = (servingSize: string): number => {
+    const match = servingSize.match(/(\d+(?:\.\d+)?)\s*g\b/i);
+    if (match) return parseFloat(match[1]);
+    return 100;
+  };
+
+  const handleBarcodeScanned = async (foodData: {
+    meal_name: string;
+    calories: number;
+    protein_g: number;
+    carbs_g: number;
+    fats_g: number;
+    serving_size: string;
+  }) => {
+    const servingWt = parseServingGrams(foodData.serving_size || "100g");
+    setBarcodeBaseMacros({
+      calories: foodData.calories,
+      protein_g: foodData.protein_g,
+      carbs_g: foodData.carbs_g,
+      fats_g: foodData.fats_g,
+      serving_size: foodData.serving_size || "1 serving",
+      serving_weight_g: servingWt,
+    });
+    setServingMultiplier(1);
+    setManualMeal({
+      meal_name: foodData.meal_name,
+      calories: foodData.calories.toString(),
+      protein_g: foodData.protein_g.toString(),
+      carbs_g: foodData.carbs_g.toString(),
+      fats_g: foodData.fats_g.toString(),
+      meal_type: "snack",
+      portion_size: foodData.serving_size || "1 serving",
+      recipe_notes: "",
+      ingredients: [],
+    });
+    setQuickAddTab("manual");
+    setIsQuickAddSheetOpen(true);
+  };
+
+  const lookupIngredientNutrition = async (ingredientName: string): Promise<{
+    calories_per_100g: number;
+    protein_per_100g: number;
+    carbs_per_100g: number;
+    fats_per_100g: number;
+    source?: string;
+  } | null> => {
+    try {
+      const { data, error } = await supabase.functions.invoke("lookup-ingredient", {
+        body: { ingredientName },
+      });
+
+      if (error) {
+        logger.error("Ingredient lookup error", error);
+        return null;
+      }
+
+      if (data?.error) {
+        logger.info("Ingredient not found", { error: data.error });
+        return null;
+      }
+
+      if (data?.nutritionData) {
+        return data.nutritionData;
+      }
+
+      return null;
+    } catch (error) {
+      logger.error("Error looking up ingredient", error);
+      return null;
+    }
+  };
+
+  const handleManualNutritionSubmit = () => {
+    if (!manualNutritionDialog.calories_per_100g) {
+      toast({ title: "Calories Required", description: "Please enter calories per 100g", variant: "destructive" });
+      return;
+    }
+
+    const ingredientName = manualNutritionDialog.ingredientName;
+    const nutritionData = {
+      calories_per_100g: parseFloat(manualNutritionDialog.calories_per_100g),
+      protein_per_100g: manualNutritionDialog.protein_per_100g ? parseFloat(manualNutritionDialog.protein_per_100g) : 0,
+      carbs_per_100g: manualNutritionDialog.carbs_per_100g ? parseFloat(manualNutritionDialog.carbs_per_100g) : 0,
+      fats_per_100g: manualNutritionDialog.fats_per_100g ? parseFloat(manualNutritionDialog.fats_per_100g) : 0,
+    };
+
+    const newIngredients = [
+      ...manualMeal.ingredients,
+      {
+        name: ingredientName,
+        grams: manualNutritionDialog.grams,
+        ...nutritionData,
+      }
+    ];
+
+    const tc = newIngredients.reduce((sum, ing) => sum + (ing.calories_per_100g || 0) * ing.grams / 100, 0);
+    const tp = newIngredients.reduce((sum, ing) => sum + (ing.protein_per_100g || 0) * ing.grams / 100, 0);
+    const tcarb = newIngredients.reduce((sum, ing) => sum + (ing.carbs_per_100g || 0) * ing.grams / 100, 0);
+    const tf = newIngredients.reduce((sum, ing) => sum + (ing.fats_per_100g || 0) * ing.grams / 100, 0);
+
+    setManualMeal({
+      ...manualMeal,
+      ingredients: newIngredients,
+      calories: Math.round(tc).toString(),
+      protein_g: Math.round(tp * 10) / 10 !== 0 ? (Math.round(tp * 10) / 10).toString() : "",
+      carbs_g: Math.round(tcarb * 10) / 10 !== 0 ? (Math.round(tcarb * 10) / 10).toString() : "",
+      fats_g: Math.round(tf * 10) / 10 !== 0 ? (Math.round(tf * 10) / 10).toString() : "",
+    });
+
+    setManualNutritionDialog({
+      open: false, ingredientName: "", grams: 0,
+      calories_per_100g: "", protein_per_100g: "", carbs_per_100g: "", fats_per_100g: "",
+    });
+    setIngredientLookupError(null);
+    toast({ title: "Ingredient Added", description: `${ingredientName} added with manual nutrition data` });
+  };
+
+  const cancelAI = () => {
+    aiAbortRef.current?.abort();
+    setAiAnalyzing(false);
+    setAiAnalyzingIngredient(false);
+  };
+
+  return {
+    aiAnalyzing,
+    aiLineItems, setAiLineItems,
+    aiAnalysisComplete, setAiAnalysisComplete,
+    aiMealDescription, setAiMealDescription,
+    aiIngredientDescription, setAiIngredientDescription,
+    aiAnalyzingIngredient,
+    barcodeBaseMacros, setBarcodeBaseMacros,
+    servingMultiplier, setServingMultiplier,
+    newIngredient, setNewIngredient,
+    lookingUpIngredient, setLookingUpIngredient,
+    ingredientLookupError, setIngredientLookupError,
+    manualNutritionDialog, setManualNutritionDialog,
+    aiAbortRef,
+    handleAiAnalyzeMeal,
+    handleSaveAiMeal,
+    handleAiAnalyzeIngredient,
+    handleVoiceInput,
+    handleBarcodeScanned,
+    lookupIngredientNutrition,
+    handleManualNutritionSubmit,
+    cancelAI,
+  };
+}
