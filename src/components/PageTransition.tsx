@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useNavigationDirection } from "@/hooks/useNavigationDirection";
@@ -29,6 +29,11 @@ export function PageTransition({ children }: PageTransitionProps) {
   const direction = useNavigationDirection();
   const prefersReducedMotion = useReducedMotion();
   const isFirstRender = useRef(true);
+
+  useEffect(() => {
+    const main = document.querySelector("main");
+    if (main) main.scrollTo(0, 0);
+  }, [location.pathname]);
 
   if (prefersReducedMotion) {
     return (
