@@ -49,7 +49,7 @@ export function MoreMenuSheet({ open, onOpenChange, menuItems, onItemClick, onSe
         <SheetHeader className="px-5 pb-2 pt-1 text-left shrink-0">
           <SheetTitle className="text-lg font-semibold text-foreground">More</SheetTitle>
         </SheetHeader>
-        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 scrollbar-hide scroll-touch overscroll-contain" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 6rem)" }}>
+        <div data-no-glow className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 scrollbar-hide scroll-touch overscroll-contain" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 6rem)" }}>
           {/* Nav links group */}
           <motion.div
             className="rounded-2xl bg-muted/30 dark:bg-white/5 overflow-hidden border border-border/50 dark:border-white/10"

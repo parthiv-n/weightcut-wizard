@@ -243,6 +243,10 @@ All colors MUST be HSL.
       /* Blue Glow */
     }
 
+    .dark [data-no-glow] button:hover {
+      box-shadow: none;
+    }
+
     /* Prevent over-glowing on purely transparent flat icon buttons */
     .dark button.rounded-full:hover,
     .dark button[variant="ghost"]:hover {

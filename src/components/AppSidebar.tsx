@@ -1,4 +1,4 @@
-import { Home, Utensils, Weight, Droplets, Calendar, Trophy, RotateCcw, Target } from "lucide-react";
+import { Home, Utensils, Weight, Droplets, Calendar, Trophy, RotateCcw, Target, HeartPulse } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useState } from "react";
 import {
@@ -25,6 +25,7 @@ const menuItems = [
   { title: "Goals", url: "/goals", icon: Target },
   { title: "Fight Camps", url: "/fight-camps", icon: Trophy },
   { title: "Fight Camp Calendar", url: "/fight-camp-calendar", icon: Calendar },
+  { title: "Recovery", url: "/recovery", icon: HeartPulse },
   { title: "Nutrition", url: "/nutrition", icon: Utensils },
   { title: "Weight Tracker", url: "/weight", icon: Weight },
   { title: "Rehydration", url: "/hydration", icon: Droplets },

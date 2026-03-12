@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, subMonths, addMonths, subDays } from "date-fns";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { RecoveryDashboard } from "@/components/fightcamp/RecoveryDashboard";
+
 import { TrainingSummarySection } from "@/components/fightcamp/TrainingSummarySection";
 import { CalendarMonthGrid } from "@/components/fightcamp/CalendarMonthGrid";
 import { SessionCard } from "@/components/fightcamp/SessionCard";
@@ -28,10 +28,6 @@ type FightCampCalendarInsert = TablesInsert<"fight_camp_calendar">;
 
 export default function FightCampCalendar() {
     const { userId, profile } = useUser();
-    const athleteProfile = useMemo(() => profile ? {
-        trainingFrequency: profile.training_frequency ?? null,
-        activityLevel: profile.activity_level ?? null,
-    } : undefined, [profile?.training_frequency, profile?.activity_level]);
     const { toast } = useToast();
     const [searchParams, setSearchParams] = useSearchParams();
     const [currentDate, setCurrentDate] = useState(new Date());
@@ -263,17 +259,6 @@ export default function FightCampCalendar() {
 
     return (
         <div className="space-y-4 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto pb-20 md:pb-6">
-                {/* Recovery Dashboard */}
-                {sessions28d.length > 0 && userId && (
-                    <RecoveryDashboard
-                        sessions28d={sessions28d as any}
-                        userId={userId}
-                        sessionLoggedAt={sessionLoggedTrigger}
-                        athleteProfile={athleteProfile}
-                        tdee={profile?.tdee ?? null}
-                    />
-                )}
-
                 {/* Calendar View */}
                 <Card className="p-4 rounded-[20px] shadow-sm glass-card mb-6">
                     <div className="flex items-center justify-between mb-4">

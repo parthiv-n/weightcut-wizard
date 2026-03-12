@@ -34,6 +34,7 @@ const FightWeek = lazy(() => import("./pages/FightWeek"));
 const FightCamps = lazy(() => import("./pages/FightCamps"));
 const FightCampDetail = lazy(() => import("./pages/FightCampDetail"));
 const FightCampCalendar = lazy(() => import("./pages/FightCampCalendar"));
+const Recovery = lazy(() => import("./pages/Recovery"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const _idle = window.requestIdleCallback || ((cb: IdleRequestCallback) => setTimeout(cb, 50));
@@ -267,6 +268,15 @@ const App = () => (
                     <ProfileCompletionGuard>
                       <AppLayout>
                         <FightCampCalendar />
+                      </AppLayout>
+                    </ProfileCompletionGuard>
+                  </ProtectedRoute>
+                } />
+                <Route path="/recovery" element={
+                  <ProtectedRoute>
+                    <ProfileCompletionGuard>
+                      <AppLayout>
+                        <Recovery />
                       </AppLayout>
                     </ProfileCompletionGuard>
                   </ProtectedRoute>

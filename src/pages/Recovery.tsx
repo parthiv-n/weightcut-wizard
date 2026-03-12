@@ -1,0 +1,82 @@
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { format, subDays } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
+import { useUser } from "@/contexts/UserContext";
+import { RecoveryDashboard } from "@/components/fightcamp/RecoveryDashboard";
+import { logger } from "@/lib/logger";
+import { Skeleton } from "@/components/ui/skeleton-loader";
+import { Card } from "@/components/ui/card";
+
+import type { Tables } from "@/integrations/supabase/types";
+
+type FightCampCalendarRow = Tables<"fight_camp_calendar">;
+
+export default function Recovery() {
+    const { userId, profile } = useUser();
+    const [sessions28d, setSessions28d] = useState<FightCampCalendarRow[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    const athleteProfile = useMemo(() => profile ? {
+        trainingFrequency: profile.training_frequency ?? null,
+        activityLevel: profile.activity_level ?? null,
+    } : undefined, [profile?.training_frequency, profile?.activity_level]);
+
+    const fetch28DaySessions = useCallback(async () => {
+        if (!userId) return;
+        setIsLoading(true);
+        try {
+            const from = format(subDays(new Date(), 28), "yyyy-MM-dd");
+            const to = format(new Date(), "yyyy-MM-dd");
+            const { data, error } = await supabase
+                .from('fight_camp_calendar')
+                .select('*')
+                .eq('user_id', userId)
+                .gte('date', from)
+                .lte('date', to);
+
+            if (error) throw error;
+            setSessions28d(data || []);
+        } catch (error) {
+            logger.error("Error fetching 28-day sessions", error);
+        } finally {
+            setIsLoading(false);
+        }
+    }, [userId]);
+
+    useEffect(() => { fetch28DaySessions(); }, [fetch28DaySessions]);
+
+    if (isLoading) {
+        return (
+            <div className="space-y-4 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto pb-20 md:pb-6">
+                <Card className="p-6 rounded-[20px] glass-card">
+                    <Skeleton className="h-6 w-40 mb-4" />
+                    <Skeleton className="h-48 w-full rounded-xl" />
+                </Card>
+            </div>
+        );
+    }
+
+    if (sessions28d.length === 0) {
+        return (
+            <div className="space-y-4 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto pb-20 md:pb-6">
+                <Card className="p-8 rounded-[20px] glass-card border-dashed flex flex-col items-center justify-center text-foreground/70">
+                    <p>No training sessions in the last 28 days.</p>
+                    <p className="text-sm mt-1">Log sessions in the Fight Camp Calendar to see recovery analytics.</p>
+                </Card>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-4 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto pb-20 md:pb-6">
+            {userId && (
+                <RecoveryDashboard
+                    sessions28d={sessions28d as any}
+                    userId={userId}
+                    athleteProfile={athleteProfile}
+                    tdee={profile?.tdee ?? null}
+                />
+            )}
+        </div>
+    );
+}
