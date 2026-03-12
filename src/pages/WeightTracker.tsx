@@ -1,24 +1,17 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { format } from "date-fns";
 import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Sparkles, Activity, Apple, Trash2, RefreshCw, Bug, Edit2, ChevronDown } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
-import { weightLogSchema } from "@/lib/validation";
 import { useUser } from "@/contexts/UserContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { triggerHapticSuccess, celebrateSuccess } from "@/lib/haptics";
-import { localCache } from "@/lib/localCache";
-import { withSupabaseTimeout, createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
-import { AIPersistence } from "@/lib/aiPersistence";
-import { useSafeAsync } from "@/hooks/useSafeAsync";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,81 +26,34 @@ import { ShareButton } from "@/components/share/ShareButton";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { WeightTrackerCard } from "@/components/share/cards/WeightTrackerCard";
 import { WeighInResultCard } from "@/components/share/cards/WeighInResultCard";
-import { logger } from "@/lib/logger";
-
-interface WeightLog {
-  id: string;
-  date: string;
-  weight_kg: number;
-}
-
-interface Profile {
-  current_weight_kg: number;
-  goal_weight_kg: number;
-  fight_week_target_kg: number | null;
-  target_date: string;
-  activity_level: string;
-  age: number;
-  sex: string;
-  height_cm: number;
-  tdee: number;
-}
-
-interface AIAnalysis {
-  riskLevel: "green" | "yellow" | "red";
-  requiredWeeklyLoss: number;
-  recommendedCalories: number;
-  calorieDeficit: number;
-  proteinGrams: number;
-  carbsGrams: number;
-  fatsGrams: number;
-  riskExplanation: string;
-  strategicGuidance: string;
-  nutritionTips: string[];
-  trainingConsiderations: string;
-  timeline: string;
-  weeklyPlan: {
-    week1: string;
-    week2: string;
-    ongoing: string;
-  };
-}
+import type { Profile } from "@/pages/weight/types";
+import { useWeightData } from "@/hooks/weight/useWeightData";
+import { useWeightAnalysis } from "@/hooks/weight/useWeightAnalysis";
 
 export default function WeightTracker() {
-  const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
-  const [newWeight, setNewWeight] = useState("");
-  const [newDate, setNewDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [loading, setLoading] = useState(false);
-  const [analyzingWeight, setAnalyzingWeight] = useState(false);
-  const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
-  const [aiAnalysisWeight, setAiAnalysisWeight] = useState<number | null>(null);
-  const [aiAnalysisTarget, setAiAnalysisTarget] = useState<number | null>(null);
-  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [editingLogId, setEditingLogId] = useState<string | null>(null);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [logToDelete, setLogToDelete] = useState<WeightLog | null>(null);
-  const [debugDialogOpen, setDebugDialogOpen] = useState(false);
-  const [debugData, setDebugData] = useState<{
-    requestPayload: any;
-    rawResponse: any;
-    parsedResponse: any;
-    currentWeightSource: string;
-    currentWeightValue: number | null;
-    latestWeightLog: any;
-    profileData: any;
-  } | null>(null);
-  const [unsafeGoalDialogOpen, setUnsafeGoalDialogOpen] = useState(false);
-  const [showProjected, setShowProjected] = useState(true);
-  const { toast } = useToast();
-  const { updateCurrentWeight, userId, profile: contextProfile } = useUser();
+  const { userId, profile: contextProfile } = useUser();
   const profile = contextProfile as unknown as Profile;
-  const { safeAsync, isMounted } = useSafeAsync();
   const [searchParams, setSearchParams] = useSearchParams();
-  const weightInputRef = useRef<HTMLInputElement>(null);
-  const aiAbortRef = useRef<AbortController | null>(null);
   const [timeFilter, setTimeFilter] = useState<"1W" | "1M" | "ALL">("1M");
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [showProjected, setShowProjected] = useState(true);
   const [shareOpen, setShareOpen] = useState(false);
   const [weighInShareOpen, setWeighInShareOpen] = useState(false);
+
+  const {
+    weightLogs, newWeight, setNewWeight, newDate, setNewDate,
+    loading, editingLogId, deleteDialogOpen, setDeleteDialogOpen,
+    logToDelete, weightInputRef,
+    fetchData, handleAddWeight: rawHandleAddWeight, handleDeleteLog, handleEditLog, initiateDelete,
+    getCurrentWeight,
+  } = useWeightData({ profile });
+
+  const {
+    analyzingWeight, aiAnalysis, aiAnalysisWeight, aiAnalysisTarget,
+    unsafeGoalDialogOpen, setUnsafeGoalDialogOpen,
+    debugDialogOpen, setDebugDialogOpen, debugData,
+    loadPersistedAnalysis, clearAnalysis, getAIAnalysis, handleAICancel,
+  } = useWeightAnalysis({ profile });
 
   useEffect(() => {
     if (!userId) return;
@@ -117,7 +63,7 @@ export default function WeightTracker() {
     if (stored !== null) setShowProjected(JSON.parse(stored));
   }, [userId]);
 
-  // Warmup ping — pre-warm edge function to avoid cold start on first AI call
+  // Warmup ping
   useEffect(() => {
     if (!userId) return;
     const timer = setTimeout(() => {
@@ -126,331 +72,14 @@ export default function WeightTracker() {
     return () => clearTimeout(timer);
   }, [userId]);
 
-  const loadPersistedAnalysis = () => {
-    if (!userId) return;
-
-    try {
-      const persisted = AIPersistence.load(userId, "weight_analysis");
-      if (persisted) {
-        const { analysis, currentWeight, fightWeekTarget } = persisted;
-        if (analysis) {
-          setAiAnalysis(analysis);
-          setAiAnalysisWeight(currentWeight);
-          setAiAnalysisTarget(fightWeekTarget);
-        }
-      }
-    } catch (error) {
-      logger.error("Error loading persisted analysis", error);
-    }
-  };
-
-  const clearAnalysis = () => {
-    if (!userId) return;
-    setAiAnalysis(null);
-    setAiAnalysisWeight(null);
-    setAiAnalysisTarget(null);
-    AIPersistence.remove(userId, "weight_analysis");
-  };
-
-  const fetchData = async () => {
-    if (!userId) return;
-
-    // Cache-first: show cached logs instantly
-    const cachedLogs = localCache.get<WeightLog[]>(userId, 'weight_logs');
-    if (cachedLogs) {
-      safeAsync(setWeightLogs)(cachedLogs);
-    }
-
-    // Fetch fresh weight logs with timeout
-    try {
-      const { data: logsData } = await withSupabaseTimeout(
-        supabase
-          .from("weight_logs")
-          .select("id, date, weight_kg")
-          .eq("user_id", userId)
-          .order("date", { ascending: true }),
-        undefined,
-        "Weight logs query"
-      );
-
-      if (!isMounted()) return;
-
-      if (logsData) {
-        setWeightLogs(logsData);
-        localCache.set(userId, 'weight_logs', logsData);
-      }
-    } catch (err) {
-      logger.error("Error fetching weight logs", err);
-      // Cached data (if any) is already showing
-    }
-  };
-
   const handleAddWeight = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const validationResult = weightLogSchema.safeParse({
-      weight_kg: parseFloat(newWeight),
-      date: newDate,
-    });
-
-    if (!validationResult.success) {
-      toast({
-        title: "Validation Error",
-        description: validationResult.error.errors[0].message,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setLoading(true);
-
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    let opError = null;
-
-    if (editingLogId) {
-      const { error } = await withSupabaseTimeout(
-        supabase
-          .from("weight_logs")
-          .update({
-            weight_kg: parseFloat(newWeight),
-            date: newDate,
-          })
-          .eq("id", editingLogId),
-        undefined,
-        "Weight log update"
-      );
-      opError = error;
-    } else {
-      const { error } = await withSupabaseTimeout(
-        supabase.from("weight_logs").insert({
-          user_id: user.id,
-          weight_kg: parseFloat(newWeight),
-          date: newDate,
-        }),
-        undefined,
-        "Weight log insert"
-      );
-      opError = error;
-    }
-
-    if (opError) {
-      toast({
-        title: "Error",
-        description: `Failed to ${editingLogId ? 'update' : 'log'} weight`,
-        variant: "destructive",
-      });
-    } else {
-      const loggedWeight = parseFloat(newWeight);
-
-      await withSupabaseTimeout(
-        supabase
-          .from("profiles")
-          .update({ current_weight_kg: loggedWeight })
-          .eq("id", user.id),
-        undefined,
-        "Profile weight update"
-      );
-
-      await updateCurrentWeight(loggedWeight);
-
-      // Pre-cache weight logs for Dashboard so it loads instantly
-      if (userId) {
-        const cachedLogs = localCache.get<any[]>(userId, 'dashboard_weight_logs');
-        if (cachedLogs) {
-          const existingIdx = cachedLogs.findIndex((l: any) => l.date === newDate);
-          let updatedLogs: any[];
-          if (existingIdx >= 0) {
-            updatedLogs = [...cachedLogs];
-            updatedLogs[existingIdx] = { date: newDate, weight_kg: loggedWeight };
-          } else {
-            updatedLogs = [...cachedLogs, { date: newDate, weight_kg: loggedWeight }]
-              .sort((a, b) => a.date.localeCompare(b.date));
-          }
-          // Keep only last 30 entries to match Dashboard query
-          if (updatedLogs.length > 30) updatedLogs = updatedLogs.slice(-30);
-          localCache.set(userId, 'dashboard_weight_logs', updatedLogs);
-        }
-      }
-
-      toast({
-        title: editingLogId ? "Weight updated" : "Weight logged",
-        description: "Your weight has been recorded",
-      });
-      celebrateSuccess();
-
-      // Offer weigh-in share card if weight is at or below target
-      const fwt = profile?.fight_week_target_kg ?? profile?.goal_weight_kg;
+    const loggedWeight = await rawHandleAddWeight(e);
+    if (loggedWeight && profile) {
+      const fwt = profile.fight_week_target_kg ?? profile.goal_weight_kg;
       if (fwt && loggedWeight <= fwt && !editingLogId) {
         setWeighInShareOpen(true);
       }
-
-      setNewWeight("");
-      setEditingLogId(null);
-      fetchData();
     }
-
-    setLoading(false);
-  };
-
-  const handleDeleteLog = async () => {
-    if (!logToDelete) return;
-
-    setLoading(true);
-    const { error } = await withSupabaseTimeout(
-      supabase
-        .from("weight_logs")
-        .delete()
-        .eq("id", logToDelete.id),
-      undefined,
-      "Weight log delete"
-    );
-
-    if (error) {
-      toast({
-        title: "Error",
-        description: "Failed to delete weight log",
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Deleted",
-        description: "Weight log has been removed",
-      });
-      fetchData();
-    }
-
-    setLoading(false);
-    setDeleteDialogOpen(false);
-    setLogToDelete(null);
-  };
-
-  const handleEditLog = (log: WeightLog) => {
-    setNewWeight(log.weight_kg.toString());
-    setNewDate(log.date);
-    setEditingLogId(log.id);
-    weightInputRef.current?.focus();
-    triggerHapticSuccess();
-  };
-
-  const initiateDelete = (log: WeightLog) => {
-    setLogToDelete(log);
-    setDeleteDialogOpen(true);
-  };
-
-  const getAIAnalysis = async () => {
-    if (!profile) return;
-
-    // Ensure fight_week_target_kg is set - this is the diet goal, not the final weigh-in goal
-    const fightWeekTarget = profile.fight_week_target_kg;
-    if (!fightWeekTarget) {
-      toast({
-        title: "Fight Week Target Required",
-        description: "Please set your fight week target weight in Goals to get AI analysis.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    aiAbortRef.current?.abort();
-    const { controller, cleanup } = createAIAbortController(30000);
-    aiAbortRef.current = controller;
-
-    setAnalyzingWeight(true);
-
-    try {
-      // Use profile weight directly — kept current by updateCurrentWeight()
-      const currentWeight = profile.current_weight_kg;
-      const currentWeightSource = "profile.current_weight_kg";
-
-      // Show medical warning for aggressive goals (>1.5kg/week) but always proceed with analysis
-      if (isGoalUnrealistic(currentWeight, fightWeekTarget, profile.target_date)) {
-        setUnsafeGoalDialogOpen(true);
-      }
-
-      // Prepare request payload for debugging
-      const requestPayload = {
-        currentWeight,
-        // Use fight_week_target_kg as the end goal for weight loss strategy (diet target before dehydration)
-        goalWeight: fightWeekTarget,
-        weighInDayWeight: profile.goal_weight_kg, // Day before fight day, final weigh-in goal (after dehydration)
-        targetDate: profile.target_date,
-        activityLevel: profile.activity_level,
-        age: profile.age,
-        sex: profile.sex,
-        heightCm: profile.height_cm,
-        tdee: profile.tdee,
-      };
-
-      const { data, error } = await supabase.functions.invoke("weight-tracker-analysis", {
-        body: requestPayload,
-        signal: controller.signal,
-      });
-
-      if (controller.signal.aborted) return;
-
-      // Capture debug data
-      const debugInfo = {
-        requestPayload,
-        rawResponse: data || error,
-        parsedResponse: data?.analysis || null,
-        currentWeightSource,
-        currentWeightValue: currentWeight,
-        profileData: {
-          current_weight_kg: profile.current_weight_kg,
-          goal_weight_kg: profile.goal_weight_kg,
-          fight_week_target_kg: profile.fight_week_target_kg,
-          target_date: profile.target_date,
-          activity_level: profile.activity_level,
-          age: profile.age,
-          sex: profile.sex,
-          height_cm: profile.height_cm,
-          tdee: profile.tdee
-        }
-      };
-      setDebugData(debugInfo);
-
-      if (error) {
-        const msg = await extractEdgeFunctionError(error, "AI analysis unavailable");
-        toast({
-          title: "AI analysis unavailable",
-          description: msg,
-          variant: "destructive"
-        });
-      } else if (data?.analysis) {
-        setAiAnalysis(data.analysis);
-        setAiAnalysisWeight(currentWeight);
-        setAiAnalysisTarget(fightWeekTarget);
-
-        if (userId) {
-          AIPersistence.save(userId, "weight_analysis", {
-            analysis: data.analysis,
-            currentWeight,
-            fightWeekTarget,
-          }, 24);
-        }
-      }
-    } catch (err: any) {
-      if (err?.name === 'AbortError' || controller.signal.aborted) return;
-      toast({
-        title: "AI analysis unavailable",
-        description: err?.message || "Something went wrong",
-        variant: "destructive"
-      });
-    } finally {
-      cleanup();
-      setAnalyzingWeight(false);
-    }
-  };
-
-  const handleAICancel = () => {
-    aiAbortRef.current?.abort();
-    setAnalyzingWeight(false);
-  };
-
-  const handleUnsafeGoalDismiss = () => {
-    setUnsafeGoalDialogOpen(false);
   };
 
   const getWeeklyLossRequired = () => {
@@ -460,31 +89,16 @@ export default function WeightTracker() {
     const today = new Date();
     const daysRemaining = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     const weeksRemaining = Math.max(1, daysRemaining / 7);
-    // Use fight_week_target_kg as the end goal (diet target before dehydration)
     const fightWeekTarget = profile.fight_week_target_kg;
     if (!fightWeekTarget) return 0;
     const weightRemaining = current - fightWeekTarget;
     return weightRemaining / weeksRemaining;
   };
 
-  const isGoalUnrealistic = (currentWeight: number, fightWeekTarget: number, targetDate: string): boolean => {
-    const target = new Date(targetDate);
-    const today = new Date();
-    const daysRemaining = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    const weeksRemaining = Math.max(1, daysRemaining / 7);
-    const weightRemaining = currentWeight - fightWeekTarget;
-    const requiredWeeklyLoss = weightRemaining / weeksRemaining;
-    return requiredWeeklyLoss > 1.5;
-  };
-
   const getChartData = () => {
     if (!profile) return [];
-
-    // Show both fight week target (diet goal) and weigh-in day weight (final weigh-in) on chart
-    // Prioritize fight_week_target_kg as the primary diet goal
     const fightWeekTarget = profile.fight_week_target_kg || profile.goal_weight_kg;
 
-    // If no weight logs, show onboarding weight as a starting point
     if (!weightLogs.length) {
       if (profile.current_weight_kg) {
         return [{
@@ -511,8 +125,6 @@ export default function WeightTracker() {
       filteredLogs = filteredLogs.filter(log => new Date(log.date) >= oneMonthAgo);
     }
 
-    // If filtering results in empty array but we have data overall,
-    // just show the latest raw data point so the graph isn't entirely blank
     if (filteredLogs.length === 0 && weightLogs.length > 0) {
       filteredLogs = [weightLogs[weightLogs.length - 1]];
     }
@@ -520,7 +132,6 @@ export default function WeightTracker() {
     const data: { date: string; weight: number | null; projected: number | null; fightWeekGoal: number | undefined; fightNightGoal: number | undefined; logId: string | null; fullDate: string }[] = filteredLogs.map((log, idx) => ({
       date: format(new Date(log.date), "MMM dd"),
       weight: log.weight_kg,
-      // Last actual point gets projected value too so the lines connect
       projected: (aiAnalysis && idx === filteredLogs.length - 1) ? log.weight_kg : null as number | null,
       fightWeekGoal: fightWeekTarget,
       fightNightGoal: profile.goal_weight_kg,
@@ -528,7 +139,6 @@ export default function WeightTracker() {
       fullDate: log.date,
     }));
 
-    // Add projected future data points when AI analysis exists
     if (aiAnalysis && aiAnalysis.requiredWeeklyLoss > 0 && filteredLogs.length > 0) {
       const lastLog = filteredLogs[filteredLogs.length - 1];
       const lastWeight = lastLog.weight_kg;
@@ -538,7 +148,6 @@ export default function WeightTracker() {
 
       for (let week = 1; week <= maxWeeks; week++) {
         const futureDate = new Date(lastDate.getTime() + week * 7 * 24 * 60 * 60 * 1000);
-        // Stop if we've passed the target date
         if (futureDate > targetDate) break;
 
         const projectedWeight = Math.max(
@@ -556,7 +165,6 @@ export default function WeightTracker() {
           fullDate: format(futureDate, "yyyy-MM-dd"),
         });
 
-        // Stop if we've reached the target weight
         if (projectedWeight <= fightWeekTarget) break;
       }
     }
@@ -574,17 +182,10 @@ export default function WeightTracker() {
     }
   };
 
-  const getCurrentWeight = () => {
-    if (!weightLogs.length) return profile?.current_weight_kg || 0;
-    return weightLogs[weightLogs.length - 1].weight_kg;
-  };
-
   const getWeightProgress = () => {
     if (!profile) return 0;
     const current = getCurrentWeight();
-    // Use the first weight log as starting weight, or profile weight if no logs exist
     const start = weightLogs.length > 0 ? weightLogs[0].weight_kg : profile.current_weight_kg;
-    // Progress towards fight week target (diet goal before dehydration)
     const fightWeekTarget = profile.fight_week_target_kg;
     if (!fightWeekTarget) return 0;
     const total = start - fightWeekTarget;
@@ -594,90 +195,36 @@ export default function WeightTracker() {
 
   const getInsight = () => {
     if (!weightLogs.length || !profile) {
-      return {
-        message: "Start logging your weight to receive personalized insights.",
-        icon: Target,
-        color: "text-muted-foreground",
-      };
+      return { message: "Start logging your weight to receive personalized insights.", icon: Target, color: "text-muted-foreground" };
     }
 
     const current = getCurrentWeight();
-    // Use fight_week_target_kg as the end goal (diet target before dehydration)
     const fightWeekTarget = profile.fight_week_target_kg;
     if (!fightWeekTarget) {
-      return {
-        message: "Please set your fight week target weight in Goals to see insights.",
-        icon: Target,
-        color: "text-muted-foreground",
-      };
+      return { message: "Please set your fight week target weight in Goals to see insights.", icon: Target, color: "text-muted-foreground" };
     }
     const targetDate = new Date(profile.target_date);
     const today = new Date();
     const daysRemaining = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     const weightRemaining = current - fightWeekTarget;
 
-    // Calculate recent weight loss rate (last 7 days)
     const recentLogs = weightLogs.slice(-7);
     if (recentLogs.length >= 2) {
       const weekAgo = recentLogs[0].weight_kg;
       const weeklyLoss = weekAgo - current;
       const weeklyLossPercent = (weeklyLoss / current) * 100;
 
-      if (weeklyLossPercent > 1.5) {
-        return {
-          message: "⚠️ Weight loss pace is too aggressive. Reduce deficit to maintain performance and safety.",
-          icon: AlertTriangle,
-          color: "text-danger",
-        };
-      }
-
-      if (weeklyLoss > 1.0) {
-        return {
-          message: "Caution: Losing weight slightly fast. Monitor energy levels and adjust if needed.",
-          icon: TrendingDown,
-          color: "text-warning",
-        };
-      }
-
-      if (weeklyLoss >= 0.5 && weeklyLoss <= 1.0) {
-        return {
-          message: "Excellent pace! You're losing weight safely within the optimal 0.5-1kg per week range.",
-          icon: TrendingDown,
-          color: "text-success",
-        };
-      }
-
-      if (weeklyLoss > 0 && weeklyLoss < 0.5) {
-        return {
-          message: "Steady progress. Consider slight calorie reduction if deadline is approaching.",
-          icon: TrendingDown,
-          color: "text-primary",
-        };
-      }
-
-      if (weeklyLoss <= 0) {
-        return {
-          message: "No weight loss detected. Review calorie intake and increase activity if possible.",
-          icon: TrendingUp,
-          color: "text-warning",
-        };
-      }
+      if (weeklyLossPercent > 1.5) return { message: "Warning: Weight loss pace is too aggressive. Reduce deficit to maintain performance and safety.", icon: AlertTriangle, color: "text-danger" };
+      if (weeklyLoss > 1.0) return { message: "Caution: Losing weight slightly fast. Monitor energy levels and adjust if needed.", icon: TrendingDown, color: "text-warning" };
+      if (weeklyLoss >= 0.5 && weeklyLoss <= 1.0) return { message: "Excellent pace! You're losing weight safely within the optimal 0.5-1kg per week range.", icon: TrendingDown, color: "text-success" };
+      if (weeklyLoss > 0 && weeklyLoss < 0.5) return { message: "Steady progress. Consider slight calorie reduction if deadline is approaching.", icon: TrendingDown, color: "text-primary" };
+      if (weeklyLoss <= 0) return { message: "No weight loss detected. Review calorie intake and increase activity if possible.", icon: TrendingUp, color: "text-warning" };
     }
 
     const requiredWeeklyLoss = weightRemaining / (daysRemaining / 7);
-    if (requiredWeeklyLoss > 1.0) {
-      return {
-        message: "Target requires >1kg/week loss. Consider extending timeline for safety.",
-        icon: AlertTriangle,
-        color: "text-danger",
-      };
-    }
+    if (requiredWeeklyLoss > 1.0) return { message: "Target requires >1kg/week loss. Consider extending timeline for safety.", icon: AlertTriangle, color: "text-danger" };
 
-    return {
-      message: "Stay consistent with your plan. Track daily for best results.",
-      icon: Target,
-      color: "text-primary",
-    };
+    return { message: "Stay consistent with your plan. Track daily for best results.", icon: Target, color: "text-primary" };
   };
 
   const insight = getInsight();
@@ -707,7 +254,6 @@ export default function WeightTracker() {
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Progress Chart</p>
             <div className="flex items-center gap-2">
             {weightLogs.length >= 2 && <ShareButton onClick={() => setShareOpen(true)} />}
-            {/* Time Filter Toggle */}
             <div className="flex bg-muted rounded-full p-0.5 border border-white/5">
               {(["1W", "1M", "ALL"] as const).map((filter) => (
                 <button
@@ -729,21 +275,8 @@ export default function WeightTracker() {
               <ResponsiveContainer width="100%" height={200}>
                 <LineChart data={getChartData()} onClick={handleChartClick}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.2} />
-                  <XAxis
-                    dataKey="date"
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={11}
-                    tickLine={false}
-                    axisLine={false}
-                    domain={["dataMin - 2", "dataMax + 2"]}
-                    width={36}
-                  />
+                  <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} domain={["dataMin - 2", "dataMax + 2"]} width={36} />
                   <Tooltip
                     content={({ active, payload }) => {
                       if (active && payload && payload.length) {
@@ -754,12 +287,8 @@ export default function WeightTracker() {
                         return (
                           <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
                             <p className="text-xs text-muted-foreground">{entry.fullDate}</p>
-                            {actualWeight && (
-                              <p className="text-lg font-bold text-primary">{actualWeight}kg</p>
-                            )}
-                            {isProjectedOnly && (
-                              <p className="text-lg font-bold text-muted-foreground">{projectedWeight.toFixed(1)}kg <span className="text-xs font-normal">projected</span></p>
-                            )}
+                            {actualWeight && <p className="text-lg font-bold text-primary">{actualWeight}kg</p>}
+                            {isProjectedOnly && <p className="text-lg font-bold text-muted-foreground">{projectedWeight.toFixed(1)}kg <span className="text-xs font-normal">projected</span></p>}
                             {actualWeight && <p className="text-[10px] text-muted-foreground mt-1">Tap to delete</p>}
                           </div>
                         );
@@ -767,38 +296,13 @@ export default function WeightTracker() {
                       return null;
                     }}
                   />
-                  <ReferenceLine
-                    y={profile?.fight_week_target_kg || profile?.goal_weight_kg}
-                    stroke="hsl(var(--primary))"
-                    strokeDasharray="5 5"
-                    label={{ value: "Target", fill: "hsl(var(--primary))", fontSize: 10 }}
-                  />
+                  <ReferenceLine y={profile?.fight_week_target_kg || profile?.goal_weight_kg} stroke="hsl(var(--primary))" strokeDasharray="5 5" label={{ value: "Target", fill: "hsl(var(--primary))", fontSize: 10 }} />
                   {profile?.fight_week_target_kg && (
-                    <ReferenceLine
-                      y={profile.goal_weight_kg}
-                      stroke="hsl(var(--destructive))"
-                      strokeDasharray="3 3"
-                      label={{ value: "Fight Night", fill: "hsl(var(--destructive))", fontSize: 10 }}
-                    />
+                    <ReferenceLine y={profile.goal_weight_kg} stroke="hsl(var(--destructive))" strokeDasharray="3 3" label={{ value: "Fight Night", fill: "hsl(var(--destructive))", fontSize: 10 }} />
                   )}
-                  <Line
-                    type="monotone"
-                    dataKey="weight"
-                    stroke="hsl(var(--primary))"
-                    strokeWidth={2.5}
-                    dot={{ fill: "hsl(var(--primary))", r: 4, cursor: "pointer" }}
-                    activeDot={{ r: 6, cursor: "pointer" }}
-                  />
+                  <Line type="monotone" dataKey="weight" stroke="hsl(var(--primary))" strokeWidth={2.5} dot={{ fill: "hsl(var(--primary))", r: 4, cursor: "pointer" }} activeDot={{ r: 6, cursor: "pointer" }} />
                   {aiAnalysis && showProjected && (
-                    <Line
-                      type="monotone"
-                      dataKey="projected"
-                      stroke="hsl(var(--muted-foreground))"
-                      strokeWidth={1.5}
-                      strokeDasharray="6 4"
-                      dot={false}
-                      connectNulls={false}
-                    />
+                    <Line type="monotone" dataKey="projected" stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} strokeDasharray="6 4" dot={false} connectNulls={false} />
                   )}
                 </LineChart>
               </ResponsiveContainer>
@@ -820,11 +324,7 @@ export default function WeightTracker() {
                 </div>
               )}
               <div className="border-t border-border/20 pt-3">
-                <Collapsible
-                  open={isHistoryOpen}
-                  onOpenChange={setIsHistoryOpen}
-                  className="w-full space-y-2"
-                >
+                <Collapsible open={isHistoryOpen} onOpenChange={setIsHistoryOpen} className="w-full space-y-2">
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Recent Entries</p>
                     <CollapsibleTrigger asChild>
@@ -837,29 +337,16 @@ export default function WeightTracker() {
                   <CollapsibleContent className="space-y-2 pt-2">
                     <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
                       {weightLogs.slice().reverse().map((log) => (
-                        <div
-                          key={log.id}
-                          className="flex items-center justify-between p-3 rounded-xl border border-white/5 bg-background/50 hover:bg-background/80 transition-colors"
-                        >
+                        <div key={log.id} className="flex items-center justify-between p-3 rounded-xl border border-white/5 bg-background/50 hover:bg-background/80 transition-colors">
                           <div>
                             <span className="text-base font-bold text-primary mr-3">{log.weight_kg} kg</span>
                             <span className="text-xs text-muted-foreground">{format(new Date(log.date), "MMM dd, yyyy")}</span>
                           </div>
                           <div className="flex items-center gap-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleEditLog(log)}
-                              className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                            >
+                            <Button variant="ghost" size="icon" onClick={() => handleEditLog(log)} className="h-8 w-8 text-muted-foreground hover:text-foreground">
                               <Edit2 className="h-4 w-4" />
                             </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => initiateDelete(log)}
-                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                            >
+                            <Button variant="ghost" size="icon" onClick={() => initiateDelete(log)} className="h-8 w-8 text-muted-foreground hover:text-destructive">
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
@@ -877,27 +364,11 @@ export default function WeightTracker() {
           )}
         </div>
 
-
         {/* Header + Inline Log Form */}
         <div className="flex flex-col gap-3">
           <form onSubmit={handleAddWeight} className="flex gap-2 items-center">
-            <Input
-              ref={weightInputRef}
-              type="number"
-              step="0.1"
-              placeholder="75.5 kg"
-              value={newWeight}
-              onChange={(e) => setNewWeight(e.target.value)}
-              required
-              className="flex-1 h-10"
-            />
-            <Input
-              type="date"
-              value={newDate}
-              onChange={(e) => setNewDate(e.target.value)}
-              required
-              className="w-[130px] h-10"
-            />
+            <Input ref={weightInputRef} type="number" step="0.1" placeholder="75.5 kg" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} required className="flex-1 h-10" />
+            <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} required className="w-[130px] h-10" />
             <Button type="submit" disabled={loading} className="h-10 px-4 shrink-0">
               {loading ? "..." : editingLogId ? "Update" : "Log"}
             </Button>
@@ -922,27 +393,9 @@ export default function WeightTracker() {
                 const current = getCurrentWeight();
                 const target = profile.fight_week_target_kg || profile.goal_weight_kg;
                 const diff = target - current;
-                if (diff > 0) return (
-                  <>
-                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">To Gain</p>
-                    <p className="display-number text-2xl text-green-500">+{diff.toFixed(1)}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">kg</p>
-                  </>
-                );
-                if (diff < 0) return (
-                  <>
-                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">To Lose</p>
-                    <p className="display-number text-2xl text-primary">{Math.abs(diff).toFixed(1)}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">kg</p>
-                  </>
-                );
-                return (
-                  <>
-                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Status</p>
-                    <p className="display-number text-2xl text-green-500">✓</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">At Target</p>
-                  </>
-                );
+                if (diff > 0) return (<><p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">To Gain</p><p className="display-number text-2xl text-green-500">+{diff.toFixed(1)}</p><p className="text-[10px] text-muted-foreground mt-0.5">kg</p></>);
+                if (diff < 0) return (<><p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">To Lose</p><p className="display-number text-2xl text-primary">{Math.abs(diff).toFixed(1)}</p><p className="text-[10px] text-muted-foreground mt-0.5">kg</p></>);
+                return (<><p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Status</p><p className="display-number text-2xl text-green-500">✓</p><p className="text-[10px] text-muted-foreground mt-0.5">At Target</p></>);
               })()}
             </div>
             <div className="glass-card p-4 text-center">
@@ -979,12 +432,9 @@ export default function WeightTracker() {
 
         {/* AI Analysis */}
         {!analyzingWeight && aiAnalysis && (() => {
-          const isAtOrBelowTarget = aiAnalysisWeight !== null && aiAnalysisTarget !== null &&
-            aiAnalysisWeight <= aiAnalysisTarget;
+          const isAtOrBelowTarget = aiAnalysisWeight !== null && aiAnalysisTarget !== null && aiAnalysisWeight <= aiAnalysisTarget;
           const displayRiskLevel = isAtOrBelowTarget ? 'green' : aiAnalysis.riskLevel;
-          const weightDiff = aiAnalysisWeight !== null && aiAnalysisTarget !== null
-            ? aiAnalysisTarget - aiAnalysisWeight
-            : 0;
+          const weightDiff = aiAnalysisWeight !== null && aiAnalysisTarget !== null ? aiAnalysisTarget - aiAnalysisWeight : 0;
 
           return (
             <div className="glass-card p-4 space-y-5 animate-fade-in">
@@ -992,40 +442,16 @@ export default function WeightTracker() {
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-[10px] uppercase tracking-widest text-muted-foreground">AI Strategy</p>
-                  <p className={`text-lg font-bold mt-0.5 ${displayRiskLevel === 'green' ? 'text-green-500' :
-                    displayRiskLevel === 'yellow' ? 'text-yellow-500' :
-                      'text-red-500'
-                    }`}>
-                    {displayRiskLevel === 'green' ? 'Safe Pace' :
-                      displayRiskLevel === 'yellow' ? 'Moderate Pace' : 'Aggressive Pace'}
+                  <p className={`text-lg font-bold mt-0.5 ${displayRiskLevel === 'green' ? 'text-green-500' : displayRiskLevel === 'yellow' ? 'text-yellow-500' : 'text-red-500'}`}>
+                    {displayRiskLevel === 'green' ? 'Safe Pace' : displayRiskLevel === 'yellow' ? 'Moderate Pace' : 'Aggressive Pace'}
                   </p>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    {isAtOrBelowTarget
-                      ? 'At or below target — maintenance mode'
-                      : `${aiAnalysis.requiredWeeklyLoss.toFixed(2)} kg/week required`
-                    }
+                    {isAtOrBelowTarget ? 'At or below target — maintenance mode' : `${aiAnalysis.requiredWeeklyLoss.toFixed(2)} kg/week required`}
                   </p>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={getAIAnalysis}
-                    disabled={analyzingWeight}
-                    className="h-8 w-8"
-                    title="Refresh analysis"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={clearAnalysis}
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                    title="Delete analysis"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                  <Button variant="ghost" size="icon" onClick={getAIAnalysis} disabled={analyzingWeight} className="h-8 w-8" title="Refresh analysis"><RefreshCw className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" onClick={clearAnalysis} className="h-8 w-8 text-muted-foreground hover:text-destructive" title="Delete analysis"><Trash2 className="h-4 w-4" /></Button>
                 </div>
               </div>
 
@@ -1044,27 +470,9 @@ export default function WeightTracker() {
                   </div>
                   <div>
                     {(() => {
-                      if (weightDiff > 0) return (
-                        <>
-                          <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Gain</p>
-                          <p className="text-xl font-bold text-green-500">+{weightDiff.toFixed(1)}</p>
-                          <p className="text-[10px] text-muted-foreground">kg</p>
-                        </>
-                      );
-                      if (weightDiff < 0) return (
-                        <>
-                          <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Lose</p>
-                          <p className="text-xl font-bold text-primary">{Math.abs(weightDiff).toFixed(1)}</p>
-                          <p className="text-[10px] text-muted-foreground">kg</p>
-                        </>
-                      );
-                      return (
-                        <>
-                          <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Status</p>
-                          <p className="text-xl font-bold text-green-500">✓</p>
-                          <p className="text-[10px] text-muted-foreground">At Target</p>
-                        </>
-                      );
+                      if (weightDiff > 0) return (<><p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Gain</p><p className="text-xl font-bold text-green-500">+{weightDiff.toFixed(1)}</p><p className="text-[10px] text-muted-foreground">kg</p></>);
+                      if (weightDiff < 0) return (<><p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Lose</p><p className="text-xl font-bold text-primary">{Math.abs(weightDiff).toFixed(1)}</p><p className="text-[10px] text-muted-foreground">kg</p></>);
+                      return (<><p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Status</p><p className="text-xl font-bold text-green-500">✓</p><p className="text-[10px] text-muted-foreground">At Target</p></>);
                     })()}
                   </div>
                 </div>
@@ -1075,60 +483,40 @@ export default function WeightTracker() {
                 (() => {
                   const currentWeight = aiAnalysisWeight;
                   const targetWeight = aiAnalysisTarget;
-                  const weightDiff = targetWeight - currentWeight;
-                  const isAtOrBelowTarget = weightDiff >= 0;
+                  const wd = targetWeight - currentWeight;
+                  const isAtTarget = wd >= 0;
 
-                  // Calculate weeks until target
                   const targetDate = new Date(profile.target_date);
                   const today = new Date();
                   const daysRemaining = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
                   const weeksRemaining = Math.max(1, Math.ceil(daysRemaining / 7));
 
-                  // Calculate progress percentage
                   let progressPercent = 0;
-                  if (!isAtOrBelowTarget && weightDiff < 0) {
-                    // Weight loss: progress = (start - current) / (start - target) * 100
-                    const startWeight = currentWeight;
-                    const totalToLose = startWeight - targetWeight;
-                    const lostSoFar = 0; // Currently at start
-                    progressPercent = Math.min(100, Math.max(0, (lostSoFar / totalToLose) * 100));
-                  } else if (isAtOrBelowTarget && weightDiff > 0) {
-                    // Weight gain: progress = (current - start) / (target - start) * 100
-                    const startWeight = currentWeight;
-                    const totalToGain = targetWeight - startWeight;
-                    const gainedSoFar = 0; // Currently at start
-                    progressPercent = Math.min(100, Math.max(0, (gainedSoFar / totalToGain) * 100));
+                  if (!isAtTarget && wd < 0) {
+                    progressPercent = 0;
+                  } else if (isAtTarget && wd > 0) {
+                    progressPercent = 0;
                   } else {
-                    // At target
                     progressPercent = 100;
                   }
 
-                  // Calculate weekly milestones for markers
                   const milestones: Array<{ week: number; expectedWeight: number; position: number }> = [];
 
-                  if (!isAtOrBelowTarget && aiAnalysis.requiredWeeklyLoss > 0) {
-                    // Weight loss mode
+                  if (!isAtTarget && aiAnalysis.requiredWeeklyLoss > 0) {
                     const startWeight = currentWeight;
                     const totalToLose = startWeight - targetWeight;
                     for (let week = 1; week <= Math.min(weeksRemaining, 8); week++) {
-                      const expectedWeight = Math.max(
-                        targetWeight,
-                        currentWeight - (week * aiAnalysis.requiredWeeklyLoss)
-                      );
+                      const expectedWeight = Math.max(targetWeight, currentWeight - (week * aiAnalysis.requiredWeeklyLoss));
                       const weightLost = startWeight - expectedWeight;
                       const position = Math.min(100, Math.max(0, (weightLost / totalToLose) * 100));
                       milestones.push({ week, expectedWeight, position });
                     }
-                  } else if (isAtOrBelowTarget && weightDiff > 0) {
-                    // Weight gain mode
+                  } else if (isAtTarget && wd > 0) {
                     const startWeight = currentWeight;
                     const totalToGain = targetWeight - startWeight;
                     const weeklyGain = Math.abs(aiAnalysis.requiredWeeklyLoss) || 0.2;
                     for (let week = 1; week <= Math.min(weeksRemaining, 8); week++) {
-                      const expectedWeight = Math.min(
-                        targetWeight,
-                        currentWeight + (week * weeklyGain)
-                      );
+                      const expectedWeight = Math.min(targetWeight, currentWeight + (week * weeklyGain));
                       const weightGained = expectedWeight - startWeight;
                       const position = Math.min(100, Math.max(0, (weightGained / totalToGain) * 100));
                       milestones.push({ week, expectedWeight, position });
@@ -1138,52 +526,24 @@ export default function WeightTracker() {
                   return (
                     <div className="py-2">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-semibold text-muted-foreground">
-                          {currentWeight.toFixed(1)} kg
-                        </span>
-                        <span className="text-[9px] text-muted-foreground">
-                          {weeksRemaining} {weeksRemaining === 1 ? 'week' : 'weeks'} remaining
-                        </span>
-                        <span className="text-[10px] font-semibold text-primary">
-                          {targetWeight.toFixed(1)} kg
-                        </span>
+                        <span className="text-[10px] font-semibold text-muted-foreground">{currentWeight.toFixed(1)} kg</span>
+                        <span className="text-[9px] text-muted-foreground">{weeksRemaining} {weeksRemaining === 1 ? 'week' : 'weeks'} remaining</span>
+                        <span className="text-[10px] font-semibold text-primary">{targetWeight.toFixed(1)} kg</span>
                       </div>
                       <div className="relative">
-                        {/* Weight labels above milestones */}
                         <div className="relative h-4 mb-1">
                           {milestones.map(({ week, expectedWeight, position }) => (
-                            <div
-                              key={`label-${week}`}
-                              className="absolute -translate-x-1/2"
-                              style={{ left: `${position}%` }}
-                            >
-                              <span className="text-[9px] text-muted-foreground whitespace-nowrap">
-                                {expectedWeight.toFixed(1)}
-                              </span>
+                            <div key={`label-${week}`} className="absolute -translate-x-1/2" style={{ left: `${position}%` }}>
+                              <span className="text-[9px] text-muted-foreground whitespace-nowrap">{expectedWeight.toFixed(1)}</span>
                             </div>
                           ))}
                         </div>
-                        {/* Progress bar */}
                         <div className="relative h-3 bg-muted rounded-full overflow-visible">
-                          {/* Progress fill */}
-                          <div
-                            className="h-full bg-gradient-to-r from-primary to-primary/80 rounded-full transition-all duration-500"
-                            style={{ width: `${progressPercent}%` }}
-                          />
-                          {/* Milestone markers */}
+                          <div className="h-full bg-gradient-to-r from-primary to-primary/80 rounded-full transition-all duration-500" style={{ width: `${progressPercent}%` }} />
                           {milestones.map(({ week, expectedWeight, position }) => (
-                            <div
-                              key={week}
-                              className="absolute top-0 bottom-0 w-0.5 bg-foreground/30"
-                              style={{ left: `${position}%` }}
-                              title={`Week ${week}: ${expectedWeight.toFixed(1)} kg`}
-                            />
+                            <div key={week} className="absolute top-0 bottom-0 w-0.5 bg-foreground/30" style={{ left: `${position}%` }} title={`Week ${week}: ${expectedWeight.toFixed(1)} kg`} />
                           ))}
-                          {/* Current position indicator */}
-                          <div
-                            className="absolute top-1/2 -translate-y-1/2 w-2 h-2 bg-primary rounded-full border-2 border-background shadow-sm z-10"
-                            style={{ left: `${progressPercent}%`, marginLeft: '-4px' }}
-                          />
+                          <div className="absolute top-1/2 -translate-y-1/2 w-2 h-2 bg-primary rounded-full border-2 border-background shadow-sm z-10" style={{ left: `${progressPercent}%`, marginLeft: '-4px' }} />
                         </div>
                       </div>
                     </div>
@@ -1220,36 +580,25 @@ export default function WeightTracker() {
               <div className="space-y-3 border-t border-border/20 pt-4">
                 <div className="flex gap-2 items-start">
                   <AlertTriangle className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    <span className="font-medium text-foreground">Risk: </span>{aiAnalysis.riskExplanation}
-                  </p>
+                  <p className="text-xs text-muted-foreground leading-relaxed"><span className="font-medium text-foreground">Risk: </span>{aiAnalysis.riskExplanation}</p>
                 </div>
                 <div className="flex gap-2 items-start">
                   <Sparkles className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    <span className="font-medium text-foreground">Strategy: </span>{aiAnalysis.strategicGuidance}
-                  </p>
+                  <p className="text-xs text-muted-foreground leading-relaxed"><span className="font-medium text-foreground">Strategy: </span>{aiAnalysis.strategicGuidance}</p>
                 </div>
                 {aiAnalysis.nutritionTips.length > 0 && (
                   <div className="flex gap-2 items-start">
                     <Apple className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                    <div className="text-xs text-muted-foreground leading-relaxed">
-                      <span className="font-medium text-foreground">Nutrition: </span>
-                      {aiAnalysis.nutritionTips.join(' · ')}
-                    </div>
+                    <div className="text-xs text-muted-foreground leading-relaxed"><span className="font-medium text-foreground">Nutrition: </span>{aiAnalysis.nutritionTips.join(' · ')}</div>
                   </div>
                 )}
                 <div className="flex gap-2 items-start">
                   <Activity className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    <span className="font-medium text-foreground">Training: </span>{aiAnalysis.trainingConsiderations}
-                  </p>
+                  <p className="text-xs text-muted-foreground leading-relaxed"><span className="font-medium text-foreground">Training: </span>{aiAnalysis.trainingConsiderations}</p>
                 </div>
                 <div className="flex gap-2 items-start">
                   <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    <span className="font-medium text-foreground">Timeline: </span>{aiAnalysis.timeline}
-                  </p>
+                  <p className="text-xs text-muted-foreground leading-relaxed"><span className="font-medium text-foreground">Timeline: </span>{aiAnalysis.timeline}</p>
                 </div>
               </div>
 
@@ -1285,12 +634,7 @@ export default function WeightTracker() {
 
         {/* Debug Button */}
         {debugData && (
-          <Button
-            onClick={() => setDebugDialogOpen(true)}
-            variant="ghost"
-            size="sm"
-            className="w-full opacity-50 text-xs"
-          >
+          <Button onClick={() => setDebugDialogOpen(true)} variant="ghost" size="sm" className="w-full opacity-50 text-xs">
             <Bug className="h-3 w-3 mr-1" />
             Debug AI Request/Response
           </Button>
@@ -1313,9 +657,7 @@ export default function WeightTracker() {
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogAction onClick={handleUnsafeGoalDismiss}>
-                I understand
-              </AlertDialogAction>
+              <AlertDialogAction onClick={() => setUnsafeGoalDialogOpen(false)}>I understand</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
@@ -1324,9 +666,7 @@ export default function WeightTracker() {
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>AI Weight Loss Strategy - Debug Info</DialogTitle>
-              <DialogDescription>
-                Debug information for the AI weight loss strategy request and response
-              </DialogDescription>
+              <DialogDescription>Debug information for the AI weight loss strategy request and response</DialogDescription>
             </DialogHeader>
             {debugData && (
               <div className="space-y-6 mt-4">
@@ -1340,41 +680,29 @@ export default function WeightTracker() {
                         <strong>Latest Weight Log:</strong>
                         <div className="ml-4">
                           Weight: {debugData.latestWeightLog.weight_kg} kg
-                          {debugData.latestWeightLog.date && (
-                            <div>Date: {debugData.latestWeightLog.date}</div>
-                          )}
+                          {debugData.latestWeightLog.date && <div>Date: {debugData.latestWeightLog.date}</div>}
                         </div>
                       </div>
                     )}
-                    {!debugData.latestWeightLog && (
-                      <div className="mt-2 text-muted-foreground">No weight log found, using profile weight</div>
-                    )}
+                    {!debugData.latestWeightLog && <div className="mt-2 text-muted-foreground">No weight log found, using profile weight</div>}
                   </div>
                 </div>
                 <div className="space-y-2">
                   <h3 className="font-semibold text-sm">Profile Data</h3>
-                  <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto font-mono">
-                    {JSON.stringify(debugData.profileData, null, 2)}
-                  </pre>
+                  <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto font-mono">{JSON.stringify(debugData.profileData, null, 2)}</pre>
                 </div>
                 <div className="space-y-2">
                   <h3 className="font-semibold text-sm">Request Payload (Sent to API)</h3>
-                  <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto font-mono">
-                    {JSON.stringify(debugData.requestPayload, null, 2)}
-                  </pre>
+                  <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto font-mono">{JSON.stringify(debugData.requestPayload, null, 2)}</pre>
                 </div>
                 <div className="space-y-2">
                   <h3 className="font-semibold text-sm">Raw API Response</h3>
-                  <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto font-mono max-h-96 overflow-y-auto">
-                    {JSON.stringify(debugData.rawResponse, null, 2)}
-                  </pre>
+                  <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto font-mono max-h-96 overflow-y-auto">{JSON.stringify(debugData.rawResponse, null, 2)}</pre>
                 </div>
                 {debugData.parsedResponse && (
                   <div className="space-y-2">
                     <h3 className="font-semibold text-sm">Parsed Response (Analysis)</h3>
-                    <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto font-mono max-h-96 overflow-y-auto">
-                      {JSON.stringify(debugData.parsedResponse, null, 2)}
-                    </pre>
+                    <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto font-mono max-h-96 overflow-y-auto">{JSON.stringify(debugData.parsedResponse, null, 2)}</pre>
                   </div>
                 )}
               </div>
@@ -1383,33 +711,13 @@ export default function WeightTracker() {
         </Dialog>
       </div>
 
-      {/* Share weight tracker card */}
-      <ShareCardDialog
-        open={shareOpen}
-        onOpenChange={setShareOpen}
-        title="Share Weight Progress"
-        shareTitle="Weight Journey"
-        shareText="Check out my weight progress on WeightCut Wizard"
-      >
+      <ShareCardDialog open={shareOpen} onOpenChange={setShareOpen} title="Share Weight Progress" shareTitle="Weight Journey" shareText="Check out my weight progress on WeightCut Wizard">
         {({ cardRef, aspect }) => (
-          <WeightTrackerCard
-            ref={cardRef}
-            weightLogs={weightLogs}
-            goalWeight={profile?.fight_week_target_kg ?? profile?.goal_weight_kg}
-            timeFilter={timeFilter}
-            aspect={aspect}
-          />
+          <WeightTrackerCard ref={cardRef} weightLogs={weightLogs} goalWeight={profile?.fight_week_target_kg ?? profile?.goal_weight_kg} timeFilter={timeFilter} aspect={aspect} />
         )}
       </ShareCardDialog>
 
-      {/* Share weigh-in result card */}
-      <ShareCardDialog
-        open={weighInShareOpen}
-        onOpenChange={setWeighInShareOpen}
-        title="Share Weigh-In Result"
-        shareTitle="Made Weight!"
-        shareText="I made weight on WeightCut Wizard"
-      >
+      <ShareCardDialog open={weighInShareOpen} onOpenChange={setWeighInShareOpen} title="Share Weigh-In Result" shareTitle="Made Weight!" shareText="I made weight on WeightCut Wizard">
         {({ cardRef, aspect }) => (
           <WeighInResultCard
             ref={cardRef}

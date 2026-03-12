@@ -10,7 +10,7 @@ Living checklist of everything to resolve before App Store submission. Consolida
 
 - [ ] **AIGeneratingOverlay completion animation never fires** — `src/components/AIGeneratingOverlay.tsx:88-100`. The `!isGenerating && isOpen` condition is never true because both props are always the same value (`isAiActive`). Users never see "Complete!" feedback. **Fix:** Decouple `isOpen` from `isGenerating` in callers (Nutrition.tsx, Hydration.tsx, etc.) so `isOpen` stays true briefly after `isGenerating` goes false.
 
-- [ ] **No privacy policy or terms of service links in-app** — Required for App Store. No links exist anywhere in the UI. **Fix:** Add links to Settings sheet/page and onboarding footer.
+- [DONE] **No privacy policy or terms of service links in-app** — Required for App Store. No links exist anywhere in the UI. **Fix:** Add links to Settings sheet/page and onboarding footer.
 
 - [ ] **Payment infrastructure not implemented** — No Stripe integration, no subscription management, no webhooks. `is_premium` field exists in profiles but is never checked/enforced. **Need:** Stripe checkout, webhook edge function, subscription table, paywall UI, billing portal.
 
@@ -22,23 +22,23 @@ Living checklist of everything to resolve before App Store submission. Consolida
 
 ## HIGH
 
-- [ ] **Race condition in `refreshProfile()`** — `src/contexts/UserContext.tsx:140-187`. No abort signal or staleness check. If called twice rapidly, the slower first call can overwrite the faster second call's result with stale data. **Fix:** Capture userId at call start, verify it hasn't changed before setting state.
+- [DONE] **Race condition in `refreshProfile()`** — `src/contexts/UserContext.tsx:140-187`. No abort signal or staleness check. If called twice rapidly, the slower first call can overwrite the faster second call's result with stale data. **Fix:** Capture userId at call start, verify it hasn't changed before setting state.
 
-- [ ] **Missing `userId` dependency in Nutrition.tsx warmup useEffect** — `src/pages/Nutrition.tsx:517`. Effect uses `userId` in its body but omits it from the dependency array — stale closure. **Fix:** Add `userId` to the dependency array.
+- [DONE] **Missing `userId` dependency in Nutrition.tsx warmup useEffect** — `src/pages/Nutrition.tsx:517`. Effect uses `userId` in its body but omits it from the dependency array — stale closure. **Fix:** Add `userId` to the dependency array.
 
-- [ ] **Missing input validation in `fight-camp-coach` edge function** — `supabase/functions/fight-camp-coach/index.ts:49-94`. Extracts many payload fields with zero type/range validation. Bad client data produces garbage LLM prompts. **Fix:** Add validation for required fields and numeric ranges before building the prompt.
+- [DONE] **Missing input validation in `fight-camp-coach` edge function** — `supabase/functions/fight-camp-coach/index.ts:49-94`. Extracts many payload fields with zero type/range validation. Bad client data produces garbage LLM prompts. **Fix:** Add validation for required fields and numeric ranges before building the prompt.
 
-- [ ] **Missing `finish_reason` check in `analyse-diet` edge function** — `supabase/functions/analyse-diet/index.ts:142`. If Grok truncates the response (`finish_reason: "length"`), `parseJSON` will silently fail with a generic error. No logging to detect this. **Fix:** Check `data.choices[0].finish_reason` after the Grok call and log a warning if `"length"`.
+- [DONE] **Missing `finish_reason` check in `analyse-diet` edge function** — `supabase/functions/analyse-diet/index.ts:142`. If Grok truncates the response (`finish_reason: "length"`), `parseJSON` will silently fail with a generic error. No logging to detect this. **Fix:** Check `data.choices[0].finish_reason` after the Grok call and log a warning if `"length"`.
 
-- [ ] **Untyped Supabase casts in FightCampCalendar** — `src/pages/FightCampCalendar.tsx` (lines 97, 124, 218, 226, 263, 313). Multiple `(supabase as any)` casts for `fight_camp_calendar` table. **Fix:** Extend Supabase type definitions to include this table.
+- [DONE] **Untyped Supabase casts in FightCampCalendar** — `src/pages/FightCampCalendar.tsx` (lines 97, 124, 218, 226, 263, 313). Multiple `(supabase as any)` casts for `fight_camp_calendar` table. **Fix:** Extend Supabase type definitions to include this table.
 
-- [ ] **Missing ARIA labels on interactive elements** — Many icon-only buttons (edit, delete, expand/collapse in nutrition, weight unit toggles, settings toggles) lack `aria-label`. Only ~26 ARIA labels across entire codebase. **Fix:** Audit all icon-only buttons and add descriptive aria-labels.
+- [DONE] **Missing ARIA labels on interactive elements** — Many icon-only buttons (edit, delete, expand/collapse in nutrition, weight unit toggles, settings toggles) lack `aria-label`. Only ~26 ARIA labels across entire codebase. **Fix:** Audit all icon-only buttons and add descriptive aria-labels.
 
-- [ ] **Color contrast below WCAG AA** — `src/index.css`. `--muted-foreground: 220 15% 65%` on near-black background yields ~3.5:1 ratio (AA requires 4.5:1). Affects secondary text, chart labels, muted icons. **Fix:** Adjust to `220 15% 55%` or similar for ≥4.5:1 ratio.
+- [DONE] **Color contrast below WCAG AA** — `src/index.css`. `--muted-foreground: 220 15% 65%` on near-black background yields ~3.5:1 ratio (AA requires 4.5:1). Affects secondary text, chart labels, muted icons. **Fix:** Adjust to `220 15% 55%` or similar for ≥4.5:1 ratio.
 
-- [ ] **No offline indicator UI** — Network events are listened to and a sync queue exists, but users see no visual indication they're offline or that data is pending sync. **Fix:** Add a thin banner component that shows when `navigator.onLine` is false.
+- [DONE] **No offline indicator UI** — Network events are listened to and a sync queue exists, but users see no visual indication they're offline or that data is pending sync. **Fix:** Add a thin banner component that shows when `navigator.onLine` is false.
 
-- [ ] **Massive single-file components** — `Nutrition.tsx` (3,878 lines), `WeightTracker.tsx` (1,414), `Hydration.tsx` (1,206), `performanceEngine.ts` (1,340), `FightCampCalendar.tsx` (758), `BottomNav.tsx` (632). **Need:** Decompose into focused sub-components (max 300-400 lines each).
+- [DONE] **Massive single-file components** — `Nutrition.tsx` (3,878 lines), `WeightTracker.tsx` (1,414), `Hydration.tsx` (1,206), `performanceEngine.ts` (1,340), `FightCampCalendar.tsx` (758), `BottomNav.tsx` (632). **Need:** Decompose into focused sub-components (max 300-400 lines each).
 
 - [ ] **Silent async errors** — `Dashboard.tsx`: `.catch(() => {})` swallows errors. Multiple pages: `if (!data) return;` without user feedback. `JSON.parse()` without try-catch in: `localCache.ts`, `aiPersistence.ts`, `syncQueue.ts`. **Need:** Error toasts/states on all async operations, wrap all JSON.parse.
 

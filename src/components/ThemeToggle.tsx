@@ -28,6 +28,7 @@ export function ThemeToggle({ className }: { className?: string }) {
       variant="ghost"
       size="icon"
       onClick={toggleTheme}
+      aria-label={theme === "light" ? "Switch to dark mode" : "Switch to light mode"}
       className={`rounded-full ${className || ""}`}
     >
       {theme === "light" ? (

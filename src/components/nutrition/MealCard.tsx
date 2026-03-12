@@ -91,6 +91,7 @@ export function MealCard({ meal, onEdit, onDelete }: MealCardProps) {
             variant="ghost"
             size="icon"
             className="h-6 w-6 flex-shrink-0 text-muted-foreground"
+            aria-label={expanded ? "Collapse meal details" : "Expand meal details"}
             onClick={() => setExpanded(!expanded)}
           >
             {expanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
@@ -100,6 +101,7 @@ export function MealCard({ meal, onEdit, onDelete }: MealCardProps) {
             variant="ghost"
             size="icon"
             className="h-6 w-6 flex-shrink-0 text-muted-foreground hover:text-destructive"
+            aria-label="Delete meal"
             onClick={onDelete}
           >
             <Trash2 className="h-3 w-3" />

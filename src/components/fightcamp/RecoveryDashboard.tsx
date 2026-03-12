@@ -682,7 +682,7 @@ function CoachResultCard({ coach, onRefresh }: { coach: CoachResponse; onRefresh
       {/* Header with refresh */}
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Coach Analysis</span>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onRefresh}>
+        <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Refresh coach analysis" onClick={onRefresh}>
           <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
         </Button>
       </div>

@@ -86,6 +86,51 @@ serve(async (req) => {
       enhancedReadinessScore,
     } = await req.json();
 
+    // --- Input validation ---
+    const clamp = (val: number, min: number, max: number) => Math.max(min, Math.min(max, val));
+
+    // Required numeric fields
+    if (typeof strain !== 'number' || !isFinite(strain)) {
+      return new Response(JSON.stringify({ error: 'strain must be a finite number' }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    if (typeof overtrainingScore !== 'number' || !isFinite(overtrainingScore)) {
+      return new Response(JSON.stringify({ error: 'overtrainingScore must be a finite number' }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    if (typeof loadRatio !== 'number' || !isFinite(loadRatio)) {
+      return new Response(JSON.stringify({ error: 'loadRatio must be a finite number' }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // Range clamping
+    const clampedStrain = clamp(strain, 0, 21);
+    const clampedOvertrainingScore = clamp(overtrainingScore, 0, 100);
+    const clampedLoadRatio = clamp(loadRatio, 0, 10);
+    const clampedReadinessScore = typeof readinessScore === 'number' && isFinite(readinessScore) ? clamp(readinessScore, 0, 100) : readinessScore;
+    const clampedHooperIndex = typeof hooperIndex === 'number' && isFinite(hooperIndex) ? clamp(hooperIndex, 4, 28) : hooperIndex;
+    const clampedCheckInScore = typeof checkInScore === 'number' && isFinite(checkInScore) ? clamp(checkInScore, 0, 12) : checkInScore;
+
+    // Enum validation
+    if (checkInSignal != null && !['green', 'yellow', 'red'].includes(checkInSignal)) {
+      return new Response(JSON.stringify({ error: 'checkInSignal must be "green", "yellow", or "red"' }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    if (overtrainingZone != null && !['low', 'moderate', 'high', 'critical'].includes(overtrainingZone)) {
+      return new Response(JSON.stringify({ error: 'overtrainingZone must be "low", "moderate", "high", or "critical"' }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // Type checks
+    if (recentSessions != null && !Array.isArray(recentSessions)) {
+      return new Response(JSON.stringify({ error: 'recentSessions must be an array' }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    if (checkIn != null && (typeof checkIn !== 'object' || Array.isArray(checkIn))) {
+      return new Response(JSON.stringify({ error: 'checkIn must be an object' }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
     if (!GROK_API_KEY) {
       throw new Error("GROK_API_KEY is not configured");
@@ -99,7 +144,7 @@ serve(async (req) => {
 
     const feelLabel = checkInSignal === 'green' ? 'good' : checkInSignal === 'yellow' ? 'mixed' : 'rough';
     const checkInText = checkIn
-      ? `\nFighter's self-assessment right now (CHECK-IN SIGNAL: ${checkInSignal?.toUpperCase() ?? 'UNKNOWN'}, score ${checkInScore ?? '?'}/12):
+      ? `\nFighter's self-assessment right now (CHECK-IN SIGNAL: ${checkInSignal?.toUpperCase() ?? 'UNKNOWN'}, score ${clampedCheckInScore ?? '?'}/12):
 - Energy: ${checkIn.energy}
 - Body soreness: ${checkIn.soreness}
 - Sleep last night: ${checkIn.sleep}
@@ -116,8 +161,8 @@ serve(async (req) => {
       : '';
 
     // Build readiness text if available
-    const readinessText = readinessScore != null
-      ? `\nReadiness Score: ${readinessScore}/100 (${readinessLabel ?? 'unknown'})${
+    const readinessText = clampedReadinessScore != null
+      ? `\nReadiness Score: ${clampedReadinessScore}/100 (${readinessLabel ?? 'unknown'})${
           readinessBreakdown
             ? `\n  - Sleep: ${readinessBreakdown.sleepScore}/100 | Soreness: ${readinessBreakdown.sorenessScore}/100 | Load Balance: ${readinessBreakdown.loadBalanceScore}/100 | Recovery: ${readinessBreakdown.recoveryScore}/100 | Consistency: ${readinessBreakdown.consistencyScore}/100`
             : ''
@@ -140,8 +185,8 @@ serve(async (req) => {
       : '';
 
     // Build Hooper Index text
-    const hooperText = hooperIndex != null
-      ? `\nHooper Index: ${hooperIndex}/28 (Sleep: ${hooperComponents?.sleep ?? '?'}/7, Stress: ${hooperComponents?.stress ?? '?'}/7, Fatigue: ${hooperComponents?.fatigue ?? '?'}/7, Soreness: ${hooperComponents?.soreness ?? '?'}/7)`
+    const hooperText = clampedHooperIndex != null
+      ? `\nHooper Index: ${clampedHooperIndex}/28 (Sleep: ${hooperComponents?.sleep ?? '?'}/7, Stress: ${hooperComponents?.stress ?? '?'}/7, Fatigue: ${hooperComponents?.fatigue ?? '?'}/7, Soreness: ${hooperComponents?.soreness ?? '?'}/7)`
       : '';
 
     // Build caloric deficit text
@@ -251,9 +296,9 @@ OUTPUT:
 CRITICAL — recovery_focus must be exactly 5 items, each one addressing a DIFFERENT aspect of this fighter's recovery needs based on their actual metrics. Do not give generic advice. Reference their specific numbers and trends.`;
 
     const userPrompt = `Fighter metrics (deterministic — do not override):
-- Strain: ${strain?.toFixed(1) ?? 0}/21 | Daily Load: ${dailyLoad?.toFixed(0) ?? 0}
-- Acute (7d): ${acuteLoad?.toFixed(0) ?? 0} | Chronic (28d): ${chronicLoad?.toFixed(0) ?? 0} | AC Ratio: ${loadRatio?.toFixed(2) ?? 1.0}
-- Overtraining: ${overtrainingScore ?? 0}/100 (${overtrainingZone ?? 'low'})
+- Strain: ${clampedStrain.toFixed(1)}/21 | Daily Load: ${dailyLoad?.toFixed(0) ?? 0}
+- Acute (7d): ${acuteLoad?.toFixed(0) ?? 0} | Chronic (28d): ${chronicLoad?.toFixed(0) ?? 0} | AC Ratio: ${clampedLoadRatio.toFixed(2)}
+- Overtraining: ${clampedOvertrainingScore}/100 (${overtrainingZone ?? 'low'})
 - Avg RPE (7d): ${avgRPE7d?.toFixed(1) ?? 0} | Avg Soreness: ${avgSoreness7d?.toFixed(1) ?? 0}/10
 - Sessions (7d): ${sessionsLast7d ?? weeklySessionCount ?? 0} | Consecutive high days: ${consecutiveHighDays ?? 0}
 - Sleep: ${latestSleep ?? 8}h (avg ${avgSleep?.toFixed(1) ?? 0}h) | Soreness: ${latestSoreness ?? 0}/10${readinessText}${calibrationText}${hooperText}${deficitText}${balanceText}${trendAlertsText}
