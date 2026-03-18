@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronUp } from "lucide-react";
-import { useState } from "react";
+import { useState, memo } from "react";
 import type { EnhancedReadinessBreakdown } from "@/utils/performanceEngine";
 
 interface ReadinessBreakdownCardProps {
@@ -35,7 +35,7 @@ function getBarColor(value: number): string {
   return '#ef4444';
 }
 
-export function ReadinessBreakdownCard({ breakdown, totalCheckInDays }: ReadinessBreakdownCardProps) {
+export const ReadinessBreakdownCard = memo(function ReadinessBreakdownCard({ breakdown, totalCheckInDays }: ReadinessBreakdownCardProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   const tier = breakdown.tier;
@@ -113,4 +113,4 @@ export function ReadinessBreakdownCard({ breakdown, totalCheckInDays }: Readines
       )}
     </div>
   );
-}
+});

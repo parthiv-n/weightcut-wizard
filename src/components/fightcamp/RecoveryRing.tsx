@@ -1,3 +1,5 @@
+import { memo } from "react";
+
 interface RecoveryRingProps {
   value: number;
   max: number;
@@ -10,7 +12,7 @@ interface RecoveryRingProps {
   sublabel?: string;
 }
 
-export function RecoveryRing({
+export const RecoveryRing = memo(function RecoveryRing({
   value,
   max,
   color,
@@ -95,4 +97,4 @@ export function RecoveryRing({
       </span>
     </div>
   );
-}
+});

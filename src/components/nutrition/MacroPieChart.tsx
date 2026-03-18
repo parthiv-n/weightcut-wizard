@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Settings } from "lucide-react";
 
 interface MacroPieChartProps {
@@ -12,7 +13,7 @@ interface MacroPieChartProps {
     onEditTargets?: () => void;
 }
 
-export function MacroPieChart({
+export const MacroPieChart = memo(function MacroPieChart({
     calories,
     calorieTarget,
     protein,
@@ -199,4 +200,4 @@ export function MacroPieChart({
             </div>
         </div>
     );
-}
+});

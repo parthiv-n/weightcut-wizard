@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { AnimatedRing, AnimatedNumber } from "@/components/motion";
 
@@ -6,7 +7,7 @@ interface CalorieProgressRingProps {
   target: number;
 }
 
-export function CalorieProgressRing({ consumed, target }: CalorieProgressRingProps) {
+export const CalorieProgressRing = memo(function CalorieProgressRing({ consumed, target }: CalorieProgressRingProps) {
   const percentage = target > 0 ? Math.min((consumed / target) * 100, 100) : 0;
   const progressFraction = percentage / 100;
 
@@ -57,4 +58,4 @@ export function CalorieProgressRing({ consumed, target }: CalorieProgressRingPro
       </CardContent>
     </Card>
   );
-}
+});

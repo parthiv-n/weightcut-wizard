@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/UserContext";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { normalizeTechniqueName, processChains, buildGraphData } from "@/lib/techniqueGraph";
-import { createAIAbortController } from "@/lib/timeoutWrapper";
+import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 import { celebrateSuccess } from "@/lib/haptics";
 import { logger } from "@/lib/logger";
 import type {
@@ -149,7 +149,10 @@ export function useSkillTree() {
       );
 
       if (controller.signal.aborted) return;
-      if (chainError) throw chainError;
+      if (chainError) {
+        if (chainError?.name === "AbortError") throw chainError;
+        throw new Error(await extractEdgeFunctionError(chainError, "Chain generation failed"));
+      }
       const chainData = chainResponse as TechniqueChainResponse;
 
       if (!chainData?.chains?.length) return;

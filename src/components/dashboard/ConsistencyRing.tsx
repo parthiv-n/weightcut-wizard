@@ -1,9 +1,10 @@
+import { memo } from "react";
 import type { WeeklyConsistency } from "@/hooks/useGamification";
 import { AnimatedRing, AnimatedNumber } from "@/components/motion";
 
 interface ConsistencyRingProps extends WeeklyConsistency {}
 
-export function ConsistencyRing({
+export const ConsistencyRing = memo(function ConsistencyRing({
   percentage,
   daysComplete,
   totalDays,
@@ -72,4 +73,4 @@ export function ConsistencyRing({
       </div>
     </div>
   );
-}
+});

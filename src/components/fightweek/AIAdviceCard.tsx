@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, memo } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Sparkles,
@@ -32,7 +32,7 @@ const AI_STEPS = [
   { icon: Sparkles, label: "Generating protocol advice", color: "text-yellow-400" },
 ];
 
-export function AIAdviceCard({ advice, isGenerating, onGenerate, onCancel, onRetry }: AIAdviceCardProps) {
+export const AIAdviceCard = memo(function AIAdviceCard({ advice, isGenerating, onGenerate, onCancel, onRetry }: AIAdviceCardProps) {
   const [tipsOpen, setTipsOpen] = useState(false);
 
   return (
@@ -146,4 +146,4 @@ export function AIAdviceCard({ advice, isGenerating, onGenerate, onCancel, onRet
       </div>
     </>
   );
-}
+});

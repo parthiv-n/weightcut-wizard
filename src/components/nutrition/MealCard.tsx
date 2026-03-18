@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Edit2, Trash2, ChevronDown, Sparkles } from "lucide-react";
-import { useState, useRef } from "react";
+import { useState, useRef, memo } from "react";
 import { motion, AnimatePresence, useMotionValue, useReducedMotion } from "motion/react";
 import { springs } from "@/lib/motion";
 import { MacroDonut } from "./MacroDonut";
@@ -37,7 +37,7 @@ interface MealCardProps {
 
 const DELETE_THRESHOLD = -80;
 
-export function MealCard({ meal, onEdit, onDelete }: MealCardProps) {
+export const MealCard = memo(function MealCard({ meal, onEdit, onDelete }: MealCardProps) {
   const [expanded, setExpanded] = useState(false);
   const hasDetails = !!(meal.ingredients?.length || meal.portion_size || meal.recipe_notes);
   const prefersReducedMotion = useReducedMotion();
@@ -205,4 +205,4 @@ export function MealCard({ meal, onEdit, onDelete }: MealCardProps) {
       </motion.div>
     </div>
   );
-}
+});

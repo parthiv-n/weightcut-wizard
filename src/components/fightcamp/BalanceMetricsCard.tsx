@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import type { BalanceMetric } from "@/utils/performanceEngine";
 
@@ -34,7 +35,7 @@ function getBarPosition(recent: number, baseline: number, z: number): { left: nu
   return { left: center, width: Math.max(2, width), barLeft };
 }
 
-export function BalanceMetricsCard({ balanceMetrics }: BalanceMetricsCardProps) {
+export const BalanceMetricsCard = memo(function BalanceMetricsCard({ balanceMetrics }: BalanceMetricsCardProps) {
   if (balanceMetrics.length === 0) return null;
 
   return (
@@ -98,4 +99,4 @@ export function BalanceMetricsCard({ balanceMetrics }: BalanceMetricsCardProps) 
       </div>
     </div>
   );
-}
+});

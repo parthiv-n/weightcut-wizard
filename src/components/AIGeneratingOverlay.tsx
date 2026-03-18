@@ -1,5 +1,5 @@
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, memo } from "react";
 import { createPortal } from "react-dom";
 import { CheckCircle2, Loader2, LucideIcon, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -22,7 +22,7 @@ interface AIGeneratingOverlayProps {
     onRetry?: () => void;
 }
 
-export function AIGeneratingOverlay({
+export const AIGeneratingOverlay = memo(function AIGeneratingOverlay({
     isOpen,
     isGenerating,
     steps,
@@ -179,4 +179,4 @@ export function AIGeneratingOverlay({
         </div>,
         document.body
     );
-}
+});

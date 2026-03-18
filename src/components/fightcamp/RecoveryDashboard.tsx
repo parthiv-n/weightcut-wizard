@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, memo } from "react";
 import { Activity, Brain, RefreshCw, AlertTriangle, CheckCircle, Loader2, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
@@ -146,7 +146,7 @@ function computeCheckInSignal(ci: FeelCheckIn): { score: number; signal: 'green'
 const today = new Date().toISOString().split('T')[0];
 const CACHE_KEY = `fight_camp_coach_${today}`;
 
-export function RecoveryDashboard({ sessions28d, userId, sessionLoggedAt = 0, athleteProfile, tdee }: RecoveryDashboardProps) {
+export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, userId, sessionLoggedAt = 0, athleteProfile, tdee }: RecoveryDashboardProps) {
   const [metrics, setMetrics] = useState<AllMetrics | null>(null);
   const [coachData, setCoachData] = useState<CoachResponse | null>(null);
   const [isCoachLoading, setIsCoachLoading] = useState(false);
@@ -644,7 +644,7 @@ export function RecoveryDashboard({ sessions28d, userId, sessionLoggedAt = 0, at
       </div>
     </div>
   );
-}
+});
 
 // ─── Readiness Hero Badge (AI-driven) ────────────────────────
 function ReadinessBadgeUI({ state }: { state: CoachResponse['readiness_state'] }) {

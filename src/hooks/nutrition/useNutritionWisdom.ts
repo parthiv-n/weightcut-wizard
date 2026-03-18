@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { AIPersistence } from "@/lib/aiPersistence";
+import { extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
 import type { TrainingFoodTip, MacroGoals } from "@/pages/nutrition/types";
 
@@ -111,7 +112,8 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
       });
 
       if (!isMounted()) return;
-      if (error) throw error;
+      if (error) throw new Error(await extractEdgeFunctionError(error, "Could not generate nutrition advice"));
+      if (data?.error) throw new Error(data.error);
 
       let advice: string | null = null;
       if (data?.mealPlan) {
@@ -185,7 +187,8 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
       });
 
       if (!isMounted()) return;
-      if (error) throw error;
+      if (error) throw new Error(await extractEdgeFunctionError(error, "Could not generate training food ideas"));
+      if (data?.error) throw new Error(data.error);
 
       let trainingData: TrainingFoodTip | null = null;
 

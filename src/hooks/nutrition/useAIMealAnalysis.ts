@@ -82,6 +82,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
         if (controller.signal.aborted) return;
         if (error) throw new Error(await extractEdgeFunctionError(error, "Failed to analyze meal"));
+        if (data?.error) throw new Error(data.error);
         nutritionData = data.nutritionData;
         if (userId && nutritionData) {
           AIPersistence.save(userId, mealCacheKey, nutritionData, 24 * 7);
@@ -186,6 +187,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
       if (ingController.signal.aborted) return;
       if (error) throw new Error(await extractEdgeFunctionError(error, "Failed to analyze ingredient"));
+      if (data?.error) throw new Error(data.error);
 
       const { nutritionData } = data;
 
@@ -295,6 +297,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
       if (voiceController.signal.aborted) return;
       if (error) throw new Error(await extractEdgeFunctionError(error, "Failed to process voice input"));
+      if (data?.error) throw new Error(data.error);
       const { nutritionData } = data;
 
       if (nutritionData.items && Array.isArray(nutritionData.items) && nutritionData.items.length > 0) {

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingDown } from "lucide-react";
 import { AnimatedRing, AnimatedNumber } from "@/components/motion";
@@ -8,7 +9,7 @@ interface WeightProgressRingProps {
   goalWeight: number;
 }
 
-export function WeightProgressRing({ currentWeight, startingWeight, goalWeight }: WeightProgressRingProps) {
+export const WeightProgressRing = memo(function WeightProgressRing({ currentWeight, startingWeight, goalWeight }: WeightProgressRingProps) {
   const totalToLose = startingWeight - goalWeight;
   const weightLost = startingWeight - currentWeight;
   const weightRemaining = currentWeight - goalWeight;
@@ -65,4 +66,4 @@ export function WeightProgressRing({ currentWeight, startingWeight, goalWeight }
       </CardContent>
     </Card>
   );
-}
+});
