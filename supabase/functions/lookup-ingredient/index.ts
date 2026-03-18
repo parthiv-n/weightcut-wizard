@@ -133,7 +133,7 @@ If ambiguous, specify most common preparation (e.g., "chicken" → "chicken brea
       if (!nutritionData.calories_per_100g || nutritionData.calories_per_100g < 0) {
         return new Response(
           JSON.stringify({ error: "Invalid nutrition data found. Please enter manually." }),
-          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
@@ -156,7 +156,7 @@ If ambiguous, specify most common preparation (e.g., "chicken" → "chicken brea
       edgeLogger.error("Error parsing nutrition data", parseError, { functionName: "lookup-ingredient" });
       return new Response(
         JSON.stringify({ error: "Could not parse nutrition data. Please enter manually." }),
-        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

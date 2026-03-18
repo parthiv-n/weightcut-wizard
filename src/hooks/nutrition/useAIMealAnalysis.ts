@@ -65,7 +65,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     }
 
     aiAbortRef.current?.abort();
-    const { controller, cleanup } = createAIAbortController(30000);
+    const { controller, cleanup } = createAIAbortController();
     aiAbortRef.current = controller;
 
     setAiAnalyzing(true);
@@ -82,6 +82,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
         if (controller.signal.aborted) return;
         if (error) throw new Error(await extractEdgeFunctionError(error, "Failed to analyze meal"));
+        if (data?.error) throw new Error(data.error);
         nutritionData = data.nutritionData;
         if (userId && nutritionData) {
           AIPersistence.save(userId, mealCacheKey, nutritionData, 24 * 7);
@@ -110,7 +111,6 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
       setManualMeal(prev => ({ ...prev, meal_name: nutritionData.meal_name }));
       setAiAnalysisComplete(true);
-      toast({ title: "Analysis complete!", description: "Review the items below and tap Add Meal" });
     } catch (error: any) {
       if (error?.name === 'AbortError' || controller.signal.aborted) return;
       logger.error("Error analyzing meal", error);
@@ -175,7 +175,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     }
 
     aiAbortRef.current?.abort();
-    const { controller: ingController, cleanup: ingCleanup } = createAIAbortController(30000);
+    const { controller: ingController, cleanup: ingCleanup } = createAIAbortController();
     aiAbortRef.current = ingController;
 
     setAiAnalyzingIngredient(true);
@@ -187,6 +187,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
       if (ingController.signal.aborted) return;
       if (error) throw new Error(await extractEdgeFunctionError(error, "Failed to analyze ingredient"));
+      if (data?.error) throw new Error(data.error);
 
       const { nutritionData } = data;
 
@@ -283,7 +284,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     setIsQuickAddSheetOpen(true);
 
     aiAbortRef.current?.abort();
-    const { controller: voiceController, cleanup: voiceCleanup } = createAIAbortController(30000);
+    const { controller: voiceController, cleanup: voiceCleanup } = createAIAbortController();
     aiAbortRef.current = voiceController;
 
     setAiAnalyzing(true);
@@ -296,6 +297,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
       if (voiceController.signal.aborted) return;
       if (error) throw new Error(await extractEdgeFunctionError(error, "Failed to process voice input"));
+      if (data?.error) throw new Error(data.error);
       const { nutritionData } = data;
 
       if (nutritionData.items && Array.isArray(nutritionData.items) && nutritionData.items.length > 0) {
@@ -320,7 +322,6 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
       setManualMeal(prev => ({ ...prev, meal_name: nutritionData.meal_name }));
       setAiAnalysisComplete(true);
-      toast({ title: "Analysis complete!", description: "Review the items below and tap Add Meal" });
     } catch (error: any) {
       if (error?.name === 'AbortError' || voiceController.signal.aborted) return;
       logger.error("Error processing voice input", error);

@@ -35,6 +35,7 @@ const FightCamps = lazy(() => import("./pages/FightCamps"));
 const FightCampDetail = lazy(() => import("./pages/FightCampDetail"));
 const FightCampCalendar = lazy(() => import("./pages/FightCampCalendar"));
 const Recovery = lazy(() => import("./pages/Recovery"));
+const SkillTree = lazy(() => import("./pages/SkillTree"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const _idle = window.requestIdleCallback || ((cb: IdleRequestCallback) => setTimeout(cb, 50));
@@ -45,6 +46,8 @@ const queryClient = new QueryClient();
 const SKIP_ROUTES = ['/', '/auth', '/onboarding'];
 
 import { App as CapacitorApp } from '@capacitor/app';
+import { StatusBar, Style } from '@capacitor/status-bar';
+import { Capacitor } from '@capacitor/core';
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
 
@@ -57,6 +60,13 @@ function RouteTracker() {
       localStorage.setItem('lastRoute', location.pathname);
     }
   }, [location.pathname]);
+
+  // Set light status bar text for dark background
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      StatusBar.setStyle({ style: Style.Dark });
+    }
+  }, []);
 
   // Handle Deep Links (Supabase Auth)
   useEffect(() => {
@@ -107,12 +117,14 @@ function RouteTracker() {
       if (url.includes('weightcutwizard://')) {
         const slug = url.split("weightcutwizard://")[1];
         if (slug) {
-          // Remove query params if any, unless we want to keep them
-          const path = slug.split('?')[0];
+          const [path, queryString] = slug.split('?');
+          // Preserve ?reset=true for password reset deep links
+          const params = new URLSearchParams(queryString || '');
+          const suffix = params.get('reset') === 'true' ? '?reset=true' : '';
 
           // special case: 'callback' is often used for auth redirects, ignore it if we didn't match auth above
           if (path !== 'callback') {
-            navigate(`/${path}`);
+            navigate(`/${path}${suffix}`);
           } else {
             // callback without code? maybe just go to dashboard
             navigate('/dashboard');
@@ -286,6 +298,15 @@ const App = () => (
                     <ProfileCompletionGuard>
                       <AppLayout>
                         <FightWeek />
+                      </AppLayout>
+                    </ProfileCompletionGuard>
+                  </ProtectedRoute>
+                } />
+                <Route path="/skill-tree" element={
+                  <ProtectedRoute>
+                    <ProfileCompletionGuard>
+                      <AppLayout>
+                        <Suspense fallback={<DashboardSkeleton />}><SkillTree /></Suspense>
                       </AppLayout>
                     </ProfileCompletionGuard>
                   </ProtectedRoute>

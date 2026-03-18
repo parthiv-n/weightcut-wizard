@@ -14,8 +14,8 @@ interface ProfilePictureUploadProps {
 const createImage = (url: string): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
     const image = new Image();
-    image.addEventListener("load", () => resolve(image));
-    image.addEventListener("error", (error) => reject(error));
+    image.addEventListener("load", () => resolve(image), { once: true });
+    image.addEventListener("error", (error) => reject(error), { once: true });
     image.src = url;
   });
 

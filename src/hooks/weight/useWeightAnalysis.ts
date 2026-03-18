@@ -73,7 +73,7 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
     }
 
     aiAbortRef.current?.abort();
-    const { controller, cleanup } = createAIAbortController(30000);
+    const { controller, cleanup } = createAIAbortController();
     aiAbortRef.current = controller;
 
     setAnalyzingWeight(true);

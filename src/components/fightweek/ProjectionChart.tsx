@@ -1,3 +1,4 @@
+import { memo } from "react";
 import {
   AreaChart,
   Area,
@@ -14,7 +15,7 @@ interface ProjectionChartProps {
   targetWeight: number;
 }
 
-export function ProjectionChart({ timeline, targetWeight }: ProjectionChartProps) {
+export const ProjectionChart = memo(function ProjectionChart({ timeline, targetWeight }: ProjectionChartProps) {
   const data = timeline.map(d => ({
     label: d.label.replace(" Days Out", "d").replace(" Day Out", "d"),
     weight: d.projectedWeight,
@@ -86,4 +87,4 @@ export function ProjectionChart({ timeline, targetWeight }: ProjectionChartProps
       </div>
     </div>
   );
-}
+});

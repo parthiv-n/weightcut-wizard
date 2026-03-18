@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, Tooltip, ReferenceLine } from "recharts";
 import { format, parseISO } from "date-fns";
 import type { DailyStrainEntry, ForecastResult } from "@/utils/performanceEngine";
@@ -7,7 +8,7 @@ interface StrainChartProps {
   forecast: ForecastResult;
 }
 
-export function StrainChart({ strainHistory, forecast }: StrainChartProps) {
+export const StrainChart = memo(function StrainChart({ strainHistory, forecast }: StrainChartProps) {
   // Build chart data: 7 days + 1 forecast day
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
@@ -129,4 +130,4 @@ export function StrainChart({ strainHistory, forecast }: StrainChartProps) {
       </ResponsiveContainer>
     </div>
   );
-}
+});

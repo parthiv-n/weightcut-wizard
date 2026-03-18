@@ -414,6 +414,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
         if (isUserLoadedRef.current && userIdRef.current) {
           refreshProfile();
         }
+      } else if (event === 'PASSWORD_RECOVERY' && session) {
+        setIsSessionValid(true);
+        await loadUserData(session);
       } else if (event === 'SIGNED_IN' && session) {
         setIsSessionValid(true);
         if (!isUserLoadedRef.current) {

@@ -1,4 +1,4 @@
-import { Moon, Sun, ChevronRight, BookOpen, Bell } from "lucide-react";
+import { Moon, Sun, ChevronRight, BookOpen, Bell, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -19,6 +19,7 @@ interface SettingsPanelProps {
   onAvatarChange: (url: string) => void;
   onSave: () => void;
   onReplayTutorial: () => void;
+  onDeleteAccount: () => void;
 }
 
 export function SettingsPanel({
@@ -28,6 +29,7 @@ export function SettingsPanel({
   theme, onToggleTheme,
   onAvatarChange, onSave,
   onReplayTutorial,
+  onDeleteAccount,
 }: SettingsPanelProps) {
   const [reminderSettings, setReminderSettings] = useState<ReminderSettings>(getSettings);
   const [timePickerOpen, setTimePickerOpen] = useState(false);
@@ -230,6 +232,26 @@ export function SettingsPanel({
             </div>
           </button>
 
+          {/* Delete Account */}
+          <button
+            type="button"
+            onClick={onDeleteAccount}
+            className="w-full rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left"
+          >
+            <div className="flex items-center justify-between px-4 py-3">
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-destructive/10 dark:bg-destructive/15">
+                  <Trash2 className="h-5 w-5 text-destructive" />
+                </span>
+                <div>
+                  <p className="text-[15px] font-medium text-destructive">Delete Account</p>
+                  <p className="text-xs text-muted-foreground">Permanently delete your account and all data</p>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+            </div>
+          </button>
+
           {/* Save */}
           <Button
             onClick={onSave}
@@ -237,6 +259,8 @@ export function SettingsPanel({
           >
             Save Changes
           </Button>
+
+          <p className="text-center text-xs text-muted-foreground/50 pt-1">v{__APP_VERSION__}</p>
         </div>
       </div>
     </>

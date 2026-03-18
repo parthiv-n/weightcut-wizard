@@ -1,8 +1,9 @@
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, memo } from "react";
 import { createPortal } from "react-dom";
 import { CheckCircle2, Loader2, LucideIcon, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { celebrateSuccess } from "@/lib/haptics";
 
 export interface AIStep {
     icon: LucideIcon;
@@ -21,7 +22,7 @@ interface AIGeneratingOverlayProps {
     onRetry?: () => void;
 }
 
-export function AIGeneratingOverlay({
+export const AIGeneratingOverlay = memo(function AIGeneratingOverlay({
     isOpen,
     isGenerating,
     steps,
@@ -32,18 +33,20 @@ export function AIGeneratingOverlay({
     onRetry,
 }: AIGeneratingOverlayProps) {
     const [currentStep, setCurrentStep] = useState(0);
-    const [isComplete, setIsComplete] = useState(false);
     const [showCancel, setShowCancel] = useState(false);
     const [elapsed, setElapsed] = useState(0);
+    const wasGeneratingRef = useRef(false);
     const cancelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const visible = isOpen;
 
     // Reset state when opening
     useEffect(() => {
         if (isOpen) {
             setCurrentStep(0);
-            setIsComplete(false);
             setShowCancel(false);
             setElapsed(0);
+            wasGeneratingRef.current = false;
         }
     }, [isOpen]);
 
@@ -51,7 +54,7 @@ export function AIGeneratingOverlay({
     useEffect(() => {
         if (cancelTimerRef.current) clearTimeout(cancelTimerRef.current);
 
-        if (isOpen && isGenerating) {
+        if (visible && isGenerating) {
             cancelTimerRef.current = setTimeout(() => setShowCancel(true), 3000);
         } else {
             setShowCancel(false);
@@ -60,18 +63,18 @@ export function AIGeneratingOverlay({
         return () => {
             if (cancelTimerRef.current) clearTimeout(cancelTimerRef.current);
         };
-    }, [isOpen, isGenerating]);
+    }, [visible, isGenerating]);
 
     // Elapsed timer
     useEffect(() => {
-        if (!isOpen || !isGenerating) { setElapsed(0); return; }
+        if (!visible || !isGenerating) { setElapsed(0); return; }
         const t = setInterval(() => setElapsed(s => s + 1), 1000);
         return () => clearInterval(t);
-    }, [isOpen, isGenerating]);
+    }, [visible, isGenerating]);
 
     // Handle step progression
     useEffect(() => {
-        if (!isOpen || !isGenerating) return;
+        if (!visible || !isGenerating) return;
 
         const interval = setInterval(() => {
             setCurrentStep((prev) => {
@@ -83,23 +86,22 @@ export function AIGeneratingOverlay({
         }, 1200); // Advance every 1.2 seconds
 
         return () => clearInterval(interval);
-    }, [isOpen, isGenerating, steps.length]);
+    }, [visible, isGenerating, steps.length]);
 
-    // Handle completion
+    // Handle completion — immediately dismiss and fire haptic
     useEffect(() => {
-        if (!isGenerating && isOpen) {
-            // When generation stops, mark as complete
-            setCurrentStep(steps.length);
-            setIsComplete(true);
-
-            const timeout = setTimeout(() => {
-                onCompletion?.();
-            }, 1500); // Close after 1.5s of showing completion
-            return () => clearTimeout(timeout);
+        if (!isGenerating && wasGeneratingRef.current) {
+            celebrateSuccess();
+            onCompletion?.();
         }
-    }, [isGenerating, isOpen, steps.length, onCompletion]);
+    }, [isGenerating, onCompletion]);
 
-    if (!isOpen) return null;
+    // Track isGenerating transitions (must run AFTER completion effect reads the ref)
+    useEffect(() => {
+        wasGeneratingRef.current = isGenerating;
+    }, [isGenerating]);
+
+    if (!visible) return null;
 
     return createPortal(
         <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
@@ -109,17 +111,17 @@ export function AIGeneratingOverlay({
 
                 <div className="text-center space-y-2 mb-8">
                     <h3 className="text-xl font-bold text-white transition-all duration-300">
-                        {isComplete ? "Complete!" : title}
+                        {title}
                     </h3>
                     <p className="text-zinc-400 text-sm transition-all duration-300">
-                        {isComplete ? "Your results are ready." : subtitle}
+                        {subtitle}
                     </p>
                 </div>
 
                 <div className="space-y-4">
                     {steps.map((step, index) => {
                         const isActive = index === currentStep;
-                        const isCompleted = index < currentStep || isComplete;
+                        const isCompleted = index < currentStep;
 
                         return (
                             <div
@@ -157,14 +159,14 @@ export function AIGeneratingOverlay({
                 </div>
 
                 {/* Elapsed timer */}
-                {!isComplete && elapsed >= 5 && (
+                {elapsed >= 5 && (
                     <p className="mt-4 text-center text-xs text-zinc-500">
                         {elapsed}s elapsed
                     </p>
                 )}
 
                 {/* Cancel button */}
-                {showCancel && !isComplete && onCancel && (
+                {showCancel && onCancel && (
                     <button
                         onClick={onCancel}
                         className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-800/50 border border-zinc-800 rounded-xl transition-all duration-200 animate-in fade-in duration-300"
@@ -177,4 +179,4 @@ export function AIGeneratingOverlay({
         </div>,
         document.body
     );
-}
+});

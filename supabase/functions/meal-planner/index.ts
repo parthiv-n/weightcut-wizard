@@ -240,7 +240,7 @@ Respond ONLY with this exact JSON structure:
       edgeLogger.error("Grok API fetch error", fetchError, { functionName: "meal-planner" });
       return new Response(
         JSON.stringify({ error: "Failed to connect to AI service" }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -250,7 +250,7 @@ Respond ONLY with this exact JSON structure:
 
       if (response.status === 429) {
         return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again in a moment." }),
+          JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -271,7 +271,7 @@ Respond ONLY with this exact JSON structure:
 
       return new Response(
         JSON.stringify({ error: `Grok API error: ${errorData.error?.message || 'Unknown error'}` }),
-        { status: 502, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 

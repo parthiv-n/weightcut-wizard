@@ -10,6 +10,7 @@ import { AIPersistence } from "@/lib/aiPersistence";
 import { useAuth } from "@/contexts/UserContext";
 import { Capacitor } from "@capacitor/core";
 import { Camera as CapCamera, CameraPermissionState } from "@capacitor/camera";
+import { extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
 
 interface BarcodeScannerProps {
@@ -72,7 +73,8 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
         body: { barcode },
       });
 
-      if (error) throw error;
+      if (error) throw new Error(await extractEdgeFunctionError(error, "Failed to get product information"));
+      if (data?.error) throw new Error(data.error);
 
       if (!data.found) {
         toast({
@@ -97,14 +99,7 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
       });
     } catch (error: any) {
       logger.error("Error scanning barcode", error);
-
-      let errorMessage = "Failed to get product information";
-      if (error.message?.includes("network") || error.message?.includes("fetch")) {
-        errorMessage = "Network error. Please check your connection and try again.";
-      } else if (error.message) {
-        errorMessage = error.message;
-      }
-
+      const errorMessage = error.message || "Failed to get product information";
       toast({
         title: "Scan failed",
         description: errorMessage,

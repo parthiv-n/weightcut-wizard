@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Activity, Moon, Trash2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -16,7 +17,7 @@ interface SessionCardProps {
   onColorChange: (sessionType: string, color: string) => void;
 }
 
-export function SessionCard({ session, customColors, userId, onEdit, onDelete, onColorChange }: SessionCardProps) {
+export const SessionCard = memo(function SessionCard({ session, customColors, userId, onEdit, onDelete, onColorChange }: SessionCardProps) {
   const isRest = session.session_type === 'Rest';
   const sessionColor = getSessionColor(session.session_type, customColors);
 
@@ -104,4 +105,4 @@ export function SessionCard({ session, customColors, userId, onEdit, onDelete, o
       )}
     </Card>
   );
-}
+});

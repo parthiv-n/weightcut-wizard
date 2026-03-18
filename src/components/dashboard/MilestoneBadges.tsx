@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Flame, Calendar, Utensils, Trophy, Scale, TrendingUp, Award, Zap, Star, Dumbbell, Crown, Check, ChevronRight } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import type { MilestoneBadge } from "@/hooks/useGamification";
@@ -23,7 +24,7 @@ function BadgeSkeleton() {
   );
 }
 
-export function MilestoneBadges({ badges, loading, onTap }: MilestoneBadgesProps) {
+export const MilestoneBadges = memo(function MilestoneBadges({ badges, loading, onTap }: MilestoneBadgesProps) {
   const prefersReducedMotion = useReducedMotion();
 
   if (loading) {
@@ -116,4 +117,4 @@ export function MilestoneBadges({ badges, loading, onTap }: MilestoneBadgesProps
       </motion.div>
     </Wrapper>
   );
-}
+});

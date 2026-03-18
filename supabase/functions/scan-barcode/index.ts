@@ -33,14 +33,17 @@ serve(async (req) => {
   try {
     const { barcode } = await req.json();
 
-    if (!barcode) {
-      throw new Error("Barcode is required");
+    if (!barcode || typeof barcode !== "string" || !/^\d{8,14}$/.test(barcode)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid barcode format. Expected 8-14 digits." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     edgeLogger.info("Fetching product data for barcode", { barcode });
 
     // Call OpenFoodFacts API
-    const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcode}.json`);
+    const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(barcode)}.json`);
     const data = await response.json();
 
     if (data.status === 0 || !data.product) {

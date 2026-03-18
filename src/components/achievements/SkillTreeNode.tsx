@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { motion } from "motion/react";
 import { Check, Flame, Calendar, Utensils, Trophy, Scale, TrendingUp, Award, Zap, Star, Dumbbell, Crown } from "lucide-react";
 import type { AchievementNode } from "@/hooks/useGamification";
@@ -11,7 +12,7 @@ interface SkillTreeNodeProps {
   globalIndex: number;
 }
 
-export function SkillTreeNode({ achievement, globalIndex }: SkillTreeNodeProps) {
+export const SkillTreeNode = memo(function SkillTreeNode({ achievement, globalIndex }: SkillTreeNodeProps) {
   const Icon = iconMap[achievement.icon];
   const unlocked = achievement.unlocked;
 
@@ -63,4 +64,4 @@ export function SkillTreeNode({ achievement, globalIndex }: SkillTreeNodeProps) 
       </div>
     </motion.div>
   );
-}
+});

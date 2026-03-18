@@ -40,7 +40,6 @@ export default function FightCampCalendar() {
 
     // Form State
     const [sessionType, setSessionType] = useState(SESSION_TYPES[0]);
-    const [customType, setCustomType] = useState("");
     const [duration, setDuration] = useState("60");
     const [rpe, setRpe] = useState([5]);
     const [intensityLevel, setIntensityLevel] = useState([3]);
@@ -48,9 +47,6 @@ export default function FightCampCalendar() {
     const [sorenessLevel, setSorenessLevel] = useState([5]);
     const [sleepHours, setSleepHours] = useState("8");
     const [notes, setNotes] = useState("");
-    const [fatigue, setFatigue] = useState([5]);
-    const [sleepQuality, setSleepQuality] = useState<'good' | 'poor'>('good');
-    const [mobilityDone, setMobilityDone] = useState(false);
 
     // Edit state
     const [editingSession, setEditingSession] = useState<FightCampCalendarRow | null>(null);
@@ -60,8 +56,6 @@ export default function FightCampCalendar() {
     const [cardVariant, setCardVariant] = useState<"dark" | "transparent">("dark");
     // Custom session colors
     const [customColors, setCustomColors] = useState<Record<string, string>>({});
-
-    const isRestDay = sessionType === 'Rest';
 
     const fetchSessions = useCallback(async () => {
         if (!userId) return;
@@ -124,28 +118,18 @@ export default function FightCampCalendar() {
 
     const resetForm = () => {
         setSessionType(SESSION_TYPES[0]);
-        setCustomType("");
         setDuration("60");
         setRpe([5]);
         setIntensityLevel([3]);
         setHasSoreness(false);
         setSorenessLevel([5]);
         setNotes("");
-        setFatigue([5]);
-        setSleepQuality('good');
-        setMobilityDone(false);
         setEditingSession(null);
     };
 
     const handleEditSession = (session: FightCampCalendarRow) => {
         setEditingSession(session);
-        if (SESSION_TYPES.includes(session.session_type)) {
-            setSessionType(session.session_type);
-            setCustomType("");
-        } else {
-            setSessionType("Other");
-            setCustomType(session.session_type);
-        }
+        setSessionType(session.session_type);
         setDuration(String(session.duration_minutes));
         setRpe([session.rpe]);
         const il = session.intensity_level ?? (session.intensity === 'high' ? 5 : session.intensity === 'moderate' ? 3 : 1);
@@ -154,9 +138,6 @@ export default function FightCampCalendar() {
         setSorenessLevel([(session.soreness_level ?? 0) > 0 ? session.soreness_level! : 5]);
         setSleepHours(String(session.sleep_hours ?? 8));
         setNotes(session.notes ?? "");
-        setFatigue([session.fatigue_level ?? 5]);
-        setSleepQuality((session.sleep_quality as 'good' | 'poor') ?? 'good');
-        setMobilityDone(session.mobility_done ?? false);
         setIsAddModalOpen(true);
     };
 
@@ -168,17 +149,17 @@ export default function FightCampCalendar() {
             const payload: FightCampCalendarInsert = {
                 user_id: userId,
                 date: format(selectedDate, "yyyy-MM-dd"),
-                session_type: sessionType === 'Other' ? (customType.trim() || 'Other') : sessionType,
-                duration_minutes: isRestDay ? 0 : (parseInt(duration) || 0),
-                rpe: isRestDay ? 1 : rpe[0],
+                session_type: sessionType,
+                duration_minutes: parseInt(duration) || 0,
+                rpe: rpe[0],
                 intensity: intensityMap[intensityLevel[0]] || 'moderate',
-                intensity_level: isRestDay ? 1 : intensityLevel[0],
+                intensity_level: intensityLevel[0],
                 soreness_level: hasSoreness ? sorenessLevel[0] : 0,
                 sleep_hours: parseFloat(sleepHours) || 0,
-                notes: isRestDay ? null : (notes.trim() || null),
-                fatigue_level: isRestDay ? fatigue[0] : null,
-                sleep_quality: isRestDay ? sleepQuality : null,
-                mobility_done: isRestDay ? mobilityDone : null,
+                notes: notes.trim() || null,
+                fatigue_level: null,
+                sleep_quality: null,
+                mobility_done: null,
             };
 
             if (editingSession) {
@@ -195,14 +176,10 @@ export default function FightCampCalendar() {
             }
 
             toast({
-                title: editingSession
-                    ? "Session Updated"
-                    : isRestDay ? "Rest Day Logged" : "Session Saved",
+                title: editingSession ? "Session Updated" : "Session Saved",
                 description: editingSession
                     ? "Your session has been updated."
-                    : isRestDay
-                        ? "Your rest day has been recorded."
-                        : "Your training session has been logged successfully.",
+                    : "Your training session has been logged successfully.",
             });
 
             setIsAddModalOpen(false);
@@ -303,8 +280,8 @@ export default function FightCampCalendar() {
                                 </DialogHeader>
                                 <FightCampLogForm
                                     isEditing={!!editingSession}
+                                    userId={userId}
                                     sessionType={sessionType} setSessionType={setSessionType}
-                                    customType={customType} setCustomType={setCustomType}
                                     duration={duration} setDuration={setDuration}
                                     rpe={rpe} setRpe={setRpe}
                                     intensityLevel={intensityLevel} setIntensityLevel={setIntensityLevel}
@@ -312,9 +289,6 @@ export default function FightCampCalendar() {
                                     sorenessLevel={sorenessLevel} setSorenessLevel={setSorenessLevel}
                                     sleepHours={sleepHours} setSleepHours={setSleepHours}
                                     notes={notes} setNotes={setNotes}
-                                    fatigue={fatigue} setFatigue={setFatigue}
-                                    sleepQuality={sleepQuality} setSleepQuality={setSleepQuality}
-                                    mobilityDone={mobilityDone} setMobilityDone={setMobilityDone}
                                     onSave={handleSaveSession}
                                 />
                             </DialogContent>

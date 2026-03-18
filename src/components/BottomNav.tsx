@@ -1,4 +1,4 @@
-import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Droplets, Calendar, LogOut, HeartPulse } from "lucide-react";
+import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Droplets, Calendar, LogOut, HeartPulse, GitBranch, Trash2 } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
@@ -37,6 +37,7 @@ const moreMenuItems = [
   { title: "Recovery", url: "/recovery", icon: HeartPulse },
   { title: "Rehydration", url: "/hydration", icon: Droplets },
   { title: "Fight Week", url: "/fight-week", icon: Calendar },
+  { title: "Skill Tree", url: "/skill-tree", icon: GitBranch },
 ];
 
 export function BottomNav() {
@@ -50,6 +51,8 @@ export function BottomNav() {
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
+  const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const [editedName, setEditedName] = useState(userName);
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     const saved = localStorage.getItem("theme") as "light" | "dark" | null;
@@ -120,6 +123,23 @@ export function BottomNav() {
     await supabase.auth.signOut();
     navigate("/auth");
     toast({ title: "Signed out", description: "You have been successfully signed out." });
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleteLoading(true);
+    try {
+      const { error } = await supabase.functions.invoke("delete-account");
+      if (error) throw error;
+      await supabase.auth.signOut();
+      setDeleteAccountDialogOpen(false);
+      setSettingsDialogOpen(false);
+      navigate("/auth");
+      toast({ title: "Account deleted", description: "Your account and all data have been permanently deleted." });
+    } catch (err) {
+      toast({ title: "Error", description: "Failed to delete account. Please try again.", variant: "destructive" });
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   const DashboardIcon = mainNavItems[0].icon;
@@ -271,6 +291,7 @@ export function BottomNav() {
         }}
         onSave={handleUpdateProfile}
         onReplayTutorial={handleReplayTutorial}
+        onDeleteAccount={() => { setSettingsDialogOpen(false); setDeleteAccountDialogOpen(true); }}
       />
 
       {/* Logout Confirmation Dialog */}
@@ -292,6 +313,31 @@ export function BottomNav() {
               className="flex-1 sm:flex-initial sm:min-w-[100px] rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               Sign Out
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Account Confirmation Dialog */}
+      <AlertDialog open={deleteAccountDialogOpen} onOpenChange={setDeleteAccountDialogOpen}>
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader className="sm:text-center">
+            <div className="mx-auto mb-1 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 dark:bg-destructive/15 ring-1 ring-destructive/20">
+              <Trash2 className="h-5 w-5 text-destructive" />
+            </div>
+            <AlertDialogTitle className="text-center">Delete Account</AlertDialogTitle>
+            <AlertDialogDescription className="text-center">
+              This will permanently delete your account and all associated data. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-row gap-3 sm:justify-center pt-1">
+            <AlertDialogCancel className="flex-1 sm:flex-initial sm:min-w-[100px]" disabled={deleteLoading}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteAccount}
+              disabled={deleteLoading}
+              className="flex-1 sm:flex-initial sm:min-w-[100px] rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteLoading ? "Deleting…" : "Delete Account"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

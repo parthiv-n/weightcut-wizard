@@ -285,10 +285,12 @@ export default function Dashboard() {
     return weightUnit === 'kg' ? kg : kg * 2.20462;
   }, [weightUnit]);
 
-  const chartData = useMemo(() => weightLogs.map((log) => ({
-    date: new Date(log.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-    weight: convertWeight(parseFloat(log.weight_kg)),
-  })), [weightLogs, convertWeight]);
+  const chartData = useMemo(() => weightLogs
+    .filter((log) => !isNaN(parseFloat(log.weight_kg)))
+    .map((log) => ({
+      date: new Date(log.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+      weight: convertWeight(parseFloat(log.weight_kg)),
+    })), [weightLogs, convertWeight]);
 
   if (loading) {
     return <DashboardSkeleton />;
