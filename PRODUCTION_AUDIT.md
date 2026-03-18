@@ -10,9 +10,13 @@ Living checklist of everything to resolve before App Store submission. Consolida
 
 - [ ] **AIGeneratingOverlay completion animation never fires** — `src/components/AIGeneratingOverlay.tsx:88-100`. The `!isGenerating && isOpen` condition is never true because both props are always the same value (`isAiActive`). Users never see "Complete!" feedback. **Fix:** Decouple `isOpen` from `isGenerating` in callers (Nutrition.tsx, Hydration.tsx, etc.) so `isOpen` stays true briefly after `isGenerating` goes false.
 
-- [DONE] **No privacy policy or terms of service links in-app** — Required for App Store. No links exist anywhere in the UI. **Fix:** Add links to Settings sheet/page and onboarding footer.
+- [ ] **No privacy policy or terms of service links in-app** — Links exist in `Auth.tsx:296` but point to `#privacy-policy` placeholder URLs with a TODO comment. Not valid for App Store review. **Fix:** Publish real policies and update the placeholder hrefs.
 
 - [ ] **Payment infrastructure not implemented** — No Stripe integration, no subscription management, no webhooks. `is_premium` field exists in profiles but is never checked/enforced. **Need:** Stripe checkout, webhook edge function, subscription table, paywall UI, billing portal.
+
+- [ ] **No global unhandled promise rejection handler** — No `window.addEventListener('unhandledrejection', ...)` in `main.tsx`. Async errors outside try/catch vanish silently, never reach Sentry. **Fix:** Add global handler in `main.tsx` that forwards to Sentry.
+
+- [ ] **GDPR: No account deletion UI** — App Store requires users to be able to delete their account from within the app (Apple requirement since 2022). No UI or API endpoint exists for this. **Fix:** Add "Delete Account" button in Settings and a Supabase edge function to cascade-delete user data.
 
 - [ ] **No rate limiting on edge functions** — Zero rate limiting on all 16 edge functions. A single user can spam Grok API calls and exhaust quota. **Need:** Per-user rate limits (e.g., Upstash or Deno KV) on all AI functions.
 
@@ -40,6 +44,10 @@ Living checklist of everything to resolve before App Store submission. Consolida
 
 - [DONE] **Massive single-file components** — `Nutrition.tsx` (3,878 lines), `WeightTracker.tsx` (1,414), `Hydration.tsx` (1,206), `performanceEngine.ts` (1,340), `FightCampCalendar.tsx` (758), `BottomNav.tsx` (632). **Need:** Decompose into focused sub-components (max 300-400 lines each).
 
+- [ ] **Over-fetching with `select("*")` everywhere** — 15+ queries across `UserContext.tsx:149,254`, `FightCampDetail.tsx:57`, `useSkillTree.ts:63,81,90,112`, `DataResetDialog.tsx:46-49`, `batchOperations.ts:141,154,168`, `weight-tracker-analysis/index.ts:74`. Fetches all columns when only a few are needed. Wastes bandwidth and exposes unnecessary data. **Fix:** Replace with explicit column lists.
+
+- [ ] **Missing `@capacitor/status-bar` plugin** — No programmatic control over status bar appearance. Dark theme gets white status bar text by default on some iOS versions. **Fix:** Install plugin and set `Style.Dark` on app start.
+
 - [ ] **Silent async errors** — `Dashboard.tsx`: `.catch(() => {})` swallows errors. Multiple pages: `if (!data) return;` without user feedback. `JSON.parse()` without try-catch in: `localCache.ts`, `aiPersistence.ts`, `syncQueue.ts`. **Need:** Error toasts/states on all async operations, wrap all JSON.parse.
 
 - [ ] **Bundle size >2.5MB uncompressed JS** — `@huggingface/transformers`: 870 KB (used for barcode/ML, should lazy-load), `xlsx`: 429 KB. **Need:** Lazy-load transformers to barcode route only; replace/remove xlsx.
@@ -51,6 +59,8 @@ Living checklist of everything to resolve before App Store submission. Consolida
 ---
 
 ## MEDIUM
+
+- [ ] **Deep link handler doesn't parse `?reset=true`** — Password reset emails redirect with `?reset=true` param but `RouteTracker` in `App.tsx` doesn't detect it. Users land on last route instead of reset form. **Fix:** Check for reset param before restoring last route.
 
 - [ ] **Missing NaN guard in FightWeek projections** — `src/pages/FightWeek.tsx:53-56`. `parseFloat("")` returns `NaN`. The `!cw` check works but is implicit and doesn't cover `0` values. **Fix:** Use explicit `isNaN()` checks.
 
@@ -114,6 +124,41 @@ Living checklist of everything to resolve before App Store submission. Consolida
 
 ---
 
+## PERFORMANCE OPTIMIZATIONS
+
+### Bundle Size
+- [ ] **Lazy-load `@huggingface/transformers` (870 KB)** — Currently in `package.json` deps but only used via dynamic `import()` in `VoiceInput.tsx:40,55`. Verify it's not in the main chunk via bundle analysis. If it is, move to a code-split chunk.
+- [ ] **Convert PNG assets to WebP** — `wizard-hero.png`, `wizard-thinking.png`, `wizard-logo.png`, `wizard-nutrition.png` in `src/assets/`. Use WebP with PNG fallback. Add responsive 1x/2x/3x variants for retina.
+- [ ] **Run bundle analyzer** — Add `rollup-plugin-visualizer` to vite config to identify other large chunks. Target <1.5MB compressed for initial load.
+
+### Rendering
+- [ ] **Add `React.memo` to mapped components** — MealCard, SessionCard, any component rendered inside `.map()`. Zero `React.memo` usage currently.
+- [ ] **Add `useCallback` to handlers passed as props** — Nutrition page handlers (`onEdit`, `onDelete`, dialog toggles) are recreated every render, causing child re-renders. 72 useCallback instances exist elsewhere but key pages like Nutrition are missing them.
+- [ ] **Split UserContext consumers** — `useUser()` merges auth + profile contexts. Components needing only `userId` re-render when profile changes. Allow `useAuth()` / `useProfile()` separate consumption.
+
+### Data Fetching
+- [ ] **Replace `select("*")` with specific columns** — See HIGH section. Reduces payload size and query time.
+- [ ] **Add Supabase composite indexes** — Frequently queried patterns lack indexes:
+  - `nutrition_logs(user_id, date DESC)`
+  - `weight_logs(user_id, date DESC)`
+  - `fight_camps(user_id)`
+  - `user_technique_progress(user_id)`
+  - `fight_camp_calendar(user_id, date DESC)`
+- [ ] **Consolidate gamification queries** — `useGamification.ts:267-363` runs 5 parallel DB queries on every Dashboard mount (cached 15 min). Consider a single DB function or view.
+- [ ] **Use `head: true` for count-only queries** — `useGamification.ts:302,307` fetches full rows just to count them. Use `.select("", { count: "exact", head: true })`.
+
+### Edge Functions
+- [ ] **Consolidate warmup pings** — Dashboard, WeightTracker, Nutrition, RecoveryDashboard, FightWeek, Hydration all fire independent warmup GETs with fixed 2s delays. Consolidate into one utility, use `requestIdleCallback`, skip if already warmed.
+- [ ] **Add response caching headers** — Static-ish responses (daily-wisdom for same day, ingredient lookups) could return `Cache-Control` headers to reduce repeat calls.
+
+### Images & Assets
+- [ ] **Lazy-load wizard images** — Add `loading="lazy"` to decorative wizard PNGs that appear below the fold.
+
+### Lists
+- [ ] **Add pagination to nutrition logs** — Currently loads all meals for a date range. With months of data, query + render time grows linearly.
+
+---
+
 ## DONE (resolved)
 
 - [x] **Error monitoring** — Sentry integration added (client + edge functions).
@@ -129,13 +174,16 @@ Living checklist of everything to resolve before App Store submission. Consolida
 
 ## COMPLIANCE CHECKLIST (Required for App Store / payments)
 
-- [ ] Privacy policy published and linked in app
+- [ ] Privacy policy published and linked in app (currently placeholder links)
 - [ ] Terms of service published and linked in app
 - [ ] GDPR: Data export functionality
 - [ ] GDPR: Account deletion functionality
 - [ ] GDPR: Consent management
+- [ ] Account deletion (Apple requirement since 2022)
 - [ ] PCI DSS: Use Stripe-hosted checkout (avoid handling card data)
 - [ ] Refund policy defined
 - [ ] Tax handling configured (Stripe Tax or manual)
 - [ ] Cookie/tracking consent (if applicable)
 - [ ] Incident response plan documented
+- [ ] App Store screenshots (5-8 per device size)
+- [ ] App icon set (all iOS sizes via Xcode asset catalog)
