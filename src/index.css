@@ -125,6 +125,11 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  *:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
   html {
     /* Fix iOS Safari 100vh bug - use CSS custom property for dynamic viewport height */
     height: 100%;

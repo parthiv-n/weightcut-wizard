@@ -65,7 +65,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     }
 
     aiAbortRef.current?.abort();
-    const { controller, cleanup } = createAIAbortController(30000);
+    const { controller, cleanup } = createAIAbortController();
     aiAbortRef.current = controller;
 
     setAiAnalyzing(true);
@@ -110,7 +110,6 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
       setManualMeal(prev => ({ ...prev, meal_name: nutritionData.meal_name }));
       setAiAnalysisComplete(true);
-      toast({ title: "Analysis complete!", description: "Review the items below and tap Add Meal" });
     } catch (error: any) {
       if (error?.name === 'AbortError' || controller.signal.aborted) return;
       logger.error("Error analyzing meal", error);
@@ -175,7 +174,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     }
 
     aiAbortRef.current?.abort();
-    const { controller: ingController, cleanup: ingCleanup } = createAIAbortController(30000);
+    const { controller: ingController, cleanup: ingCleanup } = createAIAbortController();
     aiAbortRef.current = ingController;
 
     setAiAnalyzingIngredient(true);
@@ -283,7 +282,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     setIsQuickAddSheetOpen(true);
 
     aiAbortRef.current?.abort();
-    const { controller: voiceController, cleanup: voiceCleanup } = createAIAbortController(30000);
+    const { controller: voiceController, cleanup: voiceCleanup } = createAIAbortController();
     aiAbortRef.current = voiceController;
 
     setAiAnalyzing(true);
@@ -320,7 +319,6 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
       setManualMeal(prev => ({ ...prev, meal_name: nutritionData.meal_name }));
       setAiAnalysisComplete(true);
-      toast({ title: "Analysis complete!", description: "Review the items below and tap Add Meal" });
     } catch (error: any) {
       if (error?.name === 'AbortError' || voiceController.signal.aborted) return;
       logger.error("Error processing voice input", error);

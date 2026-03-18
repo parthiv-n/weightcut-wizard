@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,17 +18,18 @@ export default function Auth() {
   const [passwordError, setPasswordError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
   const { userId } = useAuth();
 
-  // Redirect when user is authenticated (handles both fresh logins and already-logged-in).
-  // UserContext's onAuthStateChange calls loadUserData() first, then sets userId —
-  // so by the time this fires, profile data is already loaded. No race condition.
+  const isPasswordReset = searchParams.get("reset") === "true";
+
+  // Redirect when user is authenticated — but skip if we're in password reset flow
   useEffect(() => {
-    if (userId) {
+    if (userId && !isPasswordReset) {
       navigate("/dashboard");
     }
-  }, [userId, navigate]);
+  }, [userId, isPasswordReset, navigate]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -134,14 +135,41 @@ export default function Auth() {
     }
   };
 
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordError("");
+
+    if (password !== confirmPassword) {
+      setPasswordError("Passwords do not match");
+      return;
+    }
+    if (password.length < 6) {
+      setPasswordError("Password must be at least 6 characters long");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      toast({ title: "Password updated!", description: "Your password has been changed successfully." });
+      setSearchParams({});
+      navigate("/dashboard");
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update password." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Real-time password match validation
   useEffect(() => {
-    if (!isLogin && confirmPassword && password !== confirmPassword) {
+    if ((!isLogin || isPasswordReset) && confirmPassword && password !== confirmPassword) {
       setPasswordError("Passwords do not match");
-    } else if (!isLogin && confirmPassword && password === confirmPassword) {
+    } else if ((!isLogin || isPasswordReset) && confirmPassword && password === confirmPassword) {
       setPasswordError("");
     }
-  }, [password, confirmPassword, isLogin]);
+  }, [password, confirmPassword, isLogin, isPasswordReset]);
 
   return (
     <div className="min-h-screen bg-background dark:bg-gradient-to-br dark:from-[#040810] dark:via-[#020204] dark:to-[#060a14] text-foreground flex flex-col items-center justify-center p-6 relative overflow-hidden">
@@ -178,17 +206,54 @@ export default function Auth() {
                 Weight Cut Wizard
               </h1>
               <p className="text-muted-foreground text-base font-medium">
-                {showForgotPassword
-                  ? "Reset Password"
-                  : isLogin
-                    ? "Welcome Back"
-                    : "Start Your Journey"}
+                {isPasswordReset
+                  ? "Set New Password"
+                  : showForgotPassword
+                    ? "Reset Password"
+                    : isLogin
+                      ? "Welcome Back"
+                      : "Start Your Journey"}
               </p>
             </div>
 
             {/* Form */}
             <div className="w-full space-y-4">
-              {showForgotPassword ? (
+              {isPasswordReset ? (
+                <form onSubmit={handlePasswordUpdate} className="space-y-4">
+                  <div className="space-y-3">
+                    <Input
+                      id="new-password"
+                      type="password"
+                      placeholder="New Password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      minLength={6}
+                      className={`h-12 rounded-full bg-card border-border text-foreground placeholder:text-muted-foreground px-5 text-base focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all font-medium ${passwordError ? "border-red-500 focus:ring-red-500/50" : ""}`}
+                    />
+                    <Input
+                      id="confirm-new-password"
+                      type="password"
+                      placeholder="Confirm New Password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                      minLength={6}
+                      className={`h-12 rounded-full bg-card border-border text-foreground placeholder:text-muted-foreground px-5 text-base focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all font-medium ${passwordError ? "border-red-500 focus:ring-red-500/50" : ""}`}
+                    />
+                    {passwordError && (
+                      <p className="text-xs text-red-500 text-center px-4 font-medium">{passwordError}</p>
+                    )}
+                  </div>
+                  <Button
+                    type="submit"
+                    className="w-full h-12 rounded-full text-base font-bold bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/25 hover:opacity-90 transition-opacity active:scale-[0.98]"
+                    disabled={loading}
+                  >
+                    {loading ? "Updating..." : "Update Password"}
+                  </Button>
+                </form>
+              ) : showForgotPassword ? (
                 <form onSubmit={handleForgotPassword} className="space-y-4">
                   <div className="space-y-2">
                     <Input

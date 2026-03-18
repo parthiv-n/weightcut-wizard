@@ -42,7 +42,7 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
     }
 
     aiAbortRef.current?.abort();
-    const { controller, cleanup } = createAIAbortController(30000);
+    const { controller, cleanup } = createAIAbortController();
     aiAbortRef.current = controller;
 
     setGeneratingPlan(true);
@@ -182,11 +182,6 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
           prompt: aiPrompt
         }, 24);
       }
-
-      toast({
-        title: "Meal plan generated!",
-        description: `${ideasToStore.length} new ideas added (${accumulatedIdeas.length} total)`,
-      });
 
       setIsAiDialogOpen(false);
       setAiPrompt("");

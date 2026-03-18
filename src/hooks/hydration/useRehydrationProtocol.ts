@@ -133,10 +133,6 @@ export function useRehydrationProtocol() {
           );
         }
 
-        toast({
-          title: "Protocol Generated",
-          description: "Your personalised rehydration plan is ready",
-        });
       }
     } catch (error: any) {
       if (error?.name === 'AbortError' || controller.signal.aborted) return;

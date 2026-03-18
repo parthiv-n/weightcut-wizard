@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/UserContext";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { normalizeTechniqueName, processChains, buildGraphData } from "@/lib/techniqueGraph";
+import { createAIAbortController } from "@/lib/timeoutWrapper";
+import { celebrateSuccess } from "@/lib/haptics";
 import { logger } from "@/lib/logger";
 import type {
   Technique,
@@ -28,6 +30,7 @@ export function useSkillTree() {
   const [graphBounds, setGraphBounds] = useState({ width: 400, height: 300 });
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
+  const aiAbortRef = useRef<AbortController | null>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -130,6 +133,116 @@ export function useSkillTree() {
     load();
   }, [userId, rebuildGraph]);
 
+  const generateChains = async (
+    name: string,
+    sport: string,
+    techniqueId: string,
+    updatedProgress: UserTechniqueProgress[],
+    controller: AbortController,
+    cleanup: () => void
+  ) => {
+    try {
+      const existingNames = stateRef.current.techniques.map((t) => t.name);
+      const { data: chainResponse, error: chainError } = await supabase.functions.invoke(
+        "generate-technique-chains",
+        { body: { techniqueName: name, sport, existingTechniques: existingNames }, signal: controller.signal }
+      );
+
+      if (controller.signal.aborted) return;
+      if (chainError) throw chainError;
+      const chainData = chainResponse as TechniqueChainResponse;
+
+      if (!chainData?.chains?.length) return;
+
+      // Update technique metadata if provided
+      if (chainData.technique_metadata) {
+        const { position, category } = chainData.technique_metadata;
+        if (position || category) {
+          await supabase
+            .from("techniques")
+            .update({
+              ...(position ? { position } : {}),
+              ...(category ? { category } : {}),
+            })
+            .eq("id", techniqueId);
+        }
+      }
+
+      // Process chains
+      const { newTechniques, newEdges } = processChains(
+        chainData.chains,
+        sport,
+        stateRef.current.techniques,
+        stateRef.current.edges
+      );
+
+      // Batch insert new techniques
+      const insertedTechniques: Technique[] = [];
+      if (newTechniques.length > 0) {
+        const { data: inserted } = await supabase
+          .from("techniques")
+          .upsert(
+            newTechniques.map((t) => ({ name: t.name, name_normalized: t.name_normalized, sport: t.sport })),
+            { onConflict: "name_normalized,sport" }
+          )
+          .select();
+        if (inserted) insertedTechniques.push(...(inserted as Technique[]));
+      }
+
+      // Build normalized→id lookup with all techniques
+      const allTechs = [...stateRef.current.techniques, ...insertedTechniques];
+      const normalizedToId = new Map<string, string>();
+      for (const t of allTechs) {
+        normalizedToId.set(t.name_normalized, t.id);
+      }
+
+      // Batch insert new edges
+      const edgesToInsert = newEdges
+        .map((e) => ({
+          from_technique_id: normalizedToId.get(e.fromNormalized),
+          to_technique_id: normalizedToId.get(e.toNormalized),
+          relation_type: "chains_into",
+        }))
+        .filter((e) => e.from_technique_id && e.to_technique_id) as {
+        from_technique_id: string;
+        to_technique_id: string;
+        relation_type: string;
+      }[];
+
+      const insertedEdges: TechniqueEdge[] = [];
+      if (edgesToInsert.length > 0) {
+        const { data: edgeResults } = await supabase
+          .from("technique_edges")
+          .upsert(edgesToInsert, {
+            onConflict: "from_technique_id,to_technique_id,relation_type",
+          })
+          .select();
+        if (edgeResults) insertedEdges.push(...(edgeResults as TechniqueEdge[]));
+      }
+
+      // Update state and rebuild graph
+      const finalState: SkillTreeState = {
+        techniques: [...new Map([...stateRef.current.techniques, ...insertedTechniques].map((t) => [t.id, t])).values()],
+        edges: [...new Map([...stateRef.current.edges, ...insertedEdges].map((e) => [e.id, e])).values()],
+        progress: updatedProgress,
+      };
+      setState(finalState);
+      rebuildGraph(finalState.techniques, finalState.edges, finalState.progress);
+      if (userId) AIPersistence.save(userId, "skill_tree", finalState, 24);
+      celebrateSuccess();
+    } catch (chainErr: any) {
+      if (chainErr?.name === "AbortError" || controller.signal.aborted) {
+        logger.info("Chain generation cancelled by user");
+      } else {
+        logger.warn("Chain generation failed (technique was still logged)", { error: chainErr });
+      }
+    } finally {
+      cleanup();
+      aiAbortRef.current = null;
+      setIsGenerating(false);
+    }
+  };
+
   const logTechnique = useCallback(
     async (name: string, sport: string, notes?: string, sessionId?: string) => {
       if (!userId) return;
@@ -206,100 +319,11 @@ export function useSkillTree() {
         setState(intermediateState);
         rebuildGraph(intermediateState.techniques, intermediateState.edges, intermediateState.progress);
 
-        // 4. Generate chains (async, non-blocking for the UI)
+        // 4. Generate chains in background — don't block the caller
+        const { controller, cleanup } = createAIAbortController();
+        aiAbortRef.current = controller;
         setIsGenerating(true);
-        try {
-          const existingNames = stateRef.current.techniques.map((t) => t.name);
-          const { data: chainResponse, error: chainError } = await supabase.functions.invoke(
-            "generate-technique-chains",
-            { body: { techniqueName: name, sport, existingTechniques: existingNames } }
-          );
-
-          if (chainError) throw chainError;
-          const chainData = chainResponse as TechniqueChainResponse;
-
-          if (!chainData?.chains?.length) return;
-
-          // Update technique metadata if provided
-          if (chainData.technique_metadata) {
-            const { position, category } = chainData.technique_metadata;
-            if (position || category) {
-              await supabase
-                .from("techniques")
-                .update({
-                  ...(position ? { position } : {}),
-                  ...(category ? { category } : {}),
-                })
-                .eq("id", technique.id);
-            }
-          }
-
-          // 5. Process chains
-          const { newTechniques, newEdges } = processChains(
-            chainData.chains,
-            sport,
-            stateRef.current.techniques,
-            stateRef.current.edges
-          );
-
-          // Batch insert new techniques
-          const insertedTechniques: Technique[] = [];
-          if (newTechniques.length > 0) {
-            const { data: inserted } = await supabase
-              .from("techniques")
-              .upsert(
-                newTechniques.map((t) => ({ name: t.name, name_normalized: t.name_normalized, sport: t.sport })),
-                { onConflict: "name_normalized,sport" }
-              )
-              .select();
-            if (inserted) insertedTechniques.push(...(inserted as Technique[]));
-          }
-
-          // Build normalized→id lookup with all techniques
-          const allTechs = [...stateRef.current.techniques, ...insertedTechniques];
-          const normalizedToId = new Map<string, string>();
-          for (const t of allTechs) {
-            normalizedToId.set(t.name_normalized, t.id);
-          }
-
-          // Batch insert new edges
-          const edgesToInsert = newEdges
-            .map((e) => ({
-              from_technique_id: normalizedToId.get(e.fromNormalized),
-              to_technique_id: normalizedToId.get(e.toNormalized),
-              relation_type: "chains_into",
-            }))
-            .filter((e) => e.from_technique_id && e.to_technique_id) as {
-            from_technique_id: string;
-            to_technique_id: string;
-            relation_type: string;
-          }[];
-
-          const insertedEdges: TechniqueEdge[] = [];
-          if (edgesToInsert.length > 0) {
-            const { data: edgeResults } = await supabase
-              .from("technique_edges")
-              .upsert(edgesToInsert, {
-                onConflict: "from_technique_id,to_technique_id,relation_type",
-              })
-              .select();
-            if (edgeResults) insertedEdges.push(...(edgeResults as TechniqueEdge[]));
-          }
-
-          // 6. Update state and rebuild graph
-          const finalState: SkillTreeState = {
-            techniques: [...new Map([...stateRef.current.techniques, ...insertedTechniques].map((t) => [t.id, t])).values()],
-            edges: [...new Map([...stateRef.current.edges, ...insertedEdges].map((e) => [e.id, e])).values()],
-            progress: updatedProgress,
-          };
-          setState(finalState);
-          rebuildGraph(finalState.techniques, finalState.edges, finalState.progress);
-          AIPersistence.save(userId, "skill_tree", finalState, 24);
-        } catch (chainErr) {
-          logger.warn("Chain generation failed (technique was still logged)", { error: chainErr });
-        } finally {
-          setIsGenerating(false);
-        }
+        generateChains(name, sport, technique.id, updatedProgress, controller, cleanup);
       } catch (err) {
         logger.error("Failed to log technique", { error: err });
         throw err;

@@ -14,6 +14,13 @@ const Index = () => {
   useEffect(() => {
     if (isLoading) return;
 
+    // Forward password reset links to auth page
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('reset') === 'true') {
+      navigate('/auth?reset=true');
+      return;
+    }
+
     if (userId) {
       if (hasProfile) {
         const lastRoute = localStorage.getItem('lastRoute');

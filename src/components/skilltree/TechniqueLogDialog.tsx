@@ -13,7 +13,6 @@ interface TechniqueLogDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onLog: (name: string, sport: string, notes?: string) => Promise<void>;
-  isGenerating: boolean;
   existingTechniqueNames: string[];
 }
 
@@ -21,7 +20,6 @@ export function TechniqueLogDialog({
   open,
   onOpenChange,
   onLog,
-  isGenerating,
   existingTechniqueNames,
 }: TechniqueLogDialogProps) {
   const { toast } = useToast();
@@ -136,10 +134,10 @@ export function TechniqueLogDialog({
             disabled={!name.trim() || isSubmitting}
             className="w-full min-h-[44px] rounded-xl"
           >
-            {isSubmitting || isGenerating ? (
+            {isSubmitting ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                {isGenerating ? "Generating chains..." : "Logging..."}
+                Logging...
               </>
             ) : (
               "Log & Generate"

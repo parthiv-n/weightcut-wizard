@@ -53,7 +53,7 @@ export default function FightWeek() {
     const cw = parseFloat(currentWeight);
     const tw = parseFloat(targetWeight);
     const days = parseInt(daysUntilWeighIn);
-    if (!cw || !tw || !days || cw <= tw || days < 1 || days > 14) return null;
+    if (isNaN(cw) || isNaN(tw) || isNaN(days) || cw <= 0 || tw <= 0 || days < 1 || cw <= tw || days > 14) return null;
 
     const sex = (profile?.sex as "male" | "female") || "male";
     return computeFightWeekPlan({ currentWeight: cw, targetWeight: tw, daysUntilWeighIn: days, sex });
@@ -171,7 +171,7 @@ export default function FightWeek() {
     if (!userId || !projection) return;
 
     aiAbortRef.current?.abort();
-    const { controller, cleanup } = createAIAbortController(30000);
+    const { controller, cleanup } = createAIAbortController();
     aiAbortRef.current = controller;
 
     safeAsync(setIsGeneratingAdvice)(true);
