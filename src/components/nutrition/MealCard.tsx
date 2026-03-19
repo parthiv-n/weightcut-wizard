@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Edit2, Trash2, ChevronDown, Sparkles } from "lucide-react";
 import { useState, useRef, memo } from "react";
-import { motion, AnimatePresence, useMotionValue, useReducedMotion } from "motion/react";
+import { motion, useMotionValue, useReducedMotion } from "motion/react";
 import { springs } from "@/lib/motion";
 import { MacroDonut } from "./MacroDonut";
 import { triggerHaptic, triggerHapticWarning, triggerHapticSelection } from "@/lib/haptics";
@@ -140,15 +140,9 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete }: MealC
         </div>
 
         {/* Expanded details */}
-        <AnimatePresence initial={false}>
-          {expanded && (
-            <motion.div
-              initial={prefersReducedMotion ? false : { height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={springs.responsive}
-              className="overflow-hidden"
-            >
+        {hasDetails && (
+          <div className="disclosure-panel" data-expanded={expanded} aria-hidden={!expanded}>
+            <div className="disclosure-inner">
               <div className="px-3 pb-3 pt-2 space-y-2 border-t border-border/20 bg-black/10">
                 {meal.ingredients && meal.ingredients.length > 0 && (
                   <div className="space-y-1">
@@ -199,9 +193,9 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete }: MealC
                   </div>
                 )}
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </div>
+          </div>
+        )}
       </motion.div>
     </div>
   );
