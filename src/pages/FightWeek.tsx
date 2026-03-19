@@ -171,7 +171,7 @@ export default function FightWeek() {
     if (!userId || !projection) return;
 
     aiAbortRef.current?.abort();
-    const { controller, cleanup } = createAIAbortController();
+    const controller = createAIAbortController();
     aiAbortRef.current = controller;
 
     safeAsync(setIsGeneratingAdvice)(true);
@@ -204,7 +204,6 @@ export default function FightWeek() {
       if (err?.name === 'AbortError' || controller.signal.aborted) return;
       toast({ title: "AI advice unavailable", description: err?.message || "Something went wrong", variant: "destructive" });
     } finally {
-      cleanup();
       safeAsync(setIsGeneratingAdvice)(false);
     }
   };

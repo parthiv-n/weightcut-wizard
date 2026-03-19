@@ -50,14 +50,8 @@ export function withRetry<T>(
 
 // Creates an AbortController for AI calls.
 // No auto-timeout — the user cancels manually via the overlay's Cancel button.
-export function createAIAbortController(): {
-  controller: AbortController;
-  cleanup: () => void;
-} {
-  const controller = new AbortController();
-  const cleanup = () => {};
-
-  return { controller, cleanup };
+export function createAIAbortController(): AbortController {
+  return new AbortController();
 }
 
 // Extracts the real error message from a Supabase FunctionsHttpError.

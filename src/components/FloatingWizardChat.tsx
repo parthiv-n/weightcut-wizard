@@ -4,7 +4,7 @@ import { Sparkles, Send, Trash2, User, Bot, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
 import { triggerHapticSelection, triggerHapticSuccess } from "@/lib/haptics";
-import wizardAvatar from "@/assets/wizard-logo.png";
+import wizardAvatar from "@/assets/wizard-logo.webp";
 import { GlowingEffect } from "@/components/ui/glowing-effect";
 import { supabase } from "@/integrations/supabase/client";
 

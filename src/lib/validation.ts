@@ -38,6 +38,34 @@ export const profileSchema = z.object({
   training_frequency: z.number().int().nonnegative("Training frequency cannot be negative").max(21, "Training frequency too high").optional().nullable(),
 });
 
+// Gym set validation schema
+export const gymSetSchema = z.object({
+  weight_kg: z.number().nonnegative("Weight cannot be negative").max(500, "Weight must be less than 500kg").optional().nullable(),
+  reps: z.number().int().positive("Reps must be at least 1").max(999, "Reps too high"),
+  rpe: z.number().min(1, "RPE must be 1-10").max(10, "RPE must be 1-10").optional().nullable(),
+  is_warmup: z.boolean().optional(),
+  is_bodyweight: z.boolean().optional(),
+  assisted_weight_kg: z.number().nonnegative().max(200).optional().nullable(),
+  notes: z.string().max(500, "Notes too long").optional().nullable(),
+});
+
+// Gym session validation schema
+export const gymSessionSchema = z.object({
+  session_type: z.enum(["Strength", "Conditioning", "Muay Thai S&C", "Hypertrophy", "Powerlifting", "Circuit", "Custom"]),
+  duration_minutes: z.number().int().positive().max(600, "Duration too long").optional().nullable(),
+  notes: z.string().max(2000, "Notes too long").optional().nullable(),
+  perceived_fatigue: z.number().int().min(1).max(10).optional().nullable(),
+});
+
+// Custom exercise validation schema
+export const customExerciseSchema = z.object({
+  name: z.string().trim().min(1, "Exercise name is required").max(100, "Name too long"),
+  category: z.enum(["push", "pull", "legs", "core", "cardio", "full_body"]),
+  muscle_group: z.enum(["chest", "back", "shoulders", "biceps", "triceps", "quads", "hamstrings", "glutes", "calves", "abs", "forearms", "traps", "full_body", "cardio"]),
+  equipment: z.enum(["barbell", "dumbbell", "cable", "machine", "bodyweight", "kettlebell", "bands", "none"]).optional().nullable(),
+  is_bodyweight: z.boolean().optional(),
+});
+
 // Hydration log validation schema
 export const hydrationLogSchema = z.object({
   amount_ml: z.number().int().positive("Amount must be positive").min(1).max(20000, "Amount too high"),

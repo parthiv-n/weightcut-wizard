@@ -40,7 +40,7 @@ export function MoreMenuSheet({ open, onOpenChange, menuItems, onItemClick, onSe
     <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
       <SheetContent
         side="bottom"
-        className="h-[70vh] max-h-[85vh] rounded-t-3xl flex flex-col p-0 gap-0 bg-background/95 dark:bg-background/98 backdrop-blur-md border-t border-border/50 [&>button]:hidden"
+        className="h-[70vh] max-h-[85vh] rounded-t-3xl flex flex-col p-0 gap-0 bg-background border-t border-border/50 [&>button]:hidden"
       >
         {/* Drag handle */}
         <div className="flex justify-center pt-3 pb-1 shrink-0">

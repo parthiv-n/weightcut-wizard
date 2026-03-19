@@ -1,4 +1,4 @@
-import { Home, Utensils, Weight, Droplets, Calendar, Trophy, RotateCcw, Target, HeartPulse, GitBranch } from "lucide-react";
+import { Home, Utensils, Weight, Droplets, Calendar, Trophy, RotateCcw, Target, HeartPulse, GitBranch, Dumbbell } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useState } from "react";
 import {
@@ -15,7 +15,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import wizardLogo from "@/assets/wizard-logo.png";
+import wizardLogo from "@/assets/wizard-logo.webp";
 import { ProfileDropdown } from "@/components/ProfileDropdown";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { DataResetDialog } from "@/components/DataResetDialog";
@@ -31,6 +31,7 @@ const menuItems = [
   { title: "Rehydration", url: "/hydration", icon: Droplets },
   { title: "Fight Week", url: "/fight-week", icon: Calendar },
   { title: "Skill Tree", url: "/skill-tree", icon: GitBranch },
+  { title: "Gym Tracker", url: "/gym", icon: Dumbbell },
 ];
 
 export function AppSidebar() {

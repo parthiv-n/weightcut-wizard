@@ -2,20 +2,16 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
 import { edgeLogger } from "../_shared/errorReporter.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders } from "../_shared/cors.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders(req) });
   }
 
   if (req.method === "GET") {
     return new Response(JSON.stringify({ status: "warm" }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
     });
   }
 
@@ -24,7 +20,7 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        { status: 401, headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
     }
 
     const supabaseClient = createClient(
@@ -36,7 +32,7 @@ serve(async (req) => {
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
     if (userError || !user) {
       return new Response(JSON.stringify({ error: 'Invalid token' }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        { status: 401, headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
     }
 
     const { meals, profile, macroGoals, date } = await req.json();
@@ -44,7 +40,7 @@ serve(async (req) => {
     if (!meals || !Array.isArray(meals) || meals.length === 0) {
       return new Response(
         JSON.stringify({ error: "At least one meal is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -125,14 +121,14 @@ Athlete profile: ${profile?.age || "?"} years, ${profile?.sex || "?"}, ${profile
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 429, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
         );
       }
 
       if (response.status === 401 || response.status === 403) {
         return new Response(
           JSON.stringify({ error: "API key invalid or quota exceeded." }),
-          { status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: response.status, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
         );
       }
 
@@ -158,7 +154,7 @@ Athlete profile: ${profile?.age || "?"} years, ${profile?.sex || "?"}, ${profile
 
     return new Response(
       JSON.stringify({ analysisData }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
     );
 
   } catch (error) {
@@ -167,7 +163,7 @@ Athlete profile: ${profile?.age || "?"} years, ${profile?.sex || "?"}, ${profile
       JSON.stringify({
         error: error instanceof Error ? error.message : "Unknown error occurred"
       }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 });

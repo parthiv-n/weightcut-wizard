@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/UserContext";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";
 import { WizardLoader } from "@/components/ui/WizardLoader";
-import wizardLogo from "@/assets/wizard-logo.png";
+import wizardLogo from "@/assets/wizard-logo.webp";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { userId, isLoading, authError, retryAuth } = useAuth();

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import wizardLogo from "@/assets/wizard-logo.png";
+import wizardLogo from "@/assets/wizard-logo.webp";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { RefreshCw } from "lucide-react";

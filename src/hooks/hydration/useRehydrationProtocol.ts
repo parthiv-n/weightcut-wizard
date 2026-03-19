@@ -89,7 +89,7 @@ export function useRehydrationProtocol() {
     if (!currentWeight) return;
 
     aiAbortRef.current?.abort();
-    const { controller, cleanup } = createAIAbortController();
+    const controller = createAIAbortController();
     aiAbortRef.current = controller;
 
     safeAsync(setLoading)(true);
@@ -144,7 +144,6 @@ export function useRehydrationProtocol() {
         variant: "destructive",
       });
     } finally {
-      cleanup();
       safeAsync(setLoading)(false);
     }
   };

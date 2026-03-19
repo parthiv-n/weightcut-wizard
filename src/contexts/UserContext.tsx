@@ -4,8 +4,10 @@ import { withAuthTimeout, withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { Capacitor } from "@capacitor/core";
 import { App as CapacitorApp } from "@capacitor/app";
 import { localCache } from "@/lib/localCache";
+import { nutritionCache, startCacheCleanup, stopCacheCleanup } from "@/lib/nutritionCache";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { logger } from "@/lib/logger";
+import { PROFILE_COLUMNS } from "@/lib/queryColumns";
 
 export interface ProfileData {
   id?: string;
@@ -146,7 +148,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     const attempt = async (): Promise<boolean> => {
       const { data } = await withSupabaseTimeout(
-        supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
+        supabase.from("profiles").select(PROFILE_COLUMNS).eq("id", uid).maybeSingle(),
         4000,
         "Profile refresh query"
       );
@@ -251,7 +253,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         withSupabaseTimeout(
           supabase
             .from("profiles")
-            .select("*")
+            .select(PROFILE_COLUMNS)
             .eq("id", user.id)
             .maybeSingle(),
           4000,
@@ -389,14 +391,19 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'INITIAL_SESSION') {
         if (session?.user) {
+          startCacheCleanup();
           await loadUserData(session);
         } else {
           setIsLoading(false);
         }
       } else if (event === 'SIGNED_OUT') {
         // Clear all cached data for this user before resetting refs
+        stopCacheCleanup();
         const uid = userIdRef.current;
-        if (uid) localCache.clearUser(uid);
+        if (uid) {
+          localCache.clearUser(uid);
+          nutritionCache.clearUser(uid);
+        }
         isUserLoadedRef.current = false;
         setIsSessionValid(false);
         setUserId(null);
@@ -418,6 +425,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setIsSessionValid(true);
         await loadUserData(session);
       } else if (event === 'SIGNED_IN' && session) {
+        startCacheCleanup();
         setIsSessionValid(true);
         if (!isUserLoadedRef.current) {
           setIsLoading(true); // only for fresh logins, not token refreshes

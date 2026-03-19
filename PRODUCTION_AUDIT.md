@@ -10,24 +10,21 @@ Living checklist of everything to resolve before App Store submission. Consolida
 
 - [ ] **Payment infrastructure not implemented** — No Stripe integration, no subscription management, no webhooks. `is_premium` field exists in profiles but is never checked/enforced. **Need:** Stripe checkout, webhook edge function, subscription table, paywall UI, billing portal.
 
-- [ ] **No global unhandled promise rejection handler** — No `window.addEventListener('unhandledrejection', ...)` in `main.tsx`. Async errors outside try/catch vanish silently, never reach Sentry. **Fix:** Add global handler in `main.tsx` that forwards to Sentry.
+- [ ] **No rate limiting on edge functions** — Zero rate limiting on all 17 edge functions. A single user can spam Grok API calls and exhaust quota. **Need:** Per-user rate limits (e.g., Upstash or Deno KV) on all AI functions.
 
-- [ ] **No rate limiting on edge functions** — Zero rate limiting on all 16 edge functions. A single user can spam Grok API calls and exhaust quota. **Need:** Per-user rate limits (e.g., Upstash or Deno KV) on all AI functions.
+- [ ] **Missing auth on 3 edge functions** — `fight-week-analysis`, `rehydration-protocol`, and `training-summary` have no `supabase.auth.getUser()` check. Any request with a valid Supabase anon key can invoke them without being logged in. **Fix:** Add auth guard to all three, matching the pattern in other functions.
 
-- [ ] **Wildcard CORS on all functions** — Currently `"*"` on all functions — allows any website to call APIs. **Need:** Dynamic CORS that allows production domain + localhost for dev.
+- [ ] **`meal-planner-test` deployed to production** — Test function with no auth check, no input validation, and no rate limiting is live. **Fix:** Remove from production deployment or gate behind auth + feature flag.
 
 ---
 
 ## HIGH
 
+- [ ] **Silent async errors** — 14 `.catch(() => {})` instances across 12 files (`Dashboard.tsx`, `Nutrition.tsx`, `FightWeek.tsx`, `WeightTracker.tsx`, `App.tsx`, `UserContext.tsx` ×2, `RecoveryDashboard.tsx`, `FoodSearchDialog.tsx`, `useNutritionData.ts` ×2, `useRehydrationProtocol.ts`, `FloatingWizardChat.tsx`, `haptics.ts`). Most are warmup pings, lazy loads, or syncQueue — intentionally fire-and-forget but should at least log. **Need:** Replace with `.catch(logError)` or equivalent; add user-facing error states where appropriate.
 
-- [ ] **Over-fetching with `select("*")` everywhere** — 15+ queries across `UserContext.tsx:149,254`, `FightCampDetail.tsx:57`, `useSkillTree.ts:63,81,90,112`, `DataResetDialog.tsx:46-49`, `batchOperations.ts:141,154,168`, `weight-tracker-analysis/index.ts:74`. Fetches all columns when only a few are needed. Wastes bandwidth and exposes unnecessary data. **Fix:** Replace with explicit column lists.
+- [ ] **Input validation missing on most edge functions** — Manual checks exist on `analyze-meal`, `scan-barcode`, and `lookup-ingredient`. No Zod or schema validation anywhere. Most other functions trust client data blindly. **Need:** Zod schemas on all edge functions.
 
-- [ ] **Silent async errors** — `Dashboard.tsx`: `.catch(() => {})` swallows errors. Multiple pages: `if (!data) return;` without user feedback. `JSON.parse()` without try-catch in: `localCache.ts`, `aiPersistence.ts`, `syncQueue.ts`. **Need:** Error toasts/states on all async operations, wrap all JSON.parse.
-
-- [ ] **Bundle size >2.5MB uncompressed JS** — `@huggingface/transformers`: 870 KB (used for barcode/ML, should lazy-load), `xlsx`: 429 KB. **Need:** Lazy-load transformers to barcode route only; replace/remove xlsx.
-
-- [ ] **Input validation missing on most edge functions** — `rehydration-protocol`: no schema validation, `meal-planner`: no validation on prompt input. Most functions trust client data. **Need:** Zod schemas on all edge functions.
+- [ ] **Run bundle analyzer** — No `rollup-plugin-visualizer` configured. Unknown if other large chunks exist beyond `@huggingface/transformers` (confirmed lazy-loaded). **Need:** Add visualizer to vite config, target <1.5MB compressed initial load.
 
 ---
 
@@ -35,9 +32,7 @@ Living checklist of everything to resolve before App Store submission. Consolida
 
 - [ ] **Inconsistent error status codes across edge functions** — Some return 404 for "not found", others return 500 for similar failures. Client must handle both. **Fix:** Standardize error response format and status codes.
 
-- [ ] **Missing confirmation dialogs** — Goal updates (could break cut plan), nutrition target overrides, no "unsaved changes" warning on any form.
-
-- [ ] **No React.memo anywhere** — Zero instances of `React.memo()` in entire codebase. Heavy components re-render on every parent update. **Need:** Memo on MealCard, chart components, RecoveryDashboard, AI overlays.
+- [ ] **Missing confirmation dialogs** — WeightTracker now has AlertDialog for unsafe goal values. Goals page still missing confirmation for updates that could break cut plan. Nutrition target overrides and "unsaved changes" warnings still absent.
 
 - [ ] **No pagination** — Nutrition meals could load thousands of records. Weight logs have no pagination. Fight camp calendar loads full month at once.
 
@@ -46,10 +41,6 @@ Living checklist of everything to resolve before App Store submission. Consolida
 ---
 
 ## LOW
-
-- [ ] **Global `setInterval` in nutritionCache never cleared** — `src/lib/nutritionCache.ts:186-188`. Runs every 5 min with no cleanup mechanism. Harmless in browser but not clean. **Fix:** Export start/stop functions, call on login/logout.
-
-- [ ] **Empty `cleanup()` in `createAIAbortController`** — `src/lib/timeoutWrapper.ts:58`. The returned cleanup function is a no-op. All callers invoke it in `finally` blocks for nothing. Phantom `30000` args have been removed, but the no-op cleanup remains. **Fix:** Remove the phantom cleanup or implement actual timeout cleanup.
 
 - [ ] **No pull-to-refresh gesture** — Manual refresh button exists but no native iOS pull-to-refresh. **Fix:** Implement using Capacitor plugin or library.
 
@@ -61,8 +52,6 @@ Living checklist of everything to resolve before App Store submission. Consolida
 
 - [ ] **Crash recovery UI is too technical** — ErrorBoundary shows raw error details. **Fix:** Show user-friendly copy with "Try Again" and "Contact Support" options; hide tech details behind a `<details>` toggle.
 
-- [ ] **Token refresh race condition** — `UserContext.tsx`: Multiple concurrent requests can trigger simultaneous `refreshSession()` calls. **Need:** Refresh lock/mutex.
-
 - [ ] **ESLint config too permissive** — `@typescript-eslint/no-unused-vars: "off"` — dead code not flagged. 10+ `eslint-disable` comments scattered through components.
 
 - [ ] **Dependency updates** — 29 packages outdated (React 18→19, supabase-js 2.85→2.98, etc.). Image asset `wizard-logo.png` (432 KB) should be SVG/WebP.
@@ -71,30 +60,31 @@ Living checklist of everything to resolve before App Store submission. Consolida
 
 - [ ] **API resilience** — No fallback if Grok API is down (11+ functions affected). No circuit breaker pattern, no retry with backoff. `food-search` has in-memory cache only (lost on function restart).
 
+- [ ] **npm audit vulnerability** — `tar` package (<=7.5.10) has hardlink path traversal CVE. **Fix:** `npm audit fix`.
+
+- [ ] **Missing vitest.config.ts** — vitest is in `package.json` but no `vitest.config.ts` exists. Tests may not run optimally without explicit configuration. **Fix:** Add `vitest.config.ts` with proper paths and setup.
+
+- [ ] **~5 `any` type usages remain** — Mostly in error catch blocks and session types. Down from ~15. **Fix:** Gradually replace with `unknown` or proper types.
+
 ---
 
 ## PERFORMANCE OPTIMIZATIONS
 
 ### Bundle Size
-- [ ] **Lazy-load `@huggingface/transformers` (870 KB)** — Currently in `package.json` deps but only used via dynamic `import()` in `VoiceInput.tsx:40,55`. Verify it's not in the main chunk via bundle analysis. If it is, move to a code-split chunk.
 - [ ] **Convert PNG assets to WebP** — `wizard-hero.png`, `wizard-thinking.png`, `wizard-logo.png`, `wizard-nutrition.png` in `src/assets/`. Use WebP with PNG fallback. Add responsive 1x/2x/3x variants for retina.
-- [ ] **Run bundle analyzer** — Add `rollup-plugin-visualizer` to vite config to identify other large chunks. Target <1.5MB compressed for initial load.
+- [ ] **Run bundle analyzer** — Add `rollup-plugin-visualizer` to vite config to identify large chunks. Target <1.5MB compressed for initial load.
 
 ### Rendering
-- [ ] **Add `React.memo` to mapped components** — MealCard, SessionCard, any component rendered inside `.map()`. Zero `React.memo` usage currently.
-- [ ] **Add `useCallback` to handlers passed as props** — Nutrition page handlers (`onEdit`, `onDelete`, dialog toggles) are recreated every render, causing child re-renders. 72 useCallback instances exist elsewhere but key pages like Nutrition are missing them.
-- [ ] **Split UserContext consumers** — `useUser()` merges auth + profile contexts. Components needing only `userId` re-render when profile changes. Allow `useAuth()` / `useProfile()` separate consumption.
+- [x] **Add `useCallback` to handlers passed as props** — **DONE.** All Nutrition page handlers and hook-level handlers wrapped in `useCallback`. Memoized children (`MealCard`, `MacroPieChart`) now receive stable references.
 
 ### Data Fetching
-- [ ] **Replace `select("*")` with specific columns** — See HIGH section. Reduces payload size and query time.
-- [ ] **Add Supabase composite indexes** — Frequently queried patterns lack indexes:
+- [ ] **Add Supabase composite indexes** — Some indexes added in migrations (`wellness_checkins`, `training_summaries`). Remaining patterns still need indexes:
   - `nutrition_logs(user_id, date DESC)`
   - `weight_logs(user_id, date DESC)`
   - `fight_camps(user_id)`
   - `user_technique_progress(user_id)`
   - `fight_camp_calendar(user_id, date DESC)`
 - [ ] **Consolidate gamification queries** — `useGamification.ts:267-363` runs 5 parallel DB queries on every Dashboard mount (cached 15 min). Consider a single DB function or view.
-- [ ] **Use `head: true` for count-only queries** — `useGamification.ts:302,307` fetches full rows just to count them. Use `.select("", { count: "exact", head: true })`.
 
 ### Edge Functions
 - [ ] **Consolidate warmup pings** — Dashboard, WeightTracker, Nutrition, RecoveryDashboard, FightWeek, Hydration all fire independent warmup GETs with fixed 2s delays. Consolidate into one utility, use `requestIdleCallback`, skip if already warmed.
@@ -110,6 +100,13 @@ Living checklist of everything to resolve before App Store submission. Consolida
 
 ## DONE (resolved)
 
+- [x] **Global unhandled rejection handler** — `window.addEventListener('unhandledrejection', ...)` added in `main.tsx:23` with Sentry forwarding.
+- [x] **Wildcard CORS → dynamic allowlist** — `_shared/cors.ts` now uses `ALLOWED_ORIGINS` array with env-based production origin. No more `"*"`.
+- [x] **Over-fetching `select("*")` replaced** — All queries now use explicit column lists. Only `DataResetDialog.tsx` retains `select("*")` intentionally for full CSV export.
+- [x] **`@huggingface/transformers` lazy-loaded** — Confirmed dynamic `import()` in `VoiceInput.tsx:40,55`. Not in main bundle.
+- [x] **nutritionCache cleanup lifecycle** — `startCacheCleanup()` / `stopCacheCleanup()` exported and wired to auth login/logout in `UserContext.tsx`.
+- [x] **UserContext split** — `useAuth()` and `useProfile()` exported for separate consumption. Used in 13+ files. Components needing only auth no longer re-render on profile changes.
+- [x] **Empty `cleanup()` in `createAIAbortController`** — No-op `cleanup` removed; function now returns `AbortController` directly. All call sites updated.
 - [x] **Error monitoring** — Sentry integration added (client + edge functions).
 - [x] **Testing setup** — vitest configured, critical path tests added.
 - [x] **Security — auth on scan-barcode, transcribe-audio, food-search** — `supabase.auth.getUser()` checks added.
@@ -118,6 +115,11 @@ Living checklist of everything to resolve before App Store submission. Consolida
 - [x] **TypeScript strict mode** — `strict: true` enabled incrementally.
 - [x] **Empty states** — Added to data-driven pages (Nutrition, FightCamps have empty states; Hydration form is always shown).
 - [x] **Loading state consistency** — Skeleton loaders added for Nutrition, Goals, Hydration.
+- [x] **React.memo on components** — 17 components now use `React.memo`, including mapped components (MealCard, SessionCard, etc.).
+- [x] **Token refresh race condition** — Sequential async handling via React state prevents concurrent `refreshSession()` races.
+- [x] **`head: true` for count queries** — Confirmed in `useGamification.ts` and 3 other files. Count-only queries no longer fetch full rows.
+- [x] **GDPR Data Export** — Comprehensive CSV export implemented in `DataResetDialog.tsx`.
+- [x] **`select("*")` cleanup** — Replaced with explicit columns in `UserContext.tsx`, `FightCampDetail.tsx`, `useSkillTree.ts`, `batchOperations.ts`, `weight-tracker-analysis`.
 
 ---
 
@@ -125,7 +127,7 @@ Living checklist of everything to resolve before App Store submission. Consolida
 
 - [ ] Privacy policy published and linked in app (currently placeholder links)
 - [ ] Terms of service published and linked in app
-- [ ] GDPR: Data export functionality
+- [x] GDPR: Data export functionality (CSV export in DataResetDialog.tsx)
 - [x] GDPR: Account deletion functionality
 - [ ] GDPR: Consent management
 - [x] Account deletion (Apple requirement since 2022)

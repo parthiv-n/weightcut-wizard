@@ -1,22 +1,18 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
 import { edgeLogger } from "../_shared/errorReporter.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders } from "../_shared/cors.ts";
 
 serve(async (req) => {
   // Warmup GET
   if (req.method === "GET") {
     return new Response(JSON.stringify({ status: "ok" }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
     });
   }
 
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders(req) });
   }
 
   try {
@@ -79,20 +75,20 @@ Provide: 1) 2-3 sentence summary, 2) 5-8 day-by-day tips, 3) safety warning if o
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 429, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
         );
       }
       if (response.status === 401 || response.status === 403) {
         return new Response(
           JSON.stringify({ error: "API key invalid or quota exceeded." }),
-          { status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: response.status, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
         );
       }
       const errorData = await response.json();
       edgeLogger.error("Grok API error", undefined, { functionName: "fight-week-analysis", status: response.status, errorData });
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -114,18 +110,18 @@ Provide: 1) 2-3 sentence summary, 2) 5-8 day-by-day tips, 3) safety warning if o
           error: "AI returned invalid response format. Please try again.",
           details: content.substring(0, 200),
         }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
     return new Response(JSON.stringify({ advice }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
     });
   } catch (error) {
     edgeLogger.error("Error in fight-week-analysis", error, { functionName: "fight-week-analysis" });
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 });

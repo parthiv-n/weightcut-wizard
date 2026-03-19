@@ -84,7 +84,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data, error } = await (supabase as any)
             .from("training_summaries")
-            .select("*")
+            .select("id, week_start, summary_data, session_ids, notes_fingerprint, created_at, updated_at")
             .eq("user_id", userId)
             .order("week_start", { ascending: false });
 

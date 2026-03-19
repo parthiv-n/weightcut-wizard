@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
@@ -31,7 +31,7 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
   const { userId, profile: contextProfile } = useUser();
   const { toast } = useToast();
 
-  const handleAnalyseDiet = async (forceRefresh = false) => {
+  const handleAnalyseDiet = useCallback(async (forceRefresh = false) => {
     if (!userId || meals.length === 0) return;
 
     const cacheKey = `diet_analysis_${selectedDate}`;
@@ -44,7 +44,7 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
     }
 
     aiAbortRef.current?.abort();
-    const { controller: dietController, cleanup: dietCleanup } = createAIAbortController();
+    const dietController = createAIAbortController();
     aiAbortRef.current = dietController;
 
     setDietAnalysisLoading(true);
@@ -96,10 +96,9 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
         variant: "destructive",
       });
     } finally {
-      dietCleanup();
       setDietAnalysisLoading(false);
     }
-  };
+  }, [userId, meals, selectedDate, dailyCalorieTarget, aiMacroGoals, setDietAnalysis, setDietAnalysisLoading, aiAbortRef, contextProfile, toast]);
 
   return { handleAnalyseDiet };
 }

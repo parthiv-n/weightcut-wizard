@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
@@ -35,14 +35,14 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
   const [aiPrompt, setAiPrompt] = useState("");
   const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
 
-  const handleGenerateMealPlan = async () => {
+  const handleGenerateMealPlan = useCallback(async () => {
     if (!aiPrompt.trim()) {
       toast({ title: "Please enter a prompt", description: "Describe what kind of meals you'd like", variant: "destructive" });
       return;
     }
 
     aiAbortRef.current?.abort();
-    const { controller, cleanup } = createAIAbortController();
+    const controller = createAIAbortController();
     aiAbortRef.current = controller;
 
     setGeneratingPlan(true);
@@ -53,13 +53,11 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
         if (!sessionValid) {
           toast({ title: "Authentication Required", description: "Your session has expired. Please refresh the page and log in again.", variant: "destructive" });
           setGeneratingPlan(false);
-          cleanup();
           return;
         }
       }
 
       if (!userId) {
-        cleanup();
         throw new Error("Authentication required. Please log in again.");
       }
 
@@ -214,10 +212,9 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
 
       toast({ title: "Error generating meal plan", description: errorMsg, variant: "destructive" });
     } finally {
-      cleanup();
       setGeneratingPlan(false);
     }
-  };
+  }, [aiPrompt, isSessionValid, checkSessionValidity, userId, profile, selectedDate, dailyCalorieTarget, safetyStatus, safetyMessage, mealPlanIdeas, setMealPlanIdeas, setDailyCalorieTarget, setSafetyStatus, setSafetyMessage, aiAbortRef, refreshSession, toast]);
 
   return {
     generatingPlan,

@@ -213,6 +213,27 @@ All colors MUST be HSL.
 
 @layer components {
 
+  /* Disclosure panel: GPU-composited expand/collapse via grid-template-rows */
+  .disclosure-panel {
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transition: grid-template-rows 250ms ease-out, opacity 200ms ease-out;
+  }
+  .disclosure-panel[data-expanded="true"] {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+  .disclosure-panel > .disclosure-inner {
+    overflow: hidden;
+  }
+  .disclosure-panel:not([data-expanded="true"]) {
+    pointer-events: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .disclosure-panel { transition: none; }
+  }
+
   /* GLOBAL MODERN GLASSMORPHISM FOR CONTENT CONTAINERS (Only applies fully in dark mode, fallback for light) */
   .glass-card,
   .bg-card,

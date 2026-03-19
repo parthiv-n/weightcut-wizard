@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Quote, CheckCircle2 } from "lucide-react";
-import wizardLogo from "@/assets/wizard-logo.png";
+import wizardLogo from "@/assets/wizard-logo.webp";
 
 interface WeightIncreaseQuestionnaireProps {
     open: boolean;

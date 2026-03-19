@@ -6,7 +6,7 @@ import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Droplets, TrendingDown, Calendar, Lock, ChevronRight, Flame, Zap, CheckCircle2, Scale } from "lucide-react";
-import wizardLogo from "@/assets/wizard-logo.png";
+import wizardLogo from "@/assets/wizard-logo.webp";
 import { WeightProgressRing } from "@/components/dashboard/WeightProgressRing";
 import { CalorieProgressRing } from "@/components/dashboard/CalorieProgressRing";
 import { StreakBadge } from "@/components/dashboard/StreakBadge";

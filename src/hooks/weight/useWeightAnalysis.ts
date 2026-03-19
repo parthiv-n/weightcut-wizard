@@ -73,7 +73,7 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
     }
 
     aiAbortRef.current?.abort();
-    const { controller, cleanup } = createAIAbortController();
+    const controller = createAIAbortController();
     aiAbortRef.current = controller;
 
     setAnalyzingWeight(true);
@@ -154,7 +154,6 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
         variant: "destructive"
       });
     } finally {
-      cleanup();
       setAnalyzingWeight(false);
     }
   };

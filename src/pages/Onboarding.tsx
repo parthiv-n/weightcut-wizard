@@ -10,7 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Sparkles, AlertTriangle, CheckCircle, Zap, Shield, Activity } from "lucide-react";
 import { profileSchema } from "@/lib/validation";
-import wizardLogo from "@/assets/wizard-logo.png";
+import wizardLogo from "@/assets/wizard-logo.webp";
 import { celebrateSuccess } from "@/lib/haptics";
 import { logger } from "@/lib/logger";
 

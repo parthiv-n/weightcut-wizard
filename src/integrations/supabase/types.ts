@@ -39,6 +39,220 @@ export type Database = {
   }
   public: {
     Tables: {
+      exercises: {
+        Row: {
+          id: string
+          user_id: string | null
+          name: string
+          category: string
+          muscle_group: string
+          equipment: string | null
+          is_bodyweight: boolean
+          is_custom: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          name: string
+          category: string
+          muscle_group: string
+          equipment?: string | null
+          is_bodyweight?: boolean
+          is_custom?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          name?: string
+          category?: string
+          muscle_group?: string
+          equipment?: string | null
+          is_bodyweight?: boolean
+          is_custom?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
+      gym_sessions: {
+        Row: {
+          id: string
+          user_id: string
+          date: string
+          session_type: string
+          duration_minutes: number | null
+          notes: string | null
+          perceived_fatigue: number | null
+          status: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          date?: string
+          session_type: string
+          duration_minutes?: number | null
+          notes?: string | null
+          perceived_fatigue?: number | null
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          date?: string
+          session_type?: string
+          duration_minutes?: number | null
+          notes?: string | null
+          perceived_fatigue?: number | null
+          status?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gym_sessions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gym_sets: {
+        Row: {
+          id: string
+          session_id: string
+          exercise_id: string
+          user_id: string
+          set_order: number
+          exercise_order: number
+          weight_kg: number | null
+          reps: number
+          rpe: number | null
+          is_warmup: boolean
+          is_bodyweight: boolean
+          assisted_weight_kg: number | null
+          notes: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          session_id: string
+          exercise_id: string
+          user_id: string
+          set_order: number
+          exercise_order: number
+          weight_kg?: number | null
+          reps: number
+          rpe?: number | null
+          is_warmup?: boolean
+          is_bodyweight?: boolean
+          assisted_weight_kg?: number | null
+          notes?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          session_id?: string
+          exercise_id?: string
+          user_id?: string
+          set_order?: number
+          exercise_order?: number
+          weight_kg?: number | null
+          reps?: number
+          rpe?: number | null
+          is_warmup?: boolean
+          is_bodyweight?: boolean
+          assisted_weight_kg?: number | null
+          notes?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gym_sets_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "gym_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_sets_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_sets_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exercise_prs: {
+        Row: {
+          id: string
+          user_id: string
+          exercise_id: string
+          max_weight_kg: number | null
+          max_reps: number | null
+          max_volume: number | null
+          estimated_1rm: number | null
+          best_set_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          exercise_id: string
+          max_weight_kg?: number | null
+          max_reps?: number | null
+          max_volume?: number | null
+          estimated_1rm?: number | null
+          best_set_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          exercise_id?: string
+          max_weight_kg?: number | null
+          max_reps?: number | null
+          max_volume?: number | null
+          estimated_1rm?: number | null
+          best_set_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exercise_prs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exercise_prs_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exercise_prs_best_set_id_fkey"
+            columns: ["best_set_id"]
+            isOneToOne: false
+            referencedRelation: "gym_sets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       daily_wellness_checkins: {
         Row: {
           id: string

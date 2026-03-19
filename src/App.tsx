@@ -36,6 +36,7 @@ const FightCampDetail = lazy(() => import("./pages/FightCampDetail"));
 const FightCampCalendar = lazy(() => import("./pages/FightCampCalendar"));
 const Recovery = lazy(() => import("./pages/Recovery"));
 const SkillTree = lazy(() => import("./pages/SkillTree"));
+const GymTracker = lazy(() => import("./pages/GymTracker"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const _idle = window.requestIdleCallback || ((cb: IdleRequestCallback) => setTimeout(cb, 50));
@@ -307,6 +308,15 @@ const App = () => (
                     <ProfileCompletionGuard>
                       <AppLayout>
                         <Suspense fallback={<DashboardSkeleton />}><SkillTree /></Suspense>
+                      </AppLayout>
+                    </ProfileCompletionGuard>
+                  </ProtectedRoute>
+                } />
+                <Route path="/gym" element={
+                  <ProtectedRoute>
+                    <ProfileCompletionGuard>
+                      <AppLayout>
+                        <Suspense fallback={<DashboardSkeleton />}><GymTracker /></Suspense>
                       </AppLayout>
                     </ProfileCompletionGuard>
                   </ProtectedRoute>

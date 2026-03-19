@@ -2,11 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
 import { edgeLogger } from "../_shared/errorReporter.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders } from "../_shared/cors.ts";
 
 function getExperienceTier(freq: number | null, level: string | null): string {
   const f = freq ?? 0;
@@ -18,12 +14,12 @@ function getExperienceTier(freq: number | null, level: string | null): string {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders(req) });
   }
 
   if (req.method === "GET") {
     return new Response(JSON.stringify({ status: "warm" }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
     });
   }
 
@@ -31,7 +27,7 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        { status: 401, headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
     }
 
     const supabaseClient = createClient(
@@ -43,7 +39,7 @@ serve(async (req) => {
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
     if (userError || !user) {
       return new Response(JSON.stringify({ error: 'Invalid token' }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        { status: 401, headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
     }
 
     const {
@@ -92,15 +88,15 @@ serve(async (req) => {
     // Required numeric fields
     if (typeof strain !== 'number' || !isFinite(strain)) {
       return new Response(JSON.stringify({ error: 'strain must be a finite number' }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
     }
     if (typeof overtrainingScore !== 'number' || !isFinite(overtrainingScore)) {
       return new Response(JSON.stringify({ error: 'overtrainingScore must be a finite number' }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
     }
     if (typeof loadRatio !== 'number' || !isFinite(loadRatio)) {
       return new Response(JSON.stringify({ error: 'loadRatio must be a finite number' }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
     }
 
     // Range clamping
@@ -114,21 +110,21 @@ serve(async (req) => {
     // Enum validation
     if (checkInSignal != null && !['green', 'yellow', 'red'].includes(checkInSignal)) {
       return new Response(JSON.stringify({ error: 'checkInSignal must be "green", "yellow", or "red"' }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
     }
     if (overtrainingZone != null && !['low', 'moderate', 'high', 'critical'].includes(overtrainingZone)) {
       return new Response(JSON.stringify({ error: 'overtrainingZone must be "low", "moderate", "high", or "critical"' }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
     }
 
     // Type checks
     if (recentSessions != null && !Array.isArray(recentSessions)) {
       return new Response(JSON.stringify({ error: 'recentSessions must be an array' }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
     }
     if (checkIn != null && (typeof checkIn !== 'object' || Array.isArray(checkIn))) {
       return new Response(JSON.stringify({ error: 'checkIn must be an object' }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
     }
 
     const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
@@ -350,14 +346,14 @@ ${sessionsText}${checkInText}${athleteBaselineText}`;
         } catch { /* body already consumed or not JSON */ }
         return new Response(
           JSON.stringify({ error: detail }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 429, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
         );
       }
       const errorText = await response!.text();
       edgeLogger.error("Grok API error", undefined, { functionName: "fight-camp-coach", status: response!.status, errorText });
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -373,13 +369,13 @@ ${sessionsText}${checkInText}${athleteBaselineText}`;
     const coach = parseJSON(content);
 
     return new Response(JSON.stringify({ coach }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
     });
   } catch (error) {
     edgeLogger.error("Error in fight-camp-coach", error, { functionName: "fight-camp-coach" });
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 });
