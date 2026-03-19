@@ -1,4 +1,4 @@
-import { Home, Utensils, Weight, Droplets, Calendar, Trophy, RotateCcw, Target, HeartPulse, GitBranch } from "lucide-react";
+import { Home, Utensils, Weight, Droplets, Calendar, Trophy, RotateCcw, Target, HeartPulse, GitBranch, Dumbbell } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useState } from "react";
 import {
@@ -31,6 +31,7 @@ const menuItems = [
   { title: "Rehydration", url: "/hydration", icon: Droplets },
   { title: "Fight Week", url: "/fight-week", icon: Calendar },
   { title: "Skill Tree", url: "/skill-tree", icon: GitBranch },
+  { title: "Gym Tracker", url: "/gym", icon: Dumbbell },
 ];
 
 export function AppSidebar() {

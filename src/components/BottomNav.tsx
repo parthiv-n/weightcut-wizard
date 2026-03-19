@@ -1,4 +1,4 @@
-import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Droplets, Calendar, LogOut, HeartPulse, GitBranch, Trash2 } from "lucide-react";
+import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Droplets, Calendar, LogOut, HeartPulse, GitBranch, Trash2, Dumbbell } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
@@ -38,6 +38,7 @@ const moreMenuItems = [
   { title: "Rehydration", url: "/hydration", icon: Droplets },
   { title: "Fight Week", url: "/fight-week", icon: Calendar },
   { title: "Skill Tree", url: "/skill-tree", icon: GitBranch },
+  { title: "Gym Tracker", url: "/gym", icon: Dumbbell },
 ];
 
 export function BottomNav() {
