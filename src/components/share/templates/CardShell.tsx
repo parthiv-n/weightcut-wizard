@@ -1,6 +1,6 @@
 import { ReactNode, forwardRef } from "react";
 import { CardWatermark } from "./CardWatermark";
-import wizardLogo from "@/assets/wizard-logo.png";
+import wizardLogo from "@/assets/wizard-logo.webp";
 
 export type AspectRatio = "square" | "story";
 

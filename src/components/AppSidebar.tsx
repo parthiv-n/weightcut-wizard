@@ -15,7 +15,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import wizardLogo from "@/assets/wizard-logo.png";
+import wizardLogo from "@/assets/wizard-logo.webp";
 import { ProfileDropdown } from "@/components/ProfileDropdown";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { DataResetDialog } from "@/components/DataResetDialog";

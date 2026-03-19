@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Sparkles, Calendar as CalendarIcon, Loader2, Settings, Edit2, X, Activity, Utensils, Database, PieChart as PieChartIcon, Search, CheckCircle, ChevronDown, ChevronUp, ChevronRight, ScanLine, Mic, Dumbbell, Sunrise, Salad, UtensilsCrossed, Apple } from "lucide-react";
-import wizardLogo from "@/assets/wizard-logo.png";
+import wizardLogo from "@/assets/wizard-logo.webp";
 import { MealCard } from "@/components/nutrition/MealCard";
 import { MacroPieChart } from "@/components/nutrition/MacroPieChart";
 import { FoodSearchDialog } from "@/components/nutrition/FoodSearchDialog";
@@ -269,10 +269,34 @@ export default function Nutrition() {
 
   const overlayProps = getOverlayProps();
 
-  const openFoodSearch = (mealType: string) => {
+  const openFoodSearch = useCallback((mealType: string) => {
     setFoodSearchMealType(mealType);
     setIsFoodSearchOpen(true);
-  };
+  }, []);
+
+  const handleEditTargets = useCallback(() => {
+    setEditingTargets({
+      calories: dailyCalorieTarget.toString(),
+      protein: (aiMacroGoals?.proteinGrams || 0).toString(),
+      carbs: (aiMacroGoals?.carbsGrams || 0).toString(),
+      fats: (aiMacroGoals?.fatsGrams || 0).toString(),
+    });
+    setIsEditTargetsDialogOpen(true);
+  }, [dailyCalorieTarget, aiMacroGoals]);
+
+  const handleDietAnalysisDismiss = useCallback(() => {
+    nutritionData.setDietAnalysis(null);
+    if (userId) import("@/lib/aiPersistence").then(({ AIPersistence }) => AIPersistence.remove(userId, `diet_analysis_${selectedDate}`));
+  }, [userId, selectedDate, nutritionData.setDietAnalysis]);
+
+  const handleFoodSearchSelected = useCallback((food: any) => {
+    mealOps.handleFoodSearchSelected(food, foodSearchMealType);
+  }, [mealOps.handleFoodSearchSelected, foodSearchMealType]);
+
+  const handleSheetOpenChange = useCallback((open: boolean) => {
+    setIsQuickAddSheetOpen(open);
+    if (!open) { aiMeal.setIngredientLookupError(null); aiMeal.setBarcodeBaseMacros(null); aiMeal.setServingMultiplier(1); aiMeal.setAiLineItems([]); aiMeal.setAiAnalysisComplete(false); }
+  }, [aiMeal.setIngredientLookupError, aiMeal.setBarcodeBaseMacros, aiMeal.setServingMultiplier, aiMeal.setAiLineItems, aiMeal.setAiAnalysisComplete]);
 
   const handleSaveTargets = async () => {
     const calories = parseFloat(editingTargets.calories);
@@ -418,15 +442,7 @@ export default function Nutrition() {
           proteinGoal={aiMacroGoals?.proteinGrams}
           carbsGoal={aiMacroGoals?.carbsGrams}
           fatsGoal={aiMacroGoals?.fatsGrams}
-          onEditTargets={() => {
-            setEditingTargets({
-              calories: dailyCalorieTarget.toString(),
-              protein: (aiMacroGoals?.proteinGrams || 0).toString(),
-              carbs: (aiMacroGoals?.carbsGrams || 0).toString(),
-              fats: (aiMacroGoals?.fatsGrams || 0).toString(),
-            });
-            setIsEditTargetsDialogOpen(true);
-          }}
+          onEditTargets={handleEditTargets}
         />
 
         {/* Date Navigator */}
@@ -546,7 +562,7 @@ export default function Nutrition() {
           {nutritionData.dietAnalysis ? (
             <DietAnalysisCard
               analysis={nutritionData.dietAnalysis}
-              onDismiss={() => { nutritionData.setDietAnalysis(null); if (userId) import("@/lib/aiPersistence").then(({ AIPersistence }) => AIPersistence.remove(userId, `diet_analysis_${selectedDate}`)); }}
+              onDismiss={handleDietAnalysisDismiss}
               onRefresh={() => dietAnalysisHook.handleAnalyseDiet(true)}
               refreshing={nutritionData.dietAnalysisLoading}
             />
@@ -672,13 +688,10 @@ export default function Nutrition() {
 
         {/* Food Search Dialog */}
         <FoodSearchDialog open={isFoodSearchOpen} onOpenChange={setIsFoodSearchOpen}
-          onFoodSelected={(food) => mealOps.handleFoodSearchSelected(food, foodSearchMealType)} mealType={foodSearchMealType} />
+          onFoodSelected={handleFoodSearchSelected} mealType={foodSearchMealType} />
 
         {/* Quick Add Bottom Sheet */}
-        <Sheet open={isQuickAddSheetOpen} onOpenChange={(open) => {
-          setIsQuickAddSheetOpen(open);
-          if (!open) { aiMeal.setIngredientLookupError(null); aiMeal.setBarcodeBaseMacros(null); aiMeal.setServingMultiplier(1); aiMeal.setAiLineItems([]); aiMeal.setAiAnalysisComplete(false); }
-        }}>
+        <Sheet open={isQuickAddSheetOpen} onOpenChange={handleSheetOpenChange}>
           <SheetContent side="bottom" className="h-[85vh] overflow-y-auto pb-32 pt-0">
             <div className="flex justify-center pt-3 pb-2"><div className="w-10 h-1 rounded-full bg-muted-foreground/30" /></div>
             <SheetHeader className="pb-3"><SheetTitle className="text-base">Add Meal</SheetTitle></SheetHeader>

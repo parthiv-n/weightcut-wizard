@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
@@ -58,7 +58,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     return cleaned || userInput;
   };
 
-  const handleAiAnalyzeMeal = async () => {
+  const handleAiAnalyzeMeal = useCallback(async () => {
     if (!aiMealDescription.trim()) {
       toast({ title: "Missing description", description: "Please describe your meal", variant: "destructive" });
       return;
@@ -118,9 +118,9 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     } finally {
       setAiAnalyzing(false);
     }
-  };
+  }, [aiMealDescription, userId, setManualMeal, toast]);
 
-  const handleSaveAiMeal = async () => {
+  const handleSaveAiMeal = useCallback(async () => {
     if (aiLineItems.length === 0) return;
 
     const totalCalories = aiLineItems.reduce((s, i) => s + i.calories, 0);
@@ -165,9 +165,9 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       logger.error("Error saving AI meal", error);
       toast({ title: "Error", description: "Failed to add meal", variant: "destructive" });
     }
-  };
+  }, [aiLineItems, manualMeal, aiMealDescription, saveMealToDb, setIsQuickAddSheetOpen, setManualMeal, toast]);
 
-  const handleAiAnalyzeIngredient = async () => {
+  const handleAiAnalyzeIngredient = useCallback(async () => {
     if (!aiIngredientDescription.trim()) {
       toast({ title: "Input Required", description: "Please describe the ingredient", variant: "destructive" });
       return;
@@ -274,9 +274,9 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     } finally {
       setAiAnalyzingIngredient(false);
     }
-  };
+  }, [aiIngredientDescription, manualMeal, setManualMeal, toast]);
 
-  const handleVoiceInput = async (transcribedText: string) => {
+  const handleVoiceInput = useCallback(async (transcribedText: string) => {
     setAiMealDescription(transcribedText);
     setQuickAddTab("ai");
     setIsQuickAddSheetOpen(true);
@@ -327,7 +327,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     } finally {
       setAiAnalyzing(false);
     }
-  };
+  }, [setManualMeal, setQuickAddTab, setIsQuickAddSheetOpen, toast]);
 
   const parseServingGrams = (servingSize: string): number => {
     const match = servingSize.match(/(\d+(?:\.\d+)?)\s*g\b/i);
@@ -335,7 +335,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     return 100;
   };
 
-  const handleBarcodeScanned = async (foodData: {
+  const handleBarcodeScanned = useCallback(async (foodData: {
     meal_name: string;
     calories: number;
     protein_g: number;
@@ -366,9 +366,9 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     });
     setQuickAddTab("manual");
     setIsQuickAddSheetOpen(true);
-  };
+  }, [setManualMeal, setQuickAddTab, setIsQuickAddSheetOpen]);
 
-  const lookupIngredientNutrition = async (ingredientName: string): Promise<{
+  const lookupIngredientNutrition = useCallback(async (ingredientName: string): Promise<{
     calories_per_100g: number;
     protein_per_100g: number;
     carbs_per_100g: number;
@@ -399,9 +399,9 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       logger.error("Error looking up ingredient", error);
       return null;
     }
-  };
+  }, []);
 
-  const handleManualNutritionSubmit = () => {
+  const handleManualNutritionSubmit = useCallback(() => {
     if (!manualNutritionDialog.calories_per_100g) {
       toast({ title: "Calories Required", description: "Please enter calories per 100g", variant: "destructive" });
       return;
@@ -444,7 +444,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     });
     setIngredientLookupError(null);
     toast({ title: "Ingredient Added", description: `${ingredientName} added with manual nutrition data` });
-  };
+  }, [manualNutritionDialog, manualMeal, setManualMeal, toast]);
 
   const cancelAI = () => {
     aiAbortRef.current?.abort();

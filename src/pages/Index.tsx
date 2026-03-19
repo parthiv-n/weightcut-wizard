@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Shield, TrendingDown, Brain } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import wizardNutrition from "@/assets/wizard-nutrition.png";
+import wizardNutrition from "@/assets/wizard-nutrition.webp";
 import { useAuth } from "@/contexts/UserContext";
 import { WizardLoader } from "@/components/ui/WizardLoader";
 

@@ -1,7 +1,7 @@
 import React, { Component, ErrorInfo, ReactNode } from "react";
 import { logger } from "@/lib/logger";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, RefreshCw } from "lucide-react";
+import { AlertCircle, RefreshCw, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface Props {
@@ -57,9 +57,9 @@ class ErrorBoundary extends Component<Props, State> {
         <div className="p-4 space-y-4">
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Something went wrong</AlertTitle>
+            <AlertTitle>Oops, something broke</AlertTitle>
             <AlertDescription>
-              An unexpected error occurred. This might be due to a temporary AI service issue.
+              We hit an unexpected snag. Try again — if it keeps happening, reach out to support.
               {this.state.error && (
                 <details className="mt-2 text-xs">
                   <summary className="cursor-pointer">Error Details</summary>
@@ -76,18 +76,28 @@ class ErrorBoundary extends Component<Props, State> {
               )}
             </AlertDescription>
           </Alert>
-          
+
           <div className="flex gap-2">
             <Button onClick={this.handleRetry} variant="outline" size="sm">
               <RefreshCw className="h-4 w-4 mr-2" />
               Try Again
             </Button>
-            <Button 
-              onClick={() => window.location.reload()} 
-              variant="outline" 
+            <Button
+              onClick={() => window.location.reload()}
+              variant="outline"
               size="sm"
             >
               Reload Page
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              asChild
+            >
+              <a href="https://github.com/Raip036/weightcut-wizard/issues" target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Contact Support
+              </a>
             </Button>
           </div>
         </div>

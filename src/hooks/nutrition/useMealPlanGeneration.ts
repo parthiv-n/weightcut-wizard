@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
@@ -35,7 +35,7 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
   const [aiPrompt, setAiPrompt] = useState("");
   const [isAiDialogOpen, setIsAiDialogOpen] = useState(false);
 
-  const handleGenerateMealPlan = async () => {
+  const handleGenerateMealPlan = useCallback(async () => {
     if (!aiPrompt.trim()) {
       toast({ title: "Please enter a prompt", description: "Describe what kind of meals you'd like", variant: "destructive" });
       return;
@@ -214,7 +214,7 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
     } finally {
       setGeneratingPlan(false);
     }
-  };
+  }, [aiPrompt, isSessionValid, checkSessionValidity, userId, profile, selectedDate, dailyCalorieTarget, safetyStatus, safetyMessage, mealPlanIdeas, setMealPlanIdeas, setDailyCalorieTarget, setSafetyStatus, setSafetyMessage, aiAbortRef, refreshSession, toast]);
 
   return {
     generatingPlan,

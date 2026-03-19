@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
@@ -37,7 +37,7 @@ export function useMealOperations(params: UseMealOperationsParams) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mealToDelete, setMealToDelete] = useState<Meal | null>(null);
 
-  const saveMealToDb = async (mealData: {
+  const saveMealToDb = useCallback(async (mealData: {
     meal_name: string;
     calories: number;
     protein_g: number | null;
@@ -106,9 +106,9 @@ export function useMealOperations(params: UseMealOperationsParams) {
       toast({ title: "Saved offline", description: "Will sync when connected." });
       scrollToTop();
     }
-  };
+  }, [userId, selectedDate, meals, setMeals, loadMeals, toast]);
 
-  const handleLogMealIdea = async (mealIdea: Meal, mealTypeOverride?: string) => {
+  const handleLogMealIdea = useCallback(async (mealIdea: Meal, mealTypeOverride?: string) => {
     setLoggingMeal(mealIdea.id);
     try {
       if (!userId) throw new Error("Not authenticated");
@@ -191,7 +191,7 @@ export function useMealOperations(params: UseMealOperationsParams) {
     } finally {
       setLoggingMeal(null);
     }
-  };
+  }, [userId, selectedDate, meals, setMeals, loadMeals, toast]);
 
   const saveMealIdeasToDatabase = async (mealIdeas: Meal[]) => {
     if (mealIdeas.length === 0) return;
@@ -303,12 +303,12 @@ export function useMealOperations(params: UseMealOperationsParams) {
     }
   };
 
-  const initiateDeleteMeal = (meal: Meal) => {
+  const initiateDeleteMeal = useCallback((meal: Meal) => {
     setMealToDelete(meal);
     setDeleteDialogOpen(true);
-  };
+  }, []);
 
-  const handleDeleteMeal = async () => {
+  const handleDeleteMeal = useCallback(async () => {
     if (!mealToDelete || !userId) return;
 
     const deletedId = mealToDelete.id;
@@ -349,9 +349,9 @@ export function useMealOperations(params: UseMealOperationsParams) {
       toast({ title: "Deleted offline", description: "Will sync when connected." });
       scrollToTop();
     }
-  };
+  }, [mealToDelete, userId, meals, setMeals, selectedDate, loadMeals, toast]);
 
-  const handleFoodSearchSelected = async (food: {
+  const handleFoodSearchSelected = useCallback(async (food: {
     meal_name: string;
     calories: number;
     protein_g: number;
@@ -424,7 +424,10 @@ export function useMealOperations(params: UseMealOperationsParams) {
       toast({ title: "Saved offline", description: "Will sync when connected." });
       scrollToTop();
     }
-  };
+  }, [userId, selectedDate, meals, setMeals, loadMeals, toast]);
+
+  // handleSaveAllMeals is just saveMealIdeasToDatabase — not wrapped separately
+  // since it captures mealPlanIdeas which changes frequently
 
   return {
     loggingMeal,

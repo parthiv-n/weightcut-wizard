@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import { sentryVitePlugin } from "@sentry/vite-plugin";
+import { visualizer } from "rollup-plugin-visualizer";
 import path from "path";
 
 // https://vitejs.dev/config/
@@ -22,6 +23,11 @@ export default defineConfig(({ mode }) => ({
         filesToDeleteAfterUpload: ["./dist/**/*.map"],
       },
       disable: !process.env.SENTRY_AUTH_TOKEN,
+    }),
+    mode === "analyze" && visualizer({
+      open: true,
+      filename: "dist/stats.html",
+      gzipSize: true,
     }),
   ],
   resolve: {

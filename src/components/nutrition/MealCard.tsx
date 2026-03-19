@@ -110,8 +110,8 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete }: MealC
 
           {/* Name + colored macro labels */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-[13px] font-semibold leading-snug text-foreground truncate">{meal.meal_name}</span>
+            <div className="flex items-start gap-1.5">
+              <span className="text-[13px] font-semibold leading-snug text-foreground line-clamp-2">{meal.meal_name}</span>
               {meal.is_ai_generated && (
                 <Sparkles className="h-3 w-3 text-primary flex-shrink-0 drop-shadow-md" />
               )}
