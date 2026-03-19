@@ -47,7 +47,7 @@ Living checklist of everything to resolve before App Store submission. Consolida
 
 - [ ] **Global `setInterval` in nutritionCache never cleared** — `src/lib/nutritionCache.ts:186-188`. Runs every 5 min with no cleanup mechanism. Harmless in browser but not clean. **Fix:** Export start/stop functions, call on login/logout.
 
-- [ ] **Empty `cleanup()` in `createAIAbortController`** — `src/lib/timeoutWrapper.ts:58`. The returned cleanup function is a no-op. All callers invoke it in `finally` blocks for nothing. Phantom `30000` args have been removed, but the no-op cleanup remains. **Fix:** Remove the phantom cleanup or implement actual timeout cleanup.
+- [x] **Empty `cleanup()` in `createAIAbortController`** — No-op `cleanup` removed from `createAIAbortController`; function now returns `AbortController` directly. All 9 call sites updated.
 
 - [ ] **No pull-to-refresh gesture** — Manual refresh button exists but no native iOS pull-to-refresh. **Fix:** Implement using Capacitor plugin or library.
 

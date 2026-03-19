@@ -44,7 +44,7 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
     }
 
     aiAbortRef.current?.abort();
-    const { controller: dietController, cleanup: dietCleanup } = createAIAbortController();
+    const dietController = createAIAbortController();
     aiAbortRef.current = dietController;
 
     setDietAnalysisLoading(true);
@@ -96,7 +96,6 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
         variant: "destructive",
       });
     } finally {
-      dietCleanup();
       setDietAnalysisLoading(false);
     }
   };

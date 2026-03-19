@@ -65,7 +65,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     }
 
     aiAbortRef.current?.abort();
-    const { controller, cleanup } = createAIAbortController();
+    const controller = createAIAbortController();
     aiAbortRef.current = controller;
 
     setAiAnalyzing(true);
@@ -116,7 +116,6 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       logger.error("Error analyzing meal", error);
       toast({ title: "Analysis failed", description: error.message || "Failed to analyze meal", variant: "destructive" });
     } finally {
-      cleanup();
       setAiAnalyzing(false);
     }
   };
@@ -175,7 +174,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     }
 
     aiAbortRef.current?.abort();
-    const { controller: ingController, cleanup: ingCleanup } = createAIAbortController();
+    const ingController = createAIAbortController();
     aiAbortRef.current = ingController;
 
     setAiAnalyzingIngredient(true);
@@ -273,7 +272,6 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       logger.error("Error analyzing ingredient", error);
       toast({ title: "Analysis failed", description: error.message || "Failed to analyze ingredient. Please try again or add manually.", variant: "destructive" });
     } finally {
-      ingCleanup();
       setAiAnalyzingIngredient(false);
     }
   };
@@ -284,7 +282,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     setIsQuickAddSheetOpen(true);
 
     aiAbortRef.current?.abort();
-    const { controller: voiceController, cleanup: voiceCleanup } = createAIAbortController();
+    const voiceController = createAIAbortController();
     aiAbortRef.current = voiceController;
 
     setAiAnalyzing(true);
@@ -327,7 +325,6 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       logger.error("Error processing voice input", error);
       toast({ title: "Analysis failed", description: error.message || "Failed to process voice input", variant: "destructive" });
     } finally {
-      voiceCleanup();
       setAiAnalyzing(false);
     }
   };

@@ -139,7 +139,6 @@ export function useSkillTree() {
     techniqueId: string,
     updatedProgress: UserTechniqueProgress[],
     controller: AbortController,
-    cleanup: () => void
   ) => {
     try {
       const existingNames = stateRef.current.techniques.map((t) => t.name);
@@ -240,7 +239,6 @@ export function useSkillTree() {
         logger.warn("Chain generation failed (technique was still logged)", { error: chainErr });
       }
     } finally {
-      cleanup();
       aiAbortRef.current = null;
       setIsGenerating(false);
     }
@@ -323,10 +321,10 @@ export function useSkillTree() {
         rebuildGraph(intermediateState.techniques, intermediateState.edges, intermediateState.progress);
 
         // 4. Generate chains in background — don't block the caller
-        const { controller, cleanup } = createAIAbortController();
+        const controller = createAIAbortController();
         aiAbortRef.current = controller;
         setIsGenerating(true);
-        generateChains(name, sport, technique.id, updatedProgress, controller, cleanup);
+        generateChains(name, sport, technique.id, updatedProgress, controller);
       } catch (err) {
         logger.error("Failed to log technique", { error: err });
         throw err;

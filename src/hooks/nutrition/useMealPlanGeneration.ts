@@ -42,7 +42,7 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
     }
 
     aiAbortRef.current?.abort();
-    const { controller, cleanup } = createAIAbortController();
+    const controller = createAIAbortController();
     aiAbortRef.current = controller;
 
     setGeneratingPlan(true);
@@ -53,13 +53,11 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
         if (!sessionValid) {
           toast({ title: "Authentication Required", description: "Your session has expired. Please refresh the page and log in again.", variant: "destructive" });
           setGeneratingPlan(false);
-          cleanup();
           return;
         }
       }
 
       if (!userId) {
-        cleanup();
         throw new Error("Authentication required. Please log in again.");
       }
 
@@ -214,7 +212,6 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
 
       toast({ title: "Error generating meal plan", description: errorMsg, variant: "destructive" });
     } finally {
-      cleanup();
       setGeneratingPlan(false);
     }
   };

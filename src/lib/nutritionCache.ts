@@ -182,10 +182,20 @@ class NutritionCache {
 // Global cache instance
 export const nutritionCache = new NutritionCache();
 
-// Auto-cleanup every 5 minutes
-setInterval(() => {
-  nutritionCache.cleanup();
-}, 5 * 60 * 1000);
+// Auto-cleanup every 5 minutes — start/stop with auth lifecycle
+let cleanupInterval: ReturnType<typeof setInterval> | null = null;
+
+export function startCacheCleanup(): void {
+  if (cleanupInterval) return;
+  cleanupInterval = setInterval(() => nutritionCache.cleanup(), 5 * 60 * 1000);
+}
+
+export function stopCacheCleanup(): void {
+  if (cleanupInterval) {
+    clearInterval(cleanupInterval);
+    cleanupInterval = null;
+  }
+}
 
 // Helper functions for common operations
 export const cacheHelpers = {
