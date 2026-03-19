@@ -3,11 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { extractContent } from "../_shared/parseResponse.ts";
 import { RESEARCH_SUMMARY } from "../_shared/researchSummary.ts";
 import { edgeLogger } from "../_shared/errorReporter.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders } from "../_shared/cors.ts";
 
 function buildDataContext(results: {
   profile: any;
@@ -182,13 +178,13 @@ function buildDataContext(results: {
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders(req) });
   }
 
   // GET warmup handler
   if (req.method === "GET") {
     return new Response(JSON.stringify({ status: "warm" }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" }
     });
   }
 
@@ -197,7 +193,7 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        { status: 401, headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
     }
 
     const supabaseClient = createClient(
@@ -209,7 +205,7 @@ serve(async (req) => {
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
     if (userError || !user) {
       return new Response(JSON.stringify({ error: 'Invalid token' }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        { status: 401, headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
     }
 
     const today = new Date().toISOString().split('T')[0];
@@ -322,27 +318,27 @@ RULES:
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 429, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
         );
       }
 
       if (response.status === 401) {
         return new Response(
           JSON.stringify({ error: "Invalid API key." }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 401, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
         );
       }
 
       if (response.status === 403) {
         return new Response(
           JSON.stringify({ error: "API key invalid or quota exceeded." }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 403, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
         );
       }
 
       return new Response(
         JSON.stringify({ error: `Grok API error: ${errorData.error?.message || 'Unknown error'}` }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -370,7 +366,7 @@ RULES:
       }),
       {
         headers: {
-          ...corsHeaders,
+          ...corsHeaders(req),
           "Content-Type": "application/json",
         },
       }
@@ -379,7 +375,7 @@ RULES:
     edgeLogger.error("wizard-chat error", error, { functionName: "wizard-chat" });
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 });

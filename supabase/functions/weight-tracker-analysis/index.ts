@@ -2,19 +2,15 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
 import { edgeLogger } from "../_shared/errorReporter.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders } from "../_shared/cors.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders(req) });
   }
 
   if (req.method === "GET") {
-    return new Response(JSON.stringify({ status: "warm" }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ status: "warm" }), { headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
   }
 
   try {
@@ -22,7 +18,7 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        { status: 401, headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
     }
 
     const supabaseClient = createClient(
@@ -34,7 +30,7 @@ serve(async (req) => {
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
     if (userError || !user) {
       return new Response(JSON.stringify({ error: 'Invalid token' }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        { status: 401, headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
     }
 
     const {
@@ -228,26 +224,26 @@ OUTPUT:
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 429, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
         );
       }
       if (response.status === 401) {
         return new Response(
           JSON.stringify({ error: "Invalid API key." }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 401, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
         );
       }
       if (response.status === 402 || response.status === 403) {
         return new Response(
           JSON.stringify({ error: "API access denied. Please check your API key and billing." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 402, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
         );
       }
       const errorText = await response.text();
       edgeLogger.error("Grok API error", undefined, { functionName: "weight-tracker-analysis", status: response.status, errorText });
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -321,13 +317,13 @@ OUTPUT:
     }
 
     return new Response(JSON.stringify({ analysis }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
     });
   } catch (error) {
     edgeLogger.error("weight-tracker-analysis error", error, { functionName: "weight-tracker-analysis" });
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 });

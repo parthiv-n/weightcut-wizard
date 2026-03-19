@@ -2,15 +2,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
 import { edgeLogger } from "../_shared/errorReporter.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders } from "../_shared/cors.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders(req) });
   }
 
   try {
@@ -18,7 +14,7 @@ serve(async (req) => {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        { status: 401, headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
     }
 
     const supabaseClient = createClient(
@@ -30,7 +26,7 @@ serve(async (req) => {
     const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
     if (userError || !user) {
       return new Response(JSON.stringify({ error: 'Invalid token' }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        { status: 401, headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
     }
 
     const { ingredientName } = await req.json();
@@ -38,14 +34,14 @@ serve(async (req) => {
     if (!ingredientName || typeof ingredientName !== 'string') {
       return new Response(
         JSON.stringify({ error: "Ingredient name is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
     if (ingredientName.length > 200) {
       return new Response(
         JSON.stringify({ error: "Ingredient name too long (max 200 characters)" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -95,21 +91,21 @@ If ambiguous, specify most common preparation (e.g., "chicken" → "chicken brea
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 429, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
         );
       }
 
       if (response.status === 401) {
         return new Response(
           JSON.stringify({ error: "Invalid API key." }),
-          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 401, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
         );
       }
 
       if (response.status === 403) {
         return new Response(
           JSON.stringify({ error: "API key invalid or quota exceeded." }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 403, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
         );
       }
 
@@ -133,7 +129,7 @@ If ambiguous, specify most common preparation (e.g., "chicken" → "chicken brea
       if (!nutritionData.calories_per_100g || nutritionData.calories_per_100g < 0) {
         return new Response(
           JSON.stringify({ error: "Invalid nutrition data found. Please enter manually." }),
-          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 422, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
         );
       }
 
@@ -150,13 +146,13 @@ If ambiguous, specify most common preparation (e.g., "chicken" → "chicken brea
 
       return new Response(
         JSON.stringify({ nutritionData: result }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     } catch (parseError) {
       edgeLogger.error("Error parsing nutrition data", parseError, { functionName: "lookup-ingredient" });
       return new Response(
         JSON.stringify({ error: "Could not parse nutrition data. Please enter manually." }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -166,7 +162,7 @@ If ambiguous, specify most common preparation (e.g., "chicken" → "chicken brea
       JSON.stringify({
         error: error instanceof Error ? error.message : "Unknown error occurred"
       }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 });

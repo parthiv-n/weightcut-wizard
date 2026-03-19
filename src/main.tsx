@@ -20,4 +20,11 @@ if (dsn) {
   });
 }
 
+window.addEventListener("unhandledrejection", (event) => {
+  console.error("Unhandled promise rejection:", event.reason);
+  if (dsn) {
+    Sentry.captureException(event.reason);
+  }
+});
+
 createRoot(document.getElementById("root")!).render(<App />);

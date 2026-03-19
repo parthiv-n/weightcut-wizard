@@ -2,11 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
 import { RESEARCH_SUMMARY } from "../_shared/researchSummary.ts";
 import { edgeLogger } from "../_shared/errorReporter.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeaders } from "../_shared/cors.ts";
 
 // ── Deterministic calculations (not LLM-generated) ─────────────────────────
 function computeTargets(
@@ -55,12 +51,12 @@ function computeTargets(
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders(req) });
   }
 
   if (req.method === "GET") {
     return new Response(JSON.stringify({ status: "warm" }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
     });
   }
 
@@ -156,20 +152,20 @@ Constraints: total fluid ≈${targets.totalFluidML}ml, total carbs ≈${targets.
       if (response.status === 429) {
         return new Response(
           JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 429, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
         );
       }
       if (response.status === 401 || response.status === 403) {
         return new Response(
           JSON.stringify({ error: "API key invalid or quota exceeded." }),
-          { status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: response.status, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
         );
       }
       const errorData = await response.json();
       edgeLogger.error("Grok API error", undefined, { functionName: "rehydration-protocol", status: response.status, errorData });
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
@@ -200,13 +196,13 @@ Constraints: total fluid ≈${targets.totalFluidML}ml, total carbs ≈${targets.
     };
 
     return new Response(JSON.stringify({ protocol }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      headers: { ...corsHeaders(req), "Content-Type": "application/json" },
     });
   } catch (error) {
     edgeLogger.error("rehydration-protocol error", error, { functionName: "rehydration-protocol" });
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
     );
   }
 });
