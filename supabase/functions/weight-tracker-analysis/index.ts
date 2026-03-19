@@ -71,7 +71,7 @@ serve(async (req) => {
     // Fetch stored insights
     const { data: storedInsights } = await supabaseClient
       .from("user_insights")
-      .select("*")
+      .select("insight_type, insight_data, confidence_score")
       .eq("user_id", user.id);
 
     // Calculate body adaptation patterns

@@ -54,7 +54,7 @@ export default function FightCampDetail() {
       const { data, error } = await withSupabaseTimeout(
         supabase
           .from("fight_camps")
-          .select("*")
+          .select("id, name, event_name, fight_date, profile_pic_url, starting_weight_kg, end_weight_kg, total_weight_cut, weight_via_dehydration, weight_via_carb_reduction, weigh_in_timing, rehydration_notes, performance_feeling, is_completed")
           .eq("id", id)
           .single(),
         undefined,

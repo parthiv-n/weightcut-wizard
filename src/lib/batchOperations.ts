@@ -1,5 +1,6 @@
 // Utility for batching database operations to improve performance
 import { supabase } from "@/integrations/supabase/client";
+import { PROFILE_COLUMNS } from "@/lib/queryColumns";
 
 interface BatchOperation {
   id: string;
@@ -138,7 +139,7 @@ export const batchProfileQuery = (userId: string, priority = 5) => {
     id: `profile-${userId}`,
     operation: () => supabase
       .from("profiles")
-      .select("*")
+      .select(PROFILE_COLUMNS)
       .eq("id", userId)
       .maybeSingle(),
     priority,
@@ -151,7 +152,7 @@ export const batchNutritionQuery = (userId: string, date: string, priority = 3) 
     id: `nutrition-${userId}-${date}`,
     operation: () => supabase
       .from("nutrition_logs")
-      .select("*")
+      .select("id, user_id, date, meal_name, meal_type, calories, protein_g, carbs_g, fats_g, portion_size, is_ai_generated, recipe_notes, ingredients, created_at")
       .eq("user_id", userId)
       .eq("date", date)
       .order("created_at", { ascending: true }),
@@ -165,7 +166,7 @@ export const batchWeightLogsQuery = (userId: string, limit = 30, priority = 2) =
     id: `weight-logs-${userId}`,
     operation: () => supabase
       .from("weight_logs")
-      .select("*")
+      .select("id, user_id, date, weight_kg, created_at")
       .eq("user_id", userId)
       .order("date", { ascending: true })
       .limit(limit),

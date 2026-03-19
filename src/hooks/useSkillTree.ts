@@ -63,7 +63,7 @@ export function useSkillTree() {
         // Fetch user's technique progress to know which techniques they have
         const { data: progressData, error: progressError } = await supabase
           .from("user_technique_progress")
-          .select("*")
+          .select("id, user_id, technique_id, level, times_logged, first_logged_at, last_logged_at")
           .eq("user_id", userId);
 
         if (progressError) throw progressError;
@@ -81,7 +81,7 @@ export function useSkillTree() {
         // Fetch techniques that the user has progress on
         const { data: techData, error: techError } = await supabase
           .from("techniques")
-          .select("*")
+          .select("id, name, name_normalized, sport, position, category, created_at")
           .in("id", techniqueIds.length > 0 ? techniqueIds : ["00000000-0000-0000-0000-000000000000"]);
 
         if (techError) throw techError;
@@ -90,7 +90,7 @@ export function useSkillTree() {
         // Fetch edges between these techniques
         const { data: edgeData, error: edgeError } = await supabase
           .from("technique_edges")
-          .select("*")
+          .select("id, from_technique_id, to_technique_id, relation_type, created_at")
           .or(
             techniqueIds.length > 0
               ? `from_technique_id.in.(${techniqueIds.join(",")}),to_technique_id.in.(${techniqueIds.join(",")})`
@@ -112,7 +112,7 @@ export function useSkillTree() {
         if (missingIds.length > 0) {
           const { data: extraTechs } = await supabase
             .from("techniques")
-            .select("*")
+            .select("id, name, name_normalized, sport, position, category, created_at")
             .in("id", missingIds);
           if (extraTechs) {
             allTechniques = [...techniques, ...(extraTechs as Technique[])];

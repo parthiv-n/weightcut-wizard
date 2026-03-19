@@ -43,6 +43,7 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
         { data: fightWeekPlans },
         { data: fightWeekLogs }
       ] = await Promise.all([
+        // select("*") intentional — full data export for CSV backup
         supabase.from("profiles").select("*").eq("id", user.id).single(),
         supabase.from("weight_logs").select("*").eq("user_id", user.id).order("date", { ascending: true }),
         supabase.from("nutrition_logs").select("*").eq("user_id", user.id).order("date", { ascending: true }),

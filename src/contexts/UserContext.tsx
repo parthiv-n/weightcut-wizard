@@ -6,6 +6,7 @@ import { App as CapacitorApp } from "@capacitor/app";
 import { localCache } from "@/lib/localCache";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { logger } from "@/lib/logger";
+import { PROFILE_COLUMNS } from "@/lib/queryColumns";
 
 export interface ProfileData {
   id?: string;
@@ -146,7 +147,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     const attempt = async (): Promise<boolean> => {
       const { data } = await withSupabaseTimeout(
-        supabase.from("profiles").select("*").eq("id", uid).maybeSingle(),
+        supabase.from("profiles").select(PROFILE_COLUMNS).eq("id", uid).maybeSingle(),
         4000,
         "Profile refresh query"
       );
@@ -251,7 +252,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         withSupabaseTimeout(
           supabase
             .from("profiles")
-            .select("*")
+            .select(PROFILE_COLUMNS)
             .eq("id", user.id)
             .maybeSingle(),
           4000,
