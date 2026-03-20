@@ -1,6 +1,6 @@
 # Error Monitoring Setup Guide
 
-This project uses **Sentry** for error monitoring across the React client and Supabase edge functions, with a structured logger replacing all raw `console` calls.
+This project uses **Sentry** (`@sentry/react` v10 + `@sentry/vite-plugin` v5) for error monitoring across the React client and Supabase edge functions, with a structured logger replacing all raw `console` calls.
 
 ---
 
@@ -9,16 +9,31 @@ This project uses **Sentry** for error monitoring across the React client and Su
 ### 1. Create a Sentry Project
 
 1. Go to [sentry.io](https://sentry.io) and create a free account
-2. Create a new project: **Platform = React**
-3. Copy your **DSN** from the project settings (Settings > Client Keys)
+2. Create a new project → select **React** as the platform
+3. Copy your **DSN** from Settings → Projects → [your project] → Client Keys (DSN)
 
-### 2. Set Environment Variables
+### 2. Install Dependencies
+
+Already included in `package.json`. For a fresh clone:
+
+```bash
+npm install
+```
+
+The relevant packages are:
+
+```
+@sentry/react@^10.41.0        # Client SDK (browser tracing, exception capture)
+@sentry/vite-plugin@^5.1.1    # Source map upload during builds
+```
+
+### 3. Set Environment Variables
 
 Add to your `.env` file:
 
 ```env
-# Required for error reporting
-VITE_SENTRY_DSN=https://your-key@o123456.ingest.sentry.io/1234567
+# Required for error reporting (client-side)
+VITE_SENTRY_DSN=https://your-key@o123456.ingest.us.sentry.io/1234567
 
 # Required for source map uploads (CI/CD builds only)
 SENTRY_AUTH_TOKEN=your-auth-token
@@ -26,15 +41,19 @@ SENTRY_ORG=your-org-slug
 SENTRY_PROJECT=your-project-slug
 ```
 
+**To get the auth token**: Go to sentry.io → Settings → Auth Tokens → Create New Token. Grant `project:releases` and `org:read` scopes.
+
 **Local dev without Sentry**: The app works fine without `VITE_SENTRY_DSN`. Sentry init is skipped, and the logger falls back to dev console output only.
 
-### 3. Edge Functions (Supabase)
+### 4. Edge Functions (Supabase)
 
-Set the DSN as a Supabase secret:
+Set the DSN as a Supabase secret so edge functions can report errors:
 
 ```bash
-supabase secrets set SENTRY_DSN=https://your-key@o123456.ingest.sentry.io/1234567
+supabase secrets set SENTRY_DSN=https://your-key@o123456.ingest.us.sentry.io/1234567
 ```
+
+This can be a separate Sentry project/DSN from the client if you want to split client vs server errors.
 
 ---
 
@@ -80,18 +99,43 @@ The edge reporter uses Sentry's HTTP Store API directly (no SDK) to avoid cold-s
 
 ### ErrorBoundary
 
-The `<ErrorBoundary>` in `App.tsx` automatically captures React render crashes to Sentry with the component stack trace.
+`src/components/ErrorBoundary.tsx` is a custom React class component that catches render crashes. In `App.tsx`, it wraps the entire app and calls `Sentry.captureException` in its `onError` callback, sending the error + component stack to Sentry.
+
+---
+
+## Sentry Init (`src/main.tsx`)
+
+Sentry is initialized before React renders, with these settings:
+
+```typescript
+Sentry.init({
+  dsn,
+  integrations: [Sentry.browserTracingIntegration()],
+  tracesSampleRate: import.meta.env.DEV ? 1.0 : 0.2,
+  sendDefaultPii: false,
+  ignoreErrors: [
+    "ResizeObserver loop",
+    "AbortError",
+    "Failed to fetch",
+    "Load failed",
+    "NetworkError",
+  ],
+});
+```
+
+An `unhandledrejection` listener also forwards uncaught promise rejections to Sentry.
 
 ---
 
 ## Source Maps
 
-Production builds generate source maps and upload them to Sentry (when `SENTRY_AUTH_TOKEN` is set), then delete the `.map` files from the deploy bundle. This means:
+The `@sentry/vite-plugin` in `vite.config.ts` handles source map uploads:
 
-- Sentry shows **original TypeScript** file names and line numbers in error reports
-- Users never download source maps (no bundle size impact, no code exposure)
+- `sourcemap: 'hidden'` generates maps without exposing them in the bundle
+- When `SENTRY_AUTH_TOKEN` is set, maps are uploaded to Sentry then deleted from `dist/`
+- When the token is absent, the plugin is disabled — local builds work normally
 
-For local builds without the auth token, source maps are generated but not uploaded (the Sentry Vite plugin is disabled).
+This means Sentry shows **original TypeScript** file names and line numbers, while users never download source maps.
 
 ---
 
@@ -136,7 +180,7 @@ import { edgeLogger } from "../_shared/errorReporter.ts";
 ### Checking for Raw Console Calls
 
 ```bash
-# Should only match logger.ts and errorReporter.ts
+# Should only match logger.ts, errorReporter.ts, and main.tsx
 grep -r "console\.\(error\|warn\|log\)" src/ --include="*.ts" --include="*.tsx"
 grep -r "console\.\(error\|warn\|log\)" supabase/functions/ --include="*.ts"
 ```
@@ -155,11 +199,12 @@ grep -r "console\.\(error\|warn\|log\)" supabase/functions/ --include="*.ts"
 
 ```
 src/
-  lib/logger.ts              <- Client logger (wraps @sentry/react)
-  main.tsx                   <- Sentry.init() runs here
+  main.tsx                     <- Sentry.init() + unhandledrejection handler
+  lib/logger.ts                <- Client logger (wraps @sentry/react)
+  components/ErrorBoundary.tsx <- React error boundary → Sentry.captureException
 
 supabase/functions/
-  _shared/errorReporter.ts   <- Edge logger (raw HTTP to Sentry)
+  _shared/errorReporter.ts     <- Edge logger (raw HTTP to Sentry Store API)
 
-vite.config.ts               <- sentryVitePlugin for source map uploads
+vite.config.ts                 <- @sentry/vite-plugin for source map uploads
 ```

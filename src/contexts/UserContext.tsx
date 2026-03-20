@@ -104,8 +104,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
       const fiveMinutes = 5 * 60 * 1000;
 
       if (timeUntilExpiry <= 0) {
-        setIsSessionValid(false);
-        return false;
+        // Token expired — still try refresh (refresh token has longer TTL)
+        return await refreshSession();
       }
 
       if (timeUntilExpiry < fiveMinutes) {
