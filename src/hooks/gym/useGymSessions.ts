@@ -4,6 +4,7 @@ import { useUser } from "@/contexts/UserContext";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { localCache } from "@/lib/localCache";
 import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
+import { syncQueue } from "@/lib/syncQueue";
 import { useToast } from "@/hooks/use-toast";
 import { triggerHaptic, celebrateSuccess } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
@@ -24,6 +25,7 @@ export function useGymSessions() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [activeSession, setActiveSession] = useState<ActiveWorkout | null>(null);
   const exerciseCacheRef = useRef<Map<string, Exercise>>(new Map());
+  const hasProcessedOnMount = useRef(false);
 
   // Recover active session from localStorage on mount
   useEffect(() => {
@@ -46,6 +48,27 @@ export function useGymSessions() {
       localStorage.removeItem(ACTIVE_SESSION_KEY);
     }
   }, [activeSession]);
+
+  // Fix 3: Flush sync queue when recovering an active session on mount
+  useEffect(() => {
+    if (!activeSession || !userId || hasProcessedOnMount.current) return;
+    hasProcessedOnMount.current = true;
+    syncQueue.process(userId).catch(() => {});
+  }, [activeSession, userId]);
+
+  // Fix 2: Periodically flush sync queue during active workout (catches auth-expired set inserts)
+  useEffect(() => {
+    if (!activeSession || !userId) return;
+
+    const intervalId = setInterval(async () => {
+      if (syncQueue.size(userId) > 0) {
+        try { await supabase.auth.refreshSession(); } catch { /* process() will fail gracefully */ }
+        await syncQueue.process(userId);
+      }
+    }, 2 * 60 * 1000);
+
+    return () => clearInterval(intervalId);
+  }, [activeSession, userId]);
 
   const buildExerciseGroups = useCallback((sets: GymSet[], exercises: Exercise[]): ExerciseGroup[] => {
     const exerciseMap = new Map<string, Exercise>();
@@ -226,6 +249,19 @@ export function useGymSessions() {
       if (refreshError) {
         toast({ description: "Session expired. Please log in again.", variant: "destructive" });
         return false;
+      }
+
+      // Flush any queued set inserts/updates before marking session complete
+      if (syncQueue.size(userId) > 0) {
+        await syncQueue.process(userId);
+        const remaining = syncQueue.size(userId);
+        if (remaining > 0) {
+          toast({
+            description: `${remaining} set(s) failed to save. Try finishing again.`,
+            variant: "destructive",
+          });
+          return false;
+        }
       }
 
       const elapsed = Math.round((Date.now() - activeSession.startedAt) / 60000);

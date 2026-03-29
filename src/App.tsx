@@ -66,6 +66,7 @@ function RouteTracker() {
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
       StatusBar.setStyle({ style: Style.Dark });
+      document.documentElement.classList.add("native-app");
     }
   }, []);
 

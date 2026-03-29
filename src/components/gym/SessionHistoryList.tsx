@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { motion } from "motion/react";
 import { staggerContainer, staggerItem } from "@/lib/motion";
 import { Calendar, Clock, Dumbbell, TrendingUp } from "lucide-react";
@@ -10,7 +11,7 @@ interface SessionHistoryListProps {
   onSessionTap: (session: SessionWithSets) => void;
 }
 
-export function SessionHistoryList({ sessions, loading, onSessionTap }: SessionHistoryListProps) {
+export const SessionHistoryList = memo(function SessionHistoryList({ sessions, loading, onSessionTap }: SessionHistoryListProps) {
   if (loading) {
     return (
       <div className="space-y-3">
@@ -95,4 +96,4 @@ export function SessionHistoryList({ sessions, loading, onSessionTap }: SessionH
       ))}
     </motion.div>
   );
-}
+});

@@ -476,6 +476,25 @@ All colors MUST be HSL.
     }
   }
 
+  /* ── iOS native: kill expensive backdrop-blur, use solid backgrounds ── */
+  .native-app.dark .glass-card,
+  .native-app.dark .bg-card,
+  .native-app.dark [data-sidebar="sidebar"],
+  .native-app.dark [role="dialog"],
+  .native-app.dark .popover-content {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: hsl(0 0% 7%) !important;
+    box-shadow:
+      inset 0 1px 1px rgba(255, 255, 255, 0.06),
+      0 4px 16px rgba(0, 0, 0, 0.4);
+  }
+
+  .native-app [class*="backdrop-blur"] {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
   /* Optimize animations for reduced motion preferences */
   @media (prefers-reduced-motion: reduce) {
     .page-transition-page {

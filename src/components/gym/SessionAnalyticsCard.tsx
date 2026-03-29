@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { motion } from "motion/react";
 import { staggerItem } from "@/lib/motion";
 import { BarChart3, Calendar, Dumbbell, Clock, TrendingUp } from "lucide-react";
@@ -11,7 +12,7 @@ interface SessionAnalyticsCardProps {
   weeklyVolumes: { week: string; volume: number; sessions: number }[];
 }
 
-export function SessionAnalyticsCard({
+export const SessionAnalyticsCard = memo(function SessionAnalyticsCard({
   sessionsThisWeek, avgDuration, totalSessions,
   mostTrainedMuscle, weeklyVolumes,
 }: SessionAnalyticsCardProps) {
@@ -79,4 +80,4 @@ export function SessionAnalyticsCard({
       </div>
     </motion.div>
   );
-}
+});

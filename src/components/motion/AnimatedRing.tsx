@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { motion, useMotionValue, useSpring, useReducedMotion } from "motion/react";
 import { celebrateSuccess } from "@/lib/haptics";
+import { isNativePlatform } from "@/hooks/useIsNative";
 
 interface AnimatedRingProps {
   /** 0-1 */
@@ -91,15 +92,17 @@ export function AnimatedRing({
           <stop offset="0%" stopColor={gradientColors[0]} />
           <stop offset="100%" stopColor={gradientColors[1]} />
         </linearGradient>
-        <filter id={glowId}>
-          <feDropShadow
-            dx="0"
-            dy="0"
-            stdDeviation={isComplete ? "4" : "2"}
-            floodColor={gradientColors[0]}
-            floodOpacity={isComplete ? "0.7" : "0.4"}
-          />
-        </filter>
+        {!isNativePlatform && (
+          <filter id={glowId}>
+            <feDropShadow
+              dx="0"
+              dy="0"
+              stdDeviation={isComplete ? "4" : "2"}
+              floodColor={gradientColors[0]}
+              floodOpacity={isComplete ? "0.7" : "0.4"}
+            />
+          </filter>
+        )}
       </defs>
 
       {/* Background track */}
@@ -125,7 +128,7 @@ export function AnimatedRing({
         strokeLinecap="round"
         strokeDasharray={circumference}
         strokeDashoffset={circumference}
-        filter={`url(#${glowId})`}
+        filter={isNativePlatform ? undefined : `url(#${glowId})`}
       />
     </motion.svg>
   );

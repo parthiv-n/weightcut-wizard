@@ -2,23 +2,30 @@ import { useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useNavigationDirection } from "@/hooks/useNavigationDirection";
+import { isNativePlatform } from "@/hooks/useIsNative";
 
-const DURATION = 0.2;
+const DURATION = isNativePlatform ? 0.15 : 0.2;
 
-const variants = {
-  enter: (direction: "forward" | "back") => ({
-    opacity: 0,
-    x: direction === "forward" ? 40 : -40,
-  }),
-  center: {
-    opacity: 1,
-    x: 0,
-  },
-  exit: (direction: "forward" | "back") => ({
-    opacity: 0,
-    x: direction === "forward" ? -40 : 40,
-  }),
-};
+const variants = isNativePlatform
+  ? {
+      enter: () => ({ opacity: 0 }),
+      center: { opacity: 1 },
+      exit: () => ({ opacity: 0 }),
+    }
+  : {
+      enter: (direction: "forward" | "back") => ({
+        opacity: 0,
+        x: direction === "forward" ? 40 : -40,
+      }),
+      center: {
+        opacity: 1,
+        x: 0,
+      },
+      exit: (direction: "forward" | "back") => ({
+        opacity: 0,
+        x: direction === "forward" ? -40 : 40,
+      }),
+    };
 
 interface PageTransitionProps {
   children: React.ReactNode;

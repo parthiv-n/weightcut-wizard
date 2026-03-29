@@ -33,7 +33,7 @@ export function StreakBadge({ streak, isActive }: StreakBadgeProps) {
           }
           transition={
             isActive
-              ? { duration: 2, repeat: Infinity, ease: "easeInOut" }
+              ? { duration: 0.8, ease: "easeInOut" }
               : undefined
           }
         >

@@ -3,6 +3,7 @@
 import { memo, useCallback, useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { animate } from "motion/react";
+import { isNativePlatform } from "@/hooks/useIsNative";
 
 interface GlowingEffectProps {
     blur?: number;
@@ -16,7 +17,7 @@ interface GlowingEffectProps {
     movementDuration?: number;
     borderWidth?: number;
 }
-const GlowingEffect = memo(
+const GlowingEffectInner = memo(
     ({
         blur = 0,
         inactiveZone = 0.7,
@@ -185,6 +186,10 @@ const GlowingEffect = memo(
     }
 );
 
-GlowingEffect.displayName = "GlowingEffect";
+GlowingEffectInner.displayName = "GlowingEffect";
+
+const GlowingEffect = isNativePlatform
+    ? () => null
+    : GlowingEffectInner;
 
 export { GlowingEffect };

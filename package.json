@@ -12,6 +12,7 @@
     "analyze": "vite build --mode analyze"
   },
   "dependencies": {
+    "@capacitor-community/apple-sign-in": "^7.1.0",
     "@capacitor/app": "^8.0.1",
     "@capacitor/camera": "^8.0.1",
     "@capacitor/cli": "^8.1.0",

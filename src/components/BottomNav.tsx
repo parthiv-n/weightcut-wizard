@@ -214,8 +214,6 @@ export function BottomNav() {
             data-tutorial="nav-quick-log"
             className="flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target"
             aria-label="Quick Log"
-            animate={prefersReducedMotion ? undefined : { scale: [1, 1.04, 1] }}
-            transition={prefersReducedMotion ? undefined : { duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
             whileTap={{ scale: 0.9 }}
           >
             <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/30 flex items-center justify-center">

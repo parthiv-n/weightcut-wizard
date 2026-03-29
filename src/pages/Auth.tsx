@@ -8,6 +8,8 @@ import { useAuth } from "@/contexts/UserContext";
 import wizardLogo from "@/assets/wizard-logo.webp";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ChevronLeft } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
+import { SignInWithApple } from "@capacitor-community/apple-sign-in";
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -157,6 +159,47 @@ export default function Auth() {
       navigate("/dashboard");
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update password." });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    setLoading(true);
+    try {
+      if (Capacitor.isNativePlatform()) {
+        // Native iOS: use ASAuthorizationController → exchange ID token with Supabase
+        const result = await SignInWithApple.authorize({
+          clientId: "com.weightcutwizard.app",
+          redirectURI: "https://fvxrqpbhquvablmkugvo.supabase.co/auth/v1/callback",
+          scopes: "email name",
+        });
+        const { error } = await supabase.auth.signInWithIdToken({
+          provider: "apple",
+          token: result.response.identityToken,
+        });
+        if (error) throw error;
+      } else {
+        // Web fallback: use Supabase OAuth redirect flow
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider: "apple",
+          options: {
+            redirectTo: `${window.location.origin}/dashboard`,
+          },
+        });
+        if (error) throw error;
+      }
+    } catch (error: any) {
+      // User cancelled the Apple sign-in dialog — not an error
+      if (error?.message?.includes("canceled") || error?.code === "ERR_CANCELED") {
+        setLoading(false);
+        return;
+      }
+      toast({
+        variant: "destructive",
+        title: "Apple Sign-In Failed",
+        description: error.message || "Could not sign in with Apple. Please try again.",
+      });
     } finally {
       setLoading(false);
     }
@@ -332,6 +375,30 @@ export default function Auth() {
                     </Button>
                   </div>
                 </form>
+              )}
+
+              {!showForgotPassword && !isPasswordReset && (
+                <>
+                  {/* Divider */}
+                  <div className="flex items-center gap-3 my-2">
+                    <div className="flex-1 h-px bg-border/60" />
+                    <span className="text-xs text-muted-foreground font-medium">or</span>
+                    <div className="flex-1 h-px bg-border/60" />
+                  </div>
+
+                  {/* Apple Sign-In */}
+                  <button
+                    type="button"
+                    onClick={handleAppleSignIn}
+                    disabled={loading}
+                    className="w-full h-12 rounded-full bg-foreground text-background font-semibold text-base flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all touch-manipulation hover:opacity-90 disabled:opacity-50"
+                  >
+                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.52-3.23 0-1.44.62-2.2.44-3.06-.4C3.79 16.17 4.36 9.51 8.82 9.28c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.3 4.11zM12.03 9.2C11.88 7.16 13.5 5.5 15.42 5.35c.28 2.35-2.14 4.1-3.39 3.85z" />
+                    </svg>
+                    {isLogin ? "Sign in with Apple" : "Sign up with Apple"}
+                  </button>
+                </>
               )}
 
               {!showForgotPassword && (

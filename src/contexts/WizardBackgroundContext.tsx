@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode, useEffect } from "react";
+import { createContext, useContext, useState, useCallback, useMemo, ReactNode, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
@@ -35,7 +35,7 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
     }
   }, []);
 
-  const loadHistory = () => {
+  const loadHistory = useCallback(() => {
     if (!userId) return;
     const history = localStorage.getItem(`wizard_chat_history_${userId}`);
     if (history) {
@@ -45,19 +45,19 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
         { role: "assistant", content: "Hey champ! I'm the Weight Cut Wizard. How can I help you dial in your nutrition and weight today?" }
       ]);
     }
-  };
+  }, [userId]);
 
   useEffect(() => {
     loadHistory();
   }, [userId]);
 
-  const clearChat = () => {
+  const clearChat = useCallback(() => {
     if (!userId) return;
     localStorage.removeItem(`wizard_chat_history_${userId}`);
     setMessages([
       { role: "assistant", content: "Hey champ! I'm the Weight Cut Wizard. How can I help you dial in your nutrition and weight today?" }
     ]);
-  };
+  }, [userId]);
 
   const triggerNotification = async () => {
     try {
@@ -79,7 +79,7 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
     }
   };
 
-  const sendMessage = async (content: string) => {
+  const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || isLoading || !userId) return;
 
     const newMessages: Message[] = [...messages, { role: "user", content: content.trim() }];
@@ -129,10 +129,15 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [userId, messages, isLoading]);
+
+  const value = useMemo(
+    () => ({ messages, isLoading, sendMessage, clearChat, loadHistory }),
+    [messages, isLoading, sendMessage, clearChat, loadHistory]
+  );
 
   return (
-    <WizardBackgroundContext.Provider value={{ messages, isLoading, sendMessage, clearChat, loadHistory }}>
+    <WizardBackgroundContext.Provider value={value}>
       {children}
     </WizardBackgroundContext.Provider>
   );

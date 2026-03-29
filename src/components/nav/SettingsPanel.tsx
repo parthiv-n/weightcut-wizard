@@ -1,4 +1,4 @@
-import { Moon, Sun, ChevronRight, BookOpen, Bell, Trash2, Mail } from "lucide-react";
+import { Moon, Sun, ChevronRight, BookOpen, Bell, Trash2, Mail, Shield, FileText, LifeBuoy, Heart } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -247,6 +247,76 @@ export function SettingsPanel({
               <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
             </div>
           </button>
+
+          {/* Legal & Support */}
+          <div className="rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden divide-y divide-border/30 dark:divide-white/5">
+            <a
+              href="https://weightcutwizard.com/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between px-4 py-3 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation"
+            >
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
+                  <Shield className="h-5 w-5 text-primary" />
+                </span>
+                <div>
+                  <p className="text-[15px] font-medium text-foreground">Privacy Policy</p>
+                  <p className="text-xs text-muted-foreground">How we handle your data</p>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+            </a>
+
+            <a
+              href="https://weightcutwizard.com/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-between px-4 py-3 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation"
+            >
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
+                  <FileText className="h-5 w-5 text-primary" />
+                </span>
+                <div>
+                  <p className="text-[15px] font-medium text-foreground">Terms of Service</p>
+                  <p className="text-xs text-muted-foreground">Usage terms and conditions</p>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+            </a>
+
+            <a
+              href="mailto:support@weightcutwizard.com"
+              className="flex items-center justify-between px-4 py-3 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation"
+            >
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
+                  <LifeBuoy className="h-5 w-5 text-primary" />
+                </span>
+                <div>
+                  <p className="text-[15px] font-medium text-foreground">Support</p>
+                  <p className="text-xs text-muted-foreground">support@weightcutwizard.com</p>
+                </div>
+              </div>
+              <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+            </a>
+          </div>
+
+          {/* Medical Disclaimer */}
+          <div className="rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden">
+            <div className="flex items-start gap-3 px-4 py-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 dark:bg-amber-500/15 mt-0.5">
+                <Heart className="h-5 w-5 text-amber-500" />
+              </span>
+              <div>
+                <p className="text-[15px] font-medium text-foreground">Medical Disclaimer</p>
+                <p className="text-xs text-muted-foreground leading-relaxed mt-1">
+                  This app is for informational purposes only and is not a substitute for professional medical advice, diagnosis, or treatment. Always consult a qualified healthcare provider before making changes to your diet, training, or weight management plan.
+                </p>
+              </div>
+            </div>
+          </div>
 
           {/* Delete Account */}
           <button

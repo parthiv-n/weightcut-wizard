@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { memo, useState, useEffect } from "react";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import type { GymSet } from "@/pages/gym/types";
 
@@ -9,7 +9,7 @@ interface ExercisePerformanceChartProps {
   loading?: boolean;
 }
 
-export function ExercisePerformanceChart({ sets, loading }: ExercisePerformanceChartProps) {
+export const ExercisePerformanceChart = memo(function ExercisePerformanceChart({ sets, loading }: ExercisePerformanceChartProps) {
   const [timeFilter, setTimeFilter] = useState<TimeFilter>("1M");
   const [chartType, setChartType] = useState<"weight" | "volume">("weight");
 
@@ -134,4 +134,4 @@ export function ExercisePerformanceChart({ sets, loading }: ExercisePerformanceC
       </div>
     </div>
   );
-}
+});
