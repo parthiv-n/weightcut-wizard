@@ -55,6 +55,7 @@ export function BottomNav() {
   const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [editedName, setEditedName] = useState(userName);
+  const [userEmail, setUserEmail] = useState("");
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     const saved = localStorage.getItem("theme") as "light" | "dark" | null;
     return saved || "dark";
@@ -96,10 +97,12 @@ export function BottomNav() {
     navigate(url);
   };
 
-  const handleSettings = () => {
+  const handleSettings = async () => {
     setMoreMenuOpen(false);
     setEditedName(userName);
     setSettingsDialogOpen(true);
+    const { data } = await supabase.auth.getUser();
+    if (data.user?.email) setUserEmail(data.user.email);
   };
 
   const handleReplayTutorial = () => {
@@ -281,6 +284,7 @@ export function BottomNav() {
         open={settingsDialogOpen}
         onClose={() => setSettingsDialogOpen(false)}
         userName={userName}
+        userEmail={userEmail}
         avatarUrl={avatarUrl}
         editedName={editedName}
         setEditedName={setEditedName}

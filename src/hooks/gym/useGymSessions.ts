@@ -221,6 +221,13 @@ export function useGymSessions() {
     if (!userId || !activeSession) return false;
 
     try {
+      // Ensure auth is fresh — critical on mobile after backgrounding
+      const { error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError) {
+        toast({ description: "Session expired. Please log in again.", variant: "destructive" });
+        return false;
+      }
+
       const elapsed = Math.round((Date.now() - activeSession.startedAt) / 60000);
 
       const { error } = await withSupabaseTimeout(
@@ -234,7 +241,7 @@ export function useGymSessions() {
             updated_at: new Date().toISOString(),
           } as any)
           .eq("id", activeSession.sessionId),
-        undefined,
+        15000,
         "Finish gym session"
       );
 

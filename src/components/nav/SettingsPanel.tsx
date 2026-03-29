@@ -1,4 +1,4 @@
-import { Moon, Sun, ChevronRight, BookOpen, Bell, Trash2 } from "lucide-react";
+import { Moon, Sun, ChevronRight, BookOpen, Bell, Trash2, Mail } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -11,6 +11,7 @@ interface SettingsPanelProps {
   open: boolean;
   onClose: () => void;
   userName: string;
+  userEmail: string;
   avatarUrl: string | null;
   editedName: string;
   setEditedName: (name: string) => void;
@@ -24,7 +25,7 @@ interface SettingsPanelProps {
 
 export function SettingsPanel({
   open, onClose,
-  userName, avatarUrl,
+  userName, userEmail, avatarUrl,
   editedName, setEditedName,
   theme, onToggleTheme,
   onAvatarChange, onSave,
@@ -112,6 +113,21 @@ export function SettingsPanel({
               </div>
             </div>
           </div>
+
+          {/* Email */}
+          {userEmail && (
+            <div className="rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden">
+              <div className="flex items-center px-4 py-3 gap-3">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
+                  <Mail className="h-5 w-5 text-primary" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-[15px] font-medium text-foreground">Email</p>
+                  <p className="text-xs text-muted-foreground truncate">{userEmail}</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Appearance */}
           <button

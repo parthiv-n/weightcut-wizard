@@ -115,6 +115,8 @@ export function useGymSets({ activeSession, updateActiveSession }: UseGymSetsOpt
 
     // Persist to DB
     try {
+      // Best-effort auth refresh — prevents all sets failing after app resume
+      try { await supabase.auth.refreshSession(); } catch { /* queued if this fails */ }
       const { error } = await withSupabaseTimeout(
         supabase.from("gym_sets" as any).insert({
           id: newSetId,
