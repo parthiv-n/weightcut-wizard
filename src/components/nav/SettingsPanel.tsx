@@ -76,16 +76,16 @@ export function SettingsPanel({
         className="fixed inset-0 z-[10001] bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
         onClick={onClose}
       />
-      <div className="fixed inset-x-0 bottom-0 z-[10002] bg-background/95 dark:bg-background/98 backdrop-blur-md border-t border-border/50 rounded-t-3xl animate-in slide-in-from-bottom duration-300 safe-area-inset-bottom">
+      <div className="fixed inset-x-0 bottom-0 z-[10002] bg-background/95 dark:bg-background/98 backdrop-blur-md border-t border-border/50 rounded-t-3xl animate-in slide-in-from-bottom duration-300 safe-area-inset-bottom flex flex-col" style={{ maxHeight: "85dvh" }}>
         {/* Drag handle */}
-        <div className="flex justify-center pt-3 pb-1">
+        <div className="flex justify-center pt-3 pb-1 shrink-0">
           <div className="w-10 h-1 rounded-full bg-muted-foreground/25" />
         </div>
-        <div className="px-5 pb-2 pt-1">
+        <div className="px-5 pb-2 pt-1 shrink-0">
           <h2 className="text-lg font-semibold text-foreground">Settings</h2>
         </div>
 
-        <div className="px-4 space-y-3" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1.5rem)" }}>
+        <div className="px-4 space-y-3 overflow-y-auto overscroll-contain" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1.5rem)" }}>
           {/* Profile Picture + Name row */}
           <div className="rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 p-4">
             <div className="flex items-center gap-4">
