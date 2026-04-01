@@ -65,6 +65,20 @@ export function BottomNav() {
     setEditedName(userName);
   }, [userName]);
 
+  // Preload More menu page chunks when the menu opens
+  useEffect(() => {
+    if (moreMenuOpen) {
+      import("../pages/Goals").catch(() => {});
+      import("../pages/FightCamps").catch(() => {});
+      import("../pages/FightCampCalendar").catch(() => {});
+      import("../pages/Recovery").catch(() => {});
+      import("../pages/Hydration").catch(() => {});
+      import("../pages/FightWeek").catch(() => {});
+      import("../pages/SkillTree").catch(() => {});
+      import("../pages/GymTracker").catch(() => {});
+    }
+  }, [moreMenuOpen]);
+
   const toggleTheme = () => {
     const newTheme = theme === "light" ? "dark" : "light";
     setTheme(newTheme);
