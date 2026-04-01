@@ -40,6 +40,7 @@ export function PageTransition({ children }: PageTransitionProps) {
   useEffect(() => {
     const main = document.querySelector("main");
     if (main) main.scrollTo(0, 0);
+    window.scrollTo(0, 0);
   }, [location.pathname]);
 
   if (prefersReducedMotion) {
@@ -66,9 +67,14 @@ export function PageTransition({ children }: PageTransitionProps) {
           animate="center"
           exit="exit"
           transition={{ duration: DURATION, ease: [0.25, 0.1, 0.25, 1] }}
-          onAnimationComplete={() => {
+          onAnimationComplete={(definition) => {
             if (isFirstRender.current) {
               isFirstRender.current = false;
+            }
+            if (definition === "center") {
+              const main = document.querySelector("main");
+              if (main) main.scrollTo(0, 0);
+              window.scrollTo(0, 0);
             }
           }}
           style={{ willChange: "transform, opacity" }}

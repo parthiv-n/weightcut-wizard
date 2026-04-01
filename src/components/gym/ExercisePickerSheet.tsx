@@ -1,12 +1,11 @@
 import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Search, Plus, Dumbbell, Loader2 } from "lucide-react";
 import { motion } from "motion/react";
 import { staggerContainer, staggerItem } from "@/lib/motion";
-import { CATEGORIES, EQUIPMENT_OPTIONS, MUSCLE_GROUPS } from "@/data/exerciseDatabase";
-import type { Exercise, ExerciseCategory, Equipment, MuscleGroup } from "@/pages/gym/types";
+import { CATEGORIES, EQUIPMENT_OPTIONS } from "@/data/exerciseDatabase";
+import type { Exercise, ExerciseCategory, Equipment } from "@/pages/gym/types";
 
 interface ExercisePickerSheetProps {
   open: boolean;
@@ -55,7 +54,7 @@ export function ExercisePickerSheet({ open, onOpenChange, exercises, loading, on
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl">
         <SheetHeader className="pb-2">
-          <SheetTitle>Add Exercise</SheetTitle>
+          <SheetTitle className="text-lg font-bold tracking-tight">Add Exercise</SheetTitle>
         </SheetHeader>
 
         {/* Search */}
@@ -65,7 +64,7 @@ export function ExercisePickerSheet({ open, onOpenChange, exercises, loading, on
             placeholder="Search exercises..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-9 h-10"
+            className="pl-9 h-11 bg-muted/30 border-border/30 focus-visible:ring-2 focus-visible:ring-primary/30"
             autoFocus
           />
         </div>
@@ -76,10 +75,10 @@ export function ExercisePickerSheet({ open, onOpenChange, exercises, loading, on
             <button
               key={cat.value}
               onClick={() => setCategoryFilter(categoryFilter === cat.value ? null : cat.value as ExerciseCategory)}
-              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+              className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 ${
                 categoryFilter === cat.value
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-muted/40 text-muted-foreground hover:bg-muted/60"
               }`}
             >
               {cat.label}
@@ -93,10 +92,10 @@ export function ExercisePickerSheet({ open, onOpenChange, exercises, loading, on
             <button
               key={eq.value}
               onClick={() => setEquipmentFilter(equipmentFilter === eq.value ? null : eq.value as Equipment)}
-              className={`shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+              className={`shrink-0 px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 ${
                 equipmentFilter === eq.value
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted/50 text-muted-foreground hover:bg-muted/80"
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-muted/30 text-muted-foreground hover:bg-muted/50"
               }`}
             >
               {eq.label}
@@ -105,11 +104,11 @@ export function ExercisePickerSheet({ open, onOpenChange, exercises, loading, on
         </div>
 
         {/* Exercise list */}
-        <div className="overflow-y-auto flex-1 -mx-1 px-1" style={{ maxHeight: "calc(85vh - 240px)" }}>
+        <div className="overflow-y-auto flex-1 -mx-1 px-1" style={{ maxHeight: "calc(85vh - 260px)" }}>
           <motion.div variants={staggerContainer(30)} initial="hidden" animate="visible" className="space-y-4">
             {Array.from(grouped.entries()).map(([muscle, exs]) => (
               <motion.div key={muscle} variants={staggerItem}>
-                <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1.5 px-1">
+                <h4 className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-widest mb-1.5 px-1">
                   {muscle.replace("_", " ")}
                 </h4>
                 <div className="space-y-0.5">
@@ -117,9 +116,11 @@ export function ExercisePickerSheet({ open, onOpenChange, exercises, loading, on
                     <button
                       key={ex.id}
                       onClick={() => handleSelect(ex)}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-muted/50 active:bg-muted transition-colors text-left touch-target"
+                      className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-muted/30 active:bg-muted/50 active:scale-[0.98] transition-all text-left touch-target"
                     >
-                      <Dumbbell className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                        <Dumbbell className="h-4 w-4 text-primary/70" />
+                      </div>
                       <div className="min-w-0 flex-1">
                         <div className="text-sm font-medium truncate">{ex.name}</div>
                         <div className="text-[10px] text-muted-foreground">
@@ -140,23 +141,25 @@ export function ExercisePickerSheet({ open, onOpenChange, exercises, loading, on
             )}
 
             {!loading && filtered.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground text-sm">
-                No exercises found
+              <div className="text-center py-12">
+                <div className="h-10 w-10 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-3">
+                  <Search className="h-5 w-5 text-muted-foreground/30" />
+                </div>
+                <p className="text-sm text-muted-foreground">No exercises found</p>
               </div>
             )}
           </motion.div>
         </div>
 
         {/* Create custom */}
-        <div className="pt-3 border-t mt-3">
-          <Button
-            variant="outline"
+        <div className="pt-3 border-t border-border/30 mt-3">
+          <button
             onClick={() => { onCreateCustom(); onOpenChange(false); }}
-            className="w-full h-11 gap-2"
+            className="w-full h-12 rounded-xl border-2 border-dashed border-border/50 flex items-center justify-center gap-2 text-sm font-medium text-muted-foreground hover:text-primary hover:border-primary/30 hover:bg-primary/5 active:scale-[0.98] transition-all"
           >
             <Plus className="h-4 w-4" />
             Create Custom Exercise
-          </Button>
+          </button>
         </div>
       </SheetContent>
     </Sheet>

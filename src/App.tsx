@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation, useNavigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, useNavigate, Outlet } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -139,9 +139,8 @@ function RouteTracker() {
   return null;
 }
 
-const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
+const AppLayoutContent = () => {
   const { openMobile } = useSidebar();
-  const location = useLocation();
 
   return (
     <>
@@ -171,7 +170,7 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
             </button>
             <PageTransition>
               <Suspense fallback={<DashboardSkeleton />}>
-                {children}
+                <Outlet />
               </Suspense>
             </PageTransition>
           </main>
@@ -184,10 +183,18 @@ const AppLayoutContent = ({ children }: { children: React.ReactNode }) => {
   );
 };
 
-const AppLayout = ({ children }: { children: React.ReactNode }) => (
+const AppLayout = () => (
   <SidebarProvider>
-    <AppLayoutContent>{children}</AppLayoutContent>
+    <AppLayoutContent />
   </SidebarProvider>
+);
+
+const ProtectedAppLayout = () => (
+  <ProtectedRoute>
+    <ProfileCompletionGuard>
+      <AppLayout />
+    </ProfileCompletionGuard>
+  </ProtectedRoute>
 );
 
 const App = () => (
@@ -214,114 +221,23 @@ const App = () => (
                     <Onboarding />
                   </ProtectedRoute>
                 } />
-                <Route path="/dashboard" element={
-                  <ProtectedRoute>
-                    <ProfileCompletionGuard>
-                      <AppLayout>
-                        <Suspense fallback={<DashboardSkeleton />}><Dashboard /></Suspense>
-                      </AppLayout>
-                    </ProfileCompletionGuard>
-                  </ProtectedRoute>
-                } />
-                <Route path="/goals" element={
-                  <ProtectedRoute>
-                    <ProfileCompletionGuard>
-                      <AppLayout>
-                        <Suspense fallback={<GoalsSkeleton />}><Goals /></Suspense>
-                      </AppLayout>
-                    </ProfileCompletionGuard>
-                  </ProtectedRoute>
-                } />
-                <Route path="/nutrition" element={
-                  <ProtectedRoute>
-                    <ProfileCompletionGuard>
-                      <AppLayout>
-                        <Suspense fallback={<NutritionPageSkeleton />}><Nutrition /></Suspense>
-                      </AppLayout>
-                    </ProfileCompletionGuard>
-                  </ProtectedRoute>
-                } />
-                <Route path="/weight" element={
-                  <ProtectedRoute>
-                    <ProfileCompletionGuard>
-                      <AppLayout>
-                        <WeightTracker />
-                      </AppLayout>
-                    </ProfileCompletionGuard>
-                  </ProtectedRoute>
-                } />
-                <Route path="/hydration" element={
-                  <ProtectedRoute>
-                    <ProfileCompletionGuard>
-                      <AppLayout>
-                        <Suspense fallback={<HydrationSkeleton />}><Hydration /></Suspense>
-                      </AppLayout>
-                    </ProfileCompletionGuard>
-                  </ProtectedRoute>
-                } />
-                <Route path="/fight-camps" element={
-                  <ProtectedRoute>
-                    <ProfileCompletionGuard>
-                      <AppLayout>
-                        <FightCamps />
-                      </AppLayout>
-                    </ProfileCompletionGuard>
-                  </ProtectedRoute>
-                } />
-                <Route path="/fight-camps/:id" element={
-                  <ProtectedRoute>
-                    <ProfileCompletionGuard>
-                      <AppLayout>
-                        <FightCampDetail />
-                      </AppLayout>
-                    </ProfileCompletionGuard>
-                  </ProtectedRoute>
-                } />
-                <Route path="/fight-camp-calendar" element={
-                  <ProtectedRoute>
-                    <ProfileCompletionGuard>
-                      <AppLayout>
-                        <FightCampCalendar />
-                      </AppLayout>
-                    </ProfileCompletionGuard>
-                  </ProtectedRoute>
-                } />
-                <Route path="/recovery" element={
-                  <ProtectedRoute>
-                    <ProfileCompletionGuard>
-                      <AppLayout>
-                        <Recovery />
-                      </AppLayout>
-                    </ProfileCompletionGuard>
-                  </ProtectedRoute>
-                } />
-                <Route path="/fight-week" element={
-                  <ProtectedRoute>
-                    <ProfileCompletionGuard>
-                      <AppLayout>
-                        <FightWeek />
-                      </AppLayout>
-                    </ProfileCompletionGuard>
-                  </ProtectedRoute>
-                } />
-                <Route path="/skill-tree" element={
-                  <ProtectedRoute>
-                    <ProfileCompletionGuard>
-                      <AppLayout>
-                        <Suspense fallback={<DashboardSkeleton />}><SkillTree /></Suspense>
-                      </AppLayout>
-                    </ProfileCompletionGuard>
-                  </ProtectedRoute>
-                } />
-                <Route path="/gym" element={
-                  <ProtectedRoute>
-                    <ProfileCompletionGuard>
-                      <AppLayout>
-                        <Suspense fallback={<DashboardSkeleton />}><GymTracker /></Suspense>
-                      </AppLayout>
-                    </ProfileCompletionGuard>
-                  </ProtectedRoute>
-                } />
+
+                {/* Shared layout route — AppLayout persists across all child navigations */}
+                <Route element={<ProtectedAppLayout />}>
+                  <Route path="/dashboard" element={<Suspense fallback={<DashboardSkeleton />}><Dashboard /></Suspense>} />
+                  <Route path="/goals" element={<Suspense fallback={<GoalsSkeleton />}><Goals /></Suspense>} />
+                  <Route path="/nutrition" element={<Suspense fallback={<NutritionPageSkeleton />}><Nutrition /></Suspense>} />
+                  <Route path="/weight" element={<WeightTracker />} />
+                  <Route path="/hydration" element={<Suspense fallback={<HydrationSkeleton />}><Hydration /></Suspense>} />
+                  <Route path="/fight-camps" element={<FightCamps />} />
+                  <Route path="/fight-camps/:id" element={<FightCampDetail />} />
+                  <Route path="/fight-camp-calendar" element={<FightCampCalendar />} />
+                  <Route path="/recovery" element={<Recovery />} />
+                  <Route path="/fight-week" element={<FightWeek />} />
+                  <Route path="/skill-tree" element={<Suspense fallback={<DashboardSkeleton />}><SkillTree /></Suspense>} />
+                  <Route path="/gym" element={<Suspense fallback={<DashboardSkeleton />}><GymTracker /></Suspense>} />
+                </Route>
+
                 <Route path="*" element={<NotFound />} />
               </Routes>
               </TutorialProvider>
