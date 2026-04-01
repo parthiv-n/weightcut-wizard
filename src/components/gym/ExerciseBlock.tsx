@@ -1,6 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { Button } from "@/components/ui/button";
-import { Plus, Copy, X } from "lucide-react";
+import { Plus, Copy, X, ChevronRight } from "lucide-react";
 import { motion } from "motion/react";
 import { staggerItem } from "@/lib/motion";
 import { SetRow } from "./SetRow";
@@ -19,21 +18,38 @@ interface ExerciseBlockProps {
   onExerciseTap?: (exerciseId: string) => void;
 }
 
+const MUSCLE_BORDER_COLORS: Record<string, string> = {
+  chest: "border-l-red-400",
+  back: "border-l-blue-400",
+  shoulders: "border-l-purple-400",
+  biceps: "border-l-pink-400",
+  triceps: "border-l-orange-400",
+  quads: "border-l-green-400",
+  hamstrings: "border-l-emerald-400",
+  glutes: "border-l-lime-400",
+  calves: "border-l-teal-400",
+  abs: "border-l-yellow-400",
+  forearms: "border-l-cyan-400",
+  traps: "border-l-indigo-400",
+  full_body: "border-l-violet-400",
+  cardio: "border-l-rose-400",
+};
+
 const MUSCLE_COLORS: Record<string, string> = {
-  chest: "bg-red-500/15 text-red-400",
-  back: "bg-blue-500/15 text-blue-400",
-  shoulders: "bg-purple-500/15 text-purple-400",
-  biceps: "bg-pink-500/15 text-pink-400",
-  triceps: "bg-orange-500/15 text-orange-400",
-  quads: "bg-green-500/15 text-green-400",
-  hamstrings: "bg-emerald-500/15 text-emerald-400",
-  glutes: "bg-lime-500/15 text-lime-400",
-  calves: "bg-teal-500/15 text-teal-400",
-  abs: "bg-yellow-500/15 text-yellow-400",
-  forearms: "bg-cyan-500/15 text-cyan-400",
-  traps: "bg-indigo-500/15 text-indigo-400",
-  full_body: "bg-violet-500/15 text-violet-400",
-  cardio: "bg-rose-500/15 text-rose-400",
+  chest: "bg-red-500/10 text-red-400",
+  back: "bg-blue-500/10 text-blue-400",
+  shoulders: "bg-purple-500/10 text-purple-400",
+  biceps: "bg-pink-500/10 text-pink-400",
+  triceps: "bg-orange-500/10 text-orange-400",
+  quads: "bg-green-500/10 text-green-400",
+  hamstrings: "bg-emerald-500/10 text-emerald-400",
+  glutes: "bg-lime-500/10 text-lime-400",
+  calves: "bg-teal-500/10 text-teal-400",
+  abs: "bg-yellow-500/10 text-yellow-400",
+  forearms: "bg-cyan-500/10 text-cyan-400",
+  traps: "bg-indigo-500/10 text-indigo-400",
+  full_body: "bg-violet-500/10 text-violet-400",
+  cardio: "bg-rose-500/10 text-rose-400",
 };
 
 export function ExerciseBlock({
@@ -63,23 +79,28 @@ export function ExerciseBlock({
   }, [group.exerciseOrder, onDeleteSet]);
 
   const muscleColor = MUSCLE_COLORS[group.exercise.muscle_group] || "bg-muted text-muted-foreground";
+  const borderColor = MUSCLE_BORDER_COLORS[group.exercise.muscle_group] || "border-l-muted-foreground";
 
   return (
-    <motion.div variants={staggerItem} className="glass-card rounded-2xl border border-border/50 p-3 space-y-2">
+    <motion.div
+      variants={staggerItem}
+      className={`glass-card rounded-2xl border border-border/50 border-l-[3px] ${borderColor} overflow-hidden`}
+    >
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between p-3 pb-2">
         <button
           onClick={() => onExerciseTap?.(group.exercise.id)}
-          className="flex items-center gap-2 min-w-0"
+          className="flex items-center gap-2 min-w-0 group"
         >
-          <h3 className="font-semibold text-sm truncate">{group.exercise.name}</h3>
+          <h3 className="font-bold text-[15px] tracking-tight truncate">{group.exercise.name}</h3>
           <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium ${muscleColor}`}>
             {group.exercise.muscle_group.replace("_", " ")}
           </span>
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50 shrink-0 group-hover:text-muted-foreground transition-colors" />
         </button>
         <button
           onClick={() => onRemoveExercise(group.exerciseOrder)}
-          className="shrink-0 p-1.5 rounded-lg text-muted-foreground hover:text-destructive transition-colors"
+          className="shrink-0 p-1.5 rounded-lg text-muted-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors"
           aria-label="Remove exercise"
         >
           <X className="h-4 w-4" />
@@ -88,58 +109,55 @@ export function ExerciseBlock({
 
       {/* Column headers */}
       {group.sets.length > 0 && (
-        <div className="flex items-center gap-2 px-2 text-[10px] text-muted-foreground uppercase tracking-wider">
-          <div className="w-7 text-center">Set</div>
-          <div className="w-[72px] text-center">Weight</div>
-          <div className="w-[60px] text-center">Reps</div>
-          <div className="w-[28px]" />
-          <div className="flex-1" />
+        <div className="flex items-center gap-2 px-3 pb-1.5 text-[11px] text-muted-foreground/70 uppercase tracking-wider border-b border-border/20 mx-3 mb-1">
+          <div className="w-8 text-center">Set</div>
+          <div className="flex-1 text-center">Weight</div>
+          <div className="flex-1 text-center">Reps</div>
+          <div className="w-8" />
+          <div className="w-8" />
         </div>
       )}
 
       {/* Sets */}
-      {group.sets.map((set, i) => {
-        const setIndex = set.is_warmup ? i : workingSets.indexOf(set);
-        const prTypesForSet: PRType[] = [];
-        if (newPRSetIds?.has(set.id)) {
-          // Show all PR types for this set — simplified for inline badge
-          if (pr && set.weight_kg && set.weight_kg >= (pr.max_weight_kg ?? 0)) prTypesForSet.push("weight");
-          if (pr && set.reps >= (pr.max_reps ?? 0)) prTypesForSet.push("reps");
-        }
+      <div className="divide-y divide-border/10">
+        {group.sets.map((set, i) => {
+          const setIndex = set.is_warmup ? i : workingSets.indexOf(set);
+          const prTypesForSet: PRType[] = [];
+          if (newPRSetIds?.has(set.id)) {
+            if (pr && set.weight_kg && set.weight_kg >= (pr.max_weight_kg ?? 0)) prTypesForSet.push("weight");
+            if (pr && set.reps >= (pr.max_reps ?? 0)) prTypesForSet.push("reps");
+          }
 
-        return (
-          <SetRow
-            key={set.id}
-            set={set}
-            index={setIndex}
-            prTypes={prTypesForSet}
-            onUpdate={handleUpdate}
-            onDelete={handleDelete}
-          />
-        );
-      })}
+          return (
+            <SetRow
+              key={set.id}
+              set={set}
+              index={setIndex}
+              prTypes={prTypesForSet}
+              onUpdate={handleUpdate}
+              onDelete={handleDelete}
+            />
+          );
+        })}
+      </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2 pt-1">
-        <Button
-          variant="ghost"
-          size="sm"
+      <div className="flex items-center gap-2 p-3 pt-2">
+        <button
           onClick={handleAddSet}
-          className="h-8 text-xs gap-1 text-primary hover:text-primary"
+          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15 active:scale-95 transition-all"
         >
           <Plus className="h-3.5 w-3.5" />
           Add Set
-        </Button>
+        </button>
         {group.sets.length > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
+          <button
             onClick={() => onDuplicateLastSet(group.exerciseOrder)}
-            className="h-8 text-xs gap-1 text-muted-foreground"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium bg-muted/50 text-muted-foreground border border-border/30 hover:bg-muted active:scale-95 transition-all"
           >
             <Copy className="h-3.5 w-3.5" />
             Duplicate
-          </Button>
+          </button>
         )}
       </div>
     </motion.div>

@@ -1,14 +1,15 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Input } from "@/components/ui/input";
-import { Plus, Square, Clock, Dumbbell, Trash2 } from "lucide-react";
+import { Plus, Clock, Dumbbell, Trash2, TrendingUp, Check } from "lucide-react";
 import { motion } from "motion/react";
 import { staggerContainer, staggerItem, springs } from "@/lib/motion";
 import { ExerciseBlock } from "./ExerciseBlock";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
+import { formatVolume } from "@/lib/gymCalculations";
 import type { ActiveWorkout, Exercise, ExercisePR, GymSet } from "@/pages/gym/types";
 
 interface ActiveSessionViewProps {
@@ -37,12 +38,14 @@ function ElapsedTimer({ startedAt }: { startedAt: number }) {
     return () => clearInterval(id);
   }, [startedAt]);
 
-  const mins = Math.floor(elapsed / 60);
+  const hrs = Math.floor(elapsed / 3600);
+  const mins = Math.floor((elapsed % 3600) / 60);
   const secs = elapsed % 60;
   return (
-    <span className="tabular-nums font-mono text-sm text-muted-foreground">
-      {mins}:{secs.toString().padStart(2, "0")}
-    </span>
+    <div className="display-number text-4xl tracking-tight">
+      {hrs > 0 && <>{hrs}:</>}
+      {hrs > 0 ? mins.toString().padStart(2, "0") : mins}:{secs.toString().padStart(2, "0")}
+    </div>
   );
 }
 
@@ -59,6 +62,18 @@ export function ActiveSessionView({
 
   const totalSets = workout.exerciseGroups.reduce((sum, g) => sum + g.sets.filter(s => !s.is_warmup).length, 0);
 
+  const totalVolume = useMemo(() => {
+    let vol = 0;
+    for (const group of workout.exerciseGroups) {
+      for (const set of group.sets) {
+        if (!set.is_warmup && set.weight_kg && set.reps) {
+          vol += set.weight_kg * set.reps;
+        }
+      }
+    }
+    return vol;
+  }, [workout.exerciseGroups]);
+
   const handleFinish = useCallback(() => {
     const dur = durationOverride ? parseInt(durationOverride, 10) : undefined;
     onFinish({
@@ -71,44 +86,63 @@ export function ActiveSessionView({
 
   return (
     <div className="space-y-4">
-      {/* Session header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="px-3 py-1 rounded-full bg-primary/15 text-primary text-xs font-semibold">
-            {workout.sessionType}
-          </div>
-          <div className="flex items-center gap-1.5 text-muted-foreground">
-            <Clock className="h-3.5 w-3.5" />
-            <ElapsedTimer startedAt={workout.startedAt} />
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setDiscardDialogOpen(true)}
-            className="text-destructive hover:text-destructive h-8 text-xs"
-          >
-            <Trash2 className="h-3.5 w-3.5 mr-1" />
-            Discard
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => setFinishSheetOpen(true)}
-            className="h-8 text-xs gap-1"
-            disabled={totalSets === 0}
-          >
-            <Square className="h-3 w-3" />
-            Finish
-          </Button>
-        </div>
-      </div>
+      {/* Live session header card */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.97 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={springs.responsive}
+        className="glass-card rounded-2xl border border-border/50 p-5 relative overflow-hidden"
+      >
+        {/* Subtle gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent pointer-events-none" />
 
-      {/* Stats bar */}
-      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-        <span>{workout.exerciseGroups.length} exercises</span>
-        <span>{totalSets} working sets</span>
-      </div>
+        <div className="relative space-y-4">
+          {/* Top row: badge + discard */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+              </span>
+              <span className="px-3 py-1 rounded-full bg-primary/15 text-primary text-xs font-semibold">
+                {workout.sessionType}
+              </span>
+            </div>
+            <button
+              onClick={() => setDiscardDialogOpen(true)}
+              className="p-2 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+              aria-label="Discard workout"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+
+          {/* Centered timer */}
+          <div className="text-center py-2">
+            <ElapsedTimer startedAt={workout.startedAt} />
+            <p className="text-xs text-muted-foreground mt-1">Elapsed Time</p>
+          </div>
+
+          {/* Stats row */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-xl bg-muted/30 p-2.5 text-center">
+              <Dumbbell className="h-3.5 w-3.5 text-primary mx-auto mb-1" />
+              <div className="display-number text-sm">{workout.exerciseGroups.length}</div>
+              <div className="text-[10px] text-muted-foreground">Exercises</div>
+            </div>
+            <div className="rounded-xl bg-muted/30 p-2.5 text-center">
+              <TrendingUp className="h-3.5 w-3.5 text-primary mx-auto mb-1" />
+              <div className="display-number text-sm">{totalSets}</div>
+              <div className="text-[10px] text-muted-foreground">Working Sets</div>
+            </div>
+            <div className="rounded-xl bg-muted/30 p-2.5 text-center">
+              <Clock className="h-3.5 w-3.5 text-primary mx-auto mb-1" />
+              <div className="display-number text-sm">{formatVolume(totalVolume)}<span className="text-[10px] text-muted-foreground font-normal"> kg</span></div>
+              <div className="text-[10px] text-muted-foreground">Volume</div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
 
       {/* Exercise blocks */}
       <motion.div
@@ -139,41 +173,60 @@ export function ActiveSessionView({
         animate={{ opacity: 1 }}
         transition={springs.gentle}
       >
-        <Button
-          variant="outline"
+        <button
           onClick={onOpenExercisePicker}
-          className="w-full h-12 gap-2 border-dashed border-2"
+          className="w-full h-14 rounded-2xl border-2 border-dashed border-border/60 flex items-center justify-center gap-2.5 text-sm font-medium text-muted-foreground hover:text-primary hover:border-primary/30 hover:bg-primary/5 active:scale-[0.98] transition-all"
         >
-          <Plus className="h-5 w-5" />
+          <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+            <Plus className="h-4 w-4 text-primary" />
+          </div>
           Add Exercise
-        </Button>
+        </button>
       </motion.div>
+
+      {/* Finish button */}
+      {totalSets > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={springs.responsive}
+        >
+          <button
+            onClick={() => setFinishSheetOpen(true)}
+            className="w-full py-3.5 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-lg shadow-primary/25"
+            style={{ background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))" }}
+          >
+            <Check className="h-4.5 w-4.5" />
+            Finish Workout
+          </button>
+        </motion.div>
+      )}
 
       {/* Finish workout dialog */}
       <Dialog open={finishSheetOpen} onOpenChange={setFinishSheetOpen}>
         <DialogContent className="rounded-2xl max-w-sm">
           <DialogHeader>
-            <DialogTitle>Finish Workout</DialogTitle>
+            <DialogTitle className="text-lg">Finish Workout</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 pt-4">
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">Duration (minutes)</label>
+          <div className="space-y-3 pt-2">
+            <div className="rounded-xl bg-muted/30 p-4 space-y-2">
+              <label className="text-sm font-medium block">Duration (minutes)</label>
               <Input
                 type="number"
                 inputMode="numeric"
                 placeholder="Auto-calculated"
                 value={durationOverride}
                 onChange={(e) => setDurationOverride(e.target.value)}
-                className="h-10"
+                className="h-11 bg-background/50"
               />
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-muted-foreground">
                 Leave empty to use elapsed time ({Math.round((Date.now() - workout.startedAt) / 60000)} min)
               </p>
             </div>
 
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">
-                Perceived Fatigue: {fatigue[0]}/10
+            <div className="rounded-xl bg-muted/30 p-4 space-y-2">
+              <label className="text-sm font-medium block">
+                Perceived Fatigue: <span className="text-primary">{fatigue[0]}/10</span>
               </label>
               <Slider
                 value={fatigue}
@@ -189,19 +242,24 @@ export function ActiveSessionView({
               </div>
             </div>
 
-            <div>
-              <label className="text-sm font-medium mb-1.5 block">Notes</label>
+            <div className="rounded-xl bg-muted/30 p-4 space-y-2">
+              <label className="text-sm font-medium block">Notes</label>
               <Textarea
                 placeholder="How did the workout feel?"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="min-h-[80px] resize-none"
+                className="min-h-[80px] resize-none bg-background/50"
               />
             </div>
 
-            <Button onClick={handleFinish} className="w-full h-11">
+            <button
+              onClick={handleFinish}
+              className="w-full py-3 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 active:scale-[0.98] transition-transform mt-2"
+              style={{ background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))" }}
+            >
+              <Check className="h-4 w-4" />
               Complete Workout
-            </Button>
+            </button>
           </div>
         </DialogContent>
       </Dialog>
