@@ -450,11 +450,12 @@ All colors MUST be HSL.
     width: 100%;
   }
 
-  /* Individual page layer — GPU-accelerated for smooth slides */
+  /* Individual page layer — GPU-accelerated for smooth crossfade */
   .page-transition-page {
     transform: translateZ(0);
     backface-visibility: hidden;
-    will-change: transform, opacity;
+    will-change: opacity;
+    width: 100%;
   }
 
   /* Skip rendering off-screen sections until scrolled into view */

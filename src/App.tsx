@@ -18,7 +18,6 @@ import { BottomNav } from "@/components/BottomNav";
 import { FloatingWizardChat } from "@/components/FloatingWizardChat";
 import * as Sentry from "@sentry/react";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import { DashboardSkeleton, NutritionPageSkeleton, HydrationSkeleton, GoalsSkeleton } from "@/components/ui/skeleton-loader";
 import { RefreshCw } from "lucide-react";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import Index from "./pages/Index";
@@ -169,7 +168,7 @@ const AppLayoutContent = () => {
               <RefreshCw className="h-4 w-4 text-muted-foreground" />
             </button>
             <PageTransition>
-              <Suspense fallback={<DashboardSkeleton />}>
+              <Suspense fallback={<div className="min-h-[50vh]" />}>
                 <Outlet />
               </Suspense>
             </PageTransition>
@@ -224,18 +223,18 @@ const App = () => (
 
                 {/* Shared layout route — AppLayout persists across all child navigations */}
                 <Route element={<ProtectedAppLayout />}>
-                  <Route path="/dashboard" element={<Suspense fallback={<DashboardSkeleton />}><Dashboard /></Suspense>} />
-                  <Route path="/goals" element={<Suspense fallback={<GoalsSkeleton />}><Goals /></Suspense>} />
-                  <Route path="/nutrition" element={<Suspense fallback={<NutritionPageSkeleton />}><Nutrition /></Suspense>} />
+                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/goals" element={<Goals />} />
+                  <Route path="/nutrition" element={<Nutrition />} />
                   <Route path="/weight" element={<WeightTracker />} />
-                  <Route path="/hydration" element={<Suspense fallback={<HydrationSkeleton />}><Hydration /></Suspense>} />
+                  <Route path="/hydration" element={<Hydration />} />
                   <Route path="/fight-camps" element={<FightCamps />} />
                   <Route path="/fight-camps/:id" element={<FightCampDetail />} />
                   <Route path="/fight-camp-calendar" element={<FightCampCalendar />} />
                   <Route path="/recovery" element={<Recovery />} />
                   <Route path="/fight-week" element={<FightWeek />} />
-                  <Route path="/skill-tree" element={<Suspense fallback={<DashboardSkeleton />}><SkillTree /></Suspense>} />
-                  <Route path="/gym" element={<Suspense fallback={<DashboardSkeleton />}><GymTracker /></Suspense>} />
+                  <Route path="/skill-tree" element={<SkillTree />} />
+                  <Route path="/gym" element={<GymTracker />} />
                 </Route>
 
                 <Route path="*" element={<NotFound />} />
