@@ -283,7 +283,7 @@ export function useGymSessions() {
 
       if (error) throw error;
 
-      // Also log to fight camp calendar
+      // Also log to training calendar
       const durationMin = opts.durationMinutes ?? elapsed;
       supabase
         .from("fight_camp_calendar")

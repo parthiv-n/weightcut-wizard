@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, subMonths, addMonths, subDays } from "date-fns";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Activity } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useUser } from "@/contexts/UserContext";
 import { useToast } from "@/hooks/use-toast";
@@ -12,30 +12,32 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { TrainingSummarySection } from "@/components/fightcamp/TrainingSummarySection";
 import { CalendarMonthGrid } from "@/components/fightcamp/CalendarMonthGrid";
 import { SessionCard } from "@/components/fightcamp/SessionCard";
+import { SessionDetailDrawer } from "@/components/fightcamp/SessionDetailDrawer";
 import { FightCampLogForm, SESSION_TYPES } from "@/components/fightcamp/FightCampLogForm";
+import { uploadSessionMedia, deleteSessionMedia } from "@/lib/uploadSessionMedia";
 import { triggerHapticSelection } from "@/lib/haptics";
 import { ShareButton } from "@/components/share/ShareButton";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
-import { FightCampCalendarCard } from "@/components/share/cards/FightCampCalendarCard";
+import { TrainingCalendarCard } from "@/components/share/cards/TrainingCalendarCard";
 import { logger } from "@/lib/logger";
 import { getUserColors, setUserColor } from "@/lib/sessionColors";
 import { Skeleton } from "@/components/ui/skeleton-loader";
 
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 
-type FightCampCalendarRow = Tables<"fight_camp_calendar">;
-type FightCampCalendarInsert = TablesInsert<"fight_camp_calendar">;
+type TrainingCalendarRow = Tables<"fight_camp_calendar">;
+type TrainingCalendarInsert = TablesInsert<"fight_camp_calendar">;
 
-export default function FightCampCalendar() {
+export default function TrainingCalendar() {
     const { userId, profile } = useUser();
     const { toast } = useToast();
     const [searchParams, setSearchParams] = useSearchParams();
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(new Date());
-    const [sessions, setSessions] = useState<FightCampCalendarRow[]>([]);
+    const [sessions, setSessions] = useState<TrainingCalendarRow[]>([]);
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
-    const [sessions28d, setSessions28d] = useState<FightCampCalendarRow[]>([]);
+    const [sessions28d, setSessions28d] = useState<TrainingCalendarRow[]>([]);
     const [sessionLoggedTrigger, setSessionLoggedTrigger] = useState(0);
 
     // Form State
@@ -49,13 +51,20 @@ export default function FightCampCalendar() {
     const [notes, setNotes] = useState("");
 
     // Edit state
-    const [editingSession, setEditingSession] = useState<FightCampCalendarRow | null>(null);
+    const [editingSession, setEditingSession] = useState<TrainingCalendarRow | null>(null);
     // Share state
     const [shareOpen, setShareOpen] = useState(false);
     const [shareTimeRange, setShareTimeRange] = useState<"day" | "week" | "month">("week");
     const [cardVariant, setCardVariant] = useState<"dark" | "transparent">("dark");
     // Custom session colors
     const [customColors, setCustomColors] = useState<Record<string, string>>({});
+    // Media state
+    const [mediaFile, setMediaFile] = useState<File | null>(null);
+    const [mediaPreviewUrl, setMediaPreviewUrl] = useState<string | null>(null);
+    const [existingMediaUrl, setExistingMediaUrl] = useState<string | null>(null);
+    // Detail drawer state
+    const [viewingSession, setViewingSession] = useState<TrainingCalendarRow | null>(null);
+    const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
 
     const fetchSessions = useCallback(async () => {
         if (!userId) return;
@@ -125,9 +134,21 @@ export default function FightCampCalendar() {
         setSorenessLevel([5]);
         setNotes("");
         setEditingSession(null);
+        setMediaFile(null);
+        setMediaPreviewUrl(null);
+        setExistingMediaUrl(null);
     };
 
-    const handleEditSession = (session: FightCampCalendarRow) => {
+    const handleViewSession = (session: TrainingCalendarRow) => {
+        setViewingSession(session);
+        setIsDetailDrawerOpen(true);
+    };
+
+    const handleEditSession = (session: TrainingCalendarRow) => {
+        // Close detail drawer first if open
+        setIsDetailDrawerOpen(false);
+        setViewingSession(null);
+
         setEditingSession(session);
         setSessionType(session.session_type);
         setDuration(String(session.duration_minutes));
@@ -138,6 +159,9 @@ export default function FightCampCalendar() {
         setSorenessLevel([(session.soreness_level ?? 0) > 0 ? session.soreness_level! : 5]);
         setSleepHours(String(session.sleep_hours ?? 8));
         setNotes(session.notes ?? "");
+        setExistingMediaUrl(session.media_url ?? null);
+        setMediaFile(null);
+        setMediaPreviewUrl(null);
         setIsAddModalOpen(true);
     };
 
@@ -145,8 +169,30 @@ export default function FightCampCalendar() {
         if (!userId) return;
 
         try {
+            // Determine session ID upfront (existing or new UUID)
+            const sessionId = editingSession ? editingSession.id : crypto.randomUUID();
+
+            // Resolve media_url before the DB write
+            let resolvedMediaUrl: string | null = existingMediaUrl ?? null;
+            let mediaUploadFailed = false;
+
+            if (mediaFile) {
+                try {
+                    resolvedMediaUrl = await uploadSessionMedia(userId, sessionId, mediaFile, existingMediaUrl);
+                } catch (mediaError) {
+                    logger.error("Failed to upload session media", mediaError);
+                    mediaUploadFailed = true;
+                    resolvedMediaUrl = existingMediaUrl ?? null; // keep existing if replacing failed
+                }
+            } else if (!mediaPreviewUrl && !mediaFile && existingMediaUrl) {
+                // Media was removed
+                await deleteSessionMedia(existingMediaUrl).catch(() => {});
+                resolvedMediaUrl = null;
+            }
+
             const intensityMap: Record<number, string> = { 1: 'low', 2: 'low', 3: 'moderate', 4: 'high', 5: 'high' };
-            const payload: FightCampCalendarInsert = {
+            const payload: TrainingCalendarInsert = {
+                id: sessionId,
                 user_id: userId,
                 date: format(selectedDate, "yyyy-MM-dd"),
                 session_type: sessionType,
@@ -160,6 +206,7 @@ export default function FightCampCalendar() {
                 fatigue_level: null,
                 sleep_quality: null,
                 mobility_done: null,
+                media_url: resolvedMediaUrl,
             };
 
             if (editingSession) {
@@ -175,12 +222,20 @@ export default function FightCampCalendar() {
                 if (error) throw error;
             }
 
-            toast({
-                title: editingSession ? "Session Updated" : "Session Saved",
-                description: editingSession
-                    ? "Your session has been updated."
-                    : "Your training session has been logged successfully.",
-            });
+            if (mediaUploadFailed) {
+                toast({
+                    title: "Session saved, media failed",
+                    description: "Your session was saved but the photo/video could not be uploaded. Try editing the session to add it again.",
+                    variant: "destructive",
+                });
+            } else {
+                toast({
+                    title: editingSession ? "Session Updated" : "Session Saved",
+                    description: editingSession
+                        ? "Your session has been updated."
+                        : "Your training session has been logged successfully.",
+                });
+            }
 
             setIsAddModalOpen(false);
             fetchSessions();
@@ -199,6 +254,12 @@ export default function FightCampCalendar() {
 
     const handleDeleteSession = async (id: string) => {
         try {
+            // Delete associated media from storage
+            const session = sessions.find(s => s.id === id);
+            if (session?.media_url) {
+                await deleteSessionMedia(session.media_url).catch(() => {});
+            }
+
             const { error } = await supabase
                 .from('fight_camp_calendar')
                 .delete()
@@ -289,6 +350,17 @@ export default function FightCampCalendar() {
                                     sorenessLevel={sorenessLevel} setSorenessLevel={setSorenessLevel}
                                     sleepHours={sleepHours} setSleepHours={setSleepHours}
                                     notes={notes} setNotes={setNotes}
+                                    mediaPreviewUrl={mediaPreviewUrl}
+                                    existingMediaUrl={existingMediaUrl}
+                                    onMediaSelected={(file, previewUrl) => {
+                                        setMediaFile(file);
+                                        setMediaPreviewUrl(previewUrl);
+                                    }}
+                                    onMediaRemoved={() => {
+                                        setMediaFile(null);
+                                        setMediaPreviewUrl(null);
+                                        setExistingMediaUrl(null);
+                                    }}
                                     onSave={handleSaveSession}
                                 />
                             </DialogContent>
@@ -298,30 +370,34 @@ export default function FightCampCalendar() {
                     <div className="space-y-3">
                         {isLoading ? (
                             <div className="flex flex-col gap-3">
-                                {[1, 2, 3].map(i => (
-                                    <Card key={i} className="p-4 rounded-[20px] glass-card overflow-hidden relative border-border/10">
-                                        <Skeleton className="w-2 h-full absolute left-0 top-0 rounded-l-[20px]" />
-                                        <div className="ml-2 space-y-3">
-                                            <div className="flex justify-between items-center">
-                                                <div className="flex items-center gap-2">
-                                                    <Skeleton className="w-5 h-5 rounded-full" />
-                                                    <Skeleton className="h-4 w-24" />
-                                                </div>
-                                                <Skeleton className="h-4 w-4 rounded" />
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <Skeleton className="h-6 w-16 rounded-full" />
-                                                <Skeleton className="h-6 w-14 rounded-full" />
-                                                <Skeleton className="h-6 w-20 rounded-full" />
-                                            </div>
+                                {[1, 2].map(i => (
+                                    <div key={i} className="glass-card rounded-2xl p-5 overflow-hidden relative border-border/10">
+                                        <div className="absolute top-0 left-0 right-0 h-[2px]">
+                                            <Skeleton className="w-1/3 h-full" />
                                         </div>
-                                    </Card>
+                                        <div className="flex items-center gap-2.5">
+                                            <Skeleton className="w-3 h-3 rounded-full" />
+                                            <Skeleton className="h-4 w-20" />
+                                        </div>
+                                        <div className="flex gap-4 mt-4">
+                                            {[1, 2, 3].map(j => (
+                                                <div key={j} className="flex-1 space-y-1.5">
+                                                    <Skeleton className="h-2.5 w-12" />
+                                                    <Skeleton className="h-7 w-10" />
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
                                 ))}
                             </div>
                         ) : sessionsForSelectedDate.length === 0 ? (
-                            <Card className="p-8 rounded-[20px] glass-card border-dashed flex flex-col items-center justify-center text-foreground/70">
-                                <p>No sessions logged today.</p>
-                            </Card>
+                            <div className="glass-card rounded-2xl border-dashed border-border/20 p-10 flex flex-col items-center justify-center text-center">
+                                <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center mb-3">
+                                    <Activity className="w-5 h-5 text-foreground/30" />
+                                </div>
+                                <p className="text-sm text-foreground/40 font-medium">No sessions logged</p>
+                                <p className="text-xs text-foreground/25 mt-1">Tap + to record your training</p>
+                            </div>
                         ) : (
                             sessionsForSelectedDate.map(session => (
                                 <SessionCard
@@ -329,8 +405,7 @@ export default function FightCampCalendar() {
                                     session={session}
                                     customColors={customColors}
                                     userId={userId}
-                                    onEdit={handleEditSession}
-                                    onDelete={handleDeleteSession}
+                                    onView={handleViewSession}
                                     onColorChange={handleColorChange}
                                 />
                             ))
@@ -347,6 +422,16 @@ export default function FightCampCalendar() {
                         />
                     )}
                 </div>
+
+            {/* Session Detail Drawer */}
+            <SessionDetailDrawer
+                session={viewingSession}
+                open={isDetailDrawerOpen}
+                onOpenChange={setIsDetailDrawerOpen}
+                onEdit={handleEditSession}
+                onDelete={handleDeleteSession}
+                customColors={customColors}
+            />
 
             {/* Share dialog with time range */}
             <ShareCardDialog
@@ -422,7 +507,7 @@ export default function FightCampCalendar() {
                                     </button>
                                 ))}
                             </div>
-                            <FightCampCalendarCard
+                            <TrainingCalendarCard
                                 ref={cardRef}
                                 sessions={filtered}
                                 timeRange={shareTimeRange}

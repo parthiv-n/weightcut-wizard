@@ -6,12 +6,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Sparkles, Calendar as CalendarIcon, Loader2, Settings, Edit2, X, Activity, Utensils, Database, PieChart as PieChartIcon, Search, CheckCircle, ChevronDown, ChevronUp, ChevronRight, ScanLine, Mic, Dumbbell, Sunrise, Salad, UtensilsCrossed, Apple } from "lucide-react";
+import { Plus, Sparkles, Calendar as CalendarIcon, Loader2, Settings, Edit2, X, Activity, Utensils, Database, PieChart as PieChartIcon, Search, CheckCircle, ChevronDown, ChevronUp, ChevronRight, ScanLine, Dumbbell, Sunrise, Salad, UtensilsCrossed, Apple } from "lucide-react";
 import wizardLogo from "@/assets/wizard-logo.webp";
 import { MealCard } from "@/components/nutrition/MealCard";
 import { MacroPieChart } from "@/components/nutrition/MacroPieChart";
 import { FoodSearchDialog } from "@/components/nutrition/FoodSearchDialog";
-const VoiceInput = lazy(() => import("@/components/nutrition/VoiceInput").then(m => ({ default: m.VoiceInput })));
 const BarcodeScanner = lazy(() => import("@/components/nutrition/BarcodeScanner").then(m => ({ default: m.BarcodeScanner })));
 import { format, subDays, addDays } from "date-fns";
 import { Input } from "@/components/ui/input";
@@ -526,7 +525,7 @@ export default function Nutrition() {
                     {isActionExpanded ? <ChevronUp className="h-3 w-3 ml-0.5" /> : <ChevronDown className="h-3 w-3 ml-0.5" />}
                   </button>
                   {isActionExpanded && (
-                    <div className="grid grid-cols-5 gap-1 px-3 pb-3 pt-1 animate-fade-in">
+                    <div className="grid grid-cols-4 gap-1 px-3 pb-3 pt-1 animate-fade-in">
                       <button onClick={() => openFoodSearch(mealType)} className="flex flex-col items-center gap-1 py-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors">
                         <Search className="h-4 w-4 text-blue-500" /><span className="text-[10px] text-muted-foreground">Search</span>
                       </button>
@@ -538,10 +537,6 @@ export default function Nutrition() {
                         className="flex flex-col items-center gap-1 py-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors">
                         <Sparkles className="h-4 w-4 text-blue-500" /><span className="text-[10px] text-muted-foreground">Quick</span>
                       </button>
-                      <Suspense fallback={<div className="flex flex-col items-center gap-1 py-2"><Mic className="h-4 w-4 text-muted-foreground" /><span className="text-[10px] text-muted-foreground">Voice</span></div>}>
-                        <VoiceInput onTranscription={aiMeal.handleVoiceInput} disabled={mealPlan.generatingPlan || mealOps.savingAllMeals || aiMeal.aiAnalyzing}
-                          className="flex flex-col items-center gap-1 py-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors !h-auto !border-0 !bg-transparent !px-0" />
-                      </Suspense>
                       <button onClick={() => {
                         setManualMeal(prev => ({ ...prev, meal_type: mealType, meal_name: "", calories: "", protein_g: "", carbs_g: "", fats_g: "", portion_size: "", recipe_notes: "", ingredients: [] }));
                         aiMeal.setAiMealDescription(""); aiMeal.setAiLineItems([]); aiMeal.setAiAnalysisComplete(false);

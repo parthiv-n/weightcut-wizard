@@ -198,7 +198,7 @@ export default function Goals() {
   };
 
   if (loading) {
-    return <GoalsSkeleton />;
+    return <div className="min-h-[50vh]" />;
   }
 
   return (

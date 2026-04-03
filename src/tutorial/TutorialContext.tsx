@@ -35,7 +35,7 @@ export interface TutorialContextValue {
 export const TutorialContext = createContext<TutorialContextValue | null>(null);
 
 /** Delay before showing tooltip after a route navigation (lets lazy page load + animate) */
-const NAV_SETTLE_MS = 600;
+const NAV_SETTLE_MS = 1000;
 
 export function TutorialProvider({ children }: { children: ReactNode }) {
   const { userId, profile, hasProfile } = useUser();
@@ -179,9 +179,10 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
     // If the step specifies navigateTo, the context handles navigation — don't pause
     if (step.navigateTo) return;
     // If the step specifies a route and we're not on it, pause
-    if (step.route && step.route !== location.pathname) {
+    const flowId = state.currentFlow?.id;
+    if (step.route && step.route !== location.pathname && flowId) {
       pausedFlowRef.current = {
-        flowId: state.currentFlow!.id,
+        flowId,
         stepIndex: state.currentStepIndex,
       };
       isPausingRef.current = true;

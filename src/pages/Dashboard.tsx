@@ -2,10 +2,10 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, useReducedMotion } from "motion/react";
 import { supabase } from "@/integrations/supabase/client";
-import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { Droplets, TrendingDown, Calendar, Lock, ChevronRight, Flame, Zap, CheckCircle2, Scale } from "lucide-react";
+import { TrainingWeekWidget } from "@/components/dashboard/TrainingWeekWidget";
 import wizardLogo from "@/assets/wizard-logo.webp";
 import { WeightProgressRing } from "@/components/dashboard/WeightProgressRing";
 import { CalorieProgressRing } from "@/components/dashboard/CalorieProgressRing";
@@ -293,7 +293,7 @@ export default function Dashboard() {
     })), [weightLogs, convertWeight]);
 
   if (loading) {
-    return <DashboardSkeleton />;
+    return <div className="min-h-[50vh]" />;
   }
 
   // Fallback static wisdom (kept for when AI fails)
@@ -368,11 +368,7 @@ export default function Dashboard() {
               </span>
             </div>
           )}
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold">{getGreeting()}, {userName || "Fighter"}</h1>
-            {streak > 0 && <StreakBadge streak={streak} isActive={streakIncludesToday} />}
-          </div>
-          <p className="text-sm text-muted-foreground mt-0.5">Your weight cut journey dashboard</p>
+          {streak > 0 && <StreakBadge streak={streak} isActive={streakIncludesToday} />}
         </motion.div>
 
         {weightLogs.length === 0 && (
@@ -603,6 +599,13 @@ export default function Dashboard() {
             target={dailyCalorieGoal}
           />
         </div>
+
+        {/* Training Week Widget */}
+        {userId && (
+          <motion.div variants={prefersReducedMotion ? undefined : staggerItem} transition={springs.responsive}>
+            <TrainingWeekWidget userId={userId} />
+          </motion.div>
+        )}
 
         {/* Milestone Badges */}
         <motion.div variants={prefersReducedMotion ? undefined : staggerItem} transition={springs.responsive}>

@@ -296,17 +296,16 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="max-w-md">
-        <AlertDialogHeader className="sm:text-center">
-          {/* Icon badge */}
-          <div className="mx-auto mb-1 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 dark:bg-destructive/15 ring-1 ring-destructive/20">
-            <AlertTriangle className="h-5 w-5 text-destructive" />
+      <AlertDialogContent>
+        <AlertDialogHeader className="text-center items-center">
+          <div className="mb-2 flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10 ring-1 ring-destructive/20">
+            <AlertTriangle className="h-6 w-6 text-destructive" />
           </div>
-          <AlertDialogTitle className="text-center">Reset All Data?</AlertDialogTitle>
+          <AlertDialogTitle className="text-center text-lg">Reset All Data?</AlertDialogTitle>
           <AlertDialogDescription asChild>
-            <div className="space-y-3 pt-1 text-center text-sm text-muted-foreground">
+            <div className="space-y-3 pt-1 text-center text-[13px] leading-relaxed text-muted-foreground">
               <p>This will permanently delete your tracking data:</p>
-              <div className="rounded-xl bg-destructive/5 dark:bg-destructive/10 border border-destructive/10 dark:border-destructive/15 p-3 text-left text-xs space-y-1 text-muted-foreground/80">
+              <div className="rounded-2xl bg-destructive/5 dark:bg-destructive/10 border border-destructive/10 dark:border-destructive/15 p-4 text-left text-xs space-y-1.5 text-muted-foreground/80">
                 <p>Profile information (age, height, targets)</p>
                 <p>All weight, nutrition & hydration logs</p>
                 <p>Fight week plans, logs & AI chat history</p>
@@ -315,7 +314,7 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
                 <Shield className="h-3.5 w-3.5" />
                 Fight camps will be preserved
               </div>
-              <p className="text-xs text-muted-foreground/60">
+              <p className="text-xs text-muted-foreground/50">
                 We recommend exporting your data before resetting.
               </p>
             </div>
@@ -327,7 +326,7 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
           variant="outline"
           onClick={exportAllData}
           disabled={exporting || resetting}
-          className="w-full rounded-xl h-10"
+          className="w-full rounded-2xl h-12 text-[15px] font-semibold"
         >
           {exporting ? (
             <>
@@ -342,14 +341,14 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
           )}
         </Button>
 
-        <AlertDialogFooter className="flex-row gap-3 sm:justify-center">
-          <AlertDialogCancel className="flex-1" disabled={resetting}>
+        <AlertDialogFooter className="flex-row gap-3">
+          <AlertDialogCancel className="flex-1 h-12 rounded-2xl text-[15px] font-semibold" disabled={resetting}>
             Cancel
           </AlertDialogCancel>
           <AlertDialogAction
             onClick={handleReset}
             disabled={exporting || resetting}
-            className="flex-1 rounded-xl bg-destructive hover:bg-destructive/90"
+            className="flex-1 h-12 rounded-2xl text-[15px] font-semibold bg-destructive hover:bg-destructive/90"
           >
             {resetting ? (
               <>
