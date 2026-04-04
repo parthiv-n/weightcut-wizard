@@ -217,7 +217,7 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
   }, [aiPrompt, isSessionValid, checkSessionValidity, userId, profile, selectedDate, dailyCalorieTarget, safetyStatus, safetyMessage, mealPlanIdeas, setMealPlanIdeas, setDailyCalorieTarget, setSafetyStatus, setSafetyMessage, aiAbortRef, refreshSession, toast]);
 
   return {
-    generatingPlan,
+    generatingPlan, setGeneratingPlan,
     aiPrompt, setAiPrompt,
     isAiDialogOpen, setIsAiDialogOpen,
     handleGenerateMealPlan,

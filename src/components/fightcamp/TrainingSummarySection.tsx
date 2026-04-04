@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { format, startOfWeek, endOfWeek, addDays } from "date-fns";
-import { Brain, Loader2, ChevronDown, Trash2, CheckCircle } from "lucide-react";
+import { Brain, Loader2, ChevronDown, Trash2, CheckCircle, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Card } from "@/components/ui/card";
@@ -71,6 +71,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
     );
     const [isLoading, setIsLoading] = useState(false);
     const [isSummaryOpen, setIsSummaryOpen] = useState(true);
+    const abortRef = useRef<AbortController | null>(null);
 
     const calendarWeekStart = format(startOfWeek(selectedDate, { weekStartsOn: 1 }), "yyyy-MM-dd");
 
@@ -152,8 +153,16 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
         return "up_to_date";
     }, [selectedWeekStart, calendarWeekStart, sessionsWithNotes, selectedSummary, weekSessions]);
 
+    const handleCancel = () => {
+        abortRef.current?.abort();
+        setIsLoading(false);
+    };
+
     const handleGenerateOrUpdate = async () => {
         if (sessionsWithNotes.length === 0) return;
+        abortRef.current?.abort();
+        const controller = new AbortController();
+        abortRef.current = controller;
         setIsLoading(true);
         try {
             const { data, error } = await supabase.functions.invoke("training-summary", {
@@ -165,7 +174,9 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
                         notes: s.notes,
                     })),
                 },
+                signal: controller.signal,
             });
+            if (controller.signal.aborted) return;
 
             if (error) throw error;
             if (!data?.summary) throw new Error("No summary returned");
@@ -203,7 +214,8 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
 
             await fetchAllSummaries();
             setIsSummaryOpen(true);
-        } catch (error) {
+        } catch (error: any) {
+            if (error?.name === 'AbortError' || controller.signal.aborted) return;
             logger.error("Error generating training summary", error);
             toast({
                 title: "Error generating summary",
@@ -286,12 +298,19 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
                     className="w-full p-4 rounded-2xl glass-card border border-border/50 flex items-center justify-center gap-2 hover:bg-accent/30 transition-all disabled:opacity-60"
                 >
                     {isLoading ? (
-                        <>
+                        <div className="flex items-center gap-2 w-full justify-center">
                             <Loader2 className="h-5 w-5 animate-spin text-primary" />
                             <span className="text-sm font-semibold text-muted-foreground">
                                 Analyzing your sessions...
                             </span>
-                        </>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); handleCancel(); }}
+                                className="ml-auto flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-lg hover:bg-accent/30"
+                            >
+                                <X className="h-3.5 w-3.5" />
+                                Cancel
+                            </button>
+                        </div>
                     ) : buttonState === "up_to_date" ? (
                         <>
                             <CheckCircle className="h-5 w-5 text-green-500" />

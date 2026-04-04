@@ -165,10 +165,10 @@ export const AIGeneratingOverlay = memo(function AIGeneratingOverlay({
                     </p>
                 )}
 
-                {/* Cancel button */}
+                {/* Cancel button — shows after 3s */}
                 {showCancel && onCancel && (
                     <button
-                        onClick={onCancel}
+                        onClick={() => { onCancel(); setShowCancel(false); }}
                         className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-800/50 border border-zinc-800 rounded-xl transition-all duration-200 animate-in fade-in duration-300"
                     >
                         <X className="h-4 w-4" />
