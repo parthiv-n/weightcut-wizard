@@ -202,7 +202,7 @@ export default function Goals() {
   }
 
   return (
-    <div className="space-y-4 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto pb-20 md:pb-6">
+    <div className="space-y-3 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
         {/* Header */}
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Goals</h1>

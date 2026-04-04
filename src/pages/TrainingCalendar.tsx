@@ -296,7 +296,7 @@ export default function TrainingCalendar() {
     const sessionsForSelectedDate = sessions.filter(s => s.date === format(selectedDate, 'yyyy-MM-dd'));
 
     return (
-        <div className="space-y-4 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto pb-20 md:pb-6">
+        <div className="space-y-3 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
                 {/* Calendar View */}
                 <Card className="p-4 rounded-[20px] shadow-sm glass-card mb-6">
                     <div className="flex items-center justify-between mb-4">

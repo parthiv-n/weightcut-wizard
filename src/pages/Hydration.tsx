@@ -116,7 +116,7 @@ export default function Hydration() {
         onCancel={handleAICancel}
         onRetry={() => handleGenerateProtocol(new Event("submit") as any)}
       />
-      <div className="space-y-4 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto pb-20 md:pb-6">
+      <div className="space-y-3 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
         {/* Header */}
         <div className="mb-4">
           <h1 className="text-xl font-semibold tracking-tight">Post-Weigh-In Rehydration</h1>
@@ -168,7 +168,7 @@ export default function Hydration() {
             {/* Weight Lost Ring */}
             <div className="flex flex-col items-center justify-center space-y-3">
               <p className="text-[11px] text-blue-400 font-bold uppercase tracking-[0.2em]">Weight Lost (kg)</p>
-              <div className={`relative w-36 h-36 rounded-full border-[6px] transition-colors duration-500 flex flex-col items-center justify-center bg-background ring-1 ring-border/30 ${ringColorClasses.split(" ")[1]} ${ringColorClasses.split(" ")[2] || ""}`}>
+              <div className={`relative w-28 h-28 rounded-full border-[6px] transition-colors duration-500 flex flex-col items-center justify-center bg-background ring-1 ring-border/30 ${ringColorClasses.split(" ")[1]} ${ringColorClasses.split(" ")[2] || ""}`}>
                 <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 100 100">
                   <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" className={`transition-colors duration-500 ${ringColorClasses.split(" ")[0]}`} strokeWidth="6" strokeDasharray="289" strokeDashoffset="40" strokeLinecap="round" />
                 </svg>

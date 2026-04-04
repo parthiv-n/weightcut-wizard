@@ -216,7 +216,7 @@ export default function FightWeek() {
   // Loading skeleton
   if (initialLoading) {
     return (
-      <div className="space-y-4 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto pb-20 md:pb-6">
+      <div className="space-y-3 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-4 w-32" />
         <Skeleton className="h-40 rounded-2xl" />
@@ -234,8 +234,8 @@ export default function FightWeek() {
     : null;
 
   return (
-    <div className="space-y-4 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto pb-20 md:pb-6 text-foreground">
-      <div className="space-y-6">
+    <div className="space-y-3 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6 text-foreground">
+      <div className="space-y-3">
         {/* Header + safety badge */}
         <div className="flex items-center justify-between">
           <div>

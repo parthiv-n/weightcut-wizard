@@ -84,7 +84,7 @@ export default function GymTracker() {
   const formatVol = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : `${v}`;
 
   return (
-    <div className="space-y-5 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto pb-20 md:pb-6">
+    <div className="space-y-3 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto pb-20 md:pb-6">
       {activeSession ? (
         <>
           {/* Header for active session */}

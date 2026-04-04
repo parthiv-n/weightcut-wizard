@@ -389,7 +389,7 @@ export default function Nutrition() {
         onCancel={cancelAI}
         onRetry={overlayProps.retry ?? undefined}
       />
-      <div className="space-y-4 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto overflow-x-hidden">
+      <div className="space-y-3 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto overflow-x-hidden">
 
         {/* Wizard's Nutrition Wisdom */}
         <button

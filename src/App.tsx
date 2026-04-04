@@ -157,7 +157,7 @@ const AppLayoutContent = () => {
           </header>
           <OfflineBanner />
           {/* Main content with mobile-first responsive padding - bottom padding for bottom nav */}
-          <main className="flex-1 overflow-auto overflow-x-hidden relative min-h-0 w-full pt-2 pb-24 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right">
+          <main className="flex-1 overflow-auto overflow-x-hidden relative min-h-0 w-full pt-2 pb-16 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right">
             {/* Manual refresh button — top-left, below iOS safe area */}
             <button
               onClick={() => window.location.reload()}

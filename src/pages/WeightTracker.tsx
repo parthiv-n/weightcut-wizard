@@ -247,7 +247,7 @@ export default function WeightTracker() {
         onCancel={handleAICancel}
         onRetry={getAIAnalysis}
       />
-      <div className="space-y-5 px-4 pb-4 pt-16 sm:p-5 sm:pt-16 max-w-2xl mx-auto">
+      <div className="space-y-3 px-3 pb-3 pt-14 sm:p-5 sm:pt-16 max-w-2xl mx-auto">
         {/* Chart + History */}
         <div className="glass-card p-4 space-y-4">
           <div className="flex items-center justify-between">
@@ -272,7 +272,7 @@ export default function WeightTracker() {
           </div>
           {getChartData().length > 0 ? (
             <>
-              <ResponsiveContainer width="100%" height={200}>
+              <ResponsiveContainer width="100%" height={160}>
                 <LineChart data={getChartData()} onClick={handleChartClick}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.2} />
                   <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
