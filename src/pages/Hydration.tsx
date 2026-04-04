@@ -116,11 +116,11 @@ export default function Hydration() {
         onCancel={handleAICancel}
         onRetry={() => handleGenerateProtocol(new Event("submit") as any)}
       />
-      <div className="space-y-3 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
+      <div className="space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
         {/* Header */}
-        <div className="mb-4">
-          <h1 className="text-xl font-semibold tracking-tight">Post-Weigh-In Rehydration</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Science-based recovery protocol</p>
+        <div className="mb-2">
+          <h1 className="text-lg font-semibold tracking-tight">Post-Weigh-In Rehydration</h1>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Science-based recovery protocol</p>
         </div>
 
         {/* Disclaimer Banner */}
@@ -149,10 +149,10 @@ export default function Hydration() {
         </div>
 
         {/* Input Form */}
-        <div className="rounded-3xl border border-white/[0.06] p-6 mb-6 shadow-2xl relative overflow-hidden bg-white/[0.02] backdrop-blur-sm">
+        <div className="rounded-2xl border border-white/[0.06] p-4 mb-4 shadow-2xl relative overflow-hidden bg-white/[0.02] backdrop-blur-sm">
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[200px] h-[200px] bg-blue-500/20 opacity-40 blur-[80px] rounded-full pointer-events-none"></div>
 
-          <form onSubmit={handleGenerateProtocol} className="space-y-6 relative z-10">
+          <form onSubmit={handleGenerateProtocol} className="space-y-4 relative z-10">
             <div className="flex items-center justify-center gap-2">
               <User className="h-3.5 w-3.5 text-muted-foreground" />
               <p className="text-[11px] text-muted-foreground">{profileParts.join(" · ")}</p>
@@ -168,24 +168,24 @@ export default function Hydration() {
             {/* Weight Lost Ring */}
             <div className="flex flex-col items-center justify-center space-y-3">
               <p className="text-[11px] text-blue-400 font-bold uppercase tracking-[0.2em]">Weight Lost (kg)</p>
-              <div className={`relative w-28 h-28 rounded-full border-[6px] transition-colors duration-500 flex flex-col items-center justify-center bg-background ring-1 ring-border/30 ${ringColorClasses.split(" ")[1]} ${ringColorClasses.split(" ")[2] || ""}`}>
+              <div className={`relative w-22 h-22 rounded-full border-[5px] transition-colors duration-500 flex flex-col items-center justify-center bg-background ring-1 ring-border/30 ${ringColorClasses.split(" ")[1]} ${ringColorClasses.split(" ")[2] || ""}`} style={{ width: 88, height: 88 }}>
                 <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" className={`transition-colors duration-500 ${ringColorClasses.split(" ")[0]}`} strokeWidth="6" strokeDasharray="289" strokeDashoffset="40" strokeLinecap="round" />
+                  <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" className={`transition-colors duration-500 ${ringColorClasses.split(" ")[0]}`} strokeWidth="5" strokeDasharray="289" strokeDashoffset="40" strokeLinecap="round" />
                 </svg>
-                <Input type="number" step="0.1" placeholder="0.0" value={weightLost} onChange={(e) => setWeightLost(e.target.value)} required className="w-24 text-center text-4xl font-black bg-transparent border-none text-foreground focus-visible:ring-0 placeholder:text-muted-foreground/30 p-0 h-auto z-10" />
+                <Input type="number" step="0.1" placeholder="0.0" value={weightLost} onChange={(e) => setWeightLost(e.target.value)} required className="w-20 text-center text-3xl font-black bg-transparent border-none text-foreground focus-visible:ring-0 placeholder:text-muted-foreground/30 p-0 h-auto z-10" />
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="glass-card flex flex-col items-center justify-center space-y-1.5 rounded-2xl p-4 col-span-1">
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="glass-card flex flex-col items-center justify-center space-y-1 rounded-2xl p-3 col-span-1">
                 <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest text-center">Weigh-In</p>
                 <Input type="date" value={weighInDate} onChange={(e) => setWeighInDate(e.target.value)} required className="w-full text-center text-xs font-medium bg-transparent border-none text-muted-foreground focus-visible:ring-0 p-0 h-auto [&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-datetime-edit]:text-center [&::-webkit-datetime-edit-fields-wrapper]:justify-center" />
-                <Input type="time" value={weighInTime} onChange={(e) => setWeighInTime(e.target.value)} required className="w-full text-center text-2xl font-black bg-transparent border-none text-foreground focus-visible:ring-0 p-0 h-auto [&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-datetime-edit]:text-center [&::-webkit-datetime-edit-fields-wrapper]:justify-center" title="Weigh-in time" />
+                <Input type="time" value={weighInTime} onChange={(e) => setWeighInTime(e.target.value)} required className="w-full text-center text-xl font-black bg-transparent border-none text-foreground focus-visible:ring-0 p-0 h-auto [&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-datetime-edit]:text-center [&::-webkit-datetime-edit-fields-wrapper]:justify-center" title="Weigh-in time" />
               </div>
-              <div className="glass-card flex flex-col items-center justify-center space-y-1.5 rounded-2xl p-4 col-span-1">
+              <div className="glass-card flex flex-col items-center justify-center space-y-1 rounded-2xl p-3 col-span-1">
                 <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest text-center">Fight</p>
                 <Input type="date" value={fightDate} onChange={(e) => setFightDate(e.target.value)} required className="w-full text-center text-xs font-medium bg-transparent border-none text-muted-foreground focus-visible:ring-0 p-0 h-auto [&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-datetime-edit]:text-center [&::-webkit-datetime-edit-fields-wrapper]:justify-center" />
-                <Input type="time" value={fightTime} onChange={(e) => setFightTime(e.target.value)} required className="w-full text-center text-2xl font-black bg-transparent border-none text-foreground focus-visible:ring-0 p-0 h-auto [&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-datetime-edit]:text-center [&::-webkit-datetime-edit-fields-wrapper]:justify-center" title="Fight time" />
+                <Input type="time" value={fightTime} onChange={(e) => setFightTime(e.target.value)} required className="w-full text-center text-xl font-black bg-transparent border-none text-foreground focus-visible:ring-0 p-0 h-auto [&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-datetime-edit]:text-center [&::-webkit-datetime-edit-fields-wrapper]:justify-center" title="Fight time" />
               </div>
             </div>
 
@@ -241,7 +241,7 @@ export default function Hydration() {
               })()}
             </div>
 
-            <Button type="submit" className="w-full h-12 mt-2 font-bold text-base rounded-2xl transition-all active:scale-[0.98] bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90" disabled={loading || !currentWeight}>
+            <Button type="submit" className="w-full h-10 mt-1 font-bold text-sm rounded-2xl transition-all active:scale-[0.98] bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90" disabled={loading || !currentWeight}>
               {loading ? "Generating Protocol..." : "Generate Protocol"}
             </Button>
           </form>
@@ -249,9 +249,9 @@ export default function Hydration() {
 
         {/* PROTOCOL RESULTS */}
         {protocol && (
-          <div className="space-y-4">
+          <div className="space-y-2.5">
             {/* Summary */}
-            <div className="rounded-2xl bg-muted/50 border border-border/50 p-4">
+            <div className="rounded-2xl bg-muted/50 border border-border/50 p-3">
               <div className="flex items-start justify-between gap-3">
                 <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-line">{protocol.summary}</p>
                 <button onClick={() => handleGenerateProtocol(new Event("submit") as any)} disabled={loading} className="shrink-0 p-1.5 rounded-lg hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors" aria-label="Regenerate">
@@ -262,19 +262,19 @@ export default function Hydration() {
 
             {/* Totals Dashboard */}
             {totals && (
-              <div className="rounded-2xl bg-card border border-border/50 p-4">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-3 text-center font-bold">Rehydration Totals</p>
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="rounded-xl bg-blue-500/5 border border-blue-500/20 p-3 text-center">
-                    <p className="text-lg font-bold tabular-nums text-blue-400">{totals.totalFluidLitres}L</p>
+              <div className="rounded-2xl bg-card border border-border/50 p-3">
+                <p className="text-[9px] text-muted-foreground uppercase tracking-wider mb-2 text-center font-bold">Rehydration Totals</p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  <div className="rounded-xl bg-blue-500/5 border border-blue-500/20 p-2 text-center">
+                    <p className="text-base font-bold tabular-nums text-blue-400">{totals.totalFluidLitres}L</p>
                     <p className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">Total Fluid</p>
                   </div>
-                  <div className="rounded-xl bg-amber-500/5 border border-amber-500/20 p-3 text-center">
-                    <p className="text-lg font-bold tabular-nums text-amber-400">{(totals.totalSodiumMg / 1000).toFixed(1)}g</p>
+                  <div className="rounded-xl bg-amber-500/5 border border-amber-500/20 p-2 text-center">
+                    <p className="text-base font-bold tabular-nums text-amber-400">{(totals.totalSodiumMg / 1000).toFixed(1)}g</p>
                     <p className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">Sodium</p>
                   </div>
-                  <div className="rounded-xl bg-emerald-500/5 border border-emerald-500/20 p-3 text-center">
-                    <p className="text-lg font-bold tabular-nums text-emerald-400">{totals.totalCarbsG}g</p>
+                  <div className="rounded-xl bg-emerald-500/5 border border-emerald-500/20 p-2 text-center">
+                    <p className="text-base font-bold tabular-nums text-emerald-400">{totals.totalCarbsG}g</p>
                     <p className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">Carbs</p>
                   </div>
                   <div className="rounded-xl bg-muted border border-border/50 p-2.5 text-center">

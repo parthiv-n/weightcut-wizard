@@ -29,7 +29,7 @@ export const MacroPieChart = memo(function MacroPieChart({
     const calPct = calorieTarget > 0 ? Math.min((calories / calorieTarget) * 100, 100) : 0;
 
     // Circular progress for calories
-    const RADIUS = 52;
+    const RADIUS = 44;
     const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
     const strokeDashoffset = CIRCUMFERENCE - (calPct / 100) * CIRCUMFERENCE;
 
@@ -52,18 +52,18 @@ export const MacroPieChart = memo(function MacroPieChart({
         const isReached = value >= goal && goal > 0;
 
         return (
-            <div className="space-y-1.5">
+            <div className="space-y-1">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-                        <span className="text-xs font-semibold text-foreground/80">{label}</span>
+                        <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
+                        <span className="text-[11px] font-semibold text-foreground/80">{label}</span>
                     </div>
-                    <span className="text-xs tabular-nums text-muted-foreground">
+                    <span className="text-[11px] tabular-nums text-muted-foreground">
                         <span className="font-semibold text-foreground">{Math.round(value)}</span>
                         <span className="text-muted-foreground/60"> / {Math.round(goal)}g</span>
                     </span>
                 </div>
-                <div className="relative h-2 rounded-full overflow-hidden" style={{ backgroundColor: bgColor }}>
+                <div className="relative h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: bgColor }}>
                     <div
                         className="absolute inset-y-0 left-0 rounded-full transition-all duration-700 ease-out"
                         style={{
@@ -75,9 +75,6 @@ export const MacroPieChart = memo(function MacroPieChart({
                         }}
                     />
                 </div>
-                <p className="text-[10px] tabular-nums text-muted-foreground/50">
-                    {isReached ? "✓ Goal reached" : `${Math.round(left)}g left`}
-                </p>
             </div>
         );
     };
@@ -85,28 +82,28 @@ export const MacroPieChart = memo(function MacroPieChart({
     return (
         <div className="nutrition-dashboard">
             {/* Top section: Ring + Stats */}
-            <div className="flex items-center gap-5">
+            <div className="flex items-center gap-3.5">
                 {/* Circular calorie ring */}
-                <div className="relative flex-shrink-0" style={{ width: 120, height: 120 }}>
-                    <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
+                <div className="relative flex-shrink-0" style={{ width: 96, height: 96 }}>
+                    <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
                         {/* Background track */}
                         <circle
-                            cx="60" cy="60" r={RADIUS}
+                            cx="50" cy="50" r={RADIUS}
                             fill="none"
                             stroke="hsl(var(--border) / 0.2)"
-                            strokeWidth="8"
+                            strokeWidth="7"
                         />
                         {/* Progress arc */}
                         <circle
-                            cx="60" cy="60" r={RADIUS}
+                            cx="50" cy="50" r={RADIUS}
                             fill="none"
                             stroke={isOver ? "hsl(var(--destructive))" : "url(#calGradient)"}
-                            strokeWidth="8"
+                            strokeWidth="7"
                             strokeLinecap="round"
                             strokeDasharray={CIRCUMFERENCE}
                             strokeDashoffset={strokeDashoffset}
                             className="transition-all duration-700 ease-out"
-                            style={{ filter: `drop-shadow(0 0 6px ${isOver ? 'hsl(var(--destructive) / 0.4)' : 'hsl(var(--primary) / 0.3)'})` }}
+                            style={{ filter: `drop-shadow(0 0 4px ${isOver ? 'hsl(var(--destructive) / 0.4)' : 'hsl(var(--primary) / 0.3)'})` }}
                         />
                         <defs>
                             <linearGradient id="calGradient" x1="0%" y1="0%" x2="100%" y2="0%">
@@ -117,17 +114,17 @@ export const MacroPieChart = memo(function MacroPieChart({
                     </svg>
                     {/* Center label */}
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-2xl font-bold tabular-nums leading-none tracking-tight">
+                        <span className="text-xl font-bold tabular-nums leading-none tracking-tight">
                             {Math.round(calories)}
                         </span>
-                        <span className="text-[9px] uppercase tracking-[0.15em] text-muted-foreground/60 mt-1 font-medium">
+                        <span className="text-[8px] uppercase tracking-[0.15em] text-muted-foreground/60 mt-0.5 font-medium">
                             kcal
                         </span>
                     </div>
                 </div>
 
                 {/* Right side: Goal / Food / Remaining */}
-                <div className="flex-1 min-w-0 space-y-3">
+                <div className="flex-1 min-w-0 space-y-2">
                     <div className="grid grid-cols-3 gap-1">
                         {[
                             { label: "Goal", value: Math.round(calorieTarget), color: "text-foreground" },
@@ -135,15 +132,15 @@ export const MacroPieChart = memo(function MacroPieChart({
                             { label: isOver ? "Over" : "Left", value: isOver ? Math.round(calories - calorieTarget) : Math.round(remaining), color: isOver ? "text-destructive" : "text-emerald-500" },
                         ].map((stat) => (
                             <div key={stat.label} className="text-center">
-                                <p className="text-[9px] uppercase tracking-[0.12em] text-muted-foreground/60 font-medium">{stat.label}</p>
-                                <p className={`text-base font-bold tabular-nums leading-snug ${stat.color}`}>{stat.value}</p>
+                                <p className="text-[8px] uppercase tracking-[0.12em] text-muted-foreground/60 font-medium">{stat.label}</p>
+                                <p className={`text-sm font-bold tabular-nums leading-snug ${stat.color}`}>{stat.value}</p>
                             </div>
                         ))}
                     </div>
 
                     {/* Linear calorie progress below stats */}
-                    <div className="space-y-1">
-                        <div className="relative h-1.5 rounded-full overflow-hidden bg-border/20">
+                    <div>
+                        <div className="relative h-1 rounded-full overflow-hidden bg-border/20">
                             <div
                                 className="absolute inset-y-0 left-0 rounded-full transition-all duration-700 ease-out"
                                 style={{
@@ -155,7 +152,7 @@ export const MacroPieChart = memo(function MacroPieChart({
                                 }}
                             />
                         </div>
-                        <p className="text-[9px] text-muted-foreground/40 tabular-nums text-right">
+                        <p className="text-[8px] text-muted-foreground/40 tabular-nums text-right mt-0.5">
                             {Math.round(calPct)}% of daily goal
                         </p>
                     </div>
@@ -163,7 +160,7 @@ export const MacroPieChart = memo(function MacroPieChart({
             </div>
 
             {/* Macro progress bars */}
-            <div className="mt-5 pt-4 border-t border-border/20 space-y-3">
+            <div className="mt-3 pt-3 border-t border-border/20 space-y-2">
                 <div className="flex items-center justify-between mb-1">
                     <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-muted-foreground/60">Macros</span>
                     {onEditTargets && (

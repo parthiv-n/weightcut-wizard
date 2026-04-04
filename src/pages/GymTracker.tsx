@@ -84,7 +84,7 @@ export default function GymTracker() {
   const formatVol = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : `${v}`;
 
   return (
-    <div className="space-y-3 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto pb-20 md:pb-6">
+    <div className="space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
       {activeSession ? (
         <>
           {/* Header for active session */}
@@ -94,10 +94,10 @@ export default function GymTracker() {
             transition={springs.gentle}
             className="flex items-center gap-3"
           >
-            <div className="h-10 w-10 rounded-2xl bg-primary/15 flex items-center justify-center">
-              <Dumbbell className="h-5 w-5 text-primary" />
+            <div className="h-8 w-8 rounded-xl bg-primary/15 flex items-center justify-center">
+              <Dumbbell className="h-4 w-4 text-primary" />
             </div>
-            <h1 className="text-xl font-bold">Gym Tracker</h1>
+            <h1 className="text-lg font-bold">Gym Tracker</h1>
           </motion.div>
 
           <ActiveSessionView
@@ -121,12 +121,12 @@ export default function GymTracker() {
           variants={staggerContainer(60)}
           initial="hidden"
           animate="visible"
-          className="space-y-5"
+          className="space-y-3"
         >
           {/* Premium header */}
           <motion.div variants={staggerItem}>
-            <p className="text-xs text-muted-foreground font-medium uppercase tracking-widest mb-1">{todayLabel}</p>
-            <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/60 bg-clip-text text-transparent">
+            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest mb-0.5">{todayLabel}</p>
+            <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/60 bg-clip-text text-transparent">
               Gym
             </h1>
           </motion.div>
@@ -153,7 +153,7 @@ export default function GymTracker() {
           )}
 
           {/* Start workout card */}
-          <motion.div variants={staggerItem} className="glass-card rounded-2xl border border-border/50 p-4 space-y-4">
+          <motion.div variants={staggerItem} className="glass-card rounded-2xl border border-border/50 p-3 space-y-3">
             <h2 className="font-semibold text-sm">Start Workout</h2>
 
             {/* Session type pills */}

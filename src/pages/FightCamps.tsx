@@ -162,7 +162,7 @@ export default function FightCamps() {
 
   if (loading) {
     return (
-      <div className="space-y-5 px-4 pb-4 pt-16 sm:p-5 sm:pt-16 max-w-2xl mx-auto">
+      <div className="space-y-3 px-3 pb-3 pt-14 sm:p-5 sm:pt-14 max-w-2xl mx-auto">
         <Skeleton className="h-7 w-32" />
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
@@ -183,7 +183,7 @@ export default function FightCamps() {
   }
 
   return (
-    <div className="space-y-5 px-4 pb-4 pt-16 sm:p-5 sm:pt-16 max-w-2xl mx-auto">
+    <div className="space-y-3 px-3 pb-3 pt-14 sm:p-5 sm:pt-14 max-w-2xl mx-auto">
 
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -213,38 +213,38 @@ export default function FightCamps() {
               <DialogHeader>
                 <DialogTitle className="text-xl font-bold">New Fight Camp</DialogTitle>
               </DialogHeader>
-              <div className="space-y-5 pt-4">
-                <div className="space-y-2">
-                  <Label htmlFor="camp-name" className="text-muted-foreground pl-1">Camp Name</Label>
+              <div className="space-y-4 pt-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="camp-name" className="text-muted-foreground pl-1 text-xs">Camp Name</Label>
                   <Input
                     id="camp-name"
                     placeholder="e.g. Summer 2025"
                     value={newCamp.name}
                     onChange={(e) => setNewCamp({ ...newCamp, name: e.target.value })}
-                    className="h-12 rounded-2xl focus:border-primary focus:ring-1 focus:ring-primary px-4"
+                    className="h-10 rounded-xl focus:border-primary focus:ring-1 focus:ring-primary px-3"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="event-name" className="text-muted-foreground pl-1">Event (Optional)</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="event-name" className="text-muted-foreground pl-1 text-xs">Event (Optional)</Label>
                   <Input
                     id="event-name"
                     placeholder="e.g. UFC 300"
                     value={newCamp.event_name}
                     onChange={(e) => setNewCamp({ ...newCamp, event_name: e.target.value })}
-                    className="h-12 rounded-2xl focus:border-primary focus:ring-1 focus:ring-primary px-4"
+                    className="h-10 rounded-xl focus:border-primary focus:ring-1 focus:ring-primary px-3"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="fight-date" className="text-muted-foreground pl-1">Fight Date</Label>
+                <div className="space-y-1.5">
+                  <Label htmlFor="fight-date" className="text-muted-foreground pl-1 text-xs">Fight Date</Label>
                   <Input
                     id="fight-date"
                     type="date"
                     value={newCamp.fight_date}
                     onChange={(e) => setNewCamp({ ...newCamp, fight_date: e.target.value })}
-                    className="h-12 rounded-2xl focus:border-primary focus:ring-1 focus:ring-primary px-4 block w-full"
+                    className="h-10 rounded-xl focus:border-primary focus:ring-1 focus:ring-primary px-3 block w-full"
                   />
                 </div>
-                <Button onClick={handleCreateCamp} className="w-full h-12 rounded-2xl text-base font-bold mt-2">
+                <Button onClick={handleCreateCamp} className="w-full h-10 rounded-xl text-sm font-bold mt-1">
                   Create Camp
                 </Button>
               </div>
@@ -262,13 +262,13 @@ export default function FightCamps() {
 
         {/* Camp List */}
         {camps.length === 0 ? (
-          <div className="glass-card p-8 text-center space-y-4">
-            <div className="h-14 w-14 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
-              <Trophy className="w-6 h-6 text-primary" />
+          <div className="glass-card p-6 text-center space-y-3">
+            <div className="h-10 w-10 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
+              <Trophy className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <h3 className="text-base font-bold">No Camps Yet</h3>
-              <p className="text-muted-foreground text-sm mt-1">Start tracking your first preparation.</p>
+              <h3 className="text-sm font-bold">No Camps Yet</h3>
+              <p className="text-muted-foreground text-xs mt-0.5">Start tracking your first preparation.</p>
             </div>
             <Button onClick={() => setDialogOpen(true)} variant="outline" className="rounded-xl mt-2 border-border/50 hover:bg-muted">
               Create First Camp
@@ -296,22 +296,22 @@ export default function FightCamps() {
                     navigate(`/fight-camps/${camp.id}`);
                   }
                 }} className="cursor-pointer">
-                  <div className="flex items-start gap-3.5">
+                  <div className="flex items-start gap-3">
                     {camp.profile_pic_url ? (
                       <img
                         src={camp.profile_pic_url}
                         alt={camp.name}
-                        className="w-11 h-11 rounded-full object-cover border border-border/50 shrink-0"
+                        className="w-9 h-9 rounded-full object-cover border border-border/50 shrink-0"
                       />
                     ) : (
-                      <div className="w-11 h-11 rounded-full bg-muted flex items-center justify-center border border-border/50 shrink-0">
-                        <Trophy className="w-4.5 h-4.5 text-muted-foreground" />
+                      <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center border border-border/50 shrink-0">
+                        <Trophy className="w-4 h-4 text-muted-foreground" />
                       </div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <h3 className="font-bold text-base leading-tight">{camp.name}</h3>
+                      <h3 className="font-bold text-sm leading-tight">{camp.name}</h3>
                       {camp.event_name && (
-                        <p className="text-sm text-primary font-medium truncate">{camp.event_name}</p>
+                        <p className="text-xs text-primary font-medium truncate">{camp.event_name}</p>
                       )}
                       <p className="text-xs text-muted-foreground mt-0.5">{format(new Date(camp.fight_date), "MMM dd, yyyy")}</p>
                     </div>

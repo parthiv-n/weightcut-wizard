@@ -234,13 +234,13 @@ export default function FightWeek() {
     : null;
 
   return (
-    <div className="space-y-3 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6 text-foreground">
-      <div className="space-y-3">
+    <div className="space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6 text-foreground">
+      <div className="space-y-2.5">
         {/* Header + safety badge */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Fight Week</h1>
-            <p className="text-muted-foreground text-sm font-medium">Protocol Generator</p>
+            <h1 className="text-xl font-bold tracking-tight">Fight Week</h1>
+            <p className="text-muted-foreground text-xs font-medium">Protocol Generator</p>
           </div>
           <div className="flex items-center gap-2">
             {projection && <ShareButton onClick={() => setShareOpen(true)} />}
@@ -253,8 +253,8 @@ export default function FightWeek() {
         </div>
 
         {/* Input card */}
-        <div className="glass-card rounded-2xl p-5 border border-border/50 space-y-4">
-          <div className="grid grid-cols-3 gap-3">
+        <div className="glass-card rounded-2xl p-3 border border-border/50 space-y-3">
+          <div className="grid grid-cols-3 gap-2">
             <div className="space-y-1.5">
               <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
                 Current (kg)
@@ -264,7 +264,7 @@ export default function FightWeek() {
                 step="0.1"
                 value={currentWeight}
                 onChange={(e) => setCurrentWeight(e.target.value)}
-                className="h-12 rounded-xl text-center text-lg font-medium"
+                className="h-9 rounded-xl text-center text-sm font-medium"
                 placeholder="77.0"
               />
             </div>
@@ -277,7 +277,7 @@ export default function FightWeek() {
                 step="0.1"
                 value={targetWeight}
                 onChange={(e) => setTargetWeight(e.target.value)}
-                className="h-12 rounded-xl text-center text-lg font-medium"
+                className="h-9 rounded-xl text-center text-sm font-medium"
                 placeholder="70.3"
               />
             </div>
@@ -291,7 +291,7 @@ export default function FightWeek() {
                 max="14"
                 value={daysUntilWeighIn}
                 onChange={(e) => setDaysUntilWeighIn(e.target.value)}
-                className="h-12 rounded-xl text-center text-lg font-medium"
+                className="h-9 rounded-xl text-center text-sm font-medium"
                 placeholder="7"
               />
             </div>
@@ -301,7 +301,7 @@ export default function FightWeek() {
               onClick={savePlan}
               disabled={saving}
               variant="outline"
-              className="w-full h-10 rounded-xl text-sm"
+              className="w-full h-9 rounded-xl text-sm"
             >
               {saving ? "Saving..." : dbPlan ? "Update Plan" : "Save Plan"}
             </Button>
@@ -312,28 +312,28 @@ export default function FightWeek() {
         {projection && (
           <>
             {/* Summary tiles */}
-            <div className="grid grid-cols-3 gap-3">
-              <div className="glass-card rounded-2xl p-4 border border-border/50 text-center">
-                <TrendingDown className="h-4 w-4 mx-auto text-muted-foreground mb-1" />
-                <span className="text-2xl font-bold block">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="glass-card rounded-2xl p-2.5 border border-border/50 text-center">
+                <TrendingDown className="h-3.5 w-3.5 mx-auto text-muted-foreground mb-0.5" />
+                <span className="text-lg font-bold block">
                   {projection.totalToCut.toFixed(1)}
                 </span>
-                <span className="text-[10px] text-muted-foreground uppercase">kg to cut</span>
+                <span className="text-[9px] text-muted-foreground uppercase">kg to cut</span>
               </div>
-              <div className="glass-card rounded-2xl p-4 border border-border/50 text-center">
-                <Target className="h-4 w-4 mx-auto text-muted-foreground mb-1" />
-                <span className={`text-2xl font-bold block ${
+              <div className="glass-card rounded-2xl p-2.5 border border-border/50 text-center">
+                <Target className="h-3.5 w-3.5 mx-auto text-muted-foreground mb-0.5" />
+                <span className={`text-lg font-bold block ${
                   projection.percentBW <= 5 ? "text-green-400" :
                   projection.percentBW <= 8 ? "text-yellow-400" : "text-red-400"
                 }`}>
                   {projection.percentBW.toFixed(1)}%
                 </span>
-                <span className="text-[10px] text-muted-foreground uppercase">% bodyweight</span>
+                <span className="text-[9px] text-muted-foreground uppercase">% bodyweight</span>
               </div>
-              <div className="glass-card rounded-2xl p-4 border border-border/50 text-center">
-                <Calendar className="h-4 w-4 mx-auto text-muted-foreground mb-1" />
-                <span className="text-2xl font-bold block">{daysUntilWeighIn}</span>
-                <span className="text-[10px] text-muted-foreground uppercase">days</span>
+              <div className="glass-card rounded-2xl p-2.5 border border-border/50 text-center">
+                <Calendar className="h-3.5 w-3.5 mx-auto text-muted-foreground mb-0.5" />
+                <span className="text-lg font-bold block">{daysUntilWeighIn}</span>
+                <span className="text-[9px] text-muted-foreground uppercase">days</span>
               </div>
             </div>
 

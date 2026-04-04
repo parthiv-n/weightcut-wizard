@@ -147,7 +147,7 @@ export default function FightCampDetail() {
 
   if (loading) {
     return (
-      <div className="space-y-5 px-4 pb-4 pt-16 sm:p-5 sm:pt-16 max-w-2xl mx-auto">
+      <div className="space-y-3 px-3 pb-3 pt-14 sm:p-5 sm:pt-14 max-w-2xl mx-auto">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-40 w-full rounded-2xl" />
         <Skeleton className="h-64 w-full rounded-2xl" />
@@ -163,7 +163,7 @@ export default function FightCampDetail() {
     : null;
 
   return (
-    <div className="space-y-5 px-4 pb-4 pt-16 sm:p-5 sm:pt-16 max-w-2xl mx-auto">
+    <div className="space-y-3 px-3 pb-3 pt-14 sm:p-5 sm:pt-14 max-w-2xl mx-auto">
 
       {/* Header */}
       <div className="flex items-center gap-3">
@@ -183,19 +183,19 @@ export default function FightCampDetail() {
       </div>
 
       {/* Hero Card — Camp Picture + Quick Stats */}
-      <div className="glass-card p-4 space-y-4">
-        <div className="flex items-center gap-4">
+      <div className="glass-card p-3 space-y-3">
+        <div className="flex items-center gap-3">
           {/* Picture */}
           <label className="relative cursor-pointer shrink-0 group">
             {camp.profile_pic_url ? (
               <img
                 src={camp.profile_pic_url}
                 alt={camp.name}
-                className="w-20 h-20 rounded-2xl object-cover border border-border/50"
+                className="w-16 h-16 rounded-2xl object-cover border border-border/50"
               />
             ) : (
-              <div className="w-20 h-20 rounded-2xl bg-muted/50 border border-border/50 flex items-center justify-center">
-                <Trophy className="w-8 h-8 text-muted-foreground/50" />
+              <div className="w-16 h-16 rounded-2xl bg-muted/50 border border-border/50 flex items-center justify-center">
+                <Trophy className="w-6 h-6 text-muted-foreground/50" />
               </div>
             )}
             <div className="absolute inset-0 bg-black/40 rounded-2xl opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity flex items-center justify-center">
