@@ -87,7 +87,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (userId) {
       const t = setTimeout(() =>
-        supabase.functions.invoke("daily-wisdom", { method: "GET" } as any).catch(() => { }), 2000);
+        supabase.functions.invoke("daily-wisdom", { method: "GET" } as any).catch(() => { }), 500);
       return () => clearTimeout(t);
     }
   }, [userId]);

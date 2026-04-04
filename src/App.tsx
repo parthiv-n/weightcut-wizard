@@ -39,7 +39,11 @@ const GymTracker = lazy(() => import("./pages/GymTracker"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const _idle = window.requestIdleCallback || ((cb: IdleRequestCallback) => setTimeout(cb, 50));
-_idle(() => { import("./pages/Dashboard").catch(() => {}); });
+_idle(() => {
+  import("./pages/Dashboard").catch(() => {});
+  import("./pages/Nutrition").catch(() => {});
+  import("./pages/WeightTracker").catch(() => {});
+});
 
 const queryClient = new QueryClient();
 
@@ -168,7 +172,7 @@ const AppLayoutContent = () => {
               <RefreshCw className="h-4 w-4 text-muted-foreground" />
             </button>
             <PageTransition>
-              <Suspense fallback={<div className="min-h-[50vh]" />}>
+              <Suspense fallback={null}>
                 <Outlet />
               </Suspense>
             </PageTransition>

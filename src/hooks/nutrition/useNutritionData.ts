@@ -267,7 +267,7 @@ export function useNutritionData(params: UseNutritionDataParams) {
     if (!userId) return;
     const timer = setTimeout(() => {
       supabase.functions.invoke("analyse-diet", { method: "GET" } as any).catch(() => { });
-    }, 3000);
+    }, 500);
     return () => clearTimeout(timer);
   }, [userId]);
 
