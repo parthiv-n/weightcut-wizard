@@ -590,7 +590,7 @@ export default function Dashboard() {
       {/* Wisdom Detail Bottom Sheet */}
       {wisdom && (
         <Sheet open={wisdomSheetOpen} onOpenChange={setWisdomSheetOpen}>
-          <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl overflow-y-auto pb-8">
+          <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl overflow-y-auto" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 5rem)" }}>
             <SheetHeader className="mb-4">
               <div className="flex items-center gap-3">
                 <div className="rounded-full bg-primary/20 p-2 flex-shrink-0">
