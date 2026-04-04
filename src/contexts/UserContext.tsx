@@ -28,6 +28,7 @@ export interface ProfileData {
   ai_recommended_fats_g?: number;
   manual_nutrition_override?: boolean;
   avatar_url?: string;
+  goal_type?: 'cutting' | 'losing';
   is_premium?: boolean;
   [key: string]: any;
 }
@@ -35,7 +36,7 @@ export interface ProfileData {
 const AI_RELEVANT_FIELDS: (keyof ProfileData)[] = [
   'goal_weight_kg', 'fight_week_target_kg', 'target_date',
   'activity_level', 'tdee', 'bmr', 'current_weight_kg',
-  'age', 'sex', 'height_cm', 'training_frequency',
+  'age', 'sex', 'height_cm', 'training_frequency', 'goal_type',
 ];
 
 function haveAIFieldsChanged(prev: ProfileData | null, next: ProfileData): boolean {

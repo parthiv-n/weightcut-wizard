@@ -19,6 +19,8 @@ import wizardLogo from "@/assets/wizard-logo.webp";
 import { ProfileDropdown } from "@/components/ProfileDropdown";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { DataResetDialog } from "@/components/DataResetDialog";
+import { useUser } from "@/contexts/UserContext";
+import { FIGHT_ONLY_PATHS, isFighter } from "@/lib/goalType";
 
 const menuItems = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
@@ -37,7 +39,11 @@ const menuItems = [
 export function AppSidebar() {
   const { setOpenMobile } = useSidebar();
   const isMobile = useIsMobile();
+  const { profile } = useUser();
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const filteredMenuItems = isFighter(profile?.goal_type)
+    ? menuItems
+    : menuItems.filter(item => !FIGHT_ONLY_PATHS.includes(item.url));
 
   const handleNavClick = () => {
     if (isMobile) {
@@ -67,7 +73,7 @@ export function AppSidebar() {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1">
-              {menuItems.map((item) => (
+              {filteredMenuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild className="touch-target min-h-[44px]">
                     <NavLink

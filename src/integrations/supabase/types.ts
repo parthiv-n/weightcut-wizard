@@ -780,6 +780,7 @@ export type Database = {
           created_at: string | null
           current_weight_kg: number
           fight_week_target_kg: number | null
+          goal_type: string
           goal_weight_kg: number
           height_cm: number
           id: string
@@ -803,6 +804,7 @@ export type Database = {
           created_at?: string | null
           current_weight_kg: number
           fight_week_target_kg?: number | null
+          goal_type?: string
           goal_weight_kg: number
           height_cm: number
           id: string
@@ -826,6 +828,7 @@ export type Database = {
           created_at?: string | null
           current_weight_kg?: number
           fight_week_target_kg?: number | null
+          goal_type?: string
           goal_weight_kg?: number
           height_cm?: number
           id?: string

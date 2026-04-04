@@ -137,12 +137,13 @@ export default function Goals() {
 
   const handleSubmit = async () => {
     // Validate input
+    const goalType = contextProfile?.goal_type ?? 'cutting';
     const validationResult = profileSchema.safeParse({
       age: parseInt(formData.age),
       height_cm: parseFloat(formData.height_cm),
       current_weight_kg: parseFloat(formData.current_weight_kg),
       goal_weight_kg: parseFloat(formData.goal_weight_kg),
-      fight_week_target_kg: parseFloat(formData.fight_week_target_kg),
+      fight_week_target_kg: goalType === 'cutting' ? parseFloat(formData.fight_week_target_kg) : undefined,
       training_frequency: parseInt(formData.training_frequency),
     });
 
@@ -168,7 +169,7 @@ export default function Goals() {
         height_cm: parseFloat(formData.height_cm),
         current_weight_kg: parseFloat(formData.current_weight_kg),
         goal_weight_kg: parseFloat(formData.goal_weight_kg),
-        fight_week_target_kg: parseFloat(formData.fight_week_target_kg),
+        fight_week_target_kg: goalType === 'cutting' ? parseFloat(formData.fight_week_target_kg) : null,
         target_date: formData.target_date,
         activity_level: formData.activity_level,
         training_frequency: parseInt(formData.training_frequency),
@@ -292,7 +293,7 @@ export default function Goals() {
               {/* Weigh-in Goal */}
               <div className="px-3 py-2.5 space-y-3">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="goal_weight" className="text-sm font-medium">Weigh In Goal</Label>
+                  <Label htmlFor="goal_weight" className="text-sm font-medium">{(contextProfile?.goal_type ?? 'cutting') === 'cutting' ? 'Weigh In Goal' : 'Goal Weight'}</Label>
                   <div className="flex items-center gap-1">
                     <Input
                       id="goal_weight"
@@ -306,10 +307,11 @@ export default function Goals() {
                     <span className="text-muted-foreground text-sm">kg</span>
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground">This is your final competition weight class (day before fight).</p>
+                <p className="text-xs text-muted-foreground">{(contextProfile?.goal_type ?? 'cutting') === 'cutting' ? 'This is your final competition weight class (day before fight).' : 'Your target weight.'}</p>
               </div>
 
-              {/* Fight Week Target */}
+              {/* Fight Week Target — fighters only */}
+              {(contextProfile?.goal_type ?? 'cutting') === 'cutting' && (
               <div className="px-3 py-2.5 space-y-3 bg-muted/10">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -364,6 +366,7 @@ export default function Goals() {
                   )
                 )}
               </div>
+              )}
 
               {/* Date */}
               <div className="flex items-center justify-between px-3 py-2.5">

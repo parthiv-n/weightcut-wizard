@@ -41,6 +41,7 @@ export default function Onboarding() {
     target_date: "",
     activity_level: "",
     training_frequency: "",
+    goal_type: "cutting" as "cutting" | "losing",
   });
 
   const [useAutoTarget, setUseAutoTarget] = useState(true);
@@ -91,7 +92,7 @@ export default function Onboarding() {
       height_cm: parseFloat(formData.height_cm),
       current_weight_kg: parseFloat(formData.current_weight_kg),
       goal_weight_kg: parseFloat(formData.goal_weight_kg),
-      fight_week_target_kg: parseFloat(formData.fight_week_target_kg),
+      fight_week_target_kg: formData.goal_type === 'cutting' ? parseFloat(formData.fight_week_target_kg) : undefined,
       training_frequency: parseInt(formData.training_frequency),
     });
 
@@ -129,10 +130,11 @@ export default function Onboarding() {
         height_cm: parseFloat(formData.height_cm),
         current_weight_kg: parseFloat(formData.current_weight_kg),
         goal_weight_kg: parseFloat(formData.goal_weight_kg),
-        fight_week_target_kg: parseFloat(formData.fight_week_target_kg),
+        fight_week_target_kg: formData.goal_type === 'cutting' ? parseFloat(formData.fight_week_target_kg) : null,
         target_date: formData.target_date,
         activity_level: formData.activity_level,
         training_frequency: parseInt(formData.training_frequency),
+        goal_type: formData.goal_type,
         bmr,
         tdee,
       });
@@ -231,7 +233,7 @@ export default function Onboarding() {
   const GENERATION_STEPS = [
     { icon: Activity, label: "Analyzing your profile", color: "text-blue-400" },
     { icon: Zap, label: "Calculating nutrition targets", color: "text-yellow-400" },
-    { icon: Shield, label: "Building your weight cut strategy", color: "text-blue-400" },
+    { icon: Shield, label: formData.goal_type === 'losing' ? "Building your weight loss plan" : "Building your weight cut strategy", color: "text-blue-400" },
     { icon: Sparkles, label: "Finalizing your plan", color: "text-primary" },
     { icon: CheckCircle, label: "Your plan is ready!", color: "text-green-400" },
   ];
@@ -322,7 +324,7 @@ export default function Onboarding() {
       <div className="glass-card w-full max-w-2xl rounded-3xl border border-border dark:border-white/10 bg-gradient-to-br from-primary/[0.03] via-background/80 to-secondary/[0.03] dark:from-primary/10 dark:via-background/60 dark:to-secondary/10 shadow-xl dark:shadow-[0_0_60px_rgba(37,99,235,0.12)] backdrop-blur-2xl overflow-hidden">
         <div className="p-6 md:p-8">
           <div className="mb-6">
-            <h1 className="text-2xl font-title font-semibold text-foreground">Set Up Your Weight Cut Plan</h1>
+            <h1 className="text-2xl font-title font-semibold text-foreground">Set Up Your Plan</h1>
             <p className="text-muted-foreground mt-1">Let's personalize your journey ({step}/4)</p>
             {/* Slim Apple-style progress bar */}
             <div className="mt-4 w-full h-1.5 rounded-full bg-muted/50 dark:bg-white/10 overflow-hidden">
@@ -399,14 +401,45 @@ export default function Onboarding() {
           {step === 2 && (
             <div className="space-y-4">
               <h3 className="font-semibold text-lg text-foreground">Weight Goals</h3>
+
+              {/* Goal type toggle */}
+              <div className="flex gap-1 p-1 rounded-2xl bg-muted/50 dark:bg-white/5 border border-border dark:border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, goal_type: "cutting" }))}
+                  className={`flex-1 py-2.5 text-sm font-semibold rounded-xl transition-all ${
+                    formData.goal_type === "cutting"
+                      ? "bg-background dark:bg-white/10 text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  I have a fight
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, goal_type: "losing" }))}
+                  className={`flex-1 py-2.5 text-sm font-semibold rounded-xl transition-all ${
+                    formData.goal_type === "losing"
+                      ? "bg-background dark:bg-white/10 text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Just lose weight
+                </button>
+              </div>
+
               <p className="text-sm text-muted-foreground">
-                Set your fight night weight (weigh-in) and fight week target (before dehydration cut)
+                {formData.goal_type === 'cutting'
+                  ? "Set your fight night weight (weigh-in) and fight week target (before dehydration cut)"
+                  : "Set your goal weight and target date"}
               </p>
               <div className="grid gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="goal_weight" className="text-foreground text-sm font-medium">
-                    Fight Night Weight (kg)
-                    <span className="text-xs text-muted-foreground ml-2 font-normal">Your competition weight class</span>
+                    {formData.goal_type === 'cutting' ? 'Fight Night Weight (kg)' : 'Goal Weight (kg)'}
+                    {formData.goal_type === 'cutting' && (
+                      <span className="text-xs text-muted-foreground ml-2 font-normal">Your competition weight class</span>
+                    )}
                   </Label>
                   <Input
                     id="goal_weight"
@@ -420,6 +453,7 @@ export default function Onboarding() {
                   />
                 </div>
 
+                {formData.goal_type === 'cutting' && (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between flex-wrap gap-2">
                     <Label htmlFor="fight_week_target" className="text-foreground text-sm font-medium">
@@ -490,6 +524,7 @@ export default function Onboarding() {
                       : "Manual mode: Set your own target (typically 5-7kg above fight night weight)"}
                   </p>
                 </div>
+                )}
 
                 <div className="space-y-2">
                   <Label htmlFor="target_date" className="text-foreground text-sm font-medium">Target Date</Label>
@@ -554,8 +589,10 @@ export default function Onboarding() {
                 <p><strong className="text-foreground">Sex:</strong> <span className="text-muted-foreground">{formData.sex}</span></p>
                 <p><strong className="text-foreground">Height:</strong> <span className="text-muted-foreground">{formData.height_cm} cm</span></p>
                 <p><strong className="text-foreground">Current Weight:</strong> <span className="text-muted-foreground">{formData.current_weight_kg} kg</span></p>
-                <p><strong className="text-foreground">Fight Night Weight:</strong> <span className="text-muted-foreground">{formData.goal_weight_kg} kg</span></p>
-                <p><strong className="text-foreground">Fight Week Target:</strong> <span className="text-muted-foreground">{formData.fight_week_target_kg} kg</span></p>
+                <p><strong className="text-foreground">{formData.goal_type === 'cutting' ? 'Fight Night Weight' : 'Goal Weight'}:</strong> <span className="text-muted-foreground">{formData.goal_weight_kg} kg</span></p>
+                {formData.goal_type === 'cutting' && (
+                  <p><strong className="text-foreground">Fight Week Target:</strong> <span className="text-muted-foreground">{formData.fight_week_target_kg} kg</span></p>
+                )}
                 <p><strong className="text-foreground">Target Date:</strong> <span className="text-muted-foreground">{formData.target_date}</span></p>
                 <p><strong className="text-foreground">Activity Level:</strong> <span className="text-muted-foreground">{formData.activity_level?.replace(/_/g, " ")}</span></p>
                 <p><strong className="text-foreground">Training Frequency:</strong> <span className="text-muted-foreground">{formData.training_frequency} sessions/week</span></p>

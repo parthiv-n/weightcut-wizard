@@ -104,7 +104,7 @@ export default function Dashboard() {
       const payload = {
         currentWeight: profileData.current_weight_kg,
         goalWeight: profileData.goal_weight_kg,
-        fightWeekTarget: profileData.fight_week_target_kg,
+        fightWeekTarget: profileData.goal_type === 'losing' ? undefined : profileData.fight_week_target_kg,
         targetDate: profileData.target_date,
         tdee: profileData.tdee,
         bmr: profileData.bmr,

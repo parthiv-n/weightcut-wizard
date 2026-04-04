@@ -8,8 +8,9 @@ import { springs } from "@/lib/motion";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { useProfile } from "@/contexts/UserContext";
+import { useProfile, useUser } from "@/contexts/UserContext";
 import { useTutorial } from "@/tutorial/useTutorial";
+import { FIGHT_ONLY_PATHS, isFighter } from "@/lib/goalType";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -48,7 +49,12 @@ export function BottomNav() {
   const prefersReducedMotion = useReducedMotion();
   const { toast } = useToast();
   const { userName, avatarUrl, setUserName, setAvatarUrl } = useProfile();
+  const { userId, profile, refreshProfile } = useUser();
   const { replayTutorial } = useTutorial();
+  const goalType = (profile?.goal_type as 'cutting' | 'losing') ?? 'cutting';
+  const filteredMoreMenuItems = isFighter(goalType)
+    ? moreMenuItems
+    : moreMenuItems.filter(item => !FIGHT_ONLY_PATHS.includes(item.url));
   const [quickLogOpen, setQuickLogOpen] = useState(false);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
@@ -70,15 +76,17 @@ export function BottomNav() {
   useEffect(() => {
     if (moreMenuOpen) {
       import("../pages/Goals").catch(() => {});
-      import("../pages/FightCamps").catch(() => {});
       import("../pages/TrainingCalendar").catch(() => {});
       import("../pages/Recovery").catch(() => {});
-      import("../pages/Hydration").catch(() => {});
-      import("../pages/FightWeek").catch(() => {});
       import("../pages/SkillTree").catch(() => {});
       import("../pages/GymTracker").catch(() => {});
+      if (isFighter(goalType)) {
+        import("../pages/FightCamps").catch(() => {});
+        import("../pages/Hydration").catch(() => {});
+        import("../pages/FightWeek").catch(() => {});
+      }
     }
-  }, [moreMenuOpen]);
+  }, [moreMenuOpen, goalType]);
 
   const toggleTheme = () => {
     const newTheme = theme === "light" ? "dark" : "light";
@@ -118,6 +126,28 @@ export function BottomNav() {
     setSettingsDialogOpen(true);
     const { data } = await supabase.auth.getUser();
     if (data.user?.email) setUserEmail(data.user.email);
+  };
+
+  const handleToggleGoalType = async (fighterMode: boolean) => {
+    if (!userId) return;
+    const newType = fighterMode ? 'cutting' : 'losing';
+    try {
+      await supabase.from('profiles').update({
+        goal_type: newType,
+        ...(newType === 'losing' ? { fight_week_target_kg: null } : {}),
+      }).eq('id', userId);
+      await refreshProfile();
+      triggerHapticSelection();
+      if (newType === 'cutting') {
+        toast({ description: "Fighter mode enabled. Set your fight week target in Goals." });
+        setSettingsDialogOpen(false);
+        navigate("/goals");
+      } else {
+        toast({ description: "Switched to weight loss mode." });
+      }
+    } catch {
+      toast({ description: "Failed to update mode.", variant: "destructive" });
+    }
   };
 
   const handleReplayTutorial = () => {
@@ -287,7 +317,7 @@ export function BottomNav() {
       <MoreMenuSheet
         open={moreMenuOpen}
         onOpenChange={setMoreMenuOpen}
-        menuItems={moreMenuItems}
+        menuItems={filteredMoreMenuItems}
         onItemClick={handleMoreItemClick}
         onSettings={handleSettings}
         onLogout={() => setLogoutDialogOpen(true)}
@@ -310,6 +340,8 @@ export function BottomNav() {
         onSave={handleUpdateProfile}
         onReplayTutorial={handleReplayTutorial}
         onDeleteAccount={() => { setSettingsDialogOpen(false); setDeleteAccountDialogOpen(true); }}
+        goalType={goalType}
+        onToggleGoalType={handleToggleGoalType}
       />
 
       {/* Logout Confirmation Dialog */}
