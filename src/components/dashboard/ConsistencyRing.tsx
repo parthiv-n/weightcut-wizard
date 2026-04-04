@@ -19,14 +19,14 @@ export const ConsistencyRing = memo(function ConsistencyRing({
   const color = getRingColor();
 
   return (
-    <div className="glass-card p-4">
-      <div className="flex items-center gap-4">
+    <div className="glass-card p-3">
+      <div className="flex items-center gap-3">
         {/* Ring */}
-        <div className="relative w-20 h-20 flex-shrink-0">
+        <div className="relative w-16 h-16 flex-shrink-0">
           <AnimatedRing
             progress={percentage / 100}
-            size={80}
-            strokeWidth={6}
+            size={64}
+            strokeWidth={5}
             gradientColors={[color, color]}
             id="consistency-ring"
           />
@@ -55,7 +55,7 @@ export const ConsistencyRing = memo(function ConsistencyRing({
       </div>
 
       {/* Day dots */}
-      <div className="flex items-center justify-between mt-3 px-1">
+      <div className="flex items-center justify-between mt-2 px-1">
         {dailyBreakdown.map((day) => (
           <div key={day.date} className="flex flex-col items-center gap-1">
             <div

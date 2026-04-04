@@ -2,13 +2,11 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, useReducedMotion } from "motion/react";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { ComposedChart, Line, Area, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Droplets, TrendingDown, Calendar, Lock, ChevronRight, Flame, Zap, CheckCircle2, Scale } from "lucide-react";
 import { TrainingWeekWidget } from "@/components/dashboard/TrainingWeekWidget";
 import wizardLogo from "@/assets/wizard-logo.webp";
 import { WeightProgressRing } from "@/components/dashboard/WeightProgressRing";
-import { CalorieProgressRing } from "@/components/dashboard/CalorieProgressRing";
 import { StreakBadge } from "@/components/dashboard/StreakBadge";
 import { ConsistencyRing } from "@/components/dashboard/ConsistencyRing";
 import { MilestoneBadges } from "@/components/dashboard/MilestoneBadges";
@@ -353,7 +351,7 @@ export default function Dashboard() {
   return (
     <ErrorBoundary>
       <motion.div
-        className="space-y-5 sm:space-y-6 p-4 sm:p-5 md:p-6 w-full max-w-7xl mx-auto"
+        className="space-y-3 sm:space-y-4 p-3 sm:p-5 md:p-6 w-full max-w-7xl mx-auto"
         variants={prefersReducedMotion ? undefined : staggerContainer(60)}
         initial="hidden"
         animate="visible"
@@ -487,125 +485,101 @@ export default function Dashboard() {
         )}
         </div>
 
-        <div className="flex flex-col gap-4 lg:grid lg:grid-cols-2">
-          {/* Weight Progress Ring - Takes 1 column on desktop, order 1 on mobile */}
-          {profile && (
-            <div className="order-1 lg:order-none" data-tutorial="weight-progress-ring">
-              <WeightProgressRing
-                currentWeight={currentWeightValue}
-                startingWeight={weightLogs.length > 0 ? parseFloat(weightLogs[0].weight_kg) : currentWeightValue}
-                goalWeight={profile.goal_weight_kg ?? 0}
-              />
-            </div>
-          )}
-
-          {/* Weight History Chart - Order 2 on mobile */}
-          <div className="order-2 lg:order-none">
-            <Card className="glass-card h-full">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Weight History</CardTitle>
-                  <div className="flex gap-1 bg-muted rounded-lg p-1">
-                    <Button
-                      variant={weightUnit === 'kg' ? 'default' : 'ghost'}
-                      size="sm"
-                      onClick={() => { setWeightUnit('kg'); triggerHapticSelection(); }}
-                      className="h-9 min-h-[36px] text-xs sm:h-8 sm:min-h-[32px] touch-target"
-                    >
-                      kg
-                    </Button>
-                    <Button
-                      variant={weightUnit === 'lb' ? 'default' : 'ghost'}
-                      size="sm"
-                      onClick={() => { setWeightUnit('lb'); triggerHapticSelection(); }}
-                      className="h-9 min-h-[36px] text-xs sm:h-8 sm:min-h-[32px] touch-target"
-                    >
-                      lb
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="p-3 sm:p-6">
-                {chartData.length > 0 ? (
-                  <motion.div
-                    initial={prefersReducedMotion ? false : { opacity: 0, scale: 0.97 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={springs.gentle}
-                  >
-                  <ResponsiveContainer width="100%" height={250} className="sm:h-[300px]">
-                    <ComposedChart data={chartData}>
-                      <defs>
-                        <linearGradient id="weightGradient" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
-                          <stop offset="50%" stopColor="hsl(var(--primary))" stopOpacity={0.2} />
-                          <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
-                      <XAxis
-                        dataKey="date"
-                        stroke="hsl(var(--muted-foreground))"
-                        fontSize={12}
-                      />
-                      <YAxis
-                        stroke="hsl(var(--muted-foreground))"
-                        fontSize={12}
-                        label={{ value: weightUnit, position: 'insideLeft', style: { fill: 'hsl(var(--muted-foreground))' } }}
-                      />
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: "hsl(var(--background))",
-                          border: "1px solid hsl(var(--border))",
-                          borderRadius: "8px"
-                        }}
-                        formatter={(value: number) => [`${value.toFixed(1)} ${weightUnit}`, 'Weight']}
-                      />
-                      <Area
-                        type="monotone"
-                        dataKey="weight"
-                        stroke="none"
-                        fill="url(#weightGradient)"
-                        animationDuration={1200}
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="weight"
-                        stroke="hsl(var(--secondary))"
-                        strokeWidth={3}
-                        dot={{ fill: "hsl(var(--primary))", r: 4, strokeWidth: 2, stroke: "hsl(var(--background))" }}
-                        activeDot={{ r: 6, strokeWidth: 2 }}
-                        animationDuration={1200}
-                      />
-                    </ComposedChart>
-                  </ResponsiveContainer>
-                  </motion.div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <div className="rounded-full bg-muted/50 p-3 mb-3">
-                      <TrendingDown className="h-6 w-6 text-muted-foreground" />
-                    </div>
-                    <p className="text-sm font-medium text-foreground">No weight data yet</p>
-                    <p className="text-xs text-muted-foreground mt-1">Your progress chart will appear here.</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+        {/* Weight Progress Bar — full width */}
+        {profile && (
+          <div data-tutorial="weight-progress-ring">
+            <WeightProgressRing
+              currentWeight={currentWeightValue}
+              startingWeight={weightLogs.length > 0 ? parseFloat(weightLogs[0].weight_kg) : currentWeightValue}
+              goalWeight={profile.goal_weight_kg ?? 0}
+            />
           </div>
-        </div>
-
-        <div data-tutorial="calorie-progress-ring">
-          <CalorieProgressRing
-            consumed={todayCalories}
-            target={dailyCalorieGoal}
-          />
-        </div>
-
-        {/* Training Week Widget */}
-        {userId && (
-          <motion.div variants={prefersReducedMotion ? undefined : staggerItem} transition={springs.responsive}>
-            <TrainingWeekWidget userId={userId} />
-          </motion.div>
         )}
+
+        {/* Weight History + Training — side by side */}
+        <div className="grid grid-cols-2 gap-3">
+          {/* Weight History Chart */}
+          <div className="glass-card rounded-2xl p-3 aspect-square flex flex-col">
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Weight</span>
+              <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
+                <Button
+                  variant={weightUnit === 'kg' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => { setWeightUnit('kg'); triggerHapticSelection(); }}
+                  className="h-5 min-h-0 text-[9px] px-1.5 rounded-sm"
+                >
+                  kg
+                </Button>
+                <Button
+                  variant={weightUnit === 'lb' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => { setWeightUnit('lb'); triggerHapticSelection(); }}
+                  className="h-5 min-h-0 text-[9px] px-1.5 rounded-sm"
+                >
+                  lb
+                </Button>
+              </div>
+            </div>
+            <div className="flex-1 min-h-0">
+              {chartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+                    <defs>
+                      <linearGradient id="weightGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
+                        <stop offset="50%" stopColor="hsl(var(--primary))" stopOpacity={0.15} />
+                        <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <YAxis
+                      stroke="hsl(var(--muted-foreground))"
+                      fontSize={9}
+                      tickLine={false}
+                      axisLine={false}
+                      width={30}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: "hsl(var(--background))",
+                        border: "1px solid hsl(var(--border))",
+                        borderRadius: "8px",
+                        fontSize: 11,
+                      }}
+                      formatter={(value: number) => [`${value.toFixed(1)} ${weightUnit}`, 'Weight']}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="weight"
+                      stroke="none"
+                      fill="url(#weightGradient)"
+                      animationDuration={800}
+                    />
+                    <Line
+                      type="monotone"
+                      dataKey="weight"
+                      stroke="hsl(var(--secondary))"
+                      strokeWidth={2}
+                      dot={{ fill: "hsl(var(--primary))", r: 2.5, strokeWidth: 1.5, stroke: "hsl(var(--background))" }}
+                      activeDot={{ r: 4, strokeWidth: 1.5 }}
+                      animationDuration={800}
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <TrendingDown className="h-5 w-5 text-muted-foreground/40 mb-1" />
+                  <p className="text-[10px] text-muted-foreground">No data yet</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Training Week Widget */}
+          {userId && (
+            <TrainingWeekWidget userId={userId} compact />
+          )}
+        </div>
 
         {/* Milestone Badges */}
         <motion.div variants={prefersReducedMotion ? undefined : staggerItem} transition={springs.responsive}>
