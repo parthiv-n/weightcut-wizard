@@ -333,7 +333,7 @@ export default function TrainingCalendar() {
                                     <Plus className="h-5 w-5" />
                                 </Button>
                             </DialogTrigger>
-                            <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto rounded-[24px]">
+                            <DialogContent className="sm:max-w-md rounded-[24px]">
                                 <DialogHeader>
                                     <DialogTitle className="text-2xl font-bold">
                                         {editingSession ? 'Edit Session' : 'Log Session'}

@@ -54,7 +54,7 @@ export function SessionDetailDrawer({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-md max-h-[calc(100vh-6rem)] overflow-y-auto rounded-[24px]">
+        <DialogContent className="sm:max-w-md rounded-[24px]">
           <DialogHeader>
             <div className="flex items-center gap-3">
               <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: sessionColor }} />
