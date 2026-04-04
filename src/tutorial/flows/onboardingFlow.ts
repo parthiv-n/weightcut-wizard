@@ -2,7 +2,7 @@ import type { TutorialFlow } from "../types";
 
 export const onboardingFlow: TutorialFlow = {
   id: "onboarding",
-  version: 3,
+  version: 4,
   steps: [
     // ── Dashboard overview ──
     {
@@ -30,6 +30,7 @@ export const onboardingFlow: TutorialFlow = {
         "Your AI coach analyses your progress and gives personalised advice every day. Log your weight each morning to unlock it.",
       position: "top",
       route: "/dashboard",
+      spotlightOffset: { yPercent: -12 },
     },
     {
       id: "calorie-ring",
@@ -94,12 +95,12 @@ export const onboardingFlow: TutorialFlow = {
       navigateTo: "/fight-camps",
     },
     {
-      id: "fight-camp-calendar-page",
+      id: "training-calendar-page",
       title: "Training Calendar",
       description:
         "Log your training sessions on the calendar — BJJ, Muay Thai, wrestling, strength and more. Use the training summary so you never forget what you worked on.",
       position: "center",
-      navigateTo: "/fight-camp-calendar",
+      navigateTo: "/training-calendar",
     },
     {
       id: "fight-week-page",

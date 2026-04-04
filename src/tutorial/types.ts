@@ -17,6 +17,7 @@ export interface TutorialStep {
   route?: string;                                     // which route this step requires
   navigateTo?: string;                                // navigate to this route before showing step
   condition?: (state: UserTutorialState) => boolean;  // skip if false
+  spotlightOffset?: { x?: number; y?: number; width?: number; height?: number; yPercent?: number }; // manual spotlight nudge (yPercent: % of viewport height)
 }
 
 export interface TutorialFlow {

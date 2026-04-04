@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useLocation, useNavigate, Outlet } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate, Outlet } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -32,7 +32,7 @@ const Hydration = lazy(() => import("./pages/Hydration"));
 const FightWeek = lazy(() => import("./pages/FightWeek"));
 const FightCamps = lazy(() => import("./pages/FightCamps"));
 const FightCampDetail = lazy(() => import("./pages/FightCampDetail"));
-const FightCampCalendar = lazy(() => import("./pages/FightCampCalendar"));
+const TrainingCalendar = lazy(() => import("./pages/TrainingCalendar"));
 const Recovery = lazy(() => import("./pages/Recovery"));
 const SkillTree = lazy(() => import("./pages/SkillTree"));
 const GymTracker = lazy(() => import("./pages/GymTracker"));
@@ -157,7 +157,7 @@ const AppLayoutContent = () => {
           </header>
           <OfflineBanner />
           {/* Main content with mobile-first responsive padding - bottom padding for bottom nav */}
-          <main className="flex-1 overflow-auto overflow-x-hidden relative min-h-0 w-full pt-2 pb-24 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right">
+          <main className="flex-1 overflow-auto overflow-x-hidden relative min-h-0 w-full pt-2 pb-16 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right">
             {/* Manual refresh button — top-left, below iOS safe area */}
             <button
               onClick={() => window.location.reload()}
@@ -230,7 +230,8 @@ const App = () => (
                   <Route path="/hydration" element={<Hydration />} />
                   <Route path="/fight-camps" element={<FightCamps />} />
                   <Route path="/fight-camps/:id" element={<FightCampDetail />} />
-                  <Route path="/fight-camp-calendar" element={<FightCampCalendar />} />
+                  <Route path="/training-calendar" element={<TrainingCalendar />} />
+                  <Route path="/fight-camp-calendar" element={<Navigate to="/training-calendar" replace />} />
                   <Route path="/recovery" element={<Recovery />} />
                   <Route path="/fight-week" element={<FightWeek />} />
                   <Route path="/skill-tree" element={<SkillTree />} />

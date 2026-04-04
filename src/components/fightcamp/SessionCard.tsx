@@ -1,36 +1,43 @@
 import { memo } from "react";
-import { Activity, Moon, Trash2, Check } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
+import { Moon, Check, Image } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getSessionColor, COLOR_PALETTE } from "@/lib/sessionColors";
 import type { Tables } from "@/integrations/supabase/types";
 
-type FightCampCalendarRow = Tables<"fight_camp_calendar">;
+type TrainingCalendarRow = Tables<"fight_camp_calendar">;
 
 interface SessionCardProps {
-  session: FightCampCalendarRow;
+  session: TrainingCalendarRow;
   customColors: Record<string, string>;
   userId: string | null;
-  onEdit: (session: FightCampCalendarRow) => void;
-  onDelete: (id: string) => void;
+  onView: (session: TrainingCalendarRow) => void;
   onColorChange: (sessionType: string, color: string) => void;
 }
 
-export const SessionCard = memo(function SessionCard({ session, customColors, userId, onEdit, onDelete, onColorChange }: SessionCardProps) {
+export const SessionCard = memo(function SessionCard({ session, customColors, userId, onView, onColorChange }: SessionCardProps) {
   const isRest = session.session_type === 'Rest';
   const sessionColor = getSessionColor(session.session_type, customColors);
+  const intensityDisplay = session.intensity_level
+    ?? (session.intensity === 'high' ? 5 : session.intensity === 'moderate' ? 3 : 1);
 
   return (
-    <Card className="p-4 rounded-[20px] shadow-sm glass-card overflow-hidden relative border-border/10 cursor-pointer active:scale-[0.98] transition-transform" onClick={() => onEdit(session)}>
-      <div className="absolute top-0 left-0 w-2 h-full" style={{ backgroundColor: sessionColor }} />
+    <div
+      className="glass-card rounded-2xl p-5 cursor-pointer active:scale-[0.98] transition-all duration-200 border-border/10 overflow-hidden relative"
+      onClick={() => onView(session)}
+    >
+      {/* Top color accent */}
+      <div
+        className="absolute top-0 left-0 right-0 h-[2px] opacity-80"
+        style={{ background: `linear-gradient(90deg, ${sessionColor}, transparent)` }}
+      />
 
-      <div className="flex justify-between items-start ml-2">
-        <div className="flex items-center gap-2">
+      {/* Header: type name + media icon */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
           <Popover>
             <PopoverTrigger asChild>
               <button
-                className="w-5 h-5 rounded-full flex-shrink-0 ring-1 ring-white/20 hover:ring-white/40 transition-all"
+                className="w-3 h-3 rounded-full flex-shrink-0 ring-2 ring-white/10 hover:ring-white/30 transition-all"
                 style={{ backgroundColor: sessionColor }}
                 onClick={(e) => e.stopPropagation()}
               />
@@ -53,56 +60,116 @@ export const SessionCard = memo(function SessionCard({ session, customColors, us
               </div>
             </PopoverContent>
           </Popover>
-          <h4 className="font-bold text-lg text-foreground">{session.session_type}</h4>
+          <h4 className="font-semibold text-[15px] text-foreground tracking-tight">
+            {session.session_type}
+          </h4>
         </div>
-        <div>
-          {isRest ? (
-            <div className="flex items-center gap-3 text-sm text-foreground/80 mt-1 font-medium flex-wrap">
-              {session.sleep_quality && <span>Sleep: {session.sleep_quality}</span>}
-              {session.fatigue_level && <><span>•</span><span>Fatigue: {session.fatigue_level}/10</span></>}
-              {session.mobility_done && <><span>•</span><span>Mobility ✓</span></>}
-            </div>
-          ) : (
-            <div className="flex items-center gap-3 text-sm text-foreground/80 mt-1 font-medium">
-              <span className="flex items-center gap-1"><Activity className="w-3 h-3" /> {session.duration_minutes} min</span>
-              <span>•</span>
-              <span>RPE {session.rpe}</span>
-              <span>•</span>
-              <span>Int {session.intensity_level ?? (session.intensity === 'high' ? 5 : session.intensity === 'moderate' ? 3 : 1)}/5</span>
-            </div>
-          )}
-        </div>
-        <div className="text-right">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 -mt-1 -mr-2"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete(session.id);
-            }}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-          {session.sleep_hours > 0 && (
-            <div className="text-xs text-foreground/80 flex items-center justify-end gap-1 mt-1 font-medium">
-              <Moon className="w-3 h-3 text-primary" /> {session.sleep_hours}h
-            </div>
-          )}
-        </div>
+        {session.media_url && (
+          <div className="w-7 h-7 rounded-full bg-white/5 flex items-center justify-center">
+            <Image className="w-3.5 h-3.5 text-foreground/50" />
+          </div>
+        )}
       </div>
 
-      {session.soreness_level > 0 && (
-        <div className="mt-3 ml-2 text-xs bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300 px-2 py-1 rounded-md inline-block font-medium">
-          Soreness Level: {session.soreness_level}/10
+      {/* Hero stat row */}
+      {isRest ? (
+        <div className="flex items-end gap-4 mt-4">
+          {session.sleep_quality && (
+            <div className="flex-1 min-w-0">
+              <span className="text-[10px] font-medium uppercase tracking-widest text-foreground/40">
+                Sleep
+              </span>
+              <p className="display-number text-2xl text-foreground mt-0.5">
+                {session.sleep_quality}
+              </p>
+            </div>
+          )}
+          {session.fatigue_level != null && (
+            <div className="flex-1 min-w-0">
+              <span className="text-[10px] font-medium uppercase tracking-widest text-foreground/40">
+                Fatigue
+              </span>
+              <div className="flex items-baseline gap-1 mt-0.5">
+                <span className="display-number text-2xl text-foreground">
+                  {session.fatigue_level}
+                </span>
+                <span className="text-xs text-foreground/40 font-medium">/10</span>
+              </div>
+            </div>
+          )}
+          {session.mobility_done && (
+            <div className="flex-1 min-w-0">
+              <span className="text-[10px] font-medium uppercase tracking-widest text-foreground/40">
+                Mobility
+              </span>
+              <div className="flex items-center gap-1 mt-1.5">
+                <Check className="w-4 h-4 text-green-400" />
+                <span className="text-sm font-medium text-green-400">Done</span>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="flex items-end gap-4 mt-4">
+          <div className="flex-1 min-w-0">
+            <span className="text-[10px] font-medium uppercase tracking-widest text-foreground/40">
+              Duration
+            </span>
+            <div className="flex items-baseline gap-1 mt-0.5">
+              <span className="display-number text-2xl text-foreground">
+                {session.duration_minutes}
+              </span>
+              <span className="text-xs text-foreground/40 font-medium">min</span>
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <span className="text-[10px] font-medium uppercase tracking-widest text-foreground/40">
+              RPE
+            </span>
+            <div className="flex items-baseline gap-1 mt-0.5">
+              <span className="display-number text-2xl" style={{ color: sessionColor }}>
+                {session.rpe}
+              </span>
+              <span className="text-xs text-foreground/40 font-medium">/10</span>
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <span className="text-[10px] font-medium uppercase tracking-widest text-foreground/40">
+              Intensity
+            </span>
+            <div className="flex items-baseline gap-1 mt-0.5">
+              <span className="display-number text-2xl text-foreground">
+                {intensityDisplay}
+              </span>
+              <span className="text-xs text-foreground/40 font-medium">/5</span>
+            </div>
+          </div>
         </div>
       )}
 
+      {/* Secondary indicators: soreness + sleep pills */}
+      {(session.soreness_level > 0 || session.sleep_hours > 0) && (
+        <div className="flex items-center gap-2 mt-3 flex-wrap">
+          {session.soreness_level > 0 && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full bg-red-500/10 text-red-400">
+              Soreness {session.soreness_level}/10
+            </span>
+          )}
+          {session.sleep_hours > 0 && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-400">
+              <Moon className="w-3 h-3" />
+              {session.sleep_hours}h sleep
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Notes preview */}
       {session.notes && (
-        <p className="mt-2 ml-2 text-xs text-muted-foreground italic line-clamp-2">
+        <p className="mt-3 text-[12px] text-foreground/35 line-clamp-1 leading-relaxed">
           {session.notes}
         </p>
       )}
-    </Card>
+    </div>
   );
 });

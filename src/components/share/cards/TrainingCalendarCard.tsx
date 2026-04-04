@@ -14,7 +14,7 @@ interface Session {
   intensity_level: number;
 }
 
-interface FightCampCalendarCardProps {
+interface TrainingCalendarCardProps {
   sessions: Session[];
   timeRange: "day" | "week" | "month";
   aspect?: AspectRatio;
@@ -45,7 +45,7 @@ function getShortDayLabel(d: Date): string {
   return ["S", "M", "T", "W", "T", "F", "S"][d.getDay()];
 }
 
-export const FightCampCalendarCard = forwardRef<HTMLDivElement, FightCampCalendarCardProps>(
+export const TrainingCalendarCard = forwardRef<HTMLDivElement, TrainingCalendarCardProps>(
   ({ sessions, timeRange, aspect = "square", customColors, transparent }, ref) => {
     const { isPremium } = usePremium();
     const s = aspect === "story";
@@ -246,7 +246,7 @@ export const FightCampCalendarCard = forwardRef<HTMLDivElement, FightCampCalenda
   }
 );
 
-FightCampCalendarCard.displayName = "FightCampCalendarCard";
+TrainingCalendarCard.displayName = "TrainingCalendarCard";
 
 /* ─── Day View: horizontal session bars ─── */
 function DayView({ days, s, customColors }: { days: DayData[]; s: boolean; customColors?: Record<string, string> }) {

@@ -198,15 +198,15 @@ export default function Goals() {
   };
 
   if (loading) {
-    return <GoalsSkeleton />;
+    return <div className="min-h-[50vh]" />;
   }
 
   return (
-    <div className="space-y-4 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto pb-20 md:pb-6">
+    <div className="space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
         {/* Header */}
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Goals</h1>
-          <p className="text-muted-foreground mt-1 text-sm">Update your profile and targets</p>
+          <h1 className="text-xl font-bold tracking-tight">Goals</h1>
+          <p className="text-muted-foreground mt-0.5 text-xs">Update your profile and targets</p>
         </div>
 
         {!contextProfile?.goal_weight_kg && (
@@ -225,13 +225,13 @@ export default function Goals() {
           </div>
         )}
 
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* Section: Personal Details */}
           <div className="space-y-2">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Personal Details</h2>
             <div className="glass-card rounded-xl border border-border/50 overflow-hidden divide-y divide-border/50">
-              <div className="flex items-center justify-between p-3 sm:p-4">
-                <Label htmlFor="age" className="text-base font-medium">Age</Label>
+              <div className="flex items-center justify-between px-3 py-2.5">
+                <Label htmlFor="age" className="text-sm font-medium">Age</Label>
                 <Input
                   id="age"
                   type="number"
@@ -241,8 +241,8 @@ export default function Goals() {
                   placeholder="-"
                 />
               </div>
-              <div className="flex items-center justify-between p-3 sm:p-4">
-                <Label htmlFor="sex" className="text-base font-medium">Sex</Label>
+              <div className="flex items-center justify-between px-3 py-2.5">
+                <Label htmlFor="sex" className="text-sm font-medium">Sex</Label>
                 <Select value={formData.sex} onValueChange={(value) => setFormData({ ...formData, sex: value })}>
                   <SelectTrigger className="w-28 h-8 border-transparent focus:ring-0 shadow-none justify-end gap-2 p-0 text-base">
                     <SelectValue placeholder="Select" />
@@ -253,8 +253,8 @@ export default function Goals() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-center justify-between p-3 sm:p-4">
-                <Label htmlFor="height" className="text-base font-medium">Height</Label>
+              <div className="flex items-center justify-between px-3 py-2.5">
+                <Label htmlFor="height" className="text-sm font-medium">Height</Label>
                 <div className="flex items-center gap-1">
                   <Input
                     id="height"
@@ -267,8 +267,8 @@ export default function Goals() {
                   <span className="text-muted-foreground text-sm">cm</span>
                 </div>
               </div>
-              <div className="flex items-center justify-between p-3 sm:p-4">
-                <Label htmlFor="current_weight" className="text-base font-medium">Current Weight</Label>
+              <div className="flex items-center justify-between px-3 py-2.5">
+                <Label htmlFor="current_weight" className="text-sm font-medium">Current Weight</Label>
                 <div className="flex items-center gap-1">
                   <Input
                     id="current_weight"
@@ -290,9 +290,9 @@ export default function Goals() {
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Targets</h2>
             <div className="glass-card rounded-xl border border-border/50 overflow-hidden divide-y divide-border/50">
               {/* Weigh-in Goal */}
-              <div className="p-3 sm:p-4 space-y-3">
+              <div className="px-3 py-2.5 space-y-3">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="goal_weight" className="text-base font-medium">Weigh In Goal</Label>
+                  <Label htmlFor="goal_weight" className="text-sm font-medium">Weigh In Goal</Label>
                   <div className="flex items-center gap-1">
                     <Input
                       id="goal_weight"
@@ -310,10 +310,10 @@ export default function Goals() {
               </div>
 
               {/* Fight Week Target */}
-              <div className="p-3 sm:p-4 space-y-3 bg-muted/10">
+              <div className="px-3 py-2.5 space-y-3 bg-muted/10">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <Label htmlFor="fight_week_target" className="text-base font-medium">Diet Target</Label>
+                    <Label htmlFor="fight_week_target" className="text-sm font-medium">Diet Target</Label>
                     <button
                       type="button"
                       onClick={() => setUseAutoTarget(!useAutoTarget)}
@@ -366,8 +366,8 @@ export default function Goals() {
               </div>
 
               {/* Date */}
-              <div className="flex items-center justify-between p-3 sm:p-4">
-                <Label htmlFor="target_date" className="text-base font-medium">Target Date</Label>
+              <div className="flex items-center justify-between px-3 py-2.5">
+                <Label htmlFor="target_date" className="text-sm font-medium">Target Date</Label>
                 <Input
                   id="target_date"
                   type="date"
@@ -384,10 +384,10 @@ export default function Goals() {
           <div className="space-y-2">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Activity</h2>
             <div className="glass-card rounded-xl border border-border/50 overflow-hidden divide-y divide-border/50">
-              <div className="p-3 sm:p-4 flex flex-col gap-2">
-                <Label htmlFor="activity_level" className="text-base font-medium">Activity Level</Label>
+              <div className="px-3 py-2.5 flex flex-col gap-2">
+                <Label htmlFor="activity_level" className="text-sm font-medium">Activity Level</Label>
                 <Select value={formData.activity_level} onValueChange={(value) => setFormData({ ...formData, activity_level: value })}>
-                  <SelectTrigger className="w-full h-10 border-input bg-muted/20">
+                  <SelectTrigger className="w-full h-9 border-input bg-muted/20 text-sm">
                     <SelectValue placeholder="Select activity level" />
                   </SelectTrigger>
                   <SelectContent>
@@ -399,8 +399,8 @@ export default function Goals() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="flex items-center justify-between p-3 sm:p-4">
-                <Label htmlFor="training_frequency" className="text-base font-medium">Training Frequency</Label>
+              <div className="flex items-center justify-between px-3 py-2.5">
+                <Label htmlFor="training_frequency" className="text-sm font-medium">Training Frequency</Label>
                 <div className="flex items-center gap-1">
                   <Input
                     id="training_frequency"
@@ -417,8 +417,8 @@ export default function Goals() {
           </div>
 
           {/* Save Button */}
-          <div className="pt-4 pb-8">
-            <Button onClick={handleSubmit} disabled={saving} className="w-full h-12 text-lg font-semibold rounded-xl shadow-md">
+          <div className="pt-2 pb-6">
+            <Button onClick={handleSubmit} disabled={saving} className="w-full h-10 text-sm font-semibold rounded-xl shadow-md">
               {saving ? (
                 <>
                   <Loader2 className="mr-2 h-5 w-5 animate-spin" />

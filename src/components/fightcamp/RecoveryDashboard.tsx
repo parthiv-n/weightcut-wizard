@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, memo } from "react";
-import { Activity, Brain, RefreshCw, AlertTriangle, CheckCircle, Loader2, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Activity, Brain, RefreshCw, AlertTriangle, CheckCircle, Loader2, TrendingUp, TrendingDown, Minus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { AIPersistence } from "@/lib/aiPersistence";
@@ -151,6 +151,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
   const [coachData, setCoachData] = useState<CoachResponse | null>(null);
   const [isCoachLoading, setIsCoachLoading] = useState(false);
   const [coachError, setCoachError] = useState<string | null>(null);
+  const coachAbortRef = useRef<AbortController | null>(null);
   const [rateLimitUntil, setRateLimitUntil] = useState<number>(0);
   const [cooldownLeft, setCooldownLeft] = useState(0);
   const [checkIn, setCheckIn] = useState<Partial<FeelCheckIn>>({});
@@ -284,6 +285,9 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
       return;
     }
 
+    coachAbortRef.current?.abort();
+    const controller = new AbortController();
+    coachAbortRef.current = controller;
     setIsCoachLoading(true);
     setCoachError(null);
 
@@ -362,7 +366,9 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
 
       const { data, error } = await supabase.functions.invoke('fight-camp-coach', {
         body: payload,
+        signal: controller.signal,
       });
+      if (controller.signal.aborted) return;
 
       if (error) throw error;
       if (data?.coach) {
@@ -372,6 +378,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
         throw new Error("Invalid response from coach");
       }
     } catch (err: any) {
+      if (err?.name === 'AbortError' || controller.signal.aborted) return;
       logger.error("Coach error", err);
       const msg = await extractEdgeFunctionError(err, "Coach unavailable");
       // Detect rate limit errors and set 60s cooldown
@@ -618,7 +625,14 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
         {isCoachLoading && (
           <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
-            <span className="text-sm">Analyzing your training data (usually 15–30 seconds)...</span>
+            <span className="text-sm">Analyzing your training data...</span>
+            <button
+              onClick={() => { coachAbortRef.current?.abort(); setIsCoachLoading(false); }}
+              className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-lg hover:bg-accent/30"
+            >
+              <X className="h-3.5 w-3.5" />
+              Cancel
+            </button>
           </div>
         )}
 

@@ -1,7 +1,6 @@
 import { memo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingDown } from "lucide-react";
-import { AnimatedRing, AnimatedNumber } from "@/components/motion";
+import { AnimatedNumber } from "@/components/motion";
 
 interface WeightProgressRingProps {
   currentWeight: number;
@@ -15,55 +14,46 @@ export const WeightProgressRing = memo(function WeightProgressRing({ currentWeig
   const weightRemaining = currentWeight - goalWeight;
   const progressPercentage = totalToLose > 0 ? (weightLost / totalToLose) * 100 : 0;
   const displayProgress = Math.min(Math.max(progressPercentage, 0), 100);
-  const progressFraction = displayProgress / 100;
 
   return (
-    <Card className="glass-card overflow-hidden">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">Weight Loss Progress</CardTitle>
-        <TrendingDown className="h-4 w-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent className="flex flex-col items-center justify-center py-6">
-        <div className="relative w-48 h-48">
-          <AnimatedRing
-            progress={progressFraction}
-            size={160}
-            strokeWidth={11}
-            gradientColors={["hsl(var(--primary))", "hsl(var(--secondary))"]}
-            glowOnComplete
-            id="weight-ring"
-          />
+    <div className="glass-card p-3.5">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-2.5">
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Weight Progress</span>
+        <TrendingDown className="h-3.5 w-3.5 text-muted-foreground" />
+      </div>
 
-          {/* Center content */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <div className="text-3xl font-bold display-number bg-gradient-to-br from-primary to-secondary bg-clip-text text-transparent">
-              <AnimatedNumber value={displayProgress} format={(n) => `${Math.round(n)}%`} />
-            </div>
-            <div className="text-xs text-muted-foreground uppercase tracking-wider mt-1">Complete</div>
-          </div>
-        </div>
+      {/* Progress bar */}
+      <div className="relative h-2.5 w-full rounded-full bg-muted/50 overflow-hidden">
+        <div
+          className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-primary to-secondary transition-all duration-700 ease-out"
+          style={{ width: `${displayProgress}%` }}
+        />
+      </div>
 
-        {/* Stats below the ring */}
-        <div className="grid grid-cols-2 gap-4 w-full mt-6">
-          <div className="text-center p-3 rounded-xl bg-primary/10">
-            <div className="text-lg font-bold display-number text-primary">
-              <AnimatedNumber value={weightLost} format={(n) => `${n.toFixed(1)}kg`} />
-            </div>
-            <div className="text-xs text-muted-foreground uppercase tracking-wider">Lost</div>
-          </div>
-          <div className="text-center p-3 rounded-xl bg-secondary/10">
-            <div className="text-lg font-bold display-number text-secondary">
-              <AnimatedNumber value={Math.max(0, weightRemaining)} format={(n) => `${n.toFixed(1)}kg`} />
-            </div>
-            <div className="text-xs text-muted-foreground uppercase tracking-wider">To Go</div>
-          </div>
+      {/* Stats row */}
+      <div className="flex items-center justify-between mt-2.5">
+        <div className="flex items-baseline gap-1">
+          <span className="text-sm font-bold display-number text-primary">
+            <AnimatedNumber value={weightLost} format={(n) => n.toFixed(1)} />
+          </span>
+          <span className="text-[10px] text-muted-foreground">kg lost</span>
         </div>
+        <span className="text-sm font-bold display-number bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+          <AnimatedNumber value={displayProgress} format={(n) => `${Math.round(n)}%`} />
+        </span>
+        <div className="flex items-baseline gap-1">
+          <span className="text-sm font-bold display-number text-secondary">
+            <AnimatedNumber value={Math.max(0, weightRemaining)} format={(n) => n.toFixed(1)} />
+          </span>
+          <span className="text-[10px] text-muted-foreground">kg to go</span>
+        </div>
+      </div>
 
-        <div className="text-xs text-muted-foreground mt-4 text-center">
-          Current: <span className="font-semibold">{currentWeight.toFixed(1)}kg</span> •{" "}
-          Target: <span className="font-semibold">{goalWeight.toFixed(1)}kg</span>
-        </div>
-      </CardContent>
-    </Card>
+      {/* Current / Target */}
+      <div className="text-[10px] text-muted-foreground/60 text-center mt-1.5">
+        {currentWeight.toFixed(1)}kg → {goalWeight.toFixed(1)}kg
+      </div>
+    </div>
   );
 });

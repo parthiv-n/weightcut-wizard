@@ -6,12 +6,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Sparkles, Calendar as CalendarIcon, Loader2, Settings, Edit2, X, Activity, Utensils, Database, PieChart as PieChartIcon, Search, CheckCircle, ChevronDown, ChevronUp, ChevronRight, ScanLine, Mic, Dumbbell, Sunrise, Salad, UtensilsCrossed, Apple } from "lucide-react";
+import { Plus, Sparkles, Calendar as CalendarIcon, Loader2, Settings, Edit2, X, Activity, Utensils, Database, PieChart as PieChartIcon, Search, CheckCircle, ChevronDown, ChevronUp, ChevronRight, ScanLine, Dumbbell, Sunrise, Salad, UtensilsCrossed, Apple } from "lucide-react";
 import wizardLogo from "@/assets/wizard-logo.webp";
 import { MealCard } from "@/components/nutrition/MealCard";
 import { MacroPieChart } from "@/components/nutrition/MacroPieChart";
 import { FoodSearchDialog } from "@/components/nutrition/FoodSearchDialog";
-const VoiceInput = lazy(() => import("@/components/nutrition/VoiceInput").then(m => ({ default: m.VoiceInput })));
 const BarcodeScanner = lazy(() => import("@/components/nutrition/BarcodeScanner").then(m => ({ default: m.BarcodeScanner })));
 import { format, subDays, addDays } from "date-fns";
 import { Input } from "@/components/ui/input";
@@ -209,6 +208,7 @@ export default function Nutrition() {
       aiMeal.setNewIngredient({ name: "", grams: "" });
       aiMeal.setBarcodeBaseMacros(null);
       aiMeal.setServingMultiplier(1);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) {
       logger.error("Error in optimistic meal update setup", error);
       toast({ title: "Error", description: "Failed to add meal", variant: "destructive" });
@@ -217,7 +217,7 @@ export default function Nutrition() {
 
   const cancelAI = () => {
     aiMeal.cancelAI();
-    mealPlan.generatingPlan && aiMeal.aiAbortRef.current?.abort();
+    mealPlan.setGeneratingPlan(false);
     nutritionData.setDietAnalysisLoading(false);
   };
 
@@ -390,16 +390,16 @@ export default function Nutrition() {
         onCancel={cancelAI}
         onRetry={overlayProps.retry ?? undefined}
       />
-      <div className="space-y-4 p-4 sm:p-5 md:p-6 max-w-7xl mx-auto overflow-x-hidden">
+      <div className="space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto overflow-x-hidden">
 
         {/* Wizard's Nutrition Wisdom */}
         <button
-          className="w-full text-left rounded-2xl bg-gradient-to-r from-primary/10 via-secondary/8 to-primary/5 p-3.5 border border-primary/15 hover:border-primary/30 active:scale-[0.99] transition-all group"
+          className="w-full text-left rounded-2xl bg-gradient-to-r from-primary/10 via-secondary/8 to-primary/5 p-3 border border-primary/15 hover:border-primary/30 active:scale-[0.99] transition-all group"
           onClick={() => wisdom.generateTrainingFoodIdeas()}
         >
           <div className="flex items-center gap-3">
-            <div className="rounded-full bg-primary/15 p-2 flex-shrink-0 group-hover:bg-primary/20 transition-colors">
-              <img src={wizardLogo} alt="Wizard" className="w-10 h-10 rounded-full object-cover" />
+            <div className="rounded-full bg-primary/15 p-1.5 flex-shrink-0 group-hover:bg-primary/20 transition-colors">
+              <img src={wizardLogo} alt="Wizard" className="w-8 h-8 rounded-full object-cover" />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-2">
@@ -449,20 +449,20 @@ export default function Nutrition() {
         <div className="relative flex items-center justify-center gap-3">
           <button
             onClick={() => { setSelectedDate(format(subDays(new Date(selectedDate), 1), "yyyy-MM-dd")); triggerHapticSelection(); }}
-            className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 active:scale-95 transition-all"
+            className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 active:scale-95 transition-all"
           >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 4L6 8l4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M10 4L6 8l4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
           <button
             onClick={() => { setSelectedDate(format(new Date(), "yyyy-MM-dd")); triggerHapticSelection(); }}
-            className="flex items-center gap-2 text-sm font-semibold px-4 py-1.5 rounded-full bg-muted/40 hover:bg-muted/70 active:scale-[0.97] transition-all"
+            className="flex items-center gap-1.5 text-[13px] font-semibold px-3 py-1 rounded-full bg-muted/40 hover:bg-muted/70 active:scale-[0.97] transition-all"
           >
-            <CalendarIcon className="h-3.5 w-3.5 text-primary" />
+            <CalendarIcon className="h-3 w-3 text-primary" />
             {selectedDate === format(new Date(), "yyyy-MM-dd") ? "Today" : format(new Date(selectedDate), "EEE, MMM d")}
           </button>
           <button
             onClick={() => { setSelectedDate(format(addDays(new Date(selectedDate), 1), "yyyy-MM-dd")); triggerHapticSelection(); }}
-            className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 active:scale-95 transition-all"
+            className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 active:scale-95 transition-all"
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
@@ -470,17 +470,17 @@ export default function Nutrition() {
         </div>
 
         {meals.length === 0 && selectedDate === format(new Date(), "yyyy-MM-dd") && !loading && (
-          <div className="glass-card rounded-2xl border border-border/50 p-4">
-            <div className="flex items-start gap-3">
-              <div className="rounded-full bg-primary/15 p-2.5 flex-shrink-0">
-                <Utensils className="h-5 w-5 text-primary" />
+          <div className="glass-card rounded-2xl border border-border/50 p-3">
+            <div className="flex items-start gap-2.5">
+              <div className="rounded-full bg-primary/15 p-2 flex-shrink-0">
+                <Utensils className="h-4 w-4 text-primary" />
               </div>
               <div className="flex-1">
                 <h3 className="font-semibold text-sm">No Meals Logged Today</h3>
-                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
                   Describe what you ate and AI will calculate the macros for you.
                 </p>
-                <Button variant="outline" size="sm" className="mt-3 h-8 text-xs font-semibold"
+                <Button variant="outline" size="sm" className="mt-2 h-7 text-[11px] font-semibold"
                   onClick={() => { setQuickAddTab("ai"); setIsQuickAddSheetOpen(true); }}
                 >
                   <Sparkles className="h-3.5 w-3.5 mr-1.5" />Quick Add with AI
@@ -501,10 +501,10 @@ export default function Nutrition() {
 
             return (
               <div key={mealType} className="glass-card overflow-hidden transition-all duration-300">
-                <div className="flex items-center justify-between px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <MealIcon className={`h-4 w-4 ${mealIconColor}`} />
-                    <h3 className="text-sm font-semibold capitalize">{mealType}</h3>
+                <div className="flex items-center justify-between px-3 py-2">
+                  <div className="flex items-center gap-1.5">
+                    <MealIcon className={`h-3.5 w-3.5 ${mealIconColor}`} />
+                    <h3 className="text-[13px] font-semibold capitalize">{mealType}</h3>
                   </div>
                   <span className="text-xs font-medium text-muted-foreground tabular-nums">
                     {groupCalories > 0 ? `${Math.round(groupCalories)} kcal` : ""}
@@ -520,13 +520,13 @@ export default function Nutrition() {
                 <div className="border-t border-border/10">
                   <button
                     onClick={() => setExpandedMealActions(isActionExpanded ? null : mealType)}
-                    className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-primary/80 hover:text-primary hover:bg-primary/5 active:bg-primary/10 active:scale-[0.99] transition-all"
+                    className="w-full flex items-center justify-center gap-1.5 py-2 text-[11px] font-semibold text-primary/80 hover:text-primary hover:bg-primary/5 active:bg-primary/10 active:scale-[0.99] transition-all"
                   >
                     <Plus className="h-3.5 w-3.5" />Add Food
                     {isActionExpanded ? <ChevronUp className="h-3 w-3 ml-0.5" /> : <ChevronDown className="h-3 w-3 ml-0.5" />}
                   </button>
                   {isActionExpanded && (
-                    <div className="grid grid-cols-5 gap-1 px-3 pb-3 pt-1 animate-fade-in">
+                    <div className="grid grid-cols-4 gap-1 px-3 pb-3 pt-1 animate-fade-in">
                       <button onClick={() => openFoodSearch(mealType)} className="flex flex-col items-center gap-1 py-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors">
                         <Search className="h-4 w-4 text-blue-500" /><span className="text-[10px] text-muted-foreground">Search</span>
                       </button>
@@ -538,10 +538,6 @@ export default function Nutrition() {
                         className="flex flex-col items-center gap-1 py-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors">
                         <Sparkles className="h-4 w-4 text-blue-500" /><span className="text-[10px] text-muted-foreground">Quick</span>
                       </button>
-                      <Suspense fallback={<div className="flex flex-col items-center gap-1 py-2"><Mic className="h-4 w-4 text-muted-foreground" /><span className="text-[10px] text-muted-foreground">Voice</span></div>}>
-                        <VoiceInput onTranscription={aiMeal.handleVoiceInput} disabled={mealPlan.generatingPlan || mealOps.savingAllMeals || aiMeal.aiAnalyzing}
-                          className="flex flex-col items-center gap-1 py-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors !h-auto !border-0 !bg-transparent !px-0" />
-                      </Suspense>
                       <button onClick={() => {
                         setManualMeal(prev => ({ ...prev, meal_type: mealType, meal_name: "", calories: "", protein_g: "", carbs_g: "", fats_g: "", portion_size: "", recipe_notes: "", ingredients: [] }));
                         aiMeal.setAiMealDescription(""); aiMeal.setAiLineItems([]); aiMeal.setAiAnalysisComplete(false);
@@ -575,25 +571,25 @@ export default function Nutrition() {
         </div>
 
         {/* AI Meal Ideas Section */}
-        <div className="space-y-3" data-tutorial="generate-meal-plan">
+        <div className="space-y-2" data-tutorial="generate-meal-plan">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Meal Plan Ideas</h2>
+            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Meal Plan Ideas</h2>
             <Button onClick={() => mealPlan.setIsAiDialogOpen(true)} size="sm" variant="outline"
               className="h-8 text-xs gap-1.5 rounded-xl border-primary/20 text-primary hover:bg-primary/10">
               <Sparkles className="h-3 w-3" />Generate
             </Button>
           </div>
           {mealPlanIdeas.length === 0 ? (
-            <div className="glass-card border-dashed py-10 text-center">
-              <Sparkles className="h-7 w-7 text-primary/50 mx-auto mb-2 mix-blend-screen" />
-              <p className="text-sm font-medium text-foreground">No meal ideas yet</p>
-              <p className="text-xs text-foreground/60 mt-0.5">Generate AI meal suggestions above</p>
+            <div className="glass-card border-dashed py-7 text-center">
+              <Sparkles className="h-5 w-5 text-primary/50 mx-auto mb-1.5 mix-blend-screen" />
+              <p className="text-[13px] font-medium text-foreground">No meal ideas yet</p>
+              <p className="text-[11px] text-foreground/60 mt-0.5">Generate AI meal suggestions above</p>
             </div>
           ) : (
             <ErrorBoundary>
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <div className="flex gap-2">
-                  <Button onClick={() => mealOps.saveMealIdeasToDatabase(mealPlanIdeas)} disabled={mealOps.savingAllMeals || mealOps.loggingMeal !== null}
+                  <Button onClick={async () => { await mealOps.saveMealIdeasToDatabase(mealPlanIdeas); window.scrollTo({ top: 0, behavior: "smooth" }); }} disabled={mealOps.savingAllMeals || mealOps.loggingMeal !== null}
                     size="sm" className="flex-1 h-8 text-xs rounded-xl">
                     <Plus className="mr-1 h-3 w-3" />Save All ({mealPlanIdeas.length})
                   </Button>
@@ -601,7 +597,7 @@ export default function Nutrition() {
                     <X className="mr-1 h-3 w-3" />Clear
                   </Button>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                   {mealPlanIdeas.map((meal) => {
                     const p = meal.protein_g || 0, c = meal.carbs_g || 0, f = meal.fats_g || 0;
                     const pCal = p * 4, cCal = c * 4, fCal = f * 9;
@@ -621,16 +617,16 @@ export default function Nutrition() {
 
                     return (
                       <div key={meal.id} className="glass-card overflow-hidden transition-all duration-300">
-                        <div className={`p-4 ${hasDetails ? "cursor-pointer active:bg-white/[0.02] transition-colors" : ""}`}
+                        <div className={`p-3 ${hasDetails ? "cursor-pointer active:bg-white/[0.02] transition-colors" : ""}`}
                           onClick={() => { if (!hasDetails) return; setExpandedMealIdeas(prev => { const next = new Set(prev); if (next.has(meal.id)) next.delete(meal.id); else next.add(meal.id); return next; }); }}>
                           <div className="flex items-start gap-3">
-                            <div className="relative flex-shrink-0" style={{ width: 56, height: 56 }}>
+                            <div className="relative flex-shrink-0" style={{ width: 44, height: 44 }}>
                               <svg viewBox="0 0 56 56" className="w-full h-full -rotate-90">
-                                <circle cx="28" cy="28" r={R} fill="none" stroke="hsl(var(--border) / 0.15)" strokeWidth="5" />
+                                <circle cx="28" cy="28" r={R} fill="none" stroke="hsl(var(--border) / 0.15)" strokeWidth="4" />
                                 {macroTotal > 0 && (<>
-                                  <circle cx="28" cy="28" r={R} fill="none" stroke="#3b82f6" strokeWidth="5" strokeDasharray={`${pArc} ${CIRC - pArc}`} strokeDashoffset={0} strokeLinecap="butt" />
-                                  <circle cx="28" cy="28" r={R} fill="none" stroke="#f97316" strokeWidth="5" strokeDasharray={`${cArc} ${CIRC - cArc}`} strokeDashoffset={-pArc} strokeLinecap="butt" />
-                                  <circle cx="28" cy="28" r={R} fill="none" stroke="#a855f7" strokeWidth="5" strokeDasharray={`${fArc} ${CIRC - fArc}`} strokeDashoffset={-(pArc + cArc)} strokeLinecap="butt" />
+                                  <circle cx="28" cy="28" r={R} fill="none" stroke="#3b82f6" strokeWidth="4" strokeDasharray={`${pArc} ${CIRC - pArc}`} strokeDashoffset={0} strokeLinecap="butt" />
+                                  <circle cx="28" cy="28" r={R} fill="none" stroke="#f97316" strokeWidth="4" strokeDasharray={`${cArc} ${CIRC - cArc}`} strokeDashoffset={-pArc} strokeLinecap="butt" />
+                                  <circle cx="28" cy="28" r={R} fill="none" stroke="#a855f7" strokeWidth="4" strokeDasharray={`${fArc} ${CIRC - fArc}`} strokeDashoffset={-(pArc + cArc)} strokeLinecap="butt" />
                                 </>)}
                               </svg>
                               <div className="absolute inset-0 flex items-center justify-center"><span className="text-[10px] font-bold tabular-nums">{meal.calories}</span></div>
@@ -692,7 +688,7 @@ export default function Nutrition() {
 
         {/* Quick Add Bottom Sheet */}
         <Sheet open={isQuickAddSheetOpen} onOpenChange={handleSheetOpenChange}>
-          <SheetContent side="bottom" className="h-[85vh] overflow-y-auto pb-32 pt-0">
+          <SheetContent side="bottom" className="h-[85vh] overflow-y-auto pb-20 pt-0">
             <div className="flex justify-center pt-3 pb-2"><div className="w-10 h-1 rounded-full bg-muted-foreground/30" /></div>
             <SheetHeader className="pb-3"><SheetTitle className="text-base">Add Meal</SheetTitle></SheetHeader>
             <div className="flex gap-1 p-1 rounded-xl bg-muted/50 mb-4">

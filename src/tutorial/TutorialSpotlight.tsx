@@ -1,8 +1,17 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { motion, useReducedMotion } from "motion/react";
 
+interface SpotlightOffset {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  yPercent?: number; // shift as % of viewport height (negative = up)
+}
+
 interface SpotlightProps {
   targetEl: HTMLElement | null;
+  offset?: SpotlightOffset;
 }
 
 interface SpotlightRect {
@@ -16,13 +25,13 @@ interface SpotlightRect {
 const PADDING = 6;
 const BORDER_RADIUS = 16; // matches rounded-2xl
 
-function getSpotlightRect(el: HTMLElement): SpotlightRect {
+function getSpotlightRect(el: HTMLElement, offset?: SpotlightOffset): SpotlightRect {
   const rect = el.getBoundingClientRect();
   return {
-    x: rect.left - PADDING,
-    y: rect.top - PADDING,
-    width: rect.width + PADDING * 2,
-    height: rect.height + PADDING * 2,
+    x: rect.left - PADDING + (offset?.x ?? 0),
+    y: rect.top - PADDING + (offset?.y ?? 0) + (offset?.yPercent ? window.innerHeight * offset.yPercent / 100 : 0),
+    width: rect.width + PADDING * 2 + (offset?.width ?? 0),
+    height: rect.height + PADDING * 2 + (offset?.height ?? 0),
     rx: BORDER_RADIUS,
   };
 }
@@ -49,7 +58,7 @@ function findScrollParent(el: HTMLElement): HTMLElement | null {
   return null;
 }
 
-export function TutorialSpotlight({ targetEl }: SpotlightProps) {
+export function TutorialSpotlight({ targetEl, offset }: SpotlightProps) {
   const prefersReduced = useReducedMotion();
   const [rect, setRect] = useState<SpotlightRect | null>(null);
   const observerRef = useRef<ResizeObserver | null>(null);
@@ -59,8 +68,8 @@ export function TutorialSpotlight({ targetEl }: SpotlightProps) {
       setRect(null);
       return;
     }
-    setRect(getSpotlightRect(targetEl));
-  }, [targetEl]);
+    setRect(getSpotlightRect(targetEl, offset));
+  }, [targetEl, offset]);
 
   // Scroll target into view (skip for fixed elements like bottom nav) and measure
   useEffect(() => {
@@ -87,6 +96,7 @@ export function TutorialSpotlight({ targetEl }: SpotlightProps) {
   useEffect(() => {
     if (!targetEl) return;
 
+    observerRef.current?.disconnect();
     observerRef.current = new ResizeObserver(updateRect);
     observerRef.current.observe(targetEl);
 

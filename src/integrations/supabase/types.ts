@@ -444,6 +444,7 @@ export type Database = {
           id: string
           intensity: string
           intensity_level: number | null
+          media_url: string | null
           mobility_done: boolean | null
           notes: string | null
           rpe: number
@@ -462,6 +463,7 @@ export type Database = {
           id?: string
           intensity: string
           intensity_level?: number | null
+          media_url?: string | null
           mobility_done?: boolean | null
           notes?: string | null
           rpe: number
@@ -480,6 +482,7 @@ export type Database = {
           id?: string
           intensity?: string
           intensity_level?: number | null
+          media_url?: string | null
           mobility_done?: boolean | null
           notes?: string | null
           rpe?: number

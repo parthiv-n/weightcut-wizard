@@ -247,9 +247,9 @@ export default function WeightTracker() {
         onCancel={handleAICancel}
         onRetry={getAIAnalysis}
       />
-      <div className="space-y-5 px-4 pb-4 pt-16 sm:p-5 sm:pt-16 max-w-2xl mx-auto">
+      <div className="space-y-2.5 px-3 pb-3 pt-14 sm:p-5 sm:pt-16 max-w-2xl mx-auto">
         {/* Chart + History */}
-        <div className="glass-card p-4 space-y-4">
+        <div className="glass-card p-3 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Progress Chart</p>
             <div className="flex items-center gap-2">
@@ -272,11 +272,11 @@ export default function WeightTracker() {
           </div>
           {getChartData().length > 0 ? (
             <>
-              <ResponsiveContainer width="100%" height={200}>
+              <ResponsiveContainer width="100%" height={140}>
                 <LineChart data={getChartData()} onClick={handleChartClick}>
                   <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.2} />
-                  <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
-                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} domain={["dataMin - 2", "dataMax + 2"]} width={36} />
+                  <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={9} tickLine={false} axisLine={false} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={9} tickLine={false} axisLine={false} domain={["dataMin - 2", "dataMax + 2"]} width={30} />
                   <Tooltip
                     content={({ active, payload }) => {
                       if (active && payload && payload.length) {
@@ -296,9 +296,9 @@ export default function WeightTracker() {
                       return null;
                     }}
                   />
-                  <ReferenceLine y={profile?.fight_week_target_kg || profile?.goal_weight_kg} stroke="hsl(var(--primary))" strokeDasharray="5 5" label={{ value: "Target", fill: "hsl(var(--primary))", fontSize: 10 }} />
+                  <ReferenceLine y={profile?.fight_week_target_kg || profile?.goal_weight_kg} stroke="hsl(var(--primary))" strokeDasharray="5 5" label={{ value: "Target", fill: "hsl(var(--primary))", fontSize: 10, position: "insideTopRight" }} />
                   {profile?.fight_week_target_kg && (
-                    <ReferenceLine y={profile.goal_weight_kg} stroke="hsl(var(--destructive))" strokeDasharray="3 3" label={{ value: "Fight Night", fill: "hsl(var(--destructive))", fontSize: 10 }} />
+                    <ReferenceLine y={profile.goal_weight_kg} stroke="hsl(var(--destructive))" strokeDasharray="3 3" label={{ value: "Fight Night", fill: "hsl(var(--destructive))", fontSize: 10, position: "insideBottomRight" }} />
                   )}
                   <Line type="monotone" dataKey="weight" stroke="hsl(var(--primary))" strokeWidth={2.5} dot={{ fill: "hsl(var(--primary))", r: 4, cursor: "pointer" }} activeDot={{ r: 6, cursor: "pointer" }} />
                   {aiAnalysis && showProjected && (
@@ -323,7 +323,7 @@ export default function WeightTracker() {
                   </Button>
                 </div>
               )}
-              <div className="border-t border-border/20 pt-3">
+              <div className="border-t border-border/20 pt-2">
                 <Collapsible open={isHistoryOpen} onOpenChange={setIsHistoryOpen} className="w-full space-y-2">
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Recent Entries</p>
@@ -337,17 +337,17 @@ export default function WeightTracker() {
                   <CollapsibleContent className="space-y-2 pt-2">
                     <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
                       {weightLogs.slice().reverse().map((log) => (
-                        <div key={log.id} className="flex items-center justify-between p-3 rounded-xl border border-white/5 bg-background/50 hover:bg-background/80 transition-colors">
+                        <div key={log.id} className="flex items-center justify-between p-2 rounded-xl border border-white/5 bg-background/50 hover:bg-background/80 transition-colors">
                           <div>
-                            <span className="text-base font-bold text-primary mr-3">{log.weight_kg} kg</span>
-                            <span className="text-xs text-muted-foreground">{format(new Date(log.date), "MMM dd, yyyy")}</span>
+                            <span className="text-sm font-bold text-primary mr-2">{log.weight_kg} kg</span>
+                            <span className="text-[11px] text-muted-foreground">{format(new Date(log.date), "MMM dd, yyyy")}</span>
                           </div>
                           <div className="flex items-center gap-1">
-                            <Button variant="ghost" size="icon" onClick={() => handleEditLog(log)} className="h-8 w-8 text-muted-foreground hover:text-foreground">
-                              <Edit2 className="h-4 w-4" />
+                            <Button variant="ghost" size="icon" onClick={() => handleEditLog(log)} className="h-7 w-7 text-muted-foreground hover:text-foreground">
+                              <Edit2 className="h-3.5 w-3.5" />
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={() => initiateDelete(log)} className="h-8 w-8 text-muted-foreground hover:text-destructive">
-                              <Trash2 className="h-4 w-4" />
+                            <Button variant="ghost" size="icon" onClick={() => initiateDelete(log)} className="h-7 w-7 text-muted-foreground hover:text-destructive">
+                              <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </div>
                         </div>
@@ -365,11 +365,11 @@ export default function WeightTracker() {
         </div>
 
         {/* Header + Inline Log Form */}
-        <div className="flex flex-col gap-3">
-          <form onSubmit={handleAddWeight} className="flex gap-2 items-center">
-            <Input ref={weightInputRef} type="number" step="0.1" placeholder="75.5 kg" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} required className="flex-1 h-10" />
-            <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} required className="w-[130px] h-10" />
-            <Button type="submit" disabled={loading} className="h-10 px-4 shrink-0">
+        <div className="flex flex-col gap-2">
+          <form onSubmit={handleAddWeight} className="flex gap-1.5 items-center">
+            <Input ref={weightInputRef} type="number" step="0.1" placeholder="75.5 kg" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} required className="flex-1 h-9 text-sm" />
+            <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} required className="w-[120px] h-9 text-sm" />
+            <Button type="submit" disabled={loading} className="h-9 px-3 text-sm shrink-0">
               {loading ? "..." : editingLogId ? "Update" : "Log"}
             </Button>
           </form>
@@ -377,44 +377,44 @@ export default function WeightTracker() {
 
         {/* Stats Overview */}
         {profile && (
-          <div className="grid grid-cols-2 gap-3">
-            <div className="glass-card p-4 text-center">
-              <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Current</p>
-              <p className="display-number text-2xl">{getCurrentWeight().toFixed(1)}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">kg</p>
+          <div className="grid grid-cols-4 gap-2">
+            <div className="glass-card p-2.5 text-center">
+              <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">Current</p>
+              <p className="display-number text-lg">{getCurrentWeight().toFixed(1)}</p>
+              <p className="text-[9px] text-muted-foreground">kg</p>
             </div>
-            <div className="glass-card p-4 text-center">
-              <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Target</p>
-              <p className="display-number text-2xl">{(profile.fight_week_target_kg || profile.goal_weight_kg).toFixed(1)}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">kg</p>
+            <div className="glass-card p-2.5 text-center">
+              <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">Target</p>
+              <p className="display-number text-lg">{(profile.fight_week_target_kg || profile.goal_weight_kg).toFixed(1)}</p>
+              <p className="text-[9px] text-muted-foreground">kg</p>
             </div>
-            <div className="glass-card p-4 text-center">
+            <div className="glass-card p-2.5 text-center">
               {(() => {
                 const current = getCurrentWeight();
                 const target = profile.fight_week_target_kg || profile.goal_weight_kg;
                 const diff = target - current;
-                if (diff > 0) return (<><p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">To Gain</p><p className="display-number text-2xl text-green-500">+{diff.toFixed(1)}</p><p className="text-[10px] text-muted-foreground mt-0.5">kg</p></>);
-                if (diff < 0) return (<><p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">To Lose</p><p className="display-number text-2xl text-primary">{Math.abs(diff).toFixed(1)}</p><p className="text-[10px] text-muted-foreground mt-0.5">kg</p></>);
-                return (<><p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Status</p><p className="display-number text-2xl text-green-500">✓</p><p className="text-[10px] text-muted-foreground mt-0.5">At Target</p></>);
+                if (diff > 0) return (<><p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">To Gain</p><p className="display-number text-lg text-green-500">+{diff.toFixed(1)}</p><p className="text-[9px] text-muted-foreground">kg</p></>);
+                if (diff < 0) return (<><p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">To Lose</p><p className="display-number text-lg text-primary">{Math.abs(diff).toFixed(1)}</p><p className="text-[9px] text-muted-foreground">kg</p></>);
+                return (<><p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">Status</p><p className="display-number text-lg text-green-500">✓</p><p className="text-[9px] text-muted-foreground">At Target</p></>);
               })()}
             </div>
-            <div className="glass-card p-4 text-center">
-              <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Deadline</p>
-              <p className="text-base font-semibold">{format(new Date(profile.target_date), "MMM dd")}</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">{format(new Date(profile.target_date), "yyyy")}</p>
+            <div className="glass-card p-2.5 text-center">
+              <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">Deadline</p>
+              <p className="text-sm font-semibold">{format(new Date(profile.target_date), "MMM dd")}</p>
+              <p className="text-[9px] text-muted-foreground">{format(new Date(profile.target_date), "yyyy")}</p>
             </div>
           </div>
         )}
 
         {/* Progress + Insight */}
         {profile && (
-          <div className="glass-card p-4 space-y-2">
-            <div className="flex justify-between text-xs">
+          <div className="glass-card p-3 space-y-1.5">
+            <div className="flex justify-between text-[11px]">
               <span className="text-muted-foreground">Progress to target</span>
               <span className="font-medium">{getWeightProgress().toFixed(0)}%</span>
             </div>
-            <Progress value={getWeightProgress()} className="h-1.5" />
-            <p className="text-xs text-muted-foreground">{insight.message}</p>
+            <Progress value={getWeightProgress()} className="h-1" />
+            <p className="text-[11px] text-muted-foreground leading-relaxed">{insight.message}</p>
           </div>
         )}
 
@@ -437,12 +437,12 @@ export default function WeightTracker() {
           const weightDiff = aiAnalysisWeight !== null && aiAnalysisTarget !== null ? aiAnalysisTarget - aiAnalysisWeight : 0;
 
           return (
-            <div className="glass-card p-4 space-y-5 animate-fade-in">
+            <div className="glass-card p-3 space-y-3 animate-fade-in">
               {/* Header row */}
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground">AI Strategy</p>
-                  <p className={`text-lg font-bold mt-0.5 ${displayRiskLevel === 'green' ? 'text-green-500' : displayRiskLevel === 'yellow' ? 'text-yellow-500' : 'text-red-500'}`}>
+                  <p className="text-[9px] uppercase tracking-widest text-muted-foreground">AI Strategy</p>
+                  <p className={`text-base font-bold mt-0.5 ${displayRiskLevel === 'green' ? 'text-green-500' : displayRiskLevel === 'yellow' ? 'text-yellow-500' : 'text-red-500'}`}>
                     {displayRiskLevel === 'green' ? 'Safe Pace' : displayRiskLevel === 'yellow' ? 'Moderate Pace' : 'Aggressive Pace'}
                   </p>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
@@ -457,22 +457,22 @@ export default function WeightTracker() {
 
               {/* Now / Goal / Diff */}
               {aiAnalysisWeight !== null && aiAnalysisTarget !== null && (
-                <div className="grid grid-cols-3 gap-3 text-center">
+                <div className="grid grid-cols-3 gap-2 text-center">
                   <div>
-                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Now</p>
-                    <p className="text-xl font-bold">{aiAnalysisWeight.toFixed(1)}</p>
-                    <p className="text-[10px] text-muted-foreground">kg</p>
+                    <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">Now</p>
+                    <p className="text-lg font-bold">{aiAnalysisWeight.toFixed(1)}</p>
+                    <p className="text-[9px] text-muted-foreground">kg</p>
                   </div>
                   <div>
-                    <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Goal</p>
-                    <p className="text-xl font-bold">{aiAnalysisTarget.toFixed(1)}</p>
-                    <p className="text-[10px] text-muted-foreground">kg</p>
+                    <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">Goal</p>
+                    <p className="text-lg font-bold">{aiAnalysisTarget.toFixed(1)}</p>
+                    <p className="text-[9px] text-muted-foreground">kg</p>
                   </div>
                   <div>
                     {(() => {
-                      if (weightDiff > 0) return (<><p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Gain</p><p className="text-xl font-bold text-green-500">+{weightDiff.toFixed(1)}</p><p className="text-[10px] text-muted-foreground">kg</p></>);
-                      if (weightDiff < 0) return (<><p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Lose</p><p className="text-xl font-bold text-primary">{Math.abs(weightDiff).toFixed(1)}</p><p className="text-[10px] text-muted-foreground">kg</p></>);
-                      return (<><p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Status</p><p className="text-xl font-bold text-green-500">✓</p><p className="text-[10px] text-muted-foreground">At Target</p></>);
+                      if (weightDiff > 0) return (<><p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">Gain</p><p className="text-lg font-bold text-green-500">+{weightDiff.toFixed(1)}</p><p className="text-[9px] text-muted-foreground">kg</p></>);
+                      if (weightDiff < 0) return (<><p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">Lose</p><p className="text-lg font-bold text-primary">{Math.abs(weightDiff).toFixed(1)}</p><p className="text-[9px] text-muted-foreground">kg</p></>);
+                      return (<><p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">Status</p><p className="text-lg font-bold text-green-500">✓</p><p className="text-[9px] text-muted-foreground">At Target</p></>);
                     })()}
                   </div>
                 </div>
@@ -552,71 +552,71 @@ export default function WeightTracker() {
               )}
 
               {/* Calories + Macros */}
-              <div className="grid grid-cols-4 gap-3 text-center">
+              <div className="grid grid-cols-4 gap-2 text-center">
                 <div>
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Calories</p>
-                  <p className="text-xl font-bold text-primary">{aiAnalysis.recommendedCalories}</p>
-                  <p className="text-[10px] text-muted-foreground">kcal/day</p>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">−{aiAnalysis.calorieDeficit} deficit</p>
+                  <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">Calories</p>
+                  <p className="text-lg font-bold text-primary">{aiAnalysis.recommendedCalories}</p>
+                  <p className="text-[9px] text-muted-foreground">kcal/day</p>
+                  <p className="text-[9px] text-muted-foreground">−{aiAnalysis.calorieDeficit}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Protein</p>
-                  <p className="text-xl font-bold">{aiAnalysis.proteinGrams}</p>
-                  <p className="text-[10px] text-muted-foreground">g</p>
+                  <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">Protein</p>
+                  <p className="text-lg font-bold">{aiAnalysis.proteinGrams}</p>
+                  <p className="text-[9px] text-muted-foreground">g</p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Carbs</p>
-                  <p className="text-xl font-bold">{aiAnalysis.carbsGrams}</p>
-                  <p className="text-[10px] text-muted-foreground">g</p>
+                  <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">Carbs</p>
+                  <p className="text-lg font-bold">{aiAnalysis.carbsGrams}</p>
+                  <p className="text-[9px] text-muted-foreground">g</p>
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Fats</p>
-                  <p className="text-xl font-bold">{aiAnalysis.fatsGrams}</p>
-                  <p className="text-[10px] text-muted-foreground">g</p>
+                  <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">Fats</p>
+                  <p className="text-lg font-bold">{aiAnalysis.fatsGrams}</p>
+                  <p className="text-[9px] text-muted-foreground">g</p>
                 </div>
               </div>
 
               {/* Guidance rows */}
-              <div className="space-y-3 border-t border-border/20 pt-4">
-                <div className="flex gap-2 items-start">
-                  <AlertTriangle className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                  <p className="text-xs text-muted-foreground leading-relaxed"><span className="font-medium text-foreground">Risk: </span>{aiAnalysis.riskExplanation}</p>
+              <div className="space-y-2 border-t border-border/20 pt-3">
+                <div className="flex gap-1.5 items-start">
+                  <AlertTriangle className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-muted-foreground leading-relaxed"><span className="font-medium text-foreground">Risk: </span>{aiAnalysis.riskExplanation}</p>
                 </div>
-                <div className="flex gap-2 items-start">
-                  <Sparkles className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                  <p className="text-xs text-muted-foreground leading-relaxed"><span className="font-medium text-foreground">Strategy: </span>{aiAnalysis.strategicGuidance}</p>
+                <div className="flex gap-1.5 items-start">
+                  <Sparkles className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-muted-foreground leading-relaxed"><span className="font-medium text-foreground">Strategy: </span>{aiAnalysis.strategicGuidance}</p>
                 </div>
                 {aiAnalysis.nutritionTips.length > 0 && (
-                  <div className="flex gap-2 items-start">
-                    <Apple className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                    <div className="text-xs text-muted-foreground leading-relaxed"><span className="font-medium text-foreground">Nutrition: </span>{aiAnalysis.nutritionTips.join(' · ')}</div>
+                  <div className="flex gap-1.5 items-start">
+                    <Apple className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
+                    <div className="text-[11px] text-muted-foreground leading-relaxed"><span className="font-medium text-foreground">Nutrition: </span>{aiAnalysis.nutritionTips.join(' · ')}</div>
                   </div>
                 )}
-                <div className="flex gap-2 items-start">
-                  <Activity className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                  <p className="text-xs text-muted-foreground leading-relaxed"><span className="font-medium text-foreground">Training: </span>{aiAnalysis.trainingConsiderations}</p>
+                <div className="flex gap-1.5 items-start">
+                  <Activity className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-muted-foreground leading-relaxed"><span className="font-medium text-foreground">Training: </span>{aiAnalysis.trainingConsiderations}</p>
                 </div>
-                <div className="flex gap-2 items-start">
-                  <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0 mt-0.5" />
-                  <p className="text-xs text-muted-foreground leading-relaxed"><span className="font-medium text-foreground">Timeline: </span>{aiAnalysis.timeline}</p>
+                <div className="flex gap-1.5 items-start">
+                  <Calendar className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-muted-foreground leading-relaxed"><span className="font-medium text-foreground">Timeline: </span>{aiAnalysis.timeline}</p>
                 </div>
               </div>
 
               {/* Weekly Plan */}
-              <div className="border-t border-border/20 pt-4">
-                <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-3">Weekly Plan</p>
-                <div className="grid grid-cols-3 gap-3">
+              <div className="border-t border-border/20 pt-3">
+                <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-2">Weekly Plan</p>
+                <div className="grid grid-cols-3 gap-2">
                   <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Week 1</p>
-                    <p className="text-xs text-muted-foreground leading-relaxed">{aiAnalysis.weeklyPlan.week1}</p>
+                    <p className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground mb-0.5">Week 1</p>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">{aiAnalysis.weeklyPlan.week1}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Week 2</p>
-                    <p className="text-xs text-muted-foreground leading-relaxed">{aiAnalysis.weeklyPlan.week2}</p>
+                    <p className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground mb-0.5">Week 2</p>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">{aiAnalysis.weeklyPlan.week2}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Ongoing</p>
-                    <p className="text-xs text-muted-foreground leading-relaxed">{aiAnalysis.weeklyPlan.ongoing}</p>
+                    <p className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground mb-0.5">Ongoing</p>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">{aiAnalysis.weeklyPlan.ongoing}</p>
                   </div>
                 </div>
               </div>

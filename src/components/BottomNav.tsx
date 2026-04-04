@@ -33,7 +33,7 @@ const mainNavItems = [
 const moreMenuItems = [
   { title: "Goals", url: "/goals", icon: Target },
   { title: "Fight Camps", url: "/fight-camps", icon: Trophy },
-  { title: "Fight Camp Calendar", url: "/fight-camp-calendar", icon: Calendar },
+  { title: "Training Calendar", url: "/training-calendar", icon: Calendar },
   { title: "Recovery", url: "/recovery", icon: HeartPulse },
   { title: "Rehydration", url: "/hydration", icon: Droplets },
   { title: "Fight Week", url: "/fight-week", icon: Calendar },
@@ -70,7 +70,7 @@ export function BottomNav() {
     if (moreMenuOpen) {
       import("../pages/Goals").catch(() => {});
       import("../pages/FightCamps").catch(() => {});
-      import("../pages/FightCampCalendar").catch(() => {});
+      import("../pages/TrainingCalendar").catch(() => {});
       import("../pages/Recovery").catch(() => {});
       import("../pages/Hydration").catch(() => {});
       import("../pages/FightWeek").catch(() => {});
@@ -103,7 +103,7 @@ export function BottomNav() {
 
   const handleLogTraining = () => {
     setQuickLogOpen(false);
-    navigate("/fight-camp-calendar?openLogSession=true");
+    navigate("/training-calendar?openLogSession=true");
   };
 
   const handleMoreItemClick = (url: string) => {

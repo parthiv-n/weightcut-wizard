@@ -83,7 +83,7 @@ export async function computeAndStoreBaseline(userId: string, tdee?: number | nu
       nutritionByDay.set(row.date, existing + (row.calories ?? 0));
     }
 
-    // Fetch daily loads from fight_camp_calendar (last 90 days)
+    // Fetch daily loads from training calendar (fight_camp_calendar table, last 90 days)
     const { data: sessionData } = await supabase
       .from('fight_camp_calendar')
       .select('date, duration_minutes, rpe, intensity, intensity_level, session_type')

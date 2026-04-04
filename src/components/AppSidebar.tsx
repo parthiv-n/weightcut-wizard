@@ -24,7 +24,7 @@ const menuItems = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
   { title: "Goals", url: "/goals", icon: Target },
   { title: "Fight Camps", url: "/fight-camps", icon: Trophy },
-  { title: "Fight Camp Calendar", url: "/fight-camp-calendar", icon: Calendar },
+  { title: "Training Calendar", url: "/training-calendar", icon: Calendar },
   { title: "Recovery", url: "/recovery", icon: HeartPulse },
   { title: "Nutrition", url: "/nutrition", icon: Utensils },
   { title: "Weight Tracker", url: "/weight", icon: Weight },

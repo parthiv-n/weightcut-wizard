@@ -59,7 +59,7 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete }: MealC
   };
 
   return (
-    <div className="relative mb-3 overflow-hidden rounded-2xl">
+    <div className="relative mb-1.5 overflow-hidden rounded-2xl">
       {/* Delete background (only visible while dragging) */}
       {canSwipe && isDragging && (
         <div className="absolute inset-0 flex items-center justify-end bg-destructive/90 rounded-2xl px-6">
@@ -106,7 +106,7 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete }: MealC
           aria-expanded={hasDetails ? expanded : undefined}
         >
           {/* Mini donut */}
-          <MacroDonut protein={p} carbs={c} fat={f} calories={meal.calories} size={40} />
+          <MacroDonut protein={p} carbs={c} fat={f} calories={meal.calories} size={36} />
 
           {/* Name + colored macro labels */}
           <div className="flex-1 min-w-0">
@@ -130,7 +130,7 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete }: MealC
             <Button
               variant="ghost"
               size="icon"
-              className="h-11 w-11 flex-shrink-0 text-muted-foreground"
+              className="h-8 w-8 flex-shrink-0 text-muted-foreground"
               aria-label={expanded ? "Collapse meal details" : "Expand meal details"}
               onClick={(e) => { e.stopPropagation(); handleToggle(); }}
             >

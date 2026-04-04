@@ -276,59 +276,6 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     }
   }, [aiIngredientDescription, manualMeal, setManualMeal, toast]);
 
-  const handleVoiceInput = useCallback(async (transcribedText: string) => {
-    setAiMealDescription(transcribedText);
-    setQuickAddTab("ai");
-    setIsQuickAddSheetOpen(true);
-
-    aiAbortRef.current?.abort();
-    const voiceController = createAIAbortController();
-    aiAbortRef.current = voiceController;
-
-    setAiAnalyzing(true);
-    setAiAnalysisComplete(false);
-    try {
-      const { data, error } = await supabase.functions.invoke("analyze-meal", {
-        body: { mealDescription: transcribedText },
-        signal: voiceController.signal,
-      });
-
-      if (voiceController.signal.aborted) return;
-      if (error) throw new Error(await extractEdgeFunctionError(error, "Failed to process voice input"));
-      if (data?.error) throw new Error(data.error);
-      const { nutritionData } = data;
-
-      if (nutritionData.items && Array.isArray(nutritionData.items) && nutritionData.items.length > 0) {
-        setAiLineItems(nutritionData.items.map((item: any) => ({
-          name: item.name,
-          quantity: item.quantity || "",
-          calories: item.calories || 0,
-          protein_g: item.protein_g || 0,
-          carbs_g: item.carbs_g || 0,
-          fats_g: item.fats_g || 0,
-        })));
-      } else {
-        setAiLineItems([{
-          name: nutritionData.meal_name,
-          quantity: nutritionData.portion_size || "1 serving",
-          calories: nutritionData.calories || 0,
-          protein_g: nutritionData.protein_g || 0,
-          carbs_g: nutritionData.carbs_g || 0,
-          fats_g: nutritionData.fats_g || 0,
-        }]);
-      }
-
-      setManualMeal(prev => ({ ...prev, meal_name: nutritionData.meal_name }));
-      setAiAnalysisComplete(true);
-    } catch (error: any) {
-      if (error?.name === 'AbortError' || voiceController.signal.aborted) return;
-      logger.error("Error processing voice input", error);
-      toast({ title: "Analysis failed", description: error.message || "Failed to process voice input", variant: "destructive" });
-    } finally {
-      setAiAnalyzing(false);
-    }
-  }, [setManualMeal, setQuickAddTab, setIsQuickAddSheetOpen, toast]);
-
   const parseServingGrams = (servingSize: string): number => {
     const match = servingSize.match(/(\d+(?:\.\d+)?)\s*g\b/i);
     if (match) return parseFloat(match[1]);
@@ -469,7 +416,6 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     handleAiAnalyzeMeal,
     handleSaveAiMeal,
     handleAiAnalyzeIngredient,
-    handleVoiceInput,
     handleBarcodeScanned,
     lookupIngredientNutrition,
     handleManualNutritionSubmit,
