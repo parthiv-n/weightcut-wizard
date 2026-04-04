@@ -17,6 +17,10 @@ dist-ssr
 .env.local
 .env.*.local
 
+# Apple credentials
+scripts/generate-apple-secret.mjs
+*.p8
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

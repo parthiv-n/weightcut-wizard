@@ -1,1 +1,59 @@
 project_id = "pkubdwmnnsxjjnpjjqqy"
+
+[auth]
+enabled = true
+site_url = "weightcutwizard://**"
+additional_redirect_urls = []
+jwt_expiry = 3600
+enable_refresh_token_rotation = true
+refresh_token_reuse_interval = 10
+enable_signup = true
+enable_anonymous_sign_ins = false
+minimum_password_length = 6
+password_requirements = ""
+
+[auth.rate_limit]
+anonymous_users = 30
+token_refresh = 150
+sign_in_sign_ups = 1000
+token_verifications = 30
+email_sent = 2
+sms_sent = 30
+
+[auth.mfa]
+max_enrolled_factors = 10
+[auth.mfa.totp]
+enroll_enabled = true
+verify_enabled = true
+[auth.mfa.phone]
+enroll_enabled = false
+verify_enabled = false
+[auth.mfa.web_authn]
+enroll_enabled = false
+verify_enabled = false
+
+[auth.sessions]
+timebox = "0s"
+inactivity_timeout = "0s"
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = false
+secure_password_change = false
+max_frequency = "1m0s"
+otp_length = 8
+otp_expiry = 3600
+
+[auth.sms]
+enable_signup = false
+enable_confirmations = false
+
+[auth.external]
+[auth.external.apple]
+enabled = true
+client_id = "com.weightcutwizard.app.web"
+secret = "eyJhbGciOiJFUzI1NiIsImtpZCI6IkI0NkNON1c3NjciLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiI5MzJLQVA5OThZIiwiaWF0IjoxNzc1MzQxNzM4LCJleHAiOjE3OTA4OTM3MzgsImF1ZCI6Imh0dHBzOi8vYXBwbGVpZC5hcHBsZS5jb20iLCJzdWIiOiJjb20ud2VpZ2h0Y3V0d2l6YXJkLmFwcC53ZWIifQ.izKY6lHTjDjWZVZvXhnYLR8gztaj7BCN-wIuyyJXtbkUzDrchux6Le1wxaEWOD6ILx4zaTPl0icb9u-tqlA2mg"
+url = ""
+redirect_uri = ""
+skip_nonce_check = false

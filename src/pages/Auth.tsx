@@ -171,7 +171,7 @@ export default function Auth() {
         // Native iOS: use ASAuthorizationController → exchange ID token with Supabase
         const result = await SignInWithApple.authorize({
           clientId: "com.weightcutwizard.app",
-          redirectURI: "https://fvxrqpbhquvablmkugvo.supabase.co/auth/v1/callback",
+          redirectURI: "https://pkubdwmnnsxjjnpjjqqy.supabase.co/auth/v1/callback",
           scopes: "email name",
         });
         const { error } = await supabase.auth.signInWithIdToken({
