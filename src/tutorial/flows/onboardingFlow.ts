@@ -2,9 +2,8 @@ import type { TutorialFlow } from "../types";
 
 export const onboardingFlow: TutorialFlow = {
   id: "onboarding",
-  version: 4,
+  version: 5,
   steps: [
-    // ── Dashboard overview ──
     {
       id: "welcome",
       title: "Welcome to WeightCut Wizard",
@@ -14,66 +13,34 @@ export const onboardingFlow: TutorialFlow = {
       route: "/dashboard",
     },
     {
-      id: "weight-progress",
-      target: "weight-progress-ring",
-      title: "Your Weight Progress",
+      id: "dashboard-overview",
+      title: "Your Dashboard",
       description:
-        "This ring tracks how close you are to your goal weight. It updates automatically as you log.",
-      position: "bottom",
+        "This is your home base. You'll see your weight progress bar, weekly consistency ring, AI daily wisdom, weight history chart, training activity, and achievement badges — all at a glance.",
+      position: "center",
       route: "/dashboard",
     },
-    {
-      id: "daily-wisdom",
-      target: "daily-wisdom-card",
-      title: "Wizard's Daily Wisdom",
-      description:
-        "Your AI coach analyses your progress and gives personalised advice every day. Log your weight each morning to unlock it.",
-      position: "top",
-      route: "/dashboard",
-      spotlightOffset: { yPercent: -12 },
-    },
-    {
-      id: "calorie-ring",
-      target: "calorie-progress-ring",
-      title: "Calorie Tracking",
-      description:
-        "Track your daily calorie intake here. The ring fills as you log meals throughout the day.",
-      position: "top",
-      route: "/dashboard",
-    },
-
-    // ── Navigate to feature pages ──
     {
       id: "nutrition-page",
       title: "Nutrition",
       description:
-        "This is your nutrition hub. Log meals by scanning a barcode or searching the database. Generate AI meal plans, analyse your vitamin intake and get a diet quality score — all in one place.",
+        "Your nutrition hub. Log meals by scanning a barcode, searching the database, or using AI Quick Fill. Generate personalised meal plans, analyse your daily vitamin and mineral intake, and get a diet quality score.",
       position: "center",
       navigateTo: "/nutrition",
     },
     {
-      id: "analyse-diet",
-      target: "analyse-diet",
-      title: "Analyse Your Diet",
+      id: "nutrition-features",
+      title: "AI Diet Tools",
       description:
-        "Tap here to get an AI breakdown of your day's nutrition. Find out which micronutrients you're missing — like iron, magnesium and B-vitamins — so you can optimise your performance and recovery.",
-      position: "top",
-      route: "/nutrition",
-    },
-    {
-      id: "generate-meal-plan",
-      target: "generate-meal-plan",
-      title: "Generate Meal Plans",
-      description:
-        "Need meal ideas? Tap Generate and describe what you're after — the AI will create personalised meals tailored to your calorie and macro targets that you can log in one tap.",
-      position: "top",
+        "Use the Analyse button to get an AI breakdown of your day's nutrition — find missing micronutrients like iron, magnesium and B-vitamins. Use Generate to create meal plans tailored to your calorie and macro targets.",
+      position: "center",
       route: "/nutrition",
     },
     {
       id: "weight-tracker-page",
       title: "Weight Tracker",
       description:
-        "Track your daily weigh-ins and see your progress chart over time. Filter by week, month or all-time, and use AI to analyse your weight trends.",
+        "Track your daily weigh-ins and see your progress chart over time. Filter by week, month or all-time. Use the AI analysis to get insights on your weight trend, pace, and recommendations.",
       position: "center",
       navigateTo: "/weight",
     },
@@ -90,7 +57,7 @@ export const onboardingFlow: TutorialFlow = {
       id: "fight-camps-page",
       title: "Fight Camps",
       description:
-        "Organise your training into fight camps. Create a camp for each event, track your weight cut progress, and review past camps.",
+        "Organise your training into fight camps. Create a camp for each event, track your weight cut progress, upload photos, and review past camps to improve.",
       position: "center",
       navigateTo: "/fight-camps",
     },
@@ -98,7 +65,7 @@ export const onboardingFlow: TutorialFlow = {
       id: "training-calendar-page",
       title: "Training Calendar",
       description:
-        "Log your training sessions on the calendar — BJJ, Muay Thai, wrestling, strength and more. Use the training summary so you never forget what you worked on.",
+        "Log your training sessions — BJJ, Muay Thai, wrestling, strength, running and more. View your sessions by day, track RPE and intensity, and generate AI training summaries each week.",
       position: "center",
       navigateTo: "/training-calendar",
     },
@@ -113,25 +80,13 @@ export const onboardingFlow: TutorialFlow = {
         state.goalType === "cutting" &&
         state.profileData?.fight_week_target_kg != null,
     },
-
-    // ── Back to dashboard — bottom nav tips ──
     {
-      id: "wizard-chat",
-      target: "wizard-chat",
-      title: "AI Chatbot",
+      id: "quick-tips",
+      title: "Quick Tips",
       description:
-        "Tap the sparkle button to chat with your AI coach. Ask anything — training advice, recovery tips, nutrition questions, or help with your weight cut.",
-      position: "top",
+        "Use the + button in the nav bar to quickly log food or weight. Tap the sparkle button on the dashboard to chat with your AI coach — ask training advice, recovery tips, or anything about your cut.",
+      position: "center",
       navigateTo: "/dashboard",
-    },
-    {
-      id: "nav-quick-log",
-      target: "nav-quick-log",
-      title: "Quick Log",
-      description:
-        "Tap the + button anytime to quickly log food or weight in one tap.",
-      position: "top",
-      route: "/dashboard",
     },
     {
       id: "all-done",
@@ -139,7 +94,7 @@ export const onboardingFlow: TutorialFlow = {
       description:
         "Explore at your own pace. You can replay this tour anytime from Settings in the More menu.",
       position: "center",
-      navigateTo: "/dashboard",
+      route: "/dashboard",
     },
   ],
 };

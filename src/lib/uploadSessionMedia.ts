@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
 
-const BUCKET = "avatars";
+const BUCKET = "training-media";
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 
 function getExtFromFile(file: File): string {
@@ -45,6 +45,8 @@ export async function uploadSessionMedia(
   const fileName = `${userId}/session-${sessionId}-${Date.now()}.${ext}`;
   const contentType = file.type || "image/jpeg";
 
+  logger.info(`Uploading session media: bucket=${BUCKET}, path=${fileName}, size=${file.size}, type=${contentType}`);
+
   const { error: uploadError } = await supabase.storage
     .from(BUCKET)
     .upload(fileName, file, {
@@ -52,7 +54,10 @@ export async function uploadSessionMedia(
       upsert: true,
     });
 
-  if (uploadError) throw uploadError;
+  if (uploadError) {
+    logger.error("Storage upload failed", { bucket: BUCKET, path: fileName, error: uploadError });
+    throw uploadError;
+  }
 
   const {
     data: { publicUrl },

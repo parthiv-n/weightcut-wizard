@@ -20,6 +20,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
 import { QuickLogDialog } from "@/components/nav/QuickLogDialog";
 import { MoreMenuSheet } from "@/components/nav/MoreMenuSheet";
 import { SettingsPanel } from "@/components/nav/SettingsPanel";
@@ -336,26 +337,31 @@ export function BottomNav() {
       </AlertDialog>
 
       {/* Delete Account Confirmation Dialog */}
-      <AlertDialog open={deleteAccountDialogOpen} onOpenChange={setDeleteAccountDialogOpen}>
-        <AlertDialogContent className="max-w-sm">
-          <AlertDialogHeader className="sm:text-center">
-            <div className="mx-auto mb-1 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 dark:bg-destructive/15 ring-1 ring-destructive/20">
-              <Trash2 className="h-5 w-5 text-destructive" />
+      <AlertDialog open={deleteAccountDialogOpen} onOpenChange={(open) => { if (!deleteLoading) setDeleteAccountDialogOpen(open); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader className="text-center items-center">
+            <div className="mb-2 flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10 ring-1 ring-destructive/20">
+              <Trash2 className="h-6 w-6 text-destructive" />
             </div>
-            <AlertDialogTitle className="text-center">Delete Account</AlertDialogTitle>
-            <AlertDialogDescription className="text-center">
-              This will permanently delete your account and all associated data. This action cannot be undone.
+            <AlertDialogTitle className="text-center text-lg">Delete Account</AlertDialogTitle>
+            <AlertDialogDescription className="text-center text-[13px] leading-relaxed">
+              This will permanently delete your account and all associated data.
+              <span className="block mt-2 text-xs text-muted-foreground/50">
+                This action cannot be undone.
+              </span>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex-row gap-3 sm:justify-center pt-1">
-            <AlertDialogCancel className="flex-1 sm:flex-initial sm:min-w-[100px]" disabled={deleteLoading}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
+          <AlertDialogFooter className="flex-row gap-3 pt-2">
+            <AlertDialogCancel className="flex-1 h-12 rounded-2xl text-[15px] font-semibold" disabled={deleteLoading}>
+              Cancel
+            </AlertDialogCancel>
+            <Button
               onClick={handleDeleteAccount}
               disabled={deleteLoading}
-              className="flex-1 sm:flex-initial sm:min-w-[100px] rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="flex-1 h-12 rounded-2xl text-[15px] font-semibold bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleteLoading ? "Deleting…" : "Delete Account"}
-            </AlertDialogAction>
+              {deleteLoading ? "Deleting…" : "Delete"}
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

@@ -40,19 +40,20 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     );
 
-    // Clean up avatar storage
-    try {
-      const { data: files } = await adminClient.storage
-        .from('avatars')
-        .list(userId);
+    // Clean up storage (best-effort — don't block account deletion)
+    for (const bucket of ['avatars', 'training-media']) {
+      try {
+        const { data: files } = await adminClient.storage
+          .from(bucket)
+          .list(userId);
 
-      if (files && files.length > 0) {
-        const filePaths = files.map((f) => `${userId}/${f.name}`);
-        await adminClient.storage.from('avatars').remove(filePaths);
+        if (files && files.length > 0) {
+          const filePaths = files.map((f) => `${userId}/${f.name}`);
+          await adminClient.storage.from(bucket).remove(filePaths);
+        }
+      } catch (storageErr) {
+        edgeLogger.error('delete-account', `Storage cleanup failed for ${bucket}`, storageErr);
       }
-    } catch (storageErr) {
-      // Storage cleanup is best-effort — don't block account deletion
-      edgeLogger.error('delete-account', 'Storage cleanup failed', storageErr);
     }
 
     // Delete auth user — cascades to all user tables

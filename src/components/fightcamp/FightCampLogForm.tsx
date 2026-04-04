@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { Activity, Moon, Ruler, Plus, X, Check } from "lucide-react";
-import { SessionMediaPicker } from "@/components/fightcamp/SessionMediaPicker";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -58,8 +57,6 @@ export function FightCampLogForm({
   sorenessLevel, setSorenessLevel,
   sleepHours, setSleepHours,
   notes, setNotes,
-  mediaPreviewUrl, existingMediaUrl,
-  onMediaSelected, onMediaRemoved,
   onSave,
 }: FightCampLogFormProps) {
   const [customTypes, setCustomTypes] = useState<string[]>([]);
@@ -287,17 +284,6 @@ export function FightCampLogForm({
           onChange={(e) => setNotes(e.target.value)}
           placeholder="What did you work on? Techniques, drills, combos..."
           className="bg-accent/20 border-border/50 rounded-2xl min-h-[80px] resize-none text-sm"
-        />
-      </div>
-
-      {/* Media */}
-      <div className="space-y-2">
-        <Label className="text-sm font-semibold text-muted-foreground">MEDIA</Label>
-        <SessionMediaPicker
-          mediaPreviewUrl={mediaPreviewUrl}
-          existingMediaUrl={existingMediaUrl}
-          onMediaSelected={onMediaSelected}
-          onMediaRemoved={onMediaRemoved}
         />
       </div>
 
