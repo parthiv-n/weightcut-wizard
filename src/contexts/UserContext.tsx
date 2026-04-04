@@ -28,6 +28,7 @@ export interface ProfileData {
   ai_recommended_fats_g?: number;
   manual_nutrition_override?: boolean;
   avatar_url?: string;
+  goal_type?: 'cutting' | 'losing';
   is_premium?: boolean;
   [key: string]: any;
 }
@@ -35,7 +36,7 @@ export interface ProfileData {
 const AI_RELEVANT_FIELDS: (keyof ProfileData)[] = [
   'goal_weight_kg', 'fight_week_target_kg', 'target_date',
   'activity_level', 'tdee', 'bmr', 'current_weight_kg',
-  'age', 'sex', 'height_cm', 'training_frequency',
+  'age', 'sex', 'height_cm', 'training_frequency', 'goal_type',
 ];
 
 function haveAIFieldsChanged(prev: ProfileData | null, next: ProfileData): boolean {
@@ -149,7 +150,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const attempt = async (): Promise<boolean> => {
       const { data } = await withSupabaseTimeout(
         supabase.from("profiles").select(PROFILE_COLUMNS).eq("id", uid).maybeSingle(),
-        4000,
+        2000,
         "Profile refresh query"
       );
 
@@ -256,7 +257,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
             .select(PROFILE_COLUMNS)
             .eq("id", user.id)
             .maybeSingle(),
-          4000,
+          2000,
           "Profile query"
         ),
         withSupabaseTimeout(
@@ -267,7 +268,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
             .order("date", { ascending: false })
             .limit(1)
             .maybeSingle(),
-          4000,
+          2000,
           "Weight log query"
         ),
       ]);
@@ -312,7 +313,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
 
     // Tight backoff for faster recovery from short network drops
-    const DELAYS = [100, 300, 800, 1500];
+    const DELAYS = [100, 200, 500];
 
     for (let attempt = 0; attempt <= DELAYS.length; attempt++) {
       // Use provided session on first attempt; subsequent retries fetch fresh

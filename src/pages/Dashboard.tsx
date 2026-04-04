@@ -87,7 +87,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (userId) {
       const t = setTimeout(() =>
-        supabase.functions.invoke("daily-wisdom", { method: "GET" } as any).catch(() => { }), 2000);
+        supabase.functions.invoke("daily-wisdom", { method: "GET" } as any).catch(() => { }), 500);
       return () => clearTimeout(t);
     }
   }, [userId]);
@@ -104,7 +104,7 @@ export default function Dashboard() {
       const payload = {
         currentWeight: profileData.current_weight_kg,
         goalWeight: profileData.goal_weight_kg,
-        fightWeekTarget: profileData.fight_week_target_kg,
+        fightWeekTarget: profileData.goal_type === 'losing' ? undefined : profileData.fight_week_target_kg,
         targetDate: profileData.target_date,
         tdee: profileData.tdee,
         bmr: profileData.bmr,
@@ -590,7 +590,7 @@ export default function Dashboard() {
       {/* Wisdom Detail Bottom Sheet */}
       {wisdom && (
         <Sheet open={wisdomSheetOpen} onOpenChange={setWisdomSheetOpen}>
-          <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl overflow-y-auto pb-8">
+          <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl overflow-y-auto" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 5rem)" }}>
             <SheetHeader className="mb-4">
               <div className="flex items-center gap-3">
                 <div className="rounded-full bg-primary/20 p-2 flex-shrink-0">

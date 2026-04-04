@@ -1,4 +1,4 @@
-import { Moon, Sun, ChevronRight, BookOpen, Bell, Trash2, Mail, Shield, FileText, LifeBuoy, Heart } from "lucide-react";
+import { Moon, Sun, ChevronRight, BookOpen, Bell, Trash2, Mail, Shield, FileText, LifeBuoy, Heart, Trophy } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -21,6 +21,8 @@ interface SettingsPanelProps {
   onSave: () => void;
   onReplayTutorial: () => void;
   onDeleteAccount: () => void;
+  goalType?: 'cutting' | 'losing';
+  onToggleGoalType?: (fighterMode: boolean) => void;
 }
 
 export function SettingsPanel({
@@ -31,6 +33,8 @@ export function SettingsPanel({
   onAvatarChange, onSave,
   onReplayTutorial,
   onDeleteAccount,
+  goalType,
+  onToggleGoalType,
 }: SettingsPanelProps) {
   const [reminderSettings, setReminderSettings] = useState<ReminderSettings>(getSettings);
   const [timePickerOpen, setTimePickerOpen] = useState(false);
@@ -152,6 +156,29 @@ export function SettingsPanel({
               <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
             </div>
           </button>
+
+          {/* Fighter Mode Toggle */}
+          {onToggleGoalType && (
+            <div className="rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
+                    <Trophy className="h-5 w-5 text-primary" />
+                  </span>
+                  <div>
+                    <p className="text-[15px] font-medium text-foreground">Fighter Mode</p>
+                    <p className="text-xs text-muted-foreground">
+                      {goalType === 'cutting' ? 'Fight camps, dehydration & fight week' : 'Weight loss only'}
+                    </p>
+                  </div>
+                </div>
+                <Switch
+                  checked={goalType === 'cutting'}
+                  onCheckedChange={onToggleGoalType}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Weight Reminder (native only) */}
           {Capacitor.isNativePlatform() && (() => {

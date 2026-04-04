@@ -111,8 +111,7 @@ export default function TrainingCalendar() {
         }
     }, [userId]);
 
-    useEffect(() => { fetchSessions(); }, [fetchSessions]);
-    useEffect(() => { fetch28DaySessions(); }, [fetch28DaySessions]);
+    useEffect(() => { fetchSessions(); fetch28DaySessions(); }, [fetchSessions, fetch28DaySessions]);
     useEffect(() => { if (userId) setCustomColors(getUserColors(userId)); }, [userId]);
 
     // Auto-open Log Session dialog when navigated from Quick Log

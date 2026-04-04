@@ -176,16 +176,16 @@ export default function Hydration() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2.5">
-              <div className="glass-card flex flex-col items-center justify-center space-y-1 rounded-2xl p-3 col-span-1">
-                <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-widest text-center">Weigh-In</p>
-                <Input type="date" value={weighInDate} onChange={(e) => setWeighInDate(e.target.value)} required className="w-full text-center text-xs font-medium bg-transparent border-none text-muted-foreground focus-visible:ring-0 p-0 h-auto [&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-datetime-edit]:text-center [&::-webkit-datetime-edit-fields-wrapper]:justify-center" />
-                <Input type="time" value={weighInTime} onChange={(e) => setWeighInTime(e.target.value)} required className="w-full text-center text-xl font-black bg-transparent border-none text-foreground focus-visible:ring-0 p-0 h-auto [&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-datetime-edit]:text-center [&::-webkit-datetime-edit-fields-wrapper]:justify-center" title="Weigh-in time" />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col items-center text-center py-3">
+                <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-[0.15em] mb-1.5">Weigh-In</p>
+                <input type="time" value={weighInTime} onChange={(e) => setWeighInTime(e.target.value)} required className="bg-transparent border-none text-center text-2xl font-black text-foreground focus:outline-none w-auto mx-auto block" style={{ WebkitAppearance: "none" }} />
+                <input type="date" value={weighInDate} onChange={(e) => setWeighInDate(e.target.value)} required className="bg-transparent border-none text-center text-[11px] font-medium text-muted-foreground/60 focus:outline-none w-auto mx-auto block mt-1" style={{ WebkitAppearance: "none" }} />
               </div>
-              <div className="glass-card flex flex-col items-center justify-center space-y-1 rounded-2xl p-3 col-span-1">
-                <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest text-center">Fight</p>
-                <Input type="date" value={fightDate} onChange={(e) => setFightDate(e.target.value)} required className="w-full text-center text-xs font-medium bg-transparent border-none text-muted-foreground focus-visible:ring-0 p-0 h-auto [&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-datetime-edit]:text-center [&::-webkit-datetime-edit-fields-wrapper]:justify-center" />
-                <Input type="time" value={fightTime} onChange={(e) => setFightTime(e.target.value)} required className="w-full text-center text-xl font-black bg-transparent border-none text-foreground focus-visible:ring-0 p-0 h-auto [&::-webkit-calendar-picker-indicator]:opacity-50 [&::-webkit-datetime-edit]:text-center [&::-webkit-datetime-edit-fields-wrapper]:justify-center" title="Fight time" />
+              <div className="flex flex-col items-center text-center py-3">
+                <p className="text-[10px] text-amber-500 font-bold uppercase tracking-[0.15em] mb-1.5">Fight</p>
+                <input type="time" value={fightTime} onChange={(e) => setFightTime(e.target.value)} required className="bg-transparent border-none text-center text-2xl font-black text-foreground focus:outline-none w-auto mx-auto block" style={{ WebkitAppearance: "none" }} />
+                <input type="date" value={fightDate} onChange={(e) => setFightDate(e.target.value)} required className="bg-transparent border-none text-center text-[11px] font-medium text-muted-foreground/60 focus:outline-none w-auto mx-auto block mt-1" style={{ WebkitAppearance: "none" }} />
               </div>
             </div>
 
@@ -198,16 +198,16 @@ export default function Hydration() {
             </div>
 
             {/* Glycogen Depletion Calculator */}
-            <div className="glass-card rounded-2xl p-3">
-              <p className="text-[10px] text-blue-400 font-bold uppercase tracking-widest text-center mb-2">Glycogen Depletion</p>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-[9px] text-muted-foreground uppercase tracking-wider block mb-1 text-center">Normal (g/day)</label>
-                  <Input type="number" inputMode="numeric" placeholder="300" value={normalCarbs} onChange={(e) => setNormalCarbs(e.target.value)} className="text-center text-base font-bold bg-white/5 border-white/10 rounded-xl h-9" />
+            <div className="pt-2">
+              <p className="text-[10px] text-blue-400 font-bold uppercase tracking-[0.15em] text-center mb-3">Glycogen Depletion</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col items-center text-center">
+                  <label className="text-[9px] text-muted-foreground/60 uppercase tracking-wider mb-1">Normal (g/day)</label>
+                  <input type="number" inputMode="numeric" placeholder="300" value={normalCarbs} onChange={(e) => setNormalCarbs(e.target.value)} className="bg-transparent border-none text-center text-xl font-black text-foreground focus:outline-none w-20 mx-auto" />
                 </div>
-                <div>
-                  <label className="text-[9px] text-muted-foreground uppercase tracking-wider block mb-1 text-center">Fight Week (g/day)</label>
-                  <Input type="number" inputMode="numeric" placeholder="50" value={fightWeekCarbs} onChange={(e) => setFightWeekCarbs(e.target.value)} className="text-center text-base font-bold bg-white/5 border-white/10 rounded-xl h-9" />
+                <div className="flex flex-col items-center text-center">
+                  <label className="text-[9px] text-muted-foreground/60 uppercase tracking-wider mb-1">Fight Week (g/day)</label>
+                  <input type="number" inputMode="numeric" placeholder="50" value={fightWeekCarbs} onChange={(e) => setFightWeekCarbs(e.target.value)} className="bg-transparent border-none text-center text-xl font-black text-foreground focus:outline-none w-20 mx-auto" />
                 </div>
               </div>
               {(() => {
@@ -217,24 +217,24 @@ export default function Hydration() {
                 const reduction = hasInputs ? Math.round(((normal - fightWeek) / normal) * 100) : 0;
                 const level = glycogenDepletion;
                 const config = {
-                  significant: { color: "text-red-400 bg-red-500/10 border-red-500/20", label: "Significant", target: "8-12 g/kg" },
-                  moderate: { color: "text-amber-400 bg-amber-500/10 border-amber-500/20", label: "Moderate", target: "6-8 g/kg" },
-                  none: { color: "text-emerald-400 bg-emerald-500/10 border-emerald-500/20", label: "None", target: "4-5 g/kg" },
-                }[level] ?? { color: "text-amber-400 bg-amber-500/10 border-amber-500/20", label: "Moderate", target: "6-8 g/kg" };
+                  significant: { color: "text-red-400", label: "Significant", target: "8-12 g/kg" },
+                  moderate: { color: "text-amber-400", label: "Moderate", target: "6-8 g/kg" },
+                  none: { color: "text-emerald-400", label: "None", target: "4-5 g/kg" },
+                }[level] ?? { color: "text-amber-400", label: "Moderate", target: "6-8 g/kg" };
 
                 return (
-                  <div className={`mt-3 rounded-xl border p-2.5 ${config.color} transition-all`}>
-                    <div className="flex items-center justify-between">
+                  <div className="mt-3 text-center">
+                    <div className={`flex items-center justify-center gap-2 ${config.color}`}>
                       <span className="text-xs font-bold">{config.label}</span>
-                      <span className="text-[10px] font-semibold opacity-80">Replenish: {config.target}</span>
+                      <span className="text-[10px] font-semibold opacity-70">· Replenish: {config.target}</span>
                     </div>
                     {hasInputs ? (
-                      <p className="text-[10px] opacity-70 mt-0.5">
+                      <p className="text-[10px] text-muted-foreground/50 mt-1">
                         {fightWeek < 50 ? `< 50g/day during fight week` : `${reduction}% reduction`}
                         {" — "}reduced from {normal}g to {fightWeek}g/day
                       </p>
                     ) : (
-                      <p className="text-[10px] opacity-70 mt-0.5">Enter your carb intake to auto-detect depletion level</p>
+                      <p className="text-[10px] text-muted-foreground/40 mt-1">Enter carb intake to detect depletion level</p>
                     )}
                   </div>
                 );

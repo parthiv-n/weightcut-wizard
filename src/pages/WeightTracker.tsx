@@ -68,7 +68,7 @@ export default function WeightTracker() {
     if (!userId) return;
     const timer = setTimeout(() => {
       supabase.functions.invoke("weight-tracker-analysis", { method: "GET" } as any).catch(() => {});
-    }, 2000);
+    }, 500);
     return () => clearTimeout(timer);
   }, [userId]);
 
