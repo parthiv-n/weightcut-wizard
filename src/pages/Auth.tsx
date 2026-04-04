@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -425,15 +425,14 @@ export default function Auth() {
               )}
             </div>
           </div>
-          {/* TODO: Replace placeholder URLs with real privacy policy and terms of service URLs before App Store submission */}
           <div className="flex items-center justify-center gap-2 pt-4 pb-6 text-xs text-muted-foreground">
-            <a href="#privacy-policy" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">
+            <Link to="/legal?tab=privacy" className="hover:text-foreground transition-colors">
               Privacy Policy
-            </a>
+            </Link>
             <span>·</span>
-            <a href="#terms-of-service" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">
+            <Link to="/legal?tab=terms" className="hover:text-foreground transition-colors">
               Terms of Service
-            </a>
+            </Link>
           </div>
         </div>
       </div>

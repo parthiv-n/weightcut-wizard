@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { ProfilePictureUpload } from "./ProfilePictureUpload";
 
 export function ProfileDropdown() {
@@ -135,16 +135,15 @@ export function ProfileDropdown() {
               />
             </div>
           </div>
-          {/* TODO: Replace placeholder URLs with real privacy policy and terms of service URLs before App Store submission */}
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <span className="font-medium text-foreground/70">Legal</span>
-            <a href="#privacy-policy" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">
+            <Link to="/legal?tab=privacy" className="hover:text-foreground transition-colors">
               Privacy Policy
-            </a>
+            </Link>
             <span>·</span>
-            <a href="#terms-of-service" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors">
+            <Link to="/legal?tab=terms" className="hover:text-foreground transition-colors">
               Terms of Service
-            </a>
+            </Link>
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={() => setIsProfileOpen(false)}>

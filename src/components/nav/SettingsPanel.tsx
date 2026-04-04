@@ -1,4 +1,5 @@
 import { Moon, Sun, ChevronRight, BookOpen, Bell, Trash2, Mail, Shield, FileText, LifeBuoy, Heart, Trophy } from "lucide-react";
+import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -277,10 +278,8 @@ export function SettingsPanel({
 
           {/* Legal & Support */}
           <div className="rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden divide-y divide-border/30 dark:divide-white/5">
-            <a
-              href="https://weightcutwizard.com/privacy"
-              target="_blank"
-              rel="noopener noreferrer"
+            <Link
+              to="/legal?tab=privacy"
               className="flex items-center justify-between px-4 py-3 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation"
             >
               <div className="flex items-center gap-3">
@@ -293,12 +292,10 @@ export function SettingsPanel({
                 </div>
               </div>
               <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-            </a>
+            </Link>
 
-            <a
-              href="https://weightcutwizard.com/terms"
-              target="_blank"
-              rel="noopener noreferrer"
+            <Link
+              to="/legal?tab=terms"
               className="flex items-center justify-between px-4 py-3 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation"
             >
               <div className="flex items-center gap-3">
@@ -311,7 +308,7 @@ export function SettingsPanel({
                 </div>
               </div>
               <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-            </a>
+            </Link>
 
             <a
               href="mailto:weightcutwizard@gmail.com"

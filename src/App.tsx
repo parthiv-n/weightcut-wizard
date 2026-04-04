@@ -37,6 +37,7 @@ const Recovery = lazy(() => import("./pages/Recovery"));
 const SkillTree = lazy(() => import("./pages/SkillTree"));
 const GymTracker = lazy(() => import("./pages/GymTracker"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const Legal = lazy(() => import("./pages/Legal"));
 
 const _idle = window.requestIdleCallback || ((cb: IdleRequestCallback) => setTimeout(cb, 50));
 _idle(() => {
@@ -47,7 +48,7 @@ _idle(() => {
 
 const queryClient = new QueryClient();
 
-const SKIP_ROUTES = ['/', '/auth', '/onboarding'];
+const SKIP_ROUTES = ['/', '/auth', '/onboarding', '/legal'];
 
 import { App as CapacitorApp } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
@@ -219,6 +220,7 @@ const App = () => (
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/legal" element={<Suspense fallback={null}><Legal /></Suspense>} />
                 <Route path="/onboarding" element={
                   <ProtectedRoute>
                     <Onboarding />
