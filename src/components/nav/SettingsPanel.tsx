@@ -287,7 +287,7 @@ export function SettingsPanel({
             </a>
 
             <a
-              href="mailto:support@weightcutwizard.com"
+              href="mailto:weightcutwizard@gmail.com"
               className="flex items-center justify-between px-4 py-3 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation"
             >
               <div className="flex items-center gap-3">
@@ -296,7 +296,7 @@ export function SettingsPanel({
                 </span>
                 <div>
                   <p className="text-[15px] font-medium text-foreground">Support</p>
-                  <p className="text-xs text-muted-foreground">support@weightcutwizard.com</p>
+                  <p className="text-xs text-muted-foreground">weightcutwizard@gmail.com</p>
                 </div>
               </div>
               <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />

@@ -687,10 +687,9 @@ export default function Nutrition() {
           onFoodSelected={handleFoodSearchSelected} mealType={foodSearchMealType} />
 
         {/* Quick Add Bottom Sheet */}
-        <Sheet open={isQuickAddSheetOpen} onOpenChange={handleSheetOpenChange}>
-          <SheetContent side="bottom" className="h-[85vh] overflow-y-auto pb-20 pt-0">
-            <div className="flex justify-center pt-3 pb-2"><div className="w-10 h-1 rounded-full bg-muted-foreground/30" /></div>
-            <SheetHeader className="pb-3"><SheetTitle className="text-base">Add Meal</SheetTitle></SheetHeader>
+        <Dialog open={isQuickAddSheetOpen} onOpenChange={handleSheetOpenChange}>
+          <DialogContent className="sm:max-w-md max-h-[calc(100vh-6rem)] overflow-y-auto rounded-[24px]">
+            <DialogHeader><DialogTitle className="text-base">Add Meal</DialogTitle></DialogHeader>
             <div className="flex gap-1 p-1 rounded-xl bg-muted/50 mb-4">
               <button onClick={() => setQuickAddTab("ai")} className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${quickAddTab === "ai" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
                 <Sparkles className="h-3.5 w-3.5 inline mr-1.5 -mt-0.5" />AI Quick Fill
@@ -712,8 +711,8 @@ export default function Nutrition() {
             </div>
 
             {quickAddTab === "ai" && (
-              <div className={`space-y-3 ${!aiMeal.aiAnalysisComplete ? "flex flex-col items-center justify-center min-h-[40vh]" : ""}`}>
-                <div className={`flex flex-col gap-2 ${!aiMeal.aiAnalysisComplete ? "w-full max-w-md" : ""}`}>
+              <div className="space-y-3">
+                <div className="flex flex-col gap-2">
                   <Textarea placeholder={"e.g. 2 slices tiger bread with nutella, a glass of whole milk, and a banana\n\nBe as descriptive as possible — portions, brands, and prep details help get more accurate results"}
                     value={aiMeal.aiMealDescription} onChange={(e) => aiMeal.setAiMealDescription(e.target.value)} disabled={aiMeal.aiAnalyzing}
                     className="flex-1 text-sm min-h-[80px] resize-none" rows={3}
@@ -750,7 +749,6 @@ export default function Nutrition() {
                     <Button onClick={aiMeal.handleSaveAiMeal} disabled={aiMeal.aiLineItems.length === 0} className="w-full">Add Meal</Button>
                   </div>
                 )}
-                <div className="h-10 w-full" />
               </div>
             )}
 
@@ -840,11 +838,10 @@ export default function Nutrition() {
                   </div>
                 )}
                 <Button onClick={handleAddManualMeal} disabled={mealOps.savingAllMeals} className="w-full mt-1">{mealOps.savingAllMeals ? "Adding…" : "Add Meal"}</Button>
-                <div className="h-20 w-full" />
               </div>
             )}
-          </SheetContent>
-        </Sheet>
+          </DialogContent>
+        </Dialog>
 
         {/* AI Meal Plan Dialog */}
         <Dialog open={mealPlan.isAiDialogOpen} onOpenChange={(open) => mealPlan.setIsAiDialogOpen(open)}>
