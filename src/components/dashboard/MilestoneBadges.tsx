@@ -1,8 +1,8 @@
 import { memo } from "react";
 import { Flame, Calendar, Utensils, Trophy, Scale, TrendingUp, Award, Zap, Star, Dumbbell, Crown, Check, ChevronRight } from "lucide-react";
-import { motion, useReducedMotion } from "motion/react";
+import { motion } from "motion/react";
 import type { MilestoneBadge } from "@/hooks/useGamification";
-import { staggerContainer, staggerItem, springs } from "@/lib/motion";
+import { springs } from "@/lib/motion";
 
 const iconMap = {
   Flame, Calendar, Utensils, Trophy, Scale, TrendingUp, Award, Zap, Star, Dumbbell, Crown,
@@ -25,8 +25,6 @@ function BadgeSkeleton() {
 }
 
 export const MilestoneBadges = memo(function MilestoneBadges({ badges, loading, onTap }: MilestoneBadgesProps) {
-  const prefersReducedMotion = useReducedMotion();
-
   if (loading) {
     return (
       <div>
@@ -55,20 +53,13 @@ export const MilestoneBadges = memo(function MilestoneBadges({ badges, loading, 
         </div>
         {onTap && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
       </div>
-      <motion.div
-        className="flex gap-3 overflow-x-auto scrollbar-hide pb-1"
-        variants={prefersReducedMotion ? undefined : staggerContainer(60)}
-        initial="hidden"
-        animate="visible"
-      >
+      <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
         {badges.map((badge) => {
           const Icon = iconMap[badge.icon];
           return (
-            <motion.div
+            <div
               key={badge.id}
               className="w-28 flex-shrink-0 rounded-xl border border-border/50 p-3 text-center glass-card"
-              variants={prefersReducedMotion ? undefined : staggerItem}
-              transition={springs.responsive}
             >
               {/* Icon circle */}
               <div
@@ -111,10 +102,10 @@ export const MilestoneBadges = memo(function MilestoneBadges({ badges, loading, 
                   />
                 </div>
               )}
-            </motion.div>
+            </div>
           );
         })}
-      </motion.div>
+      </div>
     </Wrapper>
   );
 });

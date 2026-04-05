@@ -75,8 +75,8 @@ class LocalCache {
     this.set(userId, this.dateKey(table, date), data);
   }
 
-  getForDate<T>(userId: string, table: string, date: string): T | null {
-    return this.get<T>(userId, this.dateKey(table, date));
+  getForDate<T>(userId: string, table: string, date: string, maxAgeMs?: number): T | null {
+    return this.get<T>(userId, this.dateKey(table, date), maxAgeMs);
   }
 
   removeForDate(userId: string, table: string, date: string): void {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, subMonths, addMonths, subDays } from "date-fns";
 import { ChevronLeft, ChevronRight, Plus, Activity } from "lucide-react";
@@ -22,6 +22,7 @@ import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { TrainingCalendarCard } from "@/components/share/cards/TrainingCalendarCard";
 import { logger } from "@/lib/logger";
 import { getUserColors, setUserColor } from "@/lib/sessionColors";
+import { encodeRunMeta, decodeRunMeta, formatPace } from "@/lib/runMeta";
 import { Skeleton } from "@/components/ui/skeleton-loader";
 
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
@@ -50,6 +51,10 @@ export default function TrainingCalendar() {
     const [sorenessLevel, setSorenessLevel] = useState([5]);
     const [sleepHours, setSleepHours] = useState("8");
     const [notes, setNotes] = useState("");
+    const [runDistance, setRunDistance] = useState("");
+    const [runTime, setRunTime] = useState("");
+    const [runDistanceUnit, setRunDistanceUnit] = useState<"km" | "mi">("km");
+    const runPace = formatPace(runDistance, runTime);
 
     // Edit state
     const [editingSession, setEditingSession] = useState<TrainingCalendarRow | null>(null);
@@ -68,6 +73,9 @@ export default function TrainingCalendar() {
     const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
 
     const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+    const fetchingRef = useRef(false);
+    const toastRef = useRef(toast);
+    toastRef.current = toast;
 
     const monthCacheKey = (d: Date) => `training_sessions_${format(d, "yyyy-MM")}`;
 
@@ -98,7 +106,7 @@ export default function TrainingCalendar() {
         } catch (error) {
             logger.error("Error fetching sessions", error);
             if (!cached) {
-                toast({
+                toastRef.current({
                     title: "Error fetching sessions",
                     description: "Could not load your calendar data.",
                     variant: "destructive"
@@ -107,7 +115,7 @@ export default function TrainingCalendar() {
         } finally {
             setIsLoading(false);
         }
-    }, [userId, currentDate, toast]);
+    }, [userId, currentDate]);
 
     const fetch28DaySessions = useCallback(async () => {
         if (!userId) return;
@@ -149,7 +157,11 @@ export default function TrainingCalendar() {
         } catch { /* silent preload */ }
     }, [userId]);
 
-    useEffect(() => { fetchSessions(); fetch28DaySessions(); }, [fetchSessions, fetch28DaySessions]);
+    useEffect(() => {
+        if (fetchingRef.current) return;
+        fetchingRef.current = true;
+        Promise.all([fetchSessions(), fetch28DaySessions()]).finally(() => { fetchingRef.current = false; });
+    }, [fetchSessions, fetch28DaySessions]);
 
     // Preload prev/next months after current month loads
     useEffect(() => {
@@ -180,6 +192,9 @@ export default function TrainingCalendar() {
         setHasSoreness(false);
         setSorenessLevel([5]);
         setNotes("");
+        setRunDistance("");
+        setRunTime("");
+        setRunDistanceUnit("km");
         setEditingSession(null);
         setMediaFile(null);
         setMediaPreviewUrl(null);
@@ -205,7 +220,17 @@ export default function TrainingCalendar() {
         setHasSoreness((session.soreness_level ?? 0) > 0);
         setSorenessLevel([(session.soreness_level ?? 0) > 0 ? session.soreness_level! : 5]);
         setSleepHours(String(session.sleep_hours ?? 8));
-        setNotes(session.notes ?? "");
+        const { meta, notes: cleanNotes } = decodeRunMeta(session.notes);
+        setNotes(cleanNotes);
+        if (meta) {
+            setRunDistance(meta.distance || "");
+            setRunTime(meta.time || "");
+            setRunDistanceUnit(meta.unit || "km");
+        } else {
+            setRunDistance("");
+            setRunTime("");
+            setRunDistanceUnit("km");
+        }
         setExistingMediaUrl(session.media_url ?? null);
         setMediaFile(null);
         setMediaPreviewUrl(null);
@@ -249,7 +274,12 @@ export default function TrainingCalendar() {
                 intensity_level: intensityLevel[0],
                 soreness_level: hasSoreness ? sorenessLevel[0] : 0,
                 sleep_hours: parseFloat(sleepHours) || 0,
-                notes: notes.trim() || null,
+                notes: sessionType === "Run"
+                    ? encodeRunMeta(
+                        { distance: runDistance, unit: runDistanceUnit, time: runTime, pace: runPace },
+                        notes.trim()
+                      ) || null
+                    : notes.trim() || null,
                 fatigue_level: null,
                 sleep_quality: null,
                 mobility_done: null,
@@ -407,6 +437,10 @@ export default function TrainingCalendar() {
                                     sorenessLevel={sorenessLevel} setSorenessLevel={setSorenessLevel}
                                     sleepHours={sleepHours} setSleepHours={setSleepHours}
                                     notes={notes} setNotes={setNotes}
+                                    runDistance={runDistance} setRunDistance={setRunDistance}
+                                    runTime={runTime} setRunTime={setRunTime}
+                                    runDistanceUnit={runDistanceUnit} setRunDistanceUnit={setRunDistanceUnit}
+                                    runPace={runPace}
                                     mediaPreviewUrl={mediaPreviewUrl}
                                     existingMediaUrl={existingMediaUrl}
                                     onMediaSelected={(file, previewUrl) => {

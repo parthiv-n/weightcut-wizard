@@ -5,6 +5,7 @@ import { useUser } from "@/contexts/UserContext";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
+import { nutritionCache } from "@/lib/nutritionCache";
 import type { AIAnalysis, Profile, DebugData } from "@/pages/weight/types";
 
 interface UseWeightAnalysisParams {
@@ -12,7 +13,7 @@ interface UseWeightAnalysisParams {
 }
 
 export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
-  const { userId } = useUser();
+  const { userId, refreshProfile } = useUser();
   const { toast } = useToast();
   const aiAbortRef = useRef<AbortController | null>(null);
 
@@ -23,6 +24,8 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
   const [unsafeGoalDialogOpen, setUnsafeGoalDialogOpen] = useState(false);
   const [debugDialogOpen, setDebugDialogOpen] = useState(false);
   const [debugData, setDebugData] = useState<DebugData | null>(null);
+  const [targetsApplied, setTargetsApplied] = useState(false);
+  const [applyingTargets, setApplyingTargets] = useState(false);
 
   const loadPersistedAnalysis = () => {
     if (!userId) return;
@@ -47,6 +50,7 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
     setAiAnalysisWeight(null);
     setAiAnalysisTarget(null);
     AIPersistence.remove(userId, "weight_analysis");
+    setTargetsApplied(false);
   };
 
   const isGoalUnrealistic = (currentWeight: number, fightWeekTarget: number, targetDate: string): boolean => {
@@ -134,6 +138,7 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
           variant: "destructive"
         });
       } else if (data?.analysis) {
+        setTargetsApplied(false);
         setAiAnalysis(data.analysis);
         setAiAnalysisWeight(currentWeight);
         setAiAnalysisTarget(fightWeekTarget);
@@ -163,6 +168,31 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
     setAnalyzingWeight(false);
   };
 
+  const applyNutritionTargets = async () => {
+    if (!userId || !aiAnalysis) return;
+    setApplyingTargets(true);
+    try {
+      const { error } = await supabase.from("profiles").update({
+        manual_nutrition_override: false,
+        ai_recommended_calories: aiAnalysis.recommendedCalories,
+        ai_recommended_protein_g: aiAnalysis.proteinGrams,
+        ai_recommended_carbs_g: aiAnalysis.carbsGrams,
+        ai_recommended_fats_g: aiAnalysis.fatsGrams,
+      }).eq("id", userId);
+      if (error) throw error;
+      nutritionCache.remove(userId, 'profile');
+      nutritionCache.remove(userId, 'macroGoals');
+      await refreshProfile();
+      setTargetsApplied(true);
+      toast({ title: "Targets applied", description: "Nutrition page updated with AI recommendations." });
+    } catch (err: any) {
+      logger.error("Error applying nutrition targets", err);
+      toast({ title: "Failed to apply targets", description: err?.message || "Please try again.", variant: "destructive" });
+    } finally {
+      setApplyingTargets(false);
+    }
+  };
+
   return {
     analyzingWeight,
     aiAnalysis,
@@ -175,5 +205,8 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
     clearAnalysis,
     getAIAnalysis,
     handleAICancel,
+    targetsApplied,
+    applyingTargets,
+    applyNutritionTargets,
   };
 }

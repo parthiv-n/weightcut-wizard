@@ -39,8 +39,8 @@ All colors MUST be HSL.
     --destructive: 0 84% 70%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 90%;
-    --input: 0 0% 90%;
+    --border: 0 0% 78%;
+    --input: 0 0% 78%;
     --ring: 217 91% 53%;
 
     --radius: 1rem;
@@ -213,12 +213,13 @@ All colors MUST be HSL.
 
 @layer components {
 
-  /* Disclosure panel: GPU-composited expand/collapse via grid-template-rows */
+  /* Disclosure panel: expand/collapse via grid-template-rows */
   .disclosure-panel {
     display: grid;
     grid-template-rows: 0fr;
     opacity: 0;
-    transition: grid-template-rows 250ms ease-out, opacity 200ms ease-out;
+    transition: grid-template-rows 200ms ease-out, opacity 150ms ease-out;
+    contain: layout style;
   }
   .disclosure-panel[data-expanded="true"] {
     grid-template-rows: 1fr;
@@ -239,9 +240,20 @@ All colors MUST be HSL.
   .bg-card,
   [data-sidebar="sidebar"] {
     background: hsl(var(--card) / 0.9);
-    border: 1px solid hsl(var(--border) / 0.5);
+    border: 1px solid hsl(var(--border));
     border-radius: 1rem;
-    transition: box-shadow 0.3s ease, border-color 0.3s ease;
+    transition: border-color 0.3s ease;
+  }
+
+  /* Light mode: bold outlined cards, dialogs, popovers */
+  :root:not(.dark) .glass-card,
+  :root:not(.dark) .bg-card,
+  :root:not(.dark) .nutrition-dashboard,
+  :root:not(.dark) [role="dialog"],
+  :root:not(.dark) .popover-content,
+  :root:not(.dark) [data-sidebar="sidebar"] {
+    border: 1.5px solid hsl(0 0% 0% / 0.15);
+    box-shadow: 0 1px 3px hsl(0 0% 0% / 0.06);
   }
 
   .dark .glass-card,
@@ -251,14 +263,10 @@ All colors MUST be HSL.
   .dark .popover-content {
     background: rgba(255, 255, 255, 0.06) !important;
     /* Extremely sheer white */
-    backdrop-filter: blur(4px) saturate(110%);
-    -webkit-backdrop-filter: blur(4px) saturate(110%);
     border: 1px solid rgba(255, 255, 255, 0.08) !important;
     box-shadow:
       inset 0 1px 1px rgba(255, 255, 255, 0.1),
-      /* Crispy top edge inner shadow */
       0 8px 32px rgba(0, 0, 0, 0.3);
-    /* Soft outer drop shadow to create lift */
   }
 
   /* Glowing Interactive States — only on devices with real hover (not touch) */
@@ -290,7 +298,7 @@ All colors MUST be HSL.
       0 1px 3px hsl(var(--primary) / 0.04),
       0 4px 16px hsl(var(--primary) / 0.03),
       inset 0 1px 0 hsl(0 0% 100% / 0.06);
-    animation: dashboardCardEnter 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+
   }
 
   .dark .nutrition-dashboard {
@@ -464,18 +472,6 @@ All colors MUST be HSL.
     contain-intrinsic-size: auto 200px;
   }
 
-  /* Dashboard card stagger entrance */
-  @keyframes dashboardCardEnter {
-    from {
-      opacity: 0;
-      transform: translateY(20px) scale(0.95);
-    }
-
-    to {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-  }
 
   /* ── iOS native: kill expensive backdrop-blur, use solid backgrounds ── */
   .native-app.dark .glass-card,

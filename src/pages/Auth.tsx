@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -231,13 +231,18 @@ export default function Auth() {
     }
   };
 
-  // Real-time password match validation
+  // Debounced password match validation
+  const passwordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    if ((!isLogin || isPasswordReset) && confirmPassword && password !== confirmPassword) {
-      setPasswordError("Passwords do not match");
-    } else if ((!isLogin || isPasswordReset) && confirmPassword && password === confirmPassword) {
-      setPasswordError("");
-    }
+    if (passwordTimerRef.current) clearTimeout(passwordTimerRef.current);
+    passwordTimerRef.current = setTimeout(() => {
+      if ((!isLogin || isPasswordReset) && confirmPassword && password !== confirmPassword) {
+        setPasswordError("Passwords do not match");
+      } else if ((!isLogin || isPasswordReset) && confirmPassword && password === confirmPassword) {
+        setPasswordError("");
+      }
+    }, 300);
+    return () => { if (passwordTimerRef.current) clearTimeout(passwordTimerRef.current); };
   }, [password, confirmPassword, isLogin, isPasswordReset]);
 
   return (
@@ -255,12 +260,12 @@ export default function Auth() {
         <ThemeToggle />
       </div>
       {/* Subtle background orbs */}
-      <div className="absolute top-[-20%] left-[-10%] w-[400px] h-[400px] bg-primary/20 dark:bg-primary/20 rounded-full blur-[120px] pointer-events-none opacity-30 dark:opacity-20" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[300px] h-[300px] bg-secondary/15 dark:bg-secondary/20 rounded-full blur-[100px] pointer-events-none opacity-40 dark:opacity-10" />
+      <div className="absolute top-[-20%] left-[-10%] w-[400px] h-[400px] bg-primary/20 dark:bg-primary/10 rounded-full blur-3xl pointer-events-none opacity-30 dark:opacity-20" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[300px] h-[300px] bg-secondary/15 dark:bg-secondary/10 rounded-full blur-3xl pointer-events-none opacity-40 dark:opacity-10" />
 
       <div className="w-full max-w-[380px] z-10">
         {/* Glass card container */}
-        <div className="glass-card relative rounded-3xl border border-border dark:border-white/10 bg-gradient-to-br from-primary/5 via-background/60 to-secondary/5 dark:from-primary/10 dark:via-background/50 dark:to-secondary/10 shadow-xl dark:shadow-[0_0_60px_rgba(37,99,235,0.2)] backdrop-blur-2xl overflow-hidden">
+        <div className="glass-card relative rounded-3xl border border-border dark:border-white/10 bg-gradient-to-br from-primary/5 via-background/60 to-secondary/5 dark:from-primary/10 dark:via-background/50 dark:to-secondary/10 shadow-xl dark:shadow-[0_0_60px_rgba(37,99,235,0.2)] overflow-hidden">
           <div className="p-8 flex flex-col gap-6">
             {/* Header */}
             <div className="flex flex-col items-center text-center space-y-3">
@@ -298,7 +303,7 @@ export default function Auth() {
                       onChange={(e) => setPassword(e.target.value)}
                       required
                       minLength={6}
-                      className={`h-12 rounded-full bg-card border-border text-foreground placeholder:text-muted-foreground px-5 text-base focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all font-medium ${passwordError ? "border-red-500 focus:ring-red-500/50" : ""}`}
+                      className={`h-12 rounded-full bg-card border-border text-foreground placeholder:text-muted-foreground px-5 text-base focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-colors duration-200 font-medium ${passwordError ? "border-red-500 focus:ring-red-500/50" : ""}`}
                     />
                     <Input
                       id="confirm-new-password"
@@ -308,7 +313,7 @@ export default function Auth() {
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       required
                       minLength={6}
-                      className={`h-12 rounded-full bg-card border-border text-foreground placeholder:text-muted-foreground px-5 text-base focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all font-medium ${passwordError ? "border-red-500 focus:ring-red-500/50" : ""}`}
+                      className={`h-12 rounded-full bg-card border-border text-foreground placeholder:text-muted-foreground px-5 text-base focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-colors duration-200 font-medium ${passwordError ? "border-red-500 focus:ring-red-500/50" : ""}`}
                     />
                     {passwordError && (
                       <p className="text-xs text-red-500 text-center px-4 font-medium">{passwordError}</p>
@@ -332,7 +337,7 @@ export default function Auth() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
-                      className="h-12 rounded-full bg-card border-border text-foreground placeholder:text-muted-foreground px-5 text-base focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all font-medium"
+                      className="h-12 rounded-full bg-card border-border text-foreground placeholder:text-muted-foreground px-5 text-base focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-colors duration-200 font-medium"
                     />
                   </div>
                   <Button
@@ -360,7 +365,7 @@ export default function Auth() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
-                      className="h-12 rounded-full bg-card border-border text-foreground placeholder:text-muted-foreground px-5 text-base focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all font-medium"
+                      className="h-12 rounded-full bg-card border-border text-foreground placeholder:text-muted-foreground px-5 text-base focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-colors duration-200 font-medium"
                     />
                     <Input
                       id="password"
@@ -370,7 +375,7 @@ export default function Auth() {
                       onChange={(e) => setPassword(e.target.value)}
                       required
                       minLength={6}
-                      className={`h-12 rounded-full bg-card border-border text-foreground placeholder:text-muted-foreground px-5 text-base focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all font-medium ${passwordError ? "border-red-500 focus:ring-red-500/50" : ""
+                      className={`h-12 rounded-full bg-card border-border text-foreground placeholder:text-muted-foreground px-5 text-base focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-colors duration-200 font-medium ${passwordError ? "border-red-500 focus:ring-red-500/50" : ""
                         }`}
                     />
                     {!isLogin && (
@@ -382,7 +387,7 @@ export default function Auth() {
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         required
                         minLength={6}
-                        className={`h-12 rounded-full bg-card border-border text-foreground placeholder:text-muted-foreground px-5 text-base focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-all font-medium ${passwordError ? "border-red-500 focus:ring-red-500/50" : ""
+                        className={`h-12 rounded-full bg-card border-border text-foreground placeholder:text-muted-foreground px-5 text-base focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-colors duration-200 font-medium ${passwordError ? "border-red-500 focus:ring-red-500/50" : ""
                           }`}
                       />
                     )}

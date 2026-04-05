@@ -1,7 +1,8 @@
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { Moon, Check, Image } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getSessionColor, COLOR_PALETTE } from "@/lib/sessionColors";
+import { decodeRunMeta } from "@/lib/runMeta";
 import type { Tables } from "@/integrations/supabase/types";
 
 type TrainingCalendarRow = Tables<"fight_camp_calendar">;
@@ -16,9 +17,14 @@ interface SessionCardProps {
 
 export const SessionCard = memo(function SessionCard({ session, customColors, userId, onView, onColorChange }: SessionCardProps) {
   const isRest = session.session_type === 'Rest';
+  const isRun = session.session_type === 'Run';
   const sessionColor = getSessionColor(session.session_type, customColors);
   const intensityDisplay = session.intensity_level
     ?? (session.intensity === 'high' ? 5 : session.intensity === 'moderate' ? 3 : 1);
+  const { meta: runMeta, notes: cleanNotes } = useMemo(
+    () => isRun ? decodeRunMeta(session.notes) : { meta: null, notes: session.notes ?? "" },
+    [isRun, session.notes]
+  );
 
   return (
     <div
@@ -109,6 +115,45 @@ export const SessionCard = memo(function SessionCard({ session, customColors, us
             </div>
           )}
         </div>
+      ) : isRun && runMeta ? (
+        <div className="flex items-end gap-4 mt-4">
+          <div className="flex-1 min-w-0">
+            <span className="text-[10px] font-medium uppercase tracking-widest text-foreground/40">
+              Distance
+            </span>
+            <div className="flex items-baseline gap-1 mt-0.5">
+              <span className="display-number text-2xl text-foreground">
+                {runMeta.distance}
+              </span>
+              <span className="text-xs text-foreground/40 font-medium">{runMeta.unit}</span>
+            </div>
+          </div>
+          {runMeta.time && (
+            <div className="flex-1 min-w-0">
+              <span className="text-[10px] font-medium uppercase tracking-widest text-foreground/40">
+                Time
+              </span>
+              <div className="flex items-baseline gap-1 mt-0.5">
+                <span className="display-number text-2xl" style={{ color: sessionColor }}>
+                  {runMeta.time}
+                </span>
+              </div>
+            </div>
+          )}
+          {runMeta.pace && (
+            <div className="flex-1 min-w-0">
+              <span className="text-[10px] font-medium uppercase tracking-widest text-foreground/40">
+                Pace
+              </span>
+              <div className="flex items-baseline gap-1 mt-0.5">
+                <span className="display-number text-2xl text-foreground">
+                  {runMeta.pace}
+                </span>
+                <span className="text-xs text-foreground/40 font-medium">/{runMeta.unit}</span>
+              </div>
+            </div>
+          )}
+        </div>
       ) : (
         <div className="flex items-end gap-4 mt-4">
           <div className="flex-1 min-w-0">
@@ -165,9 +210,9 @@ export const SessionCard = memo(function SessionCard({ session, customColors, us
       )}
 
       {/* Notes preview */}
-      {session.notes && (
+      {(isRun ? cleanNotes : session.notes) && (
         <p className="mt-3 text-[12px] text-foreground/35 line-clamp-1 leading-relaxed">
-          {session.notes}
+          {isRun ? cleanNotes : session.notes}
         </p>
       )}
     </div>

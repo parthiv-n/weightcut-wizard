@@ -1,6 +1,5 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { motion, useReducedMotion } from "motion/react";
 import { supabase } from "@/integrations/supabase/client";
 import { ComposedChart, Line, Area, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { Droplets, TrendingDown, Calendar, Lock, ChevronRight, Flame, Zap, CheckCircle2, Scale } from "lucide-react";
@@ -22,7 +21,6 @@ import { localCache } from "@/lib/localCache";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { WeightIncreaseQuestionnaire } from "@/components/dashboard/WeightIncreaseQuestionnaire";
 import { AchievementSheet } from "@/components/achievements/AchievementSheet";
-import { staggerContainer, staggerItem, springs } from "@/lib/motion";
 import { triggerHaptic, triggerHapticSelection } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import { logger } from "@/lib/logger";
@@ -55,7 +53,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const { safeAsync, isMounted } = useSafeAsync();
   const { streak, streakIncludesToday, weeklyConsistency, badges, badgesLoading, allAchievements } = useGamification(userId, weightLogs, todayCalories, profile);
-  const prefersReducedMotion = useReducedMotion();
+
   const lastFetchRef = useRef(0);
 
   const getGreeting = () => {
@@ -350,14 +348,9 @@ export default function Dashboard() {
 
   return (
     <ErrorBoundary>
-      <motion.div
-        className="space-y-3 sm:space-y-4 p-3 sm:p-5 md:p-6 w-full max-w-7xl mx-auto"
-        variants={prefersReducedMotion ? undefined : staggerContainer(60)}
-        initial="hidden"
-        animate="visible"
-      >
+      <div className="space-y-3 sm:space-y-4 p-3 sm:p-5 md:p-6 w-full max-w-7xl mx-auto">
         {/* Countdown + Greeting header */}
-        <motion.div variants={prefersReducedMotion ? undefined : staggerItem} transition={springs.responsive}>
+        <div>
           {daysUntilTarget > 0 && (
             <div className="flex items-center gap-2 mb-1.5">
               <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
@@ -367,10 +360,10 @@ export default function Dashboard() {
             </div>
           )}
           {streak > 0 && <StreakBadge streak={streak} isActive={streakIncludesToday} />}
-        </motion.div>
+        </div>
 
         {weightLogs.length === 0 && (
-          <motion.div variants={prefersReducedMotion ? undefined : staggerItem} transition={springs.responsive}>
+          <div>
             <div className="glass-card rounded-2xl border border-border/50 p-4">
               <div className="flex items-start gap-3">
                 <div className="rounded-full bg-primary/15 p-2.5 flex-shrink-0">
@@ -392,13 +385,13 @@ export default function Dashboard() {
                 </div>
               </div>
             </div>
-          </motion.div>
+          </div>
         )}
 
         {/* Weekly Consistency Ring */}
-        <motion.div variants={prefersReducedMotion ? undefined : staggerItem} transition={springs.responsive}>
+        <div>
           <ConsistencyRing {...weeklyConsistency} />
-        </motion.div>
+        </div>
 
         {/* Wizard's Daily Wisdom card — conditional states */}
         <div data-tutorial="daily-wisdom-card">
@@ -582,10 +575,10 @@ export default function Dashboard() {
         </div>
 
         {/* Milestone Badges */}
-        <motion.div variants={prefersReducedMotion ? undefined : staggerItem} transition={springs.responsive}>
+        <div>
           <MilestoneBadges badges={badges} loading={badgesLoading} onTap={() => setAchievementSheetOpen(true)} />
-        </motion.div>
-      </motion.div>
+        </div>
+      </div>
 
       {/* Wisdom Detail Bottom Sheet */}
       {wisdom && (

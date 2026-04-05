@@ -31,7 +31,7 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
     if (Capacitor.isNativePlatform()) {
       LocalNotifications.requestPermissions().then(() => {
         syncWeightReminder();
-      });
+      }).catch(() => {});
     }
   }, []);
 
