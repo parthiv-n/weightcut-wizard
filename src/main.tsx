@@ -20,6 +20,7 @@ if (dsn) {
       "Authentication operation timed out",
       "useAuth must be used within",
       "useProfile must be used within",
+      "Cannot access uninitialized variable",
     ],
   });
 }
