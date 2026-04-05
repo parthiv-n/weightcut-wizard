@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, memo } from "react";
-import { Activity, Brain, RefreshCw, AlertTriangle, CheckCircle, Loader2, TrendingUp, TrendingDown, Minus, X } from "lucide-react";
+import { Activity, Brain, RefreshCw, AlertTriangle, CheckCircle, Loader2, TrendingUp, TrendingDown, Minus, X, BookOpen, ChevronDown, Heart, Flame, Shield, Moon, Dumbbell, Gauge, Zap, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { AIPersistence } from "@/lib/aiPersistence";
@@ -661,9 +661,182 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
 
         {coachData && <CoachResultCard coach={coachData} onRefresh={refreshCoach} />}
       </div>
+
+      {/* Metrics Guide */}
+      <MetricsGuide />
     </div>
   );
 });
+
+// ─── Metrics Guide ───────────────────────────────────────────
+const GUIDE_SECTIONS = [
+  {
+    icon: Heart,
+    color: "text-green-400",
+    bg: "bg-green-500/10",
+    title: "Readiness Score",
+    range: "0 – 100",
+    zones: [
+      { label: "Peaked", value: "80+", color: "text-green-400" },
+      { label: "Ready", value: "55–79", color: "text-blue-400" },
+      { label: "Recovering", value: "35–54", color: "text-amber-400" },
+      { label: "Strained", value: "< 35", color: "text-red-400" },
+    ],
+    description: "A composite score reflecting how prepared your body is for training. It factors in sleep quality, soreness, training load balance, recovery patterns, and consistency. Higher scores mean your body is primed for intense work.",
+  },
+  {
+    icon: Flame,
+    color: "text-orange-400",
+    bg: "bg-orange-500/10",
+    title: "Strain",
+    range: "0 – 21",
+    zones: [
+      { label: "Light", value: "0–7", color: "text-green-400" },
+      { label: "Moderate", value: "8–13", color: "text-blue-400" },
+      { label: "Hard", value: "14–17", color: "text-amber-400" },
+      { label: "All-Out", value: "18–21", color: "text-red-400" },
+    ],
+    description: "Measures the total cardiovascular and muscular load from your sessions using an exponential formula (RPE × duration × intensity). Diminishing returns mean it gets harder to push the score higher — just like real fatigue.",
+  },
+  {
+    icon: Shield,
+    color: "text-red-400",
+    bg: "bg-red-500/10",
+    title: "Overtraining Risk",
+    range: "0 – 100",
+    zones: [
+      { label: "Low", value: "0–30", color: "text-green-400" },
+      { label: "Moderate", value: "31–60", color: "text-amber-400" },
+      { label: "High", value: "61–80", color: "text-orange-400" },
+      { label: "Critical", value: "81+", color: "text-red-400" },
+    ],
+    description: "Tracks whether you're piling on too much stress too fast. Flags include spiked training loads, high average RPE, elevated soreness, consecutive high-strain days, and declining sleep. Multiple flags compound the score.",
+  },
+  {
+    icon: BarChart3,
+    color: "text-blue-400",
+    bg: "bg-blue-500/10",
+    title: "Training Load & ACWR",
+    range: null,
+    zones: [
+      { label: "Detraining", value: "< 0.8", color: "text-blue-400" },
+      { label: "Optimal", value: "0.8–1.3", color: "text-green-400" },
+      { label: "Pushing", value: "1.3–1.5", color: "text-amber-400" },
+      { label: "Overreaching", value: "> 1.5", color: "text-red-400" },
+    ],
+    description: "Acute:Chronic Workload Ratio (ACWR) compares your last 7 days of training to your 28-day baseline. A spike means you've suddenly ramped up — increasing injury and fatigue risk. The sweet spot is the optimal zone where fitness improves without excessive breakdown.",
+  },
+  {
+    icon: Moon,
+    color: "text-indigo-400",
+    bg: "bg-indigo-500/10",
+    title: "Sleep Score",
+    range: "0 – 100",
+    zones: null,
+    description: "Derived from a weighted average of your last 3 nights compared to your personal baseline. Sleep is the single biggest recovery lever — even small deficits compound over days. Tracks both duration and consistency.",
+  },
+  {
+    icon: Dumbbell,
+    color: "text-purple-400",
+    bg: "bg-purple-500/10",
+    title: "RPE & Soreness",
+    range: "1 – 10 scale",
+    zones: null,
+    description: "Rate of Perceived Exertion (RPE) measures how hard a session felt. Soreness tracks delayed muscle damage. When 7-day average RPE consistently exceeds your calibrated ceiling or soreness stays above 6, the system raises overtraining flags.",
+  },
+  {
+    icon: Gauge,
+    color: "text-cyan-400",
+    bg: "bg-cyan-500/10",
+    title: "Hooper Index",
+    range: "4 – 28",
+    zones: null,
+    description: "A validated sports science questionnaire combining sleep quality, stress, fatigue, and soreness into a single wellness number. Recorded via your daily check-in. Lower is better — rising values signal accumulating fatigue before it shows in performance.",
+  },
+  {
+    icon: Zap,
+    color: "text-yellow-400",
+    bg: "bg-yellow-500/10",
+    title: "Forecast",
+    range: null,
+    zones: null,
+    description: "Predicts tomorrow's strain, load zone, and overtraining risk based on your current trajectory. Use it to decide whether to push hard, go moderate, or take a recovery day. The forecast adapts as you log more sessions.",
+  },
+];
+
+function MetricsGuide() {
+  const [open, setOpen] = useState(false);
+  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+
+  return (
+    <div className="glass-card rounded-[20px] border border-border/50 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => { setOpen(prev => !prev); if (open) setExpandedIdx(null); }}
+        className="w-full flex items-center justify-between p-4"
+      >
+        <div className="flex items-center gap-2.5">
+          <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
+            <BookOpen className="h-3.5 w-3.5 text-primary" />
+          </div>
+          <span className="text-sm font-semibold">Understanding Your Metrics</span>
+        </div>
+        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-300 ${open ? "rotate-180" : ""}`} />
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 space-y-1.5">
+          <p className="text-[11px] text-muted-foreground/60 leading-relaxed pb-2">
+            Tap any metric to learn how it's calculated and what it means for your training.
+          </p>
+          {GUIDE_SECTIONS.map((section, idx) => {
+            const Icon = section.icon;
+            const isExpanded = expandedIdx === idx;
+            return (
+              <button
+                key={section.title}
+                type="button"
+                onClick={() => setExpandedIdx(isExpanded ? null : idx)}
+                className="w-full text-left rounded-2xl border border-border/20 overflow-hidden transition-colors hover:bg-accent/5"
+              >
+                <div className="flex items-center justify-between p-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-7 h-7 rounded-full ${section.bg} flex items-center justify-center`}>
+                      <Icon className={`h-3.5 w-3.5 ${section.color}`} />
+                    </div>
+                    <div>
+                      <span className="text-[13px] font-semibold">{section.title}</span>
+                      {section.range && (
+                        <span className="text-[10px] text-muted-foreground/50 ml-2">{section.range}</span>
+                      )}
+                    </div>
+                  </div>
+                  <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground/40 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
+                </div>
+
+                {isExpanded && (
+                  <div className="px-3 pb-3 space-y-2.5">
+                    <p className="text-[12px] text-muted-foreground leading-relaxed">{section.description}</p>
+                    {section.zones && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {section.zones.map((z) => (
+                          <div key={z.label} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-card/80 border border-border/20">
+                            <span className={`text-[10px] font-bold ${z.color}`}>{z.value}</span>
+                            <span className="text-[10px] text-muted-foreground">{z.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Readiness Hero Badge (AI-driven) ────────────────────────
 function ReadinessBadgeUI({ state }: { state: CoachResponse['readiness_state'] }) {

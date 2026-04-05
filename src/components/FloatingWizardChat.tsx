@@ -144,14 +144,14 @@ export function FloatingWizardChat() {
 
                   {msg.role === "user" ? (
                     <div className="px-3.5 py-2.5 rounded-2xl text-sm bg-gradient-to-br from-primary/90 via-primary/80 to-accent/70 text-primary-foreground rounded-tr-sm shadow-lg shadow-primary/25 border border-primary/20">
-                      <div className="prose dark:prose-invert prose-sm max-w-none">
+                      <div className="wizard-prose max-w-none">
                         <ReactMarkdown>{msg.content}</ReactMarkdown>
                       </div>
                     </div>
                   ) : (
                     <div className="relative px-3.5 py-2.5 rounded-2xl text-sm glass-card text-card-foreground rounded-tl-sm border-secondary/15 bg-gradient-to-br from-secondary/5 to-accent/5">
                       <GlowingEffect spread={40} glow disabled={false} proximity={64} inactiveZone={0.01} borderWidth={1} />
-                      <div className="relative z-10 prose dark:prose-invert prose-sm max-w-none">
+                      <div className="relative z-10 wizard-prose max-w-none">
                         <ReactMarkdown>{msg.content}</ReactMarkdown>
                       </div>
                     </div>

@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Activity, Moon, Ruler, Plus, X, Check, Route, Timer, Gauge } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Activity, Moon, Ruler, Plus, X, Check, Route, Timer, Gauge, Mic, MicOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,6 +15,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getCustomTypes, addCustomType, removeCustomType } from "@/lib/customSessionTypes";
+import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { triggerHapticSelection } from "@/lib/haptics";
+import { useToast } from "@/hooks/use-toast";
 
 const SESSION_TYPES = ["BJJ", "Muay Thai", "Boxing", "Wrestling", "Sparring", "Strength", "Run"];
 
@@ -73,6 +76,20 @@ export function FightCampLogForm({
   const [customTypes, setCustomTypes] = useState<string[]>([]);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [newTypeName, setNewTypeName] = useState("");
+  const { toast } = useToast();
+
+  const handleVoiceTranscript = useCallback((text: string) => {
+    setNotes(prev => prev ? prev + " " + text : text);
+  }, [setNotes]);
+
+  const handleVoiceError = useCallback((error: string) => {
+    toast({ title: "Voice Input", description: error, variant: "destructive" });
+  }, [toast]);
+
+  const { isListening, isSupported: voiceSupported, startListening, stopListening, interimText } = useSpeechRecognition({
+    onTranscript: handleVoiceTranscript,
+    onError: handleVoiceError,
+  });
 
   useEffect(() => {
     if (userId) setCustomTypes(getCustomTypes(userId));
@@ -345,13 +362,37 @@ export function FightCampLogForm({
 
       {/* Session Notes */}
       <div className="space-y-2">
-        <Label className="text-sm font-semibold text-muted-foreground">SESSION NOTES</Label>
-        <Textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="What did you work on? Techniques, drills, combos..."
-          className="bg-accent/20 border-border/50 rounded-2xl min-h-[80px] resize-none text-sm"
-        />
+        <div className="flex items-center justify-between">
+          <Label className="text-sm font-semibold text-muted-foreground">SESSION NOTES</Label>
+          {voiceSupported && (
+            <button
+              type="button"
+              onClick={() => {
+                triggerHapticSelection();
+                if (isListening) { stopListening(); } else { startListening(); }
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all ${
+                isListening
+                  ? "bg-red-500/15 text-red-500 animate-pulse"
+                  : "bg-white/5 border border-border/30 text-muted-foreground hover:text-foreground hover:bg-white/10"
+              }`}
+            >
+              {isListening ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
+              {isListening ? "Stop" : "Dictate"}
+            </button>
+          )}
+        </div>
+        <div className="relative">
+          <Textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder={isListening ? "Listening... speak now" : "What did you work on? Techniques, drills, combos..."}
+            className={`bg-accent/20 border-border/50 rounded-2xl min-h-[80px] resize-none text-sm ${isListening ? "border-red-500/30" : ""}`}
+          />
+          {isListening && interimText && (
+            <p className="text-[11px] text-muted-foreground/60 italic mt-1 px-1">{interimText}</p>
+          )}
+        </div>
       </div>
 
       <Button

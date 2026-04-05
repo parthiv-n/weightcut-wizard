@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Sparkles, Calendar as CalendarIcon, Loader2, Settings, Edit2, X, Activity, Utensils, Database, PieChart as PieChartIcon, Search, CheckCircle, ChevronDown, ChevronUp, ChevronRight, ScanLine, Dumbbell, Sunrise, Salad, UtensilsCrossed, Apple } from "lucide-react";
+import { Plus, Sparkles, Calendar as CalendarIcon, Loader2, Settings, Edit2, X, Activity, Utensils, Database, PieChart as PieChartIcon, Search, CheckCircle, ChevronDown, ChevronUp, ChevronRight, ScanLine, Dumbbell, Sunrise, Salad, UtensilsCrossed, Apple, Mic, MicOff } from "lucide-react";
 import wizardLogo from "@/assets/wizard-logo.webp";
 import { MealCard } from "@/components/nutrition/MealCard";
 import { MealCardSkeleton } from "@/components/ui/skeleton-loader";
@@ -30,6 +30,7 @@ import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { NutritionCard } from "@/components/share/cards/NutritionCard";
 import { logger } from "@/lib/logger";
+import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 
 import type { Ingredient, Meal, ManualMealForm, INITIAL_MANUAL_MEAL } from "@/pages/nutrition/types";
 import {
@@ -143,6 +144,29 @@ export default function Nutrition() {
     }
     return groups;
   }, [meals]);
+
+  // Voice dictation for AI meal description
+  const handleVoiceTranscript = useCallback((text: string) => {
+    aiMeal.setAiMealDescription(prev => prev ? prev + " " + text : text);
+  }, [aiMeal.setAiMealDescription]);
+  const handleVoiceError = useCallback((error: string) => {
+    toast({ title: "Voice Input", description: error, variant: "destructive" });
+  }, [toast]);
+  const { isListening, isSupported: voiceSupported, startListening, stopListening, interimText } = useSpeechRecognition({
+    onTranscript: handleVoiceTranscript,
+    onError: handleVoiceError,
+  });
+
+  // Track if user has seen the AI placeholder before
+  const [hasSeenAiPlaceholder, setHasSeenAiPlaceholder] = useState(() => {
+    try { return localStorage.getItem("wcw_ai_meal_placeholder_seen") === "1"; } catch { return false; }
+  });
+  useEffect(() => {
+    if (isQuickAddSheetOpen && quickAddTab === "ai" && !hasSeenAiPlaceholder) {
+      setHasSeenAiPlaceholder(true);
+      try { localStorage.setItem("wcw_ai_meal_placeholder_seen", "1"); } catch {}
+    }
+  }, [isQuickAddSheetOpen, quickAddTab, hasSeenAiPlaceholder]);
 
   // Warmup analyze-meal edge function when quick add sheet opens on AI tab
   useEffect(() => {
@@ -741,13 +765,36 @@ export default function Nutrition() {
             {quickAddTab === "ai" && (
               <div className="space-y-3">
                 <div className="flex flex-col gap-2">
-                  <Textarea placeholder={"e.g. 2 slices tiger bread with nutella, a glass of whole milk, and a banana\n\nBe as descriptive as possible — portions, brands, and prep details help get more accurate results"}
-                    value={aiMeal.aiMealDescription} onChange={(e) => aiMeal.setAiMealDescription(e.target.value)} disabled={aiMeal.aiAnalyzing}
-                    className="flex-1 text-sm min-h-[80px] resize-none" rows={3}
-                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && aiMeal.aiMealDescription.trim() && !aiMeal.aiAnalyzing) { e.preventDefault(); aiMeal.handleAiAnalyzeMeal(); } }} />
-                  <Button type="button" size="sm" onClick={aiMeal.handleAiAnalyzeMeal} disabled={aiMeal.aiAnalyzing || !aiMeal.aiMealDescription.trim()} className="w-full">
-                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />{aiMeal.aiAnalyzing ? "Analyzing…" : "Analyze"}
-                  </Button>
+                  <div className="relative">
+                    <Textarea
+                      placeholder={isListening ? "Listening... speak now" : (hasSeenAiPlaceholder ? "Describe what you ate..." : "e.g. 2 slices tiger bread with nutella, a glass of whole milk, and a banana")}
+                      value={aiMeal.aiMealDescription} onChange={(e) => aiMeal.setAiMealDescription(e.target.value)} disabled={aiMeal.aiAnalyzing}
+                      className={`flex-1 text-sm min-h-[80px] resize-none ${isListening ? "border-red-500/30" : ""}`} rows={3}
+                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && aiMeal.aiMealDescription.trim() && !aiMeal.aiAnalyzing) { e.preventDefault(); aiMeal.handleAiAnalyzeMeal(); } }} />
+                    {isListening && interimText && (
+                      <p className="text-[11px] text-muted-foreground/60 italic mt-1 px-1">{interimText}</p>
+                    )}
+                  </div>
+                  <div className="flex gap-2">
+                    {voiceSupported && (
+                      <button
+                        type="button"
+                        onClick={() => { triggerHapticSelection(); isListening ? stopListening() : startListening(); }}
+                        disabled={aiMeal.aiAnalyzing}
+                        className={`flex items-center justify-center gap-1.5 px-3 h-9 rounded-md text-[12px] font-semibold transition-all ${
+                          isListening
+                            ? "bg-red-500/15 text-red-500 animate-pulse border border-red-500/30"
+                            : "bg-white/5 border border-border/30 text-muted-foreground hover:text-foreground hover:bg-white/10"
+                        }`}
+                      >
+                        {isListening ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
+                        {isListening ? "Stop" : "Voice"}
+                      </button>
+                    )}
+                    <Button type="button" size="sm" onClick={() => { if (isListening) stopListening(); aiMeal.handleAiAnalyzeMeal(); }} disabled={aiMeal.aiAnalyzing || !aiMeal.aiMealDescription.trim()} className="flex-1">
+                      <Sparkles className="h-3.5 w-3.5 mr-1.5" />{aiMeal.aiAnalyzing ? "Analyzing…" : "Analyze"}
+                    </Button>
+                  </div>
                 </div>
                 {aiMeal.aiAnalysisComplete && aiMeal.aiLineItems.length > 0 && (
                   <div className="space-y-2 animate-fade-in">
