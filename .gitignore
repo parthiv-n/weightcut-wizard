@@ -31,3 +31,10 @@ scripts/generate-apple-secret.mjs
 *.njsproj
 *.sln
 *.sw?
+
+# Claude Code
+.claude/
+.claude-flow/
+.claudeflow/
+.mcp.json
+CLAUDE.md

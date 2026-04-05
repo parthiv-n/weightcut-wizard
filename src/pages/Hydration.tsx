@@ -53,13 +53,13 @@ export default function Hydration() {
   const toggleMeal = (idx: number) => setExpandedMeal((prev) => (prev === idx ? null : idx));
 
   const getWeightLossColor = () => {
-    if (!currentWeight || !weightLost) return "text-blue-500 border-blue-500/20";
+    if (!currentWeight || !weightLost) return { ring: "text-blue-500 border-blue-500/20", shadow: "" };
     const pct = (parseFloat(weightLost) / currentWeight) * 100;
-    if (pct <= 5) return "text-emerald-500 border-emerald-500/20 drop-shadow-[0_0_15px_rgba(16,185,129,0.3)]";
-    if (pct <= 8) return "text-amber-500 border-amber-500/20 drop-shadow-[0_0_15px_rgba(245,158,11,0.3)]";
-    return "text-red-500 border-red-500/20 drop-shadow-[0_0_15px_rgba(239,68,68,0.3)]";
+    if (pct <= 5) return { ring: "text-emerald-500 border-emerald-500/20", shadow: "0 0 15px rgba(16,185,129,0.3)" };
+    if (pct <= 8) return { ring: "text-amber-500 border-amber-500/20", shadow: "0 0 15px rgba(245,158,11,0.3)" };
+    return { ring: "text-red-500 border-red-500/20", shadow: "0 0 15px rgba(239,68,68,0.3)" };
   };
-  const ringColorClasses = getWeightLossColor();
+  const { ring: ringColorClasses, shadow: ringShadow } = getWeightLossColor();
 
   const formatTime = (startStr: string, hourIndex: number) => {
     if (!startStr) return `H${hourIndex}`;
@@ -149,8 +149,10 @@ export default function Hydration() {
         </div>
 
         {/* Input Form */}
-        <div className="rounded-2xl border border-white/[0.06] p-4 mb-4 shadow-2xl relative overflow-hidden bg-white/[0.02] backdrop-blur-sm">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[200px] h-[200px] bg-blue-500/20 opacity-40 blur-[80px] rounded-full pointer-events-none"></div>
+        <div className="rounded-2xl border border-white/[0.06] p-4 mb-4 shadow-2xl relative overflow-hidden bg-white/[0.02]">
+          <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[200px] h-[200px] bg-blue-500/20 opacity-40 blur-[80px] rounded-full"></div>
+          </div>
 
           <form onSubmit={handleGenerateProtocol} className="space-y-4 relative z-10">
             <div className="flex items-center justify-center gap-2">
@@ -168,24 +170,24 @@ export default function Hydration() {
             {/* Weight Lost Ring */}
             <div className="flex flex-col items-center justify-center space-y-3">
               <p className="text-[11px] text-blue-400 font-bold uppercase tracking-[0.2em]">Weight Lost (kg)</p>
-              <div className={`relative w-22 h-22 rounded-full border-[5px] transition-colors duration-500 flex flex-col items-center justify-center bg-background ring-1 ring-border/30 ${ringColorClasses.split(" ")[1]} ${ringColorClasses.split(" ")[2] || ""}`} style={{ width: 88, height: 88 }}>
+              <div className={`relative w-22 h-22 rounded-full border-[5px] transition-colors duration-500 flex flex-col items-center justify-center bg-background ring-1 ring-border/30 ${ringColorClasses.split(" ")[1]}`} style={{ width: 88, height: 88, boxShadow: ringShadow || undefined }}>
                 <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 100 100">
                   <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" className={`transition-colors duration-500 ${ringColorClasses.split(" ")[0]}`} strokeWidth="5" strokeDasharray="289" strokeDashoffset="40" strokeLinecap="round" />
                 </svg>
-                <Input type="number" step="0.1" placeholder="0.0" value={weightLost} onChange={(e) => setWeightLost(e.target.value)} required className="w-20 text-center text-3xl font-black bg-transparent border-none text-foreground focus-visible:ring-0 placeholder:text-muted-foreground/30 p-0 h-auto z-10" />
+                <Input type="number" inputMode="decimal" step="0.1" placeholder="0.0" value={weightLost} onChange={(e) => setWeightLost(e.target.value)} required className="w-20 text-center text-3xl font-black bg-transparent border-none text-foreground focus-visible:ring-0 placeholder:text-muted-foreground/30 p-0 h-auto min-h-0 relative z-10" />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col items-center text-center py-3">
                 <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-[0.15em] mb-1.5">Weigh-In</p>
-                <input type="time" value={weighInTime} onChange={(e) => setWeighInTime(e.target.value)} required className="bg-transparent border-none text-center text-2xl font-black text-foreground focus:outline-none w-auto mx-auto block" style={{ WebkitAppearance: "none" }} />
-                <input type="date" value={weighInDate} onChange={(e) => setWeighInDate(e.target.value)} required className="bg-transparent border-none text-center text-[11px] font-medium text-muted-foreground/60 focus:outline-none w-auto mx-auto block mt-1" style={{ WebkitAppearance: "none" }} />
+                <input type="time" value={weighInTime} onChange={(e) => setWeighInTime(e.target.value)} required className="bg-transparent border-none text-center text-2xl font-black text-foreground focus:outline-none w-auto mx-auto block relative" />
+                <input type="date" value={weighInDate} onChange={(e) => setWeighInDate(e.target.value)} required className="bg-transparent border-none text-center text-[11px] font-medium text-muted-foreground/60 focus:outline-none w-auto mx-auto block mt-1 relative" />
               </div>
               <div className="flex flex-col items-center text-center py-3">
                 <p className="text-[10px] text-amber-500 font-bold uppercase tracking-[0.15em] mb-1.5">Fight</p>
-                <input type="time" value={fightTime} onChange={(e) => setFightTime(e.target.value)} required className="bg-transparent border-none text-center text-2xl font-black text-foreground focus:outline-none w-auto mx-auto block" style={{ WebkitAppearance: "none" }} />
-                <input type="date" value={fightDate} onChange={(e) => setFightDate(e.target.value)} required className="bg-transparent border-none text-center text-[11px] font-medium text-muted-foreground/60 focus:outline-none w-auto mx-auto block mt-1" style={{ WebkitAppearance: "none" }} />
+                <input type="time" value={fightTime} onChange={(e) => setFightTime(e.target.value)} required className="bg-transparent border-none text-center text-2xl font-black text-foreground focus:outline-none w-auto mx-auto block relative" />
+                <input type="date" value={fightDate} onChange={(e) => setFightDate(e.target.value)} required className="bg-transparent border-none text-center text-[11px] font-medium text-muted-foreground/60 focus:outline-none w-auto mx-auto block mt-1 relative" />
               </div>
             </div>
 
@@ -203,11 +205,11 @@ export default function Hydration() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col items-center text-center">
                   <label className="text-[9px] text-muted-foreground/60 uppercase tracking-wider mb-1">Normal (g/day)</label>
-                  <input type="number" inputMode="numeric" placeholder="300" value={normalCarbs} onChange={(e) => setNormalCarbs(e.target.value)} className="bg-transparent border-none text-center text-xl font-black text-foreground focus:outline-none w-20 mx-auto" />
+                  <input type="number" inputMode="numeric" placeholder="300" value={normalCarbs} onChange={(e) => setNormalCarbs(e.target.value)} className="bg-transparent border-none text-center text-xl font-black text-foreground focus:outline-none w-20 mx-auto relative" />
                 </div>
                 <div className="flex flex-col items-center text-center">
                   <label className="text-[9px] text-muted-foreground/60 uppercase tracking-wider mb-1">Fight Week (g/day)</label>
-                  <input type="number" inputMode="numeric" placeholder="50" value={fightWeekCarbs} onChange={(e) => setFightWeekCarbs(e.target.value)} className="bg-transparent border-none text-center text-xl font-black text-foreground focus:outline-none w-20 mx-auto" />
+                  <input type="number" inputMode="numeric" placeholder="50" value={fightWeekCarbs} onChange={(e) => setFightWeekCarbs(e.target.value)} className="bg-transparent border-none text-center text-xl font-black text-foreground focus:outline-none w-20 mx-auto relative" />
                 </div>
               </div>
               {(() => {

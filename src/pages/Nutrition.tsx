@@ -124,6 +124,17 @@ export default function Nutrition() {
     mealOps.initiateDeleteMeal(meal);
   }, [mealOps.initiateDeleteMeal]);
 
+  // Effective macro goals: AI values when available, otherwise derive from calorie target
+  const effectiveMacroGoals = useMemo(() => {
+    if (aiMacroGoals) return aiMacroGoals;
+    return {
+      proteinGrams: Math.round((dailyCalorieTarget * 0.30) / 4),
+      carbsGrams: Math.round((dailyCalorieTarget * 0.40) / 4),
+      fatsGrams: Math.round((dailyCalorieTarget * 0.30) / 9),
+      recommendedCalories: dailyCalorieTarget,
+    };
+  }, [aiMacroGoals, dailyCalorieTarget]);
+
   const groupedMeals = useMemo(() => {
     const groups: Record<string, Meal[]> = { breakfast: [], lunch: [], dinner: [], snack: [] };
     for (const m of meals) {
@@ -290,12 +301,12 @@ export default function Nutrition() {
   const handleEditTargets = useCallback(() => {
     setEditingTargets({
       calories: dailyCalorieTarget.toString(),
-      protein: (aiMacroGoals?.proteinGrams || 0).toString(),
-      carbs: (aiMacroGoals?.carbsGrams || 0).toString(),
-      fats: (aiMacroGoals?.fatsGrams || 0).toString(),
+      protein: effectiveMacroGoals.proteinGrams.toString(),
+      carbs: effectiveMacroGoals.carbsGrams.toString(),
+      fats: effectiveMacroGoals.fatsGrams.toString(),
     });
     setIsEditTargetsDialogOpen(true);
-  }, [dailyCalorieTarget, aiMacroGoals]);
+  }, [dailyCalorieTarget, effectiveMacroGoals]);
 
   const handleDietAnalysisDismiss = useCallback(() => {
     nutritionData.setDietAnalysis(null);
@@ -452,9 +463,9 @@ export default function Nutrition() {
           protein={totalProtein}
           carbs={totalCarbs}
           fats={totalFats}
-          proteinGoal={aiMacroGoals?.proteinGrams}
-          carbsGoal={aiMacroGoals?.carbsGrams}
-          fatsGoal={aiMacroGoals?.fatsGrams}
+          proteinGoal={effectiveMacroGoals.proteinGrams}
+          carbsGoal={effectiveMacroGoals.carbsGrams}
+          fatsGoal={effectiveMacroGoals.fatsGrams}
           onEditTargets={handleEditTargets}
         />
 

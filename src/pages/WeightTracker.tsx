@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { format } from "date-fns";
-import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Sparkles, Activity, Apple, Trash2, RefreshCw, Bug, Edit2, ChevronDown } from "lucide-react";
+import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Sparkles, Activity, Apple, Trash2, RefreshCw, Bug, Edit2, ChevronDown, Check } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
@@ -53,6 +53,7 @@ export default function WeightTracker() {
     unsafeGoalDialogOpen, setUnsafeGoalDialogOpen,
     debugDialogOpen, setDebugDialogOpen, debugData,
     loadPersistedAnalysis, clearAnalysis, getAIAnalysis, handleAICancel,
+    targetsApplied, applyingTargets, applyNutritionTargets,
   } = useWeightAnalysis({ profile });
 
   useEffect(() => {
@@ -574,6 +575,21 @@ export default function WeightTracker() {
                   <p className="text-lg font-bold">{aiAnalysis.fatsGrams}</p>
                   <p className="text-[9px] text-muted-foreground">g</p>
                 </div>
+              </div>
+
+              {/* Apply to Nutrition Targets */}
+              <div className="flex justify-center pt-1">
+                <Button
+                  variant={targetsApplied ? "ghost" : "outline"}
+                  size="sm"
+                  className="text-xs"
+                  disabled={applyingTargets || targetsApplied}
+                  onClick={applyNutritionTargets}
+                >
+                  {targetsApplied ? (
+                    <><Check className="h-3 w-3 mr-1" />Applied to Nutrition</>
+                  ) : applyingTargets ? "Applying..." : "Apply to Nutrition Targets"}
+                </Button>
               </div>
 
               {/* Guidance rows */}
