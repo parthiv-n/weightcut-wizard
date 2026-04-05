@@ -16,6 +16,10 @@ if (dsn) {
       "Failed to fetch",
       "Load failed",
       "NetworkError",
+      "timed out after",
+      "Authentication operation timed out",
+      "useAuth must be used within",
+      "useProfile must be used within",
     ],
   });
 }

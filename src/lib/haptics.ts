@@ -44,6 +44,10 @@ export const triggerHapticSelection = async () => {
 
 export const celebrateSuccess = () => {
     triggerHapticSuccess();
-    // Lazy-import to keep the main bundle light when sound isn't needed yet
     import('./sounds').then(m => m.playSuccessSound()).catch(() => {});
+};
+
+export const confirmDelete = () => {
+    triggerHapticWarning();
+    import('./sounds').then(m => m.playDeleteSound()).catch(() => {});
 };

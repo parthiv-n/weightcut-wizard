@@ -149,21 +149,23 @@ export function useNutritionData(params: UseNutritionDataParams) {
       servedFromCache = true;
     }
 
-    const { data, error } = await withSupabaseTimeout(
-      supabase
-        .from("nutrition_logs")
-        .select("id, meal_name, calories, protein_g, carbs_g, fats_g, meal_type, portion_size, recipe_notes, is_ai_generated, ingredients, date, created_at")
-        .eq("user_id", userId)
-        .eq("date", selectedDate)
-        .order("created_at", { ascending: true }),
-      undefined,
-      "Load meals"
-    );
-
-    if (!isMounted()) return;
-
-    if (error) {
-      logger.error("Error loading meals", error);
+    let data: any[] | null = null;
+    try {
+      const result = await withSupabaseTimeout(
+        supabase
+          .from("nutrition_logs")
+          .select("id, meal_name, calories, protein_g, carbs_g, fats_g, meal_type, portion_size, recipe_notes, is_ai_generated, ingredients, date, created_at")
+          .eq("user_id", userId)
+          .eq("date", selectedDate)
+          .order("created_at", { ascending: true }),
+        undefined,
+        "Load meals"
+      );
+      if (result.error) throw result.error;
+      data = result.data;
+    } catch (err) {
+      if (!isMounted()) return;
+      logger.error("Error loading meals", err);
       if (!servedFromCache) {
         toast({
           title: "Couldn't load meals",
@@ -173,6 +175,8 @@ export function useNutritionData(params: UseNutritionDataParams) {
       }
       return;
     }
+
+    if (!isMounted()) return;
 
     const typedMeals = (data || []).map(meal => ({
       ...meal,

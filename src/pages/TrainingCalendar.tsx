@@ -15,7 +15,7 @@ import { SessionCard } from "@/components/fightcamp/SessionCard";
 import { SessionDetailDrawer } from "@/components/fightcamp/SessionDetailDrawer";
 import { FightCampLogForm, SESSION_TYPES } from "@/components/fightcamp/FightCampLogForm";
 import { uploadSessionMedia, deleteSessionMedia } from "@/lib/uploadSessionMedia";
-import { triggerHapticSelection } from "@/lib/haptics";
+import { triggerHapticSelection, confirmDelete } from "@/lib/haptics";
 import { ShareButton } from "@/components/share/ShareButton";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { TrainingCalendarCard } from "@/components/share/cards/TrainingCalendarCard";
@@ -265,6 +265,7 @@ export default function TrainingCalendar() {
                 .eq('id', id);
             if (error) throw error;
 
+            confirmDelete();
             toast({ title: "Session Deleted", description: "Your training session has been removed." });
             setSessions(sessions.filter(s => s.id !== id));
             fetch28DaySessions();

@@ -7,7 +7,7 @@ import { AIPersistence } from "@/lib/aiPersistence";
 import { localCache } from "@/lib/localCache";
 import { syncQueue } from "@/lib/syncQueue";
 import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
-import { celebrateSuccess } from "@/lib/haptics";
+import { celebrateSuccess, confirmDelete } from "@/lib/haptics";
 import { logger } from "@/lib/logger";
 import type { Meal, Ingredient } from "@/pages/nutrition/types";
 
@@ -341,6 +341,7 @@ export function useMealOperations(params: UseMealOperationsParams) {
       if (error) throw error;
 
       syncQueue.dequeueByRecordId(userId, deletedId);
+      confirmDelete();
       toast({ title: "Meal deleted" });
       await loadMeals(true);
       scrollToTop();

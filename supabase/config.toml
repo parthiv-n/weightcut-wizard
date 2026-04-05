@@ -52,7 +52,7 @@ enable_confirmations = false
 [auth.external]
 [auth.external.apple]
 enabled = true
-client_id = "com.weightcutwizard.app.web"
+client_id = "com.weightcutwizard.app"
 secret = "eyJhbGciOiJFUzI1NiIsImtpZCI6IkI0NkNON1c3NjciLCJ0eXAiOiJKV1QifQ.eyJpc3MiOiI5MzJLQVA5OThZIiwiaWF0IjoxNzc1MzQxNzM4LCJleHAiOjE3OTA4OTM3MzgsImF1ZCI6Imh0dHBzOi8vYXBwbGVpZC5hcHBsZS5jb20iLCJzdWIiOiJjb20ud2VpZ2h0Y3V0d2l6YXJkLmFwcC53ZWIifQ.izKY6lHTjDjWZVZvXhnYLR8gztaj7BCN-wIuyyJXtbkUzDrchux6Le1wxaEWOD6ILx4zaTPl0icb9u-tqlA2mg"
 url = ""
 redirect_uri = ""

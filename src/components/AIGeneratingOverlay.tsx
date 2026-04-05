@@ -104,7 +104,7 @@ export const AIGeneratingOverlay = memo(function AIGeneratingOverlay({
     if (!visible) return null;
 
     return createPortal(
-        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
+        <div className="fixed inset-0 z-[10001] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300" style={{ pointerEvents: "auto" }}>
             <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-300">
                 {/* Background Glow */}
                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary to-transparent opacity-50" />
@@ -169,7 +169,9 @@ export const AIGeneratingOverlay = memo(function AIGeneratingOverlay({
                 {showCancel && onCancel && (
                     <button
                         onClick={() => { onCancel(); setShowCancel(false); }}
-                        className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-800/50 border border-zinc-800 rounded-xl transition-all duration-200 animate-in fade-in duration-300"
+                        onTouchEnd={(e) => { e.preventDefault(); onCancel(); setShowCancel(false); }}
+                        className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-800/50 border border-zinc-800 rounded-xl transition-all duration-200 animate-in fade-in duration-300 touch-manipulation relative"
+                        style={{ pointerEvents: "auto", zIndex: 10002 }}
                     >
                         <X className="h-4 w-4" />
                         Cancel

@@ -10,7 +10,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { triggerHapticWarning } from "@/lib/haptics";
+import { triggerHapticWarning, confirmDelete } from "@/lib/haptics";
 
 interface DeleteConfirmDialogProps {
   open: boolean;
@@ -57,7 +57,7 @@ export function DeleteConfirmDialog({
             Cancel
           </AlertDialogCancel>
           <AlertDialogAction
-            onClick={onConfirm}
+            onClick={() => { confirmDelete(); onConfirm(); }}
             className="flex-1 h-12 rounded-2xl text-[15px] font-semibold bg-destructive text-destructive-foreground hover:bg-destructive/90"
           >
             Delete

@@ -59,17 +59,17 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete }: MealC
   };
 
   return (
-    <div className="relative mb-1.5 overflow-hidden rounded-2xl">
+    <div className="relative mb-1 overflow-hidden rounded-xl">
       {/* Delete background (only visible while dragging) */}
       {canSwipe && isDragging && (
-        <div className="absolute inset-0 flex items-center justify-end bg-destructive/90 rounded-2xl px-6">
-          <Trash2 className="h-5 w-5 text-destructive-foreground" />
+        <div className="absolute inset-0 flex items-center justify-end bg-destructive/90 rounded-xl px-5">
+          <Trash2 className="h-4 w-4 text-destructive-foreground" />
         </div>
       )}
 
       {/* Draggable foreground card */}
       <motion.div
-        className="glass-card relative"
+        className="relative rounded-xl border border-border/50"
         style={{ x: canSwipe ? dragX : undefined }}
         drag={canSwipe ? "x" : false}
         dragConstraints={{ left: -120, right: 0 }}
@@ -100,41 +100,44 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete }: MealC
       >
         {/* Main row */}
         <div
-          className="flex items-center gap-3 p-3 cursor-pointer"
+          className="flex items-center gap-2.5 px-2.5 py-2 cursor-pointer"
           onClick={handleToggle}
           role={hasDetails ? "button" : undefined}
           aria-expanded={hasDetails ? expanded : undefined}
         >
           {/* Mini donut */}
-          <MacroDonut protein={p} carbs={c} fat={f} calories={meal.calories} size={36} />
+          <MacroDonut protein={p} carbs={c} fat={f} calories={meal.calories} size={30} />
 
           {/* Name + colored macro labels */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-start gap-1.5">
-              <span className="text-[13px] font-semibold leading-snug text-foreground line-clamp-2">{meal.meal_name}</span>
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] font-semibold leading-tight text-foreground truncate">{meal.meal_name}</span>
               {meal.is_ai_generated && (
-                <Sparkles className="h-3 w-3 text-primary flex-shrink-0 drop-shadow-md" />
+                <Sparkles className="h-2.5 w-2.5 text-primary flex-shrink-0 drop-shadow-md" />
               )}
             </div>
             {(p > 0 || c > 0 || f > 0) && (
-              <div className="flex items-center gap-3 mt-1">
-                <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-blue-500" /><span className="text-[10px] tabular-nums font-medium">{Math.round(p)}g P</span></div>
-                <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-orange-500" /><span className="text-[10px] tabular-nums font-medium">{Math.round(c)}g C</span></div>
-                <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-purple-500" /><span className="text-[10px] tabular-nums font-medium">{Math.round(f)}g F</span></div>
+              <div className="flex items-center gap-2 mt-0.5">
+                <div className="flex items-center gap-0.5"><div className="w-1 h-1 rounded-full bg-blue-500" /><span className="text-[9px] tabular-nums font-medium text-muted-foreground">{Math.round(p)}g</span></div>
+                <div className="flex items-center gap-0.5"><div className="w-1 h-1 rounded-full bg-orange-500" /><span className="text-[9px] tabular-nums font-medium text-muted-foreground">{Math.round(c)}g</span></div>
+                <div className="flex items-center gap-0.5"><div className="w-1 h-1 rounded-full bg-purple-500" /><span className="text-[9px] tabular-nums font-medium text-muted-foreground">{Math.round(f)}g</span></div>
               </div>
             )}
           </div>
+
+          {/* Calorie badge */}
+          <span className="text-[10px] font-semibold tabular-nums text-muted-foreground flex-shrink-0">{meal.calories}</span>
 
           {/* Expand chevron */}
           {hasDetails && (
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 flex-shrink-0 text-muted-foreground"
+              className="h-6 w-6 flex-shrink-0 text-muted-foreground"
               aria-label={expanded ? "Collapse meal details" : "Expand meal details"}
               onClick={(e) => { e.stopPropagation(); handleToggle(); }}
             >
-              <ChevronDown className={`h-4 w-4 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`} />
+              <ChevronDown className={`h-3 w-3 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`} />
             </Button>
           )}
         </div>
@@ -143,7 +146,7 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete }: MealC
         {hasDetails && (
           <div className="disclosure-panel" data-expanded={expanded} aria-hidden={!expanded}>
             <div className="disclosure-inner">
-              <div className="px-3 pb-3 pt-2 space-y-2 border-t border-border/20 bg-black/10">
+              <div className="px-2.5 pb-2 pt-1.5 space-y-1.5 border-t border-border/30">
                 {meal.ingredients && meal.ingredients.length > 0 && (
                   <div className="space-y-1">
                     {meal.ingredients.map((ingredient, idx) =>

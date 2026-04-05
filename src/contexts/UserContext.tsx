@@ -150,7 +150,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     const attempt = async (): Promise<boolean> => {
       const { data } = await withSupabaseTimeout(
         supabase.from("profiles").select(PROFILE_COLUMNS).eq("id", uid).maybeSingle(),
-        2000,
+        5000,
         "Profile refresh query"
       );
 
@@ -257,7 +257,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
             .select(PROFILE_COLUMNS)
             .eq("id", user.id)
             .maybeSingle(),
-          2000,
+          5000,
           "Profile query"
         ),
         withSupabaseTimeout(
@@ -268,7 +268,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
             .order("date", { ascending: false })
             .limit(1)
             .maybeSingle(),
-          2000,
+          5000,
           "Weight log query"
         ),
       ]);
@@ -543,19 +543,36 @@ export function UserProvider({ children }: { children: ReactNode }) {
   );
 }
 
+const AUTH_FALLBACK: AuthContextType = {
+  userId: null,
+  hasProfile: false,
+  isLoading: true,
+  authError: null,
+  profile: null,
+  refreshProfile: async () => {},
+  retryAuth: async () => {},
+  isSessionValid: false,
+  checkSessionValidity: async () => false,
+  refreshSession: async () => false,
+  isOffline: false,
+};
+
+const PROFILE_FALLBACK: ProfileContextType = {
+  userName: "",
+  avatarUrl: null,
+  setUserName: () => {},
+  setAvatarUrl: () => {},
+};
+
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within a UserProvider");
-  }
+  if (context === undefined) return AUTH_FALLBACK;
   return context;
 }
 
 export function useProfile() {
   const context = useContext(ProfileContext);
-  if (context === undefined) {
-    throw new Error("useProfile must be used within a UserProvider");
-  }
+  if (context === undefined) return PROFILE_FALLBACK;
   return context;
 }
 

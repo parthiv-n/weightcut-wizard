@@ -43,7 +43,15 @@ export function ProfileDropdown() {
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        localStorage.removeItem("weightcut-wizard-auth");
+        await supabase.auth.signOut({ scope: "local" });
+      }
+    } catch {
+      localStorage.removeItem("weightcut-wizard-auth");
+    }
     navigate("/auth");
   };
 

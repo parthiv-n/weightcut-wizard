@@ -6,7 +6,7 @@ import { localCache } from "@/lib/localCache";
 import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { syncQueue } from "@/lib/syncQueue";
 import { useToast } from "@/hooks/use-toast";
-import { triggerHaptic, celebrateSuccess } from "@/lib/haptics";
+import { triggerHaptic, celebrateSuccess, confirmDelete } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import { calculateVolume } from "@/lib/gymCalculations";
 import type {
@@ -351,6 +351,7 @@ export function useGymSessions() {
         return updated;
       });
 
+      confirmDelete();
       toast({ description: "Session deleted" });
     } catch {
       toast({ description: "Failed to delete session", variant: "destructive" });

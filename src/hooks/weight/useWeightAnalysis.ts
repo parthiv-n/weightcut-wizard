@@ -62,11 +62,11 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
   const getAIAnalysis = async () => {
     if (!profile) return;
 
-    const fightWeekTarget = profile.fight_week_target_kg;
+    const fightWeekTarget = profile.fight_week_target_kg || profile.goal_weight_kg;
     if (!fightWeekTarget) {
       toast({
-        title: "Fight Week Target Required",
-        description: "Please set your fight week target weight in Goals to get AI analysis.",
+        title: "Target Weight Required",
+        description: "Please set a target weight in Goals to get AI analysis.",
         variant: "destructive",
       });
       return;
@@ -89,7 +89,7 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
       const requestPayload = {
         currentWeight,
         goalWeight: fightWeekTarget,
-        weighInDayWeight: profile.goal_weight_kg,
+        weighInDayWeight: profile.goal_weight_kg || fightWeekTarget,
         targetDate: profile.target_date,
         activityLevel: profile.activity_level,
         age: profile.age,

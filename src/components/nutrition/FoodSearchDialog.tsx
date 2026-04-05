@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type TouchEvent as ReactTouchEvent } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Loader2, ChevronRight, Minus, Plus, X } from "lucide-react";
+import { Search, Loader2, ChevronRight, Minus, Plus, X, Clock, PlusCircle, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
 
@@ -33,6 +33,61 @@ interface FoodSearchDialogProps {
 }
 
 const SERVING_PRESETS = [50, 100, 150, 200, 250];
+const SWIPE_THRESHOLD = 70;
+const HIDDEN_RECENTS_KEY = "wcw_hidden_recent_meals";
+
+function getHiddenRecents(): Set<string> {
+    try {
+        const raw = localStorage.getItem(HIDDEN_RECENTS_KEY);
+        return raw ? new Set(JSON.parse(raw)) : new Set();
+    } catch { return new Set(); }
+}
+
+function setHiddenRecents(names: Set<string>) {
+    localStorage.setItem(HIDDEN_RECENTS_KEY, JSON.stringify([...names]));
+}
+
+/** Swipeable row — swipe left to reveal delete action */
+function SwipeToDelete({ onDelete, children }: { onDelete: () => void; children: React.ReactNode }) {
+    const [offsetX, setOffsetX] = useState(0);
+    const startX = useRef(0);
+    const swiping = useRef(false);
+
+    const onTouchStart = (e: ReactTouchEvent) => {
+        startX.current = e.touches[0].clientX;
+        swiping.current = false;
+    };
+    const onTouchMove = (e: ReactTouchEvent) => {
+        const dx = e.touches[0].clientX - startX.current;
+        if (dx < -10) swiping.current = true;
+        if (swiping.current) setOffsetX(Math.min(0, dx));
+    };
+    const onTouchEnd = () => {
+        if (offsetX < -SWIPE_THRESHOLD) {
+            onDelete();
+        }
+        setOffsetX(0);
+        swiping.current = false;
+    };
+
+    return (
+        <div className="relative overflow-hidden">
+            {/* Delete background revealed on swipe */}
+            <div className="absolute inset-y-0 right-0 flex items-center justify-end pr-4 bg-destructive"
+                style={{ width: Math.max(0, -offsetX) }}>
+                <Trash2 className="h-4 w-4 text-destructive-foreground" />
+            </div>
+            <div
+                style={{ transform: `translateX(${offsetX}px)`, transition: offsetX === 0 ? "transform 0.2s ease" : "none" }}
+                onTouchStart={onTouchStart}
+                onTouchMove={onTouchMove}
+                onTouchEnd={onTouchEnd}
+            >
+                {children}
+            </div>
+        </div>
+    );
+}
 
 export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType }: FoodSearchDialogProps) {
     const [query, setQuery] = useState("");
@@ -40,8 +95,55 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
     const [searching, setSearching] = useState(false);
     const [selectedFood, setSelectedFood] = useState<FoodSearchResult | null>(null);
     const [servingGrams, setServingGrams] = useState(100);
+    const [recentMeals, setRecentMeals] = useState<(FoodSearchResult & { lastPortionGrams: number })[]>([]);
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const abortRef = useRef<AbortController | null>(null);
+
+    // Load recent meals when dialog opens
+    useEffect(() => {
+        if (!open) return;
+        (async () => {
+            try {
+                const { data } = await supabase
+                    .from("nutrition_logs")
+                    .select("meal_name, calories, protein_g, carbs_g, fats_g, portion_size")
+                    .eq("is_ai_generated", false)
+                    .order("created_at", { ascending: false })
+                    .limit(50);
+                if (!data?.length) { setRecentMeals([]); return; }
+
+                // Deduplicate by meal_name, keep most recent, skip hidden
+                const hidden = getHiddenRecents();
+                const seen = new Set<string>();
+                const unique: typeof data = [];
+                for (const row of data) {
+                    const key = row.meal_name.toLowerCase();
+                    if (seen.has(key) || hidden.has(key)) continue;
+                    seen.add(key);
+                    unique.push(row);
+                    if (unique.length >= 10) break;
+                }
+
+                setRecentMeals(unique.map((row) => {
+                    const portionMatch = row.portion_size?.match(/(\d+(?:\.\d+)?)\s*g/i);
+                    const portionGrams = portionMatch ? parseFloat(portionMatch[1]) : 100;
+                    const scale = portionGrams > 0 ? 100 / portionGrams : 1;
+                    return {
+                        id: `recent-${row.meal_name}`,
+                        name: row.meal_name,
+                        brand: "",
+                        calories_per_100g: Math.round((row.calories ?? 0) * scale),
+                        protein_per_100g: Math.round((row.protein_g ?? 0) * scale * 10) / 10,
+                        carbs_per_100g: Math.round((row.carbs_g ?? 0) * scale * 10) / 10,
+                        fats_per_100g: Math.round((row.fats_g ?? 0) * scale * 10) / 10,
+                        lastPortionGrams: Math.round(portionGrams),
+                    };
+                }));
+            } catch (err) {
+                logger.error("Failed to load recent meals", err);
+            }
+        })();
+    }, [open]);
 
     // Warmup edge function on dialog open
     useEffect(() => {
@@ -173,7 +275,83 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                                 </div>
                             )}
 
-                            {!searching && query.length < 2 && (
+                            {!searching && query.length < 2 && recentMeals.length > 0 && (
+                                <div>
+                                    <div className="px-4 pt-3 pb-1.5 flex items-center justify-between">
+                                        <div className="flex items-center gap-1.5">
+                                            <Clock className="h-3.5 w-3.5 text-muted-foreground/60" />
+                                            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Recent</span>
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                const hidden = getHiddenRecents();
+                                                recentMeals.forEach((m) => hidden.add(m.name.toLowerCase()));
+                                                setHiddenRecents(hidden);
+                                                setRecentMeals([]);
+                                            }}
+                                            className="text-xs text-muted-foreground/60 hover:text-destructive transition-colors"
+                                        >
+                                            Clear all
+                                        </button>
+                                    </div>
+                                    <div className="divide-y divide-border/30">
+                                        {recentMeals.map((food) => (
+                                            <SwipeToDelete
+                                                key={food.id}
+                                                onDelete={() => {
+                                                    const hidden = getHiddenRecents();
+                                                    hidden.add(food.name.toLowerCase());
+                                                    setHiddenRecents(hidden);
+                                                    setRecentMeals((prev) => prev.filter((m) => m.id !== food.id));
+                                                }}
+                                            >
+                                                <div className="flex items-center bg-background">
+                                                    <button
+                                                        onClick={() => {
+                                                            setSelectedFood(food);
+                                                            setServingGrams(food.lastPortionGrams);
+                                                        }}
+                                                        className="flex-1 flex items-center gap-3 px-4 py-3 hover:bg-muted/50 active:bg-muted transition-colors text-left min-w-0"
+                                                    >
+                                                        <div className="w-10 h-10 rounded-lg bg-muted/60 flex items-center justify-center flex-shrink-0">
+                                                            <Clock className="h-4 w-4 text-muted-foreground/50" />
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <p className="text-sm font-medium truncate">{food.name}</p>
+                                                            <p className="text-xs text-muted-foreground/70 mt-0.5">
+                                                                {food.calories_per_100g} kcal · P {food.protein_per_100g}g · C {food.carbs_per_100g}g · F {food.fats_per_100g}g
+                                                                <span className="text-muted-foreground/40 ml-1">per 100g</span>
+                                                            </p>
+                                                        </div>
+                                                        <ChevronRight className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            const scale = food.lastPortionGrams / 100;
+                                                            onFoodSelected({
+                                                                meal_name: food.name,
+                                                                calories: Math.round(food.calories_per_100g * scale),
+                                                                protein_g: Math.round(food.protein_per_100g * scale * 10) / 10,
+                                                                carbs_g: Math.round(food.carbs_per_100g * scale * 10) / 10,
+                                                                fats_g: Math.round(food.fats_per_100g * scale * 10) / 10,
+                                                                serving_size: `${food.lastPortionGrams}g`,
+                                                                portion_size: `${food.lastPortionGrams}g`,
+                                                            });
+                                                            onOpenChange(false);
+                                                        }}
+                                                        className="px-3 py-3 mr-2 text-primary hover:text-primary/80 active:scale-95 transition-all flex-shrink-0"
+                                                        title={`Quick add · ${food.lastPortionGrams}g`}
+                                                    >
+                                                        <PlusCircle className="h-5 w-5" />
+                                                    </button>
+                                                </div>
+                                            </SwipeToDelete>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {!searching && query.length < 2 && recentMeals.length === 0 && (
                                 <div className="text-center py-12">
                                     <Search className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
                                     <p className="text-sm text-muted-foreground">Type to search the food database</p>

@@ -247,7 +247,7 @@ All colors MUST be HSL.
   .dark .glass-card,
   .dark .bg-card,
   .dark [data-sidebar="sidebar"],
-  .dark [role="dialog"],
+  .dark [role="dialog"]:not([data-alert-dialog]),
   .dark .popover-content {
     background: rgba(255, 255, 255, 0.06) !important;
     /* Extremely sheer white */

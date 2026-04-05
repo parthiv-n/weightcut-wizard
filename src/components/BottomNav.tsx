@@ -61,6 +61,7 @@ export function BottomNav() {
   const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
   const [deleteAccountDialogOpen, setDeleteAccountDialogOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const [editedName, setEditedName] = useState(userName);
   const [userEmail, setUserEmail] = useState("");
   const [theme, setTheme] = useState<"light" | "dark">(() => {
@@ -95,10 +96,6 @@ export function BottomNav() {
     document.documentElement.classList.toggle("dark", newTheme === "dark");
     triggerHapticSelection();
   };
-
-  if (!isMobile) {
-    return null;
-  }
 
   const handleLogFood = () => {
     setQuickLogOpen(false);
@@ -168,10 +165,22 @@ export function BottomNav() {
   };
 
   const handleLogout = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
     setLogoutDialogOpen(false);
-    await supabase.auth.signOut();
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        // Force clear local session on error and retry
+        localStorage.removeItem("weightcut-wizard-auth");
+        await supabase.auth.signOut({ scope: "local" });
+      }
+    } catch {
+      localStorage.removeItem("weightcut-wizard-auth");
+    }
     navigate("/auth");
     toast({ title: "Signed out", description: "You have been successfully signed out." });
+    setLoggingOut(false);
   };
 
   const handleDeleteAccount = async () => {
@@ -194,6 +203,8 @@ export function BottomNav() {
   const DashboardIcon = mainNavItems[0].icon;
   const NutritionIcon = mainNavItems[1].icon;
   const WeightIcon = mainNavItems[2].icon;
+
+  if (!isMobile) return null;
 
   return (
     <>

@@ -89,9 +89,9 @@ export default function WeightTracker() {
     const today = new Date();
     const daysRemaining = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     const weeksRemaining = Math.max(1, daysRemaining / 7);
-    const fightWeekTarget = profile.fight_week_target_kg;
-    if (!fightWeekTarget) return 0;
-    const weightRemaining = current - fightWeekTarget;
+    const target = profile.fight_week_target_kg || profile.goal_weight_kg;
+    if (!target) return 0;
+    const weightRemaining = current - target;
     return weightRemaining / weeksRemaining;
   };
 
@@ -186,9 +186,9 @@ export default function WeightTracker() {
     if (!profile) return 0;
     const current = getCurrentWeight();
     const start = weightLogs.length > 0 ? weightLogs[0].weight_kg : profile.current_weight_kg;
-    const fightWeekTarget = profile.fight_week_target_kg;
-    if (!fightWeekTarget) return 0;
-    const total = start - fightWeekTarget;
+    const target = profile.fight_week_target_kg || profile.goal_weight_kg;
+    if (!target) return 0;
+    const total = start - target;
     const progress = start - current;
     return Math.min(100, Math.max(0, (progress / total) * 100));
   };
@@ -199,14 +199,14 @@ export default function WeightTracker() {
     }
 
     const current = getCurrentWeight();
-    const fightWeekTarget = profile.fight_week_target_kg;
-    if (!fightWeekTarget) {
-      return { message: "Please set your fight week target weight in Goals to see insights.", icon: Target, color: "text-muted-foreground" };
+    const target = profile.fight_week_target_kg || profile.goal_weight_kg;
+    if (!target) {
+      return { message: "Please set a target weight in Goals to see insights.", icon: Target, color: "text-muted-foreground" };
     }
     const targetDate = new Date(profile.target_date);
     const today = new Date();
     const daysRemaining = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    const weightRemaining = current - fightWeekTarget;
+    const weightRemaining = current - target;
 
     const recentLogs = weightLogs.slice(-7);
     if (recentLogs.length >= 2) {
@@ -656,7 +656,7 @@ export default function WeightTracker() {
                 This goal requires losing more than 1.5kg per week, which carries serious health risks including performance degradation, muscle loss, and metabolic damage. Please consult a doctor or sports nutritionist before following this plan.
               </AlertDialogDescription>
             </AlertDialogHeader>
-            <AlertDialogFooter>
+            <AlertDialogFooter className="justify-center sm:justify-center">
               <AlertDialogAction onClick={() => setUnsafeGoalDialogOpen(false)}>I understand</AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>

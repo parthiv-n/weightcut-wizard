@@ -168,17 +168,28 @@ export default function Auth() {
     setLoading(true);
     try {
       if (Capacitor.isNativePlatform()) {
+        // Generate nonce for security
+        const rawNonce = crypto.randomUUID();
+        const encoder = new TextEncoder();
+        const hashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(rawNonce));
+        const hashedNonce = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+
         // Native iOS: use ASAuthorizationController → exchange ID token with Supabase
         const result = await SignInWithApple.authorize({
           clientId: "com.weightcutwizard.app",
           redirectURI: "https://pkubdwmnnsxjjnpjjqqy.supabase.co/auth/v1/callback",
-          scopes: "email name",
+          scopes: "email",
+          nonce: hashedNonce,
         });
-        const { error } = await supabase.auth.signInWithIdToken({
+        const { data: signInData, error } = await supabase.auth.signInWithIdToken({
           provider: "apple",
           token: result.response.identityToken,
+          nonce: rawNonce,
         });
-        if (error) throw error;
+        // Supabase may return an error for first-time Apple sign-ups
+        // (e.g. email confirmation required) while still creating the session.
+        // If we got a session back, treat it as success regardless of the error.
+        if (error && !signInData?.session) throw error;
       } else {
         // Web fallback: use Supabase OAuth redirect flow
         const { error } = await supabase.auth.signInWithOAuth({
@@ -191,7 +202,22 @@ export default function Auth() {
       }
     } catch (error: any) {
       // User cancelled the Apple sign-in dialog — not an error
-      if (error?.message?.includes("canceled") || error?.code === "ERR_CANCELED") {
+      if (
+        error?.message?.includes("canceled") ||
+        error?.message?.includes("Cancel") ||
+        error?.code === "ERR_CANCELED" ||
+        error?.code === 1001
+      ) {
+        setLoading(false);
+        return;
+      }
+      // "Sign Up Not Complete" is an iOS system dialog issue, not a real failure.
+      // The user may need to retry — don't show a scary error.
+      if (error?.message?.includes("not complete") || error?.message?.includes("Not Complete")) {
+        toast({
+          title: "Please try again",
+          description: "Apple Sign-In was interrupted. Tap the button to retry.",
+        });
         setLoading(false);
         return;
       }
