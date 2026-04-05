@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { format, startOfWeek, endOfWeek } from "date-fns";
 import { ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { localCache } from "@/lib/localCache";
 import { getSessionColor, getUserColors } from "@/lib/sessionColors";
 import { AnimatedRing } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton-loader";
@@ -25,8 +26,14 @@ interface TrainingWeekWidgetProps {
 
 export const TrainingWeekWidget = memo(function TrainingWeekWidget({ userId, compact }: TrainingWeekWidgetProps) {
   const navigate = useNavigate();
-  const [sessions, setSessions] = useState<WeekSession[]>([]);
-  const [loading, setLoading] = useState(true);
+  const CACHE_KEY = "training_week_sessions";
+  const [sessions, setSessions] = useState<WeekSession[]>(() => {
+    // Serve from cache instantly
+    return localCache.get<WeekSession[]>(userId, CACHE_KEY, 10 * 60 * 1000) || [];
+  });
+  const [loading, setLoading] = useState(() => {
+    return !localCache.get<WeekSession[]>(userId, CACHE_KEY, 10 * 60 * 1000);
+  });
   const [customColors] = useState(() => getUserColors(userId));
 
   const fetchWeekSessions = useCallback(async () => {
@@ -43,7 +50,9 @@ export const TrainingWeekWidget = memo(function TrainingWeekWidget({ userId, com
         .neq("session_type", "Rest");
 
       if (error) throw error;
-      setSessions((data as WeekSession[]) || []);
+      const result = (data as WeekSession[]) || [];
+      setSessions(result);
+      localCache.set(userId, CACHE_KEY, result);
     } catch {
       // Fail silently — widget is non-critical
     } finally {

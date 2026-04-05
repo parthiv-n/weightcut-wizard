@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useUser } from "@/contexts/UserContext";
 import { RecoveryDashboard } from "@/components/fightcamp/RecoveryDashboard";
 import { logger } from "@/lib/logger";
+import { localCache } from "@/lib/localCache";
 import { Skeleton } from "@/components/ui/skeleton-loader";
 import { Card } from "@/components/ui/card";
 
@@ -23,7 +24,16 @@ export default function Recovery() {
 
     const fetch28DaySessions = useCallback(async () => {
         if (!userId) return;
-        setIsLoading(true);
+
+        // Cache-first: serve cached data instantly
+        const cached = localCache.get<TrainingCalendarRow[]>(userId, "recovery_sessions_28d", 5 * 60 * 1000);
+        if (cached) {
+            setSessions28d(cached);
+            setIsLoading(false);
+        } else {
+            setIsLoading(true);
+        }
+
         try {
             const from = format(subDays(new Date(), 28), "yyyy-MM-dd");
             const to = format(new Date(), "yyyy-MM-dd");
@@ -36,6 +46,7 @@ export default function Recovery() {
 
             if (error) throw error;
             setSessions28d(data || []);
+            localCache.set(userId, "recovery_sessions_28d", data || []);
         } catch (error) {
             logger.error("Error fetching 28-day sessions", error);
         } finally {

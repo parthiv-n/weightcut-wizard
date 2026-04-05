@@ -208,7 +208,6 @@ export default function Nutrition() {
       aiMeal.setNewIngredient({ name: "", grams: "" });
       aiMeal.setBarcodeBaseMacros(null);
       aiMeal.setServingMultiplier(1);
-      window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (error) {
       logger.error("Error in optimistic meal update setup", error);
       toast({ title: "Error", description: "Failed to add meal", variant: "destructive" });
@@ -589,7 +588,7 @@ export default function Nutrition() {
             <ErrorBoundary>
               <div className="space-y-2">
                 <div className="flex gap-2">
-                  <Button onClick={async () => { await mealOps.saveMealIdeasToDatabase(mealPlanIdeas); window.scrollTo({ top: 0, behavior: "smooth" }); }} disabled={mealOps.savingAllMeals || mealOps.loggingMeal !== null}
+                  <Button onClick={() => mealOps.saveMealIdeasToDatabase(mealPlanIdeas)} disabled={mealOps.savingAllMeals || mealOps.loggingMeal !== null}
                     size="sm" className="flex-1 h-8 text-xs rounded-xl">
                     <Plus className="mr-1 h-3 w-3" />Save All ({mealPlanIdeas.length})
                   </Button>

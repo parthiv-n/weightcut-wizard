@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { localCache } from "@/lib/localCache";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,7 +50,16 @@ export default function FightCampDetail() {
   const fetchCampDetails = async () => {
     if (!id) return;
 
-    safeAsync(setLoading)(true);
+    // Cache-first: show cached camp instantly
+    const cacheKey = `fight_camp_${id}`;
+    const cached = localCache.get<FightCamp>("shared", cacheKey, 10 * 60 * 1000);
+    if (cached) {
+      setCamp(cached);
+      safeAsync(setLoading)(false);
+    } else {
+      safeAsync(setLoading)(true);
+    }
+
     try {
       const { data, error } = await withSupabaseTimeout(
         supabase
@@ -64,15 +74,20 @@ export default function FightCampDetail() {
       if (!isMounted()) return;
 
       if (error) {
-        toast({ title: "Error", description: "Failed to load fight camp", variant: "destructive" });
-        navigate("/fight-camps");
+        if (!cached) {
+          toast({ title: "Error", description: "Failed to load fight camp", variant: "destructive" });
+          navigate("/fight-camps");
+        }
       } else {
         setCamp(data as FightCamp);
+        localCache.set("shared", cacheKey, data);
       }
     } catch {
       if (!isMounted()) return;
-      toast({ title: "Error", description: "Failed to load fight camp", variant: "destructive" });
-      navigate("/fight-camps");
+      if (!cached) {
+        toast({ title: "Error", description: "Failed to load fight camp", variant: "destructive" });
+        navigate("/fight-camps");
+      }
     }
     safeAsync(setLoading)(false);
   };
@@ -98,6 +113,7 @@ export default function FightCampDetail() {
     if (error) {
       toast({ title: "Error", description: "Failed to update camp", variant: "destructive" });
     } else {
+      localCache.set("shared", `fight_camp_${camp.id}`, camp);
       toast({ title: "Success", description: "Camp updated successfully" });
       navigate("/fight-camps");
     }

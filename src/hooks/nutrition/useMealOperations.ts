@@ -11,12 +11,6 @@ import { celebrateSuccess, confirmDelete } from "@/lib/haptics";
 import { logger } from "@/lib/logger";
 import type { Meal, Ingredient } from "@/pages/nutrition/types";
 
-function scrollToTop() {
-  const main = document.querySelector('main');
-  if (main && main.scrollTop > 0) {
-    main.scrollTo({ top: 0, behavior: 'smooth' });
-  }
-}
 
 interface UseMealOperationsParams {
   meals: Meal[];
@@ -99,12 +93,10 @@ export function useMealOperations(params: UseMealOperationsParams) {
       celebrateSuccess();
       toast({ title: "Meal added successfully" });
       await loadMeals(true);
-      scrollToTop();
     } catch (error) {
       logger.error("Error adding meal (queued for sync)", error);
       celebrateSuccess();
       toast({ title: "Saved offline", description: "Will sync when connected." });
-      scrollToTop();
     }
   }, [userId, selectedDate, meals, setMeals, loadMeals, toast]);
 
@@ -174,13 +166,11 @@ export function useMealOperations(params: UseMealOperationsParams) {
           description: `${mealIdea.meal_name} added to your day`,
         });
         await loadMeals(true);
-        scrollToTop();
-      } catch (error) {
+        } catch (error) {
         logger.error("Error logging meal (queued for sync)", error);
         celebrateSuccess();
         toast({ title: "Saved offline", description: "Will sync when connected." });
-        scrollToTop();
-      }
+        }
     } catch (error) {
       logger.error("Error logging meal", error);
       toast({
@@ -275,13 +265,11 @@ export function useMealOperations(params: UseMealOperationsParams) {
           description: `${mealIdeas.length} meals added to your day`,
         });
         await loadMeals(true);
-        scrollToTop();
-      } catch (error) {
+        } catch (error) {
         logger.error("Error saving meals (queued for sync)", error);
         celebrateSuccess();
         toast({ title: "Saved offline", description: "Will sync when connected." });
-        scrollToTop();
-      }
+        }
     } catch (error: any) {
       logger.error("Error saving meal ideas", error);
       toast({
@@ -344,11 +332,9 @@ export function useMealOperations(params: UseMealOperationsParams) {
       confirmDelete();
       toast({ title: "Meal deleted" });
       await loadMeals(true);
-      scrollToTop();
     } catch (error) {
       logger.error("Error deleting meal (queued for sync)", error);
       toast({ title: "Deleted offline", description: "Will sync when connected." });
-      scrollToTop();
     }
   }, [mealToDelete, userId, meals, setMeals, selectedDate, loadMeals, toast]);
 
@@ -418,12 +404,10 @@ export function useMealOperations(params: UseMealOperationsParams) {
       celebrateSuccess();
       toast({ title: "Food logged!", description: `${food.meal_name} · ${food.calories} kcal` });
       await loadMeals(true);
-      scrollToTop();
     } catch (error) {
       logger.error("Error logging food (queued for sync)", error);
       celebrateSuccess();
       toast({ title: "Saved offline", description: "Will sync when connected." });
-      scrollToTop();
     }
   }, [userId, selectedDate, meals, setMeals, loadMeals, toast]);
 

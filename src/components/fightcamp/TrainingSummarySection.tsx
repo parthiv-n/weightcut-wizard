@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { logger } from "@/lib/logger";
+import { localCache } from "@/lib/localCache";
 import { getSessionColor } from "@/lib/sessionColors";
 
 type TrainingSummary = {
@@ -80,20 +81,25 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
         setSelectedWeekStart(calendarWeekStart);
     }, [calendarWeekStart]);
 
-    // Fetch all saved summaries
+    // Fetch all saved summaries (cache-first)
     const fetchAllSummaries = useCallback(async () => {
+        const cached = localCache.get<SavedSummaryRow[]>(userId, "training_summaries", 10 * 60 * 1000);
+        if (cached) setSavedSummaries(cached);
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data, error } = await (supabase as any)
             .from("training_summaries")
             .select("id, week_start, summary_data, session_ids, notes_fingerprint, created_at, updated_at")
             .eq("user_id", userId)
-            .order("week_start", { ascending: false });
+            .order("week_start", { ascending: false })
+            .limit(20);
 
         if (error) {
             logger.error("Error fetching summaries", error);
             return;
         }
         setSavedSummaries((data as SavedSummaryRow[]) || []);
+        localCache.set(userId, "training_summaries", data || []);
     }, [userId]);
 
     // Fetch sessions for the current calendar week (for change detection)

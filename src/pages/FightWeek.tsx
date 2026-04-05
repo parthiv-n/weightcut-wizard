@@ -69,9 +69,14 @@ export default function FightWeek() {
     }
   }, [profile?.current_weight_kg, profile?.goal_weight_kg, dbPlan?.id]);
 
-  // Load existing plan from DB
+  // Hydrate from cache immediately, then refresh from DB
   useEffect(() => {
     if (!userId) return;
+    const cached = localCache.get<DBPlan>(userId, "fight_week_plan");
+    if (cached) {
+      hydrateFromPlan(cached);
+      setInitialLoading(false);
+    }
     loadExistingPlan();
     loadPersistedAdvice();
   }, [userId]);
@@ -80,7 +85,7 @@ export default function FightWeek() {
   useEffect(() => {
     const timer = setTimeout(() => {
       supabase.functions.invoke("fight-week-analysis", { method: "GET" }).catch(() => {});
-    }, 2000);
+    }, 500);
     return () => clearTimeout(timer);
   }, []);
 

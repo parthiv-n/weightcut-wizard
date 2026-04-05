@@ -289,6 +289,7 @@ export function useGamification(
         new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
       );
 
+      // 4 queries in parallel (weight dates reused from Dashboard prop)
       const results = await Promise.allSettled([
         // Nutrition dates for past 7 days
         supabase
@@ -311,13 +312,6 @@ export function useGamification(
           .from("fight_camps")
           .select("is_completed")
           .eq("user_id", userId),
-        // Weight log dates — capped to 1 year (streak can never exceed 365)
-        supabase
-          .from("weight_logs")
-          .select("date")
-          .eq("user_id", userId)
-          .gte("date", getDateString(new Date(Date.now() - 366 * 24 * 60 * 60 * 1000)))
-          .order("date", { ascending: true }),
       ]);
 
       if (cancelled) return;
@@ -334,10 +328,8 @@ export function useGamification(
         results[3].status === "fulfilled" ? results[3].value.data || [] : [];
       const totalCampCount = campsData.length;
       const completedCampCount = campsData.filter((c: any) => c.is_completed).length;
-      const allWeightDates =
-        results[4].status === "fulfilled"
-          ? (results[4].value.data || []).map((r: any) => r.date)
-          : [];
+      // Reuse weight dates from Dashboard prop — no extra query needed
+      const allWeightDates = weightLogs.map((l) => l.date);
 
       const data: GamificationData = {
         nutritionDates,

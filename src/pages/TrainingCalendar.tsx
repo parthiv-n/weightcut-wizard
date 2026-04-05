@@ -3,6 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, subMonths, addMonths, subDays } from "date-fns";
 import { ChevronLeft, ChevronRight, Plus, Activity } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { localCache } from "@/lib/localCache";
 import { useUser } from "@/contexts/UserContext";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -66,10 +67,23 @@ export default function TrainingCalendar() {
     const [viewingSession, setViewingSession] = useState<TrainingCalendarRow | null>(null);
     const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
 
+    const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+    const monthCacheKey = (d: Date) => `training_sessions_${format(d, "yyyy-MM")}`;
+
     const fetchSessions = useCallback(async () => {
         if (!userId) return;
 
-        setIsLoading(true);
+        // Cache-first: serve cached data instantly, then refresh in background
+        const cacheKey = monthCacheKey(currentDate);
+        const cached = localCache.get<TrainingCalendarRow[]>(userId, cacheKey, CACHE_TTL);
+        if (cached) {
+            setSessions(cached);
+            setIsLoading(false);
+        } else {
+            setIsLoading(true);
+        }
+
         try {
             const { data, error } = await supabase
                 .from('fight_camp_calendar')
@@ -80,13 +94,16 @@ export default function TrainingCalendar() {
 
             if (error) throw error;
             setSessions(data || []);
+            localCache.set(userId, cacheKey, data || []);
         } catch (error) {
             logger.error("Error fetching sessions", error);
-            toast({
-                title: "Error fetching sessions",
-                description: "Could not load your calendar data.",
-                variant: "destructive"
-            });
+            if (!cached) {
+                toast({
+                    title: "Error fetching sessions",
+                    description: "Could not load your calendar data.",
+                    variant: "destructive"
+                });
+            }
         } finally {
             setIsLoading(false);
         }
@@ -94,6 +111,10 @@ export default function TrainingCalendar() {
 
     const fetch28DaySessions = useCallback(async () => {
         if (!userId) return;
+
+        const cached28d = localCache.get<TrainingCalendarRow[]>(userId, "training_sessions_28d", CACHE_TTL);
+        if (cached28d) setSessions28d(cached28d);
+
         try {
             const from = format(subDays(new Date(), 28), "yyyy-MM-dd");
             const to = format(new Date(), "yyyy-MM-dd");
@@ -106,12 +127,39 @@ export default function TrainingCalendar() {
 
             if (error) throw error;
             setSessions28d(data || []);
+            localCache.set(userId, "training_sessions_28d", data || []);
         } catch (error) {
             logger.error("Error fetching 28-day sessions", error);
         }
     }, [userId]);
 
+    // Preload adjacent months in background
+    const preloadMonth = useCallback(async (date: Date) => {
+        if (!userId) return;
+        const key = monthCacheKey(date);
+        if (localCache.get(userId, key, CACHE_TTL)) return; // already cached
+        try {
+            const { data } = await supabase
+                .from('fight_camp_calendar')
+                .select('*')
+                .eq('user_id', userId)
+                .gte('date', format(startOfMonth(date), "yyyy-MM-dd"))
+                .lte('date', format(endOfMonth(date), "yyyy-MM-dd"));
+            if (data) localCache.set(userId, key, data);
+        } catch { /* silent preload */ }
+    }, [userId]);
+
     useEffect(() => { fetchSessions(); fetch28DaySessions(); }, [fetchSessions, fetch28DaySessions]);
+
+    // Preload prev/next months after current month loads
+    useEffect(() => {
+        if (!userId) return;
+        const t = setTimeout(() => {
+            preloadMonth(subMonths(currentDate, 1));
+            preloadMonth(addMonths(currentDate, 1));
+        }, 500);
+        return () => clearTimeout(t);
+    }, [userId, currentDate, preloadMonth]);
     useEffect(() => { if (userId) setCustomColors(getUserColors(userId)); }, [userId]);
 
     // Auto-open Log Session dialog when navigated from Quick Log
@@ -237,6 +285,11 @@ export default function TrainingCalendar() {
             }
 
             setIsAddModalOpen(false);
+            // Invalidate cache so re-fetch writes fresh data
+            if (userId) {
+                localCache.remove(userId, monthCacheKey(currentDate));
+                localCache.remove(userId, "training_sessions_28d");
+            }
             fetchSessions();
             fetch28DaySessions();
             setSessionLoggedTrigger(prev => prev + 1);
@@ -268,6 +321,10 @@ export default function TrainingCalendar() {
             confirmDelete();
             toast({ title: "Session Deleted", description: "Your training session has been removed." });
             setSessions(sessions.filter(s => s.id !== id));
+            if (userId) {
+                localCache.remove(userId, monthCacheKey(currentDate));
+                localCache.remove(userId, "training_sessions_28d");
+            }
             fetch28DaySessions();
         } catch (error) {
             logger.error("Error deleting session", error);
