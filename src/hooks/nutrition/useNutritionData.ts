@@ -43,7 +43,9 @@ export function useNutritionData(params: UseNutritionDataParams) {
   const { safeAsync, isMounted } = useSafeAsync();
   const { toast } = useToast();
   const [fetchingMacroGoals, setFetchingMacroGoals] = useState(false);
+  const [mealsLoading, setMealsLoading] = useState(true);
   const lastFetchRef = useRef(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Diet analysis state
   const [dietAnalysis, setDietAnalysis] = useState<DietAnalysisResult | null>(null);
@@ -124,13 +126,19 @@ export function useNutritionData(params: UseNutritionDataParams) {
     }
   };
 
-  const loadMeals = async (skipCache = false) => {
+  const loadMeals = async (skipCache = false, _retryCount = 0) => {
     if (!userId) return;
     lastFetchRef.current = Date.now();
 
-    if (skipCache) {
+    if (skipCache && _retryCount === 0) {
       setDietAnalysis(null);
       AIPersistence.remove(userId, `diet_analysis_${selectedDate}`);
+    }
+
+    // Clear any pending retry since we're fetching now
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
     }
 
     let servedFromCache = false;
@@ -139,6 +147,7 @@ export function useNutritionData(params: UseNutritionDataParams) {
       const cachedMeals = nutritionCache.getMeals(userId, selectedDate);
       if (cachedMeals) {
         setMeals(cachedMeals);
+        safeAsync(setMealsLoading)(false);
         return;
       }
     }
@@ -147,6 +156,11 @@ export function useNutritionData(params: UseNutritionDataParams) {
     if (localMeals && localMeals.length > 0) {
       setMeals(localMeals);
       servedFromCache = true;
+      safeAsync(setMealsLoading)(false);
+    }
+
+    if (!servedFromCache) {
+      safeAsync(setMealsLoading)(true);
     }
 
     let data: any[] | null = null;
@@ -167,11 +181,11 @@ export function useNutritionData(params: UseNutritionDataParams) {
       if (!isMounted()) return;
       logger.error("Error loading meals", err);
       if (!servedFromCache) {
-        toast({
-          title: "Couldn't load meals",
-          description: "Check your connection and try again.",
-          variant: "destructive",
-        });
+        // Schedule auto-retry with backoff (3s, 6s, 12s, max 15s)
+        const delay = Math.min(3000 * Math.pow(2, _retryCount), 15000);
+        retryTimerRef.current = setTimeout(() => {
+          if (isMounted()) loadMeals(true, _retryCount + 1);
+        }, delay);
       }
       return;
     }
@@ -219,14 +233,22 @@ export function useNutritionData(params: UseNutritionDataParams) {
     }
 
     setMeals(mergedMeals as Meal[]);
+    safeAsync(setMealsLoading)(false);
     nutritionCache.setMeals(userId, selectedDate, mergedMeals as Meal[]);
     localCache.setForDate(userId, "nutrition_logs", selectedDate, mergedMeals);
   };
 
   // Load meals on date/user change
   useEffect(() => {
+    setMealsLoading(true);
     loadMeals();
     if (userId) preloadAdjacentDates(userId, selectedDate);
+    return () => {
+      if (retryTimerRef.current) {
+        clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = null;
+      }
+    };
   }, [selectedDate, userId]);
 
   // Recalculate calorie target when relevant profile fields change
@@ -383,6 +405,7 @@ export function useNutritionData(params: UseNutritionDataParams) {
     fetchMacroGoals,
     calculateCalorieTarget,
     fetchingMacroGoals,
+    mealsLoading,
     dietAnalysis, setDietAnalysis,
     dietAnalysisLoading, setDietAnalysisLoading,
     shareOpen, setShareOpen,

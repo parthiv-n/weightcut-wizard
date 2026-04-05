@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Sparkles, Calendar as CalendarIcon, Loader2, Settings, Edit2, X, Activity, Utensils, Database, PieChart as PieChartIcon, Search, CheckCircle, ChevronDown, ChevronUp, ChevronRight, ScanLine, Dumbbell, Sunrise, Salad, UtensilsCrossed, Apple } from "lucide-react";
 import wizardLogo from "@/assets/wizard-logo.webp";
 import { MealCard } from "@/components/nutrition/MealCard";
+import { MealCardSkeleton } from "@/components/ui/skeleton-loader";
 import { MacroPieChart } from "@/components/nutrition/MacroPieChart";
 import { FoodSearchDialog } from "@/components/nutrition/FoodSearchDialog";
 const BarcodeScanner = lazy(() => import("@/components/nutrition/BarcodeScanner").then(m => ({ default: m.BarcodeScanner })));
@@ -118,6 +119,19 @@ export default function Nutrition() {
   // ── Derived ──
   const loading = mealPlan.generatingPlan || mealOps.loggingMeal !== null || mealOps.savingAllMeals;
   const isAiActive = mealPlan.generatingPlan || aiMeal.aiAnalyzing || aiMeal.aiAnalyzingIngredient || nutritionData.dietAnalysisLoading;
+
+  const handleDeleteMeal = useCallback((meal: Meal) => {
+    mealOps.initiateDeleteMeal(meal);
+  }, [mealOps.initiateDeleteMeal]);
+
+  const groupedMeals = useMemo(() => {
+    const groups: Record<string, Meal[]> = { breakfast: [], lunch: [], dinner: [], snack: [] };
+    for (const m of meals) {
+      const type = (m.meal_type || "other").toLowerCase();
+      if (type in groups) groups[type].push(m);
+    }
+    return groups;
+  }, [meals]);
 
   // Warmup analyze-meal edge function when quick add sheet opens on AI tab
   useEffect(() => {
@@ -468,7 +482,7 @@ export default function Nutrition() {
           <ShareButton onClick={nutritionData.handleShareOpen} className="absolute right-0" />
         </div>
 
-        {meals.length === 0 && selectedDate === format(new Date(), "yyyy-MM-dd") && !loading && (
+        {meals.length === 0 && selectedDate === format(new Date(), "yyyy-MM-dd") && !loading && !nutritionData.mealsLoading && (
           <div className="glass-card rounded-2xl border border-border/50 p-3">
             <div className="flex items-start gap-2.5">
               <div className="rounded-full bg-primary/15 p-2 flex-shrink-0">
@@ -492,14 +506,14 @@ export default function Nutrition() {
         {/* Meal Sections (MFP-style) */}
         <div className="space-y-2">
           {(["breakfast", "lunch", "dinner", "snack"] as const).map((mealType) => {
-            const groupMeals = meals.filter((m) => (m.meal_type || "other").toLowerCase() === mealType);
+            const groupMeals = groupedMeals[mealType];
             const groupCalories = groupMeals.reduce((sum, m) => sum + (m.calories || 0), 0);
             const isActionExpanded = expandedMealActions === mealType;
             const MealIcon = { breakfast: Sunrise, lunch: Salad, dinner: UtensilsCrossed, snack: Apple }[mealType];
             const mealIconColor = { breakfast: "text-orange-400", lunch: "text-blue-400", dinner: "text-purple-400", snack: "text-green-400" }[mealType];
 
             return (
-              <div key={mealType} className="glass-card overflow-hidden transition-all duration-300">
+              <div key={mealType} className="glass-card overflow-hidden">
                 <div className="flex items-center justify-between px-3 py-2">
                   <div className="flex items-center gap-1.5">
                     <MealIcon className={`h-3.5 w-3.5 ${mealIconColor}`} />
@@ -509,13 +523,17 @@ export default function Nutrition() {
                     {groupCalories > 0 ? `${Math.round(groupCalories)} kcal` : ""}
                   </span>
                 </div>
-                {groupMeals.length > 0 && (
+                {nutritionData.mealsLoading && meals.length === 0 ? (
+                  <div className="px-2 pb-1">
+                    <MealCardSkeleton />
+                  </div>
+                ) : groupMeals.length > 0 ? (
                   <div className="px-2">
                     {groupMeals.map((meal) => (
-                      <MealCard key={meal.id} meal={meal} onDelete={() => mealOps.initiateDeleteMeal(meal)} />
+                      <MealCard key={meal.id} meal={meal} onDelete={() => handleDeleteMeal(meal)} />
                     ))}
                   </div>
-                )}
+                ) : null}
                 <div className="border-t border-border/10">
                   <button
                     onClick={() => setExpandedMealActions(isActionExpanded ? null : mealType)}
