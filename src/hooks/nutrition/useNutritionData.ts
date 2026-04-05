@@ -46,6 +46,7 @@ export function useNutritionData(params: UseNutritionDataParams) {
   const [mealsLoading, setMealsLoading] = useState(true);
   const lastFetchRef = useRef(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeDateRef = useRef(selectedDate);
 
   // Diet analysis state
   const [dietAnalysis, setDietAnalysis] = useState<DietAnalysisResult | null>(null);
@@ -126,13 +127,14 @@ export function useNutritionData(params: UseNutritionDataParams) {
     }
   };
 
-  const loadMeals = async (skipCache = false, _retryCount = 0) => {
+  const loadMeals = async (skipCache = false, _retryCount = 0, silent = false) => {
     if (!userId) return;
+    const fetchDate = selectedDate; // capture for stale-closure guard
     lastFetchRef.current = Date.now();
 
     if (skipCache && _retryCount === 0) {
       setDietAnalysis(null);
-      AIPersistence.remove(userId, `diet_analysis_${selectedDate}`);
+      AIPersistence.remove(userId, `diet_analysis_${fetchDate}`);
     }
 
     // Clear any pending retry since we're fetching now
@@ -144,7 +146,7 @@ export function useNutritionData(params: UseNutritionDataParams) {
     let servedFromCache = false;
 
     if (!skipCache) {
-      const cachedMeals = nutritionCache.getMeals(userId, selectedDate);
+      const cachedMeals = nutritionCache.getMeals(userId, fetchDate);
       if (cachedMeals) {
         setMeals(cachedMeals);
         safeAsync(setMealsLoading)(false);
@@ -152,14 +154,18 @@ export function useNutritionData(params: UseNutritionDataParams) {
       }
     }
 
-    const localMeals = localCache.getForDate<Meal[]>(userId, "nutrition_logs", selectedDate);
-    if (localMeals && localMeals.length > 0) {
-      setMeals(localMeals);
-      servedFromCache = true;
-      safeAsync(setMealsLoading)(false);
+    // Try localStorage with 30-min TTL (skip during silent refresh — we already have meals visible)
+    if (!skipCache) {
+      const localMeals = localCache.getForDate<Meal[]>(userId, "nutrition_logs", fetchDate, 30 * 60 * 1000);
+      if (localMeals && localMeals.length > 0) {
+        setMeals(localMeals);
+        servedFromCache = true;
+        safeAsync(setMealsLoading)(false);
+      }
     }
 
-    if (!servedFromCache) {
+    // Only show loading skeleton if we have nothing to display and this isn't a silent refresh
+    if (!servedFromCache && !silent) {
       safeAsync(setMealsLoading)(true);
     }
 
@@ -170,7 +176,7 @@ export function useNutritionData(params: UseNutritionDataParams) {
           .from("nutrition_logs")
           .select("id, meal_name, calories, protein_g, carbs_g, fats_g, meal_type, portion_size, recipe_notes, is_ai_generated, ingredients, date, created_at")
           .eq("user_id", userId)
-          .eq("date", selectedDate)
+          .eq("date", fetchDate)
           .order("created_at", { ascending: true }),
         undefined,
         "Load meals"
@@ -181,6 +187,12 @@ export function useNutritionData(params: UseNutritionDataParams) {
       if (!isMounted()) return;
       logger.error("Error loading meals", err);
       if (!servedFromCache) {
+        // Last-resort: try localStorage without TTL for offline fallback
+        const fallback = localCache.getForDate<Meal[]>(userId, "nutrition_logs", fetchDate);
+        if (fallback && fallback.length > 0) {
+          setMeals(fallback);
+          safeAsync(setMealsLoading)(false);
+        }
         // Schedule auto-retry with backoff (3s, 6s, 12s, max 15s)
         const delay = Math.min(3000 * Math.pow(2, _retryCount), 15000);
         retryTimerRef.current = setTimeout(() => {
@@ -191,6 +203,8 @@ export function useNutritionData(params: UseNutritionDataParams) {
     }
 
     if (!isMounted()) return;
+    // Stale response guard — user may have navigated to a different date
+    if (activeDateRef.current !== fetchDate) return;
 
     const typedMeals = (data || []).map(meal => ({
       ...meal,
@@ -211,7 +225,7 @@ export function useNutritionData(params: UseNutritionDataParams) {
       op =>
         op.table === "nutrition_logs" &&
         op.action === "insert" &&
-        (op.payload as any).date === selectedDate &&
+        (op.payload as any).date === fetchDate &&
         !dbIds.has(op.recordId)
     );
     for (const op of pendingInserts) {
@@ -228,18 +242,19 @@ export function useNutritionData(params: UseNutritionDataParams) {
         recipe_notes: p.recipe_notes ?? undefined,
         ingredients: p.ingredients ?? undefined,
         is_ai_generated: p.is_ai_generated,
-        date: p.date ?? selectedDate,
+        date: p.date ?? fetchDate,
       });
     }
 
     setMeals(mergedMeals as Meal[]);
     safeAsync(setMealsLoading)(false);
-    nutritionCache.setMeals(userId, selectedDate, mergedMeals as Meal[]);
-    localCache.setForDate(userId, "nutrition_logs", selectedDate, mergedMeals);
+    nutritionCache.setMeals(userId, fetchDate, mergedMeals as Meal[]);
+    localCache.setForDate(userId, "nutrition_logs", fetchDate, mergedMeals);
   };
 
   // Load meals on date/user change
   useEffect(() => {
+    activeDateRef.current = selectedDate;
     setMealsLoading(true);
     loadMeals();
     if (userId) preloadAdjacentDates(userId, selectedDate);
@@ -270,12 +285,12 @@ export function useNutritionData(params: UseNutritionDataParams) {
     }
   }, [userId]);
 
-  // Visibility-based revalidation
+  // Visibility-based revalidation — silent refresh keeps existing meals visible
   useEffect(() => {
     const handleVis = () => {
       if (document.visibilityState === 'visible' && userId) {
         if (Date.now() - lastFetchRef.current < 2000) return;
-        loadMeals(true);
+        loadMeals(true, 0, /* silent */ true);
       }
     };
     document.addEventListener('visibilitychange', handleVis);

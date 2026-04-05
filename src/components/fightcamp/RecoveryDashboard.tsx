@@ -173,7 +173,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
 
     loadOrComputeBaseline(userId, tdee).then(b => {
       if (b) setBaseline(b);
-    });
+    }).catch(() => {});
 
     // Check if already checked in today
     const today = new Date().toISOString().split('T')[0];
@@ -188,7 +188,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
           setTodayCheckedIn(true);
           setWellnessCheckIn(data as WellnessCheckInData);
         }
-      });
+      }).catch(() => {});
 
     // Count total check-in days for progress banner
     supabase
@@ -197,7 +197,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
       .eq('user_id', userId)
       .then(({ count }) => {
         setCheckInDaysCount(count ?? 0);
-      });
+      }).catch(() => {});
   }, [userId, tdee]);
 
   // Compute metrics whenever sessions or wellness data changes
@@ -225,16 +225,21 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
     }
   }, [sessions28d, athleteProfile?.trainingFrequency, athleteProfile?.activityLevel, wellnessCheckIn, baseline, userId]);
 
-  // Store readiness for autoregressive smoothing when it changes
+  // Store readiness for autoregressive smoothing when it changes (deduplicated)
+  const lastStoredScoreRef = useRef<number | null>(null);
   useEffect(() => {
-    if (metrics?.readiness.score != null) {
-      AIPersistence.save(userId, 'prev_readiness', metrics.readiness.score, 48);
+    const score = metrics?.readiness.score;
+    if (score == null) return;
+    // Only write if score actually changed (avoids duplicate PATCH calls)
+    if (lastStoredScoreRef.current === score) return;
+    lastStoredScoreRef.current = score;
 
-      // Write back to check-in row if we checked in today
-      if (todayCheckedIn) {
-        const today = new Date().toISOString().split('T')[0];
-        storeReadinessScore(userId, today, metrics.readiness.score);
-      }
+    AIPersistence.save(userId, 'prev_readiness', score, 48);
+
+    // Write back to check-in row if we checked in today
+    if (todayCheckedIn) {
+      const today = new Date().toISOString().split('T')[0];
+      storeReadinessScore(userId, today, score);
     }
   }, [metrics?.readiness.score, userId, todayCheckedIn]);
 
@@ -417,7 +422,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
     // Recompute baseline in background after submission
     computeAndStoreBaseline(userId, tdee).then(b => {
       if (b) setBaseline(b);
-    });
+    }).catch(() => {});
 
     // Trigger coach advice after a small delay to let metrics recompute
     setTimeout(() => askCoach(), 300);

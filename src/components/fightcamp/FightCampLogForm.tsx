@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Activity, Moon, Ruler, Plus, X, Check } from "lucide-react";
+import { Activity, Moon, Ruler, Plus, X, Check, Route, Timer, Gauge } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,6 +39,13 @@ interface FightCampLogFormProps {
   setSleepHours: (v: string) => void;
   notes: string;
   setNotes: (v: string) => void;
+  runDistance: string;
+  setRunDistance: (v: string) => void;
+  runTime: string;
+  setRunTime: (v: string) => void;
+  runDistanceUnit: "km" | "mi";
+  setRunDistanceUnit: (v: "km" | "mi") => void;
+  runPace: string;
   mediaPreviewUrl: string | null;
   existingMediaUrl: string | null;
   onMediaSelected: (file: File, previewUrl: string) => void;
@@ -57,6 +64,10 @@ export function FightCampLogForm({
   sorenessLevel, setSorenessLevel,
   sleepHours, setSleepHours,
   notes, setNotes,
+  runDistance, setRunDistance,
+  runTime, setRunTime,
+  runDistanceUnit, setRunDistanceUnit,
+  runPace,
   onSave,
 }: FightCampLogFormProps) {
   const [customTypes, setCustomTypes] = useState<string[]>([]);
@@ -230,6 +241,62 @@ export function FightCampLogForm({
           </div>
         </div>
       </div>
+
+      {/* Run Details — only when session type is Run */}
+      {sessionType === "Run" && (
+        <div className="rounded-2xl border border-border/10 overflow-hidden">
+          {/* Distance */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border/10">
+            <span className="text-xs font-medium tracking-wide uppercase text-muted-foreground flex items-center gap-1">
+              <Route className="h-3.5 w-3.5 text-primary" /> Distance
+            </span>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="0.1"
+                min="0"
+                value={runDistance}
+                onChange={(e) => setRunDistance(e.target.value)}
+                placeholder="0"
+                className="w-20 h-8 rounded-lg text-right text-sm font-semibold bg-transparent border-border/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+              <button
+                type="button"
+                onClick={() => setRunDistanceUnit(runDistanceUnit === "km" ? "mi" : "km")}
+                className="text-xs font-semibold px-2.5 py-1 rounded-full bg-white/5 border border-border/30 hover:bg-white/10 transition-colors min-w-[36px]"
+              >
+                {runDistanceUnit}
+              </button>
+            </div>
+          </div>
+
+          {/* Time */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border/10">
+            <span className="text-xs font-medium tracking-wide uppercase text-muted-foreground flex items-center gap-1">
+              <Timer className="h-3.5 w-3.5 text-primary" /> Time
+            </span>
+            <Input
+              type="text"
+              inputMode="numeric"
+              value={runTime}
+              onChange={(e) => setRunTime(e.target.value)}
+              placeholder="mm:ss"
+              className="w-24 h-8 rounded-lg text-right text-sm font-semibold bg-transparent border-border/30"
+            />
+          </div>
+
+          {/* Pace (auto-calculated) */}
+          <div className="flex items-center justify-between px-4 py-3">
+            <span className="text-xs font-medium tracking-wide uppercase text-muted-foreground flex items-center gap-1">
+              <Gauge className="h-3.5 w-3.5 text-primary" /> Pace
+            </span>
+            <span className="text-sm font-semibold text-foreground/70">
+              {runPace ? `${runPace} /${runDistanceUnit}` : "—"}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Group 2: Recovery */}
       <div className="rounded-2xl border border-border/10 overflow-hidden">

@@ -153,7 +153,10 @@ export default function Onboarding() {
 
       setTimeout(async () => {
         setGenerationStep(4);
-        await refreshProfile(); // update hasProfile=true before navigating
+        const profileRefreshed = await refreshProfile();
+        if (!profileRefreshed) {
+          await refreshProfile();
+        }
         celebrateSuccess();
         setTimeout(() => navigate("/dashboard"), 1000);
       }, remainingAnim);

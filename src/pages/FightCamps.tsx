@@ -58,7 +58,7 @@ export default function FightCamps() {
     }
   }, [userId]);
 
-  const fetchCamps = async () => {
+  const fetchCamps = async (retryCount = 0) => {
     if (!userId) return;
 
     // Cache-first: show cached data instantly
@@ -93,8 +93,13 @@ export default function FightCamps() {
       }
     } catch (error) {
       logger.error("Unexpected error loading fight camps", error);
+      // Retry up to 2 times with backoff before showing error
+      if (retryCount < 2) {
+        setTimeout(() => fetchCamps(retryCount + 1), 1000 * (retryCount + 1));
+        return;
+      }
       if (!cached) {
-        toast({ title: "Error", description: "An unexpected error occurred", variant: "destructive" });
+        toast({ title: "Error", description: "Couldn't load fight camps. Check your connection and try again.", variant: "destructive" });
         setCamps([]);
       }
     } finally {

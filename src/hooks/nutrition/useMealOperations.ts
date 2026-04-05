@@ -5,6 +5,7 @@ import { useUser } from "@/contexts/UserContext";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { localCache } from "@/lib/localCache";
+import { nutritionCache } from "@/lib/nutritionCache";
 import { syncQueue } from "@/lib/syncQueue";
 import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { celebrateSuccess, confirmDelete } from "@/lib/haptics";
@@ -65,6 +66,7 @@ export function useMealOperations(params: UseMealOperationsParams) {
     const updatedMeals = [...meals, optimisticMeal];
     setMeals(updatedMeals);
     localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
+    nutritionCache.setMeals(userId, selectedDate, updatedMeals);
 
     const dbPayload = {
       id: mealId,
@@ -126,6 +128,7 @@ export function useMealOperations(params: UseMealOperationsParams) {
       const updatedMeals = [...meals, optimisticMeal];
       setMeals(updatedMeals);
       localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
+    nutritionCache.setMeals(userId, selectedDate, updatedMeals);
 
       const dbPayload = {
         id: mealId,
@@ -244,6 +247,7 @@ export function useMealOperations(params: UseMealOperationsParams) {
       const updatedMeals = [...meals, ...optimisticMeals];
       setMeals(updatedMeals);
       localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
+    nutritionCache.setMeals(userId, selectedDate, updatedMeals);
       setMealPlanIdeas([]);
       AIPersistence.remove(userId, 'meal_plans');
 
@@ -307,6 +311,7 @@ export function useMealOperations(params: UseMealOperationsParams) {
     setMealToDelete(null);
 
     localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
+    nutritionCache.setMeals(userId, selectedDate, updatedMeals);
 
     syncQueue.enqueue(userId, {
       table: "nutrition_logs",
@@ -367,6 +372,7 @@ export function useMealOperations(params: UseMealOperationsParams) {
     const updatedMeals = [...meals, optimisticMeal];
     setMeals(updatedMeals);
     localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
+    nutritionCache.setMeals(userId, selectedDate, updatedMeals);
 
     const dbPayload = {
       id: mealId,

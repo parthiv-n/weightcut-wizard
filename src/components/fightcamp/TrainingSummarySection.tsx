@@ -106,6 +106,9 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
     const fetchWeekSessions = useCallback(async () => {
         const ws = startOfWeek(selectedDate, { weekStartsOn: 1 });
         const we = endOfWeek(selectedDate, { weekStartsOn: 1 });
+        const weekKey = `training_week_${format(ws, "yyyy-MM-dd")}`;
+        const cached = localCache.get<SessionRow[]>(userId, weekKey, 5 * 60 * 1000);
+        if (cached) { setWeekSessions(cached); return; }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data, error } = await (supabase as any)
             .from("fight_camp_calendar")
@@ -119,6 +122,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
             return;
         }
         setWeekSessions((data as SessionRow[]) || []);
+        localCache.set(userId, weekKey, data || []);
     }, [userId, selectedDate]);
 
     useEffect(() => {

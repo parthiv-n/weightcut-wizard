@@ -162,13 +162,13 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
       }
 
       // Start onboarding after dashboard animations finish
-      autoTriggeredRef.current = true;
       const timer = setTimeout(() => {
+        autoTriggeredRef.current = true;
         managerRef.current.start("onboarding", getUserState());
       }, 800);
       return () => clearTimeout(timer);
     }
-  }, [location.pathname, userId, hasProfile, state.isActive, getUserState]);
+  }, [location.pathname, userId, hasProfile, state.isActive]);
 
   // Pause on route change — ONLY if the user navigated manually (not via tutorial navigation).
   // If the step has `navigateTo`, we expect the route to differ temporarily.

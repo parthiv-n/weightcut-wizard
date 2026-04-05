@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { format, parseISO } from "date-fns";
-import { Activity, Moon, Ruler, Pencil, Trash2 } from "lucide-react";
+import { Activity, Moon, Ruler, Pencil, Trash2, Route, Timer, Gauge } from "lucide-react";
+import { decodeRunMeta } from "@/lib/runMeta";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
@@ -44,6 +45,12 @@ export function SessionDetailDrawer({
   customColors,
 }: SessionDetailDrawerProps) {
   const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const isRun = session?.session_type === "Run";
+  const { meta: runMeta, notes: cleanNotes } = useMemo(
+    () => isRun && session ? decodeRunMeta(session.notes) : { meta: null, notes: session?.notes ?? "" },
+    [isRun, session?.notes]
+  );
 
   if (!session) return null;
 
@@ -101,6 +108,19 @@ export function SessionDetailDrawer({
               </>
             ) : (
               <>
+                {isRun && runMeta && (
+                  <>
+                    {runMeta.distance && (
+                      <MetricRow label="Distance" value={`${runMeta.distance} ${runMeta.unit}`} icon={<Route className="h-3.5 w-3.5 text-primary" />} />
+                    )}
+                    {runMeta.time && (
+                      <MetricRow label="Time" value={runMeta.time} icon={<Timer className="h-3.5 w-3.5 text-primary" />} />
+                    )}
+                    {runMeta.pace && (
+                      <MetricRow label="Pace" value={`${runMeta.pace} /${runMeta.unit}`} icon={<Gauge className="h-3.5 w-3.5 text-primary" />} />
+                    )}
+                  </>
+                )}
                 <MetricRow label="Duration" value={`${session.duration_minutes} min`} icon={<Activity className="h-3.5 w-3.5 text-primary" />} />
                 <MetricRow label="RPE" value={`${session.rpe}/10`} icon={<Activity className="h-3.5 w-3.5 text-primary" />} />
                 <MetricRow label="Intensity" value={`${intensityDisplay}/5`} icon={<Ruler className="h-3.5 w-3.5 text-primary" />} />
@@ -115,10 +135,10 @@ export function SessionDetailDrawer({
           </div>
 
           {/* Notes */}
-          {session.notes && (
+          {(isRun ? cleanNotes : session.notes) && (
             <div>
               <p className="text-xs font-medium tracking-wide uppercase text-muted-foreground mb-1.5">Notes</p>
-              <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">{session.notes}</p>
+              <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">{isRun ? cleanNotes : session.notes}</p>
             </div>
           )}
 
