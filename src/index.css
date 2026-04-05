@@ -39,8 +39,8 @@ All colors MUST be HSL.
     --destructive: 0 84% 70%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 90%;
-    --input: 0 0% 90%;
+    --border: 0 0% 78%;
+    --input: 0 0% 78%;
     --ring: 217 91% 53%;
 
     --radius: 1rem;
@@ -240,9 +240,20 @@ All colors MUST be HSL.
   .bg-card,
   [data-sidebar="sidebar"] {
     background: hsl(var(--card) / 0.9);
-    border: 1px solid hsl(var(--border) / 0.5);
+    border: 1px solid hsl(var(--border));
     border-radius: 1rem;
     transition: border-color 0.3s ease;
+  }
+
+  /* Light mode: bold outlined cards, dialogs, popovers */
+  :root:not(.dark) .glass-card,
+  :root:not(.dark) .bg-card,
+  :root:not(.dark) .nutrition-dashboard,
+  :root:not(.dark) [role="dialog"],
+  :root:not(.dark) .popover-content,
+  :root:not(.dark) [data-sidebar="sidebar"] {
+    border: 1.5px solid hsl(0 0% 0% / 0.15);
+    box-shadow: 0 1px 3px hsl(0 0% 0% / 0.06);
   }
 
   .dark .glass-card,
