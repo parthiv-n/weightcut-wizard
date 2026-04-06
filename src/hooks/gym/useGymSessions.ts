@@ -120,11 +120,11 @@ export function useGymSessions() {
       );
 
       if (sessErr) throw sessErr;
-      if (!isMounted() || !sessions?.length) {
-        if (isMounted()) {
-          safeAsync(setHistory)([]);
-          safeAsync(setHistoryLoading)(false);
-        }
+      if (!isMounted()) return;
+      if (!sessions?.length) {
+        safeAsync(setHistory)([]);
+        safeAsync(setHistoryLoading)(false);
+        localCache.set(userId, HISTORY_CACHE_KEY, []);
         return;
       }
 
