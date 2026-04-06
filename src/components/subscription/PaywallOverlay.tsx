@@ -173,8 +173,8 @@ function WebFallbackPaywall() {
     <div className="fixed inset-0 z-[10003] flex flex-col bg-background/98 dark:bg-background/99 backdrop-blur-xl animate-in fade-in duration-300">
       <button
         onClick={closePaywall}
-        className="absolute top-4 right-4 z-10 h-9 w-9 flex items-center justify-center rounded-full bg-muted/30 dark:bg-white/10 border border-border/30 active:scale-90 transition-transform"
-        style={{ top: "calc(env(safe-area-inset-top, 16px) + 8px)" }}
+        className="absolute right-4 z-10 h-11 w-11 flex items-center justify-center rounded-full bg-muted/30 dark:bg-white/10 border border-border/30 active:scale-90 transition-transform"
+        style={{ top: "calc(env(safe-area-inset-top, 0px) + 16px)" }}
       >
         <X className="h-5 w-5 text-muted-foreground" />
       </button>

@@ -79,7 +79,7 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
     return `${Math.round(calLeft)} kcal remaining. Tap for training meal ideas.`;
   };
 
-  const generateWisdomAdvice = async () => {
+  const generateWisdomAdvice = async (userInitiated = false) => {
     if (!userId || totalCalories === 0) {
       safeAsync(setAiWisdomAdvice)(null);
       return;
@@ -101,7 +101,8 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
     safeAsync(setAiWisdomLoading)(true);
     try {
       if (!checkAIAccess()) {
-        openPaywall();
+        // Only show paywall if user explicitly tapped something
+        if (userInitiated) openPaywall();
         return;
       }
 
@@ -123,7 +124,7 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
         const errBody = typeof error === 'object' && 'context' in error ? (error as any).context : null;
         if (errBody?.status === 429) {
           markLimitReached();
-          openPaywall();
+          if (userInitiated) openPaywall();
           return;
         }
         throw new Error(await extractEdgeFunctionError(error, "Could not generate nutrition advice"));
