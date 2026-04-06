@@ -358,17 +358,18 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       serving_weight_g: servingWt,
     });
     setServingMultiplier(1);
-    setManualMeal({
+    setManualMeal(prev => ({
+      ...prev,
       meal_name: foodData.meal_name,
       calories: foodData.calories.toString(),
       protein_g: foodData.protein_g.toString(),
       carbs_g: foodData.carbs_g.toString(),
       fats_g: foodData.fats_g.toString(),
-      meal_type: "snack",
+      meal_type: prev.meal_type || "snack",
       portion_size: foodData.serving_size || "1 serving",
       recipe_notes: "",
       ingredients: [],
-    });
+    }));
     setQuickAddTab("manual");
     setIsQuickAddSheetOpen(true);
   }, [setManualMeal, setQuickAddTab, setIsQuickAddSheetOpen]);

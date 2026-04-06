@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Dumbbell, Plus, Calendar, Clock, Flame } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useGymSessions } from "@/hooks/gym/useGymSessions";
@@ -46,7 +47,8 @@ export default function GymTracker() {
     generateRoutine, saveRoutine, deleteRoutine, renameRoutine,
   } = useRoutines();
 
-  const [tab, setTab] = useState<GymTab>("workouts");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTab] = useState<GymTab>(() => searchParams.get("tab") === "routines" ? "routines" : "workouts");
   const [exercisePickerOpen, setExercisePickerOpen] = useState(false);
   const [createExerciseOpen, setCreateExerciseOpen] = useState(false);
   const [detailSession, setDetailSession] = useState<SessionWithSets | null>(null);
@@ -149,13 +151,11 @@ export default function GymTracker() {
     );
     if (completedTask && handledTaskRef.current !== completedTask.id) {
       handledTaskRef.current = completedTask.id;
-      // Set result first, then open sheet on next tick so it renders with data
       setCompletedRoutineResult(completedTask.result);
       setTab("routines");
-      requestAnimationFrame(() => {
-        setGeneratorOpen(true);
-        aiDismiss(completedTask.id);
-      });
+      setGeneratorOpen(true);
+      // Dismiss after a short delay to ensure state is applied first
+      setTimeout(() => aiDismiss(completedTask.id), 100);
     }
   }, [aiTasks, aiDismiss]);
 

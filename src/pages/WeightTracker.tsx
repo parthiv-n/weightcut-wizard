@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { format } from "date-fns";
-import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Sparkles, Activity, Apple, Trash2, RefreshCw, Bug, Edit2, ChevronDown, Check } from "lucide-react";
+import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Sparkles, Activity, Scale, Trash2, RefreshCw, Bug, Edit2, ChevronDown, Check } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
@@ -241,6 +241,17 @@ export default function WeightTracker() {
 
   const { tasks: aiTasks, dismissTask: aiDismiss } = useAITask();
   const aiTask = aiTasks.find(t => t.status === "running" && t.type === "weight-analysis");
+
+  // Pick up completed weight analysis from task context
+  const handledWeightTaskRef = useRef<string | null>(null);
+  useEffect(() => {
+    const done = aiTasks.find(t => t.status === "done" && t.type === "weight-analysis" && t.result && handledWeightTaskRef.current !== t.id);
+    if (done) {
+      handledWeightTaskRef.current = done.id;
+      loadPersistedAnalysis();
+      aiDismiss(done.id);
+    }
+  }, [aiTasks, aiDismiss]);
 
   return (
     <>
@@ -489,44 +500,50 @@ export default function WeightTracker() {
               {/* Weekly Progress Bar */}
               {aiAnalysisWeight !== null && aiAnalysisTarget !== null && profile && aiAnalysis && (
                 (() => {
-                  const currentWeight = aiAnalysisWeight;
+                  const startWeight = aiAnalysisWeight;
                   const targetWeight = aiAnalysisTarget;
-                  const wd = targetWeight - currentWeight;
-                  const isAtTarget = wd >= 0;
+                  const latestWeight = getCurrentWeight();
+                  const isLosing = startWeight > targetWeight;
 
                   const targetDate = new Date(profile.target_date);
                   const today = new Date();
                   const daysRemaining = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
                   const weeksRemaining = Math.max(1, Math.ceil(daysRemaining / 7));
 
+                  // Calculate actual progress from logged weight
                   let progressPercent = 0;
-                  if (!isAtTarget && wd < 0) {
-                    progressPercent = 0;
-                  } else if (isAtTarget && wd > 0) {
-                    progressPercent = 0;
+                  if (isLosing) {
+                    const totalToLose = startWeight - targetWeight;
+                    if (totalToLose > 0 && latestWeight < startWeight) {
+                      // Only fill if user has lost weight (not gained)
+                      const actualLost = startWeight - latestWeight;
+                      progressPercent = Math.min(100, Math.max(0, (actualLost / totalToLose) * 100));
+                    }
                   } else {
-                    progressPercent = 100;
+                    const totalToGain = targetWeight - startWeight;
+                    if (totalToGain > 0 && latestWeight > startWeight) {
+                      const actualGained = latestWeight - startWeight;
+                      progressPercent = Math.min(100, Math.max(0, (actualGained / totalToGain) * 100));
+                    }
                   }
 
                   const milestones: Array<{ week: number; expectedWeight: number; position: number }> = [];
 
-                  if (!isAtTarget && aiAnalysis.requiredWeeklyLoss > 0) {
-                    const startWeight = currentWeight;
+                  if (isLosing && aiAnalysis.requiredWeeklyLoss > 0) {
                     const totalToLose = startWeight - targetWeight;
                     for (let week = 1; week <= Math.min(weeksRemaining, 8); week++) {
-                      const expectedWeight = Math.max(targetWeight, currentWeight - (week * aiAnalysis.requiredWeeklyLoss));
+                      const expectedWeight = Math.max(targetWeight, startWeight - (week * aiAnalysis.requiredWeeklyLoss));
                       const weightLost = startWeight - expectedWeight;
                       const position = Math.min(100, Math.max(0, (weightLost / totalToLose) * 100));
                       milestones.push({ week, expectedWeight, position });
                     }
-                  } else if (isAtTarget && wd > 0) {
-                    const startWeight = currentWeight;
+                  } else if (!isLosing) {
                     const totalToGain = targetWeight - startWeight;
                     const weeklyGain = Math.abs(aiAnalysis.requiredWeeklyLoss) || 0.2;
                     for (let week = 1; week <= Math.min(weeksRemaining, 8); week++) {
-                      const expectedWeight = Math.min(targetWeight, currentWeight + (week * weeklyGain));
+                      const expectedWeight = Math.min(targetWeight, startWeight + (week * weeklyGain));
                       const weightGained = expectedWeight - startWeight;
-                      const position = Math.min(100, Math.max(0, (weightGained / totalToGain) * 100));
+                      const position = totalToGain > 0 ? Math.min(100, Math.max(0, (weightGained / totalToGain) * 100)) : 0;
                       milestones.push({ week, expectedWeight, position });
                     }
                   }
@@ -534,8 +551,13 @@ export default function WeightTracker() {
                   return (
                     <div className="py-2">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-semibold text-muted-foreground">{currentWeight.toFixed(1)} kg</span>
-                        <span className="text-[9px] text-muted-foreground">{weeksRemaining} {weeksRemaining === 1 ? 'week' : 'weeks'} remaining</span>
+                        <span className="text-[10px] font-semibold text-muted-foreground">{startWeight.toFixed(1)} kg</span>
+                        <span className="text-[9px] text-muted-foreground">
+                          {latestWeight !== startWeight && (
+                            <span className="text-primary font-semibold mr-1">Now: {latestWeight.toFixed(1)} kg</span>
+                          )}
+                          {weeksRemaining} {weeksRemaining === 1 ? 'week' : 'weeks'} left
+                        </span>
                         <span className="text-[10px] font-semibold text-primary">{targetWeight.toFixed(1)} kg</span>
                       </div>
                       <div className="relative">
@@ -609,10 +631,17 @@ export default function WeightTracker() {
                   <Sparkles className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
                   <p className="text-[11px] text-muted-foreground leading-relaxed"><span className="font-medium text-foreground">Strategy: </span>{aiAnalysis.strategicGuidance}</p>
                 </div>
-                {aiAnalysis.nutritionTips.length > 0 && (
+                {aiAnalysis.weeklyWorkflow && aiAnalysis.weeklyWorkflow.length > 0 && (
                   <div className="flex gap-1.5 items-start">
-                    <Apple className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
-                    <div className="text-[11px] text-muted-foreground leading-relaxed"><span className="font-medium text-foreground">Nutrition: </span>{aiAnalysis.nutritionTips.join(' · ')}</div>
+                    <Scale className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
+                    <div className="text-[11px] text-muted-foreground leading-relaxed">
+                      <span className="font-medium text-foreground">Weekly Check-in: </span>
+                      <ol className="list-decimal list-inside mt-1 space-y-1">
+                        {aiAnalysis.weeklyWorkflow.map((step, i) => (
+                          <li key={i}>{step}</li>
+                        ))}
+                      </ol>
+                    </div>
                   </div>
                 )}
                 <div className="flex gap-1.5 items-start">

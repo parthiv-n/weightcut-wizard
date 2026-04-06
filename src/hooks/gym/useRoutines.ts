@@ -90,7 +90,7 @@ export function useRoutines() {
           { icon: Activity, label: "Optimizing sets & reps" },
           { icon: Sparkles, label: "Finalizing routine" },
         ],
-        returnPath: "/gym",
+        returnPath: "/gym?tab=routines",
       });
 
       try {

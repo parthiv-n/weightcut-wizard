@@ -94,7 +94,6 @@ export function useMealOperations(params: UseMealOperationsParams) {
       if (error) throw error;
 
       celebrateSuccess();
-      await loadMeals(true);
       syncQueue.dequeueByRecordId(userId, mealId);
     } catch (error) {
       logger.error("Error adding meal (queued for sync)", error);
@@ -170,7 +169,6 @@ export function useMealOperations(params: UseMealOperationsParams) {
           title: "Meal logged!",
           description: `${mealIdea.meal_name} added to your day`,
         });
-        await loadMeals(true);
         syncQueue.dequeueByRecordId(userId, mealId);
         } catch (error) {
         logger.error("Error logging meal (queued for sync)", error);
@@ -270,7 +268,6 @@ export function useMealOperations(params: UseMealOperationsParams) {
           title: "All meals saved!",
           description: `${mealIdeas.length} meals added to your day`,
         });
-        await loadMeals(true);
         for (const mealId of mealIds) {
           syncQueue.dequeueByRecordId(userId, mealId);
         }
@@ -415,7 +412,6 @@ export function useMealOperations(params: UseMealOperationsParams) {
 
       celebrateSuccess();
       toast({ title: "Food logged!", description: `${food.meal_name} · ${food.calories} kcal` });
-      await loadMeals(true);
       syncQueue.dequeueByRecordId(userId, mealId);
     } catch (error) {
       logger.error("Error logging food (queued for sync)", error);

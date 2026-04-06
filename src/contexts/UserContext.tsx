@@ -37,7 +37,7 @@ export interface ProfileData {
 
 const AI_RELEVANT_FIELDS: (keyof ProfileData)[] = [
   'goal_weight_kg', 'fight_week_target_kg', 'target_date',
-  'activity_level', 'tdee', 'bmr', 'current_weight_kg',
+  'activity_level', 'tdee', 'bmr',
   'age', 'sex', 'height_cm', 'training_frequency', 'goal_type',
 ];
 
@@ -366,10 +366,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
       return updated;
     });
 
-    // Invalidate AI caches if weight changed meaningfully (>0.1kg)
-    if (userIdRef.current && previousWeight != null && Math.abs(weight - previousWeight) > 0.1) {
-      AIPersistence.clearAllForUser(userIdRef.current);
-    }
 
     if (userIdRef.current) {
       await supabase

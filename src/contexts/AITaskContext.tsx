@@ -97,7 +97,7 @@ export function AITaskProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
-      setTasks((prev) => prev.filter((t) => !(t.status === "done" && t.completedAt && now - t.completedAt > 30_000)));
+      setTasks((prev) => prev.filter((t) => !(t.status === "done" && t.completedAt && now - t.completedAt > 300_000)));
     }, 1000);
     return () => clearInterval(interval);
   }, []);

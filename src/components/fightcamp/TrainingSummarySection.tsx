@@ -100,6 +100,18 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
     const [isLoading, setIsLoading] = useState(false);
     const aiTrainingTask = tasks.find(t => t.type === "training-summary" && t.status === "running");
     const isGenerating = isLoading || !!aiTrainingTask;
+
+    // Pick up completed training summary from task context
+    const handledSummaryTaskRef = useRef<string | null>(null);
+    useEffect(() => {
+      const done = tasks.find(t => t.status === "done" && t.type === "training-summary" && handledSummaryTaskRef.current !== t.id);
+      if (done) {
+        handledSummaryTaskRef.current = done.id;
+        fetchAllSummaries();
+        setIsSummaryOpen(true);
+        dismissTask(done.id);
+      }
+    }, [tasks, dismissTask]);
     const [isSummaryOpen, setIsSummaryOpen] = useState(true);
     const abortRef = useRef<AbortController | null>(null);
 

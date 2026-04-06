@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -434,6 +434,17 @@ export default function Nutrition() {
   const { tasks, dismissTask } = useAITask();
   const aiTask = tasks.find(t => t.status === "running" && ["meal-analysis", "ingredient-lookup", "meal-plan", "diet-analysis"].includes(t.type));
 
+  // Pick up completed AI tasks and apply results to local state
+  const handledTaskRef = useRef<string | null>(null);
+  useEffect(() => {
+    const done = tasks.find(t => t.status === "done" && t.type === "diet-analysis" && t.result && handledTaskRef.current !== t.id);
+    if (done) {
+      handledTaskRef.current = done.id;
+      nutritionData.setDietAnalysis(done.result);
+      dismissTask(done.id);
+    }
+  }, [tasks, dismissTask, nutritionData.setDietAnalysis]);
+
   return (
     <>
       {aiTask && (
@@ -443,7 +454,7 @@ export default function Nutrition() {
             isGenerating={true}
             steps={aiTask.steps}
             title={aiTask.label}
-            onCancel={() => dismissTask(aiTask.id)}
+            onCancel={() => { cancelAI(); dismissTask(aiTask.id); }}
           />
         </div>
       )}
@@ -754,6 +765,15 @@ export default function Nutrition() {
         {/* Quick Add Bottom Sheet */}
         <Dialog open={isQuickAddSheetOpen} onOpenChange={handleSheetOpenChange}>
           <DialogContent className="sm:max-w-md max-h-[calc(100vh-6rem)] overflow-y-auto rounded-[24px]">
+            {aiTask && (
+              <AICompactOverlay
+                isOpen={true}
+                isGenerating={true}
+                steps={aiTask.steps}
+                title={aiTask.label}
+                onCancel={() => { cancelAI(); dismissTask(aiTask.id); }}
+              />
+            )}
             <DialogHeader><DialogTitle className="text-base">Add Meal</DialogTitle></DialogHeader>
             <div className="flex gap-1 p-1 rounded-xl bg-muted/50 mb-4">
               <button onClick={() => setQuickAddTab("ai")} className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${quickAddTab === "ai" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>

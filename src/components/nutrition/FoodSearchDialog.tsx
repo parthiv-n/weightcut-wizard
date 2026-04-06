@@ -215,6 +215,8 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
 
     const handleLogFood = () => {
         if (!selectedFood) return;
+        const mainEl = document.querySelector("main");
+        const scrollY = mainEl?.scrollTop ?? 0;
         onFoodSelected({
             meal_name: selectedFood.name + (selectedFood.brand ? ` (${selectedFood.brand})` : ""),
             calories: scaledCalories,
@@ -225,6 +227,7 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
             portion_size: `${servingGrams}g`,
         });
         onOpenChange(false);
+        requestAnimationFrame(() => { if (mainEl) mainEl.scrollTop = scrollY; });
     };
 
     return (
@@ -327,6 +330,8 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                                                     </button>
                                                     <button
                                                         onClick={() => {
+                                                            const mainEl = document.querySelector("main");
+                                                            const scrollY = mainEl?.scrollTop ?? 0;
                                                             const scale = food.lastPortionGrams / 100;
                                                             onFoodSelected({
                                                                 meal_name: food.name,
@@ -338,6 +343,7 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                                                                 portion_size: `${food.lastPortionGrams}g`,
                                                             });
                                                             onOpenChange(false);
+                                                            requestAnimationFrame(() => { if (mainEl) mainEl.scrollTop = scrollY; });
                                                         }}
                                                         className="px-3 py-3 mr-2 text-primary hover:text-primary/80 active:scale-95 transition-all flex-shrink-0"
                                                         title={`Quick add · ${food.lastPortionGrams}g`}

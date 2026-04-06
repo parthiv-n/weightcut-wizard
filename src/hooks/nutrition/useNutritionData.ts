@@ -250,11 +250,11 @@ export function useNutritionData(params: UseNutritionDataParams) {
       });
     }
 
-    // Skip state update if data unchanged from cache (avoids visible flash)
+    // Update state only if data actually changed (prevents flicker on navigation)
     const currentMeals = mealsRef.current;
-    const mealsChanged = mergedMeals.length !== currentMeals.length ||
-      mergedMeals.some((m, i) => m.id !== currentMeals[i]?.id);
-    if (mealsChanged || !servedFromCache) {
+    const serializedNew = JSON.stringify(mergedMeals);
+    const serializedCurrent = JSON.stringify(currentMeals);
+    if (serializedNew !== serializedCurrent) {
       setMeals(mergedMeals as Meal[]);
     }
     safeAsync(setMealsLoading)(false);
