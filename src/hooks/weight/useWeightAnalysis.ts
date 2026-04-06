@@ -2,6 +2,7 @@ import { useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
+import { useSubscription } from "@/hooks/useSubscription";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
@@ -15,6 +16,7 @@ interface UseWeightAnalysisParams {
 export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
   const { userId, refreshProfile } = useUser();
   const { toast } = useToast();
+  const { checkAIAccess, openPaywall, incrementLocalUsage } = useSubscription();
   const aiAbortRef = useRef<AbortController | null>(null);
 
   const [analyzingWeight, setAnalyzingWeight] = useState(false);
@@ -83,6 +85,11 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
     setAnalyzingWeight(true);
 
     try {
+      if (!checkAIAccess()) {
+        openPaywall();
+        return;
+      }
+
       const currentWeight = profile.current_weight_kg;
       const currentWeightSource = "profile.current_weight_kg";
 
@@ -131,6 +138,11 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
       setDebugData(debugInfo);
 
       if (error) {
+        const errBody = typeof error === 'object' && 'context' in error ? (error as any).context : null;
+        if (errBody?.status === 429) {
+          openPaywall();
+          return;
+        }
         const msg = await extractEdgeFunctionError(error, "AI analysis unavailable");
         toast({
           title: "AI analysis unavailable",
@@ -138,6 +150,7 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
           variant: "destructive"
         });
       } else if (data?.analysis) {
+        incrementLocalUsage();
         setTargetsApplied(false);
         setAiAnalysis(data.analysis);
         setAiAnalysisWeight(currentWeight);

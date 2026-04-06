@@ -10,7 +10,9 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ProfileCompletionGuard } from "@/components/ProfileCompletionGuard";
 import { UserProvider } from "@/contexts/UserContext";
+import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { WizardBackgroundProvider } from "@/contexts/WizardBackgroundContext";
+import { PaywallOverlay } from "@/components/subscription/PaywallOverlay";
 import { PageTransition } from "@/components/PageTransition";
 import { NavigationDirectionProvider } from "@/hooks/useNavigationDirection";
 import { TutorialProvider } from "@/tutorial/TutorialContext";
@@ -210,9 +212,11 @@ const App = () => (
         });
       }}>
         <UserProvider>
+          <SubscriptionProvider>
           <WizardBackgroundProvider>
             <Toaster />
             <Sonner />
+            <PaywallOverlay />
             <BrowserRouter>
               <NavigationDirectionProvider>
               <TutorialProvider>
@@ -250,6 +254,7 @@ const App = () => (
               </NavigationDirectionProvider>
             </BrowserRouter>
           </WizardBackgroundProvider>
+          </SubscriptionProvider>
         </UserProvider>
       </ErrorBoundary>
     </TooltipProvider>

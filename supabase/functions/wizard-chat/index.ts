@@ -4,6 +4,7 @@ import { extractContent } from "../_shared/parseResponse.ts";
 import { RESEARCH_SUMMARY } from "../_shared/researchSummary.ts";
 import { edgeLogger } from "../_shared/errorReporter.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { checkAIUsage, aiLimitResponse } from "../_shared/subscriptionGuard.ts";
 
 function buildDataContext(results: {
   profile: any;
@@ -206,6 +207,12 @@ serve(async (req) => {
     if (userError || !user) {
       return new Response(JSON.stringify({ error: 'Invalid token' }),
         { status: 401, headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
+    }
+
+    // Check AI usage limits (free: 1/day, premium: unlimited)
+    const usage = await checkAIUsage(user.id);
+    if (!usage.allowed) {
+      return aiLimitResponse(req, usage, corsHeaders);
     }
 
     const today = new Date().toISOString().split('T')[0];

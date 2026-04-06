@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/UserContext";
+import { useSubscription } from "@/hooks/useSubscription";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { normalizeTechniqueName, processChains, buildGraphData } from "@/lib/techniqueGraph";
 import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
@@ -24,6 +25,7 @@ interface SkillTreeState {
 
 export function useSkillTree() {
   const { userId } = useAuth();
+  const { checkAIAccess, openPaywall, incrementLocalUsage } = useSubscription();
   const [state, setState] = useState<SkillTreeState>({ techniques: [], edges: [], progress: [] });
   const [graphNodes, setGraphNodes] = useState<GraphNode[]>([]);
   const [graphEdges, setGraphEdges] = useState<GraphEdge[]>([]);
@@ -141,6 +143,11 @@ export function useSkillTree() {
     controller: AbortController,
   ) => {
     try {
+      if (!checkAIAccess()) {
+        openPaywall();
+        return;
+      }
+
       const existingNames = stateRef.current.techniques.map((t) => t.name);
       const { data: chainResponse, error: chainError } = await supabase.functions.invoke(
         "generate-technique-chains",
@@ -149,9 +156,15 @@ export function useSkillTree() {
 
       if (controller.signal.aborted) return;
       if (chainError) {
+        const errBody = typeof chainError === 'object' && 'context' in chainError ? (chainError as any).context : null;
+        if (errBody?.status === 429) {
+          openPaywall();
+          return;
+        }
         if (chainError?.name === "AbortError") throw chainError;
         throw new Error(await extractEdgeFunctionError(chainError, "Chain generation failed"));
       }
+      incrementLocalUsage();
       const chainData = chainResponse as TechniqueChainResponse;
 
       if (!chainData?.chains?.length) return;

@@ -30,6 +30,8 @@ export interface ProfileData {
   avatar_url?: string;
   goal_type?: 'cutting' | 'losing';
   is_premium?: boolean;
+  subscription_tier?: string;
+  subscription_expires_at?: string | null;
   [key: string]: any;
 }
 

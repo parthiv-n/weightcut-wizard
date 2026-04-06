@@ -60,7 +60,8 @@ export default function Onboarding() {
             .maybeSingle();
 
           if (data) {
-            navigate("/dashboard");
+            await refreshProfile();
+            navigate("/dashboard", { replace: true });
           }
         }
       } catch (error) {

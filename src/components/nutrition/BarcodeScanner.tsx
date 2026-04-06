@@ -12,6 +12,7 @@ import { Capacitor } from "@capacitor/core";
 import { Camera as CapCamera, CameraPermissionState } from "@capacitor/camera";
 import { extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
+import { useSubscription } from "@/hooks/useSubscription";
 
 interface BarcodeScannerProps {
   onFoodScanned: (foodData: {
@@ -38,6 +39,7 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
   const { userId } = useAuth();
+  const { checkAIAccess, openPaywall, incrementLocalUsage } = useSubscription();
 
   const requestNativePermission = async (): Promise<boolean> => {
     if (!Capacitor.isNativePlatform()) return true;
@@ -69,6 +71,12 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
         return;
       }
 
+      if (!checkAIAccess()) {
+        openPaywall();
+        setIsProcessing(false);
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke("scan-barcode", {
         body: { barcode },
       });
@@ -86,6 +94,7 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
         return;
       }
 
+      incrementLocalUsage();
       setScannedProduct(data);
       setIsProcessing(false);
 

@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
+import { useSubscription } from "@/hooks/useSubscription";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
@@ -30,6 +31,7 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
   const { isSessionValid, checkSessionValidity, refreshSession, userId, profile: contextProfile } = useUser();
   const profile = contextProfile;
   const { toast } = useToast();
+  const { checkAIAccess, openPaywall, incrementLocalUsage } = useSubscription();
 
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
@@ -61,6 +63,11 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
         throw new Error("Authentication required. Please log in again.");
       }
 
+      if (!checkAIAccess()) {
+        openPaywall();
+        return;
+      }
+
       const userData = profile ? {
         currentWeight: profile.current_weight_kg,
         goalWeight: profile.goal_weight_kg,
@@ -78,12 +85,18 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
       if (controller.signal.aborted) return;
 
       if (response.error) {
+        const errBody = typeof response.error === 'object' && 'context' in response.error ? (response.error as any).context : null;
+        if (errBody?.status === 429) {
+          openPaywall();
+          return;
+        }
         throw new Error(await extractEdgeFunctionError(response.error, "Failed to generate meal plan"));
       }
 
       if (response.data?.error) {
         throw new Error(response.data.error);
       }
+      incrementLocalUsage();
 
       const { mealPlan, dailyCalorieTarget: target, safetyStatus: status, safetyMessage: message } = response.data;
 

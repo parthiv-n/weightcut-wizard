@@ -12,6 +12,7 @@ import { computeAllMetrics, type SessionRow, type AllMetrics, type ReadinessResu
 import { loadOrComputeBaseline, computeAndStoreBaseline, storeReadinessScore } from "@/utils/baselineComputer";
 import { logger } from "@/lib/logger";
 import { extractEdgeFunctionError } from "@/lib/timeoutWrapper";
+import { useSubscription } from "@/hooks/useSubscription";
 
 interface FeelCheckIn {
   energy: 'high' | 'moderate' | 'low' | 'empty';
@@ -155,6 +156,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
   const [rateLimitUntil, setRateLimitUntil] = useState<number>(0);
   const [cooldownLeft, setCooldownLeft] = useState(0);
   const [checkIn, setCheckIn] = useState<Partial<FeelCheckIn>>({});
+  const { checkAIAccess, openPaywall, incrementLocalUsage } = useSubscription();
 
   // Enhanced wellness state
   const [wellnessCheckIn, setWellnessCheckIn] = useState<WellnessCheckInData | null>(null);
@@ -290,6 +292,11 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
       return;
     }
 
+    if (!checkAIAccess()) {
+      openPaywall();
+      return;
+    }
+
     coachAbortRef.current?.abort();
     const controller = new AbortController();
     coachAbortRef.current = controller;
@@ -377,6 +384,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
 
       if (error) throw error;
       if (data?.coach) {
+        incrementLocalUsage();
         setCoachData(data.coach);
         AIPersistence.save(userId, cacheKey, data.coach, 24);
       } else {

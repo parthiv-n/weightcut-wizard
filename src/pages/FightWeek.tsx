@@ -21,6 +21,7 @@ import { TrendingDown, Target, Calendar } from "lucide-react";
 import { ShareButton } from "@/components/share/ShareButton";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { FightWeekSummaryCard } from "@/components/share/cards/FightWeekSummaryCard";
+import { useSubscription } from "@/hooks/useSubscription";
 
 interface DBPlan {
   id: string;
@@ -45,6 +46,7 @@ export default function FightWeek() {
 
   const { toast } = useToast();
   const { userId, profile } = useUser();
+  const { checkAIAccess, openPaywall, incrementLocalUsage } = useSubscription();
   const { safeAsync, isMounted } = useSafeAsync();
   const aiAbortRef = useRef<AbortController | null>(null);
 
@@ -175,6 +177,11 @@ export default function FightWeek() {
   const generateAdvice = async () => {
     if (!userId || !projection) return;
 
+    if (!checkAIAccess()) {
+      openPaywall();
+      return;
+    }
+
     aiAbortRef.current?.abort();
     const controller = createAIAbortController();
     aiAbortRef.current = controller;
@@ -202,6 +209,7 @@ export default function FightWeek() {
         const msg = await extractEdgeFunctionError(error, "AI advice unavailable");
         toast({ title: "AI advice unavailable", description: msg, variant: "destructive" });
       } else if (data?.advice) {
+        incrementLocalUsage();
         setAiAdvice(data.advice);
         AIPersistence.save(userId, "fight_week_advice", data.advice, 48);
       }
