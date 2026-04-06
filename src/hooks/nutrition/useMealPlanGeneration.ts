@@ -3,9 +3,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useAITask } from "@/contexts/AITaskContext";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
+import { Activity, Utensils, Sparkles } from "lucide-react";
 import type { Meal } from "@/pages/nutrition/types";
 
 interface UseMealPlanGenerationParams {
@@ -32,6 +34,7 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
   const profile = contextProfile;
   const { toast } = useToast();
   const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
+  const { addTask, completeTask, failTask } = useAITask();
 
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
@@ -49,6 +52,17 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
 
     setGeneratingPlan(true);
     setIsAiDialogOpen(false);
+    const taskId = addTask({
+      id: `meal-plan-${Date.now()}`,
+      type: "meal-plan",
+      label: "Generating Meal Plan",
+      steps: [
+        { icon: Activity, label: "Analyzing nutritional needs" },
+        { icon: Utensils, label: "Designing meal structure" },
+        { icon: Sparkles, label: "Optimizing recipes" },
+      ],
+      returnPath: "/nutrition",
+    });
     try {
       if (!isSessionValid) {
         const sessionValid = await checkSessionValidity();
@@ -197,6 +211,7 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
 
       setIsAiDialogOpen(false);
       setAiPrompt("");
+      completeTask(taskId, response.data);
     } catch (error: any) {
       if (error?.name === 'AbortError' || controller.signal.aborted) return;
       logger.error("Error generating meal plan", error);
@@ -224,6 +239,7 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
         }
       }
 
+      failTask(taskId, errorMsg);
       toast({ title: "Error generating meal plan", description: errorMsg, variant: "destructive" });
     } finally {
       setGeneratingPlan(false);

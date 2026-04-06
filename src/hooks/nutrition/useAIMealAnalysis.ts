@@ -3,10 +3,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useAITask } from "@/contexts/AITaskContext";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
+import { Search, Database, CheckCircle, PieChart } from "lucide-react";
 import type { AiLineItem, Ingredient, ManualMealForm, ManualNutritionDialogState, BarcodeBaseMacros, INITIAL_MANUAL_MEAL, INITIAL_MANUAL_NUTRITION_DIALOG } from "@/pages/nutrition/types";
 
 interface UseAIMealAnalysisParams {
@@ -23,6 +25,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
   const { toast } = useToast();
   const { isMounted } = useSafeAsync();
   const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
+  const { addTask, completeTask, failTask } = useAITask();
   const aiAbortRef = useRef<AbortController | null>(null);
 
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
@@ -72,6 +75,17 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
     setAiAnalyzing(true);
     setAiAnalysisComplete(false);
+    const taskId = addTask({
+      id: `meal-analysis-${Date.now()}`,
+      type: "meal-analysis",
+      label: "Analyzing Meal",
+      steps: [
+        { icon: Search, label: "Identifying food items" },
+        { icon: Database, label: "Retrieving macros" },
+        { icon: CheckCircle, label: "Finalizing log" },
+      ],
+      returnPath: "/nutrition",
+    });
     try {
       const mealCacheKey = `meal_${aiMealDescription.toLowerCase().trim().replace(/\s+/g, '_').slice(0, 60)}`;
       let nutritionData = userId ? AIPersistence.load(userId, mealCacheKey) : null;
@@ -127,9 +141,11 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
       setManualMeal(prev => ({ ...prev, meal_name: nutritionData.meal_name }));
       setAiAnalysisComplete(true);
+      completeTask(taskId, nutritionData);
     } catch (error: any) {
       if (error?.name === 'AbortError' || controller.signal.aborted) return;
       logger.error("Error analyzing meal", error);
+      failTask(taskId, error.message || "Analysis failed");
       toast({ title: "Analysis failed", description: error.message || "Failed to analyze meal", variant: "destructive" });
     } finally {
       setAiAnalyzing(false);
@@ -194,6 +210,16 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     aiAbortRef.current = ingController;
 
     setAiAnalyzingIngredient(true);
+    const ingTaskId = addTask({
+      id: `ingredient-lookup-${Date.now()}`,
+      type: "ingredient-lookup",
+      label: "Looking Up Ingredient",
+      steps: [
+        { icon: Search, label: "Searching ingredient" },
+        { icon: PieChart, label: "Calculating macros" },
+      ],
+      returnPath: "/nutrition",
+    });
     try {
       if (!checkAIAccess()) {
         openPaywall();
@@ -296,10 +322,12 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       });
 
       setAiIngredientDescription("");
+      completeTask(ingTaskId, nutritionData);
       toast({ title: "Ingredient Added", description: `${ingredientName} (${ingredientGrams}g) added. Meal totals updated.` });
     } catch (error: any) {
       if (error?.name === 'AbortError' || ingController.signal.aborted) return;
       logger.error("Error analyzing ingredient", error);
+      failTask(ingTaskId, error.message || "Analysis failed");
       toast({ title: "Analysis failed", description: error.message || "Failed to analyze ingredient. Please try again or add manually.", variant: "destructive" });
     } finally {
       setAiAnalyzingIngredient(false);

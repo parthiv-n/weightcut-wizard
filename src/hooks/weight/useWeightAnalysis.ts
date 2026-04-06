@@ -2,11 +2,13 @@ import { useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
+import { useAITask } from "@/contexts/AITaskContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
 import { nutritionCache } from "@/lib/nutritionCache";
+import { Scale, TrendingDown, Sparkles } from "lucide-react";
 import type { AIAnalysis, Profile, DebugData } from "@/pages/weight/types";
 
 interface UseWeightAnalysisParams {
@@ -16,6 +18,7 @@ interface UseWeightAnalysisParams {
 export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
   const { userId, refreshProfile } = useUser();
   const { toast } = useToast();
+  const { addTask, completeTask, failTask } = useAITask();
   const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
   const aiAbortRef = useRef<AbortController | null>(null);
 
@@ -83,6 +86,17 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
     aiAbortRef.current = controller;
 
     setAnalyzingWeight(true);
+    const taskId = addTask({
+      id: `weight-analysis-${Date.now()}`,
+      type: "weight-analysis",
+      label: "Analyzing Progress",
+      steps: [
+        { icon: Scale, label: "Loading weight data" },
+        { icon: TrendingDown, label: "Analyzing trends" },
+        { icon: Sparkles, label: "Generating insights" },
+      ],
+      returnPath: "/weight",
+    });
 
     try {
       if (!checkAIAccess()) {
@@ -164,9 +178,11 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
             fightWeekTarget,
           }, 24);
         }
+        completeTask(taskId, data.analysis);
       }
     } catch (err: any) {
       if (err?.name === 'AbortError' || controller.signal.aborted) return;
+      failTask(taskId, err?.message || "Something went wrong");
       toast({
         title: "AI analysis unavailable",
         description: err?.message || "Something went wrong",

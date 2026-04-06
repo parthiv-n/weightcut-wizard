@@ -43,10 +43,12 @@ export function useNutritionData(params: UseNutritionDataParams) {
   const { safeAsync, isMounted } = useSafeAsync();
   const { toast } = useToast();
   const [fetchingMacroGoals, setFetchingMacroGoals] = useState(false);
-  const [mealsLoading, setMealsLoading] = useState(true);
+  const [mealsLoading, setMealsLoading] = useState(false);
   const lastFetchRef = useRef(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeDateRef = useRef(selectedDate);
+  const mealsRef = useRef(meals);
+  mealsRef.current = meals;
 
   // Diet analysis state
   const [dietAnalysis, setDietAnalysis] = useState<DietAnalysisResult | null>(null);
@@ -177,7 +179,8 @@ export function useNutritionData(params: UseNutritionDataParams) {
           .select("id, meal_name, calories, protein_g, carbs_g, fats_g, meal_type, portion_size, recipe_notes, is_ai_generated, ingredients, date, created_at")
           .eq("user_id", userId)
           .eq("date", fetchDate)
-          .order("created_at", { ascending: true }),
+          .order("created_at", { ascending: true })
+          .limit(100),
         undefined,
         "Load meals"
       );
@@ -246,7 +249,13 @@ export function useNutritionData(params: UseNutritionDataParams) {
       });
     }
 
-    setMeals(mergedMeals as Meal[]);
+    // Skip state update if data unchanged from cache (avoids visible flash)
+    const currentMeals = mealsRef.current;
+    const mealsChanged = mergedMeals.length !== currentMeals.length ||
+      mergedMeals.some((m, i) => m.id !== currentMeals[i]?.id);
+    if (mealsChanged || !servedFromCache) {
+      setMeals(mergedMeals as Meal[]);
+    }
     safeAsync(setMealsLoading)(false);
     nutritionCache.setMeals(userId, fetchDate, mergedMeals as Meal[]);
     localCache.setForDate(userId, "nutrition_logs", fetchDate, mergedMeals);
@@ -255,9 +264,13 @@ export function useNutritionData(params: UseNutritionDataParams) {
   // Load meals on date/user change
   useEffect(() => {
     activeDateRef.current = selectedDate;
-    setMealsLoading(true);
+    const hasCachedMeals = userId && (
+      nutritionCache.getMeals(userId, selectedDate) ||
+      localCache.getForDate(userId, "nutrition_logs", selectedDate, 30 * 60 * 1000)
+    );
+    if (!hasCachedMeals) setMealsLoading(true);
     loadMeals();
-    if (userId) preloadAdjacentDates(userId, selectedDate);
+    if (userId) setTimeout(() => preloadAdjacentDates(userId, selectedDate), 2000);
     return () => {
       if (retryTimerRef.current) {
         clearTimeout(retryTimerRef.current);
@@ -297,21 +310,6 @@ export function useNutritionData(params: UseNutritionDataParams) {
     return () => document.removeEventListener('visibilitychange', handleVis);
   }, [userId, selectedDate]);
 
-  // Warmup edge functions
-  useEffect(() => {
-    if (isQuickAddSheetOpenRef.current && userId) {
-      supabase.functions.invoke("analyze-meal", { method: "GET" } as any).catch(() => { });
-    }
-  }, [userId]);
-
-  useEffect(() => {
-    if (!userId) return;
-    const timer = setTimeout(() => {
-      supabase.functions.invoke("analyse-diet", { method: "GET" } as any).catch(() => { });
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [userId]);
-
   // Load cached diet analysis on date change
   useEffect(() => {
     if (!userId) return;
@@ -328,41 +326,45 @@ export function useNutritionData(params: UseNutritionDataParams) {
       contextProfile?.ai_recommended_fats_g, contextProfile?.ai_recommended_calories,
       contextProfile?.manual_nutrition_override]);
 
-  // Real-time subscription to profiles table
+  // Real-time subscription to profiles table (deferred 3s — not needed for initial render)
   useEffect(() => {
     if (!userId) return;
 
-    let channel = supabase
-      .channel('profile-nutrition-updates')
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'profiles',
-        filter: `id=eq.${userId}`
-      }, () => {
-        refreshProfile();
-      })
-      .subscribe((status) => {
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          setTimeout(() => {
-            supabase.removeChannel(channel);
-            channel = supabase
-              .channel('profile-nutrition-updates-retry')
-              .on('postgres_changes', {
-                event: 'UPDATE',
-                schema: 'public',
-                table: 'profiles',
-                filter: `id=eq.${userId}`
-              }, () => {
-                refreshProfile();
-              })
-              .subscribe();
-          }, 2000);
-        }
-      });
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    const subscribeTimer = setTimeout(() => {
+      channel = supabase
+        .channel('profile-nutrition-updates')
+        .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+          filter: `id=eq.${userId}`
+        }, () => {
+          refreshProfile();
+        })
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            setTimeout(() => {
+              if (channel) supabase.removeChannel(channel);
+              channel = supabase
+                .channel('profile-nutrition-updates-retry')
+                .on('postgres_changes', {
+                  event: 'UPDATE',
+                  schema: 'public',
+                  table: 'profiles',
+                  filter: `id=eq.${userId}`
+                }, () => {
+                  refreshProfile();
+                })
+                .subscribe();
+            }, 2000);
+          }
+        });
+    }, 3000);
 
     return () => {
-      supabase.removeChannel(channel);
+      clearTimeout(subscribeTimer);
+      if (channel) supabase.removeChannel(channel);
     };
   }, [userId]);
 

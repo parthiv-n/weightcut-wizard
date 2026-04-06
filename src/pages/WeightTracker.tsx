@@ -22,6 +22,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { AIGeneratingOverlay } from "@/components/AIGeneratingOverlay";
+import { useAITask } from "@/contexts/AITaskContext";
+import { AICompactOverlay } from "@/components/AICompactOverlay";
 import { ShareButton } from "@/components/share/ShareButton";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { WeightTrackerCard } from "@/components/share/cards/WeightTrackerCard";
@@ -237,17 +239,22 @@ export default function WeightTracker() {
     { icon: Sparkles, label: "Formulating strategy", color: "text-yellow-400" },
   ];
 
+  const { tasks: aiTasks, dismissTask: aiDismiss } = useAITask();
+  const aiTask = aiTasks.find(t => t.status === "running" && t.type === "weight-analysis");
+
   return (
     <>
-      <AIGeneratingOverlay
-        isOpen={analyzingWeight}
-        isGenerating={analyzingWeight}
-        steps={ANALYSIS_STEPS}
-        title="Analyzing Progress"
-        subtitle="Reviewing your weight data..."
-        onCancel={handleAICancel}
-        onRetry={getAIAnalysis}
-      />
+      {aiTask && (
+        <div className="px-3 sm:px-5 md:px-6 pt-3 max-w-2xl mx-auto">
+          <AICompactOverlay
+            isOpen={true}
+            isGenerating={true}
+            steps={aiTask.steps}
+            title={aiTask.label}
+            onCancel={() => aiDismiss(aiTask.id)}
+          />
+        </div>
+      )}
       <div className="space-y-2.5 p-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
         {/* Chart + History */}
         <div className="glass-card p-3 space-y-3">

@@ -16,8 +16,11 @@ import { ExerciseStatsSheet } from "@/components/gym/ExerciseStatsSheet";
 import { CreateExerciseDialog } from "@/components/gym/CreateExerciseDialog";
 import { RoutineLibrary } from "@/components/gym/RoutineLibrary";
 import { RoutineGeneratorSheet } from "@/components/gym/RoutineGeneratorSheet";
+import { ManualRoutineSheet } from "@/components/gym/ManualRoutineSheet";
 import { SESSION_TYPES } from "@/data/exerciseDatabase";
 import { triggerHaptic } from "@/lib/haptics";
+import { useAITask } from "@/contexts/AITaskContext";
+import { AICompactOverlay } from "@/components/AICompactOverlay";
 import { ImpactStyle } from "@capacitor/haptics";
 import type { SessionType, SessionWithSets, Exercise, SavedRoutine } from "@/pages/gym/types";
 
@@ -52,6 +55,7 @@ export default function GymTracker() {
   const [statsOpen, setStatsOpen] = useState(false);
   const [sessionType, setSessionType] = useState<SessionType>("Strength");
   const [generatorOpen, setGeneratorOpen] = useState(false);
+  const [manualRoutineOpen, setManualRoutineOpen] = useState(false);
   const newPRSetIdsRef = useRef(new Set<string>());
 
   const handleStartWorkout = useCallback(async () => {
@@ -133,6 +137,9 @@ export default function GymTracker() {
     }
   }, [exercises]);
 
+  const { tasks: aiTasks, dismissTask: aiDismiss } = useAITask();
+  const gymAiTask = aiTasks.find(t => t.status === "running" && t.type === "gym-routine");
+
   const todayLabel = new Date().toLocaleDateString("en-US", { weekday: "long" });
 
   const weeklyVolume = analytics.weeklyVolumes.length > 0
@@ -142,6 +149,15 @@ export default function GymTracker() {
 
   return (
     <div className="space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
+      {gymAiTask && (
+        <AICompactOverlay
+          isOpen={true}
+          isGenerating={true}
+          steps={gymAiTask.steps}
+          title={gymAiTask.label}
+          onCancel={() => aiDismiss(gymAiTask.id)}
+        />
+      )}
       <div className="space-y-3">
         {/* Header */}
         <div>
@@ -282,6 +298,7 @@ export default function GymTracker() {
             onRename={renameRoutine}
             onStartWorkout={handleStartFromRoutine}
             onOpenGenerator={() => setGeneratorOpen(true)}
+            onOpenManualCreator={() => setManualRoutineOpen(true)}
           />
         )}
       </div>
@@ -323,6 +340,13 @@ export default function GymTracker() {
         onGenerate={generateRoutine}
         onSave={saveRoutine}
         generating={generatingRoutine}
+      />
+
+      <ManualRoutineSheet
+        open={manualRoutineOpen}
+        onOpenChange={setManualRoutineOpen}
+        exercises={exercises}
+        onSave={saveRoutine}
       />
     </div>
   );

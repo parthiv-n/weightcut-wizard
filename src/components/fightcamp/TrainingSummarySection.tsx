@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { format, startOfWeek, endOfWeek, addDays } from "date-fns";
-import { Brain, Loader2, ChevronDown, Trash2, CheckCircle, X } from "lucide-react";
+import { Brain, Loader2, ChevronDown, Trash2, CheckCircle, X, Dumbbell, Activity, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Card } from "@/components/ui/card";
@@ -9,6 +9,8 @@ import { logger } from "@/lib/logger";
 import { localCache } from "@/lib/localCache";
 import { getSessionColor } from "@/lib/sessionColors";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useAITask } from "@/contexts/AITaskContext";
+import { AICompactOverlay } from "@/components/AICompactOverlay";
 
 type TrainingSummary = {
     sportSections: {
@@ -67,12 +69,15 @@ function weekLabel(weekStartStr: string): string {
 export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrigger, customColors }: TrainingSummarySectionProps) {
     const { toast } = useToast();
     const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
+    const { tasks, addTask, completeTask, failTask, dismissTask } = useAITask();
     const [savedSummaries, setSavedSummaries] = useState<SavedSummaryRow[]>([]);
     const [weekSessions, setWeekSessions] = useState<SessionRow[]>([]);
     const [selectedWeekStart, setSelectedWeekStart] = useState<string>(
         format(startOfWeek(selectedDate, { weekStartsOn: 1 }), "yyyy-MM-dd")
     );
     const [isLoading, setIsLoading] = useState(false);
+    const aiTrainingTask = tasks.find(t => t.type === "training-summary" && t.status === "running");
+    const isGenerating = isLoading || !!aiTrainingTask;
     const [isSummaryOpen, setIsSummaryOpen] = useState(true);
     const abortRef = useRef<AbortController | null>(null);
 
@@ -180,6 +185,19 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
         const controller = new AbortController();
         abortRef.current = controller;
         setIsLoading(true);
+
+        const taskId = addTask({
+            id: `training-summary-${Date.now()}`,
+            type: "training-summary",
+            label: "Generating Summary",
+            steps: [
+                { icon: Dumbbell, label: "Reviewing sessions" },
+                { icon: Activity, label: "Analyzing performance" },
+                { icon: Sparkles, label: "Writing summary" },
+            ],
+            returnPath: window.location.pathname,
+        });
+
         try {
             const { data, error } = await supabase.functions.invoke("training-summary", {
                 body: {
@@ -199,7 +217,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
 
             incrementLocalUsage();
             const fingerprint = computeFingerprint(weekSessions);
-            const sessionIds = weekSessions.filter(s => s.notes).map(s => s.id);
+            const sessionIds = sessionsWithNotes.map(s => s.id);
 
             // Upsert: insert or update
             if (selectedSummary) {
@@ -231,9 +249,11 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
 
             await fetchAllSummaries();
             setIsSummaryOpen(true);
+            completeTask(taskId, data.summary);
         } catch (error: any) {
             if (error?.name === 'AbortError' || controller.signal.aborted) return;
             logger.error("Error generating training summary", error);
+            failTask(taskId, error?.message || "Could not generate your training summary");
             toast({
                 title: "Error generating summary",
                 description: "Could not generate your training summary. Please try again.",
@@ -307,14 +327,24 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
                 </div>
             )}
 
+            {aiTrainingTask && (
+                <AICompactOverlay
+                    isOpen={true}
+                    isGenerating={true}
+                    steps={aiTrainingTask.steps}
+                    title={aiTrainingTask.label}
+                    onCancel={() => { abortRef.current?.abort(); dismissTask(aiTrainingTask.id); setIsLoading(false); }}
+                />
+            )}
+
             {/* Generate / Update button — only for current calendar week */}
             {buttonState !== "hidden" && (
                 <button
                     onClick={buttonState !== "up_to_date" ? handleGenerateOrUpdate : undefined}
-                    disabled={isLoading || buttonState === "up_to_date"}
+                    disabled={isGenerating || buttonState === "up_to_date"}
                     className="w-full p-4 rounded-2xl glass-card border border-border/50 flex items-center justify-center gap-2 hover:bg-accent/30 transition-all disabled:opacity-60"
                 >
-                    {isLoading ? (
+                    {isGenerating ? (
                         <div className="flex items-center gap-2 w-full justify-center">
                             <Loader2 className="h-5 w-5 animate-spin text-primary" />
                             <span className="text-sm font-semibold text-muted-foreground">

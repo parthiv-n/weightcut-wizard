@@ -3,10 +3,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useAITask } from "@/contexts/AITaskContext";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 import { triggerHapticSuccess } from "@/lib/haptics";
 import { logger } from "@/lib/logger";
+import { Utensils, PieChart, Search, Sparkles } from "lucide-react";
 import type { Meal, MacroGoals } from "@/pages/nutrition/types";
 import type { DietAnalysisResult } from "@/types/dietAnalysis";
 
@@ -32,6 +34,7 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
   const { userId, profile: contextProfile } = useUser();
   const { toast } = useToast();
   const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
+  const { addTask, completeTask, failTask } = useAITask();
 
   const handleAnalyseDiet = useCallback(async (forceRefresh = false) => {
     if (!userId || meals.length === 0) return;
@@ -50,6 +53,18 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
     aiAbortRef.current = dietController;
 
     setDietAnalysisLoading(true);
+    const taskId = addTask({
+      id: `diet-analysis-${Date.now()}`,
+      type: "diet-analysis",
+      label: "Analysing Diet",
+      steps: [
+        { icon: Utensils, label: "Reviewing meals" },
+        { icon: PieChart, label: "Estimating micronutrients" },
+        { icon: Search, label: "Identifying gaps" },
+        { icon: Sparkles, label: "Generating recommendations" },
+      ],
+      returnPath: "/nutrition",
+    });
     try {
       if (!checkAIAccess()) {
         openPaywall();
@@ -102,10 +117,12 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
       const result = data.analysisData as DietAnalysisResult;
       setDietAnalysis(result);
       AIPersistence.save(userId, cacheKey, result, 6);
+      completeTask(taskId, result);
       triggerHapticSuccess();
     } catch (error: any) {
       if (error?.name === 'AbortError' || dietController.signal.aborted) return;
       logger.error("Error analysing diet", error);
+      failTask(taskId, error instanceof Error ? error.message : "Could not analyse your diet");
       toast({
         title: "Analysis failed",
         description: error instanceof Error ? error.message : "Could not analyse your diet",

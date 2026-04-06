@@ -2,11 +2,13 @@ import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
+import { useAITask } from "@/contexts/AITaskContext";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { useSubscription } from "@/hooks/useSubscription";
 import { localCache } from "@/lib/localCache";
 import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
+import { Dumbbell, Activity, Sparkles } from "lucide-react";
 import type {
   SavedRoutine,
   RoutineExercise,
@@ -21,6 +23,7 @@ export function useRoutines() {
   const { userId } = useUser();
   const { safeAsync, isMounted } = useSafeAsync();
   const { toast } = useToast();
+  const { addTask, completeTask, failTask } = useAITask();
   const {
     checkAIAccess,
     openPaywall,
@@ -77,6 +80,17 @@ export function useRoutines() {
       }
 
       safeAsync(setGeneratingRoutine)(true);
+      const taskId = addTask({
+        id: `gym-routine-${Date.now()}`,
+        type: "gym-routine",
+        label: "Generating Routine",
+        steps: [
+          { icon: Dumbbell, label: "Planning exercises" },
+          { icon: Activity, label: "Optimizing sets & reps" },
+          { icon: Sparkles, label: "Finalizing routine" },
+        ],
+        returnPath: "/gym",
+      });
 
       try {
         const { data, error } = await supabase.functions.invoke(
@@ -100,15 +114,21 @@ export function useRoutines() {
 
         incrementLocalUsage();
         const routine = data?.routineData || data;
-        if (!routine?.exercises) return null;
-        return {
+        if (!routine?.exercises) {
+          failTask(taskId, "No exercises returned");
+          return null;
+        }
+        const result = {
           exercises: routine.exercises as RoutineExercise[],
           name: routine.routine_name || routine.name || "Generated Routine",
           notes: routine.notes || "",
           recommendedGymDays: routine.recommended_gym_days || null,
           splitUsed: routine.split_used || null,
         };
-      } catch (err) {
+        completeTask(taskId, result);
+        return result;
+      } catch (err: any) {
+        failTask(taskId, err?.message || "Failed to generate routine");
         logger.error("Failed to generate routine", err);
         toast({
           description: "Failed to generate routine",

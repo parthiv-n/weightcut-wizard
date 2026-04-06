@@ -18,6 +18,8 @@ import {
   Clock,
 } from "lucide-react";
 import { AIGeneratingOverlay } from "@/components/AIGeneratingOverlay";
+import { useAITask } from "@/contexts/AITaskContext";
+import { AICompactOverlay } from "@/components/AICompactOverlay";
 import { useRehydrationProtocol } from "@/hooks/hydration/useRehydrationProtocol";
 import {
   DEFAULT_WARNINGS, SUGGESTED_FOODS, SUGGESTED_DRINKS, DEFAULT_EDUCATION,
@@ -104,18 +106,22 @@ export default function Hydration() {
     { icon: Beaker, label: "Formulating recovery plan", color: "text-green-400" },
   ];
 
+  const { tasks: aiTasks, dismissTask: aiDismiss } = useAITask();
+  const aiTask = aiTasks.find(t => t.status === "running" && t.type === "rehydration");
+
   return (
     <>
-      <AIGeneratingOverlay
-        isOpen={loading}
-        isGenerating={loading}
-        steps={REHYDRATION_STEPS}
-        title="Generating Protocol"
-        subtitle="This usually takes 30–60 seconds..."
-        onCompletion={() => {}}
-        onCancel={handleAICancel}
-        onRetry={() => handleGenerateProtocol(new Event("submit") as any)}
-      />
+      {aiTask && (
+        <div className="px-3 sm:px-5 md:px-6 pt-3 max-w-7xl mx-auto">
+          <AICompactOverlay
+            isOpen={true}
+            isGenerating={true}
+            steps={aiTask.steps}
+            title={aiTask.label}
+            onCancel={() => aiDismiss(aiTask.id)}
+          />
+        </div>
+      )}
       <div className="space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
         {/* Header */}
         <div className="mb-2">

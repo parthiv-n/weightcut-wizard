@@ -1,184 +1,52 @@
-
-import { useEffect, useState, useRef, memo } from "react";
-import { createPortal } from "react-dom";
-import { CheckCircle2, Loader2, LucideIcon, X } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { celebrateSuccess } from "@/lib/haptics";
+import { memo } from "react";
+import { AICompactOverlay } from "./AICompactOverlay";
+import type { LucideIcon } from "lucide-react";
+import { useAITask } from "@/contexts/AITaskContext";
 
 export interface AIStep {
-    icon: LucideIcon;
-    label: string;
-    color?: string;
+  icon: LucideIcon;
+  label: string;
+  color?: string;
 }
 
 interface AIGeneratingOverlayProps {
-    isOpen: boolean;
-    isGenerating: boolean;
-    steps: AIStep[];
-    title?: string;
-    subtitle?: string;
-    onCompletion?: () => void;
-    onCancel?: () => void;
-    onRetry?: () => void;
+  isOpen: boolean;
+  isGenerating: boolean;
+  steps: AIStep[];
+  title?: string;
+  subtitle?: string;
+  onCompletion?: () => void;
+  onCancel?: () => void;
+  onRetry?: () => void;
 }
 
 export const AIGeneratingOverlay = memo(function AIGeneratingOverlay({
-    isOpen,
-    isGenerating,
-    steps,
-    title = "Analyzing Data",
-    subtitle = "AI is processing your request...",
-    onCompletion,
-    onCancel,
-    onRetry,
+  isOpen,
+  isGenerating,
+  steps,
+  title = "Analyzing Data",
+  subtitle = "AI is processing your request...",
+  onCompletion,
+  onCancel,
 }: AIGeneratingOverlayProps) {
-    const [currentStep, setCurrentStep] = useState(0);
-    const [showCancel, setShowCancel] = useState(false);
-    const [elapsed, setElapsed] = useState(0);
-    const wasGeneratingRef = useRef(false);
-    const cancelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { activeTask } = useAITask();
 
-    const visible = isOpen;
+  const handleMinimize = () => {
+    // No-op: the floating indicator already tracks the task via AITaskContext.
+    // Minimizing just dismisses this overlay — the AIFloatingIndicator picks it up.
+    onCancel?.();
+  };
 
-    // Reset state when opening
-    useEffect(() => {
-        if (isOpen) {
-            setCurrentStep(0);
-            setShowCancel(false);
-            setElapsed(0);
-            wasGeneratingRef.current = false;
-        }
-    }, [isOpen]);
-
-    // Cancel button timer (5s)
-    useEffect(() => {
-        if (cancelTimerRef.current) clearTimeout(cancelTimerRef.current);
-
-        if (visible && isGenerating) {
-            cancelTimerRef.current = setTimeout(() => setShowCancel(true), 3000);
-        } else {
-            setShowCancel(false);
-        }
-
-        return () => {
-            if (cancelTimerRef.current) clearTimeout(cancelTimerRef.current);
-        };
-    }, [visible, isGenerating]);
-
-    // Elapsed timer
-    useEffect(() => {
-        if (!visible || !isGenerating) { setElapsed(0); return; }
-        const t = setInterval(() => setElapsed(s => s + 1), 1000);
-        return () => clearInterval(t);
-    }, [visible, isGenerating]);
-
-    // Handle step progression
-    useEffect(() => {
-        if (!visible || !isGenerating) return;
-
-        const interval = setInterval(() => {
-            setCurrentStep((prev) => {
-                if (prev < steps.length - 1) {
-                    return prev + 1;
-                }
-                return prev;
-            });
-        }, 1200); // Advance every 1.2 seconds
-
-        return () => clearInterval(interval);
-    }, [visible, isGenerating, steps.length]);
-
-    // Handle completion — immediately dismiss and fire haptic
-    useEffect(() => {
-        if (!isGenerating && wasGeneratingRef.current) {
-            celebrateSuccess();
-            onCompletion?.();
-        }
-    }, [isGenerating, onCompletion]);
-
-    // Track isGenerating transitions (must run AFTER completion effect reads the ref)
-    useEffect(() => {
-        wasGeneratingRef.current = isGenerating;
-    }, [isGenerating]);
-
-    if (!visible) return null;
-
-    return createPortal(
-        <div className="fixed inset-0 z-[10001] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300" style={{ pointerEvents: "auto" }}>
-            <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-2xl relative overflow-hidden animate-in zoom-in-95 duration-300">
-                {/* Background Glow */}
-                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-primary to-transparent opacity-50" />
-
-                <div className="text-center space-y-2 mb-8">
-                    <h3 className="text-xl font-bold text-white transition-all duration-300">
-                        {title}
-                    </h3>
-                    <p className="text-zinc-400 text-sm transition-all duration-300">
-                        {subtitle}
-                    </p>
-                </div>
-
-                <div className="space-y-4">
-                    {steps.map((step, index) => {
-                        const isActive = index === currentStep;
-                        const isCompleted = index < currentStep;
-
-                        return (
-                            <div
-                                key={index}
-                                className={cn(
-                                    "flex items-center gap-3 p-3 rounded-xl transition-all duration-500",
-                                    isActive ? "bg-zinc-800/50 border border-zinc-700/50 translate-x-0 opacity-100" : "opacity-50",
-                                )}
-                            >
-                                <div className={cn(
-                                    "h-8 w-8 rounded-full flex items-center justify-center transition-all duration-500",
-                                    isActive ? "bg-primary/20 scale-110" : "bg-zinc-800",
-                                    isCompleted ? "bg-green-500/20" : ""
-                                )}>
-                                    {isCompleted ? (
-                                        <CheckCircle2 className="h-4 w-4 text-green-500 transition-all duration-300" />
-                                    ) : isActive ? (
-                                        <Loader2 className="h-4 w-4 text-primary animate-spin" />
-                                    ) : (
-                                        <step.icon className={cn("h-4 w-4 transition-colors duration-300", step.color || "text-zinc-500")} />
-                                    )}
-                                </div>
-                                <div className="flex-1">
-                                    <p className={cn(
-                                        "text-sm font-medium transition-colors duration-300",
-                                        isActive ? "text-white" : "text-zinc-500",
-                                        isCompleted ? "text-green-500" : ""
-                                    )}>
-                                        {step.label}
-                                    </p>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-
-                {/* Elapsed timer */}
-                {elapsed >= 5 && (
-                    <p className="mt-4 text-center text-xs text-zinc-500">
-                        {elapsed}s elapsed
-                    </p>
-                )}
-
-                {/* Cancel button — shows after 3s */}
-                {showCancel && onCancel && (
-                    <button
-                        onClick={() => { onCancel(); setShowCancel(false); }}
-                        onTouchEnd={(e) => { e.preventDefault(); onCancel(); setShowCancel(false); }}
-                        className="mt-4 w-full flex items-center justify-center gap-2 py-2.5 text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-800/50 border border-zinc-800 rounded-xl transition-all duration-200 animate-in fade-in duration-300 touch-manipulation relative"
-                        style={{ pointerEvents: "auto", zIndex: 10002 }}
-                    >
-                        <X className="h-4 w-4" />
-                        Cancel
-                    </button>
-                )}
-            </div>
-        </div>,
-        document.body
-    );
+  return (
+    <AICompactOverlay
+      isOpen={isOpen}
+      isGenerating={isGenerating}
+      steps={steps}
+      title={title}
+      subtitle={subtitle}
+      onCompletion={onCompletion}
+      onCancel={onCancel}
+      onMinimize={activeTask ? handleMinimize : undefined}
+    />
+  );
 });
