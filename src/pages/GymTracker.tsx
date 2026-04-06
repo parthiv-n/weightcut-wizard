@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { Dumbbell, Plus, Calendar, Clock, Flame } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useGymSessions } from "@/hooks/gym/useGymSessions";
@@ -139,6 +139,25 @@ export default function GymTracker() {
 
   const { tasks: aiTasks, dismissTask: aiDismiss } = useAITask();
   const gymAiTask = aiTasks.find(t => t.status === "running" && t.type === "gym-routine");
+
+  // Detect completed AI routine generation (e.g. user navigated away during generation)
+  const [completedRoutineResult, setCompletedRoutineResult] = useState<any>(null);
+  const handledTaskRef = useRef<string | null>(null);
+  useEffect(() => {
+    const completedTask = aiTasks.find(
+      t => t.status === "done" && t.type === "gym-routine" && t.result?.exercises
+    );
+    if (completedTask && handledTaskRef.current !== completedTask.id) {
+      handledTaskRef.current = completedTask.id;
+      // Set result first, then open sheet on next tick so it renders with data
+      setCompletedRoutineResult(completedTask.result);
+      setTab("routines");
+      requestAnimationFrame(() => {
+        setGeneratorOpen(true);
+        aiDismiss(completedTask.id);
+      });
+    }
+  }, [aiTasks, aiDismiss]);
 
   const todayLabel = new Date().toLocaleDateString("en-US", { weekday: "long" });
 
@@ -336,10 +355,14 @@ export default function GymTracker() {
 
       <RoutineGeneratorSheet
         open={generatorOpen}
-        onOpenChange={setGeneratorOpen}
+        onOpenChange={(open) => {
+          setGeneratorOpen(open);
+          if (!open) setCompletedRoutineResult(null);
+        }}
         onGenerate={generateRoutine}
         onSave={saveRoutine}
         generating={generatingRoutine}
+        completedResult={completedRoutineResult}
       />
 
       <ManualRoutineSheet

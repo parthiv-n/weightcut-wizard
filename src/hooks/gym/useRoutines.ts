@@ -43,7 +43,8 @@ export function useRoutines() {
 
     try {
       const { data, error } = await withSupabaseTimeout(
-        (supabase.from("saved_routines" as any) as any)
+        supabase
+          .from("saved_routines")
           .select("*")
           .eq("user_id", userId)
           .order("sort_order")
@@ -55,7 +56,7 @@ export function useRoutines() {
       if (error) throw error;
       if (!isMounted()) return;
 
-      const typed = (data as any[] || []) as SavedRoutine[];
+      const typed = (data || []) as SavedRoutine[];
       safeAsync(setRoutines)(typed);
       localCache.set(userId, CACHE_KEY, typed);
     } catch (err) {
@@ -163,7 +164,7 @@ export function useRoutines() {
 
       try {
         const { error } = await withSupabaseTimeout(
-          (supabase.from("saved_routines" as any) as any).insert({
+          supabase.from("saved_routines").insert({
             user_id: userId,
             name,
             goal,
@@ -193,7 +194,7 @@ export function useRoutines() {
 
       try {
         const { error } = await withSupabaseTimeout(
-          (supabase.from("saved_routines" as any) as any)
+          supabase.from("saved_routines")
             .delete()
             .eq("id", id),
           undefined,
@@ -225,7 +226,7 @@ export function useRoutines() {
 
       try {
         const { error } = await withSupabaseTimeout(
-          (supabase.from("saved_routines" as any) as any)
+          supabase.from("saved_routines")
             .update({ name, updated_at: new Date().toISOString() })
             .eq("id", id),
           undefined,

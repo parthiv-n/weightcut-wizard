@@ -14,12 +14,21 @@ import type {
   CombatSport, Equipment, WorkoutSplit, FocusArea,
 } from "@/pages/gym/types";
 
+interface CompletedRoutineResult {
+  exercises: RoutineExercise[];
+  name: string;
+  notes: string;
+  recommendedGymDays: number | null;
+  splitUsed: string | null;
+}
+
 interface RoutineGeneratorSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onGenerate: (params: RoutineGenerationParams) => Promise<any>;
   onSave: (name: string, goal: TrainingGoal, exercises: RoutineExercise[], sport: CombatSport, trainingDays: number, isAiGenerated: boolean) => Promise<void>;
   generating: boolean;
+  completedResult?: CompletedRoutineResult | null;
 }
 
 const GOALS: { value: TrainingGoal; label: string; icon: typeof Dumbbell; description: string }[] = [
@@ -158,7 +167,7 @@ function ExerciseRow({ ex, index }: { ex: RoutineExercise; index: number }) {
 type Step = "goals" | "sport" | "preferences" | "generate" | "result";
 const STEPS: Step[] = ["goals", "sport", "preferences", "generate", "result"];
 
-export function RoutineGeneratorSheet({ open, onOpenChange, onGenerate, onSave, generating }: RoutineGeneratorSheetProps) {
+export function RoutineGeneratorSheet({ open, onOpenChange, onGenerate, onSave, generating, completedResult }: RoutineGeneratorSheetProps) {
   // Hide bottom nav while sheet is open
   useEffect(() => {
     document.body.classList.toggle("hide-bottom-nav", open);
@@ -196,6 +205,21 @@ export function RoutineGeneratorSheet({ open, onOpenChange, onGenerate, onSave, 
     setRoutineNotes("");
     setSaving(false);
   }, []);
+
+  // Restore state from a completed background generation
+  useEffect(() => {
+    if (completedResult && completedResult.exercises.length > 0) {
+      setGeneratedExercises(completedResult.exercises);
+      setRoutineName(completedResult.name || "Generated Routine");
+      setRoutineNotes(completedResult.notes || "");
+      setRecommendedGymDays(completedResult.recommendedGymDays);
+      setSplitUsed(completedResult.splitUsed);
+      // Set defaults so handleSave works (goal/sport aren't in the result)
+      if (selectedGoals.length === 0) setSelectedGoals(["strength"]);
+      if (!sport) setSport("general");
+      setStep("result");
+    }
+  }, [completedResult]);
 
   const handleOpenChange = useCallback((open: boolean) => {
     if (!open) reset();

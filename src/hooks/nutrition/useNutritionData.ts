@@ -129,12 +129,12 @@ export function useNutritionData(params: UseNutritionDataParams) {
     }
   };
 
-  const loadMeals = async (skipCache = false, _retryCount = 0, silent = false) => {
+  const loadMeals = async (skipCache = false, _retryCount = 0, silent = false, clearAnalysis = false) => {
     if (!userId) return;
     const fetchDate = selectedDate; // capture for stale-closure guard
     lastFetchRef.current = Date.now();
 
-    if (skipCache && _retryCount === 0) {
+    if (clearAnalysis && _retryCount === 0) {
       setDietAnalysis(null);
       AIPersistence.remove(userId, `diet_analysis_${fetchDate}`);
     }
@@ -166,8 +166,9 @@ export function useNutritionData(params: UseNutritionDataParams) {
       }
     }
 
-    // Only show loading skeleton if we have nothing to display and this isn't a silent refresh
-    if (!servedFromCache && !silent) {
+    // Only show loading skeleton if we have nothing to display and this isn't a silent/post-mutation refresh
+    const hasVisibleMeals = mealsRef.current.length > 0;
+    if (!servedFromCache && !silent && !hasVisibleMeals) {
       safeAsync(setMealsLoading)(true);
     }
 
