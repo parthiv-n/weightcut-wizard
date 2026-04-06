@@ -1,11 +1,12 @@
-import { useSubscriptionContext } from "@/contexts/SubscriptionContext";
+import { useSubscriptionContext, isLimitHitToday } from "@/contexts/SubscriptionContext";
 
 export function useSubscription() {
   const ctx = useSubscriptionContext();
 
+  // Synchronous check using localStorage — immune to stale React state
   const checkAIAccess = (): boolean => {
     if (ctx.isPremium) return true;
-    return ctx.aiUsageToday.used < ctx.aiUsageToday.limit;
+    return !isLimitHitToday();
   };
 
   return {
@@ -17,5 +18,6 @@ export function useSubscription() {
     openPaywall: ctx.openPaywall,
     refreshAIUsage: ctx.refreshAIUsage,
     incrementLocalUsage: ctx.incrementLocalUsage,
+    markLimitReached: ctx.markLimitReached,
   };
 }

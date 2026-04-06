@@ -25,7 +25,7 @@ interface SkillTreeState {
 
 export function useSkillTree() {
   const { userId } = useAuth();
-  const { checkAIAccess, openPaywall, incrementLocalUsage } = useSubscription();
+  const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
   const [state, setState] = useState<SkillTreeState>({ techniques: [], edges: [], progress: [] });
   const [graphNodes, setGraphNodes] = useState<GraphNode[]>([]);
   const [graphEdges, setGraphEdges] = useState<GraphEdge[]>([]);
@@ -158,6 +158,7 @@ export function useSkillTree() {
       if (chainError) {
         const errBody = typeof chainError === 'object' && 'context' in chainError ? (chainError as any).context : null;
         if (errBody?.status === 429) {
+          markLimitReached();
           openPaywall();
           return;
         }

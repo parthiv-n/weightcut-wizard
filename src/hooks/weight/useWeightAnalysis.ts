@@ -16,7 +16,7 @@ interface UseWeightAnalysisParams {
 export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
   const { userId, refreshProfile } = useUser();
   const { toast } = useToast();
-  const { checkAIAccess, openPaywall, incrementLocalUsage } = useSubscription();
+  const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
   const aiAbortRef = useRef<AbortController | null>(null);
 
   const [analyzingWeight, setAnalyzingWeight] = useState(false);
@@ -140,6 +140,7 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
       if (error) {
         const errBody = typeof error === 'object' && 'context' in error ? (error as any).context : null;
         if (errBody?.status === 429) {
+          markLimitReached();
           openPaywall();
           return;
         }

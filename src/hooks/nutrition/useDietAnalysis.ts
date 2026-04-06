@@ -31,7 +31,7 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
 
   const { userId, profile: contextProfile } = useUser();
   const { toast } = useToast();
-  const { checkAIAccess, openPaywall, incrementLocalUsage } = useSubscription();
+  const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
 
   const handleAnalyseDiet = useCallback(async (forceRefresh = false) => {
     if (!userId || meals.length === 0) return;
@@ -90,6 +90,7 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
       if (error) {
         const errBody = typeof error === 'object' && 'context' in error ? (error as any).context : null;
         if (errBody?.status === 429) {
+          markLimitReached();
           openPaywall();
           return;
         }

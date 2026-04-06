@@ -31,7 +31,7 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
   const { isSessionValid, checkSessionValidity, refreshSession, userId, profile: contextProfile } = useUser();
   const profile = contextProfile;
   const { toast } = useToast();
-  const { checkAIAccess, openPaywall, incrementLocalUsage } = useSubscription();
+  const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
 
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
@@ -87,6 +87,7 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
       if (response.error) {
         const errBody = typeof response.error === 'object' && 'context' in response.error ? (response.error as any).context : null;
         if (errBody?.status === 429) {
+          markLimitReached();
           openPaywall();
           return;
         }

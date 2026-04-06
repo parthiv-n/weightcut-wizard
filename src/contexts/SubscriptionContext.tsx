@@ -5,6 +5,30 @@ import { Capacitor } from "@capacitor/core";
 import { initializePurchases, addCustomerInfoUpdateListener, isPremiumFromCustomerInfo } from "@/lib/purchases";
 import { logger } from "@/lib/logger";
 
+// ─── localStorage-backed limit tracking (synchronous, survives re-renders) ───
+
+const AI_LIMIT_KEY_PREFIX = "wcw_ai_limit_";
+
+function getLimitKey(): string {
+  return AI_LIMIT_KEY_PREFIX + new Date().toISOString().split("T")[0];
+}
+
+export function isLimitHitToday(): boolean {
+  return localStorage.getItem(getLimitKey()) === "true";
+}
+
+function markLimitHitToday(): void {
+  // Clear old dates to avoid localStorage bloat
+  Object.keys(localStorage).forEach((k) => {
+    if (k.startsWith(AI_LIMIT_KEY_PREFIX) && k !== getLimitKey()) {
+      localStorage.removeItem(k);
+    }
+  });
+  localStorage.setItem(getLimitKey(), "true");
+}
+
+// ─── Context ───
+
 interface AIUsage {
   used: number;
   limit: number;
@@ -20,6 +44,7 @@ interface SubscriptionContextType {
   closePaywall: () => void;
   refreshAIUsage: () => Promise<void>;
   incrementLocalUsage: () => void;
+  markLimitReached: () => void;
 }
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
@@ -28,13 +53,15 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const { profile, refreshProfile } = useProfile();
   const { userId } = useAuth();
   const [isPaywallOpen, setIsPaywallOpen] = useState(false);
-  const [aiUsageToday, setAiUsageToday] = useState<AIUsage>({ used: 0, limit: 1 });
+  const [aiUsageToday, setAiUsageToday] = useState<AIUsage>(() => ({
+    used: isLimitHitToday() ? 1 : 0,
+    limit: 1,
+  }));
 
   const tier = (profile?.subscription_tier as SubscriptionContextType["tier"]) || "free";
   const expiresAt = profile?.subscription_expires_at
     ? new Date(profile.subscription_expires_at)
     : null;
-  // Premium if tier is not free AND (no expiry = lifetime, or expiry is in the future)
   const isPremium =
     tier !== "free" && (expiresAt === null || expiresAt > new Date());
 
@@ -47,11 +74,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     const init = async () => {
       await initializePurchases(userId);
 
-      // Listen for real-time customer info changes (purchase, restore, expiry)
       const cleanup = await addCustomerInfoUpdateListener((customerInfo) => {
         const isNowPremium = isPremiumFromCustomerInfo(customerInfo);
         if (isNowPremium) {
-          // Refresh profile from DB to get the webhook-updated subscription state
           refreshProfile();
         }
       });
@@ -67,10 +92,16 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     };
   }, [userId, refreshProfile]);
 
-  // Fetch current AI usage from rate_limits on mount and when userId changes
+  // Fetch current AI usage on mount — but respect localStorage flag
   const refreshAIUsage = useCallback(async () => {
     if (!userId || isPremium) {
       setAiUsageToday({ used: 0, limit: isPremium ? -1 : 1 });
+      return;
+    }
+
+    // If localStorage says limit was hit today, don't let server reset it
+    if (isLimitHitToday()) {
+      setAiUsageToday({ used: 1, limit: 1 });
       return;
     }
 
@@ -84,7 +115,11 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         .maybeSingle();
 
       if (data && data.window_start?.startsWith(today)) {
-        setAiUsageToday({ used: data.request_count, limit: 1 });
+        const serverUsed = data.request_count;
+        if (serverUsed >= 1) {
+          markLimitHitToday();
+        }
+        setAiUsageToday({ used: serverUsed, limit: 1 });
       } else {
         setAiUsageToday({ used: 0, limit: 1 });
       }
@@ -97,9 +132,19 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     refreshAIUsage();
   }, [refreshAIUsage]);
 
+  // Called after a successful AI call — marks limit as hit in localStorage + state
   const incrementLocalUsage = useCallback(() => {
     if (!isPremium) {
-      setAiUsageToday((prev) => ({ ...prev, used: prev.used + 1 }));
+      markLimitHitToday();
+      setAiUsageToday({ used: 1, limit: 1 });
+    }
+  }, [isPremium]);
+
+  // Called when server returns 429 — ensures client stays blocked
+  const markLimitReached = useCallback(() => {
+    if (!isPremium) {
+      markLimitHitToday();
+      setAiUsageToday({ used: 1, limit: 1 });
     }
   }, [isPremium]);
 
@@ -118,6 +163,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         closePaywall,
         refreshAIUsage,
         incrementLocalUsage,
+        markLimitReached,
       }}
     >
       {children}

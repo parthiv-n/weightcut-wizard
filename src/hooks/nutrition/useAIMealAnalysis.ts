@@ -22,7 +22,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
   const { userId } = useUser();
   const { toast } = useToast();
   const { isMounted } = useSafeAsync();
-  const { checkAIAccess, openPaywall, incrementLocalUsage } = useSubscription();
+  const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
   const aiAbortRef = useRef<AbortController | null>(null);
 
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
@@ -91,6 +91,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
         if (error) {
           const errBody = typeof error === 'object' && 'context' in error ? (error as any).context : null;
           if (errBody?.status === 429) {
+            markLimitReached();
             openPaywall();
             return;
           }
@@ -208,6 +209,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       if (error) {
         const errBody = typeof error === 'object' && 'context' in error ? (error as any).context : null;
         if (errBody?.status === 429) {
+          markLimitReached();
           openPaywall();
           return;
         }
@@ -363,6 +365,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       if (error) {
         const errBody = typeof error === 'object' && 'context' in error ? (error as any).context : null;
         if (errBody?.status === 429) {
+          markLimitReached();
           openPaywall();
           return null;
         }

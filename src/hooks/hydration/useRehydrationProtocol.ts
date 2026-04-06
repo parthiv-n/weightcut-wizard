@@ -13,7 +13,7 @@ export function useRehydrationProtocol() {
   const { userId, profile: contextProfile, userName } = useUser();
   const { toast } = useToast();
   const { safeAsync, isMounted } = useSafeAsync();
-  const { checkAIAccess, openPaywall, incrementLocalUsage } = useSubscription();
+  const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
   const aiAbortRef = useRef<AbortController | null>(null);
 
   const currentWeight = contextProfile?.current_weight_kg ?? 0;
@@ -126,6 +126,7 @@ export function useRehydrationProtocol() {
       if (error) {
         const errBody = typeof error === 'object' && 'context' in error ? (error as any).context : null;
         if (errBody?.status === 429) {
+          markLimitReached();
           openPaywall();
           return;
         }

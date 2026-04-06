@@ -156,7 +156,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
   const [rateLimitUntil, setRateLimitUntil] = useState<number>(0);
   const [cooldownLeft, setCooldownLeft] = useState(0);
   const [checkIn, setCheckIn] = useState<Partial<FeelCheckIn>>({});
-  const { checkAIAccess, openPaywall, incrementLocalUsage } = useSubscription();
+  const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
 
   // Enhanced wellness state
   const [wellnessCheckIn, setWellnessCheckIn] = useState<WellnessCheckInData | null>(null);

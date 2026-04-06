@@ -66,7 +66,7 @@ function weekLabel(weekStartStr: string): string {
 
 export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrigger, customColors }: TrainingSummarySectionProps) {
     const { toast } = useToast();
-    const { checkAIAccess, openPaywall, incrementLocalUsage } = useSubscription();
+    const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
     const [savedSummaries, setSavedSummaries] = useState<SavedSummaryRow[]>([]);
     const [weekSessions, setWeekSessions] = useState<SessionRow[]>([]);
     const [selectedWeekStart, setSelectedWeekStart] = useState<string>(

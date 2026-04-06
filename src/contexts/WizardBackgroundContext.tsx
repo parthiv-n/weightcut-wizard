@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { useAuth } from "./UserContext";
-import { useSubscriptionContext } from "./SubscriptionContext";
+import { useSubscriptionContext, isLimitHitToday } from "./SubscriptionContext";
 import { syncWeightReminder } from "@/lib/weightReminder";
 import { logger } from "@/lib/logger";
 
@@ -24,7 +24,7 @@ const WizardBackgroundContext = createContext<WizardBackgroundContextType | unde
 
 export function WizardBackgroundProvider({ children }: { children: ReactNode }) {
   const { userId } = useAuth();
-  const { isPremium, aiUsageToday, openPaywall, incrementLocalUsage } = useSubscriptionContext();
+  const { isPremium, openPaywall, incrementLocalUsage, markLimitReached } = useSubscriptionContext();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -91,8 +91,8 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
     // Save immediate user message to storage so it persists even if they close app mid-fetch
     localStorage.setItem(`wizard_chat_history_${userId}`, JSON.stringify(newMessages));
 
-    // Pre-flight subscription check
-    if (!isPremium && aiUsageToday.used >= aiUsageToday.limit) {
+    // Pre-flight subscription check (localStorage-backed, synchronous)
+    if (!isPremium && isLimitHitToday()) {
       openPaywall();
       setIsLoading(false);
       return;
@@ -115,6 +115,7 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
       );
 
       if (response.status === 429) {
+        markLimitReached();
         openPaywall();
         setIsLoading(false);
         return;

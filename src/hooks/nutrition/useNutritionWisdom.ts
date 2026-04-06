@@ -29,7 +29,7 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
   const { userId } = useUser();
   const { toast } = useToast();
   const { safeAsync, isMounted } = useSafeAsync();
-  const { checkAIAccess, openPaywall, incrementLocalUsage } = useSubscription();
+  const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
 
   const [trainingWisdom, setTrainingWisdom] = useState<TrainingFoodTip | null>(null);
   const [trainingWisdomLoading, setTrainingWisdomLoading] = useState(false);
@@ -122,6 +122,7 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
       if (error) {
         const errBody = typeof error === 'object' && 'context' in error ? (error as any).context : null;
         if (errBody?.status === 429) {
+          markLimitReached();
           openPaywall();
           return;
         }
@@ -210,6 +211,7 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
       if (error) {
         const errBody = typeof error === 'object' && 'context' in error ? (error as any).context : null;
         if (errBody?.status === 429) {
+          markLimitReached();
           openPaywall();
           return;
         }
