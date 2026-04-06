@@ -13,11 +13,13 @@ import { UserProvider } from "@/contexts/UserContext";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { WizardBackgroundProvider } from "@/contexts/WizardBackgroundContext";
 import { PaywallOverlay } from "@/components/subscription/PaywallOverlay";
+import { WelcomeProOverlay } from "@/components/subscription/WelcomeProOverlay";
 import { PageTransition } from "@/components/PageTransition";
 import { NavigationDirectionProvider } from "@/hooks/useNavigationDirection";
 import { TutorialProvider } from "@/tutorial/TutorialContext";
 import { BottomNav } from "@/components/BottomNav";
 import { FloatingWizardChat } from "@/components/FloatingWizardChat";
+const FloatingWorkoutIndicator = lazy(() => import("@/components/gym/FloatingWorkoutIndicator").then(m => ({ default: m.FloatingWorkoutIndicator })));
 import * as Sentry from "@sentry/react";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { RefreshCw } from "lucide-react";
@@ -186,6 +188,7 @@ const AppLayoutContent = () => {
       </div>
       {/* Bottom Navigation - Mobile Only */}
       <BottomNav />
+      <Suspense fallback={null}><FloatingWorkoutIndicator /></Suspense>
       <FloatingWizardChat />
     </>
   );
@@ -219,6 +222,7 @@ const App = () => (
             <Toaster />
             <Sonner />
             <PaywallOverlay />
+            <WelcomeProOverlay />
             <BrowserRouter>
               <NavigationDirectionProvider>
               <TutorialProvider>

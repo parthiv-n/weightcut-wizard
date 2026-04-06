@@ -107,67 +107,64 @@ export default function GymTracker() {
 
   return (
     <div className="space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
-      {activeSession ? (
-        <>
-          <div className="flex items-center gap-3">
-            <div className="h-8 w-8 rounded-xl bg-primary/15 flex items-center justify-center">
-              <Dumbbell className="h-4 w-4 text-primary" />
-            </div>
-            <h1 className="text-lg font-bold">Gym Tracker</h1>
-          </div>
+      <div className="space-y-3">
+        {/* Header */}
+        <div>
+          <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest mb-0.5">{todayLabel}</p>
+          <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/60 bg-clip-text text-transparent">
+            Gym
+          </h1>
+        </div>
 
-          <ActiveSessionView
-            workout={activeSession}
-            exercises={exercises}
-            prs={prs}
-            newPRSetIds={newPRSetIdsRef.current}
-            onOpenExercisePicker={() => setExercisePickerOpen(true)}
-            onAddSet={handleAddSet}
-            onUpdateSet={updateSet}
-            onDeleteSet={deleteSet}
-            onDuplicateLastSet={duplicateLastSet}
-            onRemoveExercise={removeExerciseFromSession}
-            onFinish={finishSession}
-            onDiscard={discardSession}
-            onExerciseTap={handleExerciseTap}
-          />
-        </>
-      ) : (
-        <div className="space-y-3">
-          {/* Header */}
-          <div>
-            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest mb-0.5">{todayLabel}</p>
-            <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/60 bg-clip-text text-transparent">
-              Gym
-            </h1>
-          </div>
+        {/* Tab switcher — always visible */}
+        <div className="flex gap-1 p-1 rounded-xl bg-muted/30 dark:bg-white/5 border border-border/30">
+          <button
+            onClick={() => { setTab("workouts"); triggerHaptic(ImpactStyle.Light); }}
+            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all relative ${
+              tab === "workouts"
+                ? "bg-background dark:bg-white/10 text-foreground shadow-sm"
+                : "text-muted-foreground"
+            }`}
+          >
+            Workouts
+            {activeSession && (
+              <span className="absolute top-1.5 right-2 flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500" />
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => { setTab("routines"); triggerHaptic(ImpactStyle.Light); }}
+            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
+              tab === "routines"
+                ? "bg-background dark:bg-white/10 text-foreground shadow-sm"
+                : "text-muted-foreground"
+            }`}
+          >
+            Routines
+          </button>
+        </div>
 
-          {/* Tab switcher */}
-          <div className="flex gap-1 p-1 rounded-xl bg-muted/30 dark:bg-white/5 border border-border/30">
-            <button
-              onClick={() => { setTab("workouts"); triggerHaptic(ImpactStyle.Light); }}
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
-                tab === "workouts"
-                  ? "bg-background dark:bg-white/10 text-foreground shadow-sm"
-                  : "text-muted-foreground"
-              }`}
-            >
-              Workouts
-            </button>
-            <button
-              onClick={() => { setTab("routines"); triggerHaptic(ImpactStyle.Light); }}
-              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
-                tab === "routines"
-                  ? "bg-background dark:bg-white/10 text-foreground shadow-sm"
-                  : "text-muted-foreground"
-              }`}
-            >
-              Routines
-            </button>
-          </div>
-
-          {/* Tab content */}
-          {tab === "workouts" ? (
+        {/* Tab content */}
+        {tab === "workouts" ? (
+          activeSession ? (
+            <ActiveSessionView
+              workout={activeSession}
+              exercises={exercises}
+              prs={prs}
+              newPRSetIds={newPRSetIdsRef.current}
+              onOpenExercisePicker={() => setExercisePickerOpen(true)}
+              onAddSet={handleAddSet}
+              onUpdateSet={updateSet}
+              onDeleteSet={deleteSet}
+              onDuplicateLastSet={duplicateLastSet}
+              onRemoveExercise={removeExerciseFromSession}
+              onFinish={finishSession}
+              onDiscard={discardSession}
+              onExerciseTap={handleExerciseTap}
+            />
+          ) : (
             <>
               {/* Quick stats row */}
               {analytics.totalSessions > 0 && (
@@ -240,19 +237,19 @@ export default function GymTracker() {
                 />
               </div>
             </>
-          ) : (
-            /* Routines tab */
-            <RoutineLibrary
-              routines={routines}
-              loading={routinesLoading}
-              onDelete={deleteRoutine}
-              onRename={renameRoutine}
-              onStartWorkout={handleStartFromRoutine}
-              onOpenGenerator={() => setGeneratorOpen(true)}
-            />
-          )}
-        </div>
-      )}
+          )
+        ) : (
+          /* Routines tab */
+          <RoutineLibrary
+            routines={routines}
+            loading={routinesLoading}
+            onDelete={deleteRoutine}
+            onRename={renameRoutine}
+            onStartWorkout={handleStartFromRoutine}
+            onOpenGenerator={() => setGeneratorOpen(true)}
+          />
+        )}
+      </div>
 
       {/* Sheets + dialogs */}
       <ExercisePickerSheet

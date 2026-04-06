@@ -99,11 +99,15 @@ export function useRoutines() {
         }
 
         incrementLocalUsage();
-        return data as {
-          exercises: RoutineExercise[];
-          name: string;
-          notes: string;
-        } | null;
+        const routine = data?.routineData || data;
+        if (!routine?.exercises) return null;
+        return {
+          exercises: routine.exercises as RoutineExercise[],
+          name: routine.routine_name || routine.name || "Generated Routine",
+          notes: routine.notes || "",
+          recommendedGymDays: routine.recommended_gym_days || null,
+          splitUsed: routine.split_used || null,
+        };
       } catch (err) {
         logger.error("Failed to generate routine", err);
         toast({

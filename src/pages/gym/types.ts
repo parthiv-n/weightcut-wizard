@@ -105,6 +105,7 @@ export interface RoutineExercise {
   rpe: number | null;
   rest_seconds: number;
   notes: string | null;
+  day?: string; // e.g. "Day 1: Upper", "Day 2: Lower"
 }
 
 export interface SavedRoutine {
@@ -121,12 +122,18 @@ export interface SavedRoutine {
   updated_at: string;
 }
 
+export type WorkoutSplit = "upper_lower" | "push_pull_legs" | "full_body" | "bro_split" | "ai_recommended";
+
+export type FocusArea = "chest" | "back" | "shoulders" | "arms" | "legs" | "core" | "explosiveness" | "grip";
+
 export interface RoutineGenerationParams {
-  goal: TrainingGoal;
+  goals: TrainingGoal[];
   sport: CombatSport;
-  trainingDays: number;
+  sportTrainingDays: number;
   availableEquipment: Equipment[];
   sessionDurationMinutes: number;
+  focusAreas: FocusArea[];
+  preferredSplit: WorkoutSplit;
 }
 
 export type PRType = "weight" | "reps" | "volume" | "1rm";

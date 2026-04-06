@@ -1,11 +1,11 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   ChevronDown, Play, Trash2, Sparkles, Pencil, Check, X,
 } from "lucide-react";
-import type { SavedRoutine } from "@/pages/gym/types";
+import type { SavedRoutine, RoutineExercise } from "@/pages/gym/types";
 
 interface RoutineDetailCardProps {
   routine: SavedRoutine;
@@ -36,6 +36,78 @@ const MUSCLE_COLORS: Record<string, string> = {
   full_body: "bg-indigo-500/15 text-indigo-400",
   cardio: "bg-red-500/15 text-red-400",
 };
+
+const DAY_COLORS = [
+  "border-l-blue-500",
+  "border-l-purple-500",
+  "border-l-emerald-500",
+  "border-l-amber-500",
+  "border-l-rose-500",
+  "border-l-cyan-500",
+];
+
+function GroupedExerciseList({ exercises }: { exercises: RoutineExercise[] }) {
+  const hasDays = exercises.some(e => e.day);
+
+  const groups = useMemo(() => {
+    if (!hasDays) return [{ day: "", exercises }];
+    const result: { day: string; exercises: RoutineExercise[] }[] = [];
+    for (const ex of exercises) {
+      const label = ex.day || "Exercises";
+      const existing = result.find(g => g.day === label);
+      if (existing) existing.exercises.push(ex);
+      else result.push({ day: label, exercises: [ex] });
+    }
+    return result;
+  }, [exercises, hasDays]);
+
+  if (!hasDays) {
+    // Flat list for old routines
+    return (
+      <div className="px-4 pb-2 space-y-1">
+        {exercises.map((ex, i) => (
+          <div key={i} className="flex items-center gap-3 py-2 border-t border-border/20 first:border-t-0">
+            <span className="text-[10px] text-muted-foreground/50 w-4 text-right tabular-nums shrink-0">{i + 1}</span>
+            <div className="flex-1 min-w-0">
+              <span className="text-xs font-medium truncate block">{ex.name}</span>
+            </div>
+            <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">{ex.sets}&times;{ex.reps}</span>
+            <span className={`text-[9px] px-1.5 py-0.5 rounded-full shrink-0 ${MUSCLE_COLORS[ex.muscle_group] || "bg-muted/50 text-muted-foreground"}`}>
+              {ex.muscle_group.replace("_", " ")}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-3 pb-2 space-y-2.5 pt-1">
+      {groups.map((group, gi) => (
+        <div key={group.day || gi} className={`rounded-xl border border-border/30 overflow-hidden border-l-[3px] ${DAY_COLORS[gi % DAY_COLORS.length]}`}>
+          <div className="px-3 py-2 bg-muted/15 flex items-center justify-between">
+            <span className="text-[11px] font-bold uppercase tracking-wide text-foreground/80">{group.day}</span>
+            <span className="text-[10px] text-muted-foreground">{group.exercises.length} exercises</span>
+          </div>
+          <div className="divide-y divide-border/15">
+            {group.exercises.map((ex, i) => (
+              <div key={i} className="flex items-center gap-3 px-3 py-2">
+                <span className="text-[10px] text-muted-foreground/50 w-4 text-right tabular-nums shrink-0">{i + 1}</span>
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs font-medium truncate block">{ex.name}</span>
+                </div>
+                <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">{ex.sets}&times;{ex.reps}</span>
+                <span className={`text-[9px] px-1.5 py-0.5 rounded-full shrink-0 ${MUSCLE_COLORS[ex.muscle_group] || "bg-muted/50 text-muted-foreground"}`}>
+                  {ex.muscle_group.replace("_", " ")}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function RoutineDetailCard({ routine, onDelete, onRename, onStartWorkout }: RoutineDetailCardProps) {
   const [expanded, setExpanded] = useState(false);
@@ -139,24 +211,9 @@ export function RoutineDetailCard({ routine, onDelete, onRename, onStartWorkout 
             </button>
           </CollapsibleTrigger>
 
-          {/* Exercises list */}
+          {/* Exercises list — grouped by day if available */}
           <CollapsibleContent>
-            <div className="px-4 pb-2 space-y-1">
-              {routine.exercises.map((ex, i) => (
-                <div key={i} className="flex items-center gap-3 py-2 border-t border-border/20 first:border-t-0">
-                  <span className="text-[10px] text-muted-foreground/50 w-4 text-right tabular-nums shrink-0">{i + 1}</span>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-xs font-medium truncate block">{ex.name}</span>
-                  </div>
-                  <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
-                    {ex.sets}&times;{ex.reps}
-                  </span>
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full shrink-0 ${MUSCLE_COLORS[ex.muscle_group] || "bg-muted/50 text-muted-foreground"}`}>
-                    {ex.muscle_group.replace("_", " ")}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <GroupedExerciseList exercises={routine.exercises} />
 
             {/* Footer actions */}
             <div className="flex items-center gap-2 px-4 pb-4 pt-2 border-t border-border/20">

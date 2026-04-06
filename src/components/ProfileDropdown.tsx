@@ -42,17 +42,24 @@ export function ProfileDropdown() {
     }
   };
 
+  const [loggingOut, setLoggingOut] = useState(false);
   const handleSignOut = async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
     try {
-      const { error } = await supabase.auth.signOut();
+      const signOutPromise = supabase.auth.signOut();
+      const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 3000));
+      const { error } = await Promise.race([signOutPromise, timeout]);
       if (error) {
         localStorage.removeItem("weightcut-wizard-auth");
         await supabase.auth.signOut({ scope: "local" });
       }
     } catch {
       localStorage.removeItem("weightcut-wizard-auth");
+      try { await supabase.auth.signOut({ scope: "local" }); } catch {}
     }
     navigate("/auth");
+    setLoggingOut(false);
   };
 
   const handleUpdateProfile = async () => {

@@ -5,8 +5,9 @@ import { edgeLogger } from "../_shared/errorReporter.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { checkAIUsage, aiLimitResponse } from "../_shared/subscriptionGuard.ts";
 
-const VALID_GOALS = ["hypertrophy", "strength", "explosiveness", "conditioning"] as const;
-const VALID_SPORTS = ["mma", "bjj", "boxing", "muay_thai", "wrestling", "general"] as const;
+const VALID_GOALS = ["hypertrophy", "strength", "explosiveness", "conditioning"];
+const VALID_SPORTS = ["mma", "bjj", "boxing", "muay_thai", "wrestling", "general"];
+const VALID_SPLITS = ["upper_lower", "push_pull_legs", "full_body", "bro_split", "ai_recommended"];
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -43,12 +44,12 @@ serve(async (req) => {
       return aiLimitResponse(req, usage, corsHeaders);
     }
 
-    const { goal, sport, trainingDays, availableEquipment, sessionDurationMinutes } = await req.json();
+    const { goals, sport, sportTrainingDays, availableEquipment, sessionDurationMinutes, focusAreas, preferredSplit } = await req.json();
 
     // Validate inputs
-    if (!goal || !VALID_GOALS.includes(goal)) {
+    if (!Array.isArray(goals) || goals.length === 0 || !goals.every((g: string) => VALID_GOALS.includes(g))) {
       return new Response(
-        JSON.stringify({ error: `goal must be one of: ${VALID_GOALS.join(", ")}` }),
+        JSON.stringify({ error: `goals must be a non-empty array from: ${VALID_GOALS.join(", ")}` }),
         { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
@@ -60,23 +61,30 @@ serve(async (req) => {
       );
     }
 
-    if (typeof trainingDays !== "number" || trainingDays < 2 || trainingDays > 6) {
+    if (typeof sportTrainingDays !== "number" || sportTrainingDays < 2 || sportTrainingDays > 7) {
       return new Response(
-        JSON.stringify({ error: "trainingDays must be a number between 2 and 6" }),
+        JSON.stringify({ error: "sportTrainingDays must be a number between 2 and 7" }),
         { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
     if (!Array.isArray(availableEquipment) || availableEquipment.length === 0) {
       return new Response(
-        JSON.stringify({ error: "availableEquipment must be a non-empty array of strings" }),
+        JSON.stringify({ error: "availableEquipment must be a non-empty array" }),
         { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
     if (typeof sessionDurationMinutes !== "number" || sessionDurationMinutes < 30 || sessionDurationMinutes > 90) {
       return new Response(
-        JSON.stringify({ error: "sessionDurationMinutes must be a number between 30 and 90" }),
+        JSON.stringify({ error: "sessionDurationMinutes must be between 30 and 90" }),
+        { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
+      );
+    }
+
+    if (preferredSplit && !VALID_SPLITS.includes(preferredSplit)) {
+      return new Response(
+        JSON.stringify({ error: `preferredSplit must be one of: ${VALID_SPLITS.join(", ")}` }),
         { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
@@ -86,40 +94,58 @@ serve(async (req) => {
       throw new Error("GROK_API_KEY is not configured");
     }
 
-    edgeLogger.info("Generating workout routine", { goal, sport, trainingDays });
+    const goalsStr = goals.join(", ");
+    const focusStr = Array.isArray(focusAreas) && focusAreas.length > 0 ? focusAreas.join(", ") : "no specific focus — balanced program";
+    const splitStr = preferredSplit === "ai_recommended" ? "choose the best split for their goals and schedule" : preferredSplit.replace("_", "/");
 
-    const systemPrompt = `You are an expert strength & conditioning coach for combat sports athletes. Generate a workout routine that complements their martial arts training without causing overtraining. Focus on the specified goal while respecting recovery needs.
+    edgeLogger.info("Generating workout routine", { goals, sport, sportTrainingDays });
 
-Exercise database categories available:
-- push: chest, shoulders, triceps
-- pull: back, biceps
-- legs: quads, hamstrings, glutes, calves
-- core: abs
-- full_body
+    const systemPrompt = `You are an expert strength & conditioning coach for combat sports athletes. Your job is to design a gym program that COMPLEMENTS their martial arts training without causing overtraining.
 
-Return ONLY valid JSON in this exact format:
+The athlete trains their combat sport ${sportTrainingDays} days per week. Based on this, you MUST first determine how many gym sessions per week they should do and include it as "recommended_gym_days" in your response. Guidelines:
+- 6-7 sport days → 2 gym sessions max
+- 4-5 sport days → 2-3 gym sessions
+- 2-3 sport days → 3-4 gym sessions
+
+Their training goals: ${goalsStr}
+Preferred workout split: ${splitStr}
+Areas to focus on: ${focusStr}
+Session duration: ${sessionDurationMinutes} minutes
+Available equipment: ${availableEquipment.join(", ")}
+
+If multiple goals are selected, blend them intelligently. For example, hypertrophy + explosiveness means moderate rep ranges with some power movements. Strength + conditioning means heavy compounds with metabolic finishers.
+
+MANDATORY MOVEMENT PATTERNS — every routine MUST include at least one exercise from each of these categories, distributed across the split:
+1. HINGE (posterior chain/hamstrings) — e.g. deadlift, Romanian deadlift, hip thrust, good morning, kettlebell swing
+2. SQUAT (quads/glutes) — e.g. back squat, front squat, goblet squat, split squat, Bulgarian split squat, leg press
+3. PUSH (chest/shoulders/triceps) — e.g. bench press, overhead press, dumbbell press, push-ups, dips
+4. PULL (back/biceps) — e.g. pull-ups, chin-ups, barbell row, dumbbell row, cable row, lat pulldown
+These four patterns are non-negotiable. Additional isolation or accessory work can be added after these are covered.
+
+CRITICAL: Total weekly volume (sport + gym) must not risk overtraining. Keep gym volume moderate and prioritise compound movements that transfer to combat sports. Explain your programming decisions in the notes.
+
+Return ONLY valid JSON. IMPORTANT: Each exercise MUST include a "day" field that groups it into the correct session of the split (e.g. "Day 1: Push", "Day 2: Pull", "Day 3: Legs" for PPL, or "Day 1: Upper", "Day 2: Lower" for upper/lower). For full body, use "Day 1: Full Body", "Day 2: Full Body", etc. Exercises must be ordered by day.
+
 {
   "routine_name": "string",
+  "recommended_gym_days": number,
+  "split_used": "string (e.g. Upper/Lower, Full Body, Push/Pull/Legs)",
   "exercises": [
     {
+      "day": "Day 1: Push",
       "name": "Exercise Name",
       "muscle_group": "chest|back|shoulders|triceps|biceps|quads|hamstrings|glutes|calves|abs|full_body",
       "sets": 3,
       "reps": "8-12",
       "rpe": 7,
       "rest_seconds": 90,
-      "notes": "optional technique cue"
+      "notes": "technique cue or why this exercise"
     }
   ],
-  "notes": "Brief explanation of why this routine suits their goals"
+  "notes": "Explain programming decisions, how this avoids overtraining, and how it complements their ${sport} training ${sportTrainingDays}x/week"
 }`;
 
-    const userPrompt = `Generate a workout routine with:
-- Goal: ${goal}
-- Sport: ${sport}
-- Training days per week: ${trainingDays}
-- Available equipment: ${availableEquipment.join(", ")}
-- Session duration: ${sessionDurationMinutes} minutes`;
+    const userPrompt = `Generate a gym workout routine for a ${sport.replace("_", " ")} athlete who trains their sport ${sportTrainingDays} days per week. Goals: ${goalsStr}. Focus areas: ${focusStr}. Split preference: ${splitStr}. Session length: ${sessionDurationMinutes} minutes. Equipment: ${availableEquipment.join(", ")}.`;
 
     const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
