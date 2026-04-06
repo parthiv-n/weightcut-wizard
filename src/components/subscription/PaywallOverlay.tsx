@@ -8,9 +8,11 @@ import {
   getOfferings,
   purchasePackage,
   restorePurchases,
+  presentPaywall,
 } from "@/lib/purchases";
 import { useToast } from "@/hooks/use-toast";
 import { logger } from "@/lib/logger";
+import { isNativePlatform } from "@/hooks/useIsNative";
 
 const FEATURES = [
   "Unlimited AI meal analysis",
@@ -23,8 +25,33 @@ const FEATURES = [
 ];
 
 export function PaywallOverlay() {
-  const { isPaywallOpen } = useSubscriptionContext();
+  const { isPaywallOpen, closePaywall, refreshAIUsage } = useSubscriptionContext();
+  const { refreshProfile } = useProfile();
+
+  useEffect(() => {
+    if (!isPaywallOpen || !isNativePlatform) return;
+    // On native iOS, use RevenueCat's built-in paywall UI
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await presentPaywall();
+        if (cancelled) return;
+        if (result?.paywallResult === "PURCHASED" || result?.paywallResult === "RESTORED") {
+          await refreshProfile();
+          await refreshAIUsage();
+        }
+      } catch (err) {
+        logger.error("Native paywall error", err);
+      } finally {
+        if (!cancelled) closePaywall();
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [isPaywallOpen, closePaywall, refreshProfile, refreshAIUsage]);
+
   if (!isPaywallOpen) return null;
+  // On native iOS, the native paywall is shown via the effect above
+  if (isNativePlatform) return null;
   return <WebFallbackPaywall />;
 }
 
@@ -106,16 +133,16 @@ function WebFallbackPaywall() {
   };
 
   return (
-    <div className="fixed inset-0 z-[10003] flex flex-col bg-background/98 dark:bg-background/99 backdrop-blur-xl animate-in fade-in duration-300">
+    <div className="fixed inset-0 z-[10003] flex flex-col bg-background animate-in fade-in duration-300">
       <button
         onClick={closePaywall}
-        className="absolute right-4 z-10 h-11 w-11 flex items-center justify-center rounded-full bg-muted/30 dark:bg-white/10 border border-border/30 active:scale-90 transition-transform"
-        style={{ top: "calc(env(safe-area-inset-top, 0px) + 16px)" }}
+        className="absolute right-4 z-10 h-11 w-11 flex items-center justify-center rounded-full bg-muted/50 border border-border/30 active:scale-90 transition-transform"
+        style={{ top: "calc(env(safe-area-inset-top, 0px) + 12px)" }}
       >
         <X className="h-5 w-5 text-muted-foreground" />
       </button>
 
-      <div className="flex-1 flex flex-col items-center justify-center px-6 overflow-y-auto" style={{ paddingTop: "calc(env(safe-area-inset-top, 16px) + 48px)", paddingBottom: "calc(env(safe-area-inset-bottom, 16px) + 16px)" }}>
+      <div className="flex-1 flex flex-col items-center justify-center px-6 overflow-y-auto" style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 56px)", paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)" }}>
         <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary/20 to-secondary/20 border border-primary/30 flex items-center justify-center mb-5">
           <Zap className="h-8 w-8 text-primary" />
         </div>
