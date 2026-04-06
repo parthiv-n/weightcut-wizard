@@ -46,7 +46,7 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
       const granted = status.camera;
       if (granted === "denied" || granted === ("restricted" as string)) {
         setPermissionDenied(true);
-        setCameraError("Camera access was denied. Go to iOS Settings > WeightCut Wizard > Camera and enable it.");
+        setCameraError("Camera access was denied. Go to iOS Settings > FightCamp Wizard > Camera and enable it.");
         return false;
       }
       return true;

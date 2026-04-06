@@ -30,8 +30,8 @@ export function useShareCard() {
       const blob = await captureCardAsBlob(cardRef.current, { transparent });
       await shareCardImage(
         blob,
-        title ?? "WeightCut Wizard",
-        text ?? "Check out my stats on WeightCut Wizard"
+        title ?? "FightCamp Wizard",
+        text ?? "Check out my stats on FightCamp Wizard"
       );
     } catch (e) {
       logger.error("Share failed", e);

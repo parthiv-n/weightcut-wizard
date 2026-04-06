@@ -94,7 +94,7 @@ class ErrorBoundary extends Component<Props, State> {
               size="sm"
               asChild
             >
-              <a href="https://github.com/Raip036/weightcut-wizard/issues" target="_blank" rel="noopener noreferrer">
+              <a href="mailto:weightcutwizard@gmail.com">
                 <ExternalLink className="h-4 w-4 mr-2" />
                 Contact Support
               </a>

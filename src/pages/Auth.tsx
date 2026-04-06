@@ -272,12 +272,12 @@ export default function Auth() {
               <div className="relative">
                 <img
                   src={wizardLogo}
-                  alt="Weight Cut Wizard"
+                  alt="FightCamp Wizard"
                   className="h-20 w-20 object-contain drop-shadow-xl ring-2 ring-primary/30 rounded-2xl bg-background/50 dark:bg-background/30 p-1"
                 />
               </div>
               <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                Weight Cut Wizard
+                FightCamp Wizard
               </h1>
               <p className="text-muted-foreground text-base font-medium">
                 {isPasswordReset

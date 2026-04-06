@@ -128,7 +128,7 @@ serve(async (req) => {
     const requiredWeeklyGain = weightToGain > 0 ? weightToGain / weeksRemaining : 0;
 
     const systemPrompt = `You are a JSON API. Respond with ONLY the JSON object.
-You are the Weight Cut Wizard — evidence-based sports nutrition specialist for combat athletes.
+You are the FightCamp Wizard — evidence-based sports nutrition specialist for combat athletes.
 
 RULES:
 - fightWeekTarget = diet-only target (fat loss). weighInWeight = final scale weight (water cut). These are DIFFERENT.

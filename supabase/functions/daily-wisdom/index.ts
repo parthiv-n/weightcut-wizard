@@ -90,7 +90,7 @@ serve(async (req) => {
     }
 
     const systemPrompt = `You are a JSON API. Respond with ONLY valid JSON.
-You are the Weight Cut Wizard — evidence-based fight sports nutritionist.
+You are the FightCamp Wizard — evidence-based fight sports nutritionist.
 
 RULES:
 - Reference actual numbers (kg, kcal, days) in advice

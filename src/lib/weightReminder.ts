@@ -33,7 +33,7 @@ export async function scheduleReminder(hour: number, minute: number): Promise<vo
     notifications: [
       {
         id: REMINDER_ID,
-        title: "WeightCut Wizard",
+        title: "FightCamp Wizard",
         body: "Time to step on the scale ⚖️",
         schedule: { on: { hour, minute }, every: "day" },
         sound: "default",

@@ -727,13 +727,13 @@ export default function WeightTracker() {
         </Dialog>
       </div>
 
-      <ShareCardDialog open={shareOpen} onOpenChange={setShareOpen} title="Share Weight Progress" shareTitle="Weight Journey" shareText="Check out my weight progress on WeightCut Wizard">
+      <ShareCardDialog open={shareOpen} onOpenChange={setShareOpen} title="Share Weight Progress" shareTitle="Weight Journey" shareText="Check out my weight progress on FightCamp Wizard">
         {({ cardRef, aspect }) => (
           <WeightTrackerCard ref={cardRef} weightLogs={weightLogs} goalWeight={profile?.fight_week_target_kg ?? profile?.goal_weight_kg} timeFilter={timeFilter} aspect={aspect} />
         )}
       </ShareCardDialog>
 
-      <ShareCardDialog open={weighInShareOpen} onOpenChange={setWeighInShareOpen} title="Share Weigh-In Result" shareTitle="Made Weight!" shareText="I made weight on WeightCut Wizard">
+      <ShareCardDialog open={weighInShareOpen} onOpenChange={setWeighInShareOpen} title="Share Weigh-In Result" shareTitle="Made Weight!" shareText="I made weight on FightCamp Wizard">
         {({ cardRef, aspect }) => (
           <WeighInResultCard
             ref={cardRef}

@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.weightcutwizard.app',
-  appName: 'Weightcut Wizard',
+  appName: 'FightCamp Wizard',
   webDir: 'dist',
   ios: {
     preferredContentMode: 'mobile',

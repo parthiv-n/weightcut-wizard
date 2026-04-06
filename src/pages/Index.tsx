@@ -47,13 +47,13 @@ const Index = () => {
             <div className="mx-auto mb-2 md:mb-4">
               <img
                 src={wizardNutrition}
-                alt="Weight Cut Wizard"
+                alt="FightCamp Wizard"
                 className="h-24 w-24 md:h-32 md:w-32 mx-auto rounded-2xl object-contain shadow-xl shadow-blue-500/40 ring-2 ring-primary/40 bg-background/60"
               />
             </div>
             <div>
               <h1 className="text-3xl md:text-5xl lg:text-6xl font-title font-bold mb-4 tracking-tight leading-tight bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                Weight Cut Wizard
+                FightCamp Wizard
               </h1>
               <p className="text-lg md:text-xl text-muted-foreground mb-8 max-w-2xl mx-auto px-4">
                 Safe, science-based weight cutting for combat sports athletes.
@@ -100,7 +100,7 @@ const Index = () => {
             <div>
               <h3 className="text-lg font-semibold mb-1">AI-Powered</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Personalized meal plans and guidance from your AI weight cut wizard.
+                Personalized meal plans and guidance from your AI FightCamp Wizard.
               </p>
             </div>
           </div>
