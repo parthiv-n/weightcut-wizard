@@ -13,6 +13,7 @@ import { profileSchema } from "@/lib/validation";
 import wizardLogo from "@/assets/wizard-logo.webp";
 import { celebrateSuccess } from "@/lib/haptics";
 import { logger } from "@/lib/logger";
+import { seedDemoData } from "@/lib/demoData";
 
 const ACTIVITY_MULTIPLIERS = {
   sedentary: 1.2,
@@ -158,6 +159,9 @@ export default function Onboarding() {
         if (!profileRefreshed) {
           await refreshProfile();
         }
+        // Seed demo data so dashboard looks populated during tutorial
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) seedDemoData(user.id);
         celebrateSuccess();
         setTimeout(() => navigate("/dashboard"), 1000);
       }, remainingAnim);

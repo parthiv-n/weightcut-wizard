@@ -1,6 +1,4 @@
 import { useState, useCallback, useRef } from "react";
-
-
 import { Dumbbell, Plus, Calendar, Clock, Flame } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useGymSessions } from "@/hooks/gym/useGymSessions";
@@ -8,6 +6,7 @@ import { useGymSets } from "@/hooks/gym/useGymSets";
 import { useExerciseLibrary } from "@/hooks/gym/useExerciseLibrary";
 import { useExercisePRs } from "@/hooks/gym/useExercisePRs";
 import { useGymAnalytics } from "@/hooks/gym/useGymAnalytics";
+import { useRoutines } from "@/hooks/gym/useRoutines";
 import { ActiveSessionView } from "@/components/gym/ActiveSessionView";
 import { SessionHistoryList } from "@/components/gym/SessionHistoryList";
 import { SessionDetailSheet } from "@/components/gym/SessionDetailSheet";
@@ -15,10 +14,14 @@ import { SessionAnalyticsCard } from "@/components/gym/SessionAnalyticsCard";
 import { ExercisePickerSheet } from "@/components/gym/ExercisePickerSheet";
 import { ExerciseStatsSheet } from "@/components/gym/ExerciseStatsSheet";
 import { CreateExerciseDialog } from "@/components/gym/CreateExerciseDialog";
+import { RoutineLibrary } from "@/components/gym/RoutineLibrary";
+import { RoutineGeneratorSheet } from "@/components/gym/RoutineGeneratorSheet";
 import { SESSION_TYPES } from "@/data/exerciseDatabase";
 import { triggerHaptic } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
-import type { SessionType, SessionWithSets, Exercise } from "@/pages/gym/types";
+import type { SessionType, SessionWithSets, Exercise, SavedRoutine } from "@/pages/gym/types";
+
+type GymTab = "workouts" | "routines";
 
 export default function GymTracker() {
   const {
@@ -35,7 +38,12 @@ export default function GymTracker() {
   const { exercises, filteredExercises, loading: exercisesLoading, addCustomExercise } = useExerciseLibrary();
   const { prs, checkAndUpdatePR, getPRForExercise } = useExercisePRs();
   const { analytics, fetchExerciseHistory } = useGymAnalytics(history);
+  const {
+    routines, routinesLoading, generatingRoutine,
+    generateRoutine, saveRoutine, deleteRoutine, renameRoutine,
+  } = useRoutines();
 
+  const [tab, setTab] = useState<GymTab>("workouts");
   const [exercisePickerOpen, setExercisePickerOpen] = useState(false);
   const [createExerciseOpen, setCreateExerciseOpen] = useState(false);
   const [detailSession, setDetailSession] = useState<SessionWithSets | null>(null);
@@ -43,11 +51,25 @@ export default function GymTracker() {
   const [statsExercise, setStatsExercise] = useState<Exercise | null>(null);
   const [statsOpen, setStatsOpen] = useState(false);
   const [sessionType, setSessionType] = useState<SessionType>("Strength");
+  const [generatorOpen, setGeneratorOpen] = useState(false);
   const newPRSetIdsRef = useRef(new Set<string>());
 
   const handleStartWorkout = useCallback(async () => {
     await startSession(sessionType);
   }, [startSession, sessionType]);
+
+  const handleStartFromRoutine = useCallback(async (routine: SavedRoutine) => {
+    // Start a session with the routine's goal as session type
+    const typeMap: Record<string, SessionType> = {
+      hypertrophy: "Hypertrophy",
+      strength: "Strength",
+      explosiveness: "Conditioning",
+      conditioning: "Circuit",
+    };
+    const sType = typeMap[routine.goal] || "Strength";
+    await startSession(sType as SessionType);
+    setTab("workouts");
+  }, [startSession]);
 
   const handleAddSet = useCallback(async (exerciseOrder: number, data: any) => {
     const set = await addSet(exerciseOrder, data);
@@ -87,7 +109,6 @@ export default function GymTracker() {
     <div className="space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
       {activeSession ? (
         <>
-          {/* Header for active session */}
           <div className="flex items-center gap-3">
             <div className="h-8 w-8 rounded-xl bg-primary/15 flex items-center justify-center">
               <Dumbbell className="h-4 w-4 text-primary" />
@@ -121,80 +142,115 @@ export default function GymTracker() {
             </h1>
           </div>
 
-          {/* Quick stats row */}
-          {analytics.totalSessions > 0 && (
-            <div className="grid grid-cols-3 gap-2.5">
-              <div className="glass-card rounded-xl border border-border/50 p-3 text-center">
-                <Calendar className="h-3.5 w-3.5 text-primary mx-auto mb-1.5" />
-                <div className="display-number text-lg">{analytics.sessionsThisWeek}</div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">This Week</div>
-              </div>
-              <div className="glass-card rounded-xl border border-border/50 p-3 text-center">
-                <Clock className="h-3.5 w-3.5 text-primary mx-auto mb-1.5" />
-                <div className="display-number text-lg">{analytics.avgDuration}<span className="text-xs text-muted-foreground font-normal">m</span></div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">Avg Duration</div>
-              </div>
-              <div className="glass-card rounded-xl border border-border/50 p-3 text-center">
-                <Flame className="h-3.5 w-3.5 text-orange-400 mx-auto mb-1.5" />
-                <div className="display-number text-lg">{formatVol(weeklyVolume)}<span className="text-xs text-muted-foreground font-normal">kg</span></div>
-                <div className="text-[10px] text-muted-foreground mt-0.5">Week Volume</div>
-              </div>
-            </div>
-          )}
-
-          {/* Start workout card */}
-          <div className="glass-card rounded-2xl border border-border/50 p-3 space-y-3">
-            <h2 className="font-semibold text-sm">Start Workout</h2>
-
-            {/* Session type pills */}
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
-              {SESSION_TYPES.map(t => (
-                <button
-                  key={t}
-                  onClick={() => {
-                    setSessionType(t as SessionType);
-                    triggerHaptic(ImpactStyle.Light);
-                  }}
-                  className={`shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-all duration-200 ${
-                    sessionType === t
-                      ? "bg-gradient-to-r from-primary to-primary/70 text-primary-foreground shadow-lg shadow-primary/25"
-                      : "bg-muted/50 text-muted-foreground hover:bg-muted active:scale-95"
-                  }`}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-
-            {/* Start button */}
+          {/* Tab switcher */}
+          <div className="flex gap-1 p-1 rounded-xl bg-muted/30 dark:bg-white/5 border border-border/30">
             <button
-              onClick={handleStartWorkout}
-              className="w-full h-12 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
-              style={{ background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))" }}
+              onClick={() => { setTab("workouts"); triggerHaptic(ImpactStyle.Light); }}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
+                tab === "workouts"
+                  ? "bg-background dark:bg-white/10 text-foreground shadow-sm"
+                  : "text-muted-foreground"
+              }`}
             >
-              <Plus className="h-4.5 w-4.5" />
-              Start Workout
+              Workouts
+            </button>
+            <button
+              onClick={() => { setTab("routines"); triggerHaptic(ImpactStyle.Light); }}
+              className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
+                tab === "routines"
+                  ? "bg-background dark:bg-white/10 text-foreground shadow-sm"
+                  : "text-muted-foreground"
+              }`}
+            >
+              Routines
             </button>
           </div>
 
-          {/* Analytics card */}
-          <SessionAnalyticsCard
-            sessionsThisWeek={analytics.sessionsThisWeek}
-            avgDuration={analytics.avgDuration}
-            totalSessions={analytics.totalSessions}
-            mostTrainedMuscle={analytics.mostTrainedMuscle}
-            weeklyVolumes={analytics.weeklyVolumes}
-          />
+          {/* Tab content */}
+          {tab === "workouts" ? (
+            <>
+              {/* Quick stats row */}
+              {analytics.totalSessions > 0 && (
+                <div className="grid grid-cols-3 gap-2.5">
+                  <div className="glass-card rounded-xl border border-border/50 p-3 text-center">
+                    <Calendar className="h-3.5 w-3.5 text-primary mx-auto mb-1.5" />
+                    <div className="display-number text-lg">{analytics.sessionsThisWeek}</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">This Week</div>
+                  </div>
+                  <div className="glass-card rounded-xl border border-border/50 p-3 text-center">
+                    <Clock className="h-3.5 w-3.5 text-primary mx-auto mb-1.5" />
+                    <div className="display-number text-lg">{analytics.avgDuration}<span className="text-xs text-muted-foreground font-normal">m</span></div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">Avg Duration</div>
+                  </div>
+                  <div className="glass-card rounded-xl border border-border/50 p-3 text-center">
+                    <Flame className="h-3.5 w-3.5 text-orange-400 mx-auto mb-1.5" />
+                    <div className="display-number text-lg">{formatVol(weeklyVolume)}<span className="text-xs text-muted-foreground font-normal">kg</span></div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">Week Volume</div>
+                  </div>
+                </div>
+              )}
 
-          {/* Session history */}
-          <div>
-            <h2 className="font-semibold text-sm mb-3">Workout History</h2>
-            <SessionHistoryList
-              sessions={history}
-              loading={historyLoading}
-              onSessionTap={handleSessionTap}
+              {/* Start workout card */}
+              <div className="glass-card rounded-2xl border border-border/50 p-3 space-y-3">
+                <h2 className="font-semibold text-sm">Start Workout</h2>
+                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
+                  {SESSION_TYPES.map(t => (
+                    <button
+                      key={t}
+                      onClick={() => {
+                        setSessionType(t as SessionType);
+                        triggerHaptic(ImpactStyle.Light);
+                      }}
+                      className={`shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-all duration-200 ${
+                        sessionType === t
+                          ? "bg-gradient-to-r from-primary to-primary/70 text-primary-foreground shadow-lg shadow-primary/25"
+                          : "bg-muted/50 text-muted-foreground hover:bg-muted active:scale-95"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  onClick={handleStartWorkout}
+                  className="w-full h-12 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+                  style={{ background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))" }}
+                >
+                  <Plus className="h-4.5 w-4.5" />
+                  Start Workout
+                </button>
+              </div>
+
+              {/* Analytics card */}
+              <SessionAnalyticsCard
+                sessionsThisWeek={analytics.sessionsThisWeek}
+                avgDuration={analytics.avgDuration}
+                totalSessions={analytics.totalSessions}
+                mostTrainedMuscle={analytics.mostTrainedMuscle}
+                weeklyVolumes={analytics.weeklyVolumes}
+              />
+
+              {/* Session history */}
+              <div>
+                <h2 className="font-semibold text-sm mb-3">Workout History</h2>
+                <SessionHistoryList
+                  sessions={history}
+                  loading={historyLoading}
+                  onSessionTap={handleSessionTap}
+                />
+              </div>
+            </>
+          ) : (
+            /* Routines tab */
+            <RoutineLibrary
+              routines={routines}
+              loading={routinesLoading}
+              onDelete={deleteRoutine}
+              onRename={renameRoutine}
+              onStartWorkout={handleStartFromRoutine}
+              onOpenGenerator={() => setGeneratorOpen(true)}
             />
-          </div>
+          )}
         </div>
       )}
 
@@ -227,6 +283,14 @@ export default function GymTracker() {
         open={statsOpen}
         onOpenChange={setStatsOpen}
         fetchHistory={fetchExerciseHistory}
+      />
+
+      <RoutineGeneratorSheet
+        open={generatorOpen}
+        onOpenChange={setGeneratorOpen}
+        onGenerate={generateRoutine}
+        onSave={saveRoutine}
+        generating={generatingRoutine}
       />
     </div>
   );

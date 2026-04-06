@@ -90,6 +90,45 @@ export interface SessionWithSets extends GymSession {
   exerciseCount: number;
 }
 
+// ─── Routine Types ───
+
+export type TrainingGoal = "hypertrophy" | "strength" | "explosiveness" | "conditioning";
+
+export type CombatSport = "mma" | "bjj" | "boxing" | "muay_thai" | "wrestling" | "general";
+
+export interface RoutineExercise {
+  exercise_id: string | null;
+  name: string;
+  muscle_group: MuscleGroup;
+  sets: number;
+  reps: string; // e.g. "8-12" or "5"
+  rpe: number | null;
+  rest_seconds: number;
+  notes: string | null;
+}
+
+export interface SavedRoutine {
+  id: string;
+  user_id: string;
+  name: string;
+  goal: TrainingGoal;
+  sport: CombatSport | null;
+  training_days_per_week: number | null;
+  exercises: RoutineExercise[];
+  is_ai_generated: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RoutineGenerationParams {
+  goal: TrainingGoal;
+  sport: CombatSport;
+  trainingDays: number;
+  availableEquipment: Equipment[];
+  sessionDurationMinutes: number;
+}
+
 export type PRType = "weight" | "reps" | "volume" | "1rm";
 
 export interface PRRecord {

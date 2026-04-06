@@ -1,0 +1,145 @@
+import { useState } from "react";
+import { motion } from "motion/react";
+import { staggerContainer, staggerItem } from "@/lib/motion";
+import { Dumbbell, Sparkles, ArrowUpDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
+import { RoutineDetailCard } from "./RoutineDetailCard";
+import type { SavedRoutine } from "@/pages/gym/types";
+
+interface RoutineLibraryProps {
+  routines: SavedRoutine[];
+  loading: boolean;
+  onDelete: (id: string) => void;
+  onRename: (id: string, name: string) => void;
+  onStartWorkout: (routine: SavedRoutine) => void;
+  onOpenGenerator: () => void;
+}
+
+type SortMode = "recent" | "name" | "goal";
+
+export function RoutineLibrary({ routines, loading, onDelete, onRename, onStartWorkout, onOpenGenerator }: RoutineLibraryProps) {
+  const [sortMode, setSortMode] = useState<SortMode>("recent");
+  const [deleteTarget, setDeleteTarget] = useState<SavedRoutine | null>(null);
+
+  const sorted = [...routines].sort((a, b) => {
+    switch (sortMode) {
+      case "name":
+        return a.name.localeCompare(b.name);
+      case "goal":
+        return a.goal.localeCompare(b.goal) || b.created_at.localeCompare(a.created_at);
+      case "recent":
+      default:
+        return b.created_at.localeCompare(a.created_at);
+    }
+  });
+
+  const cycleSortMode = () => {
+    const modes: SortMode[] = ["recent", "name", "goal"];
+    const idx = modes.indexOf(sortMode);
+    setSortMode(modes[(idx + 1) % modes.length]);
+  };
+
+  const sortLabel: Record<SortMode, string> = {
+    recent: "Recent",
+    name: "A-Z",
+    goal: "Goal",
+  };
+
+  const handleConfirmDelete = () => {
+    if (deleteTarget) {
+      onDelete(deleteTarget.id);
+      setDeleteTarget(null);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-3">
+        {[1, 2, 3].map(i => (
+          <div key={i} className="glass-card rounded-2xl border border-border/50 p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="h-5 w-28 rounded-full shimmer-skeleton" />
+              <div className="h-4 w-16 rounded shimmer-skeleton" />
+            </div>
+            <div className="flex gap-2">
+              <div className="h-4 w-16 rounded-full shimmer-skeleton" />
+              <div className="h-4 w-12 rounded-full shimmer-skeleton" />
+              <div className="h-4 w-20 rounded-full shimmer-skeleton" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (routines.length === 0) {
+    return (
+      <div className="glass-card rounded-2xl border border-border/50 p-8 text-center">
+        <div className="h-12 w-12 rounded-2xl bg-muted/50 flex items-center justify-center mx-auto mb-3">
+          <Dumbbell className="h-6 w-6 text-muted-foreground/30" />
+        </div>
+        <p className="text-sm font-medium text-muted-foreground">No routines yet</p>
+        <p className="text-xs text-muted-foreground/60 mt-1 mb-4">Create your first AI-generated routine</p>
+        <Button
+          onClick={onOpenGenerator}
+          className="h-11 rounded-xl text-sm font-semibold bg-gradient-to-r from-primary to-primary/80"
+        >
+          <Sparkles className="h-4 w-4 mr-2" />
+          Create Your First Routine
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Header bar */}
+      <div className="flex items-center justify-between">
+        <Button
+          onClick={onOpenGenerator}
+          size="sm"
+          className="h-9 rounded-xl text-xs font-semibold bg-gradient-to-r from-primary to-primary/80 shadow-sm shadow-primary/10"
+        >
+          <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+          Generate with AI
+        </Button>
+        <button
+          onClick={cycleSortMode}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted/30 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowUpDown className="h-3 w-3" />
+          {sortLabel[sortMode]}
+        </button>
+      </div>
+
+      {/* Routine list */}
+      <motion.div
+        variants={staggerContainer(50)}
+        initial="hidden"
+        animate="visible"
+        className="space-y-3"
+      >
+        {sorted.map(routine => (
+          <motion.div key={routine.id} variants={staggerItem}>
+            <RoutineDetailCard
+              routine={routine}
+              onDelete={(id) => setDeleteTarget(routines.find(r => r.id === id) || null)}
+              onRename={onRename}
+              onStartWorkout={onStartWorkout}
+            />
+          </motion.div>
+        ))}
+      </motion.div>
+
+      {/* Delete confirmation */}
+      <DeleteConfirmDialog
+        open={deleteTarget !== null}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        onConfirm={handleConfirmDelete}
+        title="Delete Routine"
+        itemName={deleteTarget?.name}
+      />
+    </div>
+  );
+}

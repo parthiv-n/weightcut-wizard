@@ -1,19 +1,22 @@
 import { useRef, useEffect, useState } from "react";
 import { useWizardBackground } from "@/contexts/WizardBackgroundContext";
-import { Sparkles, Send, Trash2, User, Bot, Loader2, X } from "lucide-react";
+import { Sparkles, Send, Trash2, User, Bot, Loader2, X, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
 import { triggerHapticSelection, triggerHapticSuccess } from "@/lib/haptics";
 import wizardAvatar from "@/assets/wizard-logo.webp";
 import { GlowingEffect } from "@/components/ui/glowing-effect";
 import { supabase } from "@/integrations/supabase/client";
+import { useSubscription } from "@/hooks/useSubscription";
 
 export function FloatingWizardChat() {
   const { messages, isLoading, sendMessage, clearChat } = useWizardBackground();
+  const { checkAIAccess, openPaywall, isPremium } = useSubscription();
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const hasAccess = isPremium || checkAIAccess();
 
   // Edge function warmup on mount
   useEffect(() => {
@@ -47,6 +50,11 @@ export function FloatingWizardChat() {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
+    if (!checkAIAccess()) {
+      openPaywall();
+      return;
+    }
+
     triggerHapticSelection();
     const currentInput = input;
     setInput("");
@@ -54,18 +62,31 @@ export function FloatingWizardChat() {
     triggerHapticSuccess();
   };
 
+  const handleFabPress = () => {
+    triggerHapticSelection();
+    if (!checkAIAccess()) {
+      openPaywall();
+      return;
+    }
+    setOpen(true);
+  };
+
   return (
     <>
       {/* Floating button — hidden when panel is open */}
       {!open && (
         <button
-          onClick={() => { triggerHapticSelection(); setOpen(true); }}
+          onClick={handleFabPress}
           data-tutorial="wizard-chat"
-          className="fixed right-4 z-[10000] w-12 h-12 rounded-full bg-gradient-to-br from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/30 flex items-center justify-center active:scale-95 transition-transform duration-150 md:hidden"
+          className={`fixed right-4 z-[10000] w-12 h-12 rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-transform duration-150 md:hidden ${
+            hasAccess
+              ? "bg-gradient-to-br from-primary to-secondary text-primary-foreground shadow-primary/30"
+              : "bg-zinc-800 text-zinc-400 shadow-none border border-white/10"
+          }`}
           style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 5.5rem)" }}
           aria-label="Open AI Wizard"
         >
-          <Sparkles className="h-5 w-5" />
+          {hasAccess ? <Sparkles className="h-5 w-5" /> : <Lock className="h-4 w-4" />}
         </button>
       )}
 
