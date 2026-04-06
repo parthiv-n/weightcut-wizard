@@ -1,9 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { useLocation } from "react-router-dom";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { isNativePlatform } from "@/hooks/useIsNative";
 
-const DURATION = isNativePlatform ? 0.12 : 0.18;
+const DURATION = isNativePlatform ? 0.1 : 0.14;
 
 interface PageTransitionProps {
   children: React.ReactNode;
@@ -13,12 +13,6 @@ export function PageTransition({ children }: PageTransitionProps) {
   const location = useLocation();
   const prefersReducedMotion = useReducedMotion();
   const isFirstRender = useRef(true);
-
-  useEffect(() => {
-    const main = document.querySelector("main");
-    if (main) main.scrollTo(0, 0);
-    window.scrollTo(0, 0);
-  }, [location.pathname]);
 
   if (prefersReducedMotion) {
     return (

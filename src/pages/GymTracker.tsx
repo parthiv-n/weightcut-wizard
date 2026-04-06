@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef } from "react";
-import { motion } from "motion/react";
-import { staggerContainer, staggerItem, springs } from "@/lib/motion";
+
+
 import { Dumbbell, Plus, Calendar, Clock, Flame } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useGymSessions } from "@/hooks/gym/useGymSessions";
@@ -88,17 +88,12 @@ export default function GymTracker() {
       {activeSession ? (
         <>
           {/* Header for active session */}
-          <motion.div
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={springs.gentle}
-            className="flex items-center gap-3"
-          >
+          <div className="flex items-center gap-3">
             <div className="h-8 w-8 rounded-xl bg-primary/15 flex items-center justify-center">
               <Dumbbell className="h-4 w-4 text-primary" />
             </div>
             <h1 className="text-lg font-bold">Gym Tracker</h1>
-          </motion.div>
+          </div>
 
           <ActiveSessionView
             workout={activeSession}
@@ -117,23 +112,18 @@ export default function GymTracker() {
           />
         </>
       ) : (
-        <motion.div
-          variants={staggerContainer(60)}
-          initial="hidden"
-          animate="visible"
-          className="space-y-3"
-        >
-          {/* Premium header */}
-          <motion.div variants={staggerItem}>
+        <div className="space-y-3">
+          {/* Header */}
+          <div>
             <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest mb-0.5">{todayLabel}</p>
             <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/60 bg-clip-text text-transparent">
               Gym
             </h1>
-          </motion.div>
+          </div>
 
           {/* Quick stats row */}
           {analytics.totalSessions > 0 && (
-            <motion.div variants={staggerItem} className="grid grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-3 gap-2.5">
               <div className="glass-card rounded-xl border border-border/50 p-3 text-center">
                 <Calendar className="h-3.5 w-3.5 text-primary mx-auto mb-1.5" />
                 <div className="display-number text-lg">{analytics.sessionsThisWeek}</div>
@@ -149,11 +139,11 @@ export default function GymTracker() {
                 <div className="display-number text-lg">{formatVol(weeklyVolume)}<span className="text-xs text-muted-foreground font-normal">kg</span></div>
                 <div className="text-[10px] text-muted-foreground mt-0.5">Week Volume</div>
               </div>
-            </motion.div>
+            </div>
           )}
 
           {/* Start workout card */}
-          <motion.div variants={staggerItem} className="glass-card rounded-2xl border border-border/50 p-3 space-y-3">
+          <div className="glass-card rounded-2xl border border-border/50 p-3 space-y-3">
             <h2 className="font-semibold text-sm">Start Workout</h2>
 
             {/* Session type pills */}
@@ -185,7 +175,7 @@ export default function GymTracker() {
               <Plus className="h-4.5 w-4.5" />
               Start Workout
             </button>
-          </motion.div>
+          </div>
 
           {/* Analytics card */}
           <SessionAnalyticsCard
@@ -197,15 +187,15 @@ export default function GymTracker() {
           />
 
           {/* Session history */}
-          <motion.div variants={staggerItem}>
+          <div>
             <h2 className="font-semibold text-sm mb-3">Workout History</h2>
             <SessionHistoryList
               sessions={history}
               loading={historyLoading}
               onSessionTap={handleSessionTap}
             />
-          </motion.div>
-        </motion.div>
+          </div>
+        </div>
       )}
 
       {/* Sheets + dialogs */}

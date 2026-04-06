@@ -1,7 +1,7 @@
 import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Droplets, Calendar, LogOut, HeartPulse, GitBranch, Trash2, Dumbbell } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 import { NavLink, useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo } from "react";
 import { triggerHaptic, triggerHapticSelection } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import { springs } from "@/lib/motion";
@@ -43,7 +43,7 @@ const moreMenuItems = [
   { title: "Gym Tracker", url: "/gym", icon: Dumbbell },
 ];
 
-export function BottomNav() {
+export const BottomNav = memo(function BottomNav() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
   const prefersReducedMotion = useReducedMotion();
@@ -410,4 +410,4 @@ export function BottomNav() {
       </AlertDialog>
     </>
   );
-}
+});

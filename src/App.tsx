@@ -46,6 +46,8 @@ _idle(() => {
   import("./pages/Dashboard").catch(() => {});
   import("./pages/Nutrition").catch(() => {});
   import("./pages/WeightTracker").catch(() => {});
+  import("./pages/FightWeek").catch(() => {});
+  import("./pages/Recovery").catch(() => {});
 });
 
 const queryClient = new QueryClient();
