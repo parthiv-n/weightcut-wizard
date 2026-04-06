@@ -31,7 +31,7 @@ const Index = () => {
     }
   }, [userId, hasProfile, isLoading, navigate]);
 
-  if (isLoading) {
+  if (isLoading || userId) {
     return <WizardLoader />;
   }
 
