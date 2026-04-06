@@ -131,7 +131,6 @@ export default function FightCamps() {
     if (error) {
       toast({ title: "Error", description: "Failed to create fight camp", variant: "destructive" });
     } else {
-      toast({ title: "Success", description: "Fight camp created successfully" });
       setDialogOpen(false);
       setNewCamp({ name: "", event_name: "", fight_date: "" });
       fetchCamps();
@@ -153,7 +152,6 @@ export default function FightCamps() {
     if (error) {
       toast({ title: "Error", description: "Failed to delete fight camp", variant: "destructive" });
     } else {
-      toast({ title: "Success", description: "Fight camp deleted successfully" });
       fetchCamps();
     }
     setDeleteDialogOpen(false);

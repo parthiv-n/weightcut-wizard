@@ -90,6 +90,52 @@ export interface SessionWithSets extends GymSession {
   exerciseCount: number;
 }
 
+// ─── Routine Types ───
+
+export type TrainingGoal = "hypertrophy" | "strength" | "explosiveness" | "conditioning";
+
+export type CombatSport = "mma" | "bjj" | "boxing" | "muay_thai" | "wrestling" | "general";
+
+export interface RoutineExercise {
+  exercise_id: string | null;
+  name: string;
+  muscle_group: MuscleGroup;
+  sets: number;
+  reps: string; // e.g. "8-12" or "5"
+  rpe: number | null;
+  rest_seconds: number;
+  notes: string | null;
+  day?: string; // e.g. "Day 1: Upper", "Day 2: Lower"
+}
+
+export interface SavedRoutine {
+  id: string;
+  user_id: string;
+  name: string;
+  goal: TrainingGoal;
+  sport: CombatSport | null;
+  training_days_per_week: number | null;
+  exercises: RoutineExercise[];
+  is_ai_generated: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type WorkoutSplit = "upper_lower" | "push_pull_legs" | "full_body" | "bro_split" | "ai_recommended";
+
+export type FocusArea = "chest" | "back" | "shoulders" | "arms" | "legs" | "core" | "explosiveness" | "grip";
+
+export interface RoutineGenerationParams {
+  goals: TrainingGoal[];
+  sport: CombatSport;
+  sportTrainingDays: number;
+  availableEquipment: Equipment[];
+  sessionDurationMinutes: number;
+  focusAreas: FocusArea[];
+  preferredSplit: WorkoutSplit;
+}
+
 export type PRType = "weight" | "reps" | "volume" | "1rm";
 
 export interface PRRecord {

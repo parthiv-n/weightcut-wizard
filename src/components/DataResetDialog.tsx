@@ -230,10 +230,6 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
       link.click();
       URL.revokeObjectURL(url);
 
-      toast({
-        title: "Export Complete",
-        description: "Your data has been exported successfully",
-      });
     } catch (error) {
       logger.error("Export error", error);
       toast({

@@ -157,7 +157,6 @@ export const BottomNav = memo(function BottomNav() {
   const handleUpdateProfile = async () => {
     try {
       setUserName(editedName);
-      toast({ description: "Profile updated successfully" });
       setSettingsDialogOpen(false);
     } catch (error) {
       toast({ description: "Failed to update profile", variant: "destructive" });
@@ -168,15 +167,18 @@ export const BottomNav = memo(function BottomNav() {
     if (loggingOut) return;
     setLoggingOut(true);
     setLogoutDialogOpen(false);
+    setMoreMenuOpen(false);
     try {
-      const { error } = await supabase.auth.signOut();
+      const signOutPromise = supabase.auth.signOut();
+      const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 3000));
+      const { error } = await Promise.race([signOutPromise, timeout]);
       if (error) {
-        // Force clear local session on error and retry
         localStorage.removeItem("weightcut-wizard-auth");
         await supabase.auth.signOut({ scope: "local" });
       }
     } catch {
       localStorage.removeItem("weightcut-wizard-auth");
+      try { await supabase.auth.signOut({ scope: "local" }); } catch {}
     }
     navigate("/auth");
     toast({ title: "Signed out", description: "You have been successfully signed out." });
@@ -346,7 +348,6 @@ export const BottomNav = memo(function BottomNav() {
         onToggleTheme={toggleTheme}
         onAvatarChange={(url) => {
           setAvatarUrl(url);
-          toast({ description: "Profile picture updated" });
         }}
         onSave={handleUpdateProfile}
         onReplayTutorial={handleReplayTutorial}

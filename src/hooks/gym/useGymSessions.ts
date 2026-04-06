@@ -23,22 +23,18 @@ export function useGymSessions() {
   const { toast } = useToast();
   const [history, setHistory] = useState<SessionWithSets[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
-  const [activeSession, setActiveSession] = useState<ActiveWorkout | null>(null);
-  const exerciseCacheRef = useRef<Map<string, Exercise>>(new Map());
-  const hasProcessedOnMount = useRef(false);
-
-  // Recover active session from localStorage on mount
-  useEffect(() => {
+  // Initialize from localStorage synchronously to avoid race with persistence effect
+  const [activeSession, setActiveSession] = useState<ActiveWorkout | null>(() => {
     try {
       const saved = localStorage.getItem(ACTIVE_SESSION_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved) as ActiveWorkout;
-        setActiveSession(parsed);
-      }
+      return saved ? JSON.parse(saved) as ActiveWorkout : null;
     } catch {
       localStorage.removeItem(ACTIVE_SESSION_KEY);
+      return null;
     }
-  }, []);
+  });
+  const exerciseCacheRef = useRef<Map<string, Exercise>>(new Map());
+  const hasProcessedOnMount = useRef(false);
 
   // Persist active session to localStorage on change
   useEffect(() => {
@@ -228,7 +224,6 @@ export function useGymSessions() {
 
       setActiveSession(workout);
       triggerHaptic(ImpactStyle.Medium);
-      toast({ description: `${sessionType} workout started` });
       return session.id;
     } catch (err) {
       toast({ description: "Failed to start workout", variant: "destructive" });
@@ -300,7 +295,6 @@ export function useGymSessions() {
 
       setActiveSession(null);
       celebrateSuccess();
-      toast({ description: "Workout completed!" });
       // Refresh history
       fetchHistory();
       return true;
@@ -327,8 +321,7 @@ export function useGymSessions() {
     }
 
     setActiveSession(null);
-    toast({ description: "Workout discarded" });
-  }, [activeSession, toast]);
+  }, [activeSession]);
 
   const deleteSession = useCallback(async (sessionId: string) => {
     if (!userId) return;
@@ -352,7 +345,6 @@ export function useGymSessions() {
       });
 
       confirmDelete();
-      toast({ description: "Session deleted" });
     } catch {
       toast({ description: "Failed to delete session", variant: "destructive" });
     }

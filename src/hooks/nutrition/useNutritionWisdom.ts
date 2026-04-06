@@ -170,13 +170,14 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
       }
     }
 
+    if (!checkAIAccess()) {
+      openPaywall();
+      return;
+    }
+
     safeAsync(setTrainingWisdomLoading)(true);
     safeAsync(setTrainingWisdomSheetOpen)(true);
     try {
-      if (!checkAIAccess()) {
-        openPaywall();
-        return;
-      }
 
       const calorieTarget = dailyCalorieTarget;
       const proteinGoal = aiMacroGoals?.proteinGrams || Math.round(calorieTarget * 0.4 / 4);

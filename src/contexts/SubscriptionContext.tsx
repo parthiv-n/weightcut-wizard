@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from "react";
 import { useProfile, useAuth } from "@/contexts/UserContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Capacitor } from "@capacitor/core";
@@ -15,6 +15,14 @@ function getLimitKey(): string {
 
 export function isLimitHitToday(): boolean {
   return localStorage.getItem(getLimitKey()) === "true";
+}
+
+function clearLimitFlag(): void {
+  Object.keys(localStorage).forEach((k) => {
+    if (k.startsWith(AI_LIMIT_KEY_PREFIX)) {
+      localStorage.removeItem(k);
+    }
+  });
 }
 
 function markLimitHitToday(): void {
@@ -45,6 +53,8 @@ interface SubscriptionContextType {
   refreshAIUsage: () => Promise<void>;
   incrementLocalUsage: () => void;
   markLimitReached: () => void;
+  showWelcomePro: boolean;
+  dismissWelcomePro: () => void;
 }
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
@@ -53,6 +63,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const { profile, refreshProfile } = useProfile();
   const { userId } = useAuth();
   const [isPaywallOpen, setIsPaywallOpen] = useState(false);
+  const [showWelcomePro, setShowWelcomePro] = useState(false);
   const [aiUsageToday, setAiUsageToday] = useState<AIUsage>(() => ({
     used: isLimitHitToday() ? 1 : 0,
     limit: 1,
@@ -64,6 +75,24 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     : null;
   const isPremium =
     tier !== "free" && (expiresAt === null || expiresAt > new Date());
+
+  const wasPremiumRef = useRef(isPremium);
+
+  // Clear stale AI limit flags and show welcome dialog when user becomes premium
+  useEffect(() => {
+    if (isPremium) {
+      clearLimitFlag();
+      // Show welcome only on transition from free → premium (not on app reload when already premium)
+      if (!wasPremiumRef.current && userId) {
+        const welcomeKey = `wcw_welcome_pro_shown_${userId}`;
+        if (!localStorage.getItem(welcomeKey)) {
+          setShowWelcomePro(true);
+          localStorage.setItem(welcomeKey, "true");
+        }
+      }
+    }
+    wasPremiumRef.current = isPremium;
+  }, [isPremium, userId]);
 
   // Initialize RevenueCat when userId becomes available
   useEffect(() => {
@@ -95,6 +124,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   // Fetch current AI usage on mount — but respect localStorage flag
   const refreshAIUsage = useCallback(async () => {
     if (!userId || isPremium) {
+      if (isPremium) clearLimitFlag();
       setAiUsageToday({ used: 0, limit: isPremium ? -1 : 1 });
       return;
     }
@@ -150,6 +180,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
   const openPaywall = useCallback(() => setIsPaywallOpen(true), []);
   const closePaywall = useCallback(() => setIsPaywallOpen(false), []);
+  const dismissWelcomePro = useCallback(() => setShowWelcomePro(false), []);
 
   return (
     <SubscriptionContext.Provider
@@ -164,6 +195,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         refreshAIUsage,
         incrementLocalUsage,
         markLimitReached,
+        showWelcomePro,
+        dismissWelcomePro,
       }}
     >
       {children}

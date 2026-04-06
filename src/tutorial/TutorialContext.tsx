@@ -8,6 +8,8 @@ import {
 } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useUser } from "@/contexts/UserContext";
+import { seedDemoData, clearDemoData, isDemoActive } from "@/lib/demoData";
+import { localCache } from "@/lib/localCache";
 import { TutorialManager } from "./tutorialManager";
 import { tutorialPersistence } from "./tutorialPersistence";
 import { onboardingFlow } from "./flows/onboardingFlow";
@@ -89,6 +91,10 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
           newState.currentFlow.id,
           newState.currentFlow.version
         );
+        // Clear demo data when onboarding tutorial finishes
+        if (newState.currentFlow.id === "onboarding") {
+          if (isDemoActive(userId)) clearDemoData(userId);
+        }
       }
     });
     return unsub;
@@ -161,6 +167,12 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // Seed demo data only for brand-new users (no cached weight data yet)
+      const hasRealData = localCache.get(userId, "dashboard_weight_logs");
+      if (!hasRealData && !isDemoActive(userId)) {
+        seedDemoData(userId);
+      }
+
       // Start onboarding after dashboard animations finish
       const timer = setTimeout(() => {
         autoTriggeredRef.current = true;
@@ -207,6 +219,9 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
         state.currentFlow.id,
         state.currentFlow.version
       );
+      if (state.currentFlow.id === "onboarding") {
+        if (isDemoActive(userId)) clearDemoData(userId);
+      }
     }
     managerRef.current.skip();
     // Navigate back to dashboard when skipping mid-tour on another page

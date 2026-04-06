@@ -198,7 +198,6 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
       nutritionCache.remove(userId, 'macroGoals');
       await refreshProfile();
       setTargetsApplied(true);
-      toast({ title: "Targets applied", description: "Nutrition page updated with AI recommendations." });
     } catch (err: any) {
       logger.error("Error applying nutrition targets", err);
       toast({ title: "Failed to apply targets", description: err?.message || "Please try again.", variant: "destructive" });

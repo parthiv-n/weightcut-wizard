@@ -386,7 +386,6 @@ export default function Nutrition() {
       if (editingTargets.carbs) setAiMacroGoals(prev => prev ? { ...prev, carbsGrams: parseFloat(editingTargets.carbs) } : prev);
       if (editingTargets.fats) setAiMacroGoals(prev => prev ? { ...prev, fatsGrams: parseFloat(editingTargets.fats) } : prev);
       setIsEditTargetsDialogOpen(false);
-      toast({ title: "Targets updated!", description: "Your daily nutrition targets have been set." });
 
       const updateOperation = async () => {
         const updateData: any = {
@@ -886,7 +885,7 @@ export default function Nutrition() {
                         const tcarb = newIngredients.reduce((s, i) => s + (i.carbs_per_100g || 0) * i.grams / 100, 0);
                         const tf = newIngredients.reduce((s, i) => s + (i.fats_per_100g || 0) * i.grams / 100, 0);
                         setManualMeal({ ...manualMeal, ingredients: newIngredients, calories: Math.round(tc).toString(), protein_g: tp > 0 ? (Math.round(tp * 10) / 10).toString() : "", carbs_g: tcarb > 0 ? (Math.round(tcarb * 10) / 10).toString() : "", fats_g: tf > 0 ? (Math.round(tf * 10) / 10).toString() : "" });
-                        aiMeal.setNewIngredient({ name: "", grams: "" }); toast({ title: "Ingredient added", description: `Found nutrition data for ${ingredientName}` });
+                        aiMeal.setNewIngredient({ name: "", grams: "" });
                       } else { aiMeal.setManualNutritionDialog({ open: true, ingredientName, grams, calories_per_100g: "", protein_per_100g: "", carbs_per_100g: "", fats_per_100g: "" }); }
                     } catch { aiMeal.setManualNutritionDialog({ open: true, ingredientName, grams, calories_per_100g: "", protein_per_100g: "", carbs_per_100g: "", fats_per_100g: "" }); }
                     finally { aiMeal.setLookingUpIngredient(false); }

@@ -434,6 +434,11 @@ All colors MUST be HSL.
     padding-bottom: env(safe-area-inset-bottom);
   }
 
+  /* Hide bottom nav when sheets/dialogs need full screen */
+  .hide-bottom-nav nav[class*="fixed"][class*="bottom-0"] {
+    display: none !important;
+  }
+
   .safe-area-inset-left {
     padding-left: env(safe-area-inset-left);
   }

@@ -146,10 +146,6 @@ export function useWeightData({ profile }: UseWeightDataParams) {
         }
       }
 
-      toast({
-        title: editingLogId ? "Weight updated" : "Weight logged",
-        description: "Your weight has been recorded",
-      });
       celebrateSuccess();
 
       setNewWeight("");
@@ -183,10 +179,6 @@ export function useWeightData({ profile }: UseWeightDataParams) {
         variant: "destructive",
       });
     } else {
-      toast({
-        title: "Deleted",
-        description: "Weight log has been removed",
-      });
       fetchData();
     }
 
