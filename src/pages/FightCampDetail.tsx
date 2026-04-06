@@ -114,7 +114,6 @@ export default function FightCampDetail() {
       toast({ title: "Error", description: "Failed to update camp", variant: "destructive" });
     } else {
       localCache.set("shared", `fight_camp_${camp.id}`, camp);
-      toast({ title: "Success", description: "Camp updated successfully" });
       navigate("/fight-camps");
     }
   };
@@ -156,7 +155,6 @@ export default function FightCampDetail() {
       toast({ title: "Error", description: "Failed to update profile picture", variant: "destructive" });
     } else {
       setCamp({ ...camp, profile_pic_url: data.publicUrl });
-      toast({ title: "Success", description: "Profile picture updated" });
     }
     setUploading(false);
   };

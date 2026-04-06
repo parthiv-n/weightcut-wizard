@@ -11,7 +11,7 @@ interface RoutineDetailCardProps {
   routine: SavedRoutine;
   onDelete: (id: string) => void;
   onRename: (id: string, name: string) => void;
-  onStartWorkout: (routine: SavedRoutine) => void;
+  onStartWorkout: (routine: SavedRoutine, dayFilter?: string) => void;
 }
 
 const GOAL_BADGE: Record<string, string> = {
@@ -216,21 +216,70 @@ export function RoutineDetailCard({ routine, onDelete, onRename, onStartWorkout 
             <GroupedExerciseList exercises={routine.exercises} />
 
             {/* Footer actions */}
-            <div className="flex items-center gap-2 px-4 pb-4 pt-2 border-t border-border/20">
-              <Button
-                onClick={() => onStartWorkout(routine)}
-                className="flex-1 h-10 rounded-xl text-xs font-semibold bg-gradient-to-r from-primary to-primary/80"
-                size="sm"
-              >
-                <Play className="h-3.5 w-3.5 mr-1.5" />
-                Start Workout
-              </Button>
-              <button
-                onClick={() => onDelete(routine.id)}
-                className="h-10 w-10 rounded-xl flex items-center justify-center border border-border/50 hover:bg-destructive/10 hover:border-destructive/30 transition-colors"
-              >
-                <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive transition-colors" />
-              </button>
+            <div className="px-4 pb-4 pt-2 border-t border-border/20 space-y-2">
+              {(() => {
+                const hasDays = routine.exercises.some(e => e.day);
+                if (!hasDays) {
+                  return (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        onClick={() => onStartWorkout(routine)}
+                        className="flex-1 h-10 rounded-xl text-xs font-semibold bg-gradient-to-r from-primary to-primary/80"
+                        size="sm"
+                      >
+                        <Play className="h-3.5 w-3.5 mr-1.5" />
+                        Start Workout
+                      </Button>
+                      <button
+                        onClick={() => onDelete(routine.id)}
+                        className="h-10 w-10 rounded-xl flex items-center justify-center border border-border/50 hover:bg-destructive/10 hover:border-destructive/30 transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive transition-colors" />
+                      </button>
+                    </div>
+                  );
+                }
+                // Multi-day routine: show per-day Start buttons
+                const dayGroups: string[] = [];
+                for (const ex of routine.exercises) {
+                  const d = ex.day || "Exercises";
+                  if (!dayGroups.includes(d)) dayGroups.push(d);
+                }
+                return (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      {dayGroups.map((day) => (
+                        <Button
+                          key={day}
+                          onClick={() => onStartWorkout(routine, day)}
+                          variant="outline"
+                          className="h-9 rounded-xl text-[11px] font-semibold gap-1.5"
+                          size="sm"
+                        >
+                          <Play className="h-3 w-3" />
+                          {day.replace(/^Day\s*\d+:\s*/i, "")}
+                        </Button>
+                      ))}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        onClick={() => onStartWorkout(routine)}
+                        className="flex-1 h-10 rounded-xl text-xs font-semibold bg-gradient-to-r from-primary to-primary/80"
+                        size="sm"
+                      >
+                        <Play className="h-3.5 w-3.5 mr-1.5" />
+                        Start Full Routine
+                      </Button>
+                      <button
+                        onClick={() => onDelete(routine.id)}
+                        className="h-10 w-10 rounded-xl flex items-center justify-center border border-border/50 hover:bg-destructive/10 hover:border-destructive/30 transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive transition-colors" />
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </CollapsibleContent>
         </div>

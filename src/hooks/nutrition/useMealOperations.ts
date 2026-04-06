@@ -93,7 +93,6 @@ export function useMealOperations(params: UseMealOperationsParams) {
 
       syncQueue.dequeueByRecordId(userId, mealId);
       celebrateSuccess();
-      toast({ title: "Meal added successfully" });
       await loadMeals(true);
     } catch (error) {
       logger.error("Error adding meal (queued for sync)", error);
@@ -335,7 +334,6 @@ export function useMealOperations(params: UseMealOperationsParams) {
 
       syncQueue.dequeueByRecordId(userId, deletedId);
       confirmDelete();
-      toast({ title: "Meal deleted" });
       await loadMeals(true);
     } catch (error) {
       logger.error("Error deleting meal (queued for sync)", error);

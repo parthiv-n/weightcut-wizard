@@ -146,7 +146,6 @@ export function useExerciseLibrary() {
         return updated;
       });
 
-      toast({ description: "Exercise deleted" });
     } catch {
       toast({ description: "Failed to delete exercise", variant: "destructive" });
     }

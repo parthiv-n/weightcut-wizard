@@ -349,7 +349,6 @@ export default function TrainingCalendar() {
             if (error) throw error;
 
             confirmDelete();
-            toast({ title: "Session Deleted", description: "Your training session has been removed." });
             setSessions(sessions.filter(s => s.id !== id));
             if (userId) {
                 localCache.remove(userId, monthCacheKey(currentDate));

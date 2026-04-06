@@ -65,9 +65,6 @@ export function ProfileDropdown() {
   const handleUpdateProfile = async () => {
     try {
       setUserName(editedName);
-      toast({
-        description: "Profile updated successfully",
-      });
       setIsProfileOpen(false);
     } catch (error) {
       toast({

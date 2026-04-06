@@ -12,7 +12,7 @@ interface RoutineLibraryProps {
   loading: boolean;
   onDelete: (id: string) => void;
   onRename: (id: string, name: string) => void;
-  onStartWorkout: (routine: SavedRoutine) => void;
+  onStartWorkout: (routine: SavedRoutine, dayFilter?: string) => void;
   onOpenGenerator: () => void;
 }
 

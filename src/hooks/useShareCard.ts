@@ -14,7 +14,6 @@ export function useShareCard() {
     try {
       const blob = await captureCardAsBlob(cardRef.current, { transparent });
       downloadCardImage(blob, filename ?? `weightcut-wizard-${Date.now()}.png`);
-      toast({ title: "Image saved" });
     } catch (e) {
       logger.error("Capture failed", e);
       toast({ title: "Failed to capture image", variant: "destructive" });

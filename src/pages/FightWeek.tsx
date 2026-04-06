@@ -169,7 +169,6 @@ export default function FightWeek() {
     } else {
       setDbPlan(data);
       localCache.set(userId, "fight_week_plan", data);
-      toast({ title: "Plan saved" });
     }
     setSaving(false);
   };

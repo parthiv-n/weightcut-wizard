@@ -159,7 +159,6 @@ export function useRoutines() {
         if (error) throw error;
 
         await fetchRoutines();
-        toast({ description: "Routine saved" });
       } catch (err) {
         logger.error("Failed to save routine", err);
         toast({ description: "Failed to save routine", variant: "destructive" });
@@ -189,7 +188,6 @@ export function useRoutines() {
           return updated;
         });
 
-        toast({ description: "Routine deleted" });
       } catch (err) {
         logger.error("Failed to delete routine", err);
         toast({

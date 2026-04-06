@@ -157,7 +157,6 @@ export const BottomNav = memo(function BottomNav() {
   const handleUpdateProfile = async () => {
     try {
       setUserName(editedName);
-      toast({ description: "Profile updated successfully" });
       setSettingsDialogOpen(false);
     } catch (error) {
       toast({ description: "Failed to update profile", variant: "destructive" });
@@ -349,7 +348,6 @@ export const BottomNav = memo(function BottomNav() {
         onToggleTheme={toggleTheme}
         onAvatarChange={(url) => {
           setAvatarUrl(url);
-          toast({ description: "Profile picture updated" });
         }}
         onSave={handleUpdateProfile}
         onReplayTutorial={handleReplayTutorial}

@@ -182,10 +182,6 @@ export default function Goals() {
       await refreshProfile();
       celebrateSuccess();
 
-      toast({
-        title: "Goals updated!",
-        description: "Your profile has been updated successfully.",
-      });
       navigate("/dashboard");
     } catch (error: any) {
       toast({
