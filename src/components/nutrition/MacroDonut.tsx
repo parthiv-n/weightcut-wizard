@@ -27,7 +27,7 @@ export function MacroDonut({ protein, carbs, fat, calories, size = 40 }: MacroDo
     <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
       <svg viewBox={`0 0 ${size} ${size}`} className="w-full h-full -rotate-90">
         <circle cx={center} cy={center} r={R} fill="none" stroke="hsl(var(--border) / 0.15)" strokeWidth={strokeW} />
-        {macroTotal > 0 && (
+        {macroTotal > 0 ? (
           <>
             <circle cx={center} cy={center} r={R} fill="none" stroke="#3b82f6" strokeWidth={strokeW}
               strokeDasharray={`${pArc} ${CIRC - pArc}`} strokeDashoffset={0} strokeLinecap="butt" />
@@ -36,7 +36,9 @@ export function MacroDonut({ protein, carbs, fat, calories, size = 40 }: MacroDo
             <circle cx={center} cy={center} r={R} fill="none" stroke="#a855f7" strokeWidth={strokeW}
               strokeDasharray={`${fArc} ${CIRC - fArc}`} strokeDashoffset={-(pArc + cArc)} strokeLinecap="butt" />
           </>
-        )}
+        ) : calories > 0 ? (
+          <circle cx={center} cy={center} r={R} fill="none" stroke="hsl(var(--muted-foreground) / 0.3)" strokeWidth={strokeW} />
+        ) : null}
       </svg>
       <div className="absolute inset-0 flex items-center justify-center">
         <span className="font-bold tabular-nums" style={{ fontSize }}>{calories}</span>

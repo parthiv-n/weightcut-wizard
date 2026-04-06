@@ -15,7 +15,7 @@ class NutritionCache {
   private cache = new Map<string, CacheEntry<any>>();
   private readonly DEFAULT_TTL = 5 * 60 * 1000; // 5 minutes default TTL
   private readonly PROFILE_TTL = 10 * 60 * 1000; // 10 minutes for profile data
-  private readonly MEALS_TTL = 2 * 60 * 1000; // 2 minutes for meals (more dynamic)
+  private readonly MEALS_TTL = 5 * 60 * 1000; // 5 minutes for meals (visibility revalidation handles freshness)
 
   // Generate cache key
   private getCacheKey(userId: string, type: string, date?: string): string {

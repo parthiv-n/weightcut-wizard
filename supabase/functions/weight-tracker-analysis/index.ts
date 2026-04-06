@@ -148,13 +148,19 @@ RULES:
 - ALWAYS generate a full plan regardless of how aggressive the goal is
 - If requiredWeeklyLoss > 1.5: set riskLevel="red", include strong medical warning in riskExplanation urging consultation with a doctor/sports nutritionist, but still provide complete calorie/macro recommendations
 
-STYLE — be brutally concise, every word must earn its place:
-- riskExplanation: 1 sentence max. State risk level + the single most important reason.
-- strategicGuidance: 2 sentences max. One actionable strategy, one specific tactic.
-- nutritionTips: 3 short tips, each ≤8 words. Name specific foods/actions (e.g. "Greek yoghurt before bed for casein"), not generic advice.
-- trainingConsiderations: 2 sentences max. Concrete adjustments only (e.g. "Drop sparring to 70% final week").
-- timeline: 1-2 sentences max. Key milestones and dates only.
-- weeklyPlan: each week value ≤15 words. Action-focused, no filler.
+STYLE — provide genuinely useful, actionable information:
+- riskExplanation: 2-3 sentences. State risk level, explain why, and what the athlete should monitor. Include specific warning signs to watch for.
+- strategicGuidance: 3-4 sentences. Explain the overall calorie strategy, how to structure deficit across training vs rest days, and when to adjust. Be specific about numbers.
+- weeklyWorkflow: 3 steps describing the weekly check-in process:
+  Step 1: When and how to weigh (same day, same conditions, morning fasted)
+  Step 2: Compare to target weekly weight — if ABOVE target, reduce daily calories by 100-200 kcal; if BELOW target, increase by 100-150 kcal to fuel training and prevent muscle loss
+  Step 3: What to do if weight stalls for 2+ weeks or drops too fast
+  Each step should be 1-2 sentences with specific numbers.
+- trainingConsiderations: 3-4 sentences. Concrete training adjustments for the weight cut phase — how to modify intensity, volume, and session structure to preserve performance while in deficit.
+- timeline: 2-3 sentences. Break down the cut into phases with specific weekly weight targets and milestones. Include the expected trajectory.
+- weeklyPlan: each week value should be 20-30 words. Include specific calorie targets, training adjustments, and the target weight for that week.
+
+DO NOT include specific food recommendations (no meal suggestions, no food names). Focus on calorie/macro numbers, training adjustments, and the weekly monitoring workflow.
 
 OUTPUT:
 {
@@ -167,7 +173,7 @@ OUTPUT:
   "fatsGrams": 70,
   "riskExplanation": "string",
   "strategicGuidance": "string",
-  "nutritionTips": ["tip1", "tip2", "tip3"],
+  "weeklyWorkflow": ["Step 1: ...", "Step 2: ...", "Step 3: ..."],
   "trainingConsiderations": "string",
   "timeline": "string",
   "weeklyPlan": { "week1": "string", "week2": "string", "ongoing": "string" }

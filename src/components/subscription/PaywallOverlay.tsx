@@ -1,16 +1,14 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { X, Zap, Check, Loader2, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSubscriptionContext } from "@/contexts/SubscriptionContext";
 import { useProfile } from "@/contexts/UserContext";
 import {
-  presentPaywall,
   isPremiumFromCustomerInfo,
   getOfferings,
   purchasePackage,
   restorePurchases,
 } from "@/lib/purchases";
-import { Capacitor } from "@capacitor/core";
 import { useToast } from "@/hooks/use-toast";
 import { logger } from "@/lib/logger";
 
@@ -25,70 +23,8 @@ const FEATURES = [
 ];
 
 export function PaywallOverlay() {
-  const { isPaywallOpen, closePaywall, refreshAIUsage } = useSubscriptionContext();
-  const { refreshProfile } = useProfile();
-  const { toast } = useToast();
-
-  // Try native RevenueCat paywall first on iOS
-  const handleNativePaywall = useCallback(async () => {
-    if (!Capacitor.isNativePlatform()) return false;
-
-    try {
-      const result = await presentPaywall();
-      if (!result) return false;
-
-      const { customerInfo, paywallResult } = result;
-
-      if (paywallResult === "PURCHASED" || paywallResult === "RESTORED") {
-        // Wait for webhook to propagate
-        await new Promise((r) => setTimeout(r, 2000));
-        await refreshProfile();
-        await refreshAIUsage();
-        closePaywall();
-
-        const message = paywallResult === "RESTORED"
-          ? "Premium access has been restored."
-          : "You now have unlimited AI access.";
-        toast({
-          title: paywallResult === "RESTORED" ? "Purchases restored!" : "Welcome to Pro!",
-          description: message,
-        });
-        return true;
-      }
-
-      if (paywallResult === "CANCELLED" || paywallResult === "ERROR") {
-        // User dismissed — check if they became premium anyway (e.g. restore happened)
-        if (customerInfo && isPremiumFromCustomerInfo(customerInfo)) {
-          await new Promise((r) => setTimeout(r, 2000));
-          await refreshProfile();
-          await refreshAIUsage();
-          closePaywall();
-          toast({ title: "Welcome to Pro!", description: "You now have unlimited AI access." });
-          return true;
-        }
-      }
-
-      // User dismissed without purchasing — close our overlay
-      closePaywall();
-      return true; // native paywall was shown (even if dismissed)
-    } catch (err) {
-      logger.warn("Native paywall failed, falling back to custom", { error: String(err) });
-      return false; // fall through to custom paywall
-    }
-  }, [closePaywall, refreshProfile, refreshAIUsage, toast]);
-
-  // Attempt native paywall when opened
-  useEffect(() => {
-    if (isPaywallOpen && Capacitor.isNativePlatform()) {
-      handleNativePaywall();
-    }
-  }, [isPaywallOpen, handleNativePaywall]);
-
-  // Don't render custom paywall on native (RevenueCat handles it)
+  const { isPaywallOpen } = useSubscriptionContext();
   if (!isPaywallOpen) return null;
-  if (Capacitor.isNativePlatform()) return null;
-
-  // ─── Web/non-native fallback paywall ───
   return <WebFallbackPaywall />;
 }
 

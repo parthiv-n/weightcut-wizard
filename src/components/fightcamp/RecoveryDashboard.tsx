@@ -13,6 +13,8 @@ import { loadOrComputeBaseline, computeAndStoreBaseline, storeReadinessScore } f
 import { logger } from "@/lib/logger";
 import { extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useAITask } from "@/contexts/AITaskContext";
+import { AICompactOverlay } from "@/components/AICompactOverlay";
 
 interface FeelCheckIn {
   energy: 'high' | 'moderate' | 'low' | 'empty';
@@ -153,6 +155,9 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
   const [isCoachLoading, setIsCoachLoading] = useState(false);
   const [coachError, setCoachError] = useState<string | null>(null);
   const coachAbortRef = useRef<AbortController | null>(null);
+  const { tasks, addTask, completeTask, failTask, dismissTask } = useAITask();
+  const aiCoachTask = tasks.find(t => t.type === "fight-camp-coach" && t.status === "running");
+  const isCoachGenerating = isCoachLoading || !!aiCoachTask;
   const [rateLimitUntil, setRateLimitUntil] = useState<number>(0);
   const [cooldownLeft, setCooldownLeft] = useState(0);
   const [checkIn, setCheckIn] = useState<Partial<FeelCheckIn>>({});
@@ -302,6 +307,17 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
     coachAbortRef.current = controller;
     setIsCoachLoading(true);
     setCoachError(null);
+    const taskId = addTask({
+      id: `fight-camp-coach-${Date.now()}`,
+      type: "fight-camp-coach",
+      label: "Recovery Coach",
+      steps: [
+        { icon: Activity, label: "Analyzing training load" },
+        { icon: Heart, label: "Assessing recovery" },
+        { icon: Sparkles, label: "Generating advice" },
+      ],
+      returnPath: "/recovery",
+    });
 
     try {
       // Map wellness check-in to legacy FeelCheckIn format for backward compatibility
@@ -387,6 +403,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
         incrementLocalUsage();
         setCoachData(data.coach);
         AIPersistence.save(userId, cacheKey, data.coach, 24);
+        completeTask(taskId, data.coach);
       } else {
         throw new Error("Invalid response from coach");
       }
@@ -394,11 +411,11 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
       if (err?.name === 'AbortError' || controller.signal.aborted) return;
       logger.error("Coach error", err);
       const msg = await extractEdgeFunctionError(err, "Coach unavailable");
-      // Detect rate limit errors and set 60s cooldown
       if (/rate.?limit/i.test(msg) || /rate.?limit/i.test(err?.message ?? '')) {
         setRateLimitUntil(Date.now() + 60_000);
       }
       setCoachError(`Coach error: ${msg}`);
+      failTask(taskId, msg);
     } finally {
       setIsCoachLoading(false);
     }
@@ -604,13 +621,13 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
           <h2 className="text-lg font-bold">AI Recovery Coach</h2>
         </div>
 
-        {!coachData && !isCoachLoading && (
+        {!coachData && !isCoachGenerating && (
           hasEnoughData ? (
             !todayCheckedIn ? (
               <WellnessCheckIn
                 userId={userId}
                 onSubmit={handleWellnessSubmit}
-                isSubmitting={isCoachLoading}
+                isSubmitting={isCoachGenerating}
               />
             ) : (
               <Button
@@ -635,7 +652,17 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
           )
         )}
 
-        {isCoachLoading && (
+        {aiCoachTask && (
+          <AICompactOverlay
+            isOpen={true}
+            isGenerating={true}
+            steps={aiCoachTask.steps}
+            title={aiCoachTask.label}
+            onCancel={() => { coachAbortRef.current?.abort(); dismissTask(aiCoachTask.id); setIsCoachLoading(false); }}
+          />
+        )}
+
+        {isCoachGenerating && !aiCoachTask && (
           <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             <span className="text-sm">Analyzing your training data...</span>
@@ -652,7 +679,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
         {coachError && (
           <div className="text-center py-2 space-y-2">
             <div className="text-sm text-red-400">{coachError}</div>
-            {!isCoachLoading && !coachData && (
+            {!isCoachGenerating && !coachData && (
               <Button
                 onClick={askCoach}
                 className="rounded-2xl h-10 font-semibold gap-2"

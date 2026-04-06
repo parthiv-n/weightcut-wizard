@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { format, startOfWeek, endOfWeek, addDays } from "date-fns";
-import { Brain, Loader2, ChevronDown, Trash2, CheckCircle, X } from "lucide-react";
+import { Brain, Loader2, ChevronDown, Trash2, CheckCircle, X, Dumbbell, Activity, Sparkles } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Card } from "@/components/ui/card";
@@ -9,12 +9,14 @@ import { logger } from "@/lib/logger";
 import { localCache } from "@/lib/localCache";
 import { getSessionColor } from "@/lib/sessionColors";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useAITask } from "@/contexts/AITaskContext";
+import { AICompactOverlay } from "@/components/AICompactOverlay";
 
 type TrainingSummary = {
     sportSections: {
         sport: string;
         sessions_count: number;
-        techniques: { name: string; steps: string[]; sparringTip: string }[];
+        techniques: { name: string; steps: string[]; sparringTip: string; drillFlow?: string[] }[];
     }[];
     weekOverview: string;
 };
@@ -54,6 +56,28 @@ function computeFingerprint(sessions: SessionRow[]): string {
         .join("|");
 }
 
+function mergeSummaries(existing: TrainingSummary, incoming: TrainingSummary): TrainingSummary {
+    const merged = new Map<string, TrainingSummary["sportSections"][0]>();
+    for (const section of existing.sportSections || []) {
+        merged.set(section.sport, { ...section, techniques: [...section.techniques] });
+    }
+    for (const section of incoming.sportSections || []) {
+        const prev = merged.get(section.sport);
+        if (prev) {
+            const existingNames = new Set(prev.techniques.map(t => t.name));
+            const newTechniques = section.techniques.filter(t => !existingNames.has(t.name));
+            prev.techniques.push(...newTechniques);
+            prev.sessions_count = section.sessions_count;
+        } else {
+            merged.set(section.sport, { ...section, techniques: [...section.techniques] });
+        }
+    }
+    return {
+        sportSections: Array.from(merged.values()),
+        weekOverview: incoming.weekOverview || existing.weekOverview,
+    };
+}
+
 function weekLabel(weekStartStr: string): string {
     const start = new Date(weekStartStr + "T00:00:00");
     const end = addDays(start, 6);
@@ -67,12 +91,27 @@ function weekLabel(weekStartStr: string): string {
 export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrigger, customColors }: TrainingSummarySectionProps) {
     const { toast } = useToast();
     const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
+    const { tasks, addTask, completeTask, failTask, dismissTask } = useAITask();
     const [savedSummaries, setSavedSummaries] = useState<SavedSummaryRow[]>([]);
     const [weekSessions, setWeekSessions] = useState<SessionRow[]>([]);
     const [selectedWeekStart, setSelectedWeekStart] = useState<string>(
         format(startOfWeek(selectedDate, { weekStartsOn: 1 }), "yyyy-MM-dd")
     );
     const [isLoading, setIsLoading] = useState(false);
+    const aiTrainingTask = tasks.find(t => t.type === "training-summary" && t.status === "running");
+    const isGenerating = isLoading || !!aiTrainingTask;
+
+    // Pick up completed training summary from task context
+    const handledSummaryTaskRef = useRef<string | null>(null);
+    useEffect(() => {
+      const done = tasks.find(t => t.status === "done" && t.type === "training-summary" && handledSummaryTaskRef.current !== t.id);
+      if (done) {
+        handledSummaryTaskRef.current = done.id;
+        fetchAllSummaries();
+        setIsSummaryOpen(true);
+        dismissTask(done.id);
+      }
+    }, [tasks, dismissTask]);
     const [isSummaryOpen, setIsSummaryOpen] = useState(true);
     const abortRef = useRef<AbortController | null>(null);
 
@@ -105,12 +144,14 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
     }, [userId]);
 
     // Fetch sessions for the current calendar week (for change detection)
-    const fetchWeekSessions = useCallback(async () => {
+    const fetchWeekSessions = useCallback(async (skipCache = false) => {
         const ws = startOfWeek(selectedDate, { weekStartsOn: 1 });
         const we = endOfWeek(selectedDate, { weekStartsOn: 1 });
         const weekKey = `training_week_${format(ws, "yyyy-MM-dd")}`;
-        const cached = localCache.get<SessionRow[]>(userId, weekKey, 5 * 60 * 1000);
-        if (cached) { setWeekSessions(cached); return; }
+        if (!skipCache) {
+            const cached = localCache.get<SessionRow[]>(userId, weekKey, 5 * 60 * 1000);
+            if (cached) { setWeekSessions(cached); return; }
+        }
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data, error } = await (supabase as any)
             .from("fight_camp_calendar")
@@ -131,9 +172,15 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
         fetchAllSummaries();
     }, [fetchAllSummaries]);
 
+    // Initial load — uses cache
     useEffect(() => {
         fetchWeekSessions();
-    }, [fetchWeekSessions, sessionLoggedTrigger]);
+    }, [fetchWeekSessions]);
+
+    // Re-fetch on new session logged — bypass cache
+    useEffect(() => {
+        if (sessionLoggedTrigger > 0) fetchWeekSessions(true);
+    }, [sessionLoggedTrigger]);
 
     // Build gallery chips — all saved weeks + current calendar week (deduped)
     const galleryWeeks = useMemo(() => {
@@ -157,7 +204,6 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
 
     // Change detection — only for the current calendar week
     const buttonState: ButtonState = useMemo(() => {
-        if (selectedWeekStart !== calendarWeekStart) return "hidden";
         if (sessionsWithNotes.length === 0) return "hidden";
         if (!selectedSummary) return "generate";
         const currentFingerprint = computeFingerprint(weekSessions);
@@ -180,10 +226,29 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
         const controller = new AbortController();
         abortRef.current = controller;
         setIsLoading(true);
+
+        const taskId = addTask({
+            id: `training-summary-${Date.now()}`,
+            type: "training-summary",
+            label: "Generating Summary",
+            steps: [
+                { icon: Dumbbell, label: "Reviewing sessions" },
+                { icon: Activity, label: "Analyzing performance" },
+                { icon: Sparkles, label: "Writing summary" },
+            ],
+            returnPath: window.location.pathname,
+        });
+
         try {
+            // Only send sessions not already summarized (new entries since last summary)
+            const alreadySummarized = new Set(selectedSummary?.session_ids || []);
+            const sessionsToSend = sessionsWithNotes.filter(s => !alreadySummarized.has(s.id));
+            // If no new sessions, nothing to do (shouldn't happen since fingerprint would match)
+            if (sessionsToSend.length === 0) { setIsLoading(false); return; }
+
             const { data, error } = await supabase.functions.invoke("training-summary", {
                 body: {
-                    sessions: sessionsWithNotes.map(s => ({
+                    sessions: sessionsToSend.map(s => ({
                         date: s.date,
                         session_type: s.session_type,
                         duration_minutes: s.duration_minutes,
@@ -199,16 +264,18 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
 
             incrementLocalUsage();
             const fingerprint = computeFingerprint(weekSessions);
-            const sessionIds = weekSessions.filter(s => s.notes).map(s => s.id);
+            const allSessionIds = sessionsWithNotes.map(s => s.id);
 
             // Upsert: insert or update
             if (selectedSummary) {
+                // Merge new summary with existing — append new sport sections/techniques
+                const merged = mergeSummaries(selectedSummary.summary_data, data.summary);
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const { error: updateErr } = await (supabase as any)
                     .from("training_summaries")
                     .update({
-                        summary_data: data.summary,
-                        session_ids: sessionIds,
+                        summary_data: merged,
+                        session_ids: allSessionIds,
                         notes_fingerprint: fingerprint,
                     })
                     .eq("id", selectedSummary.id);
@@ -222,18 +289,22 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
                         user_id: userId,
                         week_start: calendarWeekStart,
                         summary_data: data.summary,
-                        session_ids: sessionIds,
+                        session_ids: allSessionIds,
                         notes_fingerprint: fingerprint,
                     }]);
 
                 if (insertErr) throw insertErr;
             }
 
+            // Bust cache and refresh immediately so summary appears live
+            localCache.remove(userId, "training_summaries");
             await fetchAllSummaries();
             setIsSummaryOpen(true);
+            completeTask(taskId, data.summary);
         } catch (error: any) {
             if (error?.name === 'AbortError' || controller.signal.aborted) return;
             logger.error("Error generating training summary", error);
+            failTask(taskId, error?.message || "Could not generate your training summary");
             toast({
                 title: "Error generating summary",
                 description: "Could not generate your training summary. Please try again.",
@@ -307,14 +378,24 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
                 </div>
             )}
 
+            {aiTrainingTask && (
+                <AICompactOverlay
+                    isOpen={true}
+                    isGenerating={true}
+                    steps={aiTrainingTask.steps}
+                    title={aiTrainingTask.label}
+                    onCancel={() => { abortRef.current?.abort(); dismissTask(aiTrainingTask.id); setIsLoading(false); }}
+                />
+            )}
+
             {/* Generate / Update button — only for current calendar week */}
             {buttonState !== "hidden" && (
                 <button
                     onClick={buttonState !== "up_to_date" ? handleGenerateOrUpdate : undefined}
-                    disabled={isLoading || buttonState === "up_to_date"}
+                    disabled={isGenerating || buttonState === "up_to_date"}
                     className="w-full p-4 rounded-2xl glass-card border border-border/50 flex items-center justify-center gap-2 hover:bg-accent/30 transition-all disabled:opacity-60"
                 >
-                    {isLoading ? (
+                    {isGenerating ? (
                         <div className="flex items-center gap-2 w-full justify-center">
                             <Loader2 className="h-5 w-5 animate-spin text-primary" />
                             <span className="text-sm font-semibold text-muted-foreground">
@@ -411,6 +492,19 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
                                                             </span>{" "}
                                                             {tech.sparringTip}
                                                         </div>
+                                                        {tech.drillFlow && tech.drillFlow.length > 0 && (
+                                                            <div className="mt-2 bg-secondary/10 border border-secondary/20 rounded-xl px-3 py-2.5">
+                                                                <p className="text-[10px] font-bold uppercase tracking-wider text-secondary mb-1.5">Improvement Flow</p>
+                                                                <div className="flex items-center gap-1 flex-wrap">
+                                                                    {tech.drillFlow.map((step, k) => (
+                                                                        <div key={k} className="flex items-center gap-1">
+                                                                            {k > 0 && <span className="text-secondary/50 text-xs">→</span>}
+                                                                            <span className="text-xs text-foreground/80 bg-background/50 rounded-lg px-2 py-0.5">{step}</span>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 ))}
                                             </div>

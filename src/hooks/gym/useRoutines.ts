@@ -2,11 +2,13 @@ import { useState, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
+import { useAITask } from "@/contexts/AITaskContext";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { useSubscription } from "@/hooks/useSubscription";
 import { localCache } from "@/lib/localCache";
 import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
+import { Dumbbell, Activity, Sparkles } from "lucide-react";
 import type {
   SavedRoutine,
   RoutineExercise,
@@ -21,6 +23,7 @@ export function useRoutines() {
   const { userId } = useUser();
   const { safeAsync, isMounted } = useSafeAsync();
   const { toast } = useToast();
+  const { addTask, completeTask, failTask } = useAITask();
   const {
     checkAIAccess,
     openPaywall,
@@ -40,7 +43,8 @@ export function useRoutines() {
 
     try {
       const { data, error } = await withSupabaseTimeout(
-        (supabase.from("saved_routines" as any) as any)
+        supabase
+          .from("saved_routines")
           .select("*")
           .eq("user_id", userId)
           .order("sort_order")
@@ -52,7 +56,7 @@ export function useRoutines() {
       if (error) throw error;
       if (!isMounted()) return;
 
-      const typed = (data as any[] || []) as SavedRoutine[];
+      const typed = (data || []) as SavedRoutine[];
       safeAsync(setRoutines)(typed);
       localCache.set(userId, CACHE_KEY, typed);
     } catch (err) {
@@ -77,6 +81,17 @@ export function useRoutines() {
       }
 
       safeAsync(setGeneratingRoutine)(true);
+      const taskId = addTask({
+        id: `gym-routine-${Date.now()}`,
+        type: "gym-routine",
+        label: "Generating Routine",
+        steps: [
+          { icon: Dumbbell, label: "Planning exercises" },
+          { icon: Activity, label: "Optimizing sets & reps" },
+          { icon: Sparkles, label: "Finalizing routine" },
+        ],
+        returnPath: "/gym?tab=routines",
+      });
 
       try {
         const { data, error } = await supabase.functions.invoke(
@@ -100,15 +115,21 @@ export function useRoutines() {
 
         incrementLocalUsage();
         const routine = data?.routineData || data;
-        if (!routine?.exercises) return null;
-        return {
+        if (!routine?.exercises) {
+          failTask(taskId, "No exercises returned");
+          return null;
+        }
+        const result = {
           exercises: routine.exercises as RoutineExercise[],
           name: routine.routine_name || routine.name || "Generated Routine",
           notes: routine.notes || "",
           recommendedGymDays: routine.recommended_gym_days || null,
           splitUsed: routine.split_used || null,
         };
-      } catch (err) {
+        completeTask(taskId, result);
+        return result;
+      } catch (err: any) {
+        failTask(taskId, err?.message || "Failed to generate routine");
         logger.error("Failed to generate routine", err);
         toast({
           description: "Failed to generate routine",
@@ -143,7 +164,7 @@ export function useRoutines() {
 
       try {
         const { error } = await withSupabaseTimeout(
-          (supabase.from("saved_routines" as any) as any).insert({
+          supabase.from("saved_routines").insert({
             user_id: userId,
             name,
             goal,
@@ -173,7 +194,7 @@ export function useRoutines() {
 
       try {
         const { error } = await withSupabaseTimeout(
-          (supabase.from("saved_routines" as any) as any)
+          supabase.from("saved_routines")
             .delete()
             .eq("id", id),
           undefined,
@@ -205,7 +226,7 @@ export function useRoutines() {
 
       try {
         const { error } = await withSupabaseTimeout(
-          (supabase.from("saved_routines" as any) as any)
+          supabase.from("saved_routines")
             .update({ name, updated_at: new Date().toISOString() })
             .eq("id", id),
           undefined,

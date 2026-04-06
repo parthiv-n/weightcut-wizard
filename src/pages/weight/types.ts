@@ -26,7 +26,7 @@ export interface AIAnalysis {
   fatsGrams: number;
   riskExplanation: string;
   strategicGuidance: string;
-  nutritionTips: string[];
+  weeklyWorkflow: string[];
   trainingConsiderations: string;
   timeline: string;
   weeklyPlan: {

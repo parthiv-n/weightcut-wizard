@@ -12,404 +12,8 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "13.0.5"
   }
-  graphql_public: {
-    Tables: {
-      [_ in never]: never
-    }
-    Views: {
-      [_ in never]: never
-    }
-    Functions: {
-      graphql: {
-        Args: {
-          extensions?: Json
-          operationName?: string
-          query?: string
-          variables?: Json
-        }
-        Returns: Json
-      }
-    }
-    Enums: {
-      [_ in never]: never
-    }
-    CompositeTypes: {
-      [_ in never]: never
-    }
-  }
   public: {
     Tables: {
-      exercises: {
-        Row: {
-          id: string
-          user_id: string | null
-          name: string
-          category: string
-          muscle_group: string
-          equipment: string | null
-          is_bodyweight: boolean
-          is_custom: boolean
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id?: string | null
-          name: string
-          category: string
-          muscle_group: string
-          equipment?: string | null
-          is_bodyweight?: boolean
-          is_custom?: boolean
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string | null
-          name?: string
-          category?: string
-          muscle_group?: string
-          equipment?: string | null
-          is_bodyweight?: boolean
-          is_custom?: boolean
-          created_at?: string
-        }
-        Relationships: []
-      }
-      gym_sessions: {
-        Row: {
-          id: string
-          user_id: string
-          date: string
-          session_type: string
-          duration_minutes: number | null
-          notes: string | null
-          perceived_fatigue: number | null
-          status: string
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          date?: string
-          session_type: string
-          duration_minutes?: number | null
-          notes?: string | null
-          perceived_fatigue?: number | null
-          status?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          date?: string
-          session_type?: string
-          duration_minutes?: number | null
-          notes?: string | null
-          perceived_fatigue?: number | null
-          status?: string
-          created_at?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "gym_sessions_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      gym_sets: {
-        Row: {
-          id: string
-          session_id: string
-          exercise_id: string
-          user_id: string
-          set_order: number
-          exercise_order: number
-          weight_kg: number | null
-          reps: number
-          rpe: number | null
-          is_warmup: boolean
-          is_bodyweight: boolean
-          assisted_weight_kg: number | null
-          notes: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          session_id: string
-          exercise_id: string
-          user_id: string
-          set_order: number
-          exercise_order: number
-          weight_kg?: number | null
-          reps: number
-          rpe?: number | null
-          is_warmup?: boolean
-          is_bodyweight?: boolean
-          assisted_weight_kg?: number | null
-          notes?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          session_id?: string
-          exercise_id?: string
-          user_id?: string
-          set_order?: number
-          exercise_order?: number
-          weight_kg?: number | null
-          reps?: number
-          rpe?: number | null
-          is_warmup?: boolean
-          is_bodyweight?: boolean
-          assisted_weight_kg?: number | null
-          notes?: string | null
-          created_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "gym_sets_session_id_fkey"
-            columns: ["session_id"]
-            isOneToOne: false
-            referencedRelation: "gym_sessions"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gym_sets_exercise_id_fkey"
-            columns: ["exercise_id"]
-            isOneToOne: false
-            referencedRelation: "exercises"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "gym_sets_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      exercise_prs: {
-        Row: {
-          id: string
-          user_id: string
-          exercise_id: string
-          max_weight_kg: number | null
-          max_reps: number | null
-          max_volume: number | null
-          estimated_1rm: number | null
-          best_set_id: string | null
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          exercise_id: string
-          max_weight_kg?: number | null
-          max_reps?: number | null
-          max_volume?: number | null
-          estimated_1rm?: number | null
-          best_set_id?: string | null
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          exercise_id?: string
-          max_weight_kg?: number | null
-          max_reps?: number | null
-          max_volume?: number | null
-          estimated_1rm?: number | null
-          best_set_id?: string | null
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "exercise_prs_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "exercise_prs_exercise_id_fkey"
-            columns: ["exercise_id"]
-            isOneToOne: false
-            referencedRelation: "exercises"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "exercise_prs_best_set_id_fkey"
-            columns: ["best_set_id"]
-            isOneToOne: false
-            referencedRelation: "gym_sets"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      daily_wellness_checkins: {
-        Row: {
-          id: string
-          user_id: string
-          date: string
-          sleep_quality: number
-          stress_level: number
-          fatigue_level: number
-          soreness_level: number
-          energy_level: number | null
-          motivation_level: number | null
-          sleep_hours: number | null
-          hydration_feeling: number | null
-          appetite_level: number | null
-          hooper_index: number
-          readiness_score: number | null
-          created_at: string | null
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          date: string
-          sleep_quality: number
-          stress_level: number
-          fatigue_level: number
-          soreness_level: number
-          energy_level?: number | null
-          motivation_level?: number | null
-          sleep_hours?: number | null
-          hydration_feeling?: number | null
-          appetite_level?: number | null
-          readiness_score?: number | null
-          created_at?: string | null
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          date?: string
-          sleep_quality?: number
-          stress_level?: number
-          fatigue_level?: number
-          soreness_level?: number
-          energy_level?: number | null
-          motivation_level?: number | null
-          sleep_hours?: number | null
-          hydration_feeling?: number | null
-          appetite_level?: number | null
-          readiness_score?: number | null
-          created_at?: string | null
-        }
-        Relationships: []
-      }
-      personal_baselines: {
-        Row: {
-          id: string
-          user_id: string
-          baseline_date: string
-          sleep_hours_mean_14d: number | null
-          sleep_hours_std_14d: number | null
-          soreness_mean_14d: number | null
-          soreness_std_14d: number | null
-          fatigue_mean_14d: number | null
-          fatigue_std_14d: number | null
-          stress_mean_14d: number | null
-          stress_std_14d: number | null
-          hooper_mean_14d: number | null
-          hooper_std_14d: number | null
-          daily_load_mean_14d: number | null
-          daily_load_std_14d: number | null
-          sleep_hours_mean_60d: number | null
-          sleep_hours_std_60d: number | null
-          soreness_mean_60d: number | null
-          soreness_std_60d: number | null
-          fatigue_mean_60d: number | null
-          fatigue_std_60d: number | null
-          stress_mean_60d: number | null
-          stress_std_60d: number | null
-          hooper_mean_60d: number | null
-          hooper_std_60d: number | null
-          daily_load_mean_60d: number | null
-          daily_load_std_60d: number | null
-          hooper_cv_14d: number | null
-          avg_deficit_7d: number | null
-          avg_deficit_14d: number | null
-          created_at: string | null
-          updated_at: string | null
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          baseline_date: string
-          sleep_hours_mean_14d?: number | null
-          sleep_hours_std_14d?: number | null
-          soreness_mean_14d?: number | null
-          soreness_std_14d?: number | null
-          fatigue_mean_14d?: number | null
-          fatigue_std_14d?: number | null
-          stress_mean_14d?: number | null
-          stress_std_14d?: number | null
-          hooper_mean_14d?: number | null
-          hooper_std_14d?: number | null
-          daily_load_mean_14d?: number | null
-          daily_load_std_14d?: number | null
-          sleep_hours_mean_60d?: number | null
-          sleep_hours_std_60d?: number | null
-          soreness_mean_60d?: number | null
-          soreness_std_60d?: number | null
-          fatigue_mean_60d?: number | null
-          fatigue_std_60d?: number | null
-          stress_mean_60d?: number | null
-          stress_std_60d?: number | null
-          hooper_mean_60d?: number | null
-          hooper_std_60d?: number | null
-          daily_load_mean_60d?: number | null
-          daily_load_std_60d?: number | null
-          hooper_cv_14d?: number | null
-          avg_deficit_7d?: number | null
-          avg_deficit_14d?: number | null
-          created_at?: string | null
-          updated_at?: string | null
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          baseline_date?: string
-          sleep_hours_mean_14d?: number | null
-          sleep_hours_std_14d?: number | null
-          soreness_mean_14d?: number | null
-          soreness_std_14d?: number | null
-          fatigue_mean_14d?: number | null
-          fatigue_std_14d?: number | null
-          stress_mean_14d?: number | null
-          stress_std_14d?: number | null
-          hooper_mean_14d?: number | null
-          hooper_std_14d?: number | null
-          daily_load_mean_14d?: number | null
-          daily_load_std_14d?: number | null
-          sleep_hours_mean_60d?: number | null
-          sleep_hours_std_60d?: number | null
-          soreness_mean_60d?: number | null
-          soreness_std_60d?: number | null
-          fatigue_mean_60d?: number | null
-          fatigue_std_60d?: number | null
-          stress_mean_60d?: number | null
-          stress_std_60d?: number | null
-          hooper_mean_60d?: number | null
-          hooper_std_60d?: number | null
-          daily_load_mean_60d?: number | null
-          daily_load_std_60d?: number | null
-          hooper_cv_14d?: number | null
-          avg_deficit_7d?: number | null
-          avg_deficit_14d?: number | null
-          created_at?: string | null
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
       chat_messages: {
         Row: {
           content: string
@@ -431,6 +35,147 @@ export type Database = {
           id?: string
           role?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      daily_wellness_checkins: {
+        Row: {
+          appetite_level: number | null
+          created_at: string | null
+          date: string
+          energy_level: number | null
+          fatigue_level: number
+          hooper_index: number | null
+          hydration_feeling: number | null
+          id: string
+          motivation_level: number | null
+          readiness_score: number | null
+          sleep_hours: number | null
+          sleep_quality: number
+          soreness_level: number
+          stress_level: number
+          user_id: string
+        }
+        Insert: {
+          appetite_level?: number | null
+          created_at?: string | null
+          date: string
+          energy_level?: number | null
+          fatigue_level: number
+          hooper_index?: number | null
+          hydration_feeling?: number | null
+          id?: string
+          motivation_level?: number | null
+          readiness_score?: number | null
+          sleep_hours?: number | null
+          sleep_quality: number
+          soreness_level: number
+          stress_level: number
+          user_id: string
+        }
+        Update: {
+          appetite_level?: number | null
+          created_at?: string | null
+          date?: string
+          energy_level?: number | null
+          fatigue_level?: number
+          hooper_index?: number | null
+          hydration_feeling?: number | null
+          id?: string
+          motivation_level?: number | null
+          readiness_score?: number | null
+          sleep_hours?: number | null
+          sleep_quality?: number
+          soreness_level?: number
+          stress_level?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
+      exercise_prs: {
+        Row: {
+          best_set_id: string | null
+          estimated_1rm: number | null
+          exercise_id: string
+          id: string
+          max_reps: number | null
+          max_volume: number | null
+          max_weight_kg: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          best_set_id?: string | null
+          estimated_1rm?: number | null
+          exercise_id: string
+          id?: string
+          max_reps?: number | null
+          max_volume?: number | null
+          max_weight_kg?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          best_set_id?: string | null
+          estimated_1rm?: number | null
+          exercise_id?: string
+          id?: string
+          max_reps?: number | null
+          max_volume?: number | null
+          max_weight_kg?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exercise_prs_best_set_id_fkey"
+            columns: ["best_set_id"]
+            isOneToOne: false
+            referencedRelation: "gym_sets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exercise_prs_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      exercises: {
+        Row: {
+          category: string
+          created_at: string
+          equipment: string | null
+          id: string
+          is_bodyweight: boolean
+          is_custom: boolean
+          muscle_group: string
+          name: string
+          user_id: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          equipment?: string | null
+          id?: string
+          is_bodyweight?: boolean
+          is_custom?: boolean
+          muscle_group: string
+          name: string
+          user_id?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          equipment?: string | null
+          id?: string
+          is_bodyweight?: boolean
+          is_custom?: boolean
+          muscle_group?: string
+          name?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -637,6 +382,111 @@ export type Database = {
           },
         ]
       }
+      gym_sessions: {
+        Row: {
+          created_at: string
+          date: string
+          duration_minutes: number | null
+          id: string
+          notes: string | null
+          perceived_fatigue: number | null
+          session_type: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          duration_minutes?: number | null
+          id?: string
+          notes?: string | null
+          perceived_fatigue?: number | null
+          session_type: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          duration_minutes?: number | null
+          id?: string
+          notes?: string | null
+          perceived_fatigue?: number | null
+          session_type?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      gym_sets: {
+        Row: {
+          assisted_weight_kg: number | null
+          created_at: string
+          exercise_id: string
+          exercise_order: number
+          id: string
+          is_bodyweight: boolean
+          is_warmup: boolean
+          notes: string | null
+          reps: number
+          rpe: number | null
+          session_id: string
+          set_order: number
+          user_id: string
+          weight_kg: number | null
+        }
+        Insert: {
+          assisted_weight_kg?: number | null
+          created_at?: string
+          exercise_id: string
+          exercise_order: number
+          id?: string
+          is_bodyweight?: boolean
+          is_warmup?: boolean
+          notes?: string | null
+          reps: number
+          rpe?: number | null
+          session_id: string
+          set_order: number
+          user_id: string
+          weight_kg?: number | null
+        }
+        Update: {
+          assisted_weight_kg?: number | null
+          created_at?: string
+          exercise_id?: string
+          exercise_order?: number
+          id?: string
+          is_bodyweight?: boolean
+          is_warmup?: boolean
+          notes?: string | null
+          reps?: number
+          rpe?: number | null
+          session_id?: string
+          set_order?: number
+          user_id?: string
+          weight_kg?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gym_sets_exercise_id_fkey"
+            columns: ["exercise_id"]
+            isOneToOne: false
+            referencedRelation: "exercises"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gym_sets_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "gym_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hydration_logs: {
         Row: {
           amount_ml: number
@@ -766,6 +616,111 @@ export type Database = {
         }
         Relationships: []
       }
+      personal_baselines: {
+        Row: {
+          avg_deficit_14d: number | null
+          avg_deficit_7d: number | null
+          baseline_date: string
+          created_at: string | null
+          daily_load_mean_14d: number | null
+          daily_load_mean_60d: number | null
+          daily_load_std_14d: number | null
+          daily_load_std_60d: number | null
+          fatigue_mean_14d: number | null
+          fatigue_mean_60d: number | null
+          fatigue_std_14d: number | null
+          fatigue_std_60d: number | null
+          hooper_cv_14d: number | null
+          hooper_mean_14d: number | null
+          hooper_mean_60d: number | null
+          hooper_std_14d: number | null
+          hooper_std_60d: number | null
+          id: string
+          sleep_hours_mean_14d: number | null
+          sleep_hours_mean_60d: number | null
+          sleep_hours_std_14d: number | null
+          sleep_hours_std_60d: number | null
+          soreness_mean_14d: number | null
+          soreness_mean_60d: number | null
+          soreness_std_14d: number | null
+          soreness_std_60d: number | null
+          stress_mean_14d: number | null
+          stress_mean_60d: number | null
+          stress_std_14d: number | null
+          stress_std_60d: number | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          avg_deficit_14d?: number | null
+          avg_deficit_7d?: number | null
+          baseline_date: string
+          created_at?: string | null
+          daily_load_mean_14d?: number | null
+          daily_load_mean_60d?: number | null
+          daily_load_std_14d?: number | null
+          daily_load_std_60d?: number | null
+          fatigue_mean_14d?: number | null
+          fatigue_mean_60d?: number | null
+          fatigue_std_14d?: number | null
+          fatigue_std_60d?: number | null
+          hooper_cv_14d?: number | null
+          hooper_mean_14d?: number | null
+          hooper_mean_60d?: number | null
+          hooper_std_14d?: number | null
+          hooper_std_60d?: number | null
+          id?: string
+          sleep_hours_mean_14d?: number | null
+          sleep_hours_mean_60d?: number | null
+          sleep_hours_std_14d?: number | null
+          sleep_hours_std_60d?: number | null
+          soreness_mean_14d?: number | null
+          soreness_mean_60d?: number | null
+          soreness_std_14d?: number | null
+          soreness_std_60d?: number | null
+          stress_mean_14d?: number | null
+          stress_mean_60d?: number | null
+          stress_std_14d?: number | null
+          stress_std_60d?: number | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          avg_deficit_14d?: number | null
+          avg_deficit_7d?: number | null
+          baseline_date?: string
+          created_at?: string | null
+          daily_load_mean_14d?: number | null
+          daily_load_mean_60d?: number | null
+          daily_load_std_14d?: number | null
+          daily_load_std_60d?: number | null
+          fatigue_mean_14d?: number | null
+          fatigue_mean_60d?: number | null
+          fatigue_std_14d?: number | null
+          fatigue_std_60d?: number | null
+          hooper_cv_14d?: number | null
+          hooper_mean_14d?: number | null
+          hooper_mean_60d?: number | null
+          hooper_std_14d?: number | null
+          hooper_std_60d?: number | null
+          id?: string
+          sleep_hours_mean_14d?: number | null
+          sleep_hours_mean_60d?: number | null
+          sleep_hours_std_14d?: number | null
+          sleep_hours_std_60d?: number | null
+          soreness_mean_14d?: number | null
+          soreness_mean_60d?: number | null
+          soreness_std_14d?: number | null
+          soreness_std_60d?: number | null
+          stress_mean_14d?: number | null
+          stress_mean_60d?: number | null
+          stress_std_14d?: number | null
+          stress_std_60d?: number | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           activity_level: string
@@ -785,14 +740,14 @@ export type Database = {
           height_cm: number
           id: string
           manual_nutrition_override: boolean | null
+          revenuecat_customer_id: string | null
           sex: string
+          subscription_expires_at: string | null
+          subscription_tier: string
+          subscription_updated_at: string | null
           target_date: string
           tdee: number | null
           training_frequency: number | null
-          subscription_tier: string
-          subscription_expires_at: string | null
-          revenuecat_customer_id: string | null
-          subscription_updated_at: string | null
           updated_at: string | null
         }
         Insert: {
@@ -813,12 +768,12 @@ export type Database = {
           height_cm: number
           id: string
           manual_nutrition_override?: boolean | null
-          sex: string
-          target_date: string
-          subscription_tier?: string
-          subscription_expires_at?: string | null
           revenuecat_customer_id?: string | null
+          sex: string
+          subscription_expires_at?: string | null
+          subscription_tier?: string
           subscription_updated_at?: string | null
+          target_date: string
           tdee?: number | null
           training_frequency?: number | null
           updated_at?: string | null
@@ -841,10 +796,10 @@ export type Database = {
           height_cm?: number
           id?: string
           manual_nutrition_override?: boolean | null
-          sex?: string
-          subscription_tier?: string
-          subscription_expires_at?: string | null
           revenuecat_customer_id?: string | null
+          sex?: string
+          subscription_expires_at?: string | null
+          subscription_tier?: string
           subscription_updated_at?: string | null
           target_date?: string
           tdee?: number | null
@@ -876,6 +831,195 @@ export type Database = {
           window_start?: string
         }
         Relationships: []
+      }
+      saved_routines: {
+        Row: {
+          created_at: string
+          exercises: Json
+          goal: string
+          id: string
+          is_ai_generated: boolean
+          name: string
+          sort_order: number
+          sport: string | null
+          training_days_per_week: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          exercises?: Json
+          goal: string
+          id?: string
+          is_ai_generated?: boolean
+          name: string
+          sort_order?: number
+          sport?: string | null
+          training_days_per_week?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          exercises?: Json
+          goal?: string
+          id?: string
+          is_ai_generated?: boolean
+          name?: string
+          sort_order?: number
+          sport?: string | null
+          training_days_per_week?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      technique_edges: {
+        Row: {
+          created_at: string | null
+          from_technique_id: string
+          id: string
+          relation_type: string
+          to_technique_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          from_technique_id: string
+          id?: string
+          relation_type?: string
+          to_technique_id: string
+        }
+        Update: {
+          created_at?: string | null
+          from_technique_id?: string
+          id?: string
+          relation_type?: string
+          to_technique_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "technique_edges_from_technique_id_fkey"
+            columns: ["from_technique_id"]
+            isOneToOne: false
+            referencedRelation: "techniques"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "technique_edges_to_technique_id_fkey"
+            columns: ["to_technique_id"]
+            isOneToOne: false
+            referencedRelation: "techniques"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      techniques: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          id: string
+          name: string
+          name_normalized: string
+          position: string | null
+          sport: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          id?: string
+          name: string
+          name_normalized: string
+          position?: string | null
+          sport: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          id?: string
+          name?: string
+          name_normalized?: string
+          position?: string | null
+          sport?: string
+        }
+        Relationships: []
+      }
+      training_summaries: {
+        Row: {
+          created_at: string | null
+          id: string
+          notes_fingerprint: string
+          session_ids: string[]
+          summary_data: Json
+          updated_at: string | null
+          user_id: string
+          week_start: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          notes_fingerprint?: string
+          session_ids?: string[]
+          summary_data: Json
+          updated_at?: string | null
+          user_id: string
+          week_start: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          notes_fingerprint?: string
+          session_ids?: string[]
+          summary_data?: Json
+          updated_at?: string | null
+          user_id?: string
+          week_start?: string
+        }
+        Relationships: []
+      }
+      training_technique_logs: {
+        Row: {
+          created_at: string | null
+          date: string
+          id: string
+          notes: string | null
+          session_id: string | null
+          technique_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          date?: string
+          id?: string
+          notes?: string | null
+          session_id?: string | null
+          technique_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          date?: string
+          id?: string
+          notes?: string | null
+          session_id?: string | null
+          technique_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "training_technique_logs_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "fight_camp_calendar"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "training_technique_logs_technique_id_fkey"
+            columns: ["technique_id"]
+            isOneToOne: false
+            referencedRelation: "techniques"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_dietary_preferences: {
         Row: {
@@ -940,6 +1084,44 @@ export type Database = {
         }
         Relationships: []
       }
+      user_technique_progress: {
+        Row: {
+          first_logged_at: string | null
+          id: string
+          last_logged_at: string | null
+          level: string
+          technique_id: string
+          times_logged: number
+          user_id: string
+        }
+        Insert: {
+          first_logged_at?: string | null
+          id?: string
+          last_logged_at?: string | null
+          level?: string
+          technique_id: string
+          times_logged?: number
+          user_id: string
+        }
+        Update: {
+          first_logged_at?: string | null
+          id?: string
+          last_logged_at?: string | null
+          level?: string
+          technique_id?: string
+          times_logged?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_technique_progress_technique_id_fkey"
+            columns: ["technique_id"]
+            isOneToOne: false
+            referencedRelation: "techniques"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       weight_logs: {
         Row: {
           created_at: string | null
@@ -969,6 +1151,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_ai_usage_and_increment: {
+        Args: { p_max_requests?: number; p_user_id: string }
+        Returns: Json
+      }
       increment_rate_limit: {
         Args: {
           p_function_name: string
@@ -976,13 +1162,6 @@ export type Database = {
           p_user_id: string
         }
         Returns: boolean
-      }
-      check_ai_usage_and_increment: {
-        Args: {
-          p_user_id: string
-          p_max_requests: number
-        }
-        Returns: Json
       }
     }
     Enums: {
@@ -1112,10 +1291,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
-  graphql_public: {
-    Enums: {},
-  },
   public: {
     Enums: {},
   },
 } as const
+A new version of Supabase CLI is available: v2.84.2 (currently installed v2.62.5)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli

@@ -2,16 +2,19 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
+import { useAITask } from "@/contexts/AITaskContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
+import { Droplets, Activity, Sparkles } from "lucide-react";
 import type { RehydrationProtocol } from "@/pages/hydration/types";
 
 export function useRehydrationProtocol() {
   const { userId, profile: contextProfile, userName } = useUser();
   const { toast } = useToast();
+  const { addTask, completeTask, failTask } = useAITask();
   const { safeAsync, isMounted } = useSafeAsync();
   const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
   const aiAbortRef = useRef<AbortController | null>(null);
@@ -95,6 +98,17 @@ export function useRehydrationProtocol() {
     aiAbortRef.current = controller;
 
     safeAsync(setLoading)(true);
+    const taskId = addTask({
+      id: `rehydration-${Date.now()}`,
+      type: "rehydration",
+      label: "Generating Protocol",
+      steps: [
+        { icon: Droplets, label: "Calculating fluid needs" },
+        { icon: Activity, label: "Planning timeline" },
+        { icon: Sparkles, label: "Generating protocol" },
+      ],
+      returnPath: "/hydration",
+    });
 
     try {
       if (!checkAIAccess()) {
@@ -148,11 +162,12 @@ export function useRehydrationProtocol() {
             168
           );
         }
-
+        completeTask(taskId, data.protocol);
       }
     } catch (error: any) {
       if (error?.name === 'AbortError' || controller.signal.aborted) return;
       if (!isMounted()) return;
+      failTask(taskId, error?.message || "Failed to generate rehydration protocol");
       logger.error("Error generating protocol", error);
       toast({
         title: "Error",

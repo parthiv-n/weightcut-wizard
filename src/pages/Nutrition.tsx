@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,7 +11,7 @@ import wizardLogo from "@/assets/wizard-logo.webp";
 import { MealCard } from "@/components/nutrition/MealCard";
 import { MealCardSkeleton } from "@/components/ui/skeleton-loader";
 import { MacroPieChart } from "@/components/nutrition/MacroPieChart";
-import { FoodSearchDialog } from "@/components/nutrition/FoodSearchDialog";
+const FoodSearchDialog = lazy(() => import("@/components/nutrition/FoodSearchDialog").then(m => ({ default: m.FoodSearchDialog })));
 const BarcodeScanner = lazy(() => import("@/components/nutrition/BarcodeScanner").then(m => ({ default: m.BarcodeScanner })));
 import { format, subDays, addDays } from "date-fns";
 import { Input } from "@/components/ui/input";
@@ -22,15 +22,17 @@ import { useUser } from "@/contexts/UserContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { optimisticUpdateManager, createNutritionTargetUpdate } from "@/lib/optimisticUpdates";
 import { nutritionCache } from "@/lib/nutritionCache";
-import { AIGeneratingOverlay } from "@/components/AIGeneratingOverlay";
+const AIGeneratingOverlay = lazy(() => import("@/components/AIGeneratingOverlay").then(m => ({ default: m.AIGeneratingOverlay })));
 import { triggerHapticSelection } from "@/lib/haptics";
-import { DietAnalysisCard } from "@/components/nutrition/DietAnalysisCard";
+const DietAnalysisCard = lazy(() => import("@/components/nutrition/DietAnalysisCard").then(m => ({ default: m.DietAnalysisCard })));
 import { ShareButton } from "@/components/share/ShareButton";
-import { ShareCardDialog } from "@/components/share/ShareCardDialog";
+const ShareCardDialog = lazy(() => import("@/components/share/ShareCardDialog").then(m => ({ default: m.ShareCardDialog })));
 import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { NutritionCard } from "@/components/share/cards/NutritionCard";
 import { logger } from "@/lib/logger";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { useAITask } from "@/contexts/AITaskContext";
+import { AICompactOverlay } from "@/components/AICompactOverlay";
 
 import type { Ingredient, Meal, ManualMealForm, INITIAL_MANUAL_MEAL } from "@/pages/nutrition/types";
 import {
@@ -139,8 +141,12 @@ export default function Nutrition() {
   const groupedMeals = useMemo(() => {
     const groups: Record<string, Meal[]> = { breakfast: [], lunch: [], dinner: [], snack: [] };
     for (const m of meals) {
-      const type = (m.meal_type || "other").toLowerCase();
-      if (type in groups) groups[type].push(m);
+      const type = (m.meal_type || "snack").toLowerCase();
+      if (type in groups) {
+        groups[type].push(m);
+      } else {
+        groups["snack"].push(m);
+      }
     }
     return groups;
   }, [meals]);
@@ -425,18 +431,33 @@ export default function Nutrition() {
     }
   };
 
+  const { tasks, dismissTask } = useAITask();
+  const aiTask = tasks.find(t => t.status === "running" && ["meal-analysis", "ingredient-lookup", "meal-plan", "diet-analysis"].includes(t.type));
+
+  // Pick up completed AI tasks and apply results to local state
+  const handledTaskRef = useRef<string | null>(null);
+  useEffect(() => {
+    const done = tasks.find(t => t.status === "done" && t.type === "diet-analysis" && t.result && handledTaskRef.current !== t.id);
+    if (done) {
+      handledTaskRef.current = done.id;
+      nutritionData.setDietAnalysis(done.result);
+      dismissTask(done.id);
+    }
+  }, [tasks, dismissTask, nutritionData.setDietAnalysis]);
+
   return (
     <>
-      <AIGeneratingOverlay
-        isOpen={isAiActive}
-        isGenerating={isAiActive}
-        steps={overlayProps.steps}
-        title={overlayProps.title}
-        subtitle={overlayProps.subtitle}
-        onCompletion={() => { }}
-        onCancel={cancelAI}
-        onRetry={overlayProps.retry ?? undefined}
-      />
+      {aiTask && (
+        <div className="px-3 sm:px-5 md:px-6 pt-3 max-w-7xl mx-auto">
+          <AICompactOverlay
+            isOpen={true}
+            isGenerating={true}
+            steps={aiTask.steps}
+            title={aiTask.label}
+            onCancel={() => { cancelAI(); dismissTask(aiTask.id); }}
+          />
+        </div>
+      )}
       <div className="space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto overflow-x-hidden">
 
         {/* Wizard's Nutrition Wisdom */}
@@ -607,12 +628,14 @@ export default function Nutrition() {
         {/* Diet Analysis Section */}
         <div data-tutorial="analyse-diet">
           {nutritionData.dietAnalysis ? (
-            <DietAnalysisCard
-              analysis={nutritionData.dietAnalysis}
-              onDismiss={handleDietAnalysisDismiss}
-              onRefresh={() => dietAnalysisHook.handleAnalyseDiet(true)}
-              refreshing={nutritionData.dietAnalysisLoading}
-            />
+            <Suspense fallback={null}>
+              <DietAnalysisCard
+                analysis={nutritionData.dietAnalysis}
+                onDismiss={handleDietAnalysisDismiss}
+                onRefresh={() => dietAnalysisHook.handleAnalyseDiet(true)}
+                refreshing={nutritionData.dietAnalysisLoading}
+              />
+            </Suspense>
           ) : meals.length > 0 && (
             <button onClick={() => dietAnalysisHook.handleAnalyseDiet()} disabled={nutritionData.dietAnalysisLoading}
               className="glass-card w-full p-4 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
@@ -734,12 +757,23 @@ export default function Nutrition() {
         </div>
 
         {/* Food Search Dialog */}
-        <FoodSearchDialog open={isFoodSearchOpen} onOpenChange={setIsFoodSearchOpen}
-          onFoodSelected={handleFoodSearchSelected} mealType={foodSearchMealType} />
+        <Suspense fallback={null}>
+          <FoodSearchDialog open={isFoodSearchOpen} onOpenChange={setIsFoodSearchOpen}
+            onFoodSelected={handleFoodSearchSelected} mealType={foodSearchMealType} />
+        </Suspense>
 
         {/* Quick Add Bottom Sheet */}
         <Dialog open={isQuickAddSheetOpen} onOpenChange={handleSheetOpenChange}>
           <DialogContent className="sm:max-w-md max-h-[calc(100vh-6rem)] overflow-y-auto rounded-[24px]">
+            {aiTask && (
+              <AICompactOverlay
+                isOpen={true}
+                isGenerating={true}
+                steps={aiTask.steps}
+                title={aiTask.label}
+                onCancel={() => { cancelAI(); dismissTask(aiTask.id); }}
+              />
+            )}
             <DialogHeader><DialogTitle className="text-base">Add Meal</DialogTitle></DialogHeader>
             <div className="flex gap-1 p-1 rounded-xl bg-muted/50 mb-4">
               <button onClick={() => setQuickAddTab("ai")} className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${quickAddTab === "ai" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
@@ -1066,14 +1100,16 @@ export default function Nutrition() {
         </SheetContent>
       </Sheet>
 
-      <ShareCardDialog open={nutritionData.shareOpen} onOpenChange={nutritionData.setShareOpen} title="Share Nutrition" shareTitle="My Nutrition Stats" shareText="Check out my nutrition tracking on FightCamp Wizard!">
-        {({ cardRef, aspect }) => (
-          <NutritionCard ref={cardRef} date={selectedDate} calories={totalCalories} calorieTarget={dailyCalorieTarget}
-            protein={totalProtein} carbs={totalCarbs} fats={totalFats}
-            proteinGoal={aiMacroGoals?.proteinGrams ?? 0} carbsGoal={aiMacroGoals?.carbsGrams ?? 0} fatsGoal={aiMacroGoals?.fatsGrams ?? 0}
-            mealCount={meals.length} streak={nutritionData.nutritionStreak} totalMealsLogged={nutritionData.totalMealsLogged} aspect={aspect} />
-        )}
-      </ShareCardDialog>
+      <Suspense fallback={null}>
+        <ShareCardDialog open={nutritionData.shareOpen} onOpenChange={nutritionData.setShareOpen} title="Share Nutrition" shareTitle="My Nutrition Stats" shareText="Check out my nutrition tracking on FightCamp Wizard!">
+          {({ cardRef, aspect }) => (
+            <NutritionCard ref={cardRef} date={selectedDate} calories={totalCalories} calorieTarget={dailyCalorieTarget}
+              protein={totalProtein} carbs={totalCarbs} fats={totalFats}
+              proteinGoal={aiMacroGoals?.proteinGrams ?? 0} carbsGoal={aiMacroGoals?.carbsGrams ?? 0} fatsGoal={aiMacroGoals?.fatsGrams ?? 0}
+              mealCount={meals.length} streak={nutritionData.nutritionStreak} totalMealsLogged={nutritionData.totalMealsLogged} aspect={aspect} />
+          )}
+        </ShareCardDialog>
+      </Suspense>
     </>
   );
 }

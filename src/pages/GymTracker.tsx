@@ -1,4 +1,5 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Dumbbell, Plus, Calendar, Clock, Flame } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useGymSessions } from "@/hooks/gym/useGymSessions";
@@ -16,8 +17,11 @@ import { ExerciseStatsSheet } from "@/components/gym/ExerciseStatsSheet";
 import { CreateExerciseDialog } from "@/components/gym/CreateExerciseDialog";
 import { RoutineLibrary } from "@/components/gym/RoutineLibrary";
 import { RoutineGeneratorSheet } from "@/components/gym/RoutineGeneratorSheet";
+import { ManualRoutineSheet } from "@/components/gym/ManualRoutineSheet";
 import { SESSION_TYPES } from "@/data/exerciseDatabase";
 import { triggerHaptic } from "@/lib/haptics";
+import { useAITask } from "@/contexts/AITaskContext";
+import { AICompactOverlay } from "@/components/AICompactOverlay";
 import { ImpactStyle } from "@capacitor/haptics";
 import type { SessionType, SessionWithSets, Exercise, SavedRoutine } from "@/pages/gym/types";
 
@@ -43,7 +47,8 @@ export default function GymTracker() {
     generateRoutine, saveRoutine, deleteRoutine, renameRoutine,
   } = useRoutines();
 
-  const [tab, setTab] = useState<GymTab>("workouts");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTab] = useState<GymTab>(() => searchParams.get("tab") === "routines" ? "routines" : "workouts");
   const [exercisePickerOpen, setExercisePickerOpen] = useState(false);
   const [createExerciseOpen, setCreateExerciseOpen] = useState(false);
   const [detailSession, setDetailSession] = useState<SessionWithSets | null>(null);
@@ -52,6 +57,7 @@ export default function GymTracker() {
   const [statsOpen, setStatsOpen] = useState(false);
   const [sessionType, setSessionType] = useState<SessionType>("Strength");
   const [generatorOpen, setGeneratorOpen] = useState(false);
+  const [manualRoutineOpen, setManualRoutineOpen] = useState(false);
   const newPRSetIdsRef = useRef(new Set<string>());
 
   const handleStartWorkout = useCallback(async () => {
@@ -133,6 +139,26 @@ export default function GymTracker() {
     }
   }, [exercises]);
 
+  const { tasks: aiTasks, dismissTask: aiDismiss } = useAITask();
+  const gymAiTask = aiTasks.find(t => t.status === "running" && t.type === "gym-routine");
+
+  // Detect completed AI routine generation (e.g. user navigated away during generation)
+  const [completedRoutineResult, setCompletedRoutineResult] = useState<any>(null);
+  const handledTaskRef = useRef<string | null>(null);
+  useEffect(() => {
+    const completedTask = aiTasks.find(
+      t => t.status === "done" && t.type === "gym-routine" && t.result?.exercises
+    );
+    if (completedTask && handledTaskRef.current !== completedTask.id) {
+      handledTaskRef.current = completedTask.id;
+      setCompletedRoutineResult(completedTask.result);
+      setTab("routines");
+      setGeneratorOpen(true);
+      // Dismiss after a short delay to ensure state is applied first
+      setTimeout(() => aiDismiss(completedTask.id), 100);
+    }
+  }, [aiTasks, aiDismiss]);
+
   const todayLabel = new Date().toLocaleDateString("en-US", { weekday: "long" });
 
   const weeklyVolume = analytics.weeklyVolumes.length > 0
@@ -142,6 +168,15 @@ export default function GymTracker() {
 
   return (
     <div className="space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
+      {gymAiTask && (
+        <AICompactOverlay
+          isOpen={true}
+          isGenerating={true}
+          steps={gymAiTask.steps}
+          title={gymAiTask.label}
+          onCancel={() => aiDismiss(gymAiTask.id)}
+        />
+      )}
       <div className="space-y-3">
         {/* Header */}
         <div>
@@ -282,6 +317,7 @@ export default function GymTracker() {
             onRename={renameRoutine}
             onStartWorkout={handleStartFromRoutine}
             onOpenGenerator={() => setGeneratorOpen(true)}
+            onOpenManualCreator={() => setManualRoutineOpen(true)}
           />
         )}
       </div>
@@ -319,10 +355,21 @@ export default function GymTracker() {
 
       <RoutineGeneratorSheet
         open={generatorOpen}
-        onOpenChange={setGeneratorOpen}
+        onOpenChange={(open) => {
+          setGeneratorOpen(open);
+          if (!open) setCompletedRoutineResult(null);
+        }}
         onGenerate={generateRoutine}
         onSave={saveRoutine}
         generating={generatingRoutine}
+        completedResult={completedRoutineResult}
+      />
+
+      <ManualRoutineSheet
+        open={manualRoutineOpen}
+        onOpenChange={setManualRoutineOpen}
+        exercises={exercises}
+        onSave={saveRoutine}
       />
     </div>
   );

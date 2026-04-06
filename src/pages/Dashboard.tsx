@@ -180,7 +180,8 @@ export default function Dashboard() {
       checkAndGenerateWisdom(profile, cachedWeightLogs, cachedCalories, cachedHydrationTotal);
     }
 
-    // --- Fetch fresh data from Supabase (3 queries — profile comes from context) ---
+    // --- Fetch fresh data from Supabase (7 queries in one batch — profile comes from context) ---
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     try {
       const results = await Promise.allSettled([
         withRetry(() => withSupabaseTimeout(
@@ -212,7 +213,26 @@ export default function Dashboard() {
             .eq("date", today),
           undefined,
           "Hydration logs query"
-        ))
+        )),
+
+        // Gamification queries (batched here to avoid separate round-trip)
+        supabase
+          .from("nutrition_logs")
+          .select("date")
+          .eq("user_id", userId)
+          .gte("date", sevenDaysAgo),
+        supabase
+          .from("nutrition_logs")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", userId),
+        supabase
+          .from("fight_week_plans")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", userId),
+        supabase
+          .from("fight_camps")
+          .select("is_completed")
+          .eq("user_id", userId),
       ]);
 
       if (!isMounted()) return;
@@ -247,6 +267,21 @@ export default function Dashboard() {
         setTodayHydration(totalHydration);
         localCache.setForDate(userId, 'hydration_logs', today, hydrationData);
       }
+
+      // Cache gamification data so useGamification picks it up instantly on next render
+      const logsData = logsOk ? (results[0] as PromiseFulfilledResult<any>).value.data || [] : [];
+      const gamNutritionDates = results[3].status === 'fulfilled' ? (results[3].value.data || []).map((r: any) => r.date) : [];
+      const gamMealCount = results[4].status === 'fulfilled' ? results[4].value.count || 0 : 0;
+      const gamFightWeekCount = results[5].status === 'fulfilled' ? results[5].value.count || 0 : 0;
+      const gamCampsData = results[6].status === 'fulfilled' ? results[6].value.data || [] : [];
+      localCache.set(userId, 'gamification_data', {
+        nutritionDates: gamNutritionDates,
+        mealCount: gamMealCount,
+        fightWeekCount: gamFightWeekCount,
+        completedCampCount: gamCampsData.filter((c: any) => c.is_completed).length,
+        totalCampCount: gamCampsData.length,
+        allWeightDates: logsData.map((l: any) => l.date),
+      });
 
       // Fire-and-forget wisdom with best available data (use fresh values, fall back to current state)
       const wisdomLogs = logsOk ? (results[0] as PromiseFulfilledResult<any>).value.data ?? [] : weightLogs;

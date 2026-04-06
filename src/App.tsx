@@ -12,6 +12,7 @@ import { ProfileCompletionGuard } from "@/components/ProfileCompletionGuard";
 import { UserProvider } from "@/contexts/UserContext";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { WizardBackgroundProvider } from "@/contexts/WizardBackgroundContext";
+import { AITaskProvider } from "@/contexts/AITaskContext";
 import { PaywallOverlay } from "@/components/subscription/PaywallOverlay";
 import { WelcomeProOverlay } from "@/components/subscription/WelcomeProOverlay";
 import { PageTransition } from "@/components/PageTransition";
@@ -20,6 +21,7 @@ import { TutorialProvider } from "@/tutorial/TutorialContext";
 import { BottomNav } from "@/components/BottomNav";
 import { FloatingWizardChat } from "@/components/FloatingWizardChat";
 const FloatingWorkoutIndicator = lazy(() => import("@/components/gym/FloatingWorkoutIndicator").then(m => ({ default: m.FloatingWorkoutIndicator })));
+const AIFloatingIndicator = lazy(() => import("@/components/AIFloatingIndicator").then(m => ({ default: m.AIFloatingIndicator })));
 import * as Sentry from "@sentry/react";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { RefreshCw } from "lucide-react";
@@ -179,7 +181,7 @@ const AppLayoutContent = () => {
               <RefreshCw className="h-4 w-4 text-muted-foreground" />
             </button>
             <PageTransition>
-              <Suspense fallback={null}>
+              <Suspense fallback={<div className="min-h-screen" />}>
                 <Outlet />
               </Suspense>
             </PageTransition>
@@ -189,6 +191,7 @@ const AppLayoutContent = () => {
       {/* Bottom Navigation - Mobile Only */}
       <BottomNav />
       <Suspense fallback={null}><FloatingWorkoutIndicator /></Suspense>
+      <Suspense fallback={null}><AIFloatingIndicator /></Suspense>
       <FloatingWizardChat />
     </>
   );
@@ -218,6 +221,7 @@ const App = () => (
       }}>
         <UserProvider>
           <SubscriptionProvider>
+          <AITaskProvider>
           <WizardBackgroundProvider>
             <Toaster />
             <Sonner />
@@ -260,6 +264,7 @@ const App = () => (
               </NavigationDirectionProvider>
             </BrowserRouter>
           </WizardBackgroundProvider>
+          </AITaskProvider>
           </SubscriptionProvider>
         </UserProvider>
       </ErrorBoundary>

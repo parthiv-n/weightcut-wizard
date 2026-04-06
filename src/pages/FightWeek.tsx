@@ -17,11 +17,13 @@ import { DehydrationRingPanel } from "@/components/fightweek/DehydrationRingPane
 import { ProjectionChart } from "@/components/fightweek/ProjectionChart";
 import { DayTimelineCard } from "@/components/fightweek/DayTimelineCard";
 import { AIAdviceCard, type FightWeekAIAdvice } from "@/components/fightweek/AIAdviceCard";
-import { TrendingDown, Target, Calendar } from "lucide-react";
+import { TrendingDown, Target, Calendar, Activity, Shield, Sparkles } from "lucide-react";
 import { ShareButton } from "@/components/share/ShareButton";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { FightWeekSummaryCard } from "@/components/share/cards/FightWeekSummaryCard";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useAITask } from "@/contexts/AITaskContext";
+import { AICompactOverlay } from "@/components/AICompactOverlay";
 
 interface DBPlan {
   id: string;
@@ -47,6 +49,7 @@ export default function FightWeek() {
   const { toast } = useToast();
   const { userId, profile } = useUser();
   const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
+  const { tasks: aiTasks, dismissTask: aiDismiss, addTask, completeTask, failTask } = useAITask();
   const { safeAsync, isMounted } = useSafeAsync();
   const aiAbortRef = useRef<AbortController | null>(null);
 
@@ -188,6 +191,18 @@ export default function FightWeek() {
     safeAsync(setIsGeneratingAdvice)(true);
     safeAsync(setAiAdvice)(null);
 
+    const taskId = addTask({
+      id: `fight-week-${Date.now()}`,
+      type: "fight-week",
+      label: "Analyzing Fight Week",
+      steps: [
+        { icon: Activity, label: "Analyzing projection data" },
+        { icon: Shield, label: "Checking safety thresholds" },
+        { icon: Sparkles, label: "Generating protocol" },
+      ],
+      returnPath: "/fight-week",
+    });
+
     try {
       const { data, error } = await supabase.functions.invoke("fight-week-analysis", {
         body: {
@@ -206,14 +221,17 @@ export default function FightWeek() {
 
       if (error) {
         const msg = await extractEdgeFunctionError(error, "AI advice unavailable");
+        failTask(taskId, msg);
         toast({ title: "AI advice unavailable", description: msg, variant: "destructive" });
       } else if (data?.advice) {
         incrementLocalUsage();
         setAiAdvice(data.advice);
         AIPersistence.save(userId, "fight_week_advice", data.advice, 48);
+        completeTask(taskId, data.advice);
       }
     } catch (err: any) {
       if (err?.name === 'AbortError' || controller.signal.aborted) return;
+      failTask(taskId, err?.message || "Something went wrong");
       toast({ title: "AI advice unavailable", description: err?.message || "Something went wrong", variant: "destructive" });
     } finally {
       safeAsync(setIsGeneratingAdvice)(false);
@@ -273,8 +291,19 @@ export default function FightWeek() {
         : { label: "CRITICAL", cls: "bg-red-500/10 text-red-400 border-red-500/20" }
     : null;
 
+  const fwAiTask = aiTasks.find(t => t.status === "running" && t.type === "fight-week");
+
   return (
     <div className="space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6 text-foreground">
+      {fwAiTask && (
+        <AICompactOverlay
+          isOpen={true}
+          isGenerating={true}
+          steps={fwAiTask.steps}
+          title={fwAiTask.label}
+          onCancel={() => aiDismiss(fwAiTask.id)}
+        />
+      )}
       <div className="space-y-2.5">
         {/* Header + safety badge */}
         <div className="flex items-center justify-between">

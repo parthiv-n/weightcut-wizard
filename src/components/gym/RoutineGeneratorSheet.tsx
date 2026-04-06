@@ -9,10 +9,20 @@ import {
   ChevronRight, ChevronLeft, Save, Loader2, Clock, Calendar,
   Layout, Layers, Rows3, Grid3X3, Brain,
 } from "lucide-react";
+import { useAITask } from "@/contexts/AITaskContext";
+import { AICompactOverlay } from "@/components/AICompactOverlay";
 import type {
   RoutineGenerationParams, RoutineExercise, TrainingGoal,
   CombatSport, Equipment, WorkoutSplit, FocusArea,
 } from "@/pages/gym/types";
+
+interface CompletedRoutineResult {
+  exercises: RoutineExercise[];
+  name: string;
+  notes: string;
+  recommendedGymDays: number | null;
+  splitUsed: string | null;
+}
 
 interface RoutineGeneratorSheetProps {
   open: boolean;
@@ -20,6 +30,7 @@ interface RoutineGeneratorSheetProps {
   onGenerate: (params: RoutineGenerationParams) => Promise<any>;
   onSave: (name: string, goal: TrainingGoal, exercises: RoutineExercise[], sport: CombatSport, trainingDays: number, isAiGenerated: boolean) => Promise<void>;
   generating: boolean;
+  completedResult?: CompletedRoutineResult | null;
 }
 
 const GOALS: { value: TrainingGoal; label: string; icon: typeof Dumbbell; description: string }[] = [
@@ -158,7 +169,10 @@ function ExerciseRow({ ex, index }: { ex: RoutineExercise; index: number }) {
 type Step = "goals" | "sport" | "preferences" | "generate" | "result";
 const STEPS: Step[] = ["goals", "sport", "preferences", "generate", "result"];
 
-export function RoutineGeneratorSheet({ open, onOpenChange, onGenerate, onSave, generating }: RoutineGeneratorSheetProps) {
+export function RoutineGeneratorSheet({ open, onOpenChange, onGenerate, onSave, generating, completedResult }: RoutineGeneratorSheetProps) {
+  const { tasks: aiTasks, dismissTask: aiDismissTask } = useAITask();
+  const gymAiTask = aiTasks.find(t => t.status === "running" && t.type === "gym-routine");
+
   // Hide bottom nav while sheet is open
   useEffect(() => {
     document.body.classList.toggle("hide-bottom-nav", open);
@@ -196,6 +210,21 @@ export function RoutineGeneratorSheet({ open, onOpenChange, onGenerate, onSave, 
     setRoutineNotes("");
     setSaving(false);
   }, []);
+
+  // Restore state from a completed background generation
+  useEffect(() => {
+    if (completedResult && completedResult.exercises.length > 0) {
+      setGeneratedExercises(completedResult.exercises);
+      setRoutineName(completedResult.name || "Generated Routine");
+      setRoutineNotes(completedResult.notes || "");
+      setRecommendedGymDays(completedResult.recommendedGymDays);
+      setSplitUsed(completedResult.splitUsed);
+      // Set defaults so handleSave works (goal/sport aren't in the result)
+      if (selectedGoals.length === 0) setSelectedGoals(["strength"]);
+      if (!sport) setSport("general");
+      setStep("result");
+    }
+  }, [completedResult]);
 
   const handleOpenChange = useCallback((open: boolean) => {
     if (!open) reset();
@@ -514,18 +543,24 @@ export function RoutineGeneratorSheet({ open, onOpenChange, onGenerate, onSave, 
                   </div>
                 </div>
 
-                <Button
-                  onClick={handleGenerate}
-                  disabled={generating}
-                  className="w-full h-14 rounded-2xl text-[15px] font-semibold bg-gradient-to-r from-primary to-primary/80 shadow-lg shadow-primary/20"
-                  size="lg"
-                >
-                  {generating ? (
-                    <><Loader2 className="h-5 w-5 mr-2 animate-spin" />Generating...</>
-                  ) : (
-                    <><Sparkles className="h-5 w-5 mr-2" />Generate Routine</>
-                  )}
-                </Button>
+                {generating && gymAiTask ? (
+                  <AICompactOverlay
+                    isOpen={true}
+                    isGenerating={true}
+                    steps={gymAiTask.steps}
+                    title={gymAiTask.label}
+                    onCancel={() => aiDismissTask(gymAiTask.id)}
+                  />
+                ) : (
+                  <Button
+                    onClick={handleGenerate}
+                    disabled={generating}
+                    className="w-full h-14 rounded-2xl text-[15px] font-semibold bg-gradient-to-r from-primary to-primary/80 shadow-lg shadow-primary/20"
+                    size="lg"
+                  >
+                    <Sparkles className="h-5 w-5 mr-2" />Generate Routine
+                  </Button>
+                )}
               </motion.div>
             )}
 

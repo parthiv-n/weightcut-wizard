@@ -1,11 +1,22 @@
 import { useState, useRef } from "react";
 import { format } from "date-fns";
+import { nutritionCache } from "@/lib/nutritionCache";
+import { localCache } from "@/lib/localCache";
+import { useUser } from "@/contexts/UserContext";
 import type { Meal, MacroGoals, ManualMealForm, ManualNutritionDialogState, EditingTargets, BarcodeBaseMacros, AiLineItem, INITIAL_MANUAL_MEAL, INITIAL_MANUAL_NUTRITION_DIALOG } from "@/pages/nutrition/types";
 
 export function useNutritionState() {
-  const [meals, setMeals] = useState<Meal[]>([]);
+  const { userId } = useUser();
+  const today = format(new Date(), "yyyy-MM-dd");
+  // Initialize meals from cache to prevent empty→loaded flicker on navigation
+  const [meals, setMeals] = useState<Meal[]>(() => {
+    if (!userId) return [];
+    return nutritionCache.getMeals(userId, today)
+      || localCache.getForDate<Meal[]>(userId, "nutrition_logs", today)
+      || [];
+  });
   const [mealPlanIdeas, setMealPlanIdeas] = useState<Meal[]>([]);
-  const [selectedDate, setSelectedDate] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [selectedDate, setSelectedDate] = useState(today);
   const [dailyCalorieTarget, setDailyCalorieTarget] = useState(2000);
   const [aiMacroGoals, setAiMacroGoals] = useState<MacroGoals | null>(null);
   const [safetyStatus, setSafetyStatus] = useState<"green" | "yellow" | "red">("green");

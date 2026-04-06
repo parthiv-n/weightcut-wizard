@@ -498,6 +498,7 @@ All colors MUST be HSL.
   .page-transition-container {
     position: relative;
     overflow-x: hidden;
+    overflow-y: hidden;
     min-height: 100%;
     width: 100%;
   }

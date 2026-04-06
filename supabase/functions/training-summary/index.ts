@@ -59,16 +59,17 @@ serve(async (req) => {
       .map((s: any) => `${s.date} | ${s.session_type} | ${s.duration_minutes}min | Notes: ${s.notes}`)
       .join('\n');
 
-    const systemPrompt = `You are a combat sports training analyst. You organize weekly session notes by sport type.
+    const systemPrompt = `You are a combat sports training analyst. Organize weekly session notes by sport.
 
-For each technique mentioned in the notes:
-- Provide a brief 3-5 step setup/execution guide
-- Provide one practical tip for implementing it in live sparring
+For each technique/problem in notes:
+- 3-5 step execution guide
+- 1 sparring tip
+- "drillFlow": ALWAYS include a 3-4 step improvement progression from solo/bag → partner/positional → live sparring
 
-Group by sport: BJJ, Muay Thai, Wrestling, Sparring, Strength, Conditioning.
-Only include sports that have session notes. If a session type doesn't match these exactly, map it to the closest category.
+Group by the EXACT session_type provided in the data. Valid types: BJJ, Muay Thai, Boxing, Wrestling, Sparring, Strength, Conditioning, Run.
+IMPORTANT: Keep each sport SEPARATE. Boxing is NOT Muay Thai — do not merge or remap combat sports. Use the session_type value exactly as given.
 
-Return ONLY valid JSON in this exact format:
+Return ONLY valid JSON:
 {
   "sportSections": [
     {
@@ -77,13 +78,14 @@ Return ONLY valid JSON in this exact format:
       "techniques": [
         {
           "name": "Kimura from Side Control",
-          "steps": ["Step 1...", "Step 2...", "Step 3..."],
-          "sparringTip": "Set up from a failed americana attempt..."
+          "steps": ["Step 1", "Step 2", "Step 3"],
+          "sparringTip": "Set up from failed americana...",
+          "drillFlow": ["Solo: hip escape reps 3x10", "Partner: positional start from side control", "Live: 3min rounds from side control only"]
         }
       ]
     }
   ],
-  "weekOverview": "Brief 1-2 sentence summary of training focus this week"
+  "weekOverview": "1-2 sentence summary"
 }`;
 
     const userPrompt = `Here are my training sessions from this week. Organize the techniques and drills I worked on:\n\n${sessionsText}`;

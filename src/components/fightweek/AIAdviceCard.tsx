@@ -37,15 +37,6 @@ export const AIAdviceCard = memo(function AIAdviceCard({ advice, isGenerating, o
 
   return (
     <>
-      <AIGeneratingOverlay
-        isOpen={isGenerating}
-        isGenerating={isGenerating}
-        steps={AI_STEPS}
-        title="Generating Advice"
-        subtitle="Building your research-backed protocol..."
-        onCancel={onCancel}
-        onRetry={onRetry}
-      />
 
       <div className="glass-card rounded-2xl border border-border/50 overflow-hidden">
         <div className="p-5 space-y-4">

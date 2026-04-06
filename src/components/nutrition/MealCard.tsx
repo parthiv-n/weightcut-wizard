@@ -69,7 +69,7 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete }: MealC
 
       {/* Draggable foreground card */}
       <motion.div
-        className="relative rounded-xl border border-border/50"
+        className="relative rounded-xl"
         style={{ x: canSwipe ? dragX : undefined }}
         drag={canSwipe ? "x" : false}
         dragConstraints={{ left: -120, right: 0 }}
@@ -78,12 +78,10 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete }: MealC
         onDragStart={() => {
           crossedRef.current = false;
           setIsDragging(true);
-          triggerHapticSelection();
         }}
         onDrag={() => {
           if (!crossedRef.current && dragX.get() < DELETE_THRESHOLD) {
             crossedRef.current = true;
-            triggerHapticWarning();
           }
           if (crossedRef.current && dragX.get() > DELETE_THRESHOLD) {
             crossedRef.current = false;

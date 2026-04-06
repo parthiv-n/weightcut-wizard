@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion } from "motion/react";
 import { staggerContainer, staggerItem } from "@/lib/motion";
-import { Dumbbell, Sparkles, ArrowUpDown } from "lucide-react";
+import { Dumbbell, Sparkles, ArrowUpDown, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { RoutineDetailCard } from "./RoutineDetailCard";
@@ -14,11 +14,12 @@ interface RoutineLibraryProps {
   onRename: (id: string, name: string) => void;
   onStartWorkout: (routine: SavedRoutine, dayFilter?: string) => void;
   onOpenGenerator: () => void;
+  onOpenManualCreator: () => void;
 }
 
 type SortMode = "recent" | "name" | "goal";
 
-export function RoutineLibrary({ routines, loading, onDelete, onRename, onStartWorkout, onOpenGenerator }: RoutineLibraryProps) {
+export function RoutineLibrary({ routines, loading, onDelete, onRename, onStartWorkout, onOpenGenerator, onOpenManualCreator }: RoutineLibraryProps) {
   const [sortMode, setSortMode] = useState<SortMode>("recent");
   const [deleteTarget, setDeleteTarget] = useState<SavedRoutine | null>(null);
 
@@ -80,14 +81,17 @@ export function RoutineLibrary({ routines, loading, onDelete, onRename, onStartW
           <Dumbbell className="h-6 w-6 text-muted-foreground/30" />
         </div>
         <p className="text-sm font-medium text-muted-foreground">No routines yet</p>
-        <p className="text-xs text-muted-foreground/60 mt-1 mb-4">Create your first AI-generated routine</p>
-        <Button
-          onClick={onOpenGenerator}
-          className="h-11 rounded-xl text-sm font-semibold bg-gradient-to-r from-primary to-primary/80"
-        >
-          <Sparkles className="h-4 w-4 mr-2" />
-          Create Your First Routine
-        </Button>
+        <p className="text-xs text-muted-foreground/60 mt-1 mb-4">Create your first routine</p>
+        <div className="flex gap-2 justify-center">
+          <Button onClick={onOpenManualCreator} variant="outline" className="h-11 rounded-xl text-sm font-semibold">
+            <Plus className="h-4 w-4 mr-2" />
+            Create Manual
+          </Button>
+          <Button onClick={onOpenGenerator} className="h-11 rounded-xl text-sm font-semibold bg-gradient-to-r from-primary to-primary/80">
+            <Sparkles className="h-4 w-4 mr-2" />
+            Generate with AI
+          </Button>
+        </div>
       </div>
     );
   }
@@ -96,14 +100,25 @@ export function RoutineLibrary({ routines, loading, onDelete, onRename, onStartW
     <div className="space-y-3">
       {/* Header bar */}
       <div className="flex items-center justify-between">
-        <Button
-          onClick={onOpenGenerator}
-          size="sm"
-          className="h-9 rounded-xl text-xs font-semibold bg-gradient-to-r from-primary to-primary/80 shadow-sm shadow-primary/10"
-        >
-          <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-          Generate with AI
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={onOpenManualCreator}
+            size="sm"
+            className="h-9 rounded-xl text-xs font-semibold"
+            variant="outline"
+          >
+            <Plus className="h-3.5 w-3.5 mr-1.5" />
+            Create Manual
+          </Button>
+          <Button
+            onClick={onOpenGenerator}
+            size="sm"
+            className="h-9 rounded-xl text-xs font-semibold bg-gradient-to-r from-primary to-primary/80 shadow-sm shadow-primary/10"
+          >
+            <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+            Generate with AI
+          </Button>
+        </div>
         <button
           onClick={cycleSortMode}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-muted/30 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
