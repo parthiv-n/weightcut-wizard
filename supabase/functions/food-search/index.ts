@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { edgeLogger } from "../_shared/errorReporter.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { checkAIUsage, aiLimitResponse } from "../_shared/subscriptionGuard.ts";
 
 // In-memory cache — persists across requests on the same warm isolate
 const searchCache = new Map<string, { results: any[]; ts: number }>();
@@ -77,6 +78,12 @@ serve(async (req) => {
   const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
   if (userError || !user) {
     return json({ error: "Invalid token" }, 401);
+  }
+
+  // Check AI usage limits (free: 1/day, premium: unlimited)
+  const usage = await checkAIUsage(user.id);
+  if (!usage.allowed) {
+    return aiLimitResponse(req, usage, corsHeaders);
   }
 
   try {

@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
 import { edgeLogger } from "../_shared/errorReporter.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { checkAIUsage, aiLimitResponse } from "../_shared/subscriptionGuard.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -27,6 +28,12 @@ serve(async (req) => {
     if (userError || !user) {
       return new Response(JSON.stringify({ error: 'Invalid token' }),
         { status: 401, headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
+    }
+
+    // Check AI usage limits (free: 1/day, premium: unlimited)
+    const usage = await checkAIUsage(user.id);
+    if (!usage.allowed) {
+      return aiLimitResponse(req, usage, corsHeaders);
     }
 
     const { ingredientName } = await req.json();

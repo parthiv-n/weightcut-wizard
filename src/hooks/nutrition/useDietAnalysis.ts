@@ -2,6 +2,7 @@ import { useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
+import { useSubscription } from "@/hooks/useSubscription";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 import { triggerHapticSuccess } from "@/lib/haptics";
@@ -30,6 +31,7 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
 
   const { userId, profile: contextProfile } = useUser();
   const { toast } = useToast();
+  const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
 
   const handleAnalyseDiet = useCallback(async (forceRefresh = false) => {
     if (!userId || meals.length === 0) return;
@@ -49,6 +51,11 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
 
     setDietAnalysisLoading(true);
     try {
+      if (!checkAIAccess()) {
+        openPaywall();
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke("analyse-diet", {
         body: {
           meals: meals.map(m => ({
@@ -80,8 +87,17 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
       });
 
       if (dietController.signal.aborted) return;
-      if (error) throw new Error(await extractEdgeFunctionError(error, "Could not analyse your diet"));
+      if (error) {
+        const errBody = typeof error === 'object' && 'context' in error ? (error as any).context : null;
+        if (errBody?.status === 429) {
+          markLimitReached();
+          openPaywall();
+          return;
+        }
+        throw new Error(await extractEdgeFunctionError(error, "Could not analyse your diet"));
+      }
       if (data?.error) throw new Error(data.error);
+      incrementLocalUsage();
 
       const result = data.analysisData as DietAnalysisResult;
       setDietAnalysis(result);

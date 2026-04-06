@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
+import { useSubscription } from "@/hooks/useSubscription";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
@@ -21,6 +22,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
   const { userId } = useUser();
   const { toast } = useToast();
   const { isMounted } = useSafeAsync();
+  const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
   const aiAbortRef = useRef<AbortController | null>(null);
 
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
@@ -75,14 +77,28 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       let nutritionData = userId ? AIPersistence.load(userId, mealCacheKey) : null;
 
       if (!nutritionData) {
+        if (!checkAIAccess()) {
+          openPaywall();
+          return;
+        }
+
         const { data, error } = await supabase.functions.invoke("analyze-meal", {
           body: { mealDescription: aiMealDescription },
           signal: controller.signal,
         });
 
         if (controller.signal.aborted) return;
-        if (error) throw new Error(await extractEdgeFunctionError(error, "Failed to analyze meal"));
+        if (error) {
+          const errBody = typeof error === 'object' && 'context' in error ? (error as any).context : null;
+          if (errBody?.status === 429) {
+            markLimitReached();
+            openPaywall();
+            return;
+          }
+          throw new Error(await extractEdgeFunctionError(error, "Failed to analyze meal"));
+        }
         if (data?.error) throw new Error(data.error);
+        incrementLocalUsage();
         nutritionData = data.nutritionData;
         if (userId && nutritionData) {
           AIPersistence.save(userId, mealCacheKey, nutritionData, 24 * 7);
@@ -179,14 +195,28 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
     setAiAnalyzingIngredient(true);
     try {
+      if (!checkAIAccess()) {
+        openPaywall();
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke("analyze-meal", {
         body: { mealDescription: aiIngredientDescription },
         signal: ingController.signal,
       });
 
       if (ingController.signal.aborted) return;
-      if (error) throw new Error(await extractEdgeFunctionError(error, "Failed to analyze ingredient"));
+      if (error) {
+        const errBody = typeof error === 'object' && 'context' in error ? (error as any).context : null;
+        if (errBody?.status === 429) {
+          markLimitReached();
+          openPaywall();
+          return;
+        }
+        throw new Error(await extractEdgeFunctionError(error, "Failed to analyze ingredient"));
+      }
       if (data?.error) throw new Error(data.error);
+      incrementLocalUsage();
 
       const { nutritionData } = data;
 
@@ -323,11 +353,22 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     source?: string;
   } | null> => {
     try {
+      if (!checkAIAccess()) {
+        openPaywall();
+        return null;
+      }
+
       const { data, error } = await supabase.functions.invoke("lookup-ingredient", {
         body: { ingredientName },
       });
 
       if (error) {
+        const errBody = typeof error === 'object' && 'context' in error ? (error as any).context : null;
+        if (errBody?.status === 429) {
+          markLimitReached();
+          openPaywall();
+          return null;
+        }
         logger.error("Ingredient lookup error", error);
         return null;
       }
@@ -338,6 +379,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       }
 
       if (data?.nutritionData) {
+        incrementLocalUsage();
         return data.nutritionData;
       }
 

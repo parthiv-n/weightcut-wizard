@@ -789,6 +789,10 @@ export type Database = {
           target_date: string
           tdee: number | null
           training_frequency: number | null
+          subscription_tier: string
+          subscription_expires_at: string | null
+          revenuecat_customer_id: string | null
+          subscription_updated_at: string | null
           updated_at: string | null
         }
         Insert: {
@@ -811,6 +815,10 @@ export type Database = {
           manual_nutrition_override?: boolean | null
           sex: string
           target_date: string
+          subscription_tier?: string
+          subscription_expires_at?: string | null
+          revenuecat_customer_id?: string | null
+          subscription_updated_at?: string | null
           tdee?: number | null
           training_frequency?: number | null
           updated_at?: string | null
@@ -834,6 +842,10 @@ export type Database = {
           id?: string
           manual_nutrition_override?: boolean | null
           sex?: string
+          subscription_tier?: string
+          subscription_expires_at?: string | null
+          revenuecat_customer_id?: string | null
+          subscription_updated_at?: string | null
           target_date?: string
           tdee?: number | null
           training_frequency?: number | null
@@ -964,6 +976,13 @@ export type Database = {
           p_user_id: string
         }
         Returns: boolean
+      }
+      check_ai_usage_and_increment: {
+        Args: {
+          p_user_id: string
+          p_max_requests: number
+        }
+        Returns: Json
       }
     }
     Enums: {

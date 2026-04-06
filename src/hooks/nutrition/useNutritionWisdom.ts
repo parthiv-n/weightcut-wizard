@@ -3,6 +3,7 @@ import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
+import { useSubscription } from "@/hooks/useSubscription";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { extractEdgeFunctionError } from "@/lib/timeoutWrapper";
@@ -28,6 +29,7 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
   const { userId } = useUser();
   const { toast } = useToast();
   const { safeAsync, isMounted } = useSafeAsync();
+  const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
 
   const [trainingWisdom, setTrainingWisdom] = useState<TrainingFoodTip | null>(null);
   const [trainingWisdomLoading, setTrainingWisdomLoading] = useState(false);
@@ -77,7 +79,7 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
     return `${Math.round(calLeft)} kcal remaining. Tap for training meal ideas.`;
   };
 
-  const generateWisdomAdvice = async () => {
+  const generateWisdomAdvice = async (userInitiated = false) => {
     if (!userId || totalCalories === 0) {
       safeAsync(setAiWisdomAdvice)(null);
       return;
@@ -98,6 +100,12 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
 
     safeAsync(setAiWisdomLoading)(true);
     try {
+      if (!checkAIAccess()) {
+        // Only show paywall if user explicitly tapped something
+        if (userInitiated) openPaywall();
+        return;
+      }
+
       const calGoal = dailyCalorieTarget;
       const pGoal = aiMacroGoals?.proteinGrams || 0;
       const cGoal = aiMacroGoals?.carbsGrams || 0;
@@ -112,8 +120,17 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
       });
 
       if (!isMounted()) return;
-      if (error) throw new Error(await extractEdgeFunctionError(error, "Could not generate nutrition advice"));
+      if (error) {
+        const errBody = typeof error === 'object' && 'context' in error ? (error as any).context : null;
+        if (errBody?.status === 429) {
+          markLimitReached();
+          if (userInitiated) openPaywall();
+          return;
+        }
+        throw new Error(await extractEdgeFunctionError(error, "Could not generate nutrition advice"));
+      }
       if (data?.error) throw new Error(data.error);
+      incrementLocalUsage();
 
       let advice: string | null = null;
       if (data?.mealPlan) {
@@ -156,6 +173,11 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
     safeAsync(setTrainingWisdomLoading)(true);
     safeAsync(setTrainingWisdomSheetOpen)(true);
     try {
+      if (!checkAIAccess()) {
+        openPaywall();
+        return;
+      }
+
       const calorieTarget = dailyCalorieTarget;
       const proteinGoal = aiMacroGoals?.proteinGrams || Math.round(calorieTarget * 0.4 / 4);
 
@@ -187,8 +209,17 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
       });
 
       if (!isMounted()) return;
-      if (error) throw new Error(await extractEdgeFunctionError(error, "Could not generate training food ideas"));
+      if (error) {
+        const errBody = typeof error === 'object' && 'context' in error ? (error as any).context : null;
+        if (errBody?.status === 429) {
+          markLimitReached();
+          openPaywall();
+          return;
+        }
+        throw new Error(await extractEdgeFunctionError(error, "Could not generate training food ideas"));
+      }
       if (data?.error) throw new Error(data.error);
+      incrementLocalUsage();
 
       let trainingData: TrainingFoodTip | null = null;
 

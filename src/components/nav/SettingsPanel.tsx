@@ -1,4 +1,4 @@
-import { Moon, Sun, ChevronRight, BookOpen, Bell, Trash2, Mail, Shield, FileText, LifeBuoy, Heart, Trophy } from "lucide-react";
+import { Moon, Sun, ChevronRight, BookOpen, Bell, Trash2, Mail, Shield, FileText, LifeBuoy, Heart, Trophy, Zap, RotateCcw, Crown } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,107 @@ import { ProfilePictureUpload } from "@/components/ProfilePictureUpload";
 import { Capacitor } from "@capacitor/core";
 import { useState } from "react";
 import { getSettings, saveSettings, scheduleReminder, cancelReminder, type ReminderSettings } from "@/lib/weightReminder";
+import { useSubscription } from "@/hooks/useSubscription";
+import { restorePurchases, isPremiumFromCustomerInfo, presentCustomerCenter } from "@/lib/purchases";
+import { PremiumBadge } from "@/components/subscription/PremiumBadge";
+import { useProfile } from "@/contexts/UserContext";
+import { useToast as useToastSub } from "@/hooks/use-toast";
+
+function SubscriptionSection() {
+  const { isPremium, tier, expiresAt, openPaywall } = useSubscription();
+  const { refreshProfile } = useProfile();
+  const { toast } = useToastSub();
+  const [restoringPurchases, setRestoringPurchases] = useState(false);
+
+  const handleRestore = async () => {
+    setRestoringPurchases(true);
+    try {
+      const info = await restorePurchases();
+      if (info && isPremiumFromCustomerInfo(info)) {
+        await new Promise((r) => setTimeout(r, 2000));
+        await refreshProfile();
+        toast({ title: "Purchases restored!", description: "Premium access has been restored." });
+      } else {
+        toast({ title: "No active subscription found", description: "If you believe this is an error, contact support." });
+      }
+    } catch {
+      toast({ title: "Restore failed", description: "Please try again.", variant: "destructive" as const });
+    } finally {
+      setRestoringPurchases(false);
+    }
+  };
+
+  if (isPremium) {
+    const expiryLabel = expiresAt
+      ? `Renews ${expiresAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+      : "Active";
+    const planLabel = tier === "premium_lifetime" ? "Lifetime" : tier === "premium_annual" ? "Annual" : "Monthly";
+
+    return (
+      <div className="rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden divide-y divide-border/30 dark:divide-white/5">
+        <div className="flex items-center justify-between px-4 py-3">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
+              <Crown className="h-5 w-5 text-primary" />
+            </span>
+            <div>
+              <div className="flex items-center gap-2">
+                <p className="text-[15px] font-medium text-foreground">Premium</p>
+                <PremiumBadge />
+              </div>
+              <p className="text-xs text-muted-foreground">{planLabel} · {expiryLabel}</p>
+            </div>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => presentCustomerCenter()}
+          className="w-full flex items-center justify-between px-4 py-3 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left"
+        >
+          <p className="text-sm text-foreground">Manage Subscription</p>
+          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden divide-y divide-border/30 dark:divide-white/5">
+      <button
+        type="button"
+        onClick={openPaywall}
+        className="w-full flex items-center justify-between px-4 py-3 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left"
+      >
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20">
+            <Zap className="h-5 w-5 text-primary" />
+          </span>
+          <div>
+            <p className="text-[15px] font-medium text-foreground">Upgrade to Premium</p>
+            <p className="text-xs text-muted-foreground">Unlimited AI · £7.99/mo</p>
+          </div>
+        </div>
+        <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+      </button>
+      <button
+        type="button"
+        onClick={handleRestore}
+        disabled={restoringPurchases}
+        className="w-full flex items-center justify-between px-4 py-3 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left"
+      >
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted/30 dark:bg-white/10">
+            <RotateCcw className="h-5 w-5 text-muted-foreground" />
+          </span>
+          <div>
+            <p className="text-[15px] font-medium text-foreground">Restore Purchases</p>
+            <p className="text-xs text-muted-foreground">Already subscribed?</p>
+          </div>
+        </div>
+      </button>
+    </div>
+  );
+}
 
 interface SettingsPanelProps {
   open: boolean;
@@ -133,6 +234,9 @@ export function SettingsPanel({
               </div>
             </div>
           )}
+
+          {/* Subscription */}
+          <SubscriptionSection />
 
           {/* Appearance */}
           <button

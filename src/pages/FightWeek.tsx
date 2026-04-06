@@ -21,6 +21,7 @@ import { TrendingDown, Target, Calendar } from "lucide-react";
 import { ShareButton } from "@/components/share/ShareButton";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { FightWeekSummaryCard } from "@/components/share/cards/FightWeekSummaryCard";
+import { useSubscription } from "@/hooks/useSubscription";
 
 interface DBPlan {
   id: string;
@@ -45,6 +46,7 @@ export default function FightWeek() {
 
   const { toast } = useToast();
   const { userId, profile } = useUser();
+  const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
   const { safeAsync, isMounted } = useSafeAsync();
   const aiAbortRef = useRef<AbortController | null>(null);
 
@@ -175,6 +177,11 @@ export default function FightWeek() {
   const generateAdvice = async () => {
     if (!userId || !projection) return;
 
+    if (!checkAIAccess()) {
+      openPaywall();
+      return;
+    }
+
     aiAbortRef.current?.abort();
     const controller = createAIAbortController();
     aiAbortRef.current = controller;
@@ -202,6 +209,7 @@ export default function FightWeek() {
         const msg = await extractEdgeFunctionError(error, "AI advice unavailable");
         toast({ title: "AI advice unavailable", description: msg, variant: "destructive" });
       } else if (data?.advice) {
+        incrementLocalUsage();
         setAiAdvice(data.advice);
         AIPersistence.save(userId, "fight_week_advice", data.advice, 48);
       }
@@ -218,14 +226,42 @@ export default function FightWeek() {
     safeAsync(setIsGeneratingAdvice)(false);
   };
 
-  // Loading skeleton
+  // Loading skeleton — matches the actual page layout
   if (initialLoading) {
     return (
-      <div className="space-y-3 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-4 w-32" />
-        <Skeleton className="h-40 rounded-2xl" />
-        <Skeleton className="h-64 rounded-2xl" />
+      <div className="space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
+        {/* Header */}
+        <div className="space-y-1">
+          <Skeleton className="h-7 w-36" />
+          <Skeleton className="h-3.5 w-28" />
+        </div>
+        {/* Input card */}
+        <div className="glass-card rounded-2xl p-3 border border-border/50 space-y-3">
+          <div className="grid grid-cols-3 gap-2">
+            <div className="space-y-1.5">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-9 w-full rounded-xl" />
+            </div>
+            <div className="space-y-1.5">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-9 w-full rounded-xl" />
+            </div>
+            <div className="space-y-1.5">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-9 w-full rounded-xl" />
+            </div>
+          </div>
+        </div>
+        {/* Summary tiles */}
+        <div className="grid grid-cols-3 gap-2">
+          <Skeleton className="h-20 rounded-2xl" />
+          <Skeleton className="h-20 rounded-2xl" />
+          <Skeleton className="h-20 rounded-2xl" />
+        </div>
+        {/* Breakdown card */}
+        <Skeleton className="h-48 rounded-2xl" />
+        {/* Chart */}
+        <Skeleton className="h-56 rounded-2xl" />
       </div>
     );
   }

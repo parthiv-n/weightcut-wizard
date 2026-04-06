@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { logger } from "@/lib/logger";
 import { localCache } from "@/lib/localCache";
 import { getSessionColor } from "@/lib/sessionColors";
+import { useSubscription } from "@/hooks/useSubscription";
 
 type TrainingSummary = {
     sportSections: {
@@ -65,6 +66,7 @@ function weekLabel(weekStartStr: string): string {
 
 export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrigger, customColors }: TrainingSummarySectionProps) {
     const { toast } = useToast();
+    const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
     const [savedSummaries, setSavedSummaries] = useState<SavedSummaryRow[]>([]);
     const [weekSessions, setWeekSessions] = useState<SessionRow[]>([]);
     const [selectedWeekStart, setSelectedWeekStart] = useState<string>(
@@ -170,6 +172,10 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
 
     const handleGenerateOrUpdate = async () => {
         if (sessionsWithNotes.length === 0) return;
+        if (!checkAIAccess()) {
+            openPaywall();
+            return;
+        }
         abortRef.current?.abort();
         const controller = new AbortController();
         abortRef.current = controller;
@@ -191,6 +197,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
             if (error) throw error;
             if (!data?.summary) throw new Error("No summary returned");
 
+            incrementLocalUsage();
             const fingerprint = computeFingerprint(weekSessions);
             const sessionIds = weekSessions.filter(s => s.notes).map(s => s.id);
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
+import { useSubscription } from "@/hooks/useSubscription";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
@@ -12,6 +13,7 @@ export function useRehydrationProtocol() {
   const { userId, profile: contextProfile, userName } = useUser();
   const { toast } = useToast();
   const { safeAsync, isMounted } = useSafeAsync();
+  const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
   const aiAbortRef = useRef<AbortController | null>(null);
 
   const currentWeight = contextProfile?.current_weight_kg ?? 0;
@@ -95,6 +97,11 @@ export function useRehydrationProtocol() {
     safeAsync(setLoading)(true);
 
     try {
+      if (!checkAIAccess()) {
+        openPaywall();
+        return;
+      }
+
       const { data, error } = await supabase.functions.invoke("rehydration-protocol", {
         body: {
           weightLostKg: parseFloat(weightLost),
@@ -116,9 +123,18 @@ export function useRehydrationProtocol() {
 
       if (controller.signal.aborted) return;
       if (!isMounted()) return;
-      if (error) throw new Error(await extractEdgeFunctionError(error, "Failed to generate protocol"));
+      if (error) {
+        const errBody = typeof error === 'object' && 'context' in error ? (error as any).context : null;
+        if (errBody?.status === 429) {
+          markLimitReached();
+          openPaywall();
+          return;
+        }
+        throw new Error(await extractEdgeFunctionError(error, "Failed to generate protocol"));
+      }
 
       if (data?.protocol) {
+        incrementLocalUsage();
         setProtocol(data.protocol);
 
         if (userId) {

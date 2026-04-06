@@ -281,7 +281,7 @@ All colors MUST be HSL.
     background: hsl(var(--card) / 0.9);
     border: 1px solid hsl(var(--border));
     border-radius: 1rem;
-    transition: border-color 0.3s ease;
+    transition: border-color 0.2s ease;
   }
 
   /* Light mode: bold outlined cards, dialogs, popovers */

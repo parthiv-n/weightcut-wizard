@@ -10,7 +10,9 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ProfileCompletionGuard } from "@/components/ProfileCompletionGuard";
 import { UserProvider } from "@/contexts/UserContext";
+import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { WizardBackgroundProvider } from "@/contexts/WizardBackgroundContext";
+import { PaywallOverlay } from "@/components/subscription/PaywallOverlay";
 import { PageTransition } from "@/components/PageTransition";
 import { NavigationDirectionProvider } from "@/hooks/useNavigationDirection";
 import { TutorialProvider } from "@/tutorial/TutorialContext";
@@ -44,6 +46,8 @@ _idle(() => {
   import("./pages/Dashboard").catch(() => {});
   import("./pages/Nutrition").catch(() => {});
   import("./pages/WeightTracker").catch(() => {});
+  import("./pages/FightWeek").catch(() => {});
+  import("./pages/Recovery").catch(() => {});
 });
 
 const queryClient = new QueryClient();
@@ -210,9 +214,11 @@ const App = () => (
         });
       }}>
         <UserProvider>
+          <SubscriptionProvider>
           <WizardBackgroundProvider>
             <Toaster />
             <Sonner />
+            <PaywallOverlay />
             <BrowserRouter>
               <NavigationDirectionProvider>
               <TutorialProvider>
@@ -250,6 +256,7 @@ const App = () => (
               </NavigationDirectionProvider>
             </BrowserRouter>
           </WizardBackgroundProvider>
+          </SubscriptionProvider>
         </UserProvider>
       </ErrorBoundary>
     </TooltipProvider>
