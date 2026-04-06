@@ -1067,7 +1067,7 @@ export default function Nutrition() {
         </SheetContent>
       </Sheet>
 
-      <ShareCardDialog open={nutritionData.shareOpen} onOpenChange={nutritionData.setShareOpen} title="Share Nutrition" shareTitle="My Nutrition Stats" shareText="Check out my nutrition tracking on WeightCut Wizard!">
+      <ShareCardDialog open={nutritionData.shareOpen} onOpenChange={nutritionData.setShareOpen} title="Share Nutrition" shareTitle="My Nutrition Stats" shareText="Check out my nutrition tracking on FightCamp Wizard!">
         {({ cardRef, aspect }) => (
           <NutritionCard ref={cardRef} date={selectedDate} calories={totalCalories} calorieTarget={dailyCalorieTarget}
             protein={totalProtein} carbs={totalCarbs} fats={totalFats}

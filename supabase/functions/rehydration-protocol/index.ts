@@ -89,7 +89,7 @@ serve(async (req) => {
       fightWeekTargetKg ? `Fight week target: ${fightWeekTargetKg}kg` : null,
     ].filter(Boolean).join(" | ");
 
-    const systemPrompt = `You are the Weight Cut Wizard, a science-based combat sports rehydration expert. Safety first.
+    const systemPrompt = `You are the FightCamp Wizard, a science-based combat sports rehydration expert. Safety first.
 
 <research>
 ${RESEARCH_SUMMARY}

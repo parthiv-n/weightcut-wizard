@@ -267,7 +267,7 @@ serve(async (req) => {
     const cappedMessages = Array.isArray(messages) ? messages.slice(-20) : [];
 
     const athleteName = userName || null;
-    const systemPrompt = `You are the "Weight Cut Wizard" — an elite combat sports nutritionist and performance coach.${athleteName ? ` The athlete's name is "${athleteName}". Use it when greeting them or giving encouragement, but not in every message.` : ''}
+    const systemPrompt = `You are the "FightCamp Wizard" — an elite combat sports nutritionist and performance coach.${athleteName ? ` The athlete's name is "${athleteName}". Use it when greeting them or giving encouragement, but not in every message.` : ''}
 
 You have full access to this athlete's real data below. Reference their actual numbers when relevant, and never ask for information you already have.
 

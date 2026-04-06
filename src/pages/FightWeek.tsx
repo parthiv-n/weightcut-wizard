@@ -397,7 +397,7 @@ export default function FightWeek() {
           onOpenChange={setShareOpen}
           title="Share Fight Week"
           shareTitle="Fight Week Plan"
-          shareText="Check out my weight cut protocol on WeightCut Wizard"
+          shareText="Check out my weight cut protocol on FightCamp Wizard"
         >
           {({ cardRef, aspect }) => (
             <FightWeekSummaryCard

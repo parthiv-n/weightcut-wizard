@@ -10,7 +10,7 @@ interface WizardLoaderProps {
 }
 
 export function WizardLoader({
-  title = "WeightCut Wizard",
+  title = "FightCamp Wizard",
   message = "Preparing your data...",
 }: WizardLoaderProps) {
   const [progress, setProgress] = useState(0);

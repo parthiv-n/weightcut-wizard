@@ -531,7 +531,7 @@ export default function TrainingCalendar() {
                 transparent={cardVariant === "transparent"}
                 title="Share Training Log"
                 shareTitle="Training Log"
-                shareText="Check out my training log on WeightCut Wizard"
+                shareText="Check out my training log on FightCamp Wizard"
             >
                 {({ cardRef, aspect, transparent }) => {
                     const now = new Date();

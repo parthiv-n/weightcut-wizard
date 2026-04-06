@@ -38,7 +38,7 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
 
   const getGreeting = useCallback(() => {
     const name = userName || "champ";
-    return `Hey ${name}! I'm the Weight Cut Wizard. How can I help you dial in your nutrition and weight today?`;
+    return `Hey ${name}! I'm the FightCamp Wizard. How can I help you dial in your nutrition and weight today?`;
   }, [userName]);
 
   const loadHistory = useCallback(() => {
@@ -70,7 +70,7 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
       await LocalNotifications.schedule({
         notifications: [
           {
-            title: "Weight Cut Wizard",
+            title: "FightCamp Wizard",
             body: "Your nutrition protocol is ready.",
             id: new Date().getTime(),
             schedule: { at: new Date(Date.now() + 1000) },

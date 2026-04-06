@@ -98,7 +98,7 @@ export function FloatingWizardChat() {
                 <Sparkles className="h-3 w-3 text-primary absolute -bottom-1 -right-1 drop-shadow-[0_0_6px_rgba(37,99,235,0.6)]" />
               </div>
               <div>
-                <h2 className="text-lg font-bold leading-tight bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text">Weight Cut Wizard</h2>
+                <h2 className="text-lg font-bold leading-tight bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text">FightCamp Wizard</h2>
                 <p className="text-xs text-muted-foreground flex items-center gap-1">
                   <span className="relative flex h-2 w-2">
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
