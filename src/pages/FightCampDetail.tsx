@@ -161,7 +161,7 @@ export default function FightCampDetail() {
 
   if (loading) {
     return (
-      <div className="space-y-3 px-3 pb-3 pt-14 sm:p-5 sm:pt-14 max-w-2xl mx-auto">
+      <div className="space-y-3 p-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-40 w-full rounded-2xl" />
         <Skeleton className="h-64 w-full rounded-2xl" />
@@ -177,7 +177,7 @@ export default function FightCampDetail() {
     : null;
 
   return (
-    <div className="space-y-3 px-3 pb-3 pt-14 sm:p-5 sm:pt-14 max-w-2xl mx-auto">
+    <div className="space-y-3 p-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
 
       {/* Header */}
       <div className="flex items-center gap-3">

@@ -139,8 +139,12 @@ export default function Nutrition() {
   const groupedMeals = useMemo(() => {
     const groups: Record<string, Meal[]> = { breakfast: [], lunch: [], dinner: [], snack: [] };
     for (const m of meals) {
-      const type = (m.meal_type || "other").toLowerCase();
-      if (type in groups) groups[type].push(m);
+      const type = (m.meal_type || "snack").toLowerCase();
+      if (type in groups) {
+        groups[type].push(m);
+      } else {
+        groups["snack"].push(m);
+      }
     }
     return groups;
   }, [meals]);

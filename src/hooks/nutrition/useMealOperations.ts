@@ -63,10 +63,12 @@ export function useMealOperations(params: UseMealOperationsParams) {
       date: selectedDate,
     };
 
-    const updatedMeals = [...meals, optimisticMeal];
-    setMeals(updatedMeals);
-    localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
-    nutritionCache.setMeals(userId, selectedDate, updatedMeals);
+    setMeals(prev => {
+      const updatedMeals = [...prev, optimisticMeal];
+      localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
+      nutritionCache.setMeals(userId, selectedDate, updatedMeals);
+      return updatedMeals;
+    });
 
     const dbPayload = {
       id: mealId,
@@ -91,15 +93,15 @@ export function useMealOperations(params: UseMealOperationsParams) {
 
       if (error) throw error;
 
-      syncQueue.dequeueByRecordId(userId, mealId);
       celebrateSuccess();
       await loadMeals(true);
+      syncQueue.dequeueByRecordId(userId, mealId);
     } catch (error) {
       logger.error("Error adding meal (queued for sync)", error);
       celebrateSuccess();
       toast({ title: "Saved offline", description: "Will sync when connected." });
     }
-  }, [userId, selectedDate, meals, setMeals, loadMeals, toast]);
+  }, [userId, selectedDate, setMeals, loadMeals, toast]);
 
   const handleLogMealIdea = useCallback(async (mealIdea: Meal, mealTypeOverride?: string) => {
     setLoggingMeal(mealIdea.id);
@@ -124,10 +126,12 @@ export function useMealOperations(params: UseMealOperationsParams) {
         date: selectedDate,
       };
 
-      const updatedMeals = [...meals, optimisticMeal];
-      setMeals(updatedMeals);
-      localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
-    nutritionCache.setMeals(userId, selectedDate, updatedMeals);
+      setMeals(prev => {
+        const updatedMeals = [...prev, optimisticMeal];
+        localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
+        nutritionCache.setMeals(userId, selectedDate, updatedMeals);
+        return updatedMeals;
+      });
 
       const dbPayload = {
         id: mealId,
@@ -161,13 +165,13 @@ export function useMealOperations(params: UseMealOperationsParams) {
 
         if (error) throw error;
 
-        syncQueue.dequeueByRecordId(userId, mealId);
         celebrateSuccess();
         toast({
           title: "Meal logged!",
           description: `${mealIdea.meal_name} added to your day`,
         });
         await loadMeals(true);
+        syncQueue.dequeueByRecordId(userId, mealId);
         } catch (error) {
         logger.error("Error logging meal (queued for sync)", error);
         celebrateSuccess();
@@ -183,7 +187,7 @@ export function useMealOperations(params: UseMealOperationsParams) {
     } finally {
       setLoggingMeal(null);
     }
-  }, [userId, selectedDate, meals, setMeals, loadMeals, toast]);
+  }, [userId, selectedDate, setMeals, loadMeals, toast]);
 
   const saveMealIdeasToDatabase = async (mealIdeas: Meal[]) => {
     if (mealIdeas.length === 0) return;
@@ -243,10 +247,12 @@ export function useMealOperations(params: UseMealOperationsParams) {
         });
       }
 
-      const updatedMeals = [...meals, ...optimisticMeals];
-      setMeals(updatedMeals);
-      localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
-    nutritionCache.setMeals(userId, selectedDate, updatedMeals);
+      setMeals(prev => {
+        const updatedMeals = [...prev, ...optimisticMeals];
+        localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
+        nutritionCache.setMeals(userId, selectedDate, updatedMeals);
+        return updatedMeals;
+      });
       setMealPlanIdeas([]);
       AIPersistence.remove(userId, 'meal_plans');
 
@@ -259,15 +265,15 @@ export function useMealOperations(params: UseMealOperationsParams) {
 
         if (error) throw error;
 
-        for (const mealId of mealIds) {
-          syncQueue.dequeueByRecordId(userId, mealId);
-        }
         celebrateSuccess();
         toast({
           title: "All meals saved!",
           description: `${mealIdeas.length} meals added to your day`,
         });
         await loadMeals(true);
+        for (const mealId of mealIds) {
+          syncQueue.dequeueByRecordId(userId, mealId);
+        }
         } catch (error) {
         logger.error("Error saving meals (queued for sync)", error);
         celebrateSuccess();
@@ -304,13 +310,14 @@ export function useMealOperations(params: UseMealOperationsParams) {
 
     const deletedId = mealToDelete.id;
 
-    const updatedMeals = meals.filter(m => m.id !== deletedId);
-    setMeals(updatedMeals);
+    setMeals(prev => {
+      const updatedMeals = prev.filter(m => m.id !== deletedId);
+      localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
+      nutritionCache.setMeals(userId, selectedDate, updatedMeals);
+      return updatedMeals;
+    });
     setDeleteDialogOpen(false);
     setMealToDelete(null);
-
-    localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
-    nutritionCache.setMeals(userId, selectedDate, updatedMeals);
 
     syncQueue.enqueue(userId, {
       table: "nutrition_logs",
@@ -332,14 +339,14 @@ export function useMealOperations(params: UseMealOperationsParams) {
 
       if (error) throw error;
 
-      syncQueue.dequeueByRecordId(userId, deletedId);
       confirmDelete();
       await loadMeals(true);
+      syncQueue.dequeueByRecordId(userId, deletedId);
     } catch (error) {
       logger.error("Error deleting meal (queued for sync)", error);
       toast({ title: "Deleted offline", description: "Will sync when connected." });
     }
-  }, [mealToDelete, userId, meals, setMeals, selectedDate, loadMeals, toast]);
+  }, [mealToDelete, userId, setMeals, selectedDate, loadMeals, toast]);
 
   const handleFoodSearchSelected = useCallback(async (food: {
     meal_name: string;
@@ -367,10 +374,12 @@ export function useMealOperations(params: UseMealOperationsParams) {
       is_ai_generated: false,
     };
 
-    const updatedMeals = [...meals, optimisticMeal];
-    setMeals(updatedMeals);
-    localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
-    nutritionCache.setMeals(userId, selectedDate, updatedMeals);
+    setMeals(prev => {
+      const updatedMeals = [...prev, optimisticMeal];
+      localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
+      nutritionCache.setMeals(userId, selectedDate, updatedMeals);
+      return updatedMeals;
+    });
 
     const dbPayload = {
       id: mealId,
@@ -404,16 +413,16 @@ export function useMealOperations(params: UseMealOperationsParams) {
 
       if (error) throw error;
 
-      syncQueue.dequeueByRecordId(userId, mealId);
       celebrateSuccess();
       toast({ title: "Food logged!", description: `${food.meal_name} · ${food.calories} kcal` });
       await loadMeals(true);
+      syncQueue.dequeueByRecordId(userId, mealId);
     } catch (error) {
       logger.error("Error logging food (queued for sync)", error);
       celebrateSuccess();
       toast({ title: "Saved offline", description: "Will sync when connected." });
     }
-  }, [userId, selectedDate, meals, setMeals, loadMeals, toast]);
+  }, [userId, selectedDate, setMeals, loadMeals, toast]);
 
   // handleSaveAllMeals is just saveMealIdeasToDatabase — not wrapped separately
   // since it captures mealPlanIdeas which changes frequently

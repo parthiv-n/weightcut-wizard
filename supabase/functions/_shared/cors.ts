@@ -9,9 +9,16 @@ const ALLOWED_ORIGINS = [
 const PROD_ORIGIN = Deno.env.get("ALLOWED_ORIGIN");
 if (PROD_ORIGIN) ALLOWED_ORIGINS.push(PROD_ORIGIN);
 
+function isAllowedOrigin(origin: string): boolean {
+  if (ALLOWED_ORIGINS.includes(origin)) return true;
+  // Allow any localhost port for dev flexibility
+  if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return true;
+  return false;
+}
+
 export function corsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get("Origin") ?? "";
-  const allowed = ALLOWED_ORIGINS.includes(origin);
+  const allowed = isAllowedOrigin(origin);
   return {
     "Access-Control-Allow-Origin": allowed ? origin : ALLOWED_ORIGINS[0],
     "Access-Control-Allow-Headers":

@@ -179,7 +179,7 @@ const AppLayoutContent = () => {
               <RefreshCw className="h-4 w-4 text-muted-foreground" />
             </button>
             <PageTransition>
-              <Suspense fallback={null}>
+              <Suspense fallback={<div className="min-h-screen" />}>
                 <Outlet />
               </Suspense>
             </PageTransition>

@@ -6,7 +6,7 @@ let Purchases: any = null;
 let LOG_LEVEL: any = null;
 let RevenueCatUI: any = null;
 
-const RC_API_KEY_IOS = "test_zQKIRKtEysnYPlIAZPdzMXbhPHN";
+const RC_API_KEY_IOS = "appl_KEgVHMBYZuygdbadkzJDGNdIuTL";
 const ENTITLEMENT_ID = "FightCamp Wizard Pro";
 
 export const PRODUCT_IDS = {

@@ -165,7 +165,7 @@ export default function FightCamps() {
 
   if (loading) {
     return (
-      <div className="space-y-3 px-3 pb-3 pt-14 sm:p-5 sm:pt-14 max-w-2xl mx-auto">
+      <div className="space-y-3 p-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
         <Skeleton className="h-7 w-32" />
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
@@ -186,7 +186,7 @@ export default function FightCamps() {
   }
 
   return (
-    <div className="space-y-3 px-3 pb-3 pt-14 sm:p-5 sm:pt-14 max-w-2xl mx-auto">
+    <div className="space-y-3 p-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
 
         {/* Header */}
         <div className="flex items-center justify-between">

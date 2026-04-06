@@ -248,7 +248,7 @@ export default function WeightTracker() {
         onCancel={handleAICancel}
         onRetry={getAIAnalysis}
       />
-      <div className="space-y-2.5 px-3 pb-3 pt-14 sm:p-5 sm:pt-16 max-w-2xl mx-auto">
+      <div className="space-y-2.5 p-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
         {/* Chart + History */}
         <div className="glass-card p-3 space-y-3">
           <div className="flex items-center justify-between">

@@ -53,7 +53,6 @@ interface GamificationData {
 }
 
 const CACHE_KEY = "gamification_data";
-const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 const DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
 
@@ -270,16 +269,11 @@ export function useGamification(
       return;
     }
 
-    // Check cache first
-    const cached = localCache.get<GamificationData>(
-      userId,
-      CACHE_KEY,
-      CACHE_TTL_MS
-    );
+    // Serve cache instantly (no TTL — always show if available)
+    const cached = localCache.get<GamificationData>(userId, CACHE_KEY);
     if (cached) {
       setGamificationData(cached);
       setBadgesLoading(false);
-      return;
     }
 
     let cancelled = false;
