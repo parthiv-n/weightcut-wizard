@@ -18,7 +18,7 @@ export function CardWatermark({ large = false }: CardWatermarkProps) {
         pointerEvents: "none",
       }}
     >
-      Made with WeightCut Wizard
+      Made with FightCamp Wizard
     </div>
   );
 }

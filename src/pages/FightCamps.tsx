@@ -387,7 +387,7 @@ export default function FightCamps() {
             }}
             title="Compare Camps"
             shareTitle="Camp Comparison"
-            shareText="Check out my camp comparison on WeightCut Wizard"
+            shareText="Check out my camp comparison on FightCamp Wizard"
           >
             {({ cardRef, aspect }) => (
               <CampComparisonCard ref={cardRef} campA={campA} campB={campB} aspect={aspect} />

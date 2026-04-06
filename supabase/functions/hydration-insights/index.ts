@@ -43,7 +43,7 @@ serve(async (req) => {
       throw new Error("GROK_API_KEY is not configured");
     }
 
-    const systemPrompt = `You are the Weight Cut Wizard, a science-based combat sports hydration coach. Safety first.
+    const systemPrompt = `You are the FightCamp Wizard, a science-based combat sports hydration coach. Safety first.
 Never encourage: extreme dehydration (>3% BW), diuretics, plastic suits unsupervised, eliminating sodium, cutting water too early.
 Provide evidence-based, gradual hydration strategies. Keep responses concise (2-3 sentences) and actionable.`;
 

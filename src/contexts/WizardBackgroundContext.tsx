@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useCallback, useMemo, ReactNode, u
 import { supabase } from "@/integrations/supabase/client";
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
-import { useAuth } from "./UserContext";
+import { useAuth, useUser } from "./UserContext";
 import { useSubscriptionContext, isLimitHitToday } from "./SubscriptionContext";
 import { syncWeightReminder } from "@/lib/weightReminder";
 import { logger } from "@/lib/logger";
@@ -24,6 +24,7 @@ const WizardBackgroundContext = createContext<WizardBackgroundContextType | unde
 
 export function WizardBackgroundProvider({ children }: { children: ReactNode }) {
   const { userId } = useAuth();
+  const { userName } = useUser();
   const { isPremium, openPaywall, incrementLocalUsage, markLimitReached } = useSubscriptionContext();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -37,6 +38,11 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
     }
   }, []);
 
+  const getGreeting = useCallback(() => {
+    const name = userName || "champ";
+    return `Hey ${name}! I'm the FightCamp Wizard. How can I help you dial in your nutrition and weight today?`;
+  }, [userName]);
+
   const loadHistory = useCallback(() => {
     if (!userId) return;
     const history = localStorage.getItem(`wizard_chat_history_${userId}`);
@@ -44,10 +50,10 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
       setMessages(JSON.parse(history));
     } else {
       setMessages([
-        { role: "assistant", content: "Hey champ! I'm the Weight Cut Wizard. How can I help you dial in your nutrition and weight today?" }
+        { role: "assistant", content: getGreeting() }
       ]);
     }
-  }, [userId]);
+  }, [userId, getGreeting]);
 
   useEffect(() => {
     loadHistory();
@@ -57,16 +63,16 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
     if (!userId) return;
     localStorage.removeItem(`wizard_chat_history_${userId}`);
     setMessages([
-      { role: "assistant", content: "Hey champ! I'm the Weight Cut Wizard. How can I help you dial in your nutrition and weight today?" }
+      { role: "assistant", content: getGreeting() }
     ]);
-  }, [userId]);
+  }, [userId, getGreeting]);
 
   const triggerNotification = async () => {
     try {
       await LocalNotifications.schedule({
         notifications: [
           {
-            title: "Weight Cut Wizard",
+            title: "FightCamp Wizard",
             body: "Your nutrition protocol is ready.",
             id: new Date().getTime(),
             schedule: { at: new Date(Date.now() + 1000) },
@@ -110,7 +116,7 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
             "Content-Type": "application/json",
             Authorization: `Bearer ${session.access_token}`,
           },
-          body: JSON.stringify({ messages: newMessages }),
+          body: JSON.stringify({ messages: newMessages, userName: userName || undefined }),
         }
       );
 

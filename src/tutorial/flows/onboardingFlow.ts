@@ -6,7 +6,7 @@ export const onboardingFlow: TutorialFlow = {
   steps: [
     {
       id: "welcome",
-      title: "Welcome to WeightCut Wizard",
+      title: "Welcome to FightCamp Wizard",
       description:
         "Let's take a quick tour of your app. We'll walk through every screen so you know exactly where everything is.",
       position: "center",

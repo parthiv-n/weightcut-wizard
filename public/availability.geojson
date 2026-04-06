@@ -1,0 +1,85 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "region": "North America", "countries": "US, CA, MX", "available": true },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-170, 15], [-170, 72], [-50, 72], [-50, 15], [-170, 15]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "region": "South America", "countries": "BR, AR, CL, CO, PE, VE, EC, BO, PY, UY, GY, SR", "available": true },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-82, 15], [-82, -56], [-34, -56], [-34, 15], [-82, 15]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "region": "Europe", "countries": "GB, IE, FR, DE, ES, PT, IT, NL, BE, SE, NO, DK, FI, PL, AT, CH, CZ, RO, HU, GR, BG, HR, SK, SI, LT, LV, EE, LU, MT, CY", "available": true },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-12, 35], [-12, 72], [40, 72], [40, 35], [-12, 35]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "region": "Middle East", "countries": "AE, SA, QA, KW, BH, OM, JO, LB, IL, TR", "available": true },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[25, 12], [25, 42], [60, 42], [60, 12], [25, 12]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "region": "Africa", "countries": "ZA, NG, KE, EG, GH, TZ, UG, SN, CI, CM, MA, TN, DZ, ET, RW", "available": true },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-18, -35], [-18, 37], [52, 37], [52, -35], [-18, -35]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "region": "Central & South Asia", "countries": "IN, PK, BD, LK, NP", "available": true },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[60, 5], [60, 37], [98, 37], [98, 5], [60, 5]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "region": "East & Southeast Asia", "countries": "JP, KR, CN, TW, HK, SG, TH, MY, PH, ID, VN", "available": true },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[98, -10], [98, 50], [150, 50], [150, -10], [98, -10]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "region": "Oceania", "countries": "AU, NZ, FJ, PG", "available": true },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[110, -47], [110, -5], [180, -5], [180, -47], [110, -47]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "region": "Russia & Central Asia", "countries": "RU, KZ, UZ, KG, TJ", "available": true },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[40, 37], [40, 75], [180, 75], [180, 37], [40, 37]]]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": { "region": "Caribbean & Central America", "countries": "JM, TT, BB, DO, CR, PA, GT, HN, SV, NI, CU, HT", "available": true },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [[[-92, 7], [-92, 24], [-59, 24], [-59, 7], [-92, 7]]]
+      }
+    }
+  ]
+}

@@ -18,7 +18,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>Weightcut Wizard</string>
+        <string>FightCamp Wizard</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -59,12 +59,14 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
     <key>NSPhotoLibraryUsageDescription</key>
-    <string>Weight Cut Wizard needs access to your photo library to let you upload a profile picture.</string>
+    <string>FightCamp Wizard needs access to your photo library to let you upload a profile picture.</string>
     <key>NSCameraUsageDescription</key>
-    <string>Weight Cut Wizard needs access to your camera to let you take a profile picture.</string>
+    <string>FightCamp Wizard needs access to your camera to let you take a profile picture.</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>Weight Cut Wizard needs access to your microphone to allow you to log food via voice dictation.</string>
+    <string>FightCamp Wizard needs access to your microphone to allow you to log food and training notes via voice dictation.</string>
+    <key>NSSpeechRecognitionUsageDescription</key>
+    <string>FightCamp Wizard uses speech recognition to convert your voice into session notes.</string>
     <key>NSPhotoLibraryAddUsageDescription</key>
-    <string>Weight Cut Wizard needs access to save photos to your library.</string>
+    <string>FightCamp Wizard needs access to save photos to your library.</string>
 </dict>
 </plist>

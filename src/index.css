@@ -235,6 +235,45 @@ All colors MUST be HSL.
     .disclosure-panel { transition: none; }
   }
 
+  /* Markdown prose for AI chat messages (replaces @tailwindcss/typography) */
+  .wizard-prose p {
+    margin-bottom: 0.5em;
+    line-height: 1.55;
+  }
+  .wizard-prose p:last-child { margin-bottom: 0; }
+  .wizard-prose strong { font-weight: 700; color: hsl(var(--foreground)); }
+  .wizard-prose em { font-style: italic; }
+  .wizard-prose ul, .wizard-prose ol {
+    margin: 0.4em 0;
+    padding-left: 1.25em;
+  }
+  .wizard-prose ul { list-style-type: disc; }
+  .wizard-prose ol { list-style-type: decimal; }
+  .wizard-prose li {
+    margin-bottom: 0.2em;
+    line-height: 1.5;
+  }
+  .wizard-prose li::marker {
+    color: hsl(var(--muted-foreground));
+  }
+  .wizard-prose h3, .wizard-prose h4 {
+    font-weight: 700;
+    margin-top: 0.6em;
+    margin-bottom: 0.25em;
+    font-size: 0.9em;
+    color: hsl(var(--foreground));
+  }
+  .wizard-prose code {
+    font-size: 0.85em;
+    background: hsl(var(--muted));
+    padding: 0.15em 0.35em;
+    border-radius: 0.25rem;
+  }
+  .wizard-prose hr {
+    border-color: hsl(var(--border) / 0.3);
+    margin: 0.5em 0;
+  }
+
   /* GLOBAL MODERN GLASSMORPHISM FOR CONTENT CONTAINERS (Only applies fully in dark mode, fallback for light) */
   .glass-card,
   .bg-card,

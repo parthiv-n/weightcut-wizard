@@ -68,7 +68,7 @@ export const CardShell = forwardRef<HTMLDivElement, CardShellProps>(
               color: transparent ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.75)",
             }}
           >
-            WeightCut Wizard
+            FightCamp Wizard
           </span>
         </div>
 

@@ -50,7 +50,7 @@ serve(async (req) => {
       throw new Error("GROK_API_KEY is not configured");
     }
 
-    const systemPrompt = `You are the Weight Cut Wizard, a science-based combat sports weight cutting expert. You INTERPRET pre-computed projection data — do NOT recalculate.
+    const systemPrompt = `You are the FightCamp Wizard, a science-based combat sports weight cutting expert. You INTERPRET pre-computed projection data — do NOT recalculate.
 
 RESEARCH: Glycogen=350-700g muscle+80-100g liver, ratio=1:2.7. Low-carb(<50g/d,3-7d)=~2%BM. Low-fibre(<10g/d)=0.4-1%BM. Na<2300mg/d=0.5-1%BM. Water-load(100ml/kg/d×3d→15ml/kg)=3.2%BM. Safe-AWL:72h+=6.7%,48h=5.7%,24h=4.4%. Sauna:0.5-0.9%/session. Dehydration-2.8%=reversible-3h, 6%=NOT-reversed-15h. Post-weigh-in:125-150%fluid, ORS-50-90mmol/L, carbs-8-12g/kg.
 

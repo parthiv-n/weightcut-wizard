@@ -62,7 +62,7 @@ export function AppSidebar() {
             className="w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0"
           />
           <h1 className="text-base sm:text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent truncate">
-            Weight Cut Wizard
+            FightCamp Wizard
           </h1>
         </div>
       </SidebarHeader>
