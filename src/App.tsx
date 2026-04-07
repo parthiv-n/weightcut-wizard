@@ -25,8 +25,8 @@ const AIFloatingIndicator = lazy(() => import("@/components/AIFloatingIndicator"
 const AILimitTimer = lazy(() => import("@/components/subscription/AILimitTimer").then(m => ({ default: m.AILimitTimer })));
 import * as Sentry from "@sentry/react";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import { RefreshCw } from "lucide-react";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { PullToRefresh } from "@/components/PullToRefresh";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import Onboarding from "./pages/Onboarding";
@@ -173,15 +173,7 @@ const AppLayoutContent = () => {
           <OfflineBanner />
           {/* Main content with mobile-first responsive padding - bottom padding for bottom nav */}
           <main className="flex-1 overflow-auto overflow-x-hidden relative min-h-0 w-full pt-2 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right" style={{ paddingBottom: "calc(4rem + env(safe-area-inset-bottom, 0px))" }}>
-            {/* Manual refresh button — top-left, below iOS safe area */}
-            <button
-              onClick={() => window.location.reload()}
-              style={{ top: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
-              className="fixed right-3 z-50 h-9 w-9 flex items-center justify-center rounded-xl bg-background/95 border border-border/50 shadow-sm active:scale-90 transition-transform md:hidden"
-              aria-label="Refresh page"
-            >
-              <RefreshCw className="h-4 w-4 text-muted-foreground" />
-            </button>
+            <PullToRefresh />
             <PageTransition>
               <Suspense fallback={<div className="min-h-screen" />}>
                 <Outlet />

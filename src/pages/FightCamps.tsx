@@ -191,7 +191,7 @@ export default function FightCamps() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold">{compareMode ? "Compare Camps" : "Fight Camps"}</h1>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             {camps.length >= 2 && (
               <Button
                 size="icon"
@@ -201,11 +201,18 @@ export default function FightCamps() {
                   setCompareMode(!compareMode);
                   setSelectedCamps([]);
                 }}
-                className="rounded-full h-9 w-9"
+                className="rounded-full h-8 w-8"
               >
                 {compareMode ? <X className="h-4 w-4" /> : <GitCompareArrows className="h-4 w-4" />}
               </Button>
             )}
+            <button
+              onClick={() => setDialogOpen(true)}
+              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 active:scale-95 transition-all"
+              aria-label="New fight camp"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
           </div>
         </div>
 
@@ -320,16 +327,6 @@ export default function FightCamps() {
         title="Delete Fight Camp"
         itemName={campToDelete?.name}
       />
-
-      {/* FAB — Add Fight Camp */}
-      <button
-        onClick={() => setDialogOpen(true)}
-        className="fixed right-4 z-[9998] w-12 h-12 rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/25 flex items-center justify-center active:scale-95 transition-transform md:hidden"
-        style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 5.5rem)" }}
-        aria-label="New fight camp"
-      >
-        <Plus className="h-5 w-5" />
-      </button>
 
       {/* New Camp Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
