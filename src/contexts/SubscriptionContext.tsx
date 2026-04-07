@@ -249,12 +249,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         setGems(prev => Math.max(0, prev - 1));
         // Notify useGems hook for instant settings UI update
         window.dispatchEvent(new Event('gem-consumed'));
-        // Deduct gem in DB directly (server subscriptionGuard may also deduct,
-        // but deduct_gem is idempotent per actual count — extra call just ensures sync)
+        // Server-side subscriptionGuard already deducts the gem — just sync profile after
         if (userId) {
-          (supabase.rpc as any)('deduct_gem', { p_user_id: userId })
-            .then(() => refreshProfile())
-            .catch(() => {});
+          setTimeout(() => refreshProfile(), 1500);
         }
       } else {
         // Free call — still sync profile after a delay
