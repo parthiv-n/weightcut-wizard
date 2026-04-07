@@ -202,6 +202,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       incrementUsageCount();
       const newCount = getUsageCountToday();
       setAiUsageToday({ used: newCount, limit: FREE_DAILY_LIMIT });
+      // Notify useGems to decrement locally
+      window.dispatchEvent(new Event('gem-consumed'));
     }
   }, [isPremium]);
 

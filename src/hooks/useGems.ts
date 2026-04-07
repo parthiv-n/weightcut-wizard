@@ -10,13 +10,18 @@ export function useGems() {
   const { userId, profile } = useUser();
   const { isPremium } = useSubscription();
   const { toast } = useToast();
-  const [gems, setGems] = useState(profile?.gems ?? 1);
+  // Start with 0 — profile sync will set the real value once loaded
+  const [gems, setGems] = useState(0);
   const [adsRemaining, setAdsRemaining] = useState(5);
   const [loading, setLoading] = useState(false);
+  const [profileLoaded, setProfileLoaded] = useState(false);
 
-  // Sync from profile
+  // Sync from profile — this is the source of truth
   useEffect(() => {
-    if (profile?.gems !== undefined) setGems(profile.gems);
+    if (profile?.gems !== undefined) {
+      setGems(profile.gems);
+      setProfileLoaded(true);
+    }
     if (profile?.ads_watched_today !== undefined) {
       const today = new Date().toISOString().split('T')[0];
       const adsDate = profile.ads_watched_date;
@@ -28,13 +33,20 @@ export function useGems() {
     }
   }, [profile?.gems, profile?.ads_watched_today, profile?.ads_watched_date]);
 
-  // Grant daily free gem on mount
+  // Grant daily free gem ONLY after profile has loaded (prevents race condition)
   useEffect(() => {
-    if (!userId || isPremium) return;
+    if (!userId || isPremium || !profileLoaded) return;
     (supabase.rpc as any)('grant_daily_free_gem', { p_user_id: userId })
       .then(({ data }: any) => { if (data !== null && data !== undefined) setGems(data); })
       .catch(() => {});
-  }, [userId, isPremium]);
+  }, [userId, isPremium, profileLoaded]);
+
+  // Listen for gem consumption events from AI hooks (via SubscriptionContext)
+  useEffect(() => {
+    const handler = () => { if (!isPremium) setGems(prev => Math.max(0, prev - 1)); };
+    window.addEventListener('gem-consumed', handler);
+    return () => window.removeEventListener('gem-consumed', handler);
+  }, [isPremium]);
 
   // Preload ad
   useEffect(() => {
@@ -82,6 +94,11 @@ export function useGems() {
     } catch {}
   }, [userId]);
 
+  const consumeGem = useCallback(() => {
+    if (isPremium) return;
+    setGems(prev => Math.max(0, prev - 1));
+  }, [isPremium]);
+
   return {
     gems,
     adsRemaining,
@@ -91,5 +108,6 @@ export function useGems() {
     isPremium,
     watchAdForGem,
     refreshGems,
+    consumeGem,
   };
 }

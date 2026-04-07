@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { format, startOfWeek, endOfWeek, addDays } from "date-fns";
-import { Brain, Loader2, ChevronDown, Trash2, CheckCircle, X, Dumbbell, Activity, Sparkles } from "lucide-react";
+import { Brain, Loader2, ChevronDown, Trash2, CheckCircle, X, Dumbbell, Activity, Sparkles, Gem } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Card } from "@/components/ui/card";
@@ -11,6 +11,7 @@ import { getSessionColor } from "@/lib/sessionColors";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAITask } from "@/contexts/AITaskContext";
 import { AICompactOverlay } from "@/components/AICompactOverlay";
+import { useGems } from "@/hooks/useGems";
 
 type TrainingSummary = {
     sportSections: {
@@ -90,7 +91,8 @@ function weekLabel(weekStartStr: string): string {
 
 export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrigger, customColors }: TrainingSummarySectionProps) {
     const { toast } = useToast();
-    const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
+    const { gems, isPremium: gemsIsPremium } = useGems();
+    const { checkAIAccess, openPaywall, openNoGemsDialog, incrementLocalUsage, markLimitReached } = useSubscription();
     const { tasks, addTask, completeTask, failTask, dismissTask } = useAITask();
     const [savedSummaries, setSavedSummaries] = useState<SavedSummaryRow[]>([]);
     const [weekSessions, setWeekSessions] = useState<SessionRow[]>([]);
@@ -219,7 +221,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
     const handleGenerateOrUpdate = async () => {
         if (sessionsWithNotes.length === 0) return;
         if (!checkAIAccess()) {
-            openPaywall();
+            openNoGemsDialog();
             return;
         }
         abortRef.current?.abort();
@@ -420,6 +422,12 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
                             <span className="text-sm font-semibold bg-gradient-to-r from-primary to-blue-400 bg-clip-text text-transparent">
                                 {buttonState === "update" ? "Update Training Summary" : "Generate Training Summary"}
                             </span>
+                            {!gemsIsPremium && (
+                                <span className="inline-flex items-center gap-0.5 ml-1.5 text-amber-500">
+                                    <Gem className="h-3 w-3" />
+                                    <span className="text-[10px] font-bold tabular-nums">{gems}</span>
+                                </span>
+                            )}
                         </>
                     )}
                 </button>

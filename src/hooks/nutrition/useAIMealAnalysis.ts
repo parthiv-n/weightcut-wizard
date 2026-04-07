@@ -24,7 +24,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
   const { userId } = useUser();
   const { toast } = useToast();
   const { isMounted } = useSafeAsync();
-  const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
+  const { checkAIAccess, openPaywall, openNoGemsDialog, incrementLocalUsage, markLimitReached, handleAILimitError } = useSubscription();
   const { addTask, completeTask, failTask } = useAITask();
   const aiAbortRef = useRef<AbortController | null>(null);
 
@@ -75,7 +75,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
     // If no cache, check AI access before showing any overlay
     if (!cachedData && !checkAIAccess()) {
-      openPaywall();
+      openNoGemsDialog();
       return;
     }
 
@@ -108,12 +108,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
         if (controller.signal.aborted) return;
         if (error) {
-          const errBody = typeof error === 'object' && 'context' in error ? (error as any).context : null;
-          if (errBody?.status === 429) {
-            markLimitReached();
-            openPaywall();
-            return;
-          }
+          if (handleAILimitError(error)) return;
           throw new Error(await extractEdgeFunctionError(error, "Failed to analyze meal"));
         }
         if (data?.error) throw new Error(data.error);
@@ -211,7 +206,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     }
 
     if (!checkAIAccess()) {
-      openPaywall();
+      openNoGemsDialog();
       return;
     }
 
@@ -239,12 +234,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
       if (ingController.signal.aborted) return;
       if (error) {
-        const errBody = typeof error === 'object' && 'context' in error ? (error as any).context : null;
-        if (errBody?.status === 429) {
-          markLimitReached();
-          openPaywall();
-          return;
-        }
+        if (handleAILimitError(error)) return;
         throw new Error(await extractEdgeFunctionError(error, "Failed to analyze ingredient"));
       }
       if (data?.error) throw new Error(data.error);
@@ -389,7 +379,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
   } | null> => {
     try {
       if (!checkAIAccess()) {
-        openPaywall();
+        openNoGemsDialog();
         return null;
       }
 
@@ -398,12 +388,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       });
 
       if (error) {
-        const errBody = typeof error === 'object' && 'context' in error ? (error as any).context : null;
-        if (errBody?.status === 429) {
-          markLimitReached();
-          openPaywall();
-          return null;
-        }
+        if (handleAILimitError(error)) return null;
         logger.error("Ingredient lookup error", error);
         return null;
       }

@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { format } from "date-fns";
-import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Sparkles, Activity, Scale, Trash2, RefreshCw, Bug, Edit2, ChevronDown, Check } from "lucide-react";
+import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Sparkles, Activity, Scale, Trash2, RefreshCw, Bug, Edit2, ChevronDown, Check, Gem } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
@@ -31,10 +31,12 @@ import { WeighInResultCard } from "@/components/share/cards/WeighInResultCard";
 import type { Profile } from "@/pages/weight/types";
 import { useWeightData } from "@/hooks/weight/useWeightData";
 import { useWeightAnalysis } from "@/hooks/weight/useWeightAnalysis";
+import { useGems } from "@/hooks/useGems";
 
 export default function WeightTracker() {
   const { userId, profile: contextProfile } = useUser();
   const profile = contextProfile as unknown as Profile;
+  const { gems, isPremium: gemsIsPremium } = useGems();
   const [searchParams, setSearchParams] = useSearchParams();
   const [timeFilter, setTimeFilter] = useState<"1W" | "1M" | "ALL">("1M");
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -680,7 +682,7 @@ export default function WeightTracker() {
         {!aiAnalysis && profile && (
           <Button onClick={getAIAnalysis} disabled={analyzingWeight} variant="outline" className="w-full">
             <Sparkles className="h-4 w-4 mr-2" />
-            {analyzingWeight ? "Analyzing..." : "Get AI Weight Loss Strategy"}
+            {analyzingWeight ? "Analyzing..." : <>Get AI Weight Loss Strategy{!gemsIsPremium && <span className="inline-flex items-center gap-0.5 ml-1.5 text-amber-500"><Gem className="h-3 w-3" /><span className="text-[10px] font-bold tabular-nums">{gems}</span></span>}</>}
           </Button>
         )}
 

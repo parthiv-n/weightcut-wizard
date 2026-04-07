@@ -29,7 +29,7 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
   const { userId } = useUser();
   const { toast } = useToast();
   const { safeAsync, isMounted } = useSafeAsync();
-  const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
+  const { checkAIAccess, openPaywall, openNoGemsDialog, incrementLocalUsage, markLimitReached, handleAILimitError } = useSubscription();
 
   const [trainingWisdom, setTrainingWisdom] = useState<TrainingFoodTip | null>(null);
   const [trainingWisdomLoading, setTrainingWisdomLoading] = useState(false);
@@ -102,7 +102,7 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
     try {
       if (!checkAIAccess()) {
         // Only show paywall if user explicitly tapped something
-        if (userInitiated) openPaywall();
+        if (userInitiated) openNoGemsDialog();
         return;
       }
 
@@ -121,12 +121,7 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
 
       if (!isMounted()) return;
       if (error) {
-        const errBody = typeof error === 'object' && 'context' in error ? (error as any).context : null;
-        if (errBody?.status === 429) {
-          markLimitReached();
-          if (userInitiated) openPaywall();
-          return;
-        }
+        if (handleAILimitError(error)) return;
         throw new Error(await extractEdgeFunctionError(error, "Could not generate nutrition advice"));
       }
       if (data?.error) throw new Error(data.error);
@@ -171,7 +166,7 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
     }
 
     if (!checkAIAccess()) {
-      openPaywall();
+      openNoGemsDialog();
       return;
     }
 
@@ -211,12 +206,7 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
 
       if (!isMounted()) return;
       if (error) {
-        const errBody = typeof error === 'object' && 'context' in error ? (error as any).context : null;
-        if (errBody?.status === 429) {
-          markLimitReached();
-          openPaywall();
-          return;
-        }
+        if (handleAILimitError(error)) return;
         throw new Error(await extractEdgeFunctionError(error, "Could not generate training food ideas"));
       }
       if (data?.error) throw new Error(data.error);

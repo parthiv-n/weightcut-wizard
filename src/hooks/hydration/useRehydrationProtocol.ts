@@ -16,7 +16,7 @@ export function useRehydrationProtocol() {
   const { toast } = useToast();
   const { addTask, completeTask, failTask } = useAITask();
   const { safeAsync, isMounted } = useSafeAsync();
-  const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
+  const { checkAIAccess, openPaywall, openNoGemsDialog, incrementLocalUsage, markLimitReached, handleAILimitError } = useSubscription();
   const aiAbortRef = useRef<AbortController | null>(null);
 
   const currentWeight = contextProfile?.current_weight_kg ?? 0;
@@ -94,7 +94,7 @@ export function useRehydrationProtocol() {
     if (!currentWeight) return;
 
     if (!checkAIAccess()) {
-      openPaywall();
+      openNoGemsDialog();
       return;
     }
 
@@ -139,12 +139,7 @@ export function useRehydrationProtocol() {
       if (controller.signal.aborted) return;
       if (!isMounted()) return;
       if (error) {
-        const errBody = typeof error === 'object' && 'context' in error ? (error as any).context : null;
-        if (errBody?.status === 429) {
-          markLimitReached();
-          openPaywall();
-          return;
-        }
+        if (handleAILimitError(error)) return;
         throw new Error(await extractEdgeFunctionError(error, "Failed to generate protocol"));
       }
 

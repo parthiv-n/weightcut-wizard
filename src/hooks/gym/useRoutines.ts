@@ -27,8 +27,10 @@ export function useRoutines() {
   const {
     checkAIAccess,
     openPaywall,
+    openNoGemsDialog,
     incrementLocalUsage,
     markLimitReached,
+    handleAILimitError,
   } = useSubscription();
 
   const [routines, setRoutines] = useState<SavedRoutine[]>([]);
@@ -76,7 +78,7 @@ export function useRoutines() {
   const generateRoutine = useCallback(
     async (params: RoutineGenerationParams) => {
       if (!checkAIAccess()) {
-        openPaywall();
+        openNoGemsDialog();
         return null;
       }
 
@@ -100,16 +102,7 @@ export function useRoutines() {
         );
 
         if (error) {
-          // Handle 429 rate limit
-          if (
-            typeof error === "object" &&
-            "context" in error &&
-            (error as any).context?.status === 429
-          ) {
-            markLimitReached();
-            openPaywall();
-            return null;
-          }
+          if (handleAILimitError(error)) return null;
           throw error;
         }
 
@@ -143,8 +136,10 @@ export function useRoutines() {
     [
       checkAIAccess,
       openPaywall,
+      openNoGemsDialog,
       incrementLocalUsage,
       markLimitReached,
+      handleAILimitError,
       safeAsync,
       isMounted,
       toast,
