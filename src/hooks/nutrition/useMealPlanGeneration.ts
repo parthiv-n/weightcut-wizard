@@ -46,6 +46,11 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
       return;
     }
 
+    if (!checkAIAccess()) {
+      openPaywall();
+      return;
+    }
+
     aiAbortRef.current?.abort();
     const controller = createAIAbortController();
     aiAbortRef.current = controller;
@@ -75,11 +80,6 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
 
       if (!userId) {
         throw new Error("Authentication required. Please log in again.");
-      }
-
-      if (!checkAIAccess()) {
-        openPaywall();
-        return;
       }
 
       const userData = profile ? {

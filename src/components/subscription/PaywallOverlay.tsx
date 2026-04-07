@@ -37,6 +37,8 @@ export function PaywallOverlay() {
         const result = await presentPaywall();
         if (cancelled) return;
         if (result?.paywallResult === "PURCHASED" || result?.paywallResult === "RESTORED") {
+          // Wait for RevenueCat webhook to update Supabase profile
+          await new Promise(r => setTimeout(r, 2000));
           await refreshProfile();
           await refreshAIUsage();
         }

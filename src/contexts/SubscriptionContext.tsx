@@ -103,10 +103,13 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     const init = async () => {
       await initializePurchases(userId);
 
-      const cleanup = await addCustomerInfoUpdateListener((customerInfo) => {
+      const cleanup = await addCustomerInfoUpdateListener(async (customerInfo) => {
         const isNowPremium = isPremiumFromCustomerInfo(customerInfo);
         if (isNowPremium) {
-          refreshProfile();
+          // Wait for RevenueCat webhook to update Supabase profile
+          await new Promise(r => setTimeout(r, 2000));
+          await refreshProfile();
+          refreshAIUsage();
         }
       });
       removeListener = cleanup;

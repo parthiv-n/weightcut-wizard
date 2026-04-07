@@ -48,6 +48,11 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
       }
     }
 
+    if (!checkAIAccess()) {
+      openPaywall();
+      return;
+    }
+
     aiAbortRef.current?.abort();
     const dietController = createAIAbortController();
     aiAbortRef.current = dietController;
@@ -66,10 +71,6 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
       returnPath: "/nutrition",
     });
     try {
-      if (!checkAIAccess()) {
-        openPaywall();
-        return;
-      }
 
       const { data, error } = await supabase.functions.invoke("analyse-diet", {
         body: {

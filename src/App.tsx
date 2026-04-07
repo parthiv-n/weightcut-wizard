@@ -14,7 +14,6 @@ import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { WizardBackgroundProvider } from "@/contexts/WizardBackgroundContext";
 import { AITaskProvider } from "@/contexts/AITaskContext";
 import { PaywallOverlay } from "@/components/subscription/PaywallOverlay";
-import { WelcomeProOverlay } from "@/components/subscription/WelcomeProOverlay";
 import { PageTransition } from "@/components/PageTransition";
 import { NavigationDirectionProvider } from "@/hooks/useNavigationDirection";
 import { TutorialProvider } from "@/tutorial/TutorialContext";
@@ -226,7 +225,6 @@ const App = () => (
             <Toaster />
             <Sonner />
             <PaywallOverlay />
-            <WelcomeProOverlay />
             <BrowserRouter>
               <NavigationDirectionProvider>
               <TutorialProvider>

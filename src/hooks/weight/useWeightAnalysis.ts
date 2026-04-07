@@ -81,6 +81,11 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
       return;
     }
 
+    if (!checkAIAccess()) {
+      openPaywall();
+      return;
+    }
+
     aiAbortRef.current?.abort();
     const controller = createAIAbortController();
     aiAbortRef.current = controller;
@@ -99,10 +104,6 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
     });
 
     try {
-      if (!checkAIAccess()) {
-        openPaywall();
-        return;
-      }
 
       const currentWeight = profile.current_weight_kg;
       const currentWeightSource = "profile.current_weight_kg";
