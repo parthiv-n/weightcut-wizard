@@ -14,6 +14,7 @@ import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { WizardBackgroundProvider } from "@/contexts/WizardBackgroundContext";
 import { AITaskProvider } from "@/contexts/AITaskContext";
 import { PaywallOverlay } from "@/components/subscription/PaywallOverlay";
+import { NoGemsOverlay } from "@/components/subscription/NoGemsOverlay";
 import { PageTransition } from "@/components/PageTransition";
 import { NavigationDirectionProvider } from "@/hooks/useNavigationDirection";
 import { TutorialProvider } from "@/tutorial/TutorialContext";
@@ -74,11 +75,12 @@ function RouteTracker() {
     }
   }, [location.pathname]);
 
-  // Set light status bar text for dark background
+  // Set light status bar text for dark background + initialize AdMob
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
       StatusBar.setStyle({ style: Style.Dark });
       document.documentElement.classList.add("native-app");
+      import("@/lib/admob").then(({ initializeAdMob }) => initializeAdMob()).catch(() => {});
     }
   }, []);
 
@@ -227,6 +229,7 @@ const App = () => (
             <Toaster />
             <Sonner />
             <PaywallOverlay />
+            <NoGemsOverlay />
             <BrowserRouter>
               <NavigationDirectionProvider>
               <TutorialProvider>

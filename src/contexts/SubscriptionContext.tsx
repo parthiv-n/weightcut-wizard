@@ -73,8 +73,11 @@ interface SubscriptionContextType {
   aiResetTime: Date | null;
   limitTimerVisible: boolean;
   isPaywallOpen: boolean;
+  isNoGemsOpen: boolean;
   openPaywall: () => void;
   closePaywall: () => void;
+  openNoGemsDialog: () => void;
+  closeNoGemsDialog: () => void;
   refreshAIUsage: () => Promise<void>;
   incrementLocalUsage: () => void;
   markLimitReached: () => void;
@@ -88,6 +91,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const { profile, refreshProfile } = useProfile();
   const { userId } = useAuth();
   const [isPaywallOpen, setIsPaywallOpen] = useState(false);
+  const [isNoGemsOpen, setIsNoGemsOpen] = useState(false);
   const [showWelcomePro, setShowWelcomePro] = useState(false);
   const [limitTimerVisible, setLimitTimerVisible] = useState(false);
   const limitTimerTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -242,6 +246,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     if (isLimitHitToday()) flashLimitTimer();
   }, [flashLimitTimer]);
   const closePaywall = useCallback(() => setIsPaywallOpen(false), []);
+  const openNoGemsDialog = useCallback(() => setIsNoGemsOpen(true), []);
+  const closeNoGemsDialog = useCallback(() => setIsNoGemsOpen(false), []);
   const dismissWelcomePro = useCallback(() => setShowWelcomePro(false), []);
 
   return (
@@ -254,8 +260,11 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         aiResetTime,
         limitTimerVisible,
         isPaywallOpen,
+        isNoGemsOpen,
         openPaywall,
         closePaywall,
+        openNoGemsDialog,
+        closeNoGemsDialog,
         refreshAIUsage,
         incrementLocalUsage,
         markLimitReached,
