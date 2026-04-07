@@ -93,6 +93,11 @@ export function useRehydrationProtocol() {
     e.preventDefault();
     if (!currentWeight) return;
 
+    if (!checkAIAccess()) {
+      openPaywall();
+      return;
+    }
+
     aiAbortRef.current?.abort();
     const controller = createAIAbortController();
     aiAbortRef.current = controller;
@@ -111,10 +116,6 @@ export function useRehydrationProtocol() {
     });
 
     try {
-      if (!checkAIAccess()) {
-        openPaywall();
-        return;
-      }
 
       const { data, error } = await supabase.functions.invoke("rehydration-protocol", {
         body: {

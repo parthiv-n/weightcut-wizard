@@ -14,7 +14,6 @@ import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { WizardBackgroundProvider } from "@/contexts/WizardBackgroundContext";
 import { AITaskProvider } from "@/contexts/AITaskContext";
 import { PaywallOverlay } from "@/components/subscription/PaywallOverlay";
-import { WelcomeProOverlay } from "@/components/subscription/WelcomeProOverlay";
 import { PageTransition } from "@/components/PageTransition";
 import { NavigationDirectionProvider } from "@/hooks/useNavigationDirection";
 import { TutorialProvider } from "@/tutorial/TutorialContext";
@@ -22,6 +21,7 @@ import { BottomNav } from "@/components/BottomNav";
 import { FloatingWizardChat } from "@/components/FloatingWizardChat";
 const FloatingWorkoutIndicator = lazy(() => import("@/components/gym/FloatingWorkoutIndicator").then(m => ({ default: m.FloatingWorkoutIndicator })));
 const AIFloatingIndicator = lazy(() => import("@/components/AIFloatingIndicator").then(m => ({ default: m.AIFloatingIndicator })));
+const AILimitTimer = lazy(() => import("@/components/subscription/AILimitTimer").then(m => ({ default: m.AILimitTimer })));
 import * as Sentry from "@sentry/react";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { RefreshCw } from "lucide-react";
@@ -192,6 +192,7 @@ const AppLayoutContent = () => {
       <BottomNav />
       <Suspense fallback={null}><FloatingWorkoutIndicator /></Suspense>
       <Suspense fallback={null}><AIFloatingIndicator /></Suspense>
+      <Suspense fallback={null}><AILimitTimer /></Suspense>
       <FloatingWizardChat />
     </>
   );
@@ -226,7 +227,6 @@ const App = () => (
             <Toaster />
             <Sonner />
             <PaywallOverlay />
-            <WelcomeProOverlay />
             <BrowserRouter>
               <NavigationDirectionProvider>
               <TutorialProvider>

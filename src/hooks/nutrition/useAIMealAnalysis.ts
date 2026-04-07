@@ -69,6 +69,16 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       return;
     }
 
+    // Check cache first — no access check needed for cached results
+    const mealCacheKey = `meal_${aiMealDescription.toLowerCase().trim().replace(/\s+/g, '_').slice(0, 60)}`;
+    const cachedData = userId ? AIPersistence.load(userId, mealCacheKey) : null;
+
+    // If no cache, check AI access before showing any overlay
+    if (!cachedData && !checkAIAccess()) {
+      openPaywall();
+      return;
+    }
+
     aiAbortRef.current?.abort();
     const controller = createAIAbortController();
     aiAbortRef.current = controller;
@@ -87,14 +97,9 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       returnPath: "/nutrition",
     });
     try {
-      const mealCacheKey = `meal_${aiMealDescription.toLowerCase().trim().replace(/\s+/g, '_').slice(0, 60)}`;
-      let nutritionData = userId ? AIPersistence.load(userId, mealCacheKey) : null;
+      let nutritionData = cachedData;
 
       if (!nutritionData) {
-        if (!checkAIAccess()) {
-          openPaywall();
-          return;
-        }
 
         const { data, error } = await supabase.functions.invoke("analyze-meal", {
           body: { mealDescription: aiMealDescription },
@@ -205,6 +210,11 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       return;
     }
 
+    if (!checkAIAccess()) {
+      openPaywall();
+      return;
+    }
+
     aiAbortRef.current?.abort();
     const ingController = createAIAbortController();
     aiAbortRef.current = ingController;
@@ -221,10 +231,6 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       returnPath: "/nutrition",
     });
     try {
-      if (!checkAIAccess()) {
-        openPaywall();
-        return;
-      }
 
       const { data, error } = await supabase.functions.invoke("analyze-meal", {
         body: { mealDescription: aiIngredientDescription },
