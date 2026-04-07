@@ -7,21 +7,16 @@ import { useToast } from '@/hooks/use-toast';
 import { logger } from '@/lib/logger';
 
 export function useGems() {
-  const { userId, profile } = useUser();
+  const { userId, profile, refreshProfile } = useUser();
   const { isPremium } = useSubscription();
   const { toast } = useToast();
-  // Start with 0 — profile sync will set the real value once loaded
   const [gems, setGems] = useState(0);
   const [adsRemaining, setAdsRemaining] = useState(5);
   const [loading, setLoading] = useState(false);
-  const [profileLoaded, setProfileLoaded] = useState(false);
 
-  // Sync from profile — this is the source of truth
+  // Sync gems from profile — this is the single source of truth
   useEffect(() => {
-    if (profile?.gems !== undefined) {
-      setGems(profile.gems);
-      setProfileLoaded(true);
-    }
+    if (profile?.gems !== undefined) setGems(profile.gems);
     if (profile?.ads_watched_today !== undefined) {
       const today = new Date().toISOString().split('T')[0];
       const adsDate = profile.ads_watched_date;
@@ -33,20 +28,19 @@ export function useGems() {
     }
   }, [profile?.gems, profile?.ads_watched_today, profile?.ads_watched_date]);
 
-  // Grant daily free gem ONLY after profile has loaded (prevents race condition)
+  // Listen for gem consumption events — decrement locally for instant UI,
+  // then refresh profile to sync with server
   useEffect(() => {
-    if (!userId || isPremium || !profileLoaded) return;
-    (supabase.rpc as any)('grant_daily_free_gem', { p_user_id: userId })
-      .then(({ data }: any) => { if (data !== null && data !== undefined) setGems(data); })
-      .catch(() => {});
-  }, [userId, isPremium, profileLoaded]);
-
-  // Listen for gem consumption events from AI hooks (via SubscriptionContext)
-  useEffect(() => {
-    const handler = () => { if (!isPremium) setGems(prev => Math.max(0, prev - 1)); };
+    const handler = () => {
+      if (!isPremium) {
+        setGems(prev => Math.max(0, prev - 1));
+        // Refresh profile after a short delay to get actual server state
+        setTimeout(() => refreshProfile(), 1500);
+      }
+    };
     window.addEventListener('gem-consumed', handler);
     return () => window.removeEventListener('gem-consumed', handler);
-  }, [isPremium]);
+  }, [isPremium, refreshProfile]);
 
   // Preload ad
   useEffect(() => {
@@ -75,6 +69,7 @@ export function useGems() {
 
       setGems(data.gems);
       setAdsRemaining(data.ads_remaining);
+      await refreshProfile();
       toast({ title: 'Gem earned!', description: `You now have ${data.gems} gems.` });
       return true;
     } catch (err) {
@@ -84,15 +79,11 @@ export function useGems() {
     } finally {
       setLoading(false);
     }
-  }, [userId, toast]);
+  }, [userId, toast, refreshProfile]);
 
   const refreshGems = useCallback(async () => {
-    if (!userId) return;
-    try {
-      const { data } = await (supabase.rpc as any)('grant_daily_free_gem', { p_user_id: userId });
-      if (data !== null && data !== undefined) setGems(data);
-    } catch {}
-  }, [userId]);
+    await refreshProfile();
+  }, [refreshProfile]);
 
   const consumeGem = useCallback(() => {
     if (isPremium) return;

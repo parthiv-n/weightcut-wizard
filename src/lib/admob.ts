@@ -4,13 +4,18 @@ import { logger } from '@/lib/logger';
 
 let initialized = false;
 
-// Google test ad unit ID — replace with production ID before release
-const REWARDED_AD_UNIT_ID = 'ca-app-pub-3940256099942544/5224354917';
+// Production ID — will work once AdMob account is approved
+const PROD_AD_UNIT_ID = 'ca-app-pub-5228937380128191/9961045291';
+// Google test ID — use until account is approved
+const TEST_AD_UNIT_ID = 'ca-app-pub-3940256099942544/5224354917';
+
+const USE_TEST_ADS = true; // ← flip to false once AdMob account is approved
+const REWARDED_AD_UNIT_ID = USE_TEST_ADS ? TEST_AD_UNIT_ID : PROD_AD_UNIT_ID;
 
 export async function initializeAdMob(): Promise<void> {
   if (!isNativePlatform || initialized) return;
   try {
-    await AdMob.initialize({ initializeForTesting: true });
+    await AdMob.initialize({ initializeForTesting: USE_TEST_ADS });
     initialized = true;
     logger.info('AdMob initialized');
   } catch (err) {
@@ -21,7 +26,7 @@ export async function initializeAdMob(): Promise<void> {
 export async function prepareRewardedAd(): Promise<void> {
   if (!isNativePlatform || !initialized) return;
   try {
-    await AdMob.prepareRewardVideoAd({ adId: REWARDED_AD_UNIT_ID, isTesting: true });
+    await AdMob.prepareRewardVideoAd({ adId: REWARDED_AD_UNIT_ID, isTesting: USE_TEST_ADS });
   } catch (err) {
     logger.error('Failed to prepare rewarded ad', err);
   }
