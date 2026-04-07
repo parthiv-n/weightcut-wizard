@@ -318,14 +318,14 @@ export function RoutineGeneratorSheet({ open, onOpenChange, onGenerate, onSave, 
         <SheetHeader className="pb-2">
           <div className="flex items-center justify-between">
             {stepIndex > 0 && step !== "result" ? (
-              <button onClick={goBack} className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
+              <button onClick={goBack} className="w-12 flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
                 <ChevronLeft className="h-4 w-4" />
                 Back
               </button>
             ) : (
-              <div />
+              <div className="w-12" />
             )}
-            <SheetTitle className="text-lg font-bold tracking-tight">{stepTitle()}</SheetTitle>
+            <SheetTitle className="text-lg font-bold tracking-tight text-center">{stepTitle()}</SheetTitle>
             <div className="w-12" />
           </div>
           <div className="flex gap-1.5 justify-center pt-2">
@@ -354,13 +354,13 @@ export function RoutineGeneratorSheet({ open, onOpenChange, onGenerate, onSave, 
                       <button
                         key={g.value}
                         onClick={() => toggleGoal(g.value)}
-                        className={`glass-card rounded-2xl border p-4 text-left transition-all active:scale-[0.97] ${
+                        className={`glass-card rounded-2xl border p-4 text-center transition-all active:scale-[0.97] ${
                           selected
                             ? "border-primary/50 ring-1 ring-primary/30 bg-primary/5"
                             : "border-border/50 hover:border-border"
                         }`}
                       >
-                        <div className={`h-10 w-10 rounded-xl flex items-center justify-center mb-3 ${
+                        <div className={`h-10 w-10 rounded-xl flex items-center justify-center mb-3 mx-auto ${
                           selected ? "bg-primary/20" : "bg-muted/40"
                         }`}>
                           <Icon className={`h-5 w-5 ${selected ? "text-primary" : "text-muted-foreground"}`} />

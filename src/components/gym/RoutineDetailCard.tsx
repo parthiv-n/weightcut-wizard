@@ -175,7 +175,7 @@ export function RoutineDetailCard({ routine, onDelete, onRename, onStartWorkout 
                       <span className="text-sm font-semibold truncate">{routine.name}</span>
                       <button
                         onClick={(e) => { e.stopPropagation(); setEditing(true); }}
-                        className="p-1 rounded hover:bg-muted/40 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="p-1 rounded hover:bg-muted/40 shrink-0 opacity-40 hover:opacity-100 transition-opacity"
                       >
                         <Pencil className="h-3 w-3 text-muted-foreground" />
                       </button>

@@ -39,19 +39,18 @@ export function useGymSets({ activeSession, updateActiveSession }: UseGymSetsOpt
   const removeExerciseFromSession = useCallback(async (exerciseOrder: number) => {
     if (!activeSession || !userId) return;
 
-    // Delete sets from DB
+    // Batch delete sets from DB
     const group = activeSession.exerciseGroups.find(g => g.exerciseOrder === exerciseOrder);
-    if (group) {
-      for (const set of group.sets) {
-        try {
-          await withSupabaseTimeout(
-            supabase.from("gym_sets" as any).delete().eq("id", set.id),
-            undefined,
-            "Delete set"
-          );
-        } catch {
-          // Best effort
-        }
+    if (group && group.sets.length > 0) {
+      const setIds = group.sets.map(s => s.id);
+      try {
+        await withSupabaseTimeout(
+          supabase.from("gym_sets" as any).delete().in("id", setIds),
+          undefined,
+          "Delete exercise sets"
+        );
+      } catch {
+        // Best effort — sets orphaned but not critical
       }
     }
 

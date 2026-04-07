@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { triggerHaptic, celebrateSuccess, confirmDelete } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import { calculateVolume } from "@/lib/gymCalculations";
+import { logger } from "@/lib/logger";
 import type {
   GymSession, GymSet, Exercise, SessionType,
   ExerciseGroup, SessionWithSets, ActiveWorkout,
@@ -291,7 +292,9 @@ export function useGymSessions() {
           intensity: durationMin >= 60 ? "high" : durationMin >= 30 ? "moderate" : "low",
           notes: opts.notes || null,
         })
-        .then(); // fire-and-forget
+        .then(({ error: calErr }) => {
+          if (calErr) logger.warn("Failed to log to training calendar", { error: String(calErr) });
+        });
 
       setActiveSession(null);
       celebrateSuccess();

@@ -132,7 +132,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     setGemsState(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
       const clamped = Math.max(0, next);
-      setLocalGems(clamped);
+      try { setLocalGems(clamped); } catch { /* quota exceeded — state still updates */ }
       return clamped;
     });
   }, []);
@@ -286,7 +286,14 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       }
     }, 30_000);
     return () => clearInterval(interval);
-  }, [isPremium, aiUsageToday]);
+  }, [isPremium]);
+
+  // Clean up limit timer on unmount
+  useEffect(() => {
+    return () => {
+      if (limitTimerTimeout.current) clearTimeout(limitTimerTimeout.current);
+    };
+  }, []);
 
   // Flash the limit timer for 5s whenever a locked feature is tapped
   const flashLimitTimer = useCallback(() => {

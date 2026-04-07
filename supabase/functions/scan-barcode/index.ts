@@ -45,8 +45,13 @@ serve(async (req) => {
 
     edgeLogger.info("Fetching product data for barcode", { barcode });
 
-    // Call OpenFoodFacts API
-    const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(barcode)}.json`);
+    // Call OpenFoodFacts API (15s timeout)
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${encodeURIComponent(barcode)}.json`, {
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
     const data = await response.json();
 
     if (data.status === 0 || !data.product) {

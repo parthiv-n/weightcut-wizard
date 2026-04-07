@@ -18,8 +18,15 @@ export interface FoodSuggestion {
   nutrients: string[];
 }
 
+export interface MealNutrientBreakdown {
+  mealType: string;
+  mealName: string;
+  keyNutrients: { name: string; amount: string }[];
+}
+
 export interface DietAnalysisResult {
   summary: string;
+  mealBreakdown?: MealNutrientBreakdown[];
   micronutrients: MicronutrientData[];
   gaps: NutrientGap[];
   suggestions: FoodSuggestion[];

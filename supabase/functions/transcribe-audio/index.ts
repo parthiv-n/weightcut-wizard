@@ -36,7 +36,7 @@ function processBase64Chunks(base64String: string, chunkSize = 32768) {
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders(req) });
+    return new Response(null, { status: 204, headers: corsHeaders(req) });
   }
 
   const authHeader = req.headers.get('Authorization');
@@ -73,12 +73,15 @@ serve(async (req) => {
 
     edgeLogger.info("Sending to Google Speech-to-Text API");
 
-    // Send to Google Speech-to-Text API
+    // Send to Google Speech-to-Text API (15s timeout)
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
     const response = await fetch(`https://speech.googleapis.com/v1/speech:recognize?key=${GOOGLE_API_KEY}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
+      signal: controller.signal,
       body: JSON.stringify({
         config: {
           encoding: 'WEBM_OPUS',
@@ -91,6 +94,7 @@ serve(async (req) => {
         },
       }),
     });
+    clearTimeout(timeout);
 
     if (!response.ok) {
       const errorText = await response.text();

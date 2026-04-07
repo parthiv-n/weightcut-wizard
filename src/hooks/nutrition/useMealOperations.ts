@@ -188,7 +188,7 @@ export function useMealOperations(params: UseMealOperationsParams) {
   }, [userId, selectedDate, setMeals, loadMeals, toast]);
 
   const saveMealIdeasToDatabase = async (mealIdeas: Meal[]) => {
-    if (mealIdeas.length === 0) return;
+    if (mealIdeas.length === 0 || savingAllMeals) return;
 
     setSavingAllMeals(true);
     try {

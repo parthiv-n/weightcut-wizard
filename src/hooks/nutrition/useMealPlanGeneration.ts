@@ -193,7 +193,7 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
       setSafetyStatus(status || safetyStatus);
       setSafetyMessage(message || safetyMessage);
 
-      const accumulatedIdeas = [...mealPlanIdeas, ...ideasToStore];
+      const accumulatedIdeas = [...mealPlanIdeas, ...ideasToStore].slice(-30);
       if (userId) {
         AIPersistence.save(userId, 'meal_plans', {
           meals: accumulatedIdeas,

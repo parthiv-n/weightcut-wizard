@@ -179,7 +179,9 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
         clearTimeout(scanTimeoutRef.current);
       }
     } else {
+      // Always start with back camera
       setFacingMode("environment");
+      setUseExactConstraint(true);
     }
   }, [isOpen]);
 

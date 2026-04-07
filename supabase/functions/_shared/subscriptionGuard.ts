@@ -37,7 +37,8 @@ export async function checkAIUsage(
 
   if (error) {
     console.error('[subscriptionGuard] RPC error:', error);
-    return { allowed: true, is_premium: false, used: 0, limit: 1 };
+    // Default to DENY on failure — never degrade to open access
+    return { allowed: false, is_premium: false, used: 0, limit: 1, reason: 'service_error' };
   }
 
   const result = data as AIUsageResult;
