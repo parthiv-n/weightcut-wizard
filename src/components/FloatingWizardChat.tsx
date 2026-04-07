@@ -11,7 +11,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 
 export function FloatingWizardChat() {
   const { messages, isLoading, sendMessage, clearChat } = useWizardBackground();
-  const { checkAIAccess, openPaywall, isPremium } = useSubscription();
+  const { checkAIAccess, openNoGemsDialog, isPremium } = useSubscription();
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -51,7 +51,7 @@ export function FloatingWizardChat() {
     if (!input.trim() || isLoading) return;
 
     if (!checkAIAccess()) {
-      openPaywall();
+      openNoGemsDialog();
       return;
     }
 
@@ -65,7 +65,7 @@ export function FloatingWizardChat() {
   const handleFabPress = () => {
     triggerHapticSelection();
     if (!checkAIAccess()) {
-      openPaywall();
+      openNoGemsDialog();
       return;
     }
     setOpen(true);

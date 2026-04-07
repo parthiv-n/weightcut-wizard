@@ -1,6 +1,5 @@
-import { Gem, Play, Zap, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Gem, Play, Crown, Loader2 } from "lucide-react";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 interface NoGemsDialogProps {
   open: boolean;
@@ -16,49 +15,46 @@ export function NoGemsDialog({ open, onOpenChange, onWatchAd, onGoPro, adsRemain
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm rounded-[24px]">
-        <DialogHeader className="items-center text-center">
-          <div className="h-14 w-14 rounded-2xl bg-amber-500/10 flex items-center justify-center mx-auto mb-2">
-            <Gem className="h-7 w-7 text-amber-500" />
+      <DialogContent className="sm:max-w-[320px] rounded-[28px] p-0 border-border/30 bg-background overflow-hidden gap-0">
+        {/* Header */}
+        <div className="pt-6 pb-4 px-6 text-center">
+          <div className="h-11 w-11 rounded-full bg-amber-500/10 flex items-center justify-center mx-auto mb-3">
+            <Gem className="h-5 w-5 text-amber-500" />
           </div>
-          <DialogTitle className="text-lg">Out of AI Calls</DialogTitle>
-          <p className="text-sm text-muted-foreground mt-1">
-            Watch a short video to earn 1 gem and continue.
-          </p>
-        </DialogHeader>
+          <p className="text-[15px] font-semibold text-foreground">No gems remaining</p>
+          <p className="text-[13px] text-muted-foreground mt-1">Watch a short video or go Pro to continue</p>
+        </div>
 
-        <div className="space-y-3 mt-2">
-          <Button
+        {/* Actions */}
+        <div className="px-4 pb-4 space-y-2">
+          <button
             onClick={async () => { await onWatchAd(); }}
             disabled={!canWatchAd || loading}
-            className="w-full h-12 rounded-xl text-sm font-semibold bg-gradient-to-r from-green-600 to-green-500"
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/30 active:scale-[0.98] transition-all disabled:opacity-40 text-left"
           >
-            {loading ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Play className="h-4 w-4 mr-2" />
-            )}
-            {loading ? 'Loading...' : 'Watch Ad for 1 Gem'}
-          </Button>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-green-500/10">
+              {loading ? <Loader2 className="h-4 w-4 text-green-500 animate-spin" /> : <Play className="h-4 w-4 text-green-500" />}
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold text-foreground">{loading ? 'Loading ad...' : 'Watch Ad'}</p>
+              <p className="text-[11px] text-muted-foreground">
+                {canWatchAd ? `Earn 1 gem · ${adsRemaining} left today` : 'Daily limit reached'}
+              </p>
+            </div>
+          </button>
 
-          {!canWatchAd && (
-            <p className="text-xs text-center text-muted-foreground">Daily ad limit reached</p>
-          )}
-
-          <Button
+          <button
             onClick={onGoPro}
-            variant="outline"
-            className="w-full h-12 rounded-xl text-sm font-semibold"
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-primary/5 border border-primary/20 active:scale-[0.98] transition-all text-left"
           >
-            <Zap className="h-4 w-4 mr-2" />
-            Go Pro — Unlimited
-          </Button>
-
-          {canWatchAd && (
-            <p className="text-xs text-center text-muted-foreground">
-              {adsRemaining} ad{adsRemaining !== 1 ? 's' : ''} remaining today
-            </p>
-          )}
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+              <Crown className="h-4 w-4 text-primary" />
+            </span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-semibold text-foreground">Go Pro</p>
+              <p className="text-[11px] text-muted-foreground">Unlimited AI · No ads</p>
+            </div>
+          </button>
         </div>
       </DialogContent>
     </Dialog>

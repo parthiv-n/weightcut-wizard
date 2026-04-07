@@ -92,7 +92,7 @@ function weekLabel(weekStartStr: string): string {
 export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrigger, customColors }: TrainingSummarySectionProps) {
     const { toast } = useToast();
     const { gems, isPremium: gemsIsPremium } = useGems();
-    const { checkAIAccess, openPaywall, openNoGemsDialog, incrementLocalUsage, markLimitReached } = useSubscription();
+    const { checkAIAccess, openPaywall, openNoGemsDialog, incrementLocalUsage, markLimitReached, handleAILimitError } = useSubscription();
     const { tasks, addTask, completeTask, failTask, dismissTask } = useAITask();
     const [savedSummaries, setSavedSummaries] = useState<SavedSummaryRow[]>([]);
     const [weekSessions, setWeekSessions] = useState<SessionRow[]>([]);
@@ -261,7 +261,10 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
             });
             if (controller.signal.aborted) return;
 
-            if (error) throw error;
+            if (error) {
+                if (handleAILimitError(error)) return;
+                throw error;
+            }
             if (!data?.summary) throw new Error("No summary returned");
 
             incrementLocalUsage();

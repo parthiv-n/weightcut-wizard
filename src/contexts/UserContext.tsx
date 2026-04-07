@@ -32,6 +32,10 @@ export interface ProfileData {
   is_premium?: boolean;
   subscription_tier?: string;
   subscription_expires_at?: string | null;
+  gems?: number;
+  last_free_gem_date?: string;
+  ads_watched_today?: number;
+  ads_watched_date?: string;
   [key: string]: any;
 }
 

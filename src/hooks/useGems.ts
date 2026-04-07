@@ -69,6 +69,8 @@ export function useGems() {
 
       setGems(data.gems);
       setAdsRemaining(data.ads_remaining);
+      // Update localStorage gem count so SubscriptionContext stays in sync
+      localStorage.setItem('wcw_gems', String(data.gems));
       await refreshProfile();
       toast({ title: 'Gem earned!', description: `You now have ${data.gems} gems.` });
       return true;

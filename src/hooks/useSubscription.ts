@@ -4,10 +4,12 @@ import { useCallback } from "react";
 export function useSubscription() {
   const ctx = useSubscriptionContext();
 
-  // Synchronous check using localStorage — immune to stale React state
+  // Synchronous check — allows access if premium, under rate limit, or has gems
   const checkAIAccess = (): boolean => {
     if (ctx.isPremium) return true;
-    return !isLimitHitToday();
+    if (!isLimitHitToday()) return true;
+    // Rate limit hit — but allow if user has gems (server will deduct one)
+    return ctx.gems > 0;
   };
 
   /**
