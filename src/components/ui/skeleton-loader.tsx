@@ -15,16 +15,9 @@ function Skeleton({ className, ...props }: SkeletonProps) {
 
 export function MealCardSkeleton() {
   return (
-    <div className="mb-1 rounded-xl border border-border/50 p-3 space-y-2">
-      <div className="flex justify-between items-center">
-        <Skeleton className="h-4 w-2/3" />
-        <Skeleton className="h-4 w-12" />
-      </div>
-      <div className="flex gap-2">
-        <Skeleton className="h-5 w-10 rounded-full" />
-        <Skeleton className="h-5 w-10 rounded-full" />
-        <Skeleton className="h-5 w-10 rounded-full" />
-      </div>
+    <div className="mb-1 rounded-lg px-3 py-2 flex items-center justify-between">
+      <Skeleton className="h-3 w-1/2" />
+      <Skeleton className="h-3 w-10" />
     </div>
   );
 }

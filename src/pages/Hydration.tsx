@@ -16,11 +16,13 @@ import {
   Shield,
   User,
   Clock,
+  Gem,
 } from "lucide-react";
 import { AIGeneratingOverlay } from "@/components/AIGeneratingOverlay";
 import { useAITask } from "@/contexts/AITaskContext";
 import { AICompactOverlay } from "@/components/AICompactOverlay";
 import { useRehydrationProtocol } from "@/hooks/hydration/useRehydrationProtocol";
+import { useGems } from "@/hooks/useGems";
 import {
   DEFAULT_WARNINGS, SUGGESTED_FOODS, SUGGESTED_DRINKS, DEFAULT_EDUCATION,
   getSodium, getPotassium, getCarbs, getMealFoods, getPhaseBadge,
@@ -41,6 +43,7 @@ export default function Hydration() {
     currentWeight, profileParts,
     handleGenerateProtocol, handleAICancel,
   } = useRehydrationProtocol();
+  const { gems, isPremium: gemsIsPremium } = useGems();
 
   const [activeTab, setActiveTab] = useState<"fluid" | "carbs">("fluid");
   const [expandedStep, setExpandedStep] = useState<number | null>(null);
@@ -250,7 +253,7 @@ export default function Hydration() {
             </div>
 
             <Button type="submit" className="w-full h-10 mt-1 font-bold text-sm rounded-2xl transition-all active:scale-[0.98] bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90" disabled={loading || !currentWeight}>
-              {loading ? "Generating Protocol..." : "Generate Protocol"}
+              {loading ? "Generating Protocol..." : <>Generate Protocol{!gemsIsPremium && <span className="inline-flex items-center gap-0.5 ml-1.5 text-amber-500"><Gem className="h-3 w-3" /><span className="text-[10px] font-bold tabular-nums">{gems}</span></span>}</>}
             </Button>
           </form>
         </div>

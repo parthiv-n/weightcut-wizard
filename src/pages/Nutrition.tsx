@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Sparkles, Calendar as CalendarIcon, Loader2, Settings, Edit2, X, Activity, Utensils, Database, PieChart as PieChartIcon, Search, CheckCircle, ChevronDown, ChevronUp, ChevronRight, ScanLine, Dumbbell, Sunrise, Salad, UtensilsCrossed, Apple, Mic, MicOff } from "lucide-react";
+import { Plus, Sparkles, Calendar as CalendarIcon, Loader2, Settings, Edit2, X, Activity, Utensils, Database, PieChart as PieChartIcon, Search, CheckCircle, ChevronDown, ChevronUp, ChevronRight, ScanLine, Dumbbell, Sunrise, Salad, UtensilsCrossed, Apple, Mic, MicOff, Gem } from "lucide-react";
 import wizardLogo from "@/assets/wizard-logo.webp";
 import { MealCard } from "@/components/nutrition/MealCard";
 import { MealCardSkeleton } from "@/components/ui/skeleton-loader";
@@ -32,6 +32,7 @@ import { NutritionCard } from "@/components/share/cards/NutritionCard";
 import { logger } from "@/lib/logger";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useAITask } from "@/contexts/AITaskContext";
+import { useGems } from "@/hooks/useGems";
 import { AICompactOverlay } from "@/components/AICompactOverlay";
 
 import type { Ingredient, Meal, ManualMealForm, INITIAL_MANUAL_MEAL } from "@/pages/nutrition/types";
@@ -118,6 +119,15 @@ export default function Nutrition() {
   });
 
   const macroCalc = useMacroCalculation();
+
+  const { gems, isPremium: gemsIsPremium, consumeGem } = useGems();
+
+  const gemBadge = !gemsIsPremium ? (
+    <span className="inline-flex items-center gap-0.5 ml-1.5 text-amber-500">
+      <Gem className="h-3 w-3" />
+      <span className="text-[10px] font-bold tabular-nums">{gems}</span>
+    </span>
+  ) : null;
 
   // ── Derived ──
   const loading = mealPlan.generatingPlan || mealOps.loggingMeal !== null || mealOps.savingAllMeals;
@@ -578,15 +588,15 @@ export default function Nutrition() {
                     {groupCalories > 0 ? `${Math.round(groupCalories)} kcal` : ""}
                   </span>
                 </div>
-                {nutritionData.mealsLoading && meals.length === 0 ? (
-                  <div className="px-2 pb-1">
-                    <MealCardSkeleton />
-                  </div>
-                ) : groupMeals.length > 0 ? (
+                {groupMeals.length > 0 ? (
                   <div className="px-2">
                     {groupMeals.map((meal) => (
                       <MealCard key={meal.id} meal={meal} onDelete={() => handleDeleteMeal(meal)} />
                     ))}
+                  </div>
+                ) : nutritionData.mealsLoading ? (
+                  <div className="px-2 pb-1">
+                    <MealCardSkeleton />
                   </div>
                 ) : null}
                 <div className="border-t border-border/10">
@@ -639,7 +649,7 @@ export default function Nutrition() {
           ) : meals.length > 0 && (
             <button onClick={() => dietAnalysisHook.handleAnalyseDiet()} disabled={nutritionData.dietAnalysisLoading}
               className="glass-card w-full p-4 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
-              <Sparkles className="h-4 w-4 text-primary" /><span className="text-sm font-medium text-foreground">Analyse Diet</span>
+              <Sparkles className="h-4 w-4 text-primary" /><span className="text-sm font-medium text-foreground">Analyse Diet{gemBadge}</span>
             </button>
           )}
         </div>
@@ -825,7 +835,7 @@ export default function Nutrition() {
                       </button>
                     )}
                     <Button type="button" size="sm" onClick={() => { if (isListening) stopListening(); aiMeal.handleAiAnalyzeMeal(); }} disabled={aiMeal.aiAnalyzing || !aiMeal.aiMealDescription.trim()} className="flex-1">
-                      <Sparkles className="h-3.5 w-3.5 mr-1.5" />{aiMeal.aiAnalyzing ? "Analyzing…" : "Analyze"}
+                      <Sparkles className="h-3.5 w-3.5 mr-1.5" />{aiMeal.aiAnalyzing ? "Analyzing…" : <>Analyze{gemBadge}</>}
                     </Button>
                   </div>
                 </div>
@@ -965,7 +975,7 @@ export default function Nutrition() {
               <Textarea placeholder="Describe what you'd like to eat..." value={mealPlan.aiPrompt} onChange={(e) => mealPlan.setAiPrompt(e.target.value)} rows={2} className="resize-none rounded-xl border-primary/15 bg-primary/5" />
               <Button onClick={mealPlan.handleGenerateMealPlan} disabled={mealPlan.generatingPlan}
                 className="w-full bg-gradient-to-r from-primary to-secondary shadow-lg shadow-primary/20 rounded-xl h-11 text-sm font-semibold">
-                <Sparkles className="mr-2 h-4 w-4" />{mealPlan.generatingPlan ? "Generating..." : "Generate Meal Ideas"}
+                <Sparkles className="mr-2 h-4 w-4" />{mealPlan.generatingPlan ? "Generating..." : <>Generate Meal Ideas{gemBadge}</>}
               </Button>
             </div>
           </DialogContent>

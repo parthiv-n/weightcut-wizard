@@ -6,7 +6,7 @@ import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, Trophy, Trash2, GitCompareArrows, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -191,7 +191,7 @@ export default function FightCamps() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-bold">{compareMode ? "Compare Camps" : "Fight Camps"}</h1>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             {camps.length >= 2 && (
               <Button
                 size="icon"
@@ -201,58 +201,18 @@ export default function FightCamps() {
                   setCompareMode(!compareMode);
                   setSelectedCamps([]);
                 }}
-                className="rounded-full h-9 w-9"
+                className="rounded-full h-8 w-8"
               >
                 {compareMode ? <X className="h-4 w-4" /> : <GitCompareArrows className="h-4 w-4" />}
               </Button>
             )}
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="icon" aria-label="New fight camp" className="rounded-full h-9 w-9 bg-muted hover:bg-muted/80 text-foreground border border-border/50">
-                <Plus className="h-4 w-4" />
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:rounded-3xl max-w-sm mx-auto">
-              <DialogHeader>
-                <DialogTitle className="text-xl font-bold">New Fight Camp</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 pt-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="camp-name" className="text-muted-foreground pl-1 text-xs">Camp Name</Label>
-                  <Input
-                    id="camp-name"
-                    placeholder="e.g. Summer 2025"
-                    value={newCamp.name}
-                    onChange={(e) => setNewCamp({ ...newCamp, name: e.target.value })}
-                    className="h-10 rounded-xl focus:border-primary focus:ring-1 focus:ring-primary px-3"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="event-name" className="text-muted-foreground pl-1 text-xs">Event (Optional)</Label>
-                  <Input
-                    id="event-name"
-                    placeholder="e.g. UFC 300"
-                    value={newCamp.event_name}
-                    onChange={(e) => setNewCamp({ ...newCamp, event_name: e.target.value })}
-                    className="h-10 rounded-xl focus:border-primary focus:ring-1 focus:ring-primary px-3"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="fight-date" className="text-muted-foreground pl-1 text-xs">Fight Date</Label>
-                  <Input
-                    id="fight-date"
-                    type="date"
-                    value={newCamp.fight_date}
-                    onChange={(e) => setNewCamp({ ...newCamp, fight_date: e.target.value })}
-                    className="h-10 rounded-xl focus:border-primary focus:ring-1 focus:ring-primary px-3 block w-full"
-                  />
-                </div>
-                <Button onClick={handleCreateCamp} className="w-full h-10 rounded-xl text-sm font-bold mt-1">
-                  Create Camp
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+            <button
+              onClick={() => setDialogOpen(true)}
+              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 active:scale-95 transition-all"
+              aria-label="New fight camp"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
           </div>
         </div>
 
@@ -367,6 +327,50 @@ export default function FightCamps() {
         title="Delete Fight Camp"
         itemName={campToDelete?.name}
       />
+
+      {/* New Camp Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="sm:rounded-3xl max-w-sm mx-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">New Fight Camp</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="camp-name" className="text-muted-foreground pl-1 text-xs">Camp Name</Label>
+              <Input
+                id="camp-name"
+                placeholder="e.g. Summer 2025"
+                value={newCamp.name}
+                onChange={(e) => setNewCamp({ ...newCamp, name: e.target.value })}
+                className="h-10 rounded-xl focus:border-primary focus:ring-1 focus:ring-primary px-3"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="event-name" className="text-muted-foreground pl-1 text-xs">Event (Optional)</Label>
+              <Input
+                id="event-name"
+                placeholder="e.g. UFC 300"
+                value={newCamp.event_name}
+                onChange={(e) => setNewCamp({ ...newCamp, event_name: e.target.value })}
+                className="h-10 rounded-xl focus:border-primary focus:ring-1 focus:ring-primary px-3"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="fight-date" className="text-muted-foreground pl-1 text-xs">Fight Date</Label>
+              <Input
+                id="fight-date"
+                type="date"
+                value={newCamp.fight_date}
+                onChange={(e) => setNewCamp({ ...newCamp, fight_date: e.target.value })}
+                className="h-10 rounded-xl focus:border-primary focus:ring-1 focus:ring-primary px-3 block w-full"
+              />
+            </div>
+            <Button onClick={handleCreateCamp} className="w-full h-10 rounded-xl text-sm font-bold mt-1">
+              Create Camp
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Camp comparison share dialog */}
       {selectedCamps.length === 2 && (() => {

@@ -2,7 +2,7 @@ import type { TutorialFlow } from "../types";
 
 export const onboardingFlow: TutorialFlow = {
   id: "onboarding",
-  version: 5,
+  version: 6,
   steps: [
     {
       id: "welcome",
@@ -87,6 +87,14 @@ export const onboardingFlow: TutorialFlow = {
         "Use the + button in the nav bar to quickly log food or weight. Tap the sparkle button on the dashboard to chat with your AI coach — ask training advice, recovery tips, or anything about your cut.",
       position: "center",
       navigateTo: "/dashboard",
+    },
+    {
+      id: "ai-gems",
+      title: "AI Gems",
+      description:
+        "You get 2 free AI calls daily plus 1 bonus gem every 24 hours. Need more? Watch a short ad to earn extra gems — up to 5 per day. Or go Pro for unlimited AI access. Check your gem balance anytime in Settings.",
+      position: "center",
+      route: "/dashboard",
     },
     {
       id: "all-done",

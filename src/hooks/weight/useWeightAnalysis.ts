@@ -19,7 +19,7 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
   const { userId, refreshProfile } = useUser();
   const { toast } = useToast();
   const { addTask, completeTask, failTask } = useAITask();
-  const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
+  const { checkAIAccess, openPaywall, openNoGemsDialog, incrementLocalUsage, markLimitReached, handleAILimitError } = useSubscription();
   const aiAbortRef = useRef<AbortController | null>(null);
 
   const [analyzingWeight, setAnalyzingWeight] = useState(false);
@@ -82,7 +82,7 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
     }
 
     if (!checkAIAccess()) {
-      openPaywall();
+      openNoGemsDialog();
       return;
     }
 
@@ -153,12 +153,7 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
       setDebugData(debugInfo);
 
       if (error) {
-        const errBody = typeof error === 'object' && 'context' in error ? (error as any).context : null;
-        if (errBody?.status === 429) {
-          markLimitReached();
-          openPaywall();
-          return;
-        }
+        if (handleAILimitError(error)) return;
         const msg = await extractEdgeFunctionError(error, "AI analysis unavailable");
         toast({
           title: "AI analysis unavailable",

@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { motion } from "motion/react";
 import { staggerContainer, staggerItem } from "@/lib/motion";
-import { Dumbbell, Sparkles, ArrowUpDown, Plus } from "lucide-react";
+import { Dumbbell, Sparkles, ArrowUpDown, Plus, Gem } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { RoutineDetailCard } from "./RoutineDetailCard";
 import type { SavedRoutine } from "@/pages/gym/types";
+import { useGems } from "@/hooks/useGems";
 
 interface RoutineLibraryProps {
   routines: SavedRoutine[];
@@ -22,6 +23,7 @@ type SortMode = "recent" | "name" | "goal";
 export function RoutineLibrary({ routines, loading, onDelete, onRename, onStartWorkout, onOpenGenerator, onOpenManualCreator }: RoutineLibraryProps) {
   const [sortMode, setSortMode] = useState<SortMode>("recent");
   const [deleteTarget, setDeleteTarget] = useState<SavedRoutine | null>(null);
+  const { gems, isPremium: gemsIsPremium } = useGems();
 
   const sorted = [...routines].sort((a, b) => {
     switch (sortMode) {
@@ -90,6 +92,12 @@ export function RoutineLibrary({ routines, loading, onDelete, onRename, onStartW
           <Button onClick={onOpenGenerator} className="h-11 rounded-xl text-sm font-semibold bg-gradient-to-r from-primary to-primary/80">
             <Sparkles className="h-4 w-4 mr-2" />
             Generate with AI
+            {!gemsIsPremium && (
+              <span className="inline-flex items-center gap-0.5 ml-1.5 text-amber-500">
+                <Gem className="h-3 w-3" />
+                <span className="text-[10px] font-bold tabular-nums">{gems}</span>
+              </span>
+            )}
           </Button>
         </div>
       </div>
@@ -117,6 +125,12 @@ export function RoutineLibrary({ routines, loading, onDelete, onRename, onStartW
           >
             <Sparkles className="h-3.5 w-3.5 mr-1.5" />
             Generate with AI
+            {!gemsIsPremium && (
+              <span className="inline-flex items-center gap-0.5 ml-1.5 text-amber-500">
+                <Gem className="h-3 w-3" />
+                <span className="text-[10px] font-bold tabular-nums">{gems}</span>
+              </span>
+            )}
           </Button>
         </div>
         <button

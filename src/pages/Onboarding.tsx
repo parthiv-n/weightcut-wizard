@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useProfile } from "@/contexts/UserContext";
+import { useProfile, useAuth } from "@/contexts/UserContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +30,7 @@ export default function Onboarding() {
   const [generationStep, setGenerationStep] = useState(0);
   const navigate = useNavigate();
   const { refreshProfile } = useProfile();
+  const { hasProfile, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -48,30 +49,12 @@ export default function Onboarding() {
   const [useAutoTarget, setUseAutoTarget] = useState(true);
   const [targetSafetyLevel, setTargetSafetyLevel] = useState<"safe" | "moderate" | "risky">("safe");
 
+  // Redirect immediately if profile already exists (no async flash)
   useEffect(() => {
-    // Check if user already has a profile (only once on mount)
-    const checkExistingProfile = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const { data } = await supabase
-            .from("profiles")
-            .select("id")
-            .eq("id", user.id)
-            .maybeSingle();
-
-          if (data) {
-            await refreshProfile();
-            navigate("/dashboard", { replace: true });
-          }
-        }
-      } catch (error) {
-        // Silently fail - user can continue with onboarding
-      }
-    };
-
-    checkExistingProfile();
-  }, [navigate]);
+    if (!authLoading && hasProfile) {
+      navigate("/dashboard", { replace: true });
+    }
+  }, [authLoading, hasProfile, navigate]);
 
   const calculateBMR = () => {
     const weight = parseFloat(formData.current_weight_kg);
@@ -326,6 +309,9 @@ export default function Onboarding() {
       </div>
     );
   }
+
+  // Don't flash onboarding UI if user already has a profile
+  if (authLoading || hasProfile) return null;
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background dark:bg-gradient-to-br dark:from-[#040810] dark:via-[#020204] dark:to-[#060a14] p-4">

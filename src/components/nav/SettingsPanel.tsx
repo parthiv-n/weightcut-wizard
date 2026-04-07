@@ -1,4 +1,4 @@
-import { Moon, Sun, ChevronRight, BookOpen, Bell, Trash2, Mail, Shield, FileText, LifeBuoy, Heart, Trophy, Zap, RotateCcw, Crown } from "lucide-react";
+import { Moon, Sun, ChevronRight, BookOpen, Bell, Trash2, Mail, Shield, FileText, LifeBuoy, Heart, Trophy, Zap, RotateCcw, Crown, Gem, Play } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -8,6 +8,7 @@ import { Capacitor } from "@capacitor/core";
 import { useState } from "react";
 import { getSettings, saveSettings, scheduleReminder, cancelReminder, type ReminderSettings } from "@/lib/weightReminder";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useGems } from "@/hooks/useGems";
 import { restorePurchases, isPremiumFromCustomerInfo, presentCustomerCenter } from "@/lib/purchases";
 import { PremiumBadge } from "@/components/subscription/PremiumBadge";
 import { useProfile } from "@/contexts/UserContext";
@@ -104,6 +105,51 @@ function SubscriptionSection() {
             <p className="text-xs text-muted-foreground">Already subscribed?</p>
           </div>
         </div>
+      </button>
+    </div>
+  );
+}
+
+function GemsSection() {
+  const { gems, adsRemaining, canWatchAd, loading, isPremium, watchAdForGem } = useGems();
+
+  if (isPremium) return null;
+
+  return (
+    <div className="rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden divide-y divide-border/30 dark:divide-white/5">
+      <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 dark:bg-amber-500/20">
+            <Gem className="h-5 w-5 text-amber-500" />
+          </span>
+          <div>
+            <p className="text-[15px] font-medium text-foreground">AI Gems</p>
+            <p className="text-xs text-muted-foreground">{gems} gem{gems !== 1 ? 's' : ''} available</p>
+          </div>
+        </div>
+        <span className="text-lg font-bold text-amber-500 tabular-nums">{gems}</span>
+      </div>
+
+      <button
+        type="button"
+        onClick={watchAdForGem}
+        disabled={!canWatchAd || loading}
+        className="w-full flex items-center justify-between px-4 py-3 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left disabled:opacity-50"
+      >
+        <div className="flex items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-green-500/10 dark:bg-green-500/20">
+            <Play className="h-5 w-5 text-green-500" />
+          </span>
+          <div>
+            <p className="text-[15px] font-medium text-foreground">
+              {loading ? 'Loading ad...' : 'Watch Ad for 1 Gem'}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {adsRemaining > 0 ? `${adsRemaining} ad${adsRemaining !== 1 ? 's' : ''} remaining today` : 'Daily limit reached'}
+            </p>
+          </div>
+        </div>
+        <ChevronRight className="h-4 w-4 text-muted-foreground" />
       </button>
     </div>
   );
@@ -237,6 +283,9 @@ export function SettingsPanel({
 
           {/* Subscription */}
           <SubscriptionSection />
+
+          {/* Gems & Rewards */}
+          <GemsSection />
 
           {/* Appearance */}
           <button

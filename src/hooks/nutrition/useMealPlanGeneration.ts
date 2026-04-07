@@ -33,7 +33,7 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
   const { isSessionValid, checkSessionValidity, refreshSession, userId, profile: contextProfile } = useUser();
   const profile = contextProfile;
   const { toast } = useToast();
-  const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
+  const { checkAIAccess, openPaywall, openNoGemsDialog, incrementLocalUsage, markLimitReached, handleAILimitError } = useSubscription();
   const { addTask, completeTask, failTask } = useAITask();
 
   const [generatingPlan, setGeneratingPlan] = useState(false);
@@ -47,7 +47,7 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
     }
 
     if (!checkAIAccess()) {
-      openPaywall();
+      openNoGemsDialog();
       return;
     }
 
@@ -99,12 +99,7 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
       if (controller.signal.aborted) return;
 
       if (response.error) {
-        const errBody = typeof response.error === 'object' && 'context' in response.error ? (response.error as any).context : null;
-        if (errBody?.status === 429) {
-          markLimitReached();
-          openPaywall();
-          return;
-        }
+        if (handleAILimitError(response.error)) return;
         throw new Error(await extractEdgeFunctionError(response.error, "Failed to generate meal plan"));
       }
 

@@ -48,7 +48,7 @@ export default function FightWeek() {
 
   const { toast } = useToast();
   const { userId, profile } = useUser();
-  const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
+  const { checkAIAccess, openNoGemsDialog, incrementLocalUsage, handleAILimitError } = useSubscription();
   const { tasks: aiTasks, dismissTask: aiDismiss, addTask, completeTask, failTask } = useAITask();
   const { safeAsync, isMounted } = useSafeAsync();
   const aiAbortRef = useRef<AbortController | null>(null);
@@ -180,7 +180,7 @@ export default function FightWeek() {
     if (!userId || !projection) return;
 
     if (!checkAIAccess()) {
-      openPaywall();
+      openNoGemsDialog();
       return;
     }
 
@@ -220,6 +220,7 @@ export default function FightWeek() {
       if (!isMounted()) return;
 
       if (error) {
+        if (handleAILimitError(error)) return;
         const msg = await extractEdgeFunctionError(error, "AI advice unavailable");
         failTask(taskId, msg);
         toast({ title: "AI advice unavailable", description: msg, variant: "destructive" });

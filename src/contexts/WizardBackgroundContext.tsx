@@ -25,7 +25,7 @@ const WizardBackgroundContext = createContext<WizardBackgroundContextType | unde
 export function WizardBackgroundProvider({ children }: { children: ReactNode }) {
   const { userId } = useAuth();
   const { userName } = useUser();
-  const { isPremium, openPaywall, incrementLocalUsage, markLimitReached } = useSubscriptionContext();
+  const { isPremium, openNoGemsDialog, incrementLocalUsage, markLimitReached, gems } = useSubscriptionContext();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -98,8 +98,8 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
     localStorage.setItem(`wizard_chat_history_${userId}`, JSON.stringify(newMessages));
 
     // Pre-flight subscription check (localStorage-backed, synchronous)
-    if (!isPremium && isLimitHitToday()) {
-      openPaywall();
+    if (!isPremium && isLimitHitToday() && gems <= 0) {
+      openNoGemsDialog();
       setIsLoading(false);
       return;
     }
@@ -122,7 +122,16 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
 
       if (response.status === 429) {
         markLimitReached();
-        openPaywall();
+        // Check if it's a NO_GEMS response
+        try {
+          const errBody = await response.clone().json();
+          if (errBody?.code === "NO_GEMS" || errBody?.reason === "no_gems") {
+            openNoGemsDialog();
+            setIsLoading(false);
+            return;
+          }
+        } catch {}
+        openNoGemsDialog();
         setIsLoading(false);
         return;
       }

@@ -33,7 +33,7 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
 
   const { userId, profile: contextProfile } = useUser();
   const { toast } = useToast();
-  const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
+  const { checkAIAccess, openPaywall, openNoGemsDialog, incrementLocalUsage, markLimitReached, handleAILimitError } = useSubscription();
   const { addTask, completeTask, failTask } = useAITask();
 
   const handleAnalyseDiet = useCallback(async (forceRefresh = false) => {
@@ -49,7 +49,7 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
     }
 
     if (!checkAIAccess()) {
-      openPaywall();
+      openNoGemsDialog();
       return;
     }
 
@@ -104,12 +104,7 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
 
       if (dietController.signal.aborted) return;
       if (error) {
-        const errBody = typeof error === 'object' && 'context' in error ? (error as any).context : null;
-        if (errBody?.status === 429) {
-          markLimitReached();
-          openPaywall();
-          return;
-        }
+        if (handleAILimitError(error)) return;
         throw new Error(await extractEdgeFunctionError(error, "Could not analyse your diet"));
       }
       if (data?.error) throw new Error(data.error);
