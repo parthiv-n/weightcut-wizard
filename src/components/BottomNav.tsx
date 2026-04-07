@@ -8,7 +8,7 @@ import { springs } from "@/lib/motion";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { useProfile, useUser } from "@/contexts/UserContext";
+import { useProfile, useUser, useAuth } from "@/contexts/UserContext";
 import { useTutorial } from "@/tutorial/useTutorial";
 import { FIGHT_ONLY_PATHS, isFighter } from "@/lib/goalType";
 import {
@@ -50,6 +50,7 @@ export const BottomNav = memo(function BottomNav() {
   const { toast } = useToast();
   const { userName, avatarUrl, setUserName, setAvatarUrl } = useProfile();
   const { userId, profile, refreshProfile } = useUser();
+  const { signOut } = useAuth();
   const { replayTutorial } = useTutorial();
   const goalType = (profile?.goal_type as 'cutting' | 'losing') ?? 'cutting';
   const filteredMoreMenuItems = isFighter(goalType)
@@ -168,18 +169,7 @@ export const BottomNav = memo(function BottomNav() {
     setLoggingOut(true);
     setLogoutDialogOpen(false);
     setMoreMenuOpen(false);
-    try {
-      const signOutPromise = supabase.auth.signOut();
-      const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 3000));
-      const { error } = await Promise.race([signOutPromise, timeout]);
-      if (error) {
-        localStorage.removeItem("weightcut-wizard-auth");
-        await supabase.auth.signOut({ scope: "local" });
-      }
-    } catch {
-      localStorage.removeItem("weightcut-wizard-auth");
-      try { await supabase.auth.signOut({ scope: "local" }); } catch {}
-    }
+    await signOut();
     navigate("/auth");
     toast({ title: "Signed out", description: "You have been successfully signed out." });
     setLoggingOut(false);

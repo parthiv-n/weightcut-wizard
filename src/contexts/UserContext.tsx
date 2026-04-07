@@ -57,6 +57,7 @@ interface AuthContextType {
   checkSessionValidity: () => Promise<boolean>;
   refreshSession: () => Promise<boolean>;
   loadUserData: () => Promise<void>;
+  signOut: () => Promise<void>;
 }
 
 interface ProfileContextType {
@@ -89,6 +90,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const isUserLoadedRef = useRef(false);
   const userIdRef = useRef<string | null>(null);
   const profileRef = useRef<ProfileData | null>(null);
+  const signingOutRef = useRef(false);
 
   const checkSessionValidity = useCallback(async (): Promise<boolean> => {
     try {
@@ -386,8 +388,50 @@ export function UserProvider({ children }: { children: ReactNode }) {
     setAvatarUrl(url);
   }, []);
 
+  // Centralized sign-out: immediately clears all state, then tells Supabase
+  const signOut = useCallback(async () => {
+    signingOutRef.current = true;
+
+    // Immediately clear all state so UI updates instantly
+    stopCacheCleanup();
+    const uid = userIdRef.current;
+    if (uid) {
+      localCache.clearUser(uid);
+      nutritionCache.clearUser(uid);
+    }
+    isUserLoadedRef.current = false;
+    setIsSessionValid(false);
+    setUserId(null);
+    userIdRef.current = null;
+    setUserName("");
+    setAvatarUrl("");
+    setCurrentWeight(null);
+    setProfile(null);
+    profileRef.current = null;
+    setHasProfile(false);
+    setIsLoading(false);
+
+    // Now tell Supabase (fire-and-forget with timeout)
+    try {
+      const signOutPromise = supabase.auth.signOut();
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), 3000)
+      );
+      await Promise.race([signOutPromise, timeout]);
+    } catch {
+      // Fallback: clear local session storage directly
+      localStorage.removeItem("weightcut-wizard-auth");
+      try { await supabase.auth.signOut({ scope: "local" }); } catch {}
+    }
+
+    signingOutRef.current = false;
+  }, []);
+
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      // If signOut() already cleared state, ignore all events except SIGNED_OUT (which is a no-op)
+      if (signingOutRef.current && event !== 'SIGNED_OUT') return;
+
       if (event === 'INITIAL_SESSION') {
         if (session?.user) {
           startCacheCleanup();
@@ -396,27 +440,28 @@ export function UserProvider({ children }: { children: ReactNode }) {
           setIsLoading(false);
         }
       } else if (event === 'SIGNED_OUT') {
-        // Clear all cached data for this user before resetting refs
-        stopCacheCleanup();
-        const uid = userIdRef.current;
-        if (uid) {
-          localCache.clearUser(uid);
-          nutritionCache.clearUser(uid);
+        // signOut() already cleared state — this is just a safety net
+        if (!signingOutRef.current) {
+          stopCacheCleanup();
+          const uid = userIdRef.current;
+          if (uid) {
+            localCache.clearUser(uid);
+            nutritionCache.clearUser(uid);
+          }
+          isUserLoadedRef.current = false;
+          setIsSessionValid(false);
+          setUserId(null);
+          userIdRef.current = null;
+          setUserName("");
+          setAvatarUrl("");
+          setCurrentWeight(null);
+          setProfile(null);
+          profileRef.current = null;
+          setHasProfile(false);
+          setIsLoading(false);
         }
-        isUserLoadedRef.current = false;
-        setIsSessionValid(false);
-        setUserId(null);
-        userIdRef.current = null;
-        setUserName("");
-        setAvatarUrl("");
-        setCurrentWeight(null);
-        setProfile(null);
-        profileRef.current = null;
-        setHasProfile(false);
-        setIsLoading(false);
       } else if (event === 'TOKEN_REFRESHED' && session) {
         setIsSessionValid(true);
-        // Refresh profile data after token refresh to avoid serving stale context
         if (isUserLoadedRef.current && userIdRef.current) {
           refreshProfile();
         }
@@ -427,7 +472,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
         startCacheCleanup();
         setIsSessionValid(true);
         if (!isUserLoadedRef.current) {
-          setIsLoading(true); // only for fresh logins, not token refreshes
+          setIsLoading(true);
         }
         await loadUserData(session);
       }
@@ -443,6 +488,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
     let visibilityHandler: (() => void) | null = null;
 
     const handleAppResume = () => {
+      // Don't attempt reload if user is signing out
+      if (signingOutRef.current) return;
       // If profile failed to load initially, do a full reload on resume
       if (!userIdRef.current || !profileRef.current) {
         loadUserData();
@@ -517,8 +564,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
     checkSessionValidity,
     refreshSession,
     loadUserData,
+    signOut,
   }), [userId, isSessionValid, isLoading, hasProfile, authError, isOffline,
-       retryAuth, checkSessionValidity, refreshSession, loadUserData]);
+       retryAuth, checkSessionValidity, refreshSession, loadUserData, signOut]);
 
   const profileValue = useMemo(() => ({
     profile,
@@ -545,14 +593,14 @@ const AUTH_FALLBACK: AuthContextType = {
   userId: null,
   hasProfile: false,
   isLoading: true,
-  authError: null,
-  profile: null,
-  refreshProfile: async () => {},
-  retryAuth: async () => {},
+  authError: false,
   isSessionValid: false,
+  isOffline: false,
+  retryAuth: async () => {},
   checkSessionValidity: async () => false,
   refreshSession: async () => false,
-  isOffline: false,
+  loadUserData: async () => {},
+  signOut: async () => {},
 };
 
 const PROFILE_FALLBACK: ProfileContextType = {

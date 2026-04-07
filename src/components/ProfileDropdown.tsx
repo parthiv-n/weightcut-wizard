@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { User, LogOut, Settings } from "lucide-react";
-import { useProfile } from "@/contexts/UserContext";
+import { useProfile, useAuth } from "@/contexts/UserContext";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,6 +22,7 @@ import { ProfilePictureUpload } from "./ProfilePictureUpload";
 export function ProfileDropdown() {
   const [user, setUser] = useState<any>(null);
   const { userName, avatarUrl, setUserName, setAvatarUrl } = useProfile();
+  const { signOut } = useAuth();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [editedName, setEditedName] = useState("");
   const { toast } = useToast();
@@ -42,24 +43,9 @@ export function ProfileDropdown() {
     }
   };
 
-  const [loggingOut, setLoggingOut] = useState(false);
   const handleSignOut = async () => {
-    if (loggingOut) return;
-    setLoggingOut(true);
-    try {
-      const signOutPromise = supabase.auth.signOut();
-      const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 3000));
-      const { error } = await Promise.race([signOutPromise, timeout]);
-      if (error) {
-        localStorage.removeItem("weightcut-wizard-auth");
-        await supabase.auth.signOut({ scope: "local" });
-      }
-    } catch {
-      localStorage.removeItem("weightcut-wizard-auth");
-      try { await supabase.auth.signOut({ scope: "local" }); } catch {}
-    }
+    await signOut();
     navigate("/auth");
-    setLoggingOut(false);
   };
 
   const handleUpdateProfile = async () => {
