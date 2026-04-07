@@ -588,15 +588,15 @@ export default function Nutrition() {
                     {groupCalories > 0 ? `${Math.round(groupCalories)} kcal` : ""}
                   </span>
                 </div>
-                {nutritionData.mealsLoading && meals.length === 0 ? (
-                  <div className="px-2 pb-1">
-                    <MealCardSkeleton />
-                  </div>
-                ) : groupMeals.length > 0 ? (
+                {groupMeals.length > 0 ? (
                   <div className="px-2">
                     {groupMeals.map((meal) => (
                       <MealCard key={meal.id} meal={meal} onDelete={() => handleDeleteMeal(meal)} />
                     ))}
+                  </div>
+                ) : nutritionData.mealsLoading ? (
+                  <div className="px-2 pb-1">
+                    <MealCardSkeleton />
                   </div>
                 ) : null}
                 <div className="border-t border-border/10">

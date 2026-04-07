@@ -145,8 +145,6 @@ export function useNutritionData(params: UseNutritionDataParams) {
       retryTimerRef.current = null;
     }
 
-    let servedFromCache = false;
-
     if (!skipCache) {
       const cachedMeals = nutritionCache.getMeals(userId, fetchDate);
       if (cachedMeals) {
@@ -156,19 +154,20 @@ export function useNutritionData(params: UseNutritionDataParams) {
       }
     }
 
-    // Try localStorage with 30-min TTL (skip during silent refresh — we already have meals visible)
+    // Try localStorage with 2hr TTL — if fresh, serve and skip DB fetch entirely
     if (!skipCache) {
-      const localMeals = localCache.getForDate<Meal[]>(userId, "nutrition_logs", fetchDate, 30 * 60 * 1000);
+      const localMeals = localCache.getForDate<Meal[]>(userId, "nutrition_logs", fetchDate, 120 * 60 * 1000);
       if (localMeals && localMeals.length > 0) {
         setMeals(localMeals);
-        servedFromCache = true;
+        nutritionCache.setMeals(userId, fetchDate, localMeals);
         safeAsync(setMealsLoading)(false);
+        return;
       }
     }
 
     // Only show loading skeleton if we have nothing to display and this isn't a silent/post-mutation refresh
     const hasVisibleMeals = mealsRef.current.length > 0;
-    if (!servedFromCache && !silent && !hasVisibleMeals) {
+    if (!silent && !hasVisibleMeals) {
       safeAsync(setMealsLoading)(true);
     }
 
@@ -190,7 +189,7 @@ export function useNutritionData(params: UseNutritionDataParams) {
     } catch (err) {
       if (!isMounted()) return;
       logger.error("Error loading meals", err);
-      if (!servedFromCache) {
+      {
         // Last-resort: try localStorage without TTL for offline fallback
         const fallback = localCache.getForDate<Meal[]>(userId, "nutrition_logs", fetchDate);
         if (fallback && fallback.length > 0) {
@@ -267,7 +266,7 @@ export function useNutritionData(params: UseNutritionDataParams) {
     activeDateRef.current = selectedDate;
     const hasCachedMeals = userId && (
       nutritionCache.getMeals(userId, selectedDate) ||
-      localCache.getForDate(userId, "nutrition_logs", selectedDate, 30 * 60 * 1000)
+      localCache.getForDate(userId, "nutrition_logs", selectedDate, 120 * 60 * 1000)
     );
     if (!hasCachedMeals) setMealsLoading(true);
     loadMeals();
