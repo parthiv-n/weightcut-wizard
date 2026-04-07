@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { X, Zap, Check, Loader2, RotateCcw } from "lucide-react";
+import { X, Zap, Check, Loader2, RotateCcw, Clock } from "lucide-react";
+import { useAICountdown } from "@/components/subscription/AILimitTimer";
 import { Button } from "@/components/ui/button";
 import { useSubscriptionContext } from "@/contexts/SubscriptionContext";
 import { useProfile } from "@/contexts/UserContext";
@@ -65,6 +66,7 @@ function WebFallbackPaywall() {
   const { closePaywall, refreshAIUsage } = useSubscriptionContext();
   const { refreshProfile } = useProfile();
   const { toast } = useToast();
+  const countdown = useAICountdown();
   const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">("yearly");
   const [offerings, setOfferings] = useState<any>(null);
   const [purchasing, setPurchasing] = useState(false);
@@ -151,7 +153,12 @@ function WebFallbackPaywall() {
 
         <h1 className="text-2xl font-bold text-foreground text-center">Go Pro</h1>
         <p className="text-sm text-muted-foreground text-center mt-2 max-w-[280px]">
-          You've used your free AI analysis for today. Unlock unlimited access.
+          {countdown ? (
+            <>Next free AI call in <span className="inline-flex items-center gap-1 font-bold text-foreground tabular-nums"><Clock className="h-3.5 w-3.5 inline" /> {countdown}</span></>
+          ) : (
+            "You've used your free AI analysis for today."
+          )}
+          {" "}Unlock unlimited access.
         </p>
 
         <div className="w-full max-w-sm mt-7 space-y-3">

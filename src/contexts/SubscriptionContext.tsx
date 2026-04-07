@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, ReactNode } from "react";
 import { useProfile, useAuth } from "@/contexts/UserContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Capacitor } from "@capacitor/core";
@@ -7,14 +7,20 @@ import { logger } from "@/lib/logger";
 
 // ─── localStorage-backed limit tracking (synchronous, survives re-renders) ───
 
-const AI_LIMIT_KEY_PREFIX = "wcw_ai_limit_";
+const FREE_DAILY_LIMIT = 2;
+const AI_LIMIT_KEY_PREFIX = "wcw_ai_count_";
 
 function getLimitKey(): string {
   return AI_LIMIT_KEY_PREFIX + new Date().toISOString().split("T")[0];
 }
 
+function getUsageCountToday(): number {
+  const val = localStorage.getItem(getLimitKey());
+  return val ? parseInt(val, 10) || 0 : 0;
+}
+
 export function isLimitHitToday(): boolean {
-  return localStorage.getItem(getLimitKey()) === "true";
+  return getUsageCountToday() >= FREE_DAILY_LIMIT;
 }
 
 function clearLimitFlag(): void {
@@ -23,16 +29,33 @@ function clearLimitFlag(): void {
       localStorage.removeItem(k);
     }
   });
+  // Also clear old boolean keys from previous format
+  Object.keys(localStorage).forEach((k) => {
+    if (k.startsWith("wcw_ai_limit_")) {
+      localStorage.removeItem(k);
+    }
+  });
 }
 
-function markLimitHitToday(): void {
-  // Clear old dates to avoid localStorage bloat
+function incrementUsageCount(): void {
+  // Clear old dates
   Object.keys(localStorage).forEach((k) => {
     if (k.startsWith(AI_LIMIT_KEY_PREFIX) && k !== getLimitKey()) {
       localStorage.removeItem(k);
     }
   });
-  localStorage.setItem(getLimitKey(), "true");
+  const current = getUsageCountToday();
+  localStorage.setItem(getLimitKey(), String(current + 1));
+}
+
+function markLimitHitToday(): void {
+  // Clear old dates
+  Object.keys(localStorage).forEach((k) => {
+    if (k.startsWith(AI_LIMIT_KEY_PREFIX) && k !== getLimitKey()) {
+      localStorage.removeItem(k);
+    }
+  });
+  localStorage.setItem(getLimitKey(), String(FREE_DAILY_LIMIT));
 }
 
 // ─── Context ───
@@ -47,6 +70,8 @@ interface SubscriptionContextType {
   tier: "free" | "premium_monthly" | "premium_annual" | "premium_lifetime";
   expiresAt: Date | null;
   aiUsageToday: AIUsage;
+  aiResetTime: Date | null;
+  limitTimerVisible: boolean;
   isPaywallOpen: boolean;
   openPaywall: () => void;
   closePaywall: () => void;
@@ -64,9 +89,11 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const { userId } = useAuth();
   const [isPaywallOpen, setIsPaywallOpen] = useState(false);
   const [showWelcomePro, setShowWelcomePro] = useState(false);
+  const [limitTimerVisible, setLimitTimerVisible] = useState(false);
+  const limitTimerTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [aiUsageToday, setAiUsageToday] = useState<AIUsage>(() => ({
-    used: isLimitHitToday() ? 1 : 0,
-    limit: 1,
+    used: getUsageCountToday(),
+    limit: FREE_DAILY_LIMIT,
   }));
 
   const tier = (profile?.subscription_tier as SubscriptionContextType["tier"]) || "free";
@@ -128,13 +155,13 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const refreshAIUsage = useCallback(async () => {
     if (!userId || isPremium) {
       if (isPremium) clearLimitFlag();
-      setAiUsageToday({ used: 0, limit: isPremium ? -1 : 1 });
+      setAiUsageToday({ used: 0, limit: isPremium ? -1 : FREE_DAILY_LIMIT });
       return;
     }
 
     // If localStorage says limit was hit today, don't let server reset it
     if (isLimitHitToday()) {
-      setAiUsageToday({ used: 1, limit: 1 });
+      setAiUsageToday({ used: FREE_DAILY_LIMIT, limit: FREE_DAILY_LIMIT });
       return;
     }
 
@@ -149,12 +176,12 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
       if (data && data.window_start?.startsWith(today)) {
         const serverUsed = data.request_count;
-        if (serverUsed >= 1) {
+        if (serverUsed >= FREE_DAILY_LIMIT) {
           markLimitHitToday();
         }
-        setAiUsageToday({ used: serverUsed, limit: 1 });
+        setAiUsageToday({ used: serverUsed, limit: FREE_DAILY_LIMIT });
       } else {
-        setAiUsageToday({ used: 0, limit: 1 });
+        setAiUsageToday({ used: 0, limit: FREE_DAILY_LIMIT });
       }
     } catch {
       // Fail silently — server is source of truth
@@ -165,11 +192,12 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     refreshAIUsage();
   }, [refreshAIUsage]);
 
-  // Called after a successful AI call — marks limit as hit in localStorage + state
+  // Called after a successful AI call — increments usage count
   const incrementLocalUsage = useCallback(() => {
     if (!isPremium) {
-      markLimitHitToday();
-      setAiUsageToday({ used: 1, limit: 1 });
+      incrementUsageCount();
+      const newCount = getUsageCountToday();
+      setAiUsageToday({ used: newCount, limit: FREE_DAILY_LIMIT });
     }
   }, [isPremium]);
 
@@ -177,11 +205,42 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const markLimitReached = useCallback(() => {
     if (!isPremium) {
       markLimitHitToday();
-      setAiUsageToday({ used: 1, limit: 1 });
+      setAiUsageToday({ used: FREE_DAILY_LIMIT, limit: FREE_DAILY_LIMIT });
     }
   }, [isPremium]);
 
-  const openPaywall = useCallback(() => setIsPaywallOpen(true), []);
+  // Compute reset time: midnight tonight (local) when limit is hit
+  const aiResetTime = useMemo<Date | null>(() => {
+    if (isPremium || !isLimitHitToday()) return null;
+    const midnight = new Date();
+    midnight.setHours(24, 0, 0, 0);
+    return midnight;
+  }, [isPremium, aiUsageToday]);
+
+  // Auto-unlock check every 30s — detects date rollover at midnight
+  useEffect(() => {
+    if (isPremium || !isLimitHitToday()) return;
+    const interval = setInterval(() => {
+      if (!isLimitHitToday()) {
+        clearLimitFlag();
+        setAiUsageToday({ used: 0, limit: FREE_DAILY_LIMIT });
+      }
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [isPremium, aiUsageToday]);
+
+  // Flash the limit timer for 5s whenever a locked feature is tapped
+  const flashLimitTimer = useCallback(() => {
+    if (limitTimerTimeout.current) clearTimeout(limitTimerTimeout.current);
+    setLimitTimerVisible(true);
+    limitTimerTimeout.current = setTimeout(() => setLimitTimerVisible(false), 5000);
+  }, []);
+
+  const openPaywall = useCallback(() => {
+    setIsPaywallOpen(true);
+    // Also show the transient timer toast if limit is hit
+    if (isLimitHitToday()) flashLimitTimer();
+  }, [flashLimitTimer]);
   const closePaywall = useCallback(() => setIsPaywallOpen(false), []);
   const dismissWelcomePro = useCallback(() => setShowWelcomePro(false), []);
 
@@ -192,6 +251,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         tier,
         expiresAt,
         aiUsageToday,
+        aiResetTime,
+        limitTimerVisible,
         isPaywallOpen,
         openPaywall,
         closePaywall,

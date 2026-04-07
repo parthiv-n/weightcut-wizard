@@ -23,7 +23,7 @@ export async function checkAIUsage(
 
   const { data, error } = await adminClient.rpc('check_ai_usage_and_increment', {
     p_user_id: userId,
-    p_max_requests: 1,
+    p_max_requests: 2,
   });
 
   if (error) {
