@@ -33,9 +33,8 @@ export function useGems() {
   useEffect(() => {
     const handler = () => {
       if (!isPremium) {
-        setGems(prev => Math.max(0, prev - 1));
-        // Refresh profile after a short delay to get actual server state
-        setTimeout(() => refreshProfile(), 1500);
+        // Server already deducted — refresh profile to get authoritative count
+        refreshProfile();
       }
     };
     window.addEventListener('gem-consumed', handler);
