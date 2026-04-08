@@ -161,7 +161,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
   const [rateLimitUntil, setRateLimitUntil] = useState<number>(0);
   const [cooldownLeft, setCooldownLeft] = useState(0);
   const [checkIn, setCheckIn] = useState<Partial<FeelCheckIn>>({});
-  const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
+  const { checkAIAccess, openNoGemsDialog, handleAILimitError, incrementLocalUsage, markLimitReached } = useSubscription();
 
   // Enhanced wellness state
   const [wellnessCheckIn, setWellnessCheckIn] = useState<WellnessCheckInData | null>(null);
@@ -298,7 +298,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
     }
 
     if (!checkAIAccess()) {
-      openPaywall();
+      openNoGemsDialog();
       return;
     }
 
@@ -410,10 +410,11 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
     } catch (err: any) {
       if (err?.name === 'AbortError' || controller.signal.aborted) return;
       logger.error("Coach error", err);
-      const msg = await extractEdgeFunctionError(err, "Coach unavailable");
-      if (/rate.?limit/i.test(msg) || /rate.?limit/i.test(err?.message ?? '')) {
-        setRateLimitUntil(Date.now() + 60_000);
+      if (handleAILimitError(err)) {
+        failTask(taskId, "Limit reached");
+        return;
       }
+      const msg = await extractEdgeFunctionError(err, "Coach unavailable");
       setCoachError(`Coach error: ${msg}`);
       failTask(taskId, msg);
     } finally {
