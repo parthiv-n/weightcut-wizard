@@ -314,8 +314,8 @@ export default function Onboarding() {
   if (authLoading || hasProfile) return null;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background dark:bg-gradient-to-br dark:from-[#040810] dark:via-[#020204] dark:to-[#060a14] p-4">
-      <div className="glass-card w-full max-w-2xl rounded-3xl border border-border dark:border-white/10 bg-gradient-to-br from-primary/[0.03] via-background/80 to-secondary/[0.03] dark:from-primary/10 dark:via-background/60 dark:to-secondary/10 shadow-xl dark:shadow-[0_0_60px_rgba(37,99,235,0.12)] backdrop-blur-2xl overflow-hidden">
+    <div className="flex min-h-screen items-center justify-center bg-background dark:bg-[#020204] p-4">
+      <div className="card-surface w-full max-w-2xl rounded-xl border border-border shadow-xl overflow-hidden">
         <div className="p-6 md:p-8">
           <div className="mb-6">
             <h1 className="text-2xl font-title font-semibold text-foreground">Set Up Your Plan</h1>
@@ -345,6 +345,7 @@ export default function Onboarding() {
                   <Input
                     id="age"
                     type="number"
+                    inputMode="numeric"
                     value={formData.age}
                     onChange={(e) => setFormData({ ...formData, age: e.target.value })}
                     required
@@ -368,6 +369,7 @@ export default function Onboarding() {
                   <Input
                     id="height"
                     type="number"
+                    inputMode="decimal"
                     step="0.1"
                     value={formData.height_cm}
                     onChange={(e) => setFormData({ ...formData, height_cm: e.target.value })}
@@ -380,6 +382,7 @@ export default function Onboarding() {
                   <Input
                     id="current_weight"
                     type="number"
+                    inputMode="decimal"
                     step="0.1"
                     value={formData.current_weight_kg}
                     onChange={(e) => setFormData({ ...formData, current_weight_kg: e.target.value })}
@@ -388,7 +391,7 @@ export default function Onboarding() {
                   />
                 </div>
               </div>
-              <Button onClick={() => setStep(2)} className="w-full h-12 rounded-2xl text-base font-medium bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90">Next</Button>
+              <Button onClick={() => setStep(2)} className="w-full h-12 rounded-2xl text-base font-medium bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90">Next</Button>
             </div>
           )}
 
@@ -438,6 +441,7 @@ export default function Onboarding() {
                   <Input
                     id="goal_weight"
                     type="number"
+                    inputMode="decimal"
                     step="0.1"
                     placeholder="e.g., 70"
                     value={formData.goal_weight_kg}
@@ -469,6 +473,7 @@ export default function Onboarding() {
                   <Input
                     id="fight_week_target"
                     type="number"
+                    inputMode="decimal"
                     step="0.1"
                     placeholder="e.g., 77"
                     value={formData.fight_week_target_kg}
@@ -534,7 +539,7 @@ export default function Onboarding() {
               </div>
               <div className="flex gap-2 pt-2">
                 <Button variant="outline" onClick={() => setStep(1)} className="h-12 rounded-2xl flex-1 border-border dark:border-white/15 text-foreground">Back</Button>
-                <Button onClick={() => setStep(3)} className="flex-1 h-12 rounded-2xl bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90">Next</Button>
+                <Button onClick={() => setStep(3)} className="flex-1 h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90">Next</Button>
               </div>
             </div>
           )}
@@ -562,6 +567,7 @@ export default function Onboarding() {
                 <Input
                   id="training_frequency"
                   type="number"
+                  inputMode="numeric"
                   value={formData.training_frequency}
                   onChange={(e) => setFormData({ ...formData, training_frequency: e.target.value })}
                   required
@@ -570,7 +576,7 @@ export default function Onboarding() {
               </div>
               <div className="flex gap-2 pt-2">
                 <Button variant="outline" onClick={() => setStep(2)} className="h-12 rounded-2xl flex-1 border-border dark:border-white/15 text-foreground">Back</Button>
-                <Button onClick={() => setStep(4)} className="flex-1 h-12 rounded-2xl bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90">Next</Button>
+                <Button onClick={() => setStep(4)} className="flex-1 h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90">Next</Button>
               </div>
             </div>
           )}
@@ -593,7 +599,7 @@ export default function Onboarding() {
               </div>
               <div className="flex gap-2 pt-2">
                 <Button variant="outline" onClick={() => setStep(3)} className="h-12 rounded-2xl flex-1 border-border dark:border-white/15 text-foreground">Back</Button>
-                <Button onClick={handleSubmit} disabled={loading} className="flex-1 h-12 rounded-2xl bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-70">
+                <Button onClick={handleSubmit} disabled={loading} className="flex-1 h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-70">
                   {loading ? (
                     <div className="flex items-center gap-2">
                       <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground"></div>

@@ -80,7 +80,7 @@ export const MacroPieChart = memo(function MacroPieChart({
     };
 
     return (
-        <div className="nutrition-dashboard">
+        <div className="card-surface p-4">
             {/* Top section: Ring + Stats */}
             <div className="flex items-center gap-3.5">
                 {/* Circular calorie ring */}

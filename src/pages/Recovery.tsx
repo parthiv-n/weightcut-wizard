@@ -59,7 +59,7 @@ export default function Recovery() {
     if (isLoading) {
         return (
             <div className="space-y-3 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
-                <Card className="p-6 rounded-[20px] glass-card">
+                <Card className="p-6 rounded-xl card-surface">
                     <Skeleton className="h-6 w-40 mb-4" />
                     <Skeleton className="h-48 w-full rounded-xl" />
                 </Card>
@@ -70,7 +70,7 @@ export default function Recovery() {
     if (sessions28d.length === 0) {
         return (
             <div className="space-y-3 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
-                <Card className="p-8 rounded-[20px] glass-card border-dashed flex flex-col items-center justify-center text-foreground/70">
+                <Card className="p-8 rounded-xl card-surface border-dashed flex flex-col items-center justify-center text-foreground/70">
                     <p>No training sessions in the last 28 days.</p>
                     <p className="text-sm mt-1">Log sessions in the Training Calendar to see recovery analytics.</p>
                 </Card>

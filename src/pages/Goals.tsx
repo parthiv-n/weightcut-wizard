@@ -207,7 +207,7 @@ export default function Goals() {
         </div>
 
         {!contextProfile?.goal_weight_kg && (
-          <div className="glass-card rounded-2xl border border-border/50 p-4">
+          <div className="card-surface rounded-xl border border-border p-4">
             <div className="flex items-start gap-3">
               <div className="rounded-full bg-primary/15 p-2.5 flex-shrink-0">
                 <Target className="h-5 w-5 text-primary" />
@@ -226,7 +226,7 @@ export default function Goals() {
           {/* Section: Personal Details */}
           <div className="space-y-2">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Personal Details</h2>
-            <div className="glass-card rounded-xl border border-border/50 overflow-hidden divide-y divide-border/50">
+            <div className="card-surface rounded-xl border border-border overflow-hidden divide-y divide-border">
               <div className="flex items-center justify-between px-3 py-2.5">
                 <Label htmlFor="age" className="text-sm font-medium">Age</Label>
                 <Input
@@ -285,7 +285,7 @@ export default function Goals() {
           {/* Section: Targets */}
           <div className="space-y-2">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Targets</h2>
-            <div className="glass-card rounded-xl border border-border/50 overflow-hidden divide-y divide-border/50">
+            <div className="card-surface rounded-xl border border-border overflow-hidden divide-y divide-border">
               {/* Weigh-in Goal */}
               <div className="px-3 py-2.5 space-y-3">
                 <div className="flex items-center justify-between">
@@ -382,7 +382,7 @@ export default function Goals() {
           {/* Section: Activity */}
           <div className="space-y-2">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground ml-1">Activity</h2>
-            <div className="glass-card rounded-xl border border-border/50 overflow-hidden divide-y divide-border/50">
+            <div className="card-surface rounded-xl border border-border overflow-hidden divide-y divide-border">
               <div className="px-3 py-2.5 flex flex-col gap-2">
                 <Label htmlFor="activity_level" className="text-sm font-medium">Activity Level</Label>
                 <Select value={formData.activity_level} onValueChange={(value) => setFormData({ ...formData, activity_level: value })}>

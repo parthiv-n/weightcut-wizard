@@ -83,7 +83,7 @@ interface MacroRingsProps {
 
 export function MacroRings({ protein, carbs, fats, proteinGoal, carbsGoal, fatsGoal }: MacroRingsProps) {
   return (
-    <div className="glass-card p-4">
+    <div className="card-surface p-4">
       <p className="text-xs uppercase tracking-widest text-muted-foreground text-center mb-3">Macros</p>
       <div className="grid grid-cols-3 gap-4 justify-items-center">
         <MacroRing

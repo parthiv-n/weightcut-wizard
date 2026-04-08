@@ -15,7 +15,7 @@ export function DayTimelineCard({ timeline }: DayTimelineCardProps) {
         {timeline.map((day) => (
           <div
             key={day.day}
-            className="glass-card rounded-2xl border border-border/50 p-4 space-y-3"
+            className="card-surface rounded-2xl border border-border/50 p-4 space-y-3"
           >
             {/* Day header */}
             <div className="flex items-center justify-between">

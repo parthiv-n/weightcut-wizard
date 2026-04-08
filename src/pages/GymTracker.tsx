@@ -187,12 +187,12 @@ export default function GymTracker() {
         </div>
 
         {/* Tab switcher — always visible */}
-        <div className="flex gap-1 p-1 rounded-xl bg-muted/30 dark:bg-white/5 border border-border/30">
+        <div className="flex gap-1 p-1 rounded-xl bg-muted/30 border border-border">
           <button
             onClick={() => { setTab("workouts"); triggerHaptic(ImpactStyle.Light); }}
             className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all relative ${
               tab === "workouts"
-                ? "bg-background dark:bg-white/10 text-foreground shadow-sm"
+                ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground"
             }`}
           >
@@ -208,7 +208,7 @@ export default function GymTracker() {
             onClick={() => { setTab("routines"); triggerHaptic(ImpactStyle.Light); }}
             className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
               tab === "routines"
-                ? "bg-background dark:bg-white/10 text-foreground shadow-sm"
+                ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground"
             }`}
           >
@@ -239,17 +239,17 @@ export default function GymTracker() {
               {/* Quick stats row */}
               {analytics.totalSessions > 0 && (
                 <div className="grid grid-cols-3 gap-2.5">
-                  <div className="glass-card rounded-xl border border-border/50 p-3 text-center">
+                  <div className="card-surface rounded-xl border border-border p-3 text-center">
                     <Calendar className="h-3.5 w-3.5 text-primary mx-auto mb-1.5" />
                     <div className="display-number text-lg">{analytics.sessionsThisWeek}</div>
                     <div className="text-[10px] text-muted-foreground mt-0.5">This Week</div>
                   </div>
-                  <div className="glass-card rounded-xl border border-border/50 p-3 text-center">
+                  <div className="card-surface rounded-xl border border-border p-3 text-center">
                     <Clock className="h-3.5 w-3.5 text-primary mx-auto mb-1.5" />
                     <div className="display-number text-lg">{analytics.avgDuration}<span className="text-xs text-muted-foreground font-normal">m</span></div>
                     <div className="text-[10px] text-muted-foreground mt-0.5">Avg Duration</div>
                   </div>
-                  <div className="glass-card rounded-xl border border-border/50 p-3 text-center">
+                  <div className="card-surface rounded-xl border border-border p-3 text-center">
                     <Flame className="h-3.5 w-3.5 text-orange-400 mx-auto mb-1.5" />
                     <div className="display-number text-lg">{formatVol(weeklyVolume)}<span className="text-xs text-muted-foreground font-normal">kg</span></div>
                     <div className="text-[10px] text-muted-foreground mt-0.5">Week Volume</div>
@@ -258,7 +258,7 @@ export default function GymTracker() {
               )}
 
               {/* Start workout card */}
-              <div className="glass-card rounded-2xl border border-border/50 p-3 space-y-3">
+              <div className="card-surface rounded-xl border border-border p-3 space-y-3">
                 <h2 className="font-semibold text-sm">Start Workout</h2>
                 <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
                   {SESSION_TYPES.map(t => (

@@ -17,7 +17,7 @@ interface ExercisePerformanceChartProps {
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="glass-card rounded-xl border border-border/50 px-3 py-2 shadow-xl text-xs">
+    <div className="card-surface rounded-xl border border-border px-3 py-2 shadow-xl text-xs">
       <p className="text-muted-foreground mb-1">{label}</p>
       {payload.map((p: any) => (
         <p key={p.name} className="display-number text-sm">
@@ -188,8 +188,7 @@ export const ExercisePerformanceChart = memo(function ExercisePerformanceChart({
                 dot={{ r: 4, fill: "hsl(var(--primary))", stroke: "hsl(var(--background))", strokeWidth: 2 }}
                 activeDot={{ r: 6, fill: "hsl(var(--primary))", stroke: "hsl(var(--background))", strokeWidth: 2 }}
                 name={`${chartLabel} (${unitLabel})`}
-                animationDuration={800}
-                animationEasing="ease-out"
+                animationDuration={0}
               />
             </AreaChart>
           ) : (
@@ -219,8 +218,7 @@ export const ExercisePerformanceChart = memo(function ExercisePerformanceChart({
                 fill="url(#barGradient)"
                 radius={[6, 6, 0, 0]}
                 name={`Volume (${unitLabel})`}
-                animationDuration={800}
-                animationEasing="ease-out"
+                animationDuration={0}
               />
             </BarChart>
           )}

@@ -6,12 +6,11 @@ import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { format } from "date-fns";
-import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Sparkles, Activity, Scale, Trash2, RefreshCw, Bug, Edit2, ChevronDown, Check, Gem } from "lucide-react";
+import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Sparkles, Activity, Scale, Trash2, RefreshCw, Edit2, ChevronDown, Check, CheckCircle2, Gem, Minus, Plus } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { useUser } from "@/contexts/UserContext";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,9 +28,11 @@ import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { WeightTrackerCard } from "@/components/share/cards/WeightTrackerCard";
 import { WeighInResultCard } from "@/components/share/cards/WeighInResultCard";
 import type { Profile } from "@/pages/weight/types";
+import { isFighter } from "@/lib/goalType";
 import { useWeightData } from "@/hooks/weight/useWeightData";
 import { useWeightAnalysis } from "@/hooks/weight/useWeightAnalysis";
 import { useGems } from "@/hooks/useGems";
+import { triggerHapticSelection } from "@/lib/haptics";
 
 export default function WeightTracker() {
   const { userId, profile: contextProfile } = useUser();
@@ -43,6 +44,7 @@ export default function WeightTracker() {
   const [showProjected, setShowProjected] = useState(true);
   const [shareOpen, setShareOpen] = useState(false);
   const [weighInShareOpen, setWeighInShareOpen] = useState(false);
+  const [showWeightSuccess, setShowWeightSuccess] = useState(false);
 
   const {
     weightLogs, newWeight, setNewWeight, newDate, setNewDate,
@@ -55,10 +57,17 @@ export default function WeightTracker() {
   const {
     analyzingWeight, aiAnalysis, aiAnalysisWeight, aiAnalysisTarget,
     unsafeGoalDialogOpen, setUnsafeGoalDialogOpen,
-    debugDialogOpen, setDebugDialogOpen, debugData,
     loadPersistedAnalysis, clearAnalysis, getAIAnalysis, handleAICancel,
     targetsApplied, applyingTargets, applyNutritionTargets,
   } = useWeightAnalysis({ profile });
+
+  const adjustWeight = (delta: number) => {
+    setNewWeight((prev: string) => {
+      const current = parseFloat(prev) || 0;
+      return Math.max(0, current + delta).toFixed(1);
+    });
+    triggerHapticSelection();
+  };
 
   useEffect(() => {
     if (!userId) return;
@@ -80,6 +89,8 @@ export default function WeightTracker() {
   const handleAddWeight = async (e: React.FormEvent) => {
     const loggedWeight = await rawHandleAddWeight(e);
     if (loggedWeight && profile) {
+      setShowWeightSuccess(true);
+      setTimeout(() => setShowWeightSuccess(false), 1500);
       const fwt = profile.fight_week_target_kg ?? profile.goal_weight_kg;
       if (fwt && loggedWeight <= fwt && !editingLogId) {
         setWeighInShareOpen(true);
@@ -270,12 +281,12 @@ export default function WeightTracker() {
       )}
       <div className="space-y-2.5 p-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
         {/* Chart + History */}
-        <div className="glass-card p-3 space-y-3">
+        <div className="card-surface p-3 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Progress Chart</p>
             <div className="flex items-center gap-2">
             {weightLogs.length >= 2 && <ShareButton onClick={() => setShareOpen(true)} />}
-            <div className="flex bg-muted rounded-full p-0.5 border border-white/5">
+            <div className="flex rounded-full bg-muted p-0.5">
               {(["1W", "1M", "ALL"] as const).map((filter) => (
                 <button
                   key={filter}
@@ -319,11 +330,11 @@ export default function WeightTracker() {
                   />
                   <ReferenceLine y={profile?.fight_week_target_kg || profile?.goal_weight_kg} stroke="hsl(var(--primary))" strokeDasharray="5 5" label={{ value: "Target", fill: "hsl(var(--primary))", fontSize: 10, position: "insideTopRight" }} />
                   {profile?.fight_week_target_kg && (
-                    <ReferenceLine y={profile.goal_weight_kg} stroke="hsl(var(--destructive))" strokeDasharray="3 3" label={{ value: "Fight Night", fill: "hsl(var(--destructive))", fontSize: 10, position: "insideBottomRight" }} />
+                    <ReferenceLine y={profile.goal_weight_kg} stroke="hsl(var(--destructive))" strokeDasharray="3 3" label={{ value: isFighter(profile?.goal_type) ? "Fight Night" : "Goal Weight", fill: "hsl(var(--destructive))", fontSize: 10, position: "insideBottomRight" }} />
                   )}
-                  <Line type="monotone" dataKey="weight" stroke="hsl(var(--primary))" strokeWidth={2.5} dot={{ fill: "hsl(var(--primary))", r: 4, cursor: "pointer" }} activeDot={{ r: 6, cursor: "pointer" }} />
+                  <Line type="monotone" dataKey="weight" stroke="hsl(var(--primary))" strokeWidth={2.5} dot={{ fill: "hsl(var(--primary))", r: 4, cursor: "pointer" }} activeDot={{ r: 6, cursor: "pointer" }} animationDuration={0} />
                   {aiAnalysis && showProjected && (
-                    <Line type="monotone" dataKey="projected" stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} strokeDasharray="6 4" dot={false} connectNulls={false} />
+                    <Line type="monotone" dataKey="projected" stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} strokeDasharray="6 4" dot={false} connectNulls={false} animationDuration={0} />
                   )}
                 </LineChart>
               </ResponsiveContainer>
@@ -379,8 +390,11 @@ export default function WeightTracker() {
               </div>
             </>
           ) : (
-            <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
+            <div className="h-[200px] flex flex-col items-center justify-center text-muted-foreground text-sm gap-2">
               Log your first weight to see progress
+              <Button variant="outline" size="sm" className="text-xs" onClick={() => weightInputRef.current?.focus()}>
+                Log Now
+              </Button>
             </div>
           )}
         </div>
@@ -388,28 +402,51 @@ export default function WeightTracker() {
         {/* Header + Inline Log Form */}
         <div className="flex flex-col gap-2">
           <form onSubmit={handleAddWeight} className="flex gap-1.5 items-center">
-            <Input ref={weightInputRef} type="number" step="0.1" placeholder="75.5 kg" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} required className="flex-1 h-9 text-sm" />
+            <div className="flex items-center gap-1 flex-1">
+              <button
+                type="button"
+                onClick={() => adjustWeight(-0.1)}
+                className="h-8 w-8 shrink-0 rounded-lg bg-muted flex items-center justify-center text-muted-foreground active:scale-95 transition-transform"
+                aria-label="Decrease weight"
+              >
+                <Minus className="h-3.5 w-3.5" />
+              </button>
+              <Input ref={weightInputRef} type="number" inputMode="decimal" step="0.1" placeholder={weightLogs.length > 0 ? `e.g. ${parseFloat(weightLogs[weightLogs.length - 1].weight_kg).toFixed(1)}` : "0.0"} value={newWeight} onChange={(e) => setNewWeight(e.target.value)} required className="flex-1 min-w-0 h-9 text-sm" />
+              <button
+                type="button"
+                onClick={() => adjustWeight(0.1)}
+                className="h-8 w-8 shrink-0 rounded-lg bg-muted flex items-center justify-center text-muted-foreground active:scale-95 transition-transform"
+                aria-label="Increase weight"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            </div>
             <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} required className="w-[120px] h-9 text-sm" />
             <Button type="submit" disabled={loading} className="h-9 px-3 text-sm shrink-0">
               {loading ? "..." : editingLogId ? "Update" : "Log"}
             </Button>
+            {showWeightSuccess && (
+              <span className="text-success animate-[fadeSlideUp_0.3s_ease-out_both]">
+                <CheckCircle2 className="h-5 w-5" />
+              </span>
+            )}
           </form>
         </div>
 
         {/* Stats Overview */}
         {profile && (
           <div className="grid grid-cols-4 gap-2">
-            <div className="glass-card p-2.5 text-center">
+            <div className="card-surface p-2.5 text-center">
               <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">Current</p>
               <p className="display-number text-lg">{getCurrentWeight().toFixed(1)}</p>
               <p className="text-[9px] text-muted-foreground">kg</p>
             </div>
-            <div className="glass-card p-2.5 text-center">
+            <div className="card-surface p-2.5 text-center">
               <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">Target</p>
               <p className="display-number text-lg">{(profile.fight_week_target_kg || profile.goal_weight_kg).toFixed(1)}</p>
               <p className="text-[9px] text-muted-foreground">kg</p>
             </div>
-            <div className="glass-card p-2.5 text-center">
+            <div className="card-surface p-2.5 text-center">
               {(() => {
                 const current = getCurrentWeight();
                 const target = profile.fight_week_target_kg || profile.goal_weight_kg;
@@ -419,7 +456,7 @@ export default function WeightTracker() {
                 return (<><p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">Status</p><p className="display-number text-lg text-green-500">✓</p><p className="text-[9px] text-muted-foreground">At Target</p></>);
               })()}
             </div>
-            <div className="glass-card p-2.5 text-center">
+            <div className="card-surface p-2.5 text-center">
               <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">Deadline</p>
               <p className="text-sm font-semibold">{format(new Date(profile.target_date), "MMM dd")}</p>
               <p className="text-[9px] text-muted-foreground">{format(new Date(profile.target_date), "yyyy")}</p>
@@ -429,7 +466,7 @@ export default function WeightTracker() {
 
         {/* Progress + Insight */}
         {profile && (
-          <div className="glass-card p-3 space-y-1.5">
+          <div className="card-surface p-3 space-y-1.5">
             <div className="flex justify-between text-[11px]">
               <span className="text-muted-foreground">Progress to target</span>
               <span className="font-medium">{getWeightProgress().toFixed(0)}%</span>
@@ -441,7 +478,7 @@ export default function WeightTracker() {
 
         {/* AI Analysis Loading */}
         {analyzingWeight && (
-          <div className="glass-card p-5 flex flex-col items-center gap-3">
+          <div className="card-surface p-5 flex flex-col items-center gap-3">
             <Sparkles className="h-6 w-6 text-primary animate-spin" />
             <div className="space-y-2 w-full max-w-xs">
               <Skeleton className="h-3 w-full" />
@@ -458,7 +495,7 @@ export default function WeightTracker() {
           const weightDiff = aiAnalysisWeight !== null && aiAnalysisTarget !== null ? aiAnalysisTarget - aiAnalysisWeight : 0;
 
           return (
-            <div className="glass-card p-3 space-y-3 animate-fade-in">
+            <div className="card-surface p-3 space-y-3 animate-fade-in">
               {/* Header row */}
               <div className="flex items-start justify-between">
                 <div>
@@ -686,14 +723,6 @@ export default function WeightTracker() {
           </Button>
         )}
 
-        {/* Debug Button */}
-        {debugData && (
-          <Button onClick={() => setDebugDialogOpen(true)} variant="ghost" size="sm" className="w-full opacity-50 text-xs">
-            <Bug className="h-3 w-3 mr-1" />
-            Debug AI Request/Response
-          </Button>
-        )}
-
         <DeleteConfirmDialog
           open={deleteDialogOpen}
           onOpenChange={setDeleteDialogOpen}
@@ -716,53 +745,6 @@ export default function WeightTracker() {
           </AlertDialogContent>
         </AlertDialog>
 
-        <Dialog open={debugDialogOpen} onOpenChange={setDebugDialogOpen}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>AI Weight Loss Strategy - Debug Info</DialogTitle>
-              <DialogDescription>Debug information for the AI weight loss strategy request and response</DialogDescription>
-            </DialogHeader>
-            {debugData && (
-              <div className="space-y-6 mt-4">
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-sm">Current Weight Information</h3>
-                  <div className="bg-muted p-3 rounded-md text-sm font-mono">
-                    <div><strong>Source:</strong> {debugData.currentWeightSource}</div>
-                    <div><strong>Value Used:</strong> {debugData.currentWeightValue} kg</div>
-                    {debugData.latestWeightLog && (
-                      <div className="mt-2">
-                        <strong>Latest Weight Log:</strong>
-                        <div className="ml-4">
-                          Weight: {debugData.latestWeightLog.weight_kg} kg
-                          {debugData.latestWeightLog.date && <div>Date: {debugData.latestWeightLog.date}</div>}
-                        </div>
-                      </div>
-                    )}
-                    {!debugData.latestWeightLog && <div className="mt-2 text-muted-foreground">No weight log found, using profile weight</div>}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-sm">Profile Data</h3>
-                  <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto font-mono">{JSON.stringify(debugData.profileData, null, 2)}</pre>
-                </div>
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-sm">Request Payload (Sent to API)</h3>
-                  <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto font-mono">{JSON.stringify(debugData.requestPayload, null, 2)}</pre>
-                </div>
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-sm">Raw API Response</h3>
-                  <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto font-mono max-h-96 overflow-y-auto">{JSON.stringify(debugData.rawResponse, null, 2)}</pre>
-                </div>
-                {debugData.parsedResponse && (
-                  <div className="space-y-2">
-                    <h3 className="font-semibold text-sm">Parsed Response (Analysis)</h3>
-                    <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto font-mono max-h-96 overflow-y-auto">{JSON.stringify(debugData.parsedResponse, null, 2)}</pre>
-                  </div>
-                )}
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
       </div>
 
       <ShareCardDialog open={shareOpen} onOpenChange={setShareOpen} title="Share Weight Progress" shareTitle="Weight Journey" shareText="Check out my weight progress on FightCamp Wizard">

@@ -220,7 +220,7 @@ export default function FightWeek() {
       if (!isMounted()) return;
 
       if (error) {
-        if (handleAILimitError(error)) return;
+        if (handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
         const msg = await extractEdgeFunctionError(error, "AI advice unavailable");
         failTask(taskId, msg);
         toast({ title: "AI advice unavailable", description: msg, variant: "destructive" });
@@ -254,7 +254,7 @@ export default function FightWeek() {
           <Skeleton className="h-3.5 w-28" />
         </div>
         {/* Input card */}
-        <div className="glass-card rounded-2xl p-3 border border-border/50 space-y-3">
+        <div className="card-surface rounded-xl p-3 border border-border space-y-3">
           <div className="grid grid-cols-3 gap-2">
             <div className="space-y-1.5">
               <Skeleton className="h-3 w-16" />
@@ -323,7 +323,7 @@ export default function FightWeek() {
         </div>
 
         {/* Input card */}
-        <div className="glass-card rounded-2xl p-3 border border-border/50 space-y-3">
+        <div className="card-surface rounded-xl p-3 border border-border space-y-3">
           <div className="grid grid-cols-3 gap-2">
             <div className="space-y-1.5">
               <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">
@@ -383,14 +383,14 @@ export default function FightWeek() {
           <>
             {/* Summary tiles */}
             <div className="grid grid-cols-3 gap-2">
-              <div className="glass-card rounded-2xl p-2.5 border border-border/50 text-center">
+              <div className="card-surface rounded-xl p-2.5 border border-border text-center">
                 <TrendingDown className="h-3.5 w-3.5 mx-auto text-muted-foreground mb-0.5" />
                 <span className="text-lg font-bold block">
                   {projection.totalToCut.toFixed(1)}
                 </span>
                 <span className="text-[9px] text-muted-foreground uppercase">kg to cut</span>
               </div>
-              <div className="glass-card rounded-2xl p-2.5 border border-border/50 text-center">
+              <div className="card-surface rounded-xl p-2.5 border border-border text-center">
                 <Target className="h-3.5 w-3.5 mx-auto text-muted-foreground mb-0.5" />
                 <span className={`text-lg font-bold block ${
                   projection.percentBW <= 5 ? "text-green-400" :
@@ -400,7 +400,7 @@ export default function FightWeek() {
                 </span>
                 <span className="text-[9px] text-muted-foreground uppercase">% bodyweight</span>
               </div>
-              <div className="glass-card rounded-2xl p-2.5 border border-border/50 text-center">
+              <div className="card-surface rounded-xl p-2.5 border border-border text-center">
                 <Calendar className="h-3.5 w-3.5 mx-auto text-muted-foreground mb-0.5" />
                 <span className="text-lg font-bold block">{daysUntilWeighIn}</span>
                 <span className="text-[9px] text-muted-foreground uppercase">days</span>
@@ -409,7 +409,7 @@ export default function FightWeek() {
 
             {/* Safe AWL note */}
             {projection.totalToCut > projection.maxSafeAWL && (
-              <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-3">
+              <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
                 <p className="text-sm text-red-400">
                   Cut exceeds safe AWL of {projection.maxSafeAWL.toFixed(1)}kg for this timeline (ISSN Position 7).
                 </p>

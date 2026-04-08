@@ -139,7 +139,7 @@ export function useRehydrationProtocol() {
       if (controller.signal.aborted) return;
       if (!isMounted()) return;
       if (error) {
-        if (handleAILimitError(error)) return;
+        if (handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
         throw new Error(await extractEdgeFunctionError(error, "Failed to generate protocol"));
       }
 

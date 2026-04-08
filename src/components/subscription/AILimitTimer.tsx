@@ -62,7 +62,7 @@ export function AILimitTimer() {
         fading ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0 animate-in slide-in-from-bottom duration-300"
       }`}
     >
-      <div className="flex items-center gap-2.5 rounded-2xl glass-card border border-primary/20 bg-background/95 backdrop-blur-md px-3.5 py-2.5 shadow-lg shadow-black/20">
+      <div className="flex items-center gap-2.5 rounded-xl card-surface border border-primary/20 bg-background/95 px-3.5 py-2.5 shadow-lg shadow-black/20">
         <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
           <Clock className="h-4 w-4 text-primary" />
         </div>

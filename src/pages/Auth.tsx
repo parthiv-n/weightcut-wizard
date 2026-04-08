@@ -9,10 +9,12 @@ import wizardLogo from "@/assets/wizard-logo.webp";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ChevronLeft } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
-import { SignInWithApple } from "@capacitor-community/apple-sign-in";
 
 export default function Auth() {
-  const [isLogin, setIsLogin] = useState(true);
+  const [isLogin, setIsLogin] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("mode") !== "signup";
+  });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -174,7 +176,8 @@ export default function Auth() {
         const hashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(rawNonce));
         const hashedNonce = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
 
-        // Native iOS: use ASAuthorizationController → exchange ID token with Supabase
+        // Native iOS: lazy-load Apple Sign-In plugin, then authorize
+        const { SignInWithApple } = await import("@capacitor-community/apple-sign-in");
         const result = await SignInWithApple.authorize({
           clientId: "com.weightcutwizard.app",
           redirectURI: "https://pkubdwmnnsxjjnpjjqqy.supabase.co/auth/v1/callback",
@@ -246,7 +249,7 @@ export default function Auth() {
   }, [password, confirmPassword, isLogin, isPasswordReset]);
 
   return (
-    <div className="min-h-screen bg-background dark:bg-gradient-to-br dark:from-[#040810] dark:via-[#020204] dark:to-[#060a14] text-foreground flex flex-col items-center justify-center p-6 relative overflow-hidden">
+    <div className="min-h-screen bg-background dark:bg-[#020204] text-foreground flex flex-col items-center justify-center p-6 relative">
       <div className="fixed top-[max(1rem,env(safe-area-inset-top))] left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] z-50 flex items-center justify-between px-1">
         <button
           type="button"
@@ -259,13 +262,9 @@ export default function Auth() {
         </button>
         <ThemeToggle />
       </div>
-      {/* Subtle background orbs */}
-      <div className="absolute top-[-20%] left-[-10%] w-[400px] h-[400px] bg-primary/20 dark:bg-primary/10 rounded-full blur-3xl pointer-events-none opacity-30 dark:opacity-20" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[300px] h-[300px] bg-secondary/15 dark:bg-secondary/10 rounded-full blur-3xl pointer-events-none opacity-40 dark:opacity-10" />
-
-      <div className="w-full max-w-[380px] z-10">
-        {/* Glass card container */}
-        <div className="glass-card relative rounded-3xl border border-border dark:border-white/10 bg-gradient-to-br from-primary/5 via-background/60 to-secondary/5 dark:from-primary/10 dark:via-background/50 dark:to-secondary/10 shadow-xl dark:shadow-[0_0_60px_rgba(37,99,235,0.2)] overflow-hidden">
+      <div className="w-full max-w-[380px] z-10 animate-[fadeSlideUp_0.3s_ease-out_both]">
+        {/* Card container */}
+        <div className="card-surface relative rounded-2xl border border-border shadow-md overflow-hidden">
           <div className="p-8 flex flex-col gap-6">
             {/* Header */}
             <div className="flex flex-col items-center text-center space-y-3">
@@ -273,7 +272,7 @@ export default function Auth() {
                 <img
                   src={wizardLogo}
                   alt="FightCamp Wizard"
-                  className="h-20 w-20 object-contain drop-shadow-xl ring-2 ring-primary/30 rounded-2xl bg-background/50 dark:bg-background/30 p-1"
+                  className="h-20 w-20 object-contain ring-2 ring-primary/30 rounded-2xl bg-background/50 dark:bg-background/30 p-1"
                 />
               </div>
               <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
@@ -321,7 +320,7 @@ export default function Auth() {
                   </div>
                   <Button
                     type="submit"
-                    className="w-full h-12 rounded-full text-base font-bold bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/25 hover:opacity-90 transition-opacity active:scale-[0.98]"
+                    className="w-full h-12 rounded-full text-base font-bold bg-primary text-primary-foreground shadow-sm hover:opacity-90 transition-opacity active:scale-[0.98]"
                     disabled={loading}
                   >
                     {loading ? "Updating..." : "Update Password"}
@@ -342,7 +341,7 @@ export default function Auth() {
                   </div>
                   <Button
                     type="submit"
-                    className="w-full h-12 rounded-full text-base font-bold bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/25 hover:opacity-90 transition-opacity active:scale-[0.98]"
+                    className="w-full h-12 rounded-full text-base font-bold bg-primary text-primary-foreground shadow-sm hover:opacity-90 transition-opacity active:scale-[0.98]"
                     disabled={loading}
                   >
                     {loading ? "Sending..." : "Send Reset Link"}
@@ -399,7 +398,7 @@ export default function Auth() {
                   <div className="pt-1">
                     <Button
                       type="submit"
-                      className="w-full h-12 rounded-full text-base font-bold bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/25 hover:opacity-90 transition-opacity active:scale-[0.98]"
+                      className="w-full h-12 rounded-full text-base font-bold bg-primary text-primary-foreground shadow-sm hover:opacity-90 transition-opacity active:scale-[0.98]"
                       disabled={loading}
                     >
                       {loading ? "Please wait..." : isLogin ? "Sign In" : "Sign Up"}

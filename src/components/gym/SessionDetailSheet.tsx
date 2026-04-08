@@ -49,24 +49,24 @@ export function SessionDetailSheet({ session, open, onOpenChange, onDelete }: Se
               return (
                 <motion.div variants={staggerItem} className={`grid ${cols} gap-2 mt-4 mb-5`}>
                   {hasDuration && (
-                    <div className="glass-card rounded-xl border border-border/50 text-center p-3">
+                    <div className="card-surface rounded-xl border border-border text-center p-3">
                       <Clock className="h-4 w-4 mx-auto mb-1.5 text-primary" />
                       <div className="display-number text-base">{session.duration_minutes}<span className="text-xs text-muted-foreground font-normal">m</span></div>
                       <div className="text-[10px] text-muted-foreground mt-0.5">Duration</div>
                     </div>
                   )}
-                  <div className="glass-card rounded-xl border border-border/50 text-center p-3">
+                  <div className="card-surface rounded-xl border border-border text-center p-3">
                     <Dumbbell className="h-4 w-4 mx-auto mb-1.5 text-primary" />
                     <div className="display-number text-base">{session.exerciseCount}</div>
                     <div className="text-[10px] text-muted-foreground mt-0.5">Exercises</div>
                   </div>
-                  <div className="glass-card rounded-xl border border-border/50 text-center p-3">
+                  <div className="card-surface rounded-xl border border-border text-center p-3">
                     <TrendingUp className="h-4 w-4 mx-auto mb-1.5 text-primary" />
                     <div className="display-number text-base">{formatVolume(session.totalVolume)} <span className="text-xs text-muted-foreground font-normal">kg</span></div>
                     <div className="text-[10px] text-muted-foreground mt-0.5">Volume</div>
                   </div>
                   {hasFatigue && (
-                    <div className="glass-card rounded-xl border border-border/50 text-center p-3">
+                    <div className="card-surface rounded-xl border border-border text-center p-3">
                       <Brain className="h-4 w-4 mx-auto mb-1.5 text-primary" />
                       <div className="display-number text-base">{session.perceived_fatigue}<span className="text-xs text-muted-foreground font-normal">/10</span></div>
                       <div className="text-[10px] text-muted-foreground mt-0.5">Fatigue</div>
@@ -78,7 +78,7 @@ export function SessionDetailSheet({ session, open, onOpenChange, onDelete }: Se
 
             {/* Notes */}
             {session.notes && (
-              <motion.div variants={staggerItem} className="mb-5 glass-card rounded-xl border border-border/50 p-3.5 text-sm text-muted-foreground">
+              <motion.div variants={staggerItem} className="mb-5 card-surface rounded-xl border border-border p-3.5 text-sm text-muted-foreground">
                 {session.notes}
               </motion.div>
             )}
@@ -92,7 +92,7 @@ export function SessionDetailSheet({ session, open, onOpenChange, onDelete }: Se
                   className="space-y-1.5"
                 >
                   <h4 className="font-bold text-sm tracking-tight">{group.exercise.name}</h4>
-                  <div className="glass-card rounded-xl border border-border/50 overflow-hidden divide-y divide-border/15">
+                  <div className="card-surface rounded-xl border border-border overflow-hidden divide-y divide-border/15">
                     {group.sets.map((set, i) => (
                       <div key={set.id} className={`flex items-center gap-3 text-xs px-3 py-2.5 ${set.is_warmup ? "opacity-40" : ""}`}>
                         <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${

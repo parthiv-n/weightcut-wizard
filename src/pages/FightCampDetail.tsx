@@ -181,7 +181,7 @@ export default function FightCampDetail() {
 
       {/* Header */}
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/fight-camps")} aria-label="Back to fight camps" className="h-9 w-9 rounded-full bg-muted hover:bg-muted/80 border border-border/50 shrink-0">
+        <Button variant="ghost" size="icon" onClick={() => navigate("/fight-camps")} aria-label="Back to fight camps" className="h-9 w-9 rounded-full bg-muted hover:bg-muted/80 border border-border shrink-0">
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div className="min-w-0 flex-1">
@@ -191,13 +191,13 @@ export default function FightCampDetail() {
             {format(new Date(camp.fight_date), "MMM dd, yyyy")}
           </p>
         </div>
-        <Button variant="ghost" size="icon" onClick={() => setShareOpen(true)} aria-label="Share camp" className="h-9 w-9 rounded-full bg-muted hover:bg-muted/80 border border-border/50 shrink-0">
+        <Button variant="ghost" size="icon" onClick={() => setShareOpen(true)} aria-label="Share camp" className="h-9 w-9 rounded-full bg-muted hover:bg-muted/80 border border-border shrink-0">
           <Share2 className="w-4 h-4" />
         </Button>
       </div>
 
       {/* Hero Card — Camp Picture + Quick Stats */}
-      <div className="glass-card p-3 space-y-3">
+      <div className="card-surface p-3 space-y-3">
         <div className="flex items-center gap-3">
           {/* Picture */}
           <label className="relative cursor-pointer shrink-0 group">
@@ -205,10 +205,10 @@ export default function FightCampDetail() {
               <img
                 src={camp.profile_pic_url}
                 alt={camp.name}
-                className="w-16 h-16 rounded-2xl object-cover border border-border/50"
+                className="w-16 h-16 rounded-2xl object-cover border border-border"
               />
             ) : (
-              <div className="w-16 h-16 rounded-2xl bg-muted/50 border border-border/50 flex items-center justify-center">
+              <div className="w-16 h-16 rounded-2xl bg-muted/50 border border-border flex items-center justify-center">
                 <Trophy className="w-6 h-6 text-muted-foreground/50" />
               </div>
             )}
@@ -226,15 +226,15 @@ export default function FightCampDetail() {
 
           {/* Quick Stats */}
           <div className="flex-1 grid grid-cols-3 gap-2">
-            <div className="text-center rounded-xl bg-muted/30 dark:bg-white/5 border border-border/30 py-2.5 px-1">
+            <div className="text-center rounded-xl bg-muted border border-border py-2.5 px-1">
               <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Start</p>
               <p className="text-base font-bold display-number mt-0.5">{camp.starting_weight_kg ? `${camp.starting_weight_kg}` : '—'}<span className="text-xs font-normal text-muted-foreground">kg</span></p>
             </div>
-            <div className="text-center rounded-xl bg-primary/5 dark:bg-primary/10 border border-primary/20 py-2.5 px-1">
+            <div className="text-center rounded-xl bg-primary/10 border border-primary/20 py-2.5 px-1">
               <p className="text-[10px] uppercase tracking-widest text-primary/70">Cut</p>
               <p className="text-base font-bold display-number text-primary mt-0.5">{weightCut ? `-${weightCut}` : '—'}<span className="text-xs font-normal text-primary/60">kg</span></p>
             </div>
-            <div className="text-center rounded-xl bg-muted/30 dark:bg-white/5 border border-border/30 py-2.5 px-1">
+            <div className="text-center rounded-xl bg-muted border border-border py-2.5 px-1">
               <p className="text-[10px] uppercase tracking-widest text-muted-foreground">End</p>
               <p className="text-base font-bold display-number mt-0.5">{camp.end_weight_kg ? `${camp.end_weight_kg}` : '—'}<span className="text-xs font-normal text-muted-foreground">kg</span></p>
             </div>
@@ -251,8 +251,8 @@ export default function FightCampDetail() {
       </div>
 
       {/* Weight Cut Summary */}
-      <div className="glass-card overflow-hidden">
-        <div className="px-4 py-3 border-b border-border/50 flex items-center gap-2">
+      <div className="card-surface overflow-hidden">
+        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
           <Scale className="w-4 h-4 text-primary" />
           <h2 className="text-sm font-bold">Weight Cut Summary</h2>
         </div>
@@ -308,8 +308,8 @@ export default function FightCampDetail() {
       </div>
 
       {/* Weight Cut Breakdown */}
-      <div className="glass-card overflow-hidden">
-        <div className="px-4 py-3 border-b border-border/50 flex items-center gap-2">
+      <div className="card-surface overflow-hidden">
+        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
           <TrendingDown className="w-4 h-4 text-primary" />
           <h2 className="text-sm font-bold">Cut Breakdown</h2>
         </div>
@@ -343,7 +343,7 @@ export default function FightCampDetail() {
           {/* Visual breakdown bar */}
           {(camp.weight_via_dehydration || camp.weight_via_carb_reduction) && (
             <div className="space-y-2 pt-1">
-              <div className="flex gap-1 h-3 rounded-full overflow-hidden bg-muted/30 border border-border/30">
+              <div className="flex gap-1 h-3 rounded-full overflow-hidden bg-muted/30 border border-border">
                 {camp.weight_via_dehydration && camp.weight_via_dehydration > 0 && (
                   <div
                     className="bg-blue-500/80 rounded-l-full transition-all duration-500"
@@ -367,8 +367,8 @@ export default function FightCampDetail() {
       </div>
 
       {/* Notes */}
-      <div className="glass-card overflow-hidden">
-        <div className="px-4 py-3 border-b border-border/50 flex items-center gap-2">
+      <div className="card-surface overflow-hidden">
+        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
           <FileText className="w-4 h-4 text-primary" />
           <h2 className="text-sm font-bold">Rehydration Notes</h2>
         </div>
@@ -378,13 +378,13 @@ export default function FightCampDetail() {
             value={camp.rehydration_notes || ""}
             onChange={(e) => setCamp({ ...camp, rehydration_notes: e.target.value })}
             rows={4}
-            className="rounded-2xl border-border/50 bg-muted/20 dark:bg-white/5 focus:border-primary/50 resize-none"
+            className="rounded-2xl border-border bg-muted focus:border-primary/50 resize-none"
           />
         </div>
       </div>
 
-      <div className="glass-card overflow-hidden">
-        <div className="px-4 py-3 border-b border-border/50 flex items-center gap-2">
+      <div className="card-surface overflow-hidden">
+        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
           <Zap className="w-4 h-4 text-primary" />
           <h2 className="text-sm font-bold">Performance Feeling</h2>
         </div>
@@ -394,13 +394,13 @@ export default function FightCampDetail() {
             value={camp.performance_feeling || ""}
             onChange={(e) => setCamp({ ...camp, performance_feeling: e.target.value })}
             rows={4}
-            className="rounded-2xl border-border/50 bg-muted/20 dark:bg-white/5 focus:border-primary/50 resize-none"
+            className="rounded-2xl border-border bg-muted focus:border-primary/50 resize-none"
           />
         </div>
       </div>
 
       {/* Footer — Completion + Save */}
-      <div className="glass-card p-4">
+      <div className="card-surface p-4">
         <div className="flex items-center justify-between">
           <label htmlFor="completed" className="flex items-center gap-2.5 cursor-pointer select-none">
             <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-colors ${camp.is_completed ? 'bg-primary border-primary' : 'border-border/60 bg-muted/20'}`}>

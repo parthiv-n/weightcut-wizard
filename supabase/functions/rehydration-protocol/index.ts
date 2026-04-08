@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
-import { RESEARCH_SUMMARY } from "../_shared/researchSummary.ts";
 import { edgeLogger } from "../_shared/errorReporter.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from "../_shared/cors.ts";
@@ -116,45 +115,20 @@ serve(async (req) => {
       fightWeekTargetKg ? `Fight week target: ${fightWeekTargetKg}kg` : null,
     ].filter(Boolean).join(" | ");
 
-    const systemPrompt = `You are the FightCamp Wizard, a science-based combat sports rehydration expert. Safety first.
-
-<research>
-${RESEARCH_SUMMARY}
-</research>
+    const systemPrompt = `You are a combat sports rehydration expert. Output valid JSON only, no markdown.
 
 ATHLETE: ${profileLines}
 
-TARGETS (HARD CONSTRAINTS — do not deviate):
-- Fluid: ${targets.totalFluidLitres}L (${targets.totalFluidML}ml) — 150% of ${weightLostKg}kg lost
-- Max hourly: ${targets.hourlyFluidML}ml/h | Window: ${availableHours}h
-- Sodium: ${targets.totalSodiumMg}mg | Potassium: ${targets.totalPotassiumMg}mg | Magnesium: ${targets.totalMagnesiumMg}mg
-- Carbs: ${targets.totalCarbsG}g (${targets.carbTargetLabel} g/kg) | Max ${targets.maxCarbsPerHour}g/h
-- Glycogen depletion: ${glycogenDepletion}
-- Caffeine: ${targets.caffeineLowMg}-${targets.caffeineHighMg}mg, 60 min pre-competition
+TARGETS (use exactly):
+Fluid: ${targets.totalFluidLitres}L (${targets.totalFluidML}ml) | Max/h: ${targets.hourlyFluidML}ml | Window: ${availableHours}h
+Na: ${targets.totalSodiumMg}mg | K: ${targets.totalPotassiumMg}mg | Mg: ${targets.totalMagnesiumMg}mg
+Carbs: ${targets.totalCarbsG}g (${targets.carbTargetLabel}g/kg) max ${targets.maxCarbsPerHour}g/h | Depletion: ${glycogenDepletion}
+Caffeine: ${targets.caffeineLowMg}-${targets.caffeineHighMg}mg 60min pre-comp
 
-Distribute fluid & electrolyte totals across hourly protocol. Sum of fluidML ≈ ${targets.totalFluidML}ml. Sum of carbsG ≈ ${targets.totalCarbsG}g. Never exceed ${targets.maxCarbsPerHour}g carbs/h or ~1000ml/h.
+JSON schema:
+{"summary":"2-3 line overview","hourlyProtocol":[{"hour":1,"timeLabel":"","phase":"","fluidML":0,"sodiumMg":0,"potassiumMg":0,"magnesiumMg":0,"carbsG":0,"drinkRecipe":"","notes":"","foods":[]}],"carbRefuelPlan":{"strategy":"","meals":[{"timing":"","carbsG":0,"foods":[],"rationale":""}]},"warnings":[""],"education":{"howItWorks":[{"title":"","content":""}],"caffeineGuidance":"","carbMouthRinse":""}}`;
 
-Respond with valid JSON only:
-{
-  "summary": "Multi-line overview. Put each phase on its own line like:\nPhase 1 – Rapid Rehydration (Hours 1-2): ...\nPhase 2 – Active Rehydration (Hours 3-4): ...",
-  "hourlyProtocol": [{ "hour": 1, "timeLabel": "str", "phase": "str", "fluidML": 0, "sodiumMg": 0, "potassiumMg": 0, "magnesiumMg": 0, "carbsG": 0, "drinkRecipe": "str", "notes": "str", "foods": [] }],
-  "carbRefuelPlan": { "strategy": "str", "meals": [{ "timing": "str", "carbsG": 0, "foods": [], "rationale": "str" }] },
-  "warnings": ["str"],
-  "education": { "howItWorks": [{ "title": "str", "content": "str" }], "caffeineGuidance": "str", "carbMouthRinse": "str" }
-}
-
-Foods: white rice, white bread, bananas, honey, rice cakes, sports drinks, ORS, sweetened milk, chicken breast, sports gels/chews, candy, diluted juice+salt.
-Phases: Rapid Rehydration, Active Rehydration, Glycogen Loading, Sustained Recovery, Pre-Competition, Maintenance.
-Education: 5 items covering Gastric Emptying, SGLT1 Co-Transport, Glycogen-Water Binding, 150% Rule, Phased Recovery.`;
-
-    const userPrompt = `Rehydration protocol:
-- Lost: ${weightLostKg}kg (${((weightLostKg / currentWeightKg) * 100).toFixed(1)}% BM) | Window: ${availableHours}h | Depletion: ${glycogenDepletion}
-
-${availableHours <= 6
-  ? `Short window (${availableHours}h): aggressive fast-absorbing protocol. Prioritize liquid carbs. First hour: 600-900ml ORS bolus.`
-  : `Extended window (${availableHours}h): Transition liquid→solid high-carb low-fiber after 3h. First hour: 600-900ml ORS bolus.`}
-
-Constraints: total fluid ≈${targets.totalFluidML}ml, total carbs ≈${targets.totalCarbsG}g, no hour >${targets.hourlyFluidML}ml or >${targets.maxCarbsPerHour}g carbs. Include drink recipes every hour, food suggestions, 3-5 safety warnings.`;
+    const userPrompt = `Generate rehydration protocol. Lost ${weightLostKg}kg (${((weightLostKg / currentWeightKg) * 100).toFixed(1)}% BM), ${availableHours}h window, ${glycogenDepletion} depletion. ${availableHours <= 6 ? "Short window: aggressive liquid-first protocol." : "Extended: liquid→solid after 3h."} Include drink recipes, foods, 3 warnings, 3 education items.`;
 
     edgeLogger.info("Calling Grok API for rehydration protocol");
 
@@ -171,7 +145,7 @@ Constraints: total fluid ≈${targets.totalFluidML}ml, total carbs ≈${targets.
           { role: "user", content: userPrompt },
         ],
         temperature: 0.1,
-        max_completion_tokens: 16384,
+        max_completion_tokens: 5000,
       }),
     });
 

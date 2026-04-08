@@ -132,21 +132,17 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     setGemsState(prev => {
       const next = typeof updater === 'function' ? updater(prev) : updater;
       const clamped = Math.max(0, next);
-      setLocalGems(clamped);
+      try { setLocalGems(clamped); } catch { /* quota exceeded — state still updates */ }
       return clamped;
     });
   }, []);
 
-  // Sync gems from profile: use minimum of localStorage and DB to prevent reset
+  // Sync gems from profile: server is authoritative
   useEffect(() => {
     const serverGems = (profile as any)?.gems;
     if (serverGems === undefined) return;
-    const localGems = getLocalGems();
-    // If localStorage has a lower count (client tracked deductions), keep it
-    // If server has a lower count (server deducted), use server value
-    const resolved = localGems !== null ? Math.min(localGems, serverGems) : serverGems;
-    setGemsState(resolved);
-    setLocalGems(resolved);
+    setGemsState(serverGems);
+    setLocalGems(serverGems);
   }, [profile]);
 
   const wasPremiumRef = useRef(isPremium);
@@ -244,18 +240,13 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       incrementUsageCount();
       const newCount = getUsageCountToday();
       setAiUsageToday({ used: newCount, limit: FREE_DAILY_LIMIT });
-      // If over free limit, a gem was consumed — deduct locally + in DB
+      // If over free limit, server already deducted a gem — sync profile immediately
       if (newCount > FREE_DAILY_LIMIT) {
-        setGems(prev => Math.max(0, prev - 1));
-        // Notify useGems hook for instant settings UI update
         window.dispatchEvent(new Event('gem-consumed'));
-        // Server-side subscriptionGuard already deducts the gem — just sync profile after
-        if (userId) {
-          setTimeout(() => refreshProfile(), 1500);
-        }
+        if (userId) refreshProfile();
       } else {
-        // Free call — still sync profile after a delay
-        setTimeout(() => refreshProfile(), 1500);
+        // Free call — sync profile to stay current
+        if (userId) refreshProfile();
       }
     }
   }, [isPremium, userId, refreshProfile]);
@@ -286,7 +277,14 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       }
     }, 30_000);
     return () => clearInterval(interval);
-  }, [isPremium, aiUsageToday]);
+  }, [isPremium]);
+
+  // Clean up limit timer on unmount
+  useEffect(() => {
+    return () => {
+      if (limitTimerTimeout.current) clearTimeout(limitTimerTimeout.current);
+    };
+  }, []);
 
   // Flash the limit timer for 5s whenever a locked feature is tapped
   const flashLimitTimer = useCallback(() => {

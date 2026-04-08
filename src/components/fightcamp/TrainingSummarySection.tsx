@@ -262,7 +262,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
             if (controller.signal.aborted) return;
 
             if (error) {
-                if (handleAILimitError(error)) return;
+                if (handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
                 throw error;
             }
             if (!data?.summary) throw new Error("No summary returned");
@@ -398,7 +398,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
                 <button
                     onClick={buttonState !== "up_to_date" ? handleGenerateOrUpdate : undefined}
                     disabled={isGenerating || buttonState === "up_to_date"}
-                    className="w-full p-4 rounded-2xl glass-card border border-border/50 flex items-center justify-center gap-2 hover:bg-accent/30 transition-all disabled:opacity-60"
+                    className="w-full p-4 rounded-2xl card-surface border border-border/50 flex items-center justify-center gap-2 hover:bg-accent/30 transition-all disabled:opacity-60"
                 >
                     {isGenerating ? (
                         <div className="flex items-center gap-2 w-full justify-center">
@@ -475,7 +475,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
                                 return (
                                     <Card
                                         key={section.sport}
-                                        className="p-4 rounded-[20px] shadow-sm glass-card overflow-hidden relative border-border/10"
+                                        className="p-4 rounded-xl shadow-sm card-surface overflow-hidden relative border-border"
                                     >
                                         <div className="absolute top-0 left-0 w-2 h-full" style={{ backgroundColor: getSessionColor(section.sport, customColors) }} />
                                         <div className="ml-2">

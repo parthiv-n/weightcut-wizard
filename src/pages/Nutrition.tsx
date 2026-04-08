@@ -69,9 +69,11 @@ export default function Nutrition() {
   const [isQuickAddSheetOpen, setIsQuickAddSheetOpen] = useState(false);
   const [quickAddTab, setQuickAddTab] = useState<"ai" | "manual">("ai");
   const [expandedMealActions, setExpandedMealActions] = useState<string | null>(null);
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [expandedMealIdeas, setExpandedMealIdeas] = useState<Set<string>>(new Set());
   const [isEditTargetsDialogOpen, setIsEditTargetsDialogOpen] = useState(false);
   const [editingTargets, setEditingTargets] = useState({ calories: "", protein: "", carbs: "", fats: "" });
+  const [showMealSuccess, setShowMealSuccess] = useState(false);
   const [isFoodSearchOpen, setIsFoodSearchOpen] = useState(false);
   const [foodSearchMealType, setFoodSearchMealType] = useState<string>("snack");
   const [manualMeal, setManualMeal] = useState<ManualMealForm>({
@@ -194,19 +196,25 @@ export default function Nutrition() {
     }
   }, [isQuickAddSheetOpen, quickAddTab, userId]);
 
-  // Auto-open from URL params
+  // Auto-open from URL params (deferred to avoid race with QuickLog sheet close)
   useEffect(() => {
+    let tab: "ai" | "manual" | null = null;
     if (searchParams.get("openAddMeal") === "true") {
-      setQuickAddTab("ai");
-      setIsQuickAddSheetOpen(true);
+      tab = "ai";
       searchParams.delete("openAddMeal");
-      setSearchParams(searchParams, { replace: true });
     }
     if (searchParams.get("openManualMeal") === "true") {
-      setQuickAddTab("manual");
-      setIsQuickAddSheetOpen(true);
+      tab = "manual";
       searchParams.delete("openManualMeal");
+    }
+    if (tab) {
+      const targetTab = tab;
       setSearchParams(searchParams, { replace: true });
+      const t = setTimeout(() => {
+        setQuickAddTab(targetTab);
+        setIsQuickAddSheetOpen(true);
+      }, 150);
+      return () => clearTimeout(t);
     }
   }, [searchParams, setSearchParams]);
 
@@ -265,6 +273,8 @@ export default function Nutrition() {
       });
 
       setIsQuickAddSheetOpen(false);
+      setShowMealSuccess(true);
+      setTimeout(() => setShowMealSuccess(false), 1500);
       setManualMeal({
         meal_name: "", calories: "", protein_g: "", carbs_g: "", fats_g: "",
         meal_type: "breakfast", portion_size: "", recipe_notes: "", ingredients: [],
@@ -472,7 +482,7 @@ export default function Nutrition() {
 
         {/* Wizard's Nutrition Wisdom */}
         <button
-          className="w-full text-left rounded-2xl bg-gradient-to-r from-primary/10 via-secondary/8 to-primary/5 p-3 border border-primary/15 hover:border-primary/30 active:scale-[0.99] transition-all group"
+          className="w-full text-left rounded-xl card-surface p-3 border border-border hover:border-primary/30 active:scale-[0.99] transition-all group"
           onClick={() => wisdom.generateTrainingFoodIdeas()}
         >
           <div className="flex items-center gap-3">
@@ -548,7 +558,7 @@ export default function Nutrition() {
         </div>
 
         {meals.length === 0 && selectedDate === format(new Date(), "yyyy-MM-dd") && !loading && !nutritionData.mealsLoading && (
-          <div className="glass-card rounded-2xl border border-border/50 p-3">
+          <div className="card-surface rounded-xl border border-border p-3">
             <div className="flex items-start gap-2.5">
               <div className="rounded-full bg-primary/15 p-2 flex-shrink-0">
                 <Utensils className="h-4 w-4 text-primary" />
@@ -568,6 +578,14 @@ export default function Nutrition() {
           </div>
         )}
 
+        {/* Meal success indicator */}
+        {showMealSuccess && (
+          <div className="flex items-center justify-center gap-1.5 text-success animate-[fadeSlideUp_0.3s_ease-out_both]">
+            <CheckCircle className="h-5 w-5" />
+            <span className="text-sm font-medium">Meal added</span>
+          </div>
+        )}
+
         {/* Meal Sections (MFP-style) */}
         <div className="space-y-2">
           {(["breakfast", "lunch", "dinner", "snack"] as const).map((mealType) => {
@@ -576,18 +594,44 @@ export default function Nutrition() {
             const isActionExpanded = expandedMealActions === mealType;
             const MealIcon = { breakfast: Sunrise, lunch: Salad, dinner: UtensilsCrossed, snack: Apple }[mealType];
             const mealIconColor = { breakfast: "text-orange-400", lunch: "text-blue-400", dinner: "text-purple-400", snack: "text-green-400" }[mealType];
+            const hasMeals = groupMeals.length > 0;
+            const isSectionCollapsed = !hasMeals && !nutritionData.mealsLoading
+              ? !collapsedSections.has(`${mealType}_expanded`)
+              : collapsedSections.has(mealType);
+            const toggleSection = () => {
+              setCollapsedSections(prev => {
+                const next = new Set(prev);
+                if (!hasMeals && !nutritionData.mealsLoading) {
+                  // Empty section: toggle via _expanded key
+                  if (next.has(`${mealType}_expanded`)) next.delete(`${mealType}_expanded`);
+                  else next.add(`${mealType}_expanded`);
+                } else {
+                  // Section with meals: toggle via mealType key
+                  if (next.has(mealType)) next.delete(mealType);
+                  else next.add(mealType);
+                }
+                return next;
+              });
+            };
 
             return (
-              <div key={mealType} className="glass-card overflow-hidden">
-                <div className="flex items-center justify-between px-3 py-2">
+              <div key={mealType} className="card-surface overflow-hidden">
+                <button
+                  type="button"
+                  onClick={toggleSection}
+                  className="w-full flex items-center justify-between px-3 py-2 hover:bg-muted/30 active:bg-muted/50 transition-colors"
+                >
                   <div className="flex items-center gap-1.5">
                     <MealIcon className={`h-3.5 w-3.5 ${mealIconColor}`} />
                     <h3 className="text-[13px] font-semibold capitalize">{mealType}</h3>
+                    <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform duration-200 ${isSectionCollapsed ? "-rotate-90" : ""}`} />
                   </div>
                   <span className="text-xs font-medium text-muted-foreground tabular-nums">
                     {groupCalories > 0 ? `${Math.round(groupCalories)} kcal` : ""}
                   </span>
-                </div>
+                </button>
+                {!isSectionCollapsed && (
+                  <>
                 {groupMeals.length > 0 ? (
                   <div className="px-2">
                     {groupMeals.map((meal) => (
@@ -630,6 +674,8 @@ export default function Nutrition() {
                     </div>
                   )}
                 </div>
+                  </>
+                )}
               </div>
             );
           })}
@@ -648,7 +694,7 @@ export default function Nutrition() {
             </Suspense>
           ) : meals.length > 0 && (
             <button onClick={() => dietAnalysisHook.handleAnalyseDiet()} disabled={nutritionData.dietAnalysisLoading}
-              className="glass-card w-full p-4 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
+              className="card-surface w-full p-4 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform">
               <Sparkles className="h-4 w-4 text-primary" /><span className="text-sm font-medium text-foreground">Analyse Diet{gemBadge}</span>
             </button>
           )}
@@ -664,7 +710,7 @@ export default function Nutrition() {
             </Button>
           </div>
           {mealPlanIdeas.length === 0 ? (
-            <div className="glass-card border-dashed py-7 text-center">
+            <div className="card-surface border-dashed py-7 text-center">
               <Sparkles className="h-5 w-5 text-primary/50 mx-auto mb-1.5 mix-blend-screen" />
               <p className="text-[13px] font-medium text-foreground">No meal ideas yet</p>
               <p className="text-[11px] text-foreground/60 mt-0.5">Generate AI meal suggestions above</p>
@@ -700,7 +746,7 @@ export default function Nutrition() {
                     ];
 
                     return (
-                      <div key={meal.id} className="glass-card overflow-hidden transition-all duration-300">
+                      <div key={meal.id} className="card-surface overflow-hidden transition-all duration-0">
                         <div className={`p-3 ${hasDetails ? "cursor-pointer active:bg-white/[0.02] transition-colors" : ""}`}
                           onClick={() => { if (!hasDetails) return; setExpandedMealIdeas(prev => { const next = new Set(prev); if (next.has(meal.id)) next.delete(meal.id); else next.add(meal.id); return next; }); }}>
                           <div className="flex items-start gap-3">
@@ -872,9 +918,9 @@ export default function Nutrition() {
 
             {quickAddTab === "manual" && (
               <div className="space-y-3">
-                <Input placeholder="Meal name *" value={manualMeal.meal_name} onChange={(e) => setManualMeal({ ...manualMeal, meal_name: e.target.value })} className="text-sm" />
+                <Input placeholder="Meal name *" value={manualMeal.meal_name} onChange={(e) => setManualMeal({ ...manualMeal, meal_name: e.target.value })} className="text-sm" autoFocus />
                 {aiMeal.barcodeBaseMacros && (
-                  <div className="rounded-xl border border-border/50 bg-muted/30 p-3 space-y-3">
+                  <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-3">
                     <div className="flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Serving Size</p><span className="text-xs text-muted-foreground">{aiMeal.barcodeBaseMacros.serving_size}</span></div>
                     <div className="flex items-center gap-2"><span className="text-sm text-muted-foreground flex-1">Amount</span>
                       <div className="flex items-center gap-1">
@@ -897,13 +943,13 @@ export default function Nutrition() {
                     </div>
                   </div>
                 )}
-                <div><Input type="number" placeholder="Calories *" value={manualMeal.calories} onChange={(e) => macroCalc.handleCalorieChange(e.target.value, setManualMeal)} className="text-sm" />
+                <div><Input type="number" inputMode="numeric" placeholder="Calories *" value={manualMeal.calories} onChange={(e) => macroCalc.handleCalorieChange(e.target.value, setManualMeal)} className="text-sm" />
                   {manualMeal.ingredients.some(ing => ing.calories_per_100g !== undefined) && <p className="text-[10px] text-muted-foreground mt-1">Auto-calculated from ingredients</p>}
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  <Input type="number" step="0.1" placeholder="Protein g" value={manualMeal.protein_g} onChange={(e) => setManualMeal({ ...manualMeal, protein_g: e.target.value })} className="text-sm" />
-                  <Input type="number" step="0.1" placeholder="Carbs g" value={manualMeal.carbs_g} onChange={(e) => setManualMeal({ ...manualMeal, carbs_g: e.target.value })} className="text-sm" />
-                  <Input type="number" step="0.1" placeholder="Fats g" value={manualMeal.fats_g} onChange={(e) => setManualMeal({ ...manualMeal, fats_g: e.target.value })} className="text-sm" />
+                  <Input type="number" inputMode="decimal" step="0.1" placeholder="Protein g" value={manualMeal.protein_g} onChange={(e) => setManualMeal({ ...manualMeal, protein_g: e.target.value })} className="text-sm" />
+                  <Input type="number" inputMode="decimal" step="0.1" placeholder="Carbs g" value={manualMeal.carbs_g} onChange={(e) => setManualMeal({ ...manualMeal, carbs_g: e.target.value })} className="text-sm" />
+                  <Input type="number" inputMode="decimal" step="0.1" placeholder="Fats g" value={manualMeal.fats_g} onChange={(e) => setManualMeal({ ...manualMeal, fats_g: e.target.value })} className="text-sm" />
                 </div>
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground pt-1">Ingredients (optional)</p>
                 <div className="flex gap-2">
@@ -914,7 +960,7 @@ export default function Nutrition() {
                 </div>
                 <div className="flex gap-2">
                   <Input placeholder="Ingredient name" value={aiMeal.newIngredient.name} onChange={(e) => aiMeal.setNewIngredient({ ...aiMeal.newIngredient, name: e.target.value })} className="flex-1 text-sm" />
-                  <Input type="number" placeholder="g" value={aiMeal.newIngredient.grams} onChange={(e) => aiMeal.setNewIngredient({ ...aiMeal.newIngredient, grams: e.target.value })} className="w-16 text-sm" />
+                  <Input type="number" inputMode="numeric" placeholder="g" value={aiMeal.newIngredient.grams} onChange={(e) => aiMeal.setNewIngredient({ ...aiMeal.newIngredient, grams: e.target.value })} className="w-16 text-sm" />
                   <Button type="button" size="sm" variant="outline" onClick={async () => {
                     if (!aiMeal.newIngredient.name.trim() || !aiMeal.newIngredient.grams) { toast({ title: "Missing Information", description: "Please enter ingredient name and grams", variant: "destructive" }); return; }
                     const ingredientName = aiMeal.newIngredient.name.trim(); const grams = parseFloat(aiMeal.newIngredient.grams);
@@ -963,7 +1009,7 @@ export default function Nutrition() {
 
         {/* AI Meal Plan Dialog */}
         <Dialog open={mealPlan.isAiDialogOpen} onOpenChange={(open) => mealPlan.setIsAiDialogOpen(open)}>
-          <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto rounded-2xl">
+          <DialogContent className="sm:max-w-md max-h-[85vh] overflow-y-auto rounded-xl">
             <DialogHeader className="pb-1"><DialogTitle className="flex items-center gap-2 text-base"><Sparkles className="h-4 w-4 text-primary" />Meal ideas · {format(new Date(selectedDate), "MMM d")}</DialogTitle></DialogHeader>
             <div className="space-y-3">
               <div className="flex flex-wrap gap-2">
@@ -1088,13 +1134,13 @@ export default function Nutrition() {
               <div>
                 <div className="flex items-center gap-2 mb-3"><div className="w-6 h-6 rounded-full bg-orange-500/15 flex items-center justify-center"><Sparkles className="h-3.5 w-3.5 text-orange-500" /></div><h4 className="text-sm font-bold uppercase tracking-wider text-orange-500">Pre-Training</h4></div>
                 <div className="space-y-2.5">{wisdom.trainingWisdom.preMeals.map((meal, i) => (
-                  <div key={i} className="glass-card p-3.5 space-y-1.5"><div className="flex items-start justify-between gap-2"><h5 className="text-sm font-semibold">{meal.name}</h5><span className="text-[10px] font-medium text-orange-500/70 bg-orange-500/10 px-2 py-0.5 rounded-full flex-shrink-0">{meal.timing}</span></div><p className="text-xs text-muted-foreground leading-relaxed">{meal.description}</p><p className="text-[10px] font-medium text-muted-foreground/60 tabular-nums">{meal.macros}</p></div>
+                  <div key={i} className="card-surface p-3.5 space-y-1.5"><div className="flex items-start justify-between gap-2"><h5 className="text-sm font-semibold">{meal.name}</h5><span className="text-[10px] font-medium text-orange-500/70 bg-orange-500/10 px-2 py-0.5 rounded-full flex-shrink-0">{meal.timing}</span></div><p className="text-xs text-muted-foreground leading-relaxed">{meal.description}</p><p className="text-[10px] font-medium text-muted-foreground/60 tabular-nums">{meal.macros}</p></div>
                 ))}</div>
               </div>
               <div>
                 <div className="flex items-center gap-2 mb-3"><div className="w-6 h-6 rounded-full bg-blue-500/15 flex items-center justify-center"><Dumbbell className="h-3.5 w-3.5 text-blue-500" /></div><h4 className="text-sm font-bold uppercase tracking-wider text-blue-500">Post-Training</h4></div>
                 <div className="space-y-2.5">{wisdom.trainingWisdom.postMeals.map((meal, i) => (
-                  <div key={i} className="glass-card p-3.5 space-y-1.5"><div className="flex items-start justify-between gap-2"><h5 className="text-sm font-semibold">{meal.name}</h5><span className="text-[10px] font-medium text-blue-500/70 bg-blue-500/10 px-2 py-0.5 rounded-full flex-shrink-0">{meal.timing}</span></div><p className="text-xs text-muted-foreground leading-relaxed">{meal.description}</p><p className="text-[10px] font-medium text-muted-foreground/60 tabular-nums">{meal.macros}</p></div>
+                  <div key={i} className="card-surface p-3.5 space-y-1.5"><div className="flex items-start justify-between gap-2"><h5 className="text-sm font-semibold">{meal.name}</h5><span className="text-[10px] font-medium text-blue-500/70 bg-blue-500/10 px-2 py-0.5 rounded-full flex-shrink-0">{meal.timing}</span></div><p className="text-xs text-muted-foreground leading-relaxed">{meal.description}</p><p className="text-[10px] font-medium text-muted-foreground/60 tabular-nums">{meal.macros}</p></div>
                 ))}</div>
               </div>
               {wisdom.trainingWisdom.tip && (

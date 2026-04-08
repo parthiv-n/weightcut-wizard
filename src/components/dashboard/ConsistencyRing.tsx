@@ -1,6 +1,6 @@
 import { memo } from "react";
 import type { WeeklyConsistency } from "@/hooks/useGamification";
-import { AnimatedRing, AnimatedNumber } from "@/components/motion";
+import { AnimatedNumber } from "@/components/motion";
 
 interface ConsistencyRingProps extends WeeklyConsistency {}
 
@@ -17,18 +17,20 @@ export const ConsistencyRing = memo(function ConsistencyRing({
   };
 
   const color = getRingColor();
+  const progressDeg = (percentage / 100) * 360;
 
   return (
-    <div className="glass-card p-3">
+    <div className="card-surface rounded-xl border border-border p-3">
       <div className="flex items-center gap-3">
-        {/* Ring */}
+        {/* Ring — CSS conic-gradient */}
         <div className="relative w-16 h-16 flex-shrink-0">
-          <AnimatedRing
-            progress={percentage / 100}
-            size={64}
-            strokeWidth={5}
-            gradientColors={[color, color]}
-            id="consistency-ring"
+          <div
+            className="w-full h-full rounded-full"
+            style={{
+              background: `conic-gradient(${color} ${progressDeg}deg, hsl(var(--muted) / 0.3) ${progressDeg}deg)`,
+              mask: "radial-gradient(farthest-side, transparent calc(100% - 5px), #fff calc(100% - 5px))",
+              WebkitMask: "radial-gradient(farthest-side, transparent calc(100% - 5px), #fff calc(100% - 5px))",
+            }}
           />
 
           {/* Center percentage */}

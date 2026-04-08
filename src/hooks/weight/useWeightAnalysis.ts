@@ -153,7 +153,7 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
       setDebugData(debugInfo);
 
       if (error) {
-        if (handleAILimitError(error)) return;
+        if (handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
         const msg = await extractEdgeFunctionError(error, "AI analysis unavailable");
         toast({
           title: "AI analysis unavailable",

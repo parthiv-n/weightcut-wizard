@@ -67,7 +67,7 @@ interface RecoveryDashboardProps {
 }
 
 function getStrainColor(strain: number) {
-  if (strain <= 7) return { color: "#3b82f6", glow: "#3b82f6" };
+  if (strain <= 7) return { color: "hsl(var(--primary))", glow: "hsl(var(--primary))" };
   if (strain <= 14) return { color: "#f59e0b", glow: "#f59e0b" };
   return { color: "#ef4444", glow: "#ef4444" };
 }
@@ -96,7 +96,7 @@ function getLoadZoneStyle(zone: string) {
 
 function getReadinessColor(label: ReadinessResult['label']) {
   if (label === 'peaked') return { color: "#22c55e", glow: "#22c55e" };
-  if (label === 'ready') return { color: "#3b82f6", glow: "#3b82f6" };
+  if (label === 'ready') return { color: "hsl(var(--primary))", glow: "hsl(var(--primary))" };
   if (label === 'recovering') return { color: "#f59e0b", glow: "#f59e0b" };
   return { color: "#ef4444", glow: "#ef4444" }; // strained
 }
@@ -161,7 +161,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
   const [rateLimitUntil, setRateLimitUntil] = useState<number>(0);
   const [cooldownLeft, setCooldownLeft] = useState(0);
   const [checkIn, setCheckIn] = useState<Partial<FeelCheckIn>>({});
-  const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
+  const { checkAIAccess, openNoGemsDialog, handleAILimitError, incrementLocalUsage, markLimitReached } = useSubscription();
 
   // Enhanced wellness state
   const [wellnessCheckIn, setWellnessCheckIn] = useState<WellnessCheckInData | null>(null);
@@ -298,7 +298,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
     }
 
     if (!checkAIAccess()) {
-      openPaywall();
+      openNoGemsDialog();
       return;
     }
 
@@ -410,10 +410,11 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
     } catch (err: any) {
       if (err?.name === 'AbortError' || controller.signal.aborted) return;
       logger.error("Coach error", err);
-      const msg = await extractEdgeFunctionError(err, "Coach unavailable");
-      if (/rate.?limit/i.test(msg) || /rate.?limit/i.test(err?.message ?? '')) {
-        setRateLimitUntil(Date.now() + 60_000);
+      if (handleAILimitError(err)) {
+        failTask(taskId, "Limit reached");
+        return;
       }
+      const msg = await extractEdgeFunctionError(err, "Coach unavailable");
       setCoachError(`Coach error: ${msg}`);
       failTask(taskId, msg);
     } finally {
@@ -469,7 +470,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
       )}
 
       {/* 2) Readiness Ring (hero) + Strain Ring + OT Ring */}
-      <div className="glass-card rounded-[20px] p-4 border border-border/50">
+      <div className="card-surface rounded-xl p-4 border border-border">
         <div className="flex items-center gap-2 mb-4">
           <Activity className="h-5 w-5 text-primary" />
           <h2 className="text-lg font-bold">Performance</h2>
@@ -552,7 +553,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
       )}
 
       {/* 3) 7-Day Strain Chart with forecast */}
-      <div className="glass-card rounded-[20px] p-4 border border-border/50">
+      <div className="card-surface rounded-xl p-4 border border-border">
         <div className="flex items-center gap-2 mb-3">
           <TrendingUp className="h-5 w-5 text-primary" />
           <h2 className="text-lg font-bold">7-Day Strain Trend</h2>
@@ -562,7 +563,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
 
       {/* 3.5) Trend Alerts — only when alerts exist */}
       {metrics.trends.alerts.length > 0 && (
-        <div className="glass-card rounded-[20px] p-4 border border-amber-500/30 bg-amber-500/5">
+        <div className="card-surface rounded-xl p-4 border border-amber-500/30 bg-amber-500/5">
           <div className="flex items-center gap-2 mb-3">
             <AlertTriangle className="h-5 w-5 text-amber-400" />
             <h2 className="text-lg font-bold text-amber-400">Trend Alerts</h2>
@@ -579,7 +580,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
       )}
 
       {/* 4) Forecast Summary Card */}
-      <div className="glass-card rounded-[20px] p-4 border border-border/50">
+      <div className="card-surface rounded-xl p-4 border border-border">
         <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 font-semibold">Projected Tomorrow</div>
         <div className="grid grid-cols-3 gap-3">
           <div className="text-center">
@@ -599,7 +600,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
 
       {/* 4.5) Caloric Deficit Banner — when deficit significantly impacts recovery */}
       {metrics.deficitImpactScore != null && metrics.deficitImpactScore < 60 && baseline?.avg_deficit_7d != null && (
-        <div className="glass-card rounded-[20px] p-3 border border-amber-500/30 bg-amber-500/5">
+        <div className="card-surface rounded-xl p-3 border border-amber-500/30 bg-amber-500/5">
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
             <div>
@@ -615,7 +616,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
       )}
 
       {/* 5) AI Coach Section */}
-      <div className="glass-card rounded-[20px] p-4 border border-border/50">
+      <div className="card-surface rounded-xl p-4 border border-border">
         <div className="flex items-center gap-2 mb-3">
           <Brain className="h-5 w-5 text-primary" />
           <h2 className="text-lg font-bold">AI Recovery Coach</h2>
@@ -804,7 +805,7 @@ function MetricsGuide() {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
 
   return (
-    <div className="glass-card rounded-[20px] border border-border/50 overflow-hidden">
+    <div className="card-surface rounded-xl border border-border overflow-hidden">
       <button
         type="button"
         onClick={() => { setOpen(prev => !prev); if (open) setExpandedIdx(null); }}

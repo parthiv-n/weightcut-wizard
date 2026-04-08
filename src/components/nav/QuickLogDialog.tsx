@@ -1,6 +1,7 @@
 import { Utensils, Weight, Dumbbell } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { triggerHaptic } from "@/lib/haptics";
+import { ImpactStyle } from "@capacitor/haptics";
 
 interface QuickLogDialogProps {
   open: boolean;
@@ -8,45 +9,58 @@ interface QuickLogDialogProps {
   onLogFood: () => void;
   onLogWeight: () => void;
   onLogTraining: () => void;
+  onLogGym: () => void;
 }
 
-export function QuickLogDialog({ open, onOpenChange, onLogFood, onLogWeight, onLogTraining }: QuickLogDialogProps) {
+export function QuickLogDialog({ open, onOpenChange, onLogFood, onLogWeight, onLogTraining, onLogGym }: QuickLogDialogProps) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Quick Log</DialogTitle>
-        </DialogHeader>
-        <div className="grid grid-cols-1 gap-4 py-4">
-          <Button
-            onClick={onLogFood}
-            size="lg"
-            className="h-16 flex items-center justify-start gap-4 px-6"
-            variant="outline"
-          >
-            <Utensils className="h-6 w-6 text-emerald-500" />
-            <span className="text-lg font-semibold">Log Food</span>
-          </Button>
-          <Button
-            onClick={onLogWeight}
-            size="lg"
-            className="h-16 flex items-center justify-start gap-4 px-6"
-            variant="outline"
-          >
-            <Weight className="h-6 w-6 text-blue-500" />
-            <span className="text-lg font-semibold">Log Weight</span>
-          </Button>
-          <Button
-            onClick={onLogTraining}
-            size="lg"
-            className="h-16 flex items-center justify-start gap-4 px-6"
-            variant="outline"
-          >
-            <Dumbbell className="h-6 w-6 text-orange-500" />
-            <span className="text-lg font-semibold">Log Training</span>
-          </Button>
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="rounded-t-2xl pb-[calc(env(safe-area-inset-bottom,0px)+5rem)] [&>button]:hidden">
+        <div className="flex justify-center pt-1 pb-3">
+          <div className="w-10 h-1 rounded-full bg-muted-foreground/25" aria-hidden />
         </div>
-      </DialogContent>
-    </Dialog>
+        <SheetHeader className="px-1 pb-3">
+          <SheetTitle className="text-base font-semibold">Quick Log</SheetTitle>
+        </SheetHeader>
+        <div className="grid grid-cols-4 gap-3 px-1">
+          <button
+            onClick={() => { triggerHaptic(ImpactStyle.Light); onLogFood(); }}
+            className="flex flex-col items-center gap-2 py-4 rounded-xl bg-muted/50 active:scale-95 transition-transform duration-100"
+          >
+            <div className="h-12 w-12 rounded-full bg-health/15 flex items-center justify-center">
+              <Utensils className="h-6 w-6 text-health" />
+            </div>
+            <span className="text-sm font-medium">Food</span>
+          </button>
+          <button
+            onClick={() => { triggerHaptic(ImpactStyle.Light); onLogWeight(); }}
+            className="flex flex-col items-center gap-2 py-4 rounded-xl bg-muted/50 active:scale-95 transition-transform duration-100"
+          >
+            <div className="h-12 w-12 rounded-full bg-hydration/15 flex items-center justify-center">
+              <Weight className="h-6 w-6 text-hydration" />
+            </div>
+            <span className="text-sm font-medium">Weight</span>
+          </button>
+          <button
+            onClick={() => { triggerHaptic(ImpactStyle.Light); onLogTraining(); }}
+            className="flex flex-col items-center gap-2 py-4 rounded-xl bg-muted/50 active:scale-95 transition-transform duration-100"
+          >
+            <div className="h-12 w-12 rounded-full bg-energy/15 flex items-center justify-center">
+              <Dumbbell className="h-6 w-6 text-energy" />
+            </div>
+            <span className="text-sm font-medium">Training</span>
+          </button>
+          <button
+            onClick={() => { triggerHaptic(ImpactStyle.Light); onLogGym(); }}
+            className="flex flex-col items-center gap-2 py-4 rounded-xl bg-muted/50 active:scale-95 transition-transform duration-100"
+          >
+            <div className="h-12 w-12 rounded-full bg-primary/15 flex items-center justify-center">
+              <Dumbbell className="h-6 w-6 text-primary" />
+            </div>
+            <span className="text-sm font-medium">Gym</span>
+          </button>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }

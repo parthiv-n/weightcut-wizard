@@ -141,7 +141,7 @@ export function RoutineDetailCard({ routine, onDelete, onRename, onStartWorkout 
 
   return (
     <Collapsible open={expanded} onOpenChange={setExpanded}>
-      <div className="glass-card rounded-2xl border border-border/50 overflow-hidden relative">
+      <div className="card-surface rounded-2xl border border-border/50 overflow-hidden relative">
         {/* Subtle gradient */}
         <div className="absolute inset-0 bg-gradient-to-r from-primary/[0.02] to-transparent pointer-events-none" />
 
@@ -175,7 +175,7 @@ export function RoutineDetailCard({ routine, onDelete, onRename, onStartWorkout 
                       <span className="text-sm font-semibold truncate">{routine.name}</span>
                       <button
                         onClick={(e) => { e.stopPropagation(); setEditing(true); }}
-                        className="p-1 rounded hover:bg-muted/40 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="p-1 rounded hover:bg-muted/40 shrink-0 opacity-40 hover:opacity-100 transition-opacity"
                       >
                         <Pencil className="h-3 w-3 text-muted-foreground" />
                       </button>

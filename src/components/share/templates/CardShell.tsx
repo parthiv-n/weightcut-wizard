@@ -35,8 +35,8 @@ export const CardShell = forwardRef<HTMLDivElement, CardShellProps>(
           ...(transparent && { textShadow: "0 2px 8px rgba(0,0,0,1), 0 0 24px rgba(0,0,0,0.7)" }),
           background: transparent
             ? "none"
-            : "radial-gradient(ellipse at 20% 0%, rgba(37,99,235,0.15) 0%, transparent 50%), " +
-              "radial-gradient(ellipse at 80% 100%, rgba(96,165,250,0.1) 0%, transparent 50%), " +
+            : "radial-gradient(ellipse at 20% 0%, hsl(var(--primary) / 0.15) 0%, transparent 50%), " +
+              "radial-gradient(ellipse at 80% 100%, hsl(var(--primary) / 0.1) 0%, transparent 50%), " +
               "linear-gradient(180deg, #0a0a0a 0%, #080808 50%, #050505 100%)",
           display: "flex",
           flexDirection: "column",

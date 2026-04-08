@@ -38,7 +38,7 @@ export const AIAdviceCard = memo(function AIAdviceCard({ advice, isGenerating, o
   return (
     <>
 
-      <div className="glass-card rounded-2xl border border-border/50 overflow-hidden">
+      <div className="card-surface rounded-2xl border border-border/50 overflow-hidden">
         <div className="p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">

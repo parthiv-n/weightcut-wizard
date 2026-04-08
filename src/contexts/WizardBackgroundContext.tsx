@@ -99,6 +99,12 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
 
     // Pre-flight subscription check (localStorage-backed, synchronous)
     if (!isPremium && isLimitHitToday() && gems <= 0) {
+      const limitMessages: Message[] = [...newMessages, {
+        role: "assistant",
+        content: "Sorry, you've used all your AI tokens for today. Upgrade to **Premium** for unlimited access, or wait until tomorrow when your free tokens refresh."
+      }];
+      setMessages(limitMessages);
+      localStorage.setItem(`wizard_chat_history_${userId}`, JSON.stringify(limitMessages));
       openNoGemsDialog();
       setIsLoading(false);
       return;
@@ -122,15 +128,12 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
 
       if (response.status === 429) {
         markLimitReached();
-        // Check if it's a NO_GEMS response
-        try {
-          const errBody = await response.clone().json();
-          if (errBody?.code === "NO_GEMS" || errBody?.reason === "no_gems") {
-            openNoGemsDialog();
-            setIsLoading(false);
-            return;
-          }
-        } catch {}
+        const limitMessages: Message[] = [...newMessages, {
+          role: "assistant",
+          content: "Sorry, you've run out of AI gems. Upgrade to **Premium** for unlimited access, watch an ad to earn a gem, or wait until tomorrow when your free tokens refresh."
+        }];
+        setMessages(limitMessages);
+        localStorage.setItem(`wizard_chat_history_${userId}`, JSON.stringify(limitMessages));
         openNoGemsDialog();
         setIsLoading(false);
         return;

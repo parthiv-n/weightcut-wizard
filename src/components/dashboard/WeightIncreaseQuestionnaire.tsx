@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Quote, CheckCircle2 } from "lucide-react";
-import wizardLogo from "@/assets/wizard-logo.webp";
+import { Quote, CheckCircle2, Sparkles } from "lucide-react";
 
 interface WeightIncreaseQuestionnaireProps {
     open: boolean;
@@ -41,8 +40,8 @@ export function WeightIncreaseQuestionnaire({ open, onOpenChange, onComplete }: 
             <SheetContent side="bottom" className="max-h-[85vh] rounded-t-2xl overflow-y-auto" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 2rem)" }}>
                 <SheetHeader className="mb-4">
                     <div className="flex items-center gap-3">
-                        <div className="rounded-full bg-primary/20 p-2 flex-shrink-0 animate-pulse">
-                            <img src={wizardLogo} alt="Wizard" className="w-10 h-10" />
+                        <div className="rounded-xl bg-primary/10 p-2.5 flex-shrink-0">
+                            <Sparkles className="h-5 w-5 text-primary" />
                         </div>
                         <div>
                             <SheetTitle className="text-base text-left">The Wizard is Analyzing...</SheetTitle>

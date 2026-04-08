@@ -9,17 +9,28 @@ const PROD_AD_UNIT_ID = 'ca-app-pub-5228937380128191/9961045291';
 // Google test ID — use until account is approved
 const TEST_AD_UNIT_ID = 'ca-app-pub-3940256099942544/5224354917';
 
-const USE_TEST_ADS = false;
+const USE_TEST_ADS = true;
 const REWARDED_AD_UNIT_ID = USE_TEST_ADS ? TEST_AD_UNIT_ID : PROD_AD_UNIT_ID;
 
 export async function initializeAdMob(): Promise<void> {
   if (!isNativePlatform || initialized) return;
   try {
+    // Request ATT consent before initializing ads
+    const consentInfo = await AdMob.requestConsentInfo();
+    if (consentInfo.isConsentFormAvailable) {
+      await AdMob.showConsentForm();
+    }
     await AdMob.initialize({ initializeForTesting: USE_TEST_ADS });
     initialized = true;
     logger.info('AdMob initialized');
   } catch (err) {
-    logger.error('AdMob init failed', err);
+    // ATT denied or not available — still initialize AdMob (will show non-personalized ads)
+    try {
+      await AdMob.initialize({ initializeForTesting: USE_TEST_ADS });
+      initialized = true;
+    } catch (initErr) {
+      logger.error('AdMob init failed', initErr);
+    }
   }
 }
 

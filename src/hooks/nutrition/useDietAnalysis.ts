@@ -104,7 +104,7 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
 
       if (dietController.signal.aborted) return;
       if (error) {
-        if (handleAILimitError(error)) return;
+        if (handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
         throw new Error(await extractEdgeFunctionError(error, "Could not analyse your diet"));
       }
       if (data?.error) throw new Error(data.error);

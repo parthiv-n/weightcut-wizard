@@ -84,7 +84,7 @@ export function ExerciseBlock({
   return (
     <motion.div
       variants={staggerItem}
-      className={`glass-card rounded-2xl border border-border/50 border-l-[3px] ${borderColor} overflow-hidden`}
+      className={`card-surface rounded-2xl border border-border/50 border-l-[3px] ${borderColor} overflow-hidden`}
     >
       {/* Header */}
       <div className="flex items-center justify-between p-3 pb-2">

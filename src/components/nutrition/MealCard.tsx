@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Edit2, Trash2, ChevronDown, Sparkles } from "lucide-react";
-import { useState, useRef, memo } from "react";
+import { useState, useRef, useEffect, memo } from "react";
 import { motion, useMotionValue, useReducedMotion } from "motion/react";
 import { springs } from "@/lib/motion";
 import { MacroDonut } from "./MacroDonut";
@@ -38,6 +38,20 @@ interface MealCardProps {
 const DELETE_THRESHOLD = -80;
 
 export const MealCard = memo(function MealCard({ meal, onEdit, onDelete }: MealCardProps) {
+  const [showHint, setShowHint] = useState(() => {
+    return !localStorage.getItem('wcw_swipe_hint_shown');
+  });
+
+  useEffect(() => {
+    if (showHint) {
+      const timer = setTimeout(() => {
+        setShowHint(false);
+        localStorage.setItem('wcw_swipe_hint_shown', 'true');
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [showHint]);
+
   const [expanded, setExpanded] = useState(false);
   const hasDetails = !!(meal.ingredients?.length || meal.portion_size || meal.recipe_notes);
   const prefersReducedMotion = useReducedMotion();
@@ -109,7 +123,7 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete }: MealC
           {/* Name + colored macro labels */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1">
-              <span className="text-[11px] font-semibold leading-tight text-foreground truncate">{meal.meal_name}</span>
+              <span className="text-[11px] font-semibold leading-tight text-foreground truncate">{meal.meal_name || "Untitled"}</span>
               {meal.is_ai_generated && (
                 <Sparkles className="h-2.5 w-2.5 text-primary flex-shrink-0 drop-shadow-md" />
               )}
@@ -175,7 +189,7 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete }: MealC
                 {(onEdit || onDelete) && (
                   <div className="flex gap-1 pt-1">
                     {onEdit && (
-                      <Button variant="ghost" size="sm" onClick={onEdit} className="h-9 px-3 text-xs gap-1">
+                      <Button variant="ghost" size="sm" onClick={onEdit} className="h-9 px-3 text-xs gap-1" aria-label="Edit meal">
                         <Edit2 className="h-3 w-3" />
                         Edit
                       </Button>
@@ -186,6 +200,7 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete }: MealC
                         size="sm"
                         onClick={onDelete}
                         className="h-9 px-3 text-xs gap-1 text-destructive hover:text-destructive"
+                        aria-label="Delete meal"
                       >
                         <Trash2 className="h-3 w-3" />
                         Delete
@@ -198,6 +213,11 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete }: MealC
           </div>
         )}
       </motion.div>
+      {showHint && (
+        <p className="text-[10px] text-muted-foreground/50 text-center mt-1 animate-[fadeSlideUp_0.3s_ease-out_both]">
+          ← Swipe to edit or delete
+        </p>
+      )}
     </div>
   );
 });

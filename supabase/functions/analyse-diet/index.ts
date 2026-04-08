@@ -63,6 +63,9 @@ serve(async (req) => {
 Return ONLY valid JSON with this exact structure:
 {
   "summary": "1 punchy sentence: what's good and what's missing. No fluff.",
+  "mealBreakdown": [
+    { "mealType": "breakfast", "mealName": "meal name", "keyNutrients": [{ "name": "Iron", "amount": "3.2mg" }, { "name": "Vitamin C", "amount": "45mg" }] }
+  ],
   "micronutrients": [
     { "name": "Vitamin A", "percentRDA": number, "amount": "string with unit", "rdaTarget": "string with unit" },
     { "name": "Vitamin C", "percentRDA": number, "amount": "string with unit", "rdaTarget": "string with unit" },
@@ -82,6 +85,7 @@ Return ONLY valid JSON with this exact structure:
 }
 
 Rules:
+- mealBreakdown: one entry per meal, list the top 3-4 micronutrients each meal contributes (highest amounts). Use the same meal_type from the input.
 - Estimate micronutrients from USDA food composition data for the foods listed
 - RDA targets should be adjusted for an active combat sport athlete (${profile?.sex === 'female' ? 'female' : 'male'}, ${profile?.age || 25} years)
 - Only include gaps where percentRDA < 70
@@ -117,7 +121,7 @@ Athlete profile: ${profile?.age || "?"} years, ${profile?.sex || "?"}, ${profile
           { role: "user", content: userPrompt }
         ],
         temperature: 0.3,
-        max_completion_tokens: 1500
+        max_completion_tokens: 2500
       })
     });
 

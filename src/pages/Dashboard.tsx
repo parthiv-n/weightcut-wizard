@@ -1,10 +1,9 @@
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { ComposedChart, Line, Area, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { Droplets, TrendingDown, Calendar, Lock, ChevronRight, Flame, Zap, CheckCircle2, Scale } from "lucide-react";
+import { ComposedChart, Line, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { TrendingDown, Calendar, Lock, ChevronRight, Flame, Zap, CheckCircle2, Scale, Sparkles } from "lucide-react";
 import { TrainingWeekWidget } from "@/components/dashboard/TrainingWeekWidget";
-import wizardLogo from "@/assets/wizard-logo.webp";
 import { WeightProgressRing } from "@/components/dashboard/WeightProgressRing";
 import { StreakBadge } from "@/components/dashboard/StreakBadge";
 import { ConsistencyRing } from "@/components/dashboard/ConsistencyRing";
@@ -12,6 +11,7 @@ import { MilestoneBadges } from "@/components/dashboard/MilestoneBadges";
 import { useGamification } from "@/hooks/useGamification";
 import { useUser } from "@/contexts/UserContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
 import { withSupabaseTimeout, withRetry } from "@/lib/timeoutWrapper";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,7 @@ import { AchievementSheet } from "@/components/achievements/AchievementSheet";
 import { triggerHaptic, triggerHapticSelection } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import { logger } from "@/lib/logger";
+import { trackInstallDate, maybeRequestReview } from "@/lib/appReview";
 
 interface DailyWisdom {
   summary: string;
@@ -41,7 +42,9 @@ interface DailyWisdom {
 export default function Dashboard() {
   const [weightLogs, setWeightLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [weightUnit, setWeightUnit] = useState<'kg' | 'lb'>('kg');
+  const [weightUnit, setWeightUnit] = useState<'kg' | 'lb'>(() => {
+    return (localStorage.getItem('wcw_weight_unit') as 'kg' | 'lb') || 'kg';
+  });
   const [todayCalories, setTodayCalories] = useState(0);
   const [todayHydration, setTodayHydration] = useState(0);
   const [wisdom, setWisdom] = useState<DailyWisdom | null>(null);
@@ -55,6 +58,8 @@ export default function Dashboard() {
   const { streak, streakIncludesToday, weeklyConsistency, badges, badgesLoading, allAchievements } = useGamification(userId, weightLogs, todayCalories, profile);
 
   const lastFetchRef = useRef(0);
+
+  useEffect(() => { trackInstallDate(); }, []);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -301,6 +306,7 @@ export default function Dashboard() {
       }
     } finally {
       safeAsync(setLoading)(false);
+      maybeRequestReview();
     }
   };
 
@@ -324,7 +330,7 @@ export default function Dashboard() {
     })), [weightLogs, convertWeight]);
 
   if (loading) {
-    return <div className="min-h-[50vh]" />;
+    return <DashboardSkeleton />;
   }
 
   // Fallback static wisdom (kept for when AI fails)
@@ -383,41 +389,36 @@ export default function Dashboard() {
 
   return (
     <ErrorBoundary>
-      <div className="space-y-3 sm:space-y-4 p-3 sm:p-5 md:p-6 w-full max-w-7xl mx-auto">
-        {/* Countdown + Greeting header */}
-        <div>
+      <div className="space-y-3 p-3 sm:p-5 md:p-6 w-full max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="flex items-center gap-3">
           {daysUntilTarget > 0 && (
-            <div className="flex items-center gap-2 mb-1.5">
-              <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-              <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-                <span className="text-sm text-foreground font-bold display-number">{daysUntilTarget}</span> days until target
-              </span>
-            </div>
+            <span className="text-xs text-muted-foreground">
+              <span className="font-bold display-number text-foreground">{daysUntilTarget}</span> days left
+            </span>
           )}
           {streak > 0 && <StreakBadge streak={streak} isActive={streakIncludesToday} />}
         </div>
 
         {weightLogs.length === 0 && (
-          <div>
-            <div className="glass-card rounded-2xl border border-border/50 p-4">
-              <div className="flex items-start gap-3">
-                <div className="rounded-full bg-primary/15 p-2.5 flex-shrink-0">
-                  <Scale className="h-5 w-5 text-primary" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-sm">Welcome, Fighter</h3>
-                  <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                    Log your first weigh-in to unlock your progress chart, daily AI wisdom, and weight cut tracking.
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="mt-3 h-8 text-xs font-semibold"
-                    onClick={() => navigate('/weight')}
-                  >
-                    Log Weigh-In
-                  </Button>
-                </div>
+          <div className="card-surface rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <div className="rounded-full bg-primary/15 p-2.5 flex-shrink-0">
+                <Scale className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-sm">Welcome{userName ? `, ${userName}` : ''}</h3>
+                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                  Log your first weigh-in to unlock your progress chart, daily AI wisdom, and weight tracking.
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-3 h-8 text-xs font-semibold"
+                  onClick={() => navigate('/weight')}
+                >
+                  Log Weigh-In
+                </Button>
               </div>
             </div>
           </div>
@@ -432,18 +433,18 @@ export default function Dashboard() {
         <div data-tutorial="daily-wisdom-card">
         {!hasTodayLog ? (
           /* State 1: Locked — no today weight log */
-          <div className="rounded-lg glass-card p-3 sm:p-4 border-primary/20 bg-gradient-to-r from-primary/5 to-secondary/5">
-            <div className="flex items-start gap-3 sm:gap-4">
-              <div className="rounded-full bg-primary/20 p-2 sm:p-3 flex-shrink-0 opacity-40 mix-blend-screen">
-                <img src={wizardLogo} alt="Wizard" className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover" />
+          <div className="card-surface rounded-xl p-3 sm:p-4">
+            <div className="flex items-start gap-3">
+              <div className="rounded-xl bg-primary/10 p-2.5 flex-shrink-0">
+                <Sparkles className="h-5 w-5 text-primary opacity-40" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-semibold text-sm sm:text-base text-foreground">Wizard's Daily Wisdom</h3>
+                  <h3 className="font-semibold text-sm text-foreground">Daily Insight</h3>
                   <Lock className="h-3.5 w-3.5 text-muted-foreground" />
                 </div>
-                <p className="text-xs sm:text-sm text-foreground/80 mt-1">
-                  Log your weight to unlock today's wisdom.
+                <p className="text-xs text-muted-foreground mt-1">
+                  Log your weight to unlock today's insight.
                 </p>
                 <Button
                   variant="link"
@@ -457,10 +458,10 @@ export default function Dashboard() {
           </div>
         ) : wisdomLoading ? (
           /* State 2: Loading */
-          <div className="rounded-lg glass-card p-3 sm:p-4 border-primary/20 bg-gradient-to-r from-primary/5 to-secondary/5">
-            <div className="flex items-start gap-3 sm:gap-4">
-              <div className="rounded-full bg-primary/20 p-2 sm:p-3 flex-shrink-0 animate-pulse mix-blend-screen">
-                <img src={wizardLogo} alt="Wizard" className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover opacity-60" />
+          <div className="card-surface rounded-xl p-3 sm:p-4">
+            <div className="flex items-start gap-3">
+              <div className="rounded-xl bg-primary/10 p-2.5 flex-shrink-0 animate-pulse">
+                <Sparkles className="h-5 w-5 text-primary opacity-40" />
               </div>
               <div className="flex-1 min-w-0 space-y-2 pt-1">
                 <div className="h-3 rounded shimmer-skeleton w-1/3" />
@@ -470,26 +471,26 @@ export default function Dashboard() {
             </div>
           </div>
         ) : wisdom ? (
-          /* State 3: Active — AI wisdom loaded */
+          /* State 3: Active — AI insight loaded */
           <button
-            className="w-full text-left rounded-lg glass-card p-3 sm:p-4 border-primary/20 hover:border-primary/50 transition-colors bg-gradient-to-r from-primary/5 to-secondary/5"
+            className="w-full text-left card-surface rounded-xl p-3 sm:p-4 hover:border-primary/30 transition-colors"
             onClick={handleWisdomClick}
           >
-            <div className="flex items-start gap-3 sm:gap-4">
-              <div className="rounded-full bg-primary/20 p-2 sm:p-3 flex-shrink-0 mix-blend-screen">
-                <img src={wizardLogo} alt="Wizard" className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover" />
+            <div className="flex items-start gap-3">
+              <div className="rounded-xl bg-primary/10 p-2.5 flex-shrink-0">
+                <Sparkles className="h-5 w-5 text-primary" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
-                  <h3 className="font-semibold text-sm sm:text-base text-foreground">Wizard's Daily Wisdom</h3>
+                  <h3 className="font-semibold text-sm text-foreground">Daily Insight</h3>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${riskColors[wisdom.riskLevel]}`}>
                       {wisdom.riskLevel.charAt(0).toUpperCase() + wisdom.riskLevel.slice(1)}
                     </span>
-                    <ChevronRight className="h-4 w-4 text-foreground/70" />
+                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
                   </div>
                 </div>
-                <p className="text-xs sm:text-sm text-foreground/80 mt-1 font-medium leading-snug">
+                <p className="text-xs text-muted-foreground mt-1 font-medium leading-snug">
                   {wisdom.summary}
                 </p>
               </div>
@@ -497,14 +498,14 @@ export default function Dashboard() {
           </button>
         ) : (
           /* State 4: Fallback — weight logged but AI failed */
-          <div className="rounded-lg glass-card p-3 sm:p-4 border-primary/20 bg-gradient-to-r from-primary/5 to-secondary/5">
-            <div className="flex items-start gap-3 sm:gap-4">
-              <div className="rounded-full bg-primary/20 p-2 sm:p-3 flex-shrink-0 mix-blend-screen">
-                <img src={wizardLogo} alt="Wizard" className="w-12 h-12 sm:w-16 sm:h-16 rounded-full object-cover" />
+          <div className="card-surface rounded-xl p-3 sm:p-4">
+            <div className="flex items-start gap-3">
+              <div className="rounded-xl bg-primary/10 p-2.5 flex-shrink-0">
+                <Sparkles className="h-5 w-5 text-primary" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-sm sm:text-base text-foreground">Wizard's Daily Wisdom</h3>
-                <p className="text-xs sm:text-sm text-foreground/80 mt-1 font-medium leading-snug">
+                <h3 className="font-semibold text-sm text-foreground">Daily Insight</h3>
+                <p className="text-xs text-muted-foreground mt-1 font-medium leading-snug">
                   {getWizardWisdom()}
                 </p>
               </div>
@@ -527,23 +528,23 @@ export default function Dashboard() {
         {/* Weight History + Training — side by side */}
         <div className="grid grid-cols-2 gap-3">
           {/* Weight History Chart */}
-          <div className="glass-card rounded-2xl p-3 aspect-square flex flex-col">
+          <div className="card-surface rounded-xl p-3 aspect-square flex flex-col">
             <div className="flex items-center justify-between mb-1">
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Weight</span>
-              <div className="flex gap-0.5 bg-muted rounded-md p-0.5">
+              <span className="section-header">Weight</span>
+              <div className="flex gap-0.5 bg-muted rounded-full p-0.5">
                 <Button
                   variant={weightUnit === 'kg' ? 'default' : 'ghost'}
                   size="sm"
-                  onClick={() => { setWeightUnit('kg'); triggerHapticSelection(); }}
-                  className="h-5 min-h-0 text-[9px] px-1.5 rounded-sm"
+                  onClick={() => { setWeightUnit('kg'); localStorage.setItem('wcw_weight_unit', 'kg'); triggerHapticSelection(); }}
+                  className="h-5 min-h-0 text-[9px] px-1.5 rounded-full"
                 >
                   kg
                 </Button>
                 <Button
                   variant={weightUnit === 'lb' ? 'default' : 'ghost'}
                   size="sm"
-                  onClick={() => { setWeightUnit('lb'); triggerHapticSelection(); }}
-                  className="h-5 min-h-0 text-[9px] px-1.5 rounded-sm"
+                  onClick={() => { setWeightUnit('lb'); localStorage.setItem('wcw_weight_unit', 'lb'); triggerHapticSelection(); }}
+                  className="h-5 min-h-0 text-[9px] px-1.5 rounded-full"
                 >
                   lb
                 </Button>
@@ -553,13 +554,6 @@ export default function Dashboard() {
               {chartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-                    <defs>
-                      <linearGradient id="weightGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.4} />
-                        <stop offset="50%" stopColor="hsl(var(--primary))" stopOpacity={0.15} />
-                        <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
                     <YAxis
                       stroke="hsl(var(--muted-foreground))"
                       fontSize={9}
@@ -576,21 +570,14 @@ export default function Dashboard() {
                       }}
                       formatter={(value: number) => [`${value.toFixed(1)} ${weightUnit}`, 'Weight']}
                     />
-                    <Area
-                      type="monotone"
-                      dataKey="weight"
-                      stroke="none"
-                      fill="url(#weightGradient)"
-                      animationDuration={800}
-                    />
                     <Line
                       type="monotone"
                       dataKey="weight"
-                      stroke="hsl(var(--secondary))"
+                      stroke="hsl(var(--primary))"
                       strokeWidth={2}
                       dot={{ fill: "hsl(var(--primary))", r: 2.5, strokeWidth: 1.5, stroke: "hsl(var(--background))" }}
                       activeDot={{ r: 4, strokeWidth: 1.5 }}
-                      animationDuration={800}
+                      animationDuration={0}
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -598,6 +585,9 @@ export default function Dashboard() {
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <TrendingDown className="h-5 w-5 text-muted-foreground/40 mb-1" />
                   <p className="text-[10px] text-muted-foreground">No data yet</p>
+                  <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={() => navigate('/weight')}>
+                    Log Weight
+                  </Button>
                 </div>
               )}
             </div>
@@ -621,11 +611,11 @@ export default function Dashboard() {
           <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl overflow-y-auto" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 5rem)" }}>
             <SheetHeader className="mb-4">
               <div className="flex items-center gap-3">
-                <div className="rounded-full bg-primary/20 p-2 flex-shrink-0">
-                  <img src={wizardLogo} alt="Wizard" className="w-10 h-10 rounded-full object-cover" />
+                <div className="rounded-xl bg-primary/10 p-2.5 flex-shrink-0">
+                  <Sparkles className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <SheetTitle className="text-base">Wizard's Daily Wisdom</SheetTitle>
+                  <SheetTitle className="text-base">Daily Insight</SheetTitle>
                   <p className="text-xs text-muted-foreground">
                     {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
                   </p>
@@ -635,17 +625,17 @@ export default function Dashboard() {
 
             {/* 3-col status grid */}
             <div className="grid grid-cols-3 gap-3 mb-4">
-              <div className="rounded-xl border border-border/50 p-3 text-center">
+              <div className="rounded-xl border border-border p-3 text-center">
                 <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${riskColors[wisdom.riskLevel]}`}>
                   {wisdom.riskLevel.charAt(0).toUpperCase() + wisdom.riskLevel.slice(1)}
                 </span>
                 <p className="text-xs text-muted-foreground mt-1">Risk Level</p>
               </div>
-              <div className="rounded-xl border border-border/50 p-3 text-center">
+              <div className="rounded-xl border border-border p-3 text-center">
                 <p className="text-2xl font-bold display-number">{wisdom.daysToFight}</p>
-                <p className="text-xs text-muted-foreground">Days to Fight</p>
+                <p className="text-xs text-muted-foreground">Days Left</p>
               </div>
-              <div className="rounded-xl border border-border/50 p-3 text-center">
+              <div className="rounded-xl border border-border p-3 text-center">
                 <p className={`text-sm font-semibold ${paceColors[wisdom.paceStatus] ?? 'text-foreground'}`}>
                   {paceLabels[wisdom.paceStatus] ?? wisdom.paceStatus}
                 </p>
@@ -654,7 +644,7 @@ export default function Dashboard() {
             </div>
 
             {/* Weight Pace card */}
-            <div className="rounded-xl border border-border/50 p-4 mb-3">
+            <div className="rounded-xl border border-border p-4 mb-3">
               <div className="flex items-center gap-2 mb-3">
                 <TrendingDown className="h-4 w-4 text-primary" />
                 <h4 className="text-sm font-semibold">Weight Pace</h4>
@@ -673,7 +663,7 @@ export default function Dashboard() {
             </div>
 
             {/* Today's Guidance card */}
-            <div className="rounded-xl border border-border/50 p-4 mb-3">
+            <div className="rounded-xl border border-border p-4 mb-3">
               <div className="flex items-center gap-2 mb-2">
                 <Zap className="h-4 w-4 text-primary" />
                 <h4 className="text-sm font-semibold">Today's Guidance</h4>
@@ -682,7 +672,7 @@ export default function Dashboard() {
             </div>
 
             {/* Action Items card */}
-            <div className="rounded-xl border border-border/50 p-4 mb-3">
+            <div className="rounded-xl border border-border p-4 mb-3">
               <div className="flex items-center gap-2 mb-3">
                 <CheckCircle2 className="h-4 w-4 text-primary" />
                 <h4 className="text-sm font-semibold">Action Items</h4>
@@ -701,7 +691,7 @@ export default function Dashboard() {
 
             {/* Nutrition status */}
             <div className="grid grid-cols-1 gap-3">
-              <div className="rounded-xl border border-border/50 p-3">
+              <div className="rounded-xl border border-border p-3">
                 <div className="flex items-center gap-1.5 mb-1">
                   <Flame className="h-3.5 w-3.5 text-orange-400" />
                   <p className="text-xs font-semibold">Nutrition</p>

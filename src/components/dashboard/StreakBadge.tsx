@@ -21,8 +21,8 @@ export function StreakBadge({ streak, isActive }: StreakBadgeProps) {
       <div
         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border ${
           isActive
-            ? "bg-orange-500/10 border-orange-500/20"
-            : "bg-orange-500/5 border-orange-500/10"
+            ? "bg-energy/10 border-energy/20"
+            : "bg-energy/5 border-energy/10"
         }`}
       >
         <motion.div
@@ -39,7 +39,7 @@ export function StreakBadge({ streak, isActive }: StreakBadgeProps) {
         >
           <Flame
             className={`h-4 w-4 ${
-              isActive ? "text-orange-400" : "text-muted-foreground"
+              isActive ? "text-energy" : "text-muted-foreground"
             }`}
           />
         </motion.div>

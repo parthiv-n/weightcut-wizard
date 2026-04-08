@@ -100,11 +100,11 @@ export function SessionMediaPicker({
       />
 
       {displayUrl ? (
-        <div className="relative rounded-2xl overflow-hidden border border-border/30">
+        <div className="relative rounded-xl overflow-hidden border border-border">
           {isVideo(displayUrl) ? (
             <video
               src={displayUrl}
-              className="w-full max-h-48 object-cover rounded-2xl"
+              className="w-full max-h-48 object-cover rounded-xl"
               controls={false}
               muted
               playsInline
@@ -113,7 +113,7 @@ export function SessionMediaPicker({
             <img
               src={displayUrl}
               alt="Session media"
-              className="w-full max-h-48 object-cover rounded-2xl"
+              className="w-full max-h-48 object-cover rounded-xl"
             />
           )}
           <button
@@ -123,7 +123,7 @@ export function SessionMediaPicker({
               onMediaRemoved();
               triggerHapticSelection();
             }}
-            className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center hover:bg-black/80 transition-colors"
+            className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/60 flex items-center justify-center hover:bg-black/80 transition-colors"
           >
             <X className="h-4 w-4 text-white" />
           </button>
@@ -132,7 +132,7 @@ export function SessionMediaPicker({
         <button
           type="button"
           onClick={() => { setActionSheetOpen(true); triggerHapticSelection(); }}
-          className="w-full py-6 rounded-2xl border-2 border-dashed border-border/30 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-primary/40 hover:text-primary/70 transition-colors active:scale-[0.98]"
+          className="w-full py-6 rounded-2xl border-2 border-dashed border-border flex flex-col items-center justify-center gap-2 text-muted-foreground hover:border-primary/40 hover:text-primary/70 transition-colors active:scale-[0.98]"
         >
           <Camera className="h-6 w-6" />
           <span className="text-sm font-medium">Add Photo or Video</span>

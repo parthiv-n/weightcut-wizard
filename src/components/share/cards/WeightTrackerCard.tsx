@@ -64,7 +64,7 @@ export const WeightTrackerCard = forwardRef<HTMLDivElement, WeightTrackerCardPro
                 fontWeight: 700,
                 letterSpacing: "0.15em",
                 textTransform: "uppercase",
-                color: "#2563eb",
+                color: "hsl(var(--primary))",
                 marginBottom: s ? 8 : 4,
               }}
             >
@@ -112,8 +112,8 @@ export const WeightTrackerCard = forwardRef<HTMLDivElement, WeightTrackerCardPro
             <MiniChart
               data={chartData}
               type="area"
-              color="#2563eb"
-              fillColor="rgba(37,99,235,0.15)"
+              color="hsl(var(--primary))"
+              fillColor="hsl(var(--primary) / 0.15)"
               referenceLine={goalWeight}
               referenceColor="#22c55e"
               height={s ? 400 : 280}

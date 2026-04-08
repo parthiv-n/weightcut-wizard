@@ -50,11 +50,6 @@ export function FloatingWizardChat() {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
-    if (!checkAIAccess()) {
-      openNoGemsDialog();
-      return;
-    }
-
     triggerHapticSelection();
     const currentInput = input;
     setInput("");
@@ -93,7 +88,7 @@ export function FloatingWizardChat() {
       {/* Backdrop */}
       {open && (
         <div
-          className="fixed inset-0 z-[10001] bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
+          className="fixed inset-0 z-[10001] bg-black/60 animate-in fade-in duration-200"
           onClick={() => setOpen(false)}
         />
       )}
@@ -101,7 +96,7 @@ export function FloatingWizardChat() {
       {/* Chat Panel */}
       {open && (
         <div
-          className="fixed inset-x-0 bottom-0 z-[10002] flex flex-col glass-card bg-background/98 backdrop-blur-md border-t border-border/50 rounded-t-3xl animate-in slide-in-from-bottom duration-300"
+          className="fixed inset-x-0 bottom-0 z-[10002] flex flex-col card-surface bg-background/98 border-t border-border rounded-t-3xl animate-in slide-in-from-bottom duration-300"
           style={{ height: "85dvh" }}
         >
           {/* Drag handle */}
@@ -113,10 +108,10 @@ export function FloatingWizardChat() {
           <div className="shrink-0 px-4 pb-4 border-b border-primary/15 bg-gradient-to-r from-primary/5 via-secondary/5 to-accent/5">
             <div className="flex items-center gap-3">
               <div className="relative">
-                <div className="w-10 h-10 rounded-full glass-card border-primary/20 p-0.5 overflow-hidden">
+                <div className="w-10 h-10 rounded-full card-surface border-primary/20 p-0.5 overflow-hidden">
                   <img src={wizardAvatar} alt="Wizard" className="w-full h-full object-cover rounded-full mix-blend-screen" />
                 </div>
-                <Sparkles className="h-3 w-3 text-primary absolute -bottom-1 -right-1 drop-shadow-[0_0_6px_rgba(37,99,235,0.6)]" />
+                <Sparkles className="h-3 w-3 text-primary absolute -bottom-1 -right-1 drop-shadow-[0_0_6px_hsl(var(--primary)/0.6)]" />
               </div>
               <div>
                 <h2 className="text-lg font-bold leading-tight bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text">FightCamp Wizard</h2>
@@ -133,8 +128,9 @@ export function FloatingWizardChat() {
                   variant="ghost"
                   size="icon"
                   onClick={handleClearChat}
-                  className="h-8 w-8 rounded-xl glass-card border-border/30 text-muted-foreground hover:text-destructive hover:border-destructive/30 transition-all"
+                  className="h-8 w-8 rounded-xl card-surface border-border text-muted-foreground hover:text-destructive hover:border-destructive/30 transition-all"
                   title="Clear chat history"
+                  aria-label="Clear chat"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -142,8 +138,9 @@ export function FloatingWizardChat() {
                   variant="ghost"
                   size="icon"
                   onClick={() => setOpen(false)}
-                  className="h-8 w-8 rounded-xl glass-card border-border/30 text-muted-foreground hover:text-foreground transition-all"
+                  className="h-8 w-8 rounded-xl card-surface border-border text-muted-foreground hover:text-foreground transition-all"
                   title="Close"
+                  aria-label="Close chat"
                 >
                   <X className="h-4 w-4" />
                 </Button>
@@ -159,8 +156,8 @@ export function FloatingWizardChat() {
                 className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} animate-fade-in`}
               >
                 <div className={`flex gap-2 max-w-[88%] ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
-                  <div className={`shrink-0 h-8 w-8 rounded-full flex items-center justify-center ${msg.role === "user" ? "bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/15" : "glass-card border-secondary/15"}`}>
-                    {msg.role === "user" ? <User className="h-4 w-4 text-primary drop-shadow-[0_0_4px_rgba(37,99,235,0.5)]" /> : <Bot className="h-4 w-4 text-secondary drop-shadow-[0_0_4px_rgba(37,99,235,0.4)]" />}
+                  <div className={`shrink-0 h-8 w-8 rounded-full flex items-center justify-center ${msg.role === "user" ? "bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/15" : "card-surface border-secondary/15"}`}>
+                    {msg.role === "user" ? <User className="h-4 w-4 text-primary drop-shadow-[0_0_4px_hsl(var(--primary)/0.5)]" /> : <Bot className="h-4 w-4 text-secondary drop-shadow-[0_0_4px_hsl(var(--primary)/0.4)]" />}
                   </div>
 
                   {msg.role === "user" ? (
@@ -170,7 +167,7 @@ export function FloatingWizardChat() {
                       </div>
                     </div>
                   ) : (
-                    <div className="relative px-3.5 py-2.5 rounded-2xl text-sm glass-card text-card-foreground rounded-tl-sm border-secondary/15 bg-gradient-to-br from-secondary/5 to-accent/5">
+                    <div className="relative px-3.5 py-2.5 rounded-xl text-sm card-surface text-card-foreground rounded-tl-sm border-secondary/15 bg-gradient-to-br from-secondary/5 to-accent/5">
                       <GlowingEffect spread={40} glow disabled={false} proximity={64} inactiveZone={0.01} borderWidth={1} />
                       <div className="relative z-10 wizard-prose max-w-none">
                         <ReactMarkdown>{msg.content}</ReactMarkdown>
@@ -184,12 +181,12 @@ export function FloatingWizardChat() {
             {isLoading && (
               <div className="flex justify-start animate-fade-in">
                 <div className="flex gap-2 max-w-[88%]">
-                  <div className="shrink-0 h-8 w-8 rounded-full glass-card border-secondary/15 flex items-center justify-center">
-                    <Bot className="h-4 w-4 text-secondary drop-shadow-[0_0_4px_rgba(37,99,235,0.4)]" />
+                  <div className="shrink-0 h-8 w-8 rounded-full card-surface border-secondary/15 flex items-center justify-center">
+                    <Bot className="h-4 w-4 text-secondary drop-shadow-[0_0_4px_hsl(var(--primary)/0.4)]" />
                   </div>
-                  <div className="relative px-3.5 py-2.5 rounded-2xl glass-card rounded-tl-sm border-secondary/15 bg-gradient-to-br from-secondary/5 to-accent/5 flex items-center gap-2">
+                  <div className="relative px-3.5 py-2.5 rounded-xl card-surface rounded-tl-sm border-secondary/15 bg-gradient-to-br from-secondary/5 to-accent/5 flex items-center gap-2">
                     <GlowingEffect spread={40} glow disabled={false} proximity={64} inactiveZone={0.01} borderWidth={1} />
-                    <Loader2 className="relative z-10 h-4 w-4 text-accent animate-spin drop-shadow-[0_0_6px_rgba(37,99,235,0.4)]" />
+                    <Loader2 className="relative z-10 h-4 w-4 text-accent animate-spin drop-shadow-[0_0_6px_hsl(var(--primary)/0.4)]" />
                     <span className="relative z-10 text-xs text-muted-foreground animate-pulse">Wizard is thinking...</span>
                   </div>
                 </div>
@@ -199,11 +196,11 @@ export function FloatingWizardChat() {
 
           {/* ========== INPUT BAR ========== */}
           <div
-            className="shrink-0 border-t border-border/10 bg-background/95 backdrop-blur-xl px-4 pt-3"
+            className="shrink-0 border-t border-border/10 bg-background/95 px-4 pt-3"
             style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" }}
           >
             <form onSubmit={handleSend} className="relative flex items-center gap-2">
-              <div className="relative flex-1 rounded-2xl glass-card border-primary/15 bg-gradient-to-r from-primary/5 via-secondary/5 to-accent/5 overflow-hidden">
+              <div className="relative flex-1 rounded-xl card-surface border-primary/15 bg-gradient-to-r from-primary/5 via-secondary/5 to-accent/5 overflow-hidden">
                 <GlowingEffect spread={40} glow disabled={false} proximity={64} inactiveZone={0.01} borderWidth={1} />
                 <input
                   ref={inputRef}
@@ -212,13 +209,14 @@ export function FloatingWizardChat() {
                   onChange={(e) => setInput(e.target.value)}
                   placeholder="Ask your nutritionist..."
                   disabled={isLoading}
-                  className="relative z-10 w-full h-11 rounded-2xl bg-transparent px-4 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none border-none disabled:opacity-50"
+                  className="relative z-10 w-full h-11 rounded-xl bg-transparent px-4 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none border-none disabled:opacity-50"
                 />
               </div>
               <button
                 type="submit"
                 disabled={!input.trim() || isLoading}
-                className="h-11 w-11 shrink-0 rounded-2xl bg-gradient-to-br from-primary to-accent hover:from-primary/90 hover:to-accent/90 text-primary-foreground flex items-center justify-center shadow-lg shadow-primary/20 disabled:opacity-40 active:scale-95 transition-all duration-200"
+                aria-label="Send message"
+                className="h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br from-primary to-accent hover:from-primary/90 hover:to-accent/90 text-primary-foreground flex items-center justify-center shadow-lg shadow-primary/20 disabled:opacity-40 active:scale-95 transition-all duration-200"
               >
                 <Send className="h-4 w-4" />
               </button>

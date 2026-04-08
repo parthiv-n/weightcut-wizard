@@ -26,7 +26,7 @@ export function DehydrationRingPanel({
   // No dehydration needed — show success message
   if (dehydrationNeeded <= 0) {
     return (
-      <div className="glass-card rounded-2xl border border-border/50 p-5">
+      <div className="card-surface rounded-2xl border border-border/50 p-5">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-full bg-green-500/20 flex items-center justify-center">
             <CheckCircle className="h-5 w-5 text-green-400" />
@@ -43,7 +43,7 @@ export function DehydrationRingPanel({
   }
 
   return (
-    <div className="glass-card rounded-2xl border border-border/50 p-5 space-y-4">
+    <div className="card-surface rounded-2xl border border-border/50 p-5 space-y-4">
       <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
         Dehydration Required
       </h3>

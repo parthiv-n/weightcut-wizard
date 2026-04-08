@@ -91,6 +91,10 @@ export default {
           border: "hsl(var(--sidebar-border))",
           ring: "hsl(var(--sidebar-ring))",
         },
+        energy: "hsl(var(--energy))",
+        health: "hsl(var(--health))",
+        hydration: "hsl(var(--hydration))",
+        recovery: "hsl(var(--recovery))",
       },
       fontFamily: {
         sans: ["Poppins", "sans-serif"],
