@@ -69,7 +69,7 @@ export const ReadinessBreakdownCard = memo(function ReadinessBreakdownCard({ bre
   }
 
   return (
-    <div className="card-surface rounded-[20px] border border-border/50 overflow-hidden">
+    <div className="card-surface rounded-xl border border-border overflow-hidden">
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}

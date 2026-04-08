@@ -189,7 +189,7 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete }: MealC
                 {(onEdit || onDelete) && (
                   <div className="flex gap-1 pt-1">
                     {onEdit && (
-                      <Button variant="ghost" size="sm" onClick={onEdit} className="h-9 px-3 text-xs gap-1">
+                      <Button variant="ghost" size="sm" onClick={onEdit} className="h-9 px-3 text-xs gap-1" aria-label="Edit meal">
                         <Edit2 className="h-3 w-3" />
                         Edit
                       </Button>
@@ -200,6 +200,7 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete }: MealC
                         size="sm"
                         onClick={onDelete}
                         className="h-9 px-3 text-xs gap-1 text-destructive hover:text-destructive"
+                        aria-label="Delete meal"
                       >
                         <Trash2 className="h-3 w-3" />
                         Delete

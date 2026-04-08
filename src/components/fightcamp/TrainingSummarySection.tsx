@@ -475,7 +475,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
                                 return (
                                     <Card
                                         key={section.sport}
-                                        className="p-4 rounded-[20px] shadow-sm card-surface overflow-hidden relative border-border/10"
+                                        className="p-4 rounded-xl shadow-sm card-surface overflow-hidden relative border-border"
                                     >
                                         <div className="absolute top-0 left-0 w-2 h-full" style={{ backgroundColor: getSessionColor(section.sport, customColors) }} />
                                         <div className="ml-2">

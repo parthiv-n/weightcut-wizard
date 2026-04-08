@@ -130,6 +130,7 @@ export function FloatingWizardChat() {
                   onClick={handleClearChat}
                   className="h-8 w-8 rounded-xl card-surface border-border text-muted-foreground hover:text-destructive hover:border-destructive/30 transition-all"
                   title="Clear chat history"
+                  aria-label="Clear chat"
                 >
                   <Trash2 className="h-4 w-4" />
                 </Button>
@@ -139,6 +140,7 @@ export function FloatingWizardChat() {
                   onClick={() => setOpen(false)}
                   className="h-8 w-8 rounded-xl card-surface border-border text-muted-foreground hover:text-foreground transition-all"
                   title="Close"
+                  aria-label="Close chat"
                 >
                   <X className="h-4 w-4" />
                 </Button>
@@ -213,6 +215,7 @@ export function FloatingWizardChat() {
               <button
                 type="submit"
                 disabled={!input.trim() || isLoading}
+                aria-label="Send message"
                 className="h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br from-primary to-accent hover:from-primary/90 hover:to-accent/90 text-primary-foreground flex items-center justify-center shadow-lg shadow-primary/20 disabled:opacity-40 active:scale-95 transition-all duration-200"
               >
                 <Send className="h-4 w-4" />

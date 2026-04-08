@@ -2,9 +2,8 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { ComposedChart, Line, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { Droplets, TrendingDown, Calendar, Lock, ChevronRight, Flame, Zap, CheckCircle2, Scale, Sparkles } from "lucide-react";
+import { TrendingDown, Calendar, Lock, ChevronRight, Flame, Zap, CheckCircle2, Scale, Sparkles } from "lucide-react";
 import { TrainingWeekWidget } from "@/components/dashboard/TrainingWeekWidget";
-// wizardLogo removed in UI redesign — using Sparkles icon instead
 import { WeightProgressRing } from "@/components/dashboard/WeightProgressRing";
 import { StreakBadge } from "@/components/dashboard/StreakBadge";
 import { ConsistencyRing } from "@/components/dashboard/ConsistencyRing";
@@ -25,6 +24,7 @@ import { AchievementSheet } from "@/components/achievements/AchievementSheet";
 import { triggerHaptic, triggerHapticSelection } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import { logger } from "@/lib/logger";
+import { trackInstallDate, maybeRequestReview } from "@/lib/appReview";
 
 interface DailyWisdom {
   summary: string;
@@ -58,6 +58,8 @@ export default function Dashboard() {
   const { streak, streakIncludesToday, weeklyConsistency, badges, badgesLoading, allAchievements } = useGamification(userId, weightLogs, todayCalories, profile);
 
   const lastFetchRef = useRef(0);
+
+  useEffect(() => { trackInstallDate(); }, []);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -304,6 +306,7 @@ export default function Dashboard() {
       }
     } finally {
       safeAsync(setLoading)(false);
+      maybeRequestReview();
     }
   };
 
