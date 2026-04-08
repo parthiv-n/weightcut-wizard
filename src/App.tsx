@@ -53,6 +53,13 @@ _idle(() => {
   import("./pages/WeightTracker").catch(() => {});
   import("./pages/FightWeek").catch(() => {});
   import("./pages/Recovery").catch(() => {});
+  import("./pages/Goals").catch(() => {});
+  import("./pages/Hydration").catch(() => {});
+  import("./pages/FightCamps").catch(() => {});
+  import("./pages/FightCampDetail").catch(() => {});
+  import("./pages/TrainingCalendar").catch(() => {});
+  import("./pages/SkillTree").catch(() => {});
+  import("./pages/GymTracker").catch(() => {});
 });
 
 const queryClient = new QueryClient();
@@ -175,7 +182,7 @@ const AppLayoutContent = () => {
           <main className="flex-1 overflow-auto overflow-x-hidden relative min-h-0 w-full pt-2 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right" style={{ paddingBottom: "calc(4rem + env(safe-area-inset-bottom, 0px))" }}>
             <PullToRefresh />
             <PageTransition>
-              <Suspense fallback={<div className="min-h-screen" />}>
+              <Suspense fallback={null}>
                 <Outlet />
               </Suspense>
             </PageTransition>
