@@ -169,7 +169,7 @@ export default function FightCamps() {
         <Skeleton className="h-7 w-32" />
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="glass-card p-4 space-y-3">
+            <div key={i} className="card-surface p-4 space-y-3">
               <div className="flex items-center gap-3.5">
                 <Skeleton className="h-11 w-11 rounded-full shrink-0" />
                 <div className="space-y-2 flex-1">
@@ -225,7 +225,7 @@ export default function FightCamps() {
 
         {/* Camp List */}
         {camps.length === 0 ? (
-          <div className="glass-card p-6 text-center space-y-3">
+          <div className="card-surface p-6 text-center space-y-3">
             <div className="h-10 w-10 bg-primary/10 rounded-full flex items-center justify-center mx-auto">
               <Trophy className="w-5 h-5 text-primary" />
             </div>
@@ -233,7 +233,7 @@ export default function FightCamps() {
               <h3 className="text-sm font-bold">No Camps Yet</h3>
               <p className="text-muted-foreground text-xs mt-0.5">Start tracking your first preparation.</p>
             </div>
-            <Button onClick={() => setDialogOpen(true)} variant="outline" className="rounded-xl mt-2 border-border/50 hover:bg-muted">
+            <Button onClick={() => setDialogOpen(true)} variant="outline" className="rounded-xl mt-2 border-border hover:bg-muted">
               Create First Camp
             </Button>
           </div>
@@ -242,7 +242,7 @@ export default function FightCamps() {
             {camps.map((camp) => (
               <div
                 key={camp.id}
-                className={`group relative glass-card p-4 active:scale-[0.98] transition-all duration-200 overflow-hidden ${
+                className={`group relative card-surface p-4 active:scale-[0.98] transition-all duration-200 overflow-hidden ${
                   compareMode && selectedCamps.includes(camp.id) ? "ring-2 ring-primary" : ""
                 }`}
               >
@@ -264,10 +264,10 @@ export default function FightCamps() {
                       <img
                         src={camp.profile_pic_url}
                         alt={camp.name}
-                        className="w-9 h-9 rounded-full object-cover border border-border/50 shrink-0"
+                        className="w-9 h-9 rounded-full object-cover border border-border shrink-0"
                       />
                     ) : (
-                      <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center border border-border/50 shrink-0">
+                      <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center border border-border shrink-0">
                         <Trophy className="w-4 h-4 text-muted-foreground" />
                       </div>
                     )}
@@ -282,17 +282,17 @@ export default function FightCamps() {
 
                   {/* Metrics Strip */}
                   {(camp.starting_weight_kg || camp.total_weight_cut) ? (
-                    <div className="mt-3 bg-muted/50 rounded-xl p-2.5 flex items-center justify-around border border-border/30">
+                    <div className="mt-3 bg-muted/50 rounded-xl p-2.5 flex items-center justify-around border border-border">
                       <div className="text-center">
                         <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-0.5">Start</p>
                         <p className="text-sm font-bold">{camp.starting_weight_kg ? `${camp.starting_weight_kg}kg` : '-'}</p>
                       </div>
-                      <div className="h-5 w-px bg-border/50" />
+                      <div className="h-5 w-px bg-border" />
                       <div className="text-center">
                         <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-0.5">Cut</p>
                         <p className="text-sm font-bold text-primary">{camp.total_weight_cut ? `-${camp.total_weight_cut.toFixed(1)}kg` : '-'}</p>
                       </div>
-                      <div className="h-5 w-px bg-border/50" />
+                      <div className="h-5 w-px bg-border" />
                       <div className="text-center">
                         <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-0.5">End</p>
                         <p className="text-sm font-bold">{camp.end_weight_kg ? `${camp.end_weight_kg}kg` : '-'}</p>

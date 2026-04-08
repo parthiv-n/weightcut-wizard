@@ -1,24 +1,6 @@
 import { Settings, LogOut, ChevronRight } from "lucide-react";
-import { motion } from "motion/react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { triggerHapticWarning } from "@/lib/haptics";
-
-const menuGroupVariants = {
-  open: { transition: { staggerChildren: 0.032, delayChildren: 0.06 } },
-  closed: { transition: { staggerChildren: 0.02, staggerDirection: -1 } },
-} as const;
-
-const settingsGroupVariants = {
-  open: { transition: { staggerChildren: 0.04, delayChildren: 0.2 } },
-  closed: { transition: { staggerChildren: 0.02, staggerDirection: -1 } },
-} as const;
-
-const menuItemVariants = {
-  open: { opacity: 1, y: 0 },
-  closed: { opacity: 0, y: 6 },
-} as const;
-
-const menuItemTransition = { duration: 0.28, ease: [0.25, 0.46, 0.45, 0.94] } as const;
 
 interface MoreMenuItem {
   title: string;
@@ -40,7 +22,7 @@ export function MoreMenuSheet({ open, onOpenChange, menuItems, onItemClick, onSe
     <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
       <SheetContent
         side="bottom"
-        className="h-[70vh] max-h-[85vh] rounded-t-3xl flex flex-col p-0 gap-0 bg-background border-t border-border/50 [&>button]:hidden"
+        className="h-[70vh] max-h-[85vh] rounded-t-2xl flex flex-col p-0 gap-0 bg-background border-t border-border [&>button]:hidden"
       >
         {/* Drag handle */}
         <div className="flex justify-center pt-3 pb-1 shrink-0">
@@ -49,69 +31,53 @@ export function MoreMenuSheet({ open, onOpenChange, menuItems, onItemClick, onSe
         <SheetHeader className="px-5 pb-2 pt-1 text-left shrink-0">
           <SheetTitle className="text-lg font-semibold text-foreground">More</SheetTitle>
         </SheetHeader>
-        <div data-no-glow className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 scrollbar-hide scroll-touch overscroll-contain" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 6rem)" }}>
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 scrollbar-hide scroll-touch overscroll-contain" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 6rem)" }}>
           {/* Nav links group */}
-          <motion.div
-            className="rounded-2xl bg-muted/30 dark:bg-white/5 overflow-hidden border border-border/50 dark:border-white/10"
-            initial="closed"
-            animate="open"
-            variants={menuGroupVariants}
-          >
+          <div className="rounded-xl bg-muted/40 dark:bg-muted overflow-hidden border border-border">
             {menuItems.map((item) => {
               const Icon = item.icon;
               return (
-                <motion.button
+                <button
                   key={item.url}
                   type="button"
                   onClick={() => onItemClick(item.url)}
-                  className="w-full flex items-center gap-3 px-4 py-3.5 touch-manipulation text-left border-b border-border/40 dark:border-white/5 last:border-b-0"
-                  variants={menuItemVariants}
-                  transition={menuItemTransition}
+                  className="w-full flex items-center gap-3 px-4 py-3 touch-manipulation text-left border-b border-border last:border-b-0 active:bg-muted/60 transition-colors duration-100"
                 >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
-                    <Icon className="h-5 w-5 text-primary" />
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                    <Icon className="h-[18px] w-[18px] text-primary" />
                   </span>
                   <span className="flex-1 text-[15px] font-medium text-foreground">{item.title}</span>
-                  <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-                </motion.button>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+                </button>
               );
             })}
-          </motion.div>
+          </div>
 
           {/* Settings & Logout group */}
-          <motion.div
-            className="mt-3 rounded-2xl bg-muted/30 dark:bg-white/5 overflow-hidden border border-border/50 dark:border-white/10"
-            initial="closed"
-            animate="open"
-            variants={settingsGroupVariants}
-          >
-            <motion.button
+          <div className="mt-3 rounded-xl bg-muted/40 dark:bg-muted overflow-hidden border border-border">
+            <button
               type="button"
               onClick={onSettings}
-              className="w-full flex items-center gap-3 px-4 py-3.5 touch-manipulation text-left border-b border-border/40 dark:border-white/5"
-              variants={menuItemVariants}
-              transition={menuItemTransition}
+              className="w-full flex items-center gap-3 px-4 py-3 touch-manipulation text-left border-b border-border active:bg-muted/60 transition-colors duration-100"
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted dark:bg-white/10">
-                <Settings className="h-5 w-5 text-muted-foreground" />
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-muted-foreground/10">
+                <Settings className="h-[18px] w-[18px] text-muted-foreground" />
               </span>
               <span className="flex-1 text-[15px] font-medium text-foreground">Settings</span>
-              <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-            </motion.button>
-            <motion.button
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+            </button>
+            <button
               type="button"
               onClick={() => { onLogout(); triggerHapticWarning(); }}
-              className="w-full flex items-center gap-3 px-4 py-3.5 touch-manipulation text-left"
-              variants={menuItemVariants}
-              transition={menuItemTransition}
+              className="w-full flex items-center gap-3 px-4 py-3 touch-manipulation text-left active:bg-muted/60 transition-colors duration-100"
             >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-destructive/10">
-                <LogOut className="h-5 w-5 text-destructive" />
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-destructive/10">
+                <LogOut className="h-[18px] w-[18px] text-destructive" />
               </span>
               <span className="flex-1 text-[15px] font-medium text-destructive">Log out</span>
-              <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-            </motion.button>
-          </motion.div>
+              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+            </button>
+          </div>
         </div>
       </SheetContent>
     </Sheet>

@@ -44,8 +44,7 @@ export function TutorialTooltip({
         className="fixed max-w-[340px] rounded-3xl p-5
           bg-[rgba(18,18,20,0.97)]
           border border-[rgba(255,255,255,0.08)]
-          shadow-[0_12px_48px_rgba(0,0,0,0.6)]
-          backdrop-blur-xl"
+          shadow-[0_12px_48px_rgba(0,0,0,0.6)]"
         style={{
           pointerEvents: "auto",
           zIndex: 10004,
@@ -100,7 +99,7 @@ export function TutorialTooltip({
           )}
           <button
             onClick={onNext}
-            className="min-h-[44px] px-7 rounded-2xl text-sm font-bold text-primary-foreground
+            className="min-h-[44px] px-7 rounded-xl text-sm font-bold text-primary-foreground
               bg-gradient-to-r from-primary to-secondary
               shadow-lg shadow-primary/20
               active:scale-95 transition-transform touch-manipulation"

@@ -45,7 +45,7 @@ function SubscriptionSection() {
     const planLabel = tier === "premium_lifetime" ? "Lifetime" : tier === "premium_annual" ? "Annual" : "Monthly";
 
     return (
-      <div className="rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden divide-y divide-border/30 dark:divide-white/5">
+      <div className="rounded-xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 overflow-hidden divide-y divide-border/30 dark:divide-white/5">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
@@ -73,7 +73,7 @@ function SubscriptionSection() {
   }
 
   return (
-    <div className="rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden divide-y divide-border/30 dark:divide-white/5">
+    <div className="rounded-xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 overflow-hidden divide-y divide-border/30 dark:divide-white/5">
       <button
         type="button"
         onClick={openPaywall}
@@ -116,7 +116,7 @@ function GemsSection() {
   if (isPremium) return null;
 
   return (
-    <div className="rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden divide-y divide-border/30 dark:divide-white/5">
+    <div className="rounded-xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 overflow-hidden divide-y divide-border/30 dark:divide-white/5">
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-3">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 dark:bg-amber-500/20">
@@ -225,10 +225,10 @@ export function SettingsPanel({
   return (
     <>
       <div
-        className="fixed inset-0 z-[10001] bg-black/50 backdrop-blur-sm animate-in fade-in duration-200"
+        className="fixed inset-0 z-[10001] bg-black/60 animate-in fade-in duration-200"
         onClick={onClose}
       />
-      <div className="fixed inset-x-0 bottom-0 z-[10002] bg-background/95 dark:bg-background/98 backdrop-blur-md border-t border-border/50 rounded-t-3xl animate-in slide-in-from-bottom duration-300 safe-area-inset-bottom flex flex-col" style={{ maxHeight: "85dvh" }}>
+      <div className="fixed inset-x-0 bottom-0 z-[10002] bg-background/95 dark:bg-background/98 border-t border-border rounded-t-3xl animate-in slide-in-from-bottom duration-300 safe-area-inset-bottom flex flex-col" style={{ maxHeight: "85dvh" }}>
         {/* Drag handle */}
         <div className="flex justify-center pt-3 pb-1 shrink-0">
           <div className="w-10 h-1 rounded-full bg-muted-foreground/25" />
@@ -239,13 +239,13 @@ export function SettingsPanel({
 
         <div className="px-4 space-y-3 overflow-y-auto overscroll-contain" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1.5rem)" }}>
           {/* Profile Picture + Name row */}
-          <div className="rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 p-4">
+          <div className="rounded-xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 p-4">
             <div className="flex items-center gap-4">
               <div className="shrink-0">
                 {avatarUrl ? (
                   <img src={avatarUrl} alt="Profile" className="h-14 w-14 rounded-full object-cover border-2 border-primary/20" />
                 ) : (
-                  <div className="h-14 w-14 rounded-full bg-muted/50 border-2 border-border/50 flex items-center justify-center">
+                  <div className="h-14 w-14 rounded-full bg-muted/50 border-2 border-border flex items-center justify-center">
                     <span className="text-xl font-bold text-muted-foreground">{(userName || "?")[0]?.toUpperCase()}</span>
                   </div>
                 )}
@@ -268,7 +268,7 @@ export function SettingsPanel({
 
           {/* Email */}
           {userEmail && (
-            <div className="rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden">
+            <div className="rounded-xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 overflow-hidden">
               <div className="flex items-center px-4 py-3 gap-3">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
                   <Mail className="h-5 w-5 text-primary" />
@@ -291,7 +291,7 @@ export function SettingsPanel({
           <button
             type="button"
             onClick={onToggleTheme}
-            className="w-full rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left"
+            className="w-full rounded-xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 overflow-hidden active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left"
           >
             <div className="flex items-center justify-between px-4 py-3">
               <div className="flex items-center gap-3">
@@ -313,7 +313,7 @@ export function SettingsPanel({
 
           {/* Fighter Mode Toggle */}
           {onToggleGoalType && (
-            <div className="rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden">
+            <div className="rounded-xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3">
                 <div className="flex items-center gap-3">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
@@ -343,7 +343,7 @@ export function SettingsPanel({
             const timeLabel = `Daily at ${displayHour}:${displayMinute} ${ampm}`;
 
             return (
-              <div className="rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden">
+              <div className="rounded-xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 overflow-hidden">
                 <div
                   className="flex items-center justify-between px-4 py-3 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation cursor-pointer"
                   onClick={() => { if (reminderSettings.enabled) setTimePickerOpen(!timePickerOpen); }}
@@ -413,7 +413,7 @@ export function SettingsPanel({
           <button
             type="button"
             onClick={onReplayTutorial}
-            className="w-full rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left"
+            className="w-full rounded-xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 overflow-hidden active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left"
           >
             <div className="flex items-center justify-between px-4 py-3">
               <div className="flex items-center gap-3">
@@ -430,7 +430,7 @@ export function SettingsPanel({
           </button>
 
           {/* Legal & Support */}
-          <div className="rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden divide-y divide-border/30 dark:divide-white/5">
+          <div className="rounded-xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 overflow-hidden divide-y divide-border/30 dark:divide-white/5">
             <Link
               to="/legal?tab=privacy"
               className="flex items-center justify-between px-4 py-3 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation"
@@ -481,7 +481,7 @@ export function SettingsPanel({
           </div>
 
           {/* Medical Disclaimer */}
-          <div className="rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden">
+          <div className="rounded-xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 overflow-hidden">
             <div className="flex items-start gap-3 px-4 py-3">
               <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 dark:bg-amber-500/15 mt-0.5">
                 <Heart className="h-5 w-5 text-amber-500" />
@@ -499,7 +499,7 @@ export function SettingsPanel({
           <button
             type="button"
             onClick={onDeleteAccount}
-            className="w-full rounded-2xl bg-muted/30 dark:bg-white/5 border border-border/50 dark:border-white/10 overflow-hidden active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left"
+            className="w-full rounded-xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 overflow-hidden active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left"
           >
             <div className="flex items-center justify-between px-4 py-3">
               <div className="flex items-center gap-3">
@@ -518,7 +518,7 @@ export function SettingsPanel({
           {/* Save */}
           <Button
             onClick={onSave}
-            className="w-full h-11 rounded-2xl text-base font-bold bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/20"
+            className="w-full h-11 rounded-xl text-base font-bold bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/20"
           >
             Save Changes
           </Button>

@@ -270,12 +270,12 @@ export default function WeightTracker() {
       )}
       <div className="space-y-2.5 p-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
         {/* Chart + History */}
-        <div className="glass-card p-3 space-y-3">
+        <div className="card-surface p-3 space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Progress Chart</p>
             <div className="flex items-center gap-2">
             {weightLogs.length >= 2 && <ShareButton onClick={() => setShareOpen(true)} />}
-            <div className="flex bg-muted rounded-full p-0.5 border border-white/5">
+            <div className="flex rounded-full bg-muted p-0.5">
               {(["1W", "1M", "ALL"] as const).map((filter) => (
                 <button
                   key={filter}
@@ -321,9 +321,9 @@ export default function WeightTracker() {
                   {profile?.fight_week_target_kg && (
                     <ReferenceLine y={profile.goal_weight_kg} stroke="hsl(var(--destructive))" strokeDasharray="3 3" label={{ value: "Fight Night", fill: "hsl(var(--destructive))", fontSize: 10, position: "insideBottomRight" }} />
                   )}
-                  <Line type="monotone" dataKey="weight" stroke="hsl(var(--primary))" strokeWidth={2.5} dot={{ fill: "hsl(var(--primary))", r: 4, cursor: "pointer" }} activeDot={{ r: 6, cursor: "pointer" }} />
+                  <Line type="monotone" dataKey="weight" stroke="hsl(var(--primary))" strokeWidth={2.5} dot={{ fill: "hsl(var(--primary))", r: 4, cursor: "pointer" }} activeDot={{ r: 6, cursor: "pointer" }} animationDuration={0} />
                   {aiAnalysis && showProjected && (
-                    <Line type="monotone" dataKey="projected" stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} strokeDasharray="6 4" dot={false} connectNulls={false} />
+                    <Line type="monotone" dataKey="projected" stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} strokeDasharray="6 4" dot={false} connectNulls={false} animationDuration={0} />
                   )}
                 </LineChart>
               </ResponsiveContainer>
@@ -399,17 +399,17 @@ export default function WeightTracker() {
         {/* Stats Overview */}
         {profile && (
           <div className="grid grid-cols-4 gap-2">
-            <div className="glass-card p-2.5 text-center">
+            <div className="card-surface p-2.5 text-center">
               <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">Current</p>
               <p className="display-number text-lg">{getCurrentWeight().toFixed(1)}</p>
               <p className="text-[9px] text-muted-foreground">kg</p>
             </div>
-            <div className="glass-card p-2.5 text-center">
+            <div className="card-surface p-2.5 text-center">
               <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">Target</p>
               <p className="display-number text-lg">{(profile.fight_week_target_kg || profile.goal_weight_kg).toFixed(1)}</p>
               <p className="text-[9px] text-muted-foreground">kg</p>
             </div>
-            <div className="glass-card p-2.5 text-center">
+            <div className="card-surface p-2.5 text-center">
               {(() => {
                 const current = getCurrentWeight();
                 const target = profile.fight_week_target_kg || profile.goal_weight_kg;
@@ -419,7 +419,7 @@ export default function WeightTracker() {
                 return (<><p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">Status</p><p className="display-number text-lg text-green-500">✓</p><p className="text-[9px] text-muted-foreground">At Target</p></>);
               })()}
             </div>
-            <div className="glass-card p-2.5 text-center">
+            <div className="card-surface p-2.5 text-center">
               <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">Deadline</p>
               <p className="text-sm font-semibold">{format(new Date(profile.target_date), "MMM dd")}</p>
               <p className="text-[9px] text-muted-foreground">{format(new Date(profile.target_date), "yyyy")}</p>
@@ -429,7 +429,7 @@ export default function WeightTracker() {
 
         {/* Progress + Insight */}
         {profile && (
-          <div className="glass-card p-3 space-y-1.5">
+          <div className="card-surface p-3 space-y-1.5">
             <div className="flex justify-between text-[11px]">
               <span className="text-muted-foreground">Progress to target</span>
               <span className="font-medium">{getWeightProgress().toFixed(0)}%</span>
@@ -441,7 +441,7 @@ export default function WeightTracker() {
 
         {/* AI Analysis Loading */}
         {analyzingWeight && (
-          <div className="glass-card p-5 flex flex-col items-center gap-3">
+          <div className="card-surface p-5 flex flex-col items-center gap-3">
             <Sparkles className="h-6 w-6 text-primary animate-spin" />
             <div className="space-y-2 w-full max-w-xs">
               <Skeleton className="h-3 w-full" />
@@ -458,7 +458,7 @@ export default function WeightTracker() {
           const weightDiff = aiAnalysisWeight !== null && aiAnalysisTarget !== null ? aiAnalysisTarget - aiAnalysisWeight : 0;
 
           return (
-            <div className="glass-card p-3 space-y-3 animate-fade-in">
+            <div className="card-surface p-3 space-y-3 animate-fade-in">
               {/* Header row */}
               <div className="flex items-start justify-between">
                 <div>

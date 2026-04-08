@@ -1,10 +1,8 @@
 import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Droplets, Calendar, LogOut, HeartPulse, GitBranch, Trash2, Dumbbell } from "lucide-react";
-import { motion, useReducedMotion } from "motion/react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { useState, useEffect, memo } from "react";
 import { triggerHaptic, triggerHapticSelection } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
-import { springs } from "@/lib/motion";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -46,7 +44,6 @@ const moreMenuItems = [
 export const BottomNav = memo(function BottomNav() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
-  const prefersReducedMotion = useReducedMotion();
   const { toast } = useToast();
   const { userName, avatarUrl, setUserName, setAvatarUrl } = useProfile();
   const { userId, profile, refreshProfile } = useUser();
@@ -200,32 +197,26 @@ export const BottomNav = memo(function BottomNav() {
 
   return (
     <>
-      <nav className="fixed bottom-0 left-0 right-0 z-[9999] md:hidden bg-background border-t border-border/40 safe-area-inset-bottom">
-        <div className="flex items-center justify-around h-16 px-2 relative">
+      <nav className="fixed bottom-0 left-0 right-0 z-[9999] md:hidden bg-background/95 dark:bg-[hsl(0,0%,7%)] border-t border-border safe-area-inset-bottom">
+        <div className="flex items-center justify-around h-[52px] px-1">
           {/* Dashboard */}
           <NavLink
             to={mainNavItems[0].url}
             data-tutorial="nav-dashboard"
             onClick={() => triggerHaptic(ImpactStyle.Light)}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 ${isActive
+              `flex-1 flex flex-col items-center justify-center gap-0.5 py-1 touch-target transition-colors duration-100 ${isActive
                 ? "text-primary"
                 : "text-muted-foreground"
               }`
             }
           >
             {({ isActive }) => (
-              <span className="relative flex flex-col items-center gap-1">
-                {isActive && (
-                  <motion.span
-                    layoutId="nav-active-bg"
-                    className="absolute inset-0 -mx-3 -my-1 rounded-2xl bg-primary/15"
-                    transition={springs.snappy}
-                  />
-                )}
-                <DashboardIcon className="relative z-10 h-6 w-6" />
-                <span className={`relative z-10 text-[10px] tracking-wide leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[0].title}</span>
-              </span>
+              <>
+                <DashboardIcon className="h-[22px] w-[22px]" strokeWidth={isActive ? 2.5 : 1.8} />
+                <span className={`text-[10px] leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[0].title}</span>
+                {isActive && <span className="w-1 h-1 rounded-full bg-primary mt-0.5" />}
+              </>
             )}
           </NavLink>
 
@@ -235,39 +226,33 @@ export const BottomNav = memo(function BottomNav() {
             data-tutorial="nav-nutrition"
             onClick={() => triggerHaptic(ImpactStyle.Light)}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 ${isActive
+              `flex-1 flex flex-col items-center justify-center gap-0.5 py-1 touch-target transition-colors duration-100 ${isActive
                 ? "text-primary"
                 : "text-muted-foreground"
               }`
             }
           >
             {({ isActive }) => (
-              <span className="relative flex flex-col items-center gap-1">
-                {isActive && (
-                  <motion.span
-                    layoutId="nav-active-bg"
-                    className="absolute inset-0 -mx-3 -my-1 rounded-2xl bg-primary/15"
-                    transition={springs.snappy}
-                  />
-                )}
-                <NutritionIcon className="relative z-10 h-6 w-6" />
-                <span className={`relative z-10 text-[10px] tracking-wide leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[1].title}</span>
-              </span>
+              <>
+                <NutritionIcon className="h-[22px] w-[22px]" strokeWidth={isActive ? 2.5 : 1.8} />
+                <span className={`text-[10px] leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[1].title}</span>
+                {isActive && <span className="w-1 h-1 rounded-full bg-primary mt-0.5" />}
+              </>
             )}
           </NavLink>
 
-          {/* Center plus button - floating FAB */}
-          <motion.button
+          {/* Log button - inline tab style */}
+          <button
             onClick={() => { setQuickLogOpen(true); triggerHaptic(ImpactStyle.Medium); }}
             data-tutorial="nav-quick-log"
-            className="flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target"
+            className="flex-1 flex flex-col items-center justify-center gap-0.5 py-1 touch-target text-muted-foreground active:scale-95 transition-transform duration-100"
             aria-label="Quick Log"
-            whileTap={{ scale: 0.9 }}
           >
-            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/30 flex items-center justify-center">
-              <Plus className="h-7 w-7" strokeWidth={2.5} />
+            <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
+              <Plus className="h-5 w-5 text-primary-foreground" strokeWidth={2.5} />
             </div>
-          </motion.button>
+            <span className="text-[10px] font-medium leading-tight">Log</span>
+          </button>
 
           {/* Weight */}
           <NavLink
@@ -275,24 +260,18 @@ export const BottomNav = memo(function BottomNav() {
             data-tutorial="nav-weight"
             onClick={() => triggerHaptic(ImpactStyle.Light)}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 ${isActive
+              `flex-1 flex flex-col items-center justify-center gap-0.5 py-1 touch-target transition-colors duration-100 ${isActive
                 ? "text-primary"
                 : "text-muted-foreground"
               }`
             }
           >
             {({ isActive }) => (
-              <span className="relative flex flex-col items-center gap-1">
-                {isActive && (
-                  <motion.span
-                    layoutId="nav-active-bg"
-                    className="absolute inset-0 -mx-3 -my-1 rounded-2xl bg-primary/15"
-                    transition={springs.snappy}
-                  />
-                )}
-                <WeightIcon className="relative z-10 h-6 w-6" />
-                <span className={`relative z-10 text-[10px] tracking-wide leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[2].title}</span>
-              </span>
+              <>
+                <WeightIcon className="h-[22px] w-[22px]" strokeWidth={isActive ? 2.5 : 1.8} />
+                <span className={`text-[10px] leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[2].title}</span>
+                {isActive && <span className="w-1 h-1 rounded-full bg-primary mt-0.5" />}
+              </>
             )}
           </NavLink>
 
@@ -300,11 +279,11 @@ export const BottomNav = memo(function BottomNav() {
           <button
             onClick={() => { setMoreMenuOpen(true); triggerHapticSelection(); }}
             data-tutorial="nav-more"
-            className="flex-1 flex flex-col items-center justify-center gap-1 py-2 touch-target transition-colors duration-150 text-muted-foreground"
+            className="flex-1 flex flex-col items-center justify-center gap-0.5 py-1 touch-target transition-colors duration-100 text-muted-foreground"
             aria-label="More"
           >
-            <MoreHorizontal className="h-6 w-6" />
-            <span className="text-[10px] font-medium tracking-wide leading-tight">More</span>
+            <MoreHorizontal className="h-[22px] w-[22px]" strokeWidth={1.8} />
+            <span className="text-[10px] font-medium leading-tight">More</span>
           </button>
         </div>
       </nav>

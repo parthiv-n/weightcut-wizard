@@ -91,7 +91,7 @@ interface DietAnalysisCardProps {
 
 export function DietAnalysisCard({ analysis, onDismiss, onRefresh, refreshing }: DietAnalysisCardProps) {
   return (
-    <div className="glass-card p-4 space-y-5">
+    <div className="card-surface p-4 space-y-5">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -128,7 +128,7 @@ export function DietAnalysisCard({ analysis, onDismiss, onRefresh, refreshing }:
           </p>
           <div className="space-y-2">
             {analysis.mealBreakdown.map((meal, i) => (
-              <div key={i} className="rounded-xl border border-border/40 bg-muted/20 px-3 py-2.5">
+              <div key={i} className="rounded-xl border border-border bg-muted/20 px-3 py-2.5">
                 <div className="flex items-center gap-2 mb-1.5">
                   <span className="text-[10px] uppercase tracking-wider font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
                     {meal.mealType}
@@ -139,7 +139,7 @@ export function DietAnalysisCard({ analysis, onDismiss, onRefresh, refreshing }:
                   {meal.keyNutrients.map((n, j) => (
                     <span
                       key={j}
-                      className="text-[10px] px-2 py-0.5 rounded-full border border-border/50 text-muted-foreground"
+                      className="text-[10px] px-2 py-0.5 rounded-full border border-border text-muted-foreground"
                     >
                       <span className="font-semibold text-foreground/80">{n.name}</span>{" "}
                       {n.amount}
@@ -209,7 +209,7 @@ export function DietAnalysisCard({ analysis, onDismiss, onRefresh, refreshing }:
           </p>
           <div className="space-y-2">
             {analysis.suggestions.map((suggestion, i) => (
-              <div key={i} className="rounded-xl border border-border/50 px-3 py-2.5">
+              <div key={i} className="rounded-xl border border-border px-3 py-2.5">
                 <p className="text-xs font-semibold text-foreground">{suggestion.food}</p>
                 <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
                   {suggestion.reason}

@@ -23,10 +23,10 @@ export function WelcomeProDialog({ open, onClose }: WelcomeProDialogProps) {
   return (
     <div className="fixed inset-0 z-[10004] flex items-center justify-center p-6">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/60 animate-in fade-in duration-300" onClick={onClose} />
 
       {/* Dialog */}
-      <div className="relative w-full max-w-sm rounded-3xl border border-primary/20 bg-background/98 dark:bg-zinc-900/98 backdrop-blur-2xl shadow-[0_24px_80px_rgba(37,99,235,0.15)] animate-in zoom-in-95 fade-in duration-300 overflow-hidden">
+      <div className="relative w-full max-w-sm rounded-3xl border border-primary/20 bg-background/98 dark:bg-zinc-900/98 shadow-[0_24px_80px_rgba(37,99,235,0.15)] animate-in zoom-in-95 fade-in duration-300 overflow-hidden">
         {/* Close */}
         <button
           onClick={onClose}
@@ -64,7 +64,7 @@ export function WelcomeProDialog({ open, onClose }: WelcomeProDialogProps) {
           {/* CTA */}
           <Button
             onClick={onClose}
-            className="w-full h-12 rounded-2xl text-[15px] font-bold bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/25 mt-6 active:scale-[0.97] transition-transform"
+            className="w-full h-12 rounded-xl text-[15px] font-bold bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/25 mt-6 active:scale-[0.97] transition-transform"
           >
             Let's Go
           </Button>

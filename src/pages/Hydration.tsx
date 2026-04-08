@@ -133,7 +133,7 @@ export default function Hydration() {
         </div>
 
         {/* Disclaimer Banner */}
-        <div className="rounded-2xl bg-muted/50 border border-border/50 p-3 mb-4">
+        <div className="rounded-xl bg-muted/50 border border-border p-3 mb-4">
           <div className="flex items-start gap-2">
             <Shield className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
             <div>
@@ -158,9 +158,8 @@ export default function Hydration() {
         </div>
 
         {/* Input Form */}
-        <div className="rounded-2xl border border-white/[0.06] p-4 mb-4 shadow-2xl relative overflow-hidden bg-white/[0.02]">
+        <div className="rounded-xl border border-border p-4 mb-4 relative overflow-hidden bg-card">
           <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[200px] h-[200px] bg-blue-500/20 opacity-40 blur-[80px] rounded-full"></div>
           </div>
 
           <form onSubmit={handleGenerateProtocol} className="space-y-4 relative z-10">
@@ -262,7 +261,7 @@ export default function Hydration() {
         {protocol && (
           <div className="space-y-2.5">
             {/* Summary */}
-            <div className="rounded-2xl bg-muted/50 border border-border/50 p-3">
+            <div className="rounded-xl bg-muted/50 border border-border p-3">
               <div className="flex items-start justify-between gap-3">
                 <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-line">{protocol.summary}</p>
                 <button onClick={() => handleGenerateProtocol(new Event("submit") as any)} disabled={loading} className="shrink-0 p-1.5 rounded-lg hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors" aria-label="Regenerate">
@@ -273,7 +272,7 @@ export default function Hydration() {
 
             {/* Totals Dashboard */}
             {totals && (
-              <div className="rounded-2xl bg-card border border-border/50 p-3">
+              <div className="rounded-xl bg-card border border-border p-3">
                 <p className="text-[9px] text-muted-foreground uppercase tracking-wider mb-2 text-center font-bold">Rehydration Totals</p>
                 <div className="grid grid-cols-3 gap-1.5">
                   <div className="rounded-xl bg-blue-500/5 border border-blue-500/20 p-2 text-center">
@@ -288,15 +287,15 @@ export default function Hydration() {
                     <p className="text-base font-bold tabular-nums text-emerald-400">{totals.totalCarbsG}g</p>
                     <p className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">Carbs</p>
                   </div>
-                  <div className="rounded-xl bg-muted border border-border/50 p-2.5 text-center">
+                  <div className="rounded-xl bg-muted border border-border p-2.5 text-center">
                     <p className="text-sm font-bold tabular-nums text-foreground/80">{totals.rehydrationWindowHours}h</p>
                     <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Window</p>
                   </div>
-                  <div className="rounded-xl bg-muted border border-border/50 p-2.5 text-center">
+                  <div className="rounded-xl bg-muted border border-border p-2.5 text-center">
                     <p className="text-sm font-bold tabular-nums text-foreground/80">{totals.totalPotassiumMg}mg</p>
                     <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Potassium</p>
                   </div>
-                  <div className="rounded-xl bg-muted border border-border/50 p-2.5 text-center">
+                  <div className="rounded-xl bg-muted border border-border p-2.5 text-center">
                     <p className="text-sm font-bold tabular-nums text-foreground/80">{totals.totalMagnesiumMg}mg</p>
                     <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Magnesium</p>
                   </div>
@@ -305,7 +304,7 @@ export default function Hydration() {
             )}
 
             {/* Warnings Section */}
-            <div className="rounded-2xl bg-amber-500/5 border border-amber-500/20 overflow-hidden">
+            <div className="rounded-xl bg-amber-500/5 border border-amber-500/20 overflow-hidden">
               <button className="w-full px-4 py-3 flex items-center gap-2 text-left hover:bg-amber-500/10 transition-colors" onClick={() => setWarningsOpen((o) => !o)}>
                 <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
                 <span className="text-sm font-medium text-amber-400">Safety Warnings ({allWarnings.length})</span>
@@ -324,14 +323,14 @@ export default function Hydration() {
             </div>
 
             {/* How This Protocol Works */}
-            <div className="rounded-2xl bg-muted/50 border border-border/50 overflow-hidden">
+            <div className="rounded-xl bg-muted/50 border border-border overflow-hidden">
               <button className="w-full px-4 py-3 flex items-center gap-2 text-left hover:bg-muted/30 transition-colors" onClick={() => setScienceOpen((o) => !o)}>
                 <BookOpen className="h-3.5 w-3.5 text-blue-400 shrink-0" />
                 <span className="text-sm font-medium">How This Protocol Works</span>
                 <span className="ml-auto text-muted-foreground">{scienceOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}</span>
               </button>
               {scienceOpen && (
-                <div className="px-4 pb-4 space-y-3 border-t border-border/30">
+                <div className="px-4 pb-4 space-y-3 border-t border-border">
                   <div className="pt-3 space-y-3">
                     {educationItems.map((item, idx) => (
                       <div key={idx}>
@@ -345,14 +344,14 @@ export default function Hydration() {
             </div>
 
             {/* Why Electrolytes Matter */}
-            <div className="rounded-2xl bg-muted/50 border border-border/50 overflow-hidden">
+            <div className="rounded-xl bg-muted/50 border border-border overflow-hidden">
               <button className="w-full px-4 py-3 flex items-center gap-2 text-left hover:bg-muted/30 transition-colors" onClick={() => setElectrolyteGuideOpen((o) => !o)}>
                 <Beaker className="h-3.5 w-3.5 text-blue-400 shrink-0" />
                 <span className="text-sm font-medium">Why Electrolytes Matter</span>
                 <span className="ml-auto text-muted-foreground">{electrolyteGuideOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}</span>
               </button>
               {electrolyteGuideOpen && (
-                <div className="px-4 pb-4 space-y-3 border-t border-border/30">
+                <div className="px-4 pb-4 space-y-3 border-t border-border">
                   <div className="pt-3 space-y-3">
                     {[
                       { symbol: "Na", name: "Sodium", desc: "The #1 electrolyte for rehydration. Sodium creates the osmotic gradient that pulls water into your cells and bloodstream. After a weight cut, your sodium stores are severely depleted. Without adequate sodium, you'll urinate out most of the water you drink. Target: 50-90 mmol/L in rehydration fluid (ISSN 2025)." },
@@ -373,14 +372,14 @@ export default function Hydration() {
             </div>
 
             {/* Caffeine Strategy */}
-            <div className="rounded-2xl bg-muted/50 border border-border/50 overflow-hidden">
+            <div className="rounded-xl bg-muted/50 border border-border overflow-hidden">
               <button className="w-full px-4 py-3 flex items-center gap-2 text-left hover:bg-muted/30 transition-colors" onClick={() => setCaffeineOpen((o) => !o)}>
                 <Coffee className="h-3.5 w-3.5 text-amber-400 shrink-0" />
                 <span className="text-sm font-medium">Caffeine Strategy</span>
                 <span className="ml-auto text-muted-foreground">{caffeineOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}</span>
               </button>
               {caffeineOpen && (
-                <div className="px-4 pb-4 border-t border-border/30">
+                <div className="px-4 pb-4 border-t border-border">
                   <div className="pt-3 space-y-2">
                     {totals && (
                       <div className="flex items-center gap-2 mb-2">
@@ -396,14 +395,14 @@ export default function Hydration() {
             </div>
 
             {/* Carb Mouth Rinse */}
-            <div className="rounded-2xl bg-muted/50 border border-border/50 overflow-hidden">
+            <div className="rounded-xl bg-muted/50 border border-border overflow-hidden">
               <button className="w-full px-4 py-3 flex items-center gap-2 text-left hover:bg-muted/30 transition-colors" onClick={() => setMouthRinseOpen((o) => !o)}>
                 <Info className="h-3.5 w-3.5 text-blue-400 shrink-0" />
                 <span className="text-sm font-medium">GI Distress? Carb Mouth Rinse</span>
                 <span className="ml-auto text-muted-foreground">{mouthRinseOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}</span>
               </button>
               {mouthRinseOpen && (
-                <div className="px-4 pb-4 border-t border-border/30">
+                <div className="px-4 pb-4 border-t border-border">
                   <div className="pt-3">
                     <p className="text-xs text-muted-foreground leading-relaxed">
                       {education?.carbMouthRinse ?? `If GI distress prevents you from eating or drinking close to competition, rinsing your mouth for ~10 seconds with a sports drink or carbohydrate solution may enhance performance. This activates regions in the central nervous system that increase drive and reduce perceived effort — a low-risk strategy when swallowing fluids feels impossible (Burke & Maughan 2015).`}
@@ -414,7 +413,7 @@ export default function Hydration() {
             </div>
 
             {/* Segmented Tab Control (Fluid / Carbs) */}
-            <div className="rounded-2xl bg-muted/50 border border-border/50 overflow-hidden">
+            <div className="rounded-xl bg-muted/50 border border-border overflow-hidden">
               <div className="p-2">
                 <div className="flex bg-muted rounded-full p-0.5">
                   <button onClick={() => setActiveTab("fluid")} className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === "fluid" ? "bg-blue-500 text-white shadow-sm" : "text-muted-foreground"}`}>
@@ -451,9 +450,9 @@ export default function Hydration() {
 
                     return (
                       <div key={idx}>
-                        {idx > 0 && <div className="h-px bg-border/50 mx-4" />}
+                        {idx > 0 && <div className="h-px bg-border mx-4" />}
                         <button className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-muted/30 transition-colors" onClick={() => toggleStep(idx)}>
-                          <div className="flex flex-col items-center justify-center bg-muted border border-border/50 rounded-xl px-2 py-1.5 shrink-0 min-w-[64px] shadow-sm">
+                          <div className="flex flex-col items-center justify-center bg-muted border border-border rounded-xl px-2 py-1.5 shrink-0 min-w-[64px] shadow-sm">
                             <span className="text-[9px] font-bold text-blue-500 uppercase tracking-wider">Hour {step.hour}</span>
                             <span className="text-xs font-bold text-foreground">{formatTime(weighInTime, step.hour)}</span>
                           </div>
@@ -520,7 +519,7 @@ export default function Hydration() {
 
                   {protocol.carbRefuelPlan.meals.map((meal, idx) => (
                     <div key={idx}>
-                      {idx > 0 && <div className="h-px bg-border/50 mx-4" />}
+                      {idx > 0 && <div className="h-px bg-border mx-4" />}
                       <button className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-muted/30 transition-colors" onClick={() => toggleMeal(idx)}>
                         <span className="text-[10px] font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-md px-1.5 py-0.5 shrink-0 max-w-[80px] truncate">{meal.timing}</span>
                         <span className="text-sm font-semibold tabular-nums text-emerald-400">{meal.carbsG}g</span>
@@ -546,7 +545,7 @@ export default function Hydration() {
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2 font-bold">Suggested Foods (Research-Backed)</p>
                     <div className="grid grid-cols-2 gap-1.5">
                       {SUGGESTED_FOODS.map((food, idx) => (
-                        <div key={idx} className="rounded-lg bg-card border border-border/50 p-2 space-y-1">
+                        <div key={idx} className="rounded-lg bg-card border border-border p-2 space-y-1">
                           <div className="flex items-start justify-between gap-1.5">
                             <p className="text-[11px] font-medium text-foreground/90 leading-tight min-w-0">{food.name}</p>
                             <span className="text-[10px] text-emerald-400 font-bold tabular-nums shrink-0">{food.carbsG}g</span>
@@ -562,7 +561,7 @@ export default function Hydration() {
                     <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2 font-bold">Suggested Drinks</p>
                     <div className="space-y-1.5">
                       {SUGGESTED_DRINKS.map((drink, idx) => (
-                        <div key={idx} className="flex items-center gap-2 rounded-lg bg-card border border-border/50 px-3 py-2">
+                        <div key={idx} className="flex items-center gap-2 rounded-lg bg-card border border-border px-3 py-2">
                           <Droplets className="h-3 w-3 text-blue-400 shrink-0" />
                           <div className="min-w-0">
                             <p className="text-[11px] font-medium text-foreground/90">{drink.name}</p>

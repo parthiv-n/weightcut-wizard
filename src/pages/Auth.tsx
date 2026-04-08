@@ -262,13 +262,9 @@ export default function Auth() {
         </button>
         <ThemeToggle />
       </div>
-      {/* Subtle background accents — no blur for mobile perf */}
-      <div className="absolute top-[-20%] left-[-10%] w-[400px] h-[400px] bg-primary/5 dark:bg-primary/[0.03] rounded-full pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[300px] h-[300px] bg-secondary/5 dark:bg-secondary/[0.03] rounded-full pointer-events-none" />
-
       <div className="w-full max-w-[380px] z-10 animate-[fadeSlideUp_0.3s_ease-out_both]">
-        {/* Glass card container */}
-        <div className="glass-card relative rounded-3xl border border-border dark:border-white/10 bg-gradient-to-br from-primary/5 via-background/60 to-secondary/5 dark:from-primary/10 dark:via-background/50 dark:to-secondary/10 shadow-md overflow-hidden">
+        {/* Card container */}
+        <div className="card-surface relative rounded-2xl border border-border shadow-md overflow-hidden">
           <div className="p-8 flex flex-col gap-6">
             {/* Header */}
             <div className="flex flex-col items-center text-center space-y-3">
@@ -324,7 +320,7 @@ export default function Auth() {
                   </div>
                   <Button
                     type="submit"
-                    className="w-full h-12 rounded-full text-base font-bold bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-sm hover:opacity-90 transition-opacity active:scale-[0.98]"
+                    className="w-full h-12 rounded-full text-base font-bold bg-primary text-primary-foreground shadow-sm hover:opacity-90 transition-opacity active:scale-[0.98]"
                     disabled={loading}
                   >
                     {loading ? "Updating..." : "Update Password"}
@@ -345,7 +341,7 @@ export default function Auth() {
                   </div>
                   <Button
                     type="submit"
-                    className="w-full h-12 rounded-full text-base font-bold bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-sm hover:opacity-90 transition-opacity active:scale-[0.98]"
+                    className="w-full h-12 rounded-full text-base font-bold bg-primary text-primary-foreground shadow-sm hover:opacity-90 transition-opacity active:scale-[0.98]"
                     disabled={loading}
                   >
                     {loading ? "Sending..." : "Send Reset Link"}
@@ -402,7 +398,7 @@ export default function Auth() {
                   <div className="pt-1">
                     <Button
                       type="submit"
-                      className="w-full h-12 rounded-full text-base font-bold bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-sm hover:opacity-90 transition-opacity active:scale-[0.98]"
+                      className="w-full h-12 rounded-full text-base font-bold bg-primary text-primary-foreground shadow-sm hover:opacity-90 transition-opacity active:scale-[0.98]"
                       disabled={loading}
                     >
                       {loading ? "Please wait..." : isLogin ? "Sign In" : "Sign Up"}

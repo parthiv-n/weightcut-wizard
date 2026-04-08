@@ -8,49 +8,58 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    /* Light mode - Apple Fitness clean aesthetic */
-    --background: 0 0% 98%;
-    --foreground: 240 10% 11%;
+    /* Light mode - Clean blue fitness aesthetic */
+    --background: 0 0% 97%;
+    --foreground: 220 13% 11%;
 
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 11%;
+    --card-foreground: 220 13% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 11%;
+    --popover-foreground: 220 13% 11%;
 
+    /* Blue-600 primary */
     --primary: 217 91% 53%;
     --primary-foreground: 0 0% 100%;
 
+    /* Blue-400 secondary */
     --secondary: 213 94% 68%;
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 220 14% 96%;
+    --muted: 220 14% 95%;
     --muted-foreground: 220 9% 46%;
 
-    --accent: 217 80% 65%;
-    --accent-foreground: 240 10% 11%;
+    /* Blue-500 accent */
+    --accent: 217 80% 60%;
+    --accent-foreground: 220 13% 11%;
 
-    --success: 165 100% 69%;
-    --success-foreground: 240 10% 11%;
+    --success: 152 69% 40%;
+    --success-foreground: 0 0% 100%;
 
-    --warning: 48 100% 67%;
-    --warning-foreground: 240 10% 11%;
+    --warning: 45 93% 47%;
+    --warning-foreground: 220 13% 11%;
 
-    --destructive: 0 84% 70%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 78%;
-    --input: 0 0% 78%;
+    --border: 220 13% 90%;
+    --input: 220 13% 90%;
     --ring: 217 91% 53%;
 
-    --radius: 1rem;
+    --radius: 0.75rem;
+
+    /* Fitness semantic colors */
+    --energy: 24 95% 53%;
+    --health: 152 69% 40%;
+    --hydration: 199 89% 48%;
+    --recovery: 270 60% 55%;
 
     --chart-1: 213 94% 78%;
     --chart-2: 217 91% 53%;
     --chart-3: 217 80% 45%;
 
     --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-foreground: 220 9% 26%;
     --sidebar-primary: 217 91% 53%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 213 100% 95%;
@@ -60,63 +69,64 @@ All colors MUST be HSL.
   }
 
   .dark {
-    /* Dark mode - Professional Blue Aesthetic */
+    /* Dark mode - Clean blue dark */
 
-    /* Neutral near-black base */
-    --background: 0 0% 3%;
-    --foreground: 0 0% 100%;
+    --background: 0 0% 4%;
+    --foreground: 0 0% 95%;
 
-    /* Translucent glass base (white at 4% opacity) */
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 100%;
+    /* Solid card surface */
+    --card: 220 10% 9%;
+    --card-foreground: 0 0% 95%;
 
-    --popover: 0 0% 3%;
-    --popover-foreground: 0 0% 100%;
+    --popover: 220 10% 7%;
+    --popover-foreground: 0 0% 95%;
 
-    /* Blue-600 Primary */
-    --primary: 217 91% 53%;
+    /* Blue-600 primary */
+    --primary: 217 91% 58%;
     --primary-foreground: 0 0% 100%;
 
-    /* Blue-400 Secondary */
+    /* Blue-400 secondary */
     --secondary: 213 94% 68%;
     --secondary-foreground: 0 0% 100%;
 
-    /* Neutral muted tones */
     --muted: 220 10% 13%;
-    --muted-foreground: 220 15% 75%;
+    --muted-foreground: 220 15% 65%;
 
-    /* Blue-500 Accent */
+    /* Blue-500 accent */
     --accent: 217 91% 60%;
     --accent-foreground: 0 0% 100%;
 
-    --success: 150 100% 50%;
+    --success: 152 69% 46%;
     --success-foreground: 0 0% 0%;
 
-    --warning: 45 100% 55%;
+    --warning: 45 93% 50%;
     --warning-foreground: 0 0% 0%;
 
-    --destructive: 350 100% 60%;
+    --destructive: 0 72% 55%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Ultra-thin glass borders */
-    --border: 0 0% 100%;
-    /* controlled by alpha in utility classes */
-    --input: 220 10% 16%;
-    --ring: 217 91% 53%;
-    /* Blue Ring */
+    --border: 220 10% 18%;
+    --input: 220 10% 15%;
+    --ring: 217 91% 58%;
 
-    --chart-1: 217 91% 53%;
+    /* Fitness semantic colors */
+    --energy: 24 95% 56%;
+    --health: 152 69% 46%;
+    --hydration: 199 89% 52%;
+    --recovery: 270 55% 60%;
+
+    --chart-1: 217 91% 58%;
     --chart-2: 213 94% 68%;
-    --chart-3: 217 91% 60%;
+    --chart-3: 217 80% 50%;
 
-    --sidebar-background: 0 0% 5%;
-    --sidebar-foreground: 0 0% 100%;
-    --sidebar-primary: 217 91% 53%;
+    --sidebar-background: 220 10% 5%;
+    --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 217 91% 58%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 217 30% 15%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 220 15% 18%;
-    --sidebar-ring: 217 91% 53%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 220 10% 18%;
+    --sidebar-ring: 217 91% 58%;
   }
 }
 
@@ -158,13 +168,10 @@ All colors MUST be HSL.
     animation: appLaunchFadeIn 0.35s ease-out both;
   }
 
-  /* Professional Blue Gradient Background strictly for Dark Mode */
+  /* Dark mode: solid background for performance */
   .dark html,
   .dark body {
-    background: radial-gradient(circle at top right, rgba(37, 99, 235, 0.15) 0%, rgba(8, 8, 8, 1) 40%),
-      radial-gradient(circle at bottom left, rgba(59, 130, 246, 0.08) 0%, rgba(8, 8, 8, 1) 50%);
-    background-color: #080808;
-    /* Neutral Black Fallback */
+    background-color: hsl(0 0% 4%);
     color: hsl(var(--foreground));
   }
 
@@ -274,78 +281,67 @@ All colors MUST be HSL.
     margin: 0.5em 0;
   }
 
-  /* GLOBAL MODERN GLASSMORPHISM FOR CONTENT CONTAINERS (Only applies fully in dark mode, fallback for light) */
+  /* Card surfaces - lightweight, solid backgrounds */
   .glass-card,
+  .card-surface,
   .bg-card,
   [data-sidebar="sidebar"] {
-    background: hsl(var(--card) / 0.9);
+    background: hsl(var(--card));
     border: 1px solid hsl(var(--border));
-    border-radius: 1rem;
-    transition: border-color 0.2s ease;
+    border-radius: var(--radius);
+    transition: border-color 0.15s ease;
   }
 
-  /* Light mode: bold outlined cards, dialogs, popovers */
+  /* Light mode cards */
   :root:not(.dark) .glass-card,
+  :root:not(.dark) .card-surface,
   :root:not(.dark) .bg-card,
   :root:not(.dark) .nutrition-dashboard,
   :root:not(.dark) [role="dialog"],
   :root:not(.dark) .popover-content,
   :root:not(.dark) [data-sidebar="sidebar"] {
-    border: 1.5px solid hsl(0 0% 0% / 0.15);
-    box-shadow: 0 1px 3px hsl(0 0% 0% / 0.06);
+    box-shadow: 0 1px 2px hsl(0 0% 0% / 0.05);
   }
 
+  /* Dark mode cards - solid surfaces, no glass */
   .dark .glass-card,
+  .dark .card-surface,
   .dark .bg-card,
   .dark [data-sidebar="sidebar"],
   .dark [role="dialog"]:not([data-alert-dialog]),
   .dark .popover-content {
-    background: rgba(255, 255, 255, 0.06) !important;
-    /* Extremely sheer white */
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
-    box-shadow:
-      inset 0 1px 1px rgba(255, 255, 255, 0.1),
-      0 8px 32px rgba(0, 0, 0, 0.3);
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
   }
 
-  /* Glowing Interactive States — only on devices with real hover (not touch) */
+  /* Subtle hover on desktop only */
   @media (hover: hover) {
-    .dark button:hover,
-    .dark a:hover {
-      box-shadow: 0 0 12px rgba(37, 99, 235, 0.35);
-      /* Blue Glow */
-    }
-
-    .dark [data-no-glow] button:hover {
-      box-shadow: none;
-    }
-
-    /* Prevent over-glowing on purely transparent flat icon buttons */
-    .dark button.rounded-full:hover,
-    .dark button[variant="ghost"]:hover {
-      box-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
-      background: rgba(255, 255, 255, 0.1);
+    .dark .glass-card:hover,
+    .dark .card-surface:hover {
+      border-color: hsl(0 0% 22%);
     }
   }
 
   .nutrition-dashboard {
-    background: hsl(var(--card) / 0.95);
-    border: 1px solid hsl(var(--border) / 0.3);
-    border-radius: 1.25rem;
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
     padding: 1.25rem;
-    box-shadow:
-      0 1px 3px hsl(var(--primary) / 0.04),
-      0 4px 16px hsl(var(--primary) / 0.03),
-      inset 0 1px 0 hsl(0 0% 100% / 0.06);
-
   }
 
   .dark .nutrition-dashboard {
-    background: rgba(255, 255, 255, 0.07);
-    border-color: rgba(255, 255, 255, 0.1);
-    box-shadow:
-      inset 0 1px 1px rgba(255, 255, 255, 0.15),
-      0 12px 32px rgba(0, 0, 0, 0.4);
+    background: hsl(var(--card));
+    border-color: hsl(var(--border));
+  }
+
+  /* Section header utility */
+  .section-header {
+    font-size: 0.6875rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: hsl(var(--muted-foreground));
   }
 
   .display-number {
@@ -386,8 +382,8 @@ All colors MUST be HSL.
   }
 
   @keyframes pulseRing {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.5); }
-    50% { box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.25); }
+    0%, 100% { box-shadow: 0 0 0 0 hsl(var(--primary) / 0.5); }
+    50% { box-shadow: 0 0 0 4px hsl(var(--primary) / 0.25); }
   }
 
   /* Tap feedback for touch devices */
@@ -399,15 +395,6 @@ All colors MUST be HSL.
     }
   }
 
-  /* Glass card hover depth — desktop only */
-  @media (hover: hover) {
-    .dark .glass-card:hover {
-      border-color: rgba(255, 255, 255, 0.14) !important;
-      box-shadow:
-        inset 0 1px 1px rgba(255, 255, 255, 0.12),
-        0 12px 40px rgba(0, 0, 0, 0.4);
-    }
-  }
 
   /* Toast spring entrance — overshoot bounce */
   @keyframes toast-spring-in {
@@ -523,24 +510,6 @@ All colors MUST be HSL.
   }
 
 
-  /* ── iOS native: kill expensive backdrop-blur, use solid backgrounds ── */
-  .native-app.dark .glass-card,
-  .native-app.dark .bg-card,
-  .native-app.dark [data-sidebar="sidebar"],
-  .native-app.dark [role="dialog"],
-  .native-app.dark .popover-content {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-    background: hsl(0 0% 7%) !important;
-    box-shadow:
-      inset 0 1px 1px rgba(255, 255, 255, 0.06),
-      0 4px 16px rgba(0, 0, 0, 0.4);
-  }
-
-  .native-app [class*="backdrop-blur"] {
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
-  }
 
   /* Optimize animations for reduced motion preferences */
   @media (prefers-reduced-motion: reduce) {
