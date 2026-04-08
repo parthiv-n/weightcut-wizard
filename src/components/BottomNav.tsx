@@ -1,5 +1,5 @@
 import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Droplets, Calendar, LogOut, HeartPulse, GitBranch, Trash2, Dumbbell } from "lucide-react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, memo } from "react";
 import { triggerHaptic, triggerHapticSelection } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
@@ -44,6 +44,7 @@ const moreMenuItems = [
 export const BottomNav = memo(function BottomNav() {
   const isMobile = useIsMobile();
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
   const { userName, avatarUrl, setUserName, setAvatarUrl } = useProfile();
   const { userId, profile, refreshProfile } = useUser();
@@ -97,22 +98,22 @@ export const BottomNav = memo(function BottomNav() {
 
   const handleLogFood = () => {
     setQuickLogOpen(false);
-    navigate("/nutrition?openManualMeal=true");
+    setTimeout(() => navigate("/nutrition?openManualMeal=true"), 150);
   };
 
   const handleLogWeight = () => {
     setQuickLogOpen(false);
-    navigate("/weight?focusWeightInput=true");
+    setTimeout(() => navigate("/weight?focusWeightInput=true"), 150);
   };
 
   const handleLogTraining = () => {
     setQuickLogOpen(false);
-    navigate("/training-calendar?openLogSession=true");
+    setTimeout(() => navigate("/training-calendar?openLogSession=true"), 150);
   };
 
   const handleLogGym = () => {
     setQuickLogOpen(false);
-    navigate("/gym");
+    setTimeout(() => navigate("/gym"), 150);
   };
 
   const handleMoreItemClick = (url: string) => {
@@ -248,7 +249,10 @@ export const BottomNav = memo(function BottomNav() {
 
           {/* Log button - inline tab style */}
           <button
-            onClick={() => { setQuickLogOpen(true); triggerHaptic(ImpactStyle.Medium); }}
+            onClick={() => {
+              triggerHaptic(ImpactStyle.Medium);
+              setQuickLogOpen(true);
+            }}
             data-tutorial="nav-quick-log"
             className="flex-1 flex flex-col items-center justify-center gap-0.5 py-1 touch-target text-muted-foreground active:scale-95 transition-transform duration-100"
             aria-label="Quick Log"

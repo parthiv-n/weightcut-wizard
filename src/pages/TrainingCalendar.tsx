@@ -174,13 +174,16 @@ export default function TrainingCalendar() {
     }, [userId, currentDate, preloadMonth]);
     useEffect(() => { if (userId) setCustomColors(getUserColors(userId)); }, [userId]);
 
-    // Auto-open Log Session dialog when navigated from Quick Log
+    // Auto-open Log Session dialog when navigated from Quick Log (deferred to avoid race with QuickLog sheet close)
     useEffect(() => {
         if (searchParams.get("openLogSession") === "true") {
-            setSelectedDate(new Date());
-            setIsAddModalOpen(true);
             searchParams.delete("openLogSession");
             setSearchParams(searchParams, { replace: true });
+            const t = setTimeout(() => {
+                setSelectedDate(new Date());
+                setIsAddModalOpen(true);
+            }, 150);
+            return () => clearTimeout(t);
         }
     }, [searchParams, setSearchParams]);
 

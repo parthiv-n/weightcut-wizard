@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Edit2, Trash2, ChevronDown, Sparkles } from "lucide-react";
-import { useState, useRef, memo } from "react";
+import { useState, useRef, useEffect, memo } from "react";
 import { motion, useMotionValue, useReducedMotion } from "motion/react";
 import { springs } from "@/lib/motion";
 import { MacroDonut } from "./MacroDonut";
@@ -38,6 +38,20 @@ interface MealCardProps {
 const DELETE_THRESHOLD = -80;
 
 export const MealCard = memo(function MealCard({ meal, onEdit, onDelete }: MealCardProps) {
+  const [showHint, setShowHint] = useState(() => {
+    return !localStorage.getItem('wcw_swipe_hint_shown');
+  });
+
+  useEffect(() => {
+    if (showHint) {
+      const timer = setTimeout(() => {
+        setShowHint(false);
+        localStorage.setItem('wcw_swipe_hint_shown', 'true');
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [showHint]);
+
   const [expanded, setExpanded] = useState(false);
   const hasDetails = !!(meal.ingredients?.length || meal.portion_size || meal.recipe_notes);
   const prefersReducedMotion = useReducedMotion();
@@ -198,6 +212,11 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete }: MealC
           </div>
         )}
       </motion.div>
+      {showHint && (
+        <p className="text-[10px] text-muted-foreground/50 text-center mt-1 animate-[fadeSlideUp_0.3s_ease-out_both]">
+          ← Swipe to edit or delete
+        </p>
+      )}
     </div>
   );
 });

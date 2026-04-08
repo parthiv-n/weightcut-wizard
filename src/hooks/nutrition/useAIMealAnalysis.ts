@@ -108,7 +108,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
         if (controller.signal.aborted) return;
         if (error) {
-          if (handleAILimitError(error)) return;
+          if (handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
           throw new Error(await extractEdgeFunctionError(error, "Failed to analyze meal"));
         }
         if (data?.error) throw new Error(data.error);
@@ -234,7 +234,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
       if (ingController.signal.aborted) return;
       if (error) {
-        if (handleAILimitError(error)) return;
+        if (handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
         throw new Error(await extractEdgeFunctionError(error, "Failed to analyze ingredient"));
       }
       if (data?.error) throw new Error(data.error);

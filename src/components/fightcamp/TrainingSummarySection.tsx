@@ -262,7 +262,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
             if (controller.signal.aborted) return;
 
             if (error) {
-                if (handleAILimitError(error)) return;
+                if (handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
                 throw error;
             }
             if (!data?.summary) throw new Error("No summary returned");

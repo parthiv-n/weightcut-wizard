@@ -69,9 +69,11 @@ export default function Nutrition() {
   const [isQuickAddSheetOpen, setIsQuickAddSheetOpen] = useState(false);
   const [quickAddTab, setQuickAddTab] = useState<"ai" | "manual">("ai");
   const [expandedMealActions, setExpandedMealActions] = useState<string | null>(null);
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [expandedMealIdeas, setExpandedMealIdeas] = useState<Set<string>>(new Set());
   const [isEditTargetsDialogOpen, setIsEditTargetsDialogOpen] = useState(false);
   const [editingTargets, setEditingTargets] = useState({ calories: "", protein: "", carbs: "", fats: "" });
+  const [showMealSuccess, setShowMealSuccess] = useState(false);
   const [isFoodSearchOpen, setIsFoodSearchOpen] = useState(false);
   const [foodSearchMealType, setFoodSearchMealType] = useState<string>("snack");
   const [manualMeal, setManualMeal] = useState<ManualMealForm>({
@@ -194,19 +196,25 @@ export default function Nutrition() {
     }
   }, [isQuickAddSheetOpen, quickAddTab, userId]);
 
-  // Auto-open from URL params
+  // Auto-open from URL params (deferred to avoid race with QuickLog sheet close)
   useEffect(() => {
+    let tab: "ai" | "manual" | null = null;
     if (searchParams.get("openAddMeal") === "true") {
-      setQuickAddTab("ai");
-      setIsQuickAddSheetOpen(true);
+      tab = "ai";
       searchParams.delete("openAddMeal");
-      setSearchParams(searchParams, { replace: true });
     }
     if (searchParams.get("openManualMeal") === "true") {
-      setQuickAddTab("manual");
-      setIsQuickAddSheetOpen(true);
+      tab = "manual";
       searchParams.delete("openManualMeal");
+    }
+    if (tab) {
+      const targetTab = tab;
       setSearchParams(searchParams, { replace: true });
+      const t = setTimeout(() => {
+        setQuickAddTab(targetTab);
+        setIsQuickAddSheetOpen(true);
+      }, 150);
+      return () => clearTimeout(t);
     }
   }, [searchParams, setSearchParams]);
 
@@ -265,6 +273,8 @@ export default function Nutrition() {
       });
 
       setIsQuickAddSheetOpen(false);
+      setShowMealSuccess(true);
+      setTimeout(() => setShowMealSuccess(false), 1500);
       setManualMeal({
         meal_name: "", calories: "", protein_g: "", carbs_g: "", fats_g: "",
         meal_type: "breakfast", portion_size: "", recipe_notes: "", ingredients: [],
@@ -568,6 +578,14 @@ export default function Nutrition() {
           </div>
         )}
 
+        {/* Meal success indicator */}
+        {showMealSuccess && (
+          <div className="flex items-center justify-center gap-1.5 text-success animate-[fadeSlideUp_0.3s_ease-out_both]">
+            <CheckCircle className="h-5 w-5" />
+            <span className="text-sm font-medium">Meal added</span>
+          </div>
+        )}
+
         {/* Meal Sections (MFP-style) */}
         <div className="space-y-2">
           {(["breakfast", "lunch", "dinner", "snack"] as const).map((mealType) => {
@@ -576,18 +594,44 @@ export default function Nutrition() {
             const isActionExpanded = expandedMealActions === mealType;
             const MealIcon = { breakfast: Sunrise, lunch: Salad, dinner: UtensilsCrossed, snack: Apple }[mealType];
             const mealIconColor = { breakfast: "text-orange-400", lunch: "text-blue-400", dinner: "text-purple-400", snack: "text-green-400" }[mealType];
+            const hasMeals = groupMeals.length > 0;
+            const isSectionCollapsed = !hasMeals && !nutritionData.mealsLoading
+              ? !collapsedSections.has(`${mealType}_expanded`)
+              : collapsedSections.has(mealType);
+            const toggleSection = () => {
+              setCollapsedSections(prev => {
+                const next = new Set(prev);
+                if (!hasMeals && !nutritionData.mealsLoading) {
+                  // Empty section: toggle via _expanded key
+                  if (next.has(`${mealType}_expanded`)) next.delete(`${mealType}_expanded`);
+                  else next.add(`${mealType}_expanded`);
+                } else {
+                  // Section with meals: toggle via mealType key
+                  if (next.has(mealType)) next.delete(mealType);
+                  else next.add(mealType);
+                }
+                return next;
+              });
+            };
 
             return (
               <div key={mealType} className="card-surface overflow-hidden">
-                <div className="flex items-center justify-between px-3 py-2">
+                <button
+                  type="button"
+                  onClick={toggleSection}
+                  className="w-full flex items-center justify-between px-3 py-2 hover:bg-muted/30 active:bg-muted/50 transition-colors"
+                >
                   <div className="flex items-center gap-1.5">
                     <MealIcon className={`h-3.5 w-3.5 ${mealIconColor}`} />
                     <h3 className="text-[13px] font-semibold capitalize">{mealType}</h3>
+                    <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform duration-200 ${isSectionCollapsed ? "-rotate-90" : ""}`} />
                   </div>
                   <span className="text-xs font-medium text-muted-foreground tabular-nums">
                     {groupCalories > 0 ? `${Math.round(groupCalories)} kcal` : ""}
                   </span>
-                </div>
+                </button>
+                {!isSectionCollapsed && (
+                  <>
                 {groupMeals.length > 0 ? (
                   <div className="px-2">
                     {groupMeals.map((meal) => (
@@ -630,6 +674,8 @@ export default function Nutrition() {
                     </div>
                   )}
                 </div>
+                  </>
+                )}
               </div>
             );
           })}

@@ -99,7 +99,7 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
       if (controller.signal.aborted) return;
 
       if (response.error) {
-        if (handleAILimitError(response.error)) return;
+        if (handleAILimitError(response.error)) { failTask(taskId, "Limit reached"); return; }
         throw new Error(await extractEdgeFunctionError(response.error, "Failed to generate meal plan"));
       }
 

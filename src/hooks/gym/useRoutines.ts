@@ -102,7 +102,7 @@ export function useRoutines() {
         );
 
         if (error) {
-          if (handleAILimitError(error)) return null;
+          if (handleAILimitError(error)) { failTask(taskId, "Limit reached"); return null; }
           throw error;
         }
 

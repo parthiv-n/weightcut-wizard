@@ -42,7 +42,9 @@ interface DailyWisdom {
 export default function Dashboard() {
   const [weightLogs, setWeightLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [weightUnit, setWeightUnit] = useState<'kg' | 'lb'>('kg');
+  const [weightUnit, setWeightUnit] = useState<'kg' | 'lb'>(() => {
+    return (localStorage.getItem('wcw_weight_unit') as 'kg' | 'lb') || 'kg';
+  });
   const [todayCalories, setTodayCalories] = useState(0);
   const [todayHydration, setTodayHydration] = useState(0);
   const [wisdom, setWisdom] = useState<DailyWisdom | null>(null);
@@ -386,18 +388,13 @@ export default function Dashboard() {
     <ErrorBoundary>
       <div className="space-y-3 p-3 sm:p-5 md:p-6 w-full max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-lg font-bold text-foreground">{getGreeting()}, {userName || 'Fighter'}</h1>
-            <div className="flex items-center gap-3 mt-0.5">
-              {daysUntilTarget > 0 && (
-                <span className="text-xs text-muted-foreground">
-                  <span className="font-bold display-number text-foreground">{daysUntilTarget}</span> days left
-                </span>
-              )}
-              {streak > 0 && <StreakBadge streak={streak} isActive={streakIncludesToday} />}
-            </div>
-          </div>
+        <div className="flex items-center gap-3">
+          {daysUntilTarget > 0 && (
+            <span className="text-xs text-muted-foreground">
+              <span className="font-bold display-number text-foreground">{daysUntilTarget}</span> days left
+            </span>
+          )}
+          {streak > 0 && <StreakBadge streak={streak} isActive={streakIncludesToday} />}
         </div>
 
         {weightLogs.length === 0 && (
@@ -535,7 +532,7 @@ export default function Dashboard() {
                 <Button
                   variant={weightUnit === 'kg' ? 'default' : 'ghost'}
                   size="sm"
-                  onClick={() => { setWeightUnit('kg'); triggerHapticSelection(); }}
+                  onClick={() => { setWeightUnit('kg'); localStorage.setItem('wcw_weight_unit', 'kg'); triggerHapticSelection(); }}
                   className="h-5 min-h-0 text-[9px] px-1.5 rounded-full"
                 >
                   kg
@@ -543,7 +540,7 @@ export default function Dashboard() {
                 <Button
                   variant={weightUnit === 'lb' ? 'default' : 'ghost'}
                   size="sm"
-                  onClick={() => { setWeightUnit('lb'); triggerHapticSelection(); }}
+                  onClick={() => { setWeightUnit('lb'); localStorage.setItem('wcw_weight_unit', 'lb'); triggerHapticSelection(); }}
                   className="h-5 min-h-0 text-[9px] px-1.5 rounded-full"
                 >
                   lb

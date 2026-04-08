@@ -50,11 +50,6 @@ export function FloatingWizardChat() {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
-    if (!checkAIAccess()) {
-      openNoGemsDialog();
-      return;
-    }
-
     triggerHapticSelection();
     const currentInput = input;
     setInput("");

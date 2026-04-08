@@ -220,7 +220,7 @@ export default function FightWeek() {
       if (!isMounted()) return;
 
       if (error) {
-        if (handleAILimitError(error)) return;
+        if (handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
         const msg = await extractEdgeFunctionError(error, "AI advice unavailable");
         failTask(taskId, msg);
         toast({ title: "AI advice unavailable", description: msg, variant: "destructive" });

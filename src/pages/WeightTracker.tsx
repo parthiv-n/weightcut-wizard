@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { format } from "date-fns";
-import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Sparkles, Activity, Scale, Trash2, RefreshCw, Bug, Edit2, ChevronDown, Check, Gem } from "lucide-react";
+import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Sparkles, Activity, Scale, Trash2, RefreshCw, Bug, Edit2, ChevronDown, Check, CheckCircle2, Gem, Minus, Plus } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
@@ -32,6 +32,7 @@ import type { Profile } from "@/pages/weight/types";
 import { useWeightData } from "@/hooks/weight/useWeightData";
 import { useWeightAnalysis } from "@/hooks/weight/useWeightAnalysis";
 import { useGems } from "@/hooks/useGems";
+import { triggerHapticSelection } from "@/lib/haptics";
 
 export default function WeightTracker() {
   const { userId, profile: contextProfile } = useUser();
@@ -43,6 +44,7 @@ export default function WeightTracker() {
   const [showProjected, setShowProjected] = useState(true);
   const [shareOpen, setShareOpen] = useState(false);
   const [weighInShareOpen, setWeighInShareOpen] = useState(false);
+  const [showWeightSuccess, setShowWeightSuccess] = useState(false);
 
   const {
     weightLogs, newWeight, setNewWeight, newDate, setNewDate,
@@ -59,6 +61,14 @@ export default function WeightTracker() {
     loadPersistedAnalysis, clearAnalysis, getAIAnalysis, handleAICancel,
     targetsApplied, applyingTargets, applyNutritionTargets,
   } = useWeightAnalysis({ profile });
+
+  const adjustWeight = (delta: number) => {
+    setNewWeight((prev: string) => {
+      const current = parseFloat(prev) || 0;
+      return Math.max(0, current + delta).toFixed(1);
+    });
+    triggerHapticSelection();
+  };
 
   useEffect(() => {
     if (!userId) return;
@@ -80,6 +90,8 @@ export default function WeightTracker() {
   const handleAddWeight = async (e: React.FormEvent) => {
     const loggedWeight = await rawHandleAddWeight(e);
     if (loggedWeight && profile) {
+      setShowWeightSuccess(true);
+      setTimeout(() => setShowWeightSuccess(false), 1500);
       const fwt = profile.fight_week_target_kg ?? profile.goal_weight_kg;
       if (fwt && loggedWeight <= fwt && !editingLogId) {
         setWeighInShareOpen(true);
@@ -391,11 +403,34 @@ export default function WeightTracker() {
         {/* Header + Inline Log Form */}
         <div className="flex flex-col gap-2">
           <form onSubmit={handleAddWeight} className="flex gap-1.5 items-center">
-            <Input ref={weightInputRef} type="number" inputMode="decimal" step="0.1" placeholder="75.5 kg" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} required className="flex-1 h-9 text-sm" />
+            <div className="flex items-center gap-1 flex-1">
+              <button
+                type="button"
+                onClick={() => adjustWeight(-0.1)}
+                className="h-8 w-8 shrink-0 rounded-lg bg-muted flex items-center justify-center text-muted-foreground active:scale-95 transition-transform"
+                aria-label="Decrease weight"
+              >
+                <Minus className="h-3.5 w-3.5" />
+              </button>
+              <Input ref={weightInputRef} type="number" inputMode="decimal" step="0.1" placeholder={weightLogs.length > 0 ? `e.g. ${parseFloat(weightLogs[weightLogs.length - 1].weight_kg).toFixed(1)}` : "0.0"} value={newWeight} onChange={(e) => setNewWeight(e.target.value)} required className="flex-1 min-w-0 h-9 text-sm" />
+              <button
+                type="button"
+                onClick={() => adjustWeight(0.1)}
+                className="h-8 w-8 shrink-0 rounded-lg bg-muted flex items-center justify-center text-muted-foreground active:scale-95 transition-transform"
+                aria-label="Increase weight"
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </button>
+            </div>
             <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} required className="w-[120px] h-9 text-sm" />
             <Button type="submit" disabled={loading} className="h-9 px-3 text-sm shrink-0">
               {loading ? "..." : editingLogId ? "Update" : "Log"}
             </Button>
+            {showWeightSuccess && (
+              <span className="text-success animate-[fadeSlideUp_0.3s_ease-out_both]">
+                <CheckCircle2 className="h-5 w-5" />
+              </span>
+            )}
           </form>
         </div>
 
