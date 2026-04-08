@@ -11,7 +11,10 @@ import { ChevronLeft } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
 
 export default function Auth() {
-  const [isLogin, setIsLogin] = useState(true);
+  const [isLogin, setIsLogin] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("mode") !== "signup";
+  });
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -263,7 +266,7 @@ export default function Auth() {
       <div className="absolute top-[-20%] left-[-10%] w-[400px] h-[400px] bg-primary/5 dark:bg-primary/[0.03] rounded-full pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[300px] h-[300px] bg-secondary/5 dark:bg-secondary/[0.03] rounded-full pointer-events-none" />
 
-      <div className="w-full max-w-[380px] z-10">
+      <div className="w-full max-w-[380px] z-10 animate-[fadeSlideUp_0.3s_ease-out_both]">
         {/* Glass card container */}
         <div className="glass-card relative rounded-3xl border border-border dark:border-white/10 bg-gradient-to-br from-primary/5 via-background/60 to-secondary/5 dark:from-primary/10 dark:via-background/50 dark:to-secondary/10 shadow-md overflow-hidden">
           <div className="p-8 flex flex-col gap-6">

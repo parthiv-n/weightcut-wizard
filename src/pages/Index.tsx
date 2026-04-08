@@ -1,11 +1,41 @@
-import { useEffect } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Shield, TrendingDown, Brain } from "lucide-react";
+import { Shield, Activity, Utensils, Droplets, ChevronRight } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import wizardNutrition from "@/assets/wizard-nutrition.webp";
 import { useAuth } from "@/contexts/UserContext";
 import { WizardLoader } from "@/components/ui/WizardLoader";
+
+const FEATURES = [
+  {
+    icon: Shield,
+    title: "Safe Weight Cuts",
+    desc: "Science-backed limits prevent dangerous cuts",
+    color: "text-blue-400",
+    bg: "bg-blue-500/10",
+  },
+  {
+    icon: Utensils,
+    title: "AI Nutrition",
+    desc: "Personalised meal plans & macro tracking",
+    color: "text-green-400",
+    bg: "bg-green-500/10",
+  },
+  {
+    icon: Activity,
+    title: "Fight Camp",
+    desc: "Training load, recovery & fight week prep",
+    color: "text-amber-400",
+    bg: "bg-amber-500/10",
+  },
+  {
+    icon: Droplets,
+    title: "Rehydration",
+    desc: "Post weigh-in protocols backed by research",
+    color: "text-cyan-400",
+    bg: "bg-cyan-500/10",
+  },
+];
 
 const Index = () => {
   const navigate = useNavigate();
@@ -13,110 +43,109 @@ const Index = () => {
 
   useEffect(() => {
     if (isLoading) return;
-
-    // Forward password reset links to auth page
     const params = new URLSearchParams(window.location.search);
-    if (params.get('reset') === 'true') {
-      navigate('/auth?reset=true');
+    if (params.get("reset") === "true") {
+      navigate("/auth?reset=true");
       return;
     }
-
     if (userId) {
       if (hasProfile) {
-        const lastRoute = localStorage.getItem('lastRoute');
-        navigate(lastRoute && lastRoute !== '/wizard' ? lastRoute : '/dashboard');
+        const lastRoute = localStorage.getItem("lastRoute");
+        navigate(lastRoute && lastRoute !== "/wizard" ? lastRoute : "/dashboard");
       } else {
         navigate("/onboarding");
       }
     }
   }, [userId, hasProfile, isLoading, navigate]);
 
+  const [exiting, setExiting] = useState(false);
+
+  const navigateWithTransition = useCallback((path: string) => {
+    setExiting(true);
+    setTimeout(() => navigate(path), 250);
+  }, [navigate]);
+
   if (isLoading || userId) {
     return <WizardLoader />;
   }
 
   return (
-    <div className="min-h-screen bg-background dark:bg-gradient-to-br dark:from-[#040810] dark:via-[#020204] dark:to-[#060a14]">
-      <div className="fixed top-4 right-4 z-50">
+    <div className="min-h-screen bg-background dark:bg-[#020204] text-foreground flex flex-col">
+      {/* Top bar */}
+      <div className="fixed top-[max(0.75rem,env(safe-area-inset-top))] right-[max(0.75rem,env(safe-area-inset-right))] z-50">
         <ThemeToggle />
       </div>
-      <div className="container mx-auto px-4 py-16">
-        <div className="relative mx-auto mb-12 max-w-5xl">
-          <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-3xl border border-white/10 bg-gradient-to-br from-primary/10 via-background/50 to-secondary/10 shadow-[0_0_60px_rgba(37,99,235,0.25)] backdrop-blur-2xl" />
-          <div className="relative z-10 px-6 py-10 md:px-10 md:py-12 flex flex-col items-center text-center gap-8">
-            <div className="mx-auto mb-2 md:mb-4">
-              <img
-                src={wizardNutrition}
-                alt="FightCamp Wizard"
-                className="h-24 w-24 md:h-32 md:w-32 mx-auto rounded-2xl object-contain shadow-xl shadow-blue-500/40 ring-2 ring-primary/40 bg-background/60"
-              />
-            </div>
-            <div>
-              <h1 className="text-3xl md:text-5xl lg:text-6xl font-title font-bold mb-4 tracking-tight leading-tight bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                FightCamp Wizard
-              </h1>
-              <p className="text-lg md:text-xl text-muted-foreground mb-8 max-w-2xl mx-auto px-4">
-                Safe, science-based weight cutting for combat sports athletes.
-                AI-powered guidance to reach your weight class safely.
-              </p>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center px-6">
-              <Button
-                size="lg"
-                onClick={() => navigate("/auth")}
-                className="text-base h-12 px-8 rounded-full shadow-lg shadow-primary/30 bg-gradient-to-r from-primary to-secondary text-primary-foreground w-full sm:w-auto"
-              >
-                Get Started
-              </Button>
-              <Button
-                size="lg"
-                variant="outline"
-                onClick={() => navigate("/auth")}
-                className="text-base h-12 px-8 rounded-full w-full sm:w-auto border-white/20 bg-background/40 hover:bg-background/70 backdrop-blur-md"
-              >
-                Sign In
-              </Button>
-            </div>
-          </div>
+
+      {/* Hero */}
+      <div
+        className="flex-1 flex flex-col items-center justify-center px-6 pt-20 pb-8 transition-all duration-[250ms] ease-out"
+        style={{
+          opacity: exiting ? 0 : 1,
+          transform: exiting ? "scale(0.97) translateY(-8px)" : "scale(1) translateY(0)",
+        }}
+      >
+        {/* Logo */}
+        <img
+          src={wizardNutrition}
+          alt="FightCamp Wizard"
+          className="h-24 w-24 rounded-2xl object-contain ring-1 ring-primary/20 bg-background/50 p-1 mb-6"
+        />
+
+        {/* Headline */}
+        <h1 className="text-[28px] font-extrabold tracking-tight text-center leading-tight mb-2">
+          <span className="bg-gradient-to-r from-primary to-blue-400 bg-clip-text text-transparent">
+            FightCamp Wizard
+          </span>
+        </h1>
+        <p className="text-[15px] text-muted-foreground text-center max-w-[300px] leading-relaxed mb-8">
+          Safe, science-based weight cutting for combat sport athletes
+        </p>
+
+        {/* CTA buttons */}
+        <div className="w-full max-w-[320px] space-y-3 mb-10">
+          <button
+            onClick={() => navigateWithTransition("/auth?mode=signup")}
+            disabled={exiting}
+            className="w-full h-[52px] rounded-2xl bg-primary text-primary-foreground font-bold text-[16px] flex items-center justify-center gap-2 active:scale-[0.97] transition-transform disabled:opacity-70"
+          >
+            Get Started
+            <ChevronRight className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => navigateWithTransition("/auth")}
+            disabled={exiting}
+            className="w-full h-[52px] rounded-2xl border border-border/60 text-foreground font-semibold text-[15px] flex items-center justify-center active:scale-[0.97] transition-transform hover:bg-muted/30 disabled:opacity-70"
+          >
+            I already have an account
+          </button>
         </div>
 
-        <div className="flex flex-col md:flex-row gap-4 max-w-5xl mx-auto">
-          <div className="glass-card flex items-center gap-4 p-5 rounded-2xl bg-gradient-to-br from-primary/5 via-background/40 to-secondary/5 backdrop-blur-xl border border-white/15 shadow-2xl text-left w-full transition-colors hover:border-primary/40">
-            <div className="shrink-0 flex items-center justify-center w-12 h-12 rounded-full bg-primary/10">
-              <Shield className="h-6 w-6 text-primary" />
+        {/* Feature grid */}
+        <div className="w-full max-w-[360px] grid grid-cols-2 gap-2.5">
+          {FEATURES.map((f) => (
+            <div
+              key={f.title}
+              className="rounded-2xl border border-border/30 dark:border-white/[0.06] bg-card/50 dark:bg-white/[0.03] p-3.5"
+            >
+              <div className={`h-9 w-9 rounded-xl ${f.bg} flex items-center justify-center mb-2.5`}>
+                <f.icon className={`h-4 w-4 ${f.color}`} />
+              </div>
+              <p className="text-[13px] font-semibold leading-tight mb-0.5">{f.title}</p>
+              <p className="text-[11px] text-muted-foreground leading-snug">{f.desc}</p>
             </div>
-            <div>
-              <h3 className="text-lg font-semibold mb-1">Safe & Scientific</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Built-in safety limits prevent dangerous weight cuts. Based on proven sports science.
-              </p>
-            </div>
-          </div>
-
-          <div className="glass-card flex items-center gap-4 p-5 rounded-2xl bg-gradient-to-br from-primary/5 via-background/40 to-secondary/5 backdrop-blur-xl border border-white/15 shadow-2xl text-left w-full transition-colors hover:border-primary/40">
-            <div className="shrink-0 flex items-center justify-center w-12 h-12 rounded-full bg-secondary/10">
-              <Brain className="h-6 w-6 text-secondary" />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold mb-1">AI-Powered</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Personalized meal plans and guidance from your AI FightCamp Wizard.
-              </p>
-            </div>
-          </div>
-
-          <div className="glass-card flex items-center gap-4 p-5 rounded-2xl bg-gradient-to-br from-primary/5 via-background/40 to-secondary/5 backdrop-blur-xl border border-white/15 shadow-2xl text-left w-full transition-colors hover:border-primary/40">
-            <div className="shrink-0 flex items-center justify-center w-12 h-12 rounded-full bg-accent/10">
-              <TrendingDown className="h-6 w-6 text-accent" />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold mb-1">Track Progress</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Monitor weight, nutrition, hydration, and get ready for fight week.
-              </p>
-            </div>
-          </div>
+          ))}
         </div>
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-center gap-2 pb-[max(1.5rem,env(safe-area-inset-bottom))] text-[11px] text-muted-foreground/60">
+        <button onClick={() => navigate("/legal?tab=privacy")} className="hover:text-foreground transition-colors">
+          Privacy
+        </button>
+        <span>·</span>
+        <button onClick={() => navigate("/legal?tab=terms")} className="hover:text-foreground transition-colors">
+          Terms
+        </button>
       </div>
     </div>
   );

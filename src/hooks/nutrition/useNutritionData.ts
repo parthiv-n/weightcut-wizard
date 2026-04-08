@@ -154,20 +154,22 @@ export function useNutritionData(params: UseNutritionDataParams) {
       }
     }
 
-    // Try localStorage with 2hr TTL — if fresh, serve and skip DB fetch entirely
+    // Try localStorage with 2hr TTL — serve from cache, then continue to DB for background revalidation
+    let servedFromLocal = false;
     if (!skipCache) {
       const localMeals = localCache.getForDate<Meal[]>(userId, "nutrition_logs", fetchDate, 120 * 60 * 1000);
       if (localMeals && localMeals.length > 0) {
         setMeals(localMeals);
         nutritionCache.setMeals(userId, fetchDate, localMeals);
         safeAsync(setMealsLoading)(false);
-        return;
+        servedFromLocal = true;
+        // Don't return — continue to DB so stale cache gets corrected
       }
     }
 
     // Only show loading skeleton if we have nothing to display and this isn't a silent/post-mutation refresh
     const hasVisibleMeals = mealsRef.current.length > 0;
-    if (!silent && !hasVisibleMeals) {
+    if (!silent && !servedFromLocal && !hasVisibleMeals) {
       safeAsync(setMealsLoading)(true);
     }
 
@@ -211,6 +213,8 @@ export function useNutritionData(params: UseNutritionDataParams) {
 
     const typedMeals = (data || []).map(meal => ({
       ...meal,
+      meal_name: meal.meal_name || "Untitled",
+      meal_type: meal.meal_type || "snack",
       ingredients: (meal.ingredients as unknown) as Ingredient[] | undefined,
     }));
 
@@ -235,12 +239,12 @@ export function useNutritionData(params: UseNutritionDataParams) {
       const p = op.payload as any;
       mergedMeals.push({
         id: op.recordId,
-        meal_name: p.meal_name,
+        meal_name: p.meal_name || "Untitled",
         calories: p.calories,
         protein_g: p.protein_g ?? undefined,
         carbs_g: p.carbs_g ?? undefined,
         fats_g: p.fats_g ?? undefined,
-        meal_type: p.meal_type,
+        meal_type: p.meal_type || "snack",
         portion_size: p.portion_size ?? undefined,
         recipe_notes: p.recipe_notes ?? undefined,
         ingredients: p.ingredients ?? undefined,
