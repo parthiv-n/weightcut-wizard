@@ -12,6 +12,7 @@ import { MilestoneBadges } from "@/components/dashboard/MilestoneBadges";
 import { useGamification } from "@/hooks/useGamification";
 import { useUser } from "@/contexts/UserContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
 import { withSupabaseTimeout, withRetry } from "@/lib/timeoutWrapper";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { Button } from "@/components/ui/button";
@@ -324,7 +325,7 @@ export default function Dashboard() {
     })), [weightLogs, convertWeight]);
 
   if (loading) {
-    return <div className="min-h-[50vh]" />;
+    return <DashboardSkeleton />;
   }
 
   // Fallback static wisdom (kept for when AI fails)
@@ -584,6 +585,9 @@ export default function Dashboard() {
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <TrendingDown className="h-5 w-5 text-muted-foreground/40 mb-1" />
                   <p className="text-[10px] text-muted-foreground">No data yet</p>
+                  <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={() => navigate('/weight')}>
+                    Log Weight
+                  </Button>
                 </div>
               )}
             </div>

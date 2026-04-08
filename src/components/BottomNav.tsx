@@ -110,6 +110,11 @@ export const BottomNav = memo(function BottomNav() {
     navigate("/training-calendar?openLogSession=true");
   };
 
+  const handleLogGym = () => {
+    setQuickLogOpen(false);
+    navigate("/gym");
+  };
+
   const handleMoreItemClick = (url: string) => {
     setMoreMenuOpen(false);
     navigate(url);
@@ -294,6 +299,7 @@ export const BottomNav = memo(function BottomNav() {
         onLogFood={handleLogFood}
         onLogWeight={handleLogWeight}
         onLogTraining={handleLogTraining}
+        onLogGym={handleLogGym}
       />
 
       <MoreMenuSheet

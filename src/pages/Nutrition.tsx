@@ -872,7 +872,7 @@ export default function Nutrition() {
 
             {quickAddTab === "manual" && (
               <div className="space-y-3">
-                <Input placeholder="Meal name *" value={manualMeal.meal_name} onChange={(e) => setManualMeal({ ...manualMeal, meal_name: e.target.value })} className="text-sm" />
+                <Input placeholder="Meal name *" value={manualMeal.meal_name} onChange={(e) => setManualMeal({ ...manualMeal, meal_name: e.target.value })} className="text-sm" autoFocus />
                 {aiMeal.barcodeBaseMacros && (
                   <div className="rounded-xl border border-border bg-muted/30 p-3 space-y-3">
                     <div className="flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Serving Size</p><span className="text-xs text-muted-foreground">{aiMeal.barcodeBaseMacros.serving_size}</span></div>
@@ -897,13 +897,13 @@ export default function Nutrition() {
                     </div>
                   </div>
                 )}
-                <div><Input type="number" placeholder="Calories *" value={manualMeal.calories} onChange={(e) => macroCalc.handleCalorieChange(e.target.value, setManualMeal)} className="text-sm" />
+                <div><Input type="number" inputMode="numeric" placeholder="Calories *" value={manualMeal.calories} onChange={(e) => macroCalc.handleCalorieChange(e.target.value, setManualMeal)} className="text-sm" />
                   {manualMeal.ingredients.some(ing => ing.calories_per_100g !== undefined) && <p className="text-[10px] text-muted-foreground mt-1">Auto-calculated from ingredients</p>}
                 </div>
                 <div className="grid grid-cols-3 gap-2">
-                  <Input type="number" step="0.1" placeholder="Protein g" value={manualMeal.protein_g} onChange={(e) => setManualMeal({ ...manualMeal, protein_g: e.target.value })} className="text-sm" />
-                  <Input type="number" step="0.1" placeholder="Carbs g" value={manualMeal.carbs_g} onChange={(e) => setManualMeal({ ...manualMeal, carbs_g: e.target.value })} className="text-sm" />
-                  <Input type="number" step="0.1" placeholder="Fats g" value={manualMeal.fats_g} onChange={(e) => setManualMeal({ ...manualMeal, fats_g: e.target.value })} className="text-sm" />
+                  <Input type="number" inputMode="decimal" step="0.1" placeholder="Protein g" value={manualMeal.protein_g} onChange={(e) => setManualMeal({ ...manualMeal, protein_g: e.target.value })} className="text-sm" />
+                  <Input type="number" inputMode="decimal" step="0.1" placeholder="Carbs g" value={manualMeal.carbs_g} onChange={(e) => setManualMeal({ ...manualMeal, carbs_g: e.target.value })} className="text-sm" />
+                  <Input type="number" inputMode="decimal" step="0.1" placeholder="Fats g" value={manualMeal.fats_g} onChange={(e) => setManualMeal({ ...manualMeal, fats_g: e.target.value })} className="text-sm" />
                 </div>
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground pt-1">Ingredients (optional)</p>
                 <div className="flex gap-2">
@@ -914,7 +914,7 @@ export default function Nutrition() {
                 </div>
                 <div className="flex gap-2">
                   <Input placeholder="Ingredient name" value={aiMeal.newIngredient.name} onChange={(e) => aiMeal.setNewIngredient({ ...aiMeal.newIngredient, name: e.target.value })} className="flex-1 text-sm" />
-                  <Input type="number" placeholder="g" value={aiMeal.newIngredient.grams} onChange={(e) => aiMeal.setNewIngredient({ ...aiMeal.newIngredient, grams: e.target.value })} className="w-16 text-sm" />
+                  <Input type="number" inputMode="numeric" placeholder="g" value={aiMeal.newIngredient.grams} onChange={(e) => aiMeal.setNewIngredient({ ...aiMeal.newIngredient, grams: e.target.value })} className="w-16 text-sm" />
                   <Button type="button" size="sm" variant="outline" onClick={async () => {
                     if (!aiMeal.newIngredient.name.trim() || !aiMeal.newIngredient.grams) { toast({ title: "Missing Information", description: "Please enter ingredient name and grams", variant: "destructive" }); return; }
                     const ingredientName = aiMeal.newIngredient.name.trim(); const grams = parseFloat(aiMeal.newIngredient.grams);

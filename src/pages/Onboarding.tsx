@@ -345,6 +345,7 @@ export default function Onboarding() {
                   <Input
                     id="age"
                     type="number"
+                    inputMode="numeric"
                     value={formData.age}
                     onChange={(e) => setFormData({ ...formData, age: e.target.value })}
                     required
@@ -368,6 +369,7 @@ export default function Onboarding() {
                   <Input
                     id="height"
                     type="number"
+                    inputMode="decimal"
                     step="0.1"
                     value={formData.height_cm}
                     onChange={(e) => setFormData({ ...formData, height_cm: e.target.value })}
@@ -380,6 +382,7 @@ export default function Onboarding() {
                   <Input
                     id="current_weight"
                     type="number"
+                    inputMode="decimal"
                     step="0.1"
                     value={formData.current_weight_kg}
                     onChange={(e) => setFormData({ ...formData, current_weight_kg: e.target.value })}
@@ -438,6 +441,7 @@ export default function Onboarding() {
                   <Input
                     id="goal_weight"
                     type="number"
+                    inputMode="decimal"
                     step="0.1"
                     placeholder="e.g., 70"
                     value={formData.goal_weight_kg}
@@ -469,6 +473,7 @@ export default function Onboarding() {
                   <Input
                     id="fight_week_target"
                     type="number"
+                    inputMode="decimal"
                     step="0.1"
                     placeholder="e.g., 77"
                     value={formData.fight_week_target_kg}
@@ -562,6 +567,7 @@ export default function Onboarding() {
                 <Input
                   id="training_frequency"
                   type="number"
+                  inputMode="numeric"
                   value={formData.training_frequency}
                   onChange={(e) => setFormData({ ...formData, training_frequency: e.target.value })}
                   required

@@ -379,8 +379,11 @@ export default function WeightTracker() {
               </div>
             </>
           ) : (
-            <div className="h-[200px] flex items-center justify-center text-muted-foreground text-sm">
+            <div className="h-[200px] flex flex-col items-center justify-center text-muted-foreground text-sm gap-2">
               Log your first weight to see progress
+              <Button variant="outline" size="sm" className="text-xs" onClick={() => weightInputRef.current?.focus()}>
+                Log Now
+              </Button>
             </div>
           )}
         </div>
@@ -388,7 +391,7 @@ export default function WeightTracker() {
         {/* Header + Inline Log Form */}
         <div className="flex flex-col gap-2">
           <form onSubmit={handleAddWeight} className="flex gap-1.5 items-center">
-            <Input ref={weightInputRef} type="number" step="0.1" placeholder="75.5 kg" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} required className="flex-1 h-9 text-sm" />
+            <Input ref={weightInputRef} type="number" inputMode="decimal" step="0.1" placeholder="75.5 kg" value={newWeight} onChange={(e) => setNewWeight(e.target.value)} required className="flex-1 h-9 text-sm" />
             <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} required className="w-[120px] h-9 text-sm" />
             <Button type="submit" disabled={loading} className="h-9 px-3 text-sm shrink-0">
               {loading ? "..." : editingLogId ? "Update" : "Log"}

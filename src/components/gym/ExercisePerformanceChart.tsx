@@ -188,8 +188,7 @@ export const ExercisePerformanceChart = memo(function ExercisePerformanceChart({
                 dot={{ r: 4, fill: "hsl(var(--primary))", stroke: "hsl(var(--background))", strokeWidth: 2 }}
                 activeDot={{ r: 6, fill: "hsl(var(--primary))", stroke: "hsl(var(--background))", strokeWidth: 2 }}
                 name={`${chartLabel} (${unitLabel})`}
-                animationDuration={800}
-                animationEasing="ease-out"
+                animationDuration={0}
               />
             </AreaChart>
           ) : (
@@ -219,8 +218,7 @@ export const ExercisePerformanceChart = memo(function ExercisePerformanceChart({
                 fill="url(#barGradient)"
                 radius={[6, 6, 0, 0]}
                 name={`Volume (${unitLabel})`}
-                animationDuration={800}
-                animationEasing="ease-out"
+                animationDuration={0}
               />
             </BarChart>
           )}
