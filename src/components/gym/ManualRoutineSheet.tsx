@@ -186,7 +186,7 @@ export function ManualRoutineSheet({
                       <button
                         key={g.value}
                         onClick={() => { setGoal(g.value); triggerHaptic(ImpactStyle.Light); }}
-                        className={`glass-card rounded-2xl border p-4 text-left transition-all active:scale-[0.97] ${
+                        className={`card-surface rounded-2xl border p-4 text-left transition-all active:scale-[0.97] ${
                           selected
                             ? "border-primary/50 ring-1 ring-primary/30 bg-primary/5"
                             : "border-border/50 hover:border-border"
@@ -291,7 +291,7 @@ export function ManualRoutineSheet({
                     {addedExercises.map((entry, idx) => (
                       <div
                         key={`${entry.exercise.id}-${idx}`}
-                        className="glass-card rounded-2xl border border-border/50 p-4 space-y-3"
+                        className="card-surface rounded-2xl border border-border/50 p-4 space-y-3"
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0">

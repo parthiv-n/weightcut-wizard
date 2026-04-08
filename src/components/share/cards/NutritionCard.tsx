@@ -69,7 +69,7 @@ export const NutritionCard = forwardRef<HTMLDivElement, NutritionCardProps>(
               fontWeight: 700,
               letterSpacing: "0.15em",
               textTransform: "uppercase" as const,
-              color: "#3b82f6",
+              color: "hsl(var(--primary))",
               marginBottom: s ? 8 : 4,
             }}
           >

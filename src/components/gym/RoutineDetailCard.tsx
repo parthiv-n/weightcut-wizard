@@ -141,7 +141,7 @@ export function RoutineDetailCard({ routine, onDelete, onRename, onStartWorkout 
 
   return (
     <Collapsible open={expanded} onOpenChange={setExpanded}>
-      <div className="glass-card rounded-2xl border border-border/50 overflow-hidden relative">
+      <div className="card-surface rounded-2xl border border-border/50 overflow-hidden relative">
         {/* Subtle gradient */}
         <div className="absolute inset-0 bg-gradient-to-r from-primary/[0.02] to-transparent pointer-events-none" />
 

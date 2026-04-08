@@ -23,7 +23,7 @@ export const SessionAnalyticsCard = memo(function SessionAnalyticsCard({
   return (
     <motion.div
       variants={staggerItem}
-      className="glass-card rounded-2xl border border-border/50 p-4 space-y-4 relative overflow-hidden"
+      className="card-surface rounded-2xl border border-border/50 p-4 space-y-4 relative overflow-hidden"
     >
       {/* Subtle gradient overlay */}
       <div className="absolute inset-0 bg-gradient-to-br from-primary/[0.03] to-transparent pointer-events-none" />

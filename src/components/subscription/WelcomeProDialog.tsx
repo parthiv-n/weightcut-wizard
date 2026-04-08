@@ -26,7 +26,7 @@ export function WelcomeProDialog({ open, onClose }: WelcomeProDialogProps) {
       <div className="absolute inset-0 bg-black/60 animate-in fade-in duration-300" onClick={onClose} />
 
       {/* Dialog */}
-      <div className="relative w-full max-w-sm rounded-3xl border border-primary/20 bg-background/98 dark:bg-zinc-900/98 shadow-[0_24px_80px_rgba(37,99,235,0.15)] animate-in zoom-in-95 fade-in duration-300 overflow-hidden">
+      <div className="relative w-full max-w-sm rounded-3xl border border-primary/20 bg-background/98 dark:bg-zinc-900/98 shadow-[0_24px_80px_hsl(var(--primary)/0.15)] animate-in zoom-in-95 fade-in duration-300 overflow-hidden">
         {/* Close */}
         <button
           onClick={onClose}

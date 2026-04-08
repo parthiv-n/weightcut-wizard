@@ -17,7 +17,7 @@ interface ExercisePerformanceChartProps {
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="glass-card rounded-xl border border-border/50 px-3 py-2 shadow-xl text-xs">
+    <div className="card-surface rounded-xl border border-border/50 px-3 py-2 shadow-xl text-xs">
       <p className="text-muted-foreground mb-1">{label}</p>
       {payload.map((p: any) => (
         <p key={p.name} className="display-number text-sm">

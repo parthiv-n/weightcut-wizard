@@ -404,9 +404,9 @@ export default function Dashboard() {
                 <Scale className="h-5 w-5 text-primary" />
               </div>
               <div className="flex-1">
-                <h3 className="font-semibold text-sm">Welcome, Fighter</h3>
+                <h3 className="font-semibold text-sm">Welcome{userName ? `, ${userName}` : ''}</h3>
                 <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                  Log your first weigh-in to unlock your progress chart, daily AI wisdom, and weight cut tracking.
+                  Log your first weigh-in to unlock your progress chart, daily AI wisdom, and weight tracking.
                 </p>
                 <Button
                   variant="outline"
@@ -630,7 +630,7 @@ export default function Dashboard() {
               </div>
               <div className="rounded-xl border border-border p-3 text-center">
                 <p className="text-2xl font-bold display-number">{wisdom.daysToFight}</p>
-                <p className="text-xs text-muted-foreground">Days to Fight</p>
+                <p className="text-xs text-muted-foreground">Days Left</p>
               </div>
               <div className="rounded-xl border border-border p-3 text-center">
                 <p className={`text-sm font-semibold ${paceColors[wisdom.paceStatus] ?? 'text-foreground'}`}>

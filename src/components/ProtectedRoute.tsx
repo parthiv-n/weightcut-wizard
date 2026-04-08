@@ -1,9 +1,8 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/UserContext";
 import { Button } from "@/components/ui/button";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, Sparkles } from "lucide-react";
 import { WizardLoader } from "@/components/ui/WizardLoader";
-import wizardLogo from "@/assets/wizard-logo.webp";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { userId, isLoading, authError, retryAuth } = useAuth();
@@ -17,8 +16,8 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-screen items-center justify-center bg-background p-4">
         <div className="flex flex-col items-center gap-6 text-center">
           <div className="relative flex items-center justify-center w-28 h-28 opacity-50">
-            <div className="relative rounded-full bg-primary/10 p-4">
-              <img src={wizardLogo} alt="Wizard" className="w-16 h-16" />
+            <div className="rounded-xl bg-primary/10 p-4">
+              <Sparkles className="h-10 w-10 text-primary" />
             </div>
           </div>
           <div className="space-y-2">

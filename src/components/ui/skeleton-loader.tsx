@@ -134,7 +134,7 @@ export function NutritionPageSkeleton() {
       {/* Meal sections */}
       <div className="space-y-2">
         {[1, 2].map((i) => (
-          <div key={i} className="glass-card overflow-hidden">
+          <div key={i} className="card-surface overflow-hidden">
             {/* Section header */}
             <div className="flex items-center justify-between px-4 py-3">
               <div className="flex items-center gap-2">
@@ -221,12 +221,12 @@ export function HydrationSkeleton() {
 
         {/* 2-col grid (weigh-in / fight) */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="glass-card rounded-2xl p-4 flex flex-col items-center space-y-2">
+          <div className="card-surface rounded-2xl p-4 flex flex-col items-center space-y-2">
             <Skeleton className="h-3 w-16" />
             <Skeleton className="h-4 w-24" />
             <Skeleton className="h-8 w-20" />
           </div>
-          <div className="glass-card rounded-2xl p-4 flex flex-col items-center space-y-2">
+          <div className="card-surface rounded-2xl p-4 flex flex-col items-center space-y-2">
             <Skeleton className="h-3 w-16" />
             <Skeleton className="h-4 w-24" />
             <Skeleton className="h-8 w-20" />
@@ -253,7 +253,7 @@ export function GoalsSkeleton() {
         {/* Personal Details */}
         <div className="space-y-2">
           <Skeleton className="h-3 w-28 ml-1" />
-          <div className="glass-card rounded-xl border border-border/50 overflow-hidden divide-y divide-border/50">
+          <div className="card-surface rounded-xl border border-border/50 overflow-hidden divide-y divide-border/50">
             {[1, 2, 3, 4].map((i) => (
               <div key={i} className="flex items-center justify-between p-3 sm:p-4">
                 <Skeleton className="h-4 w-24" />
@@ -266,7 +266,7 @@ export function GoalsSkeleton() {
         {/* Targets */}
         <div className="space-y-2">
           <Skeleton className="h-3 w-20 ml-1" />
-          <div className="glass-card rounded-xl border border-border/50 overflow-hidden divide-y divide-border/50">
+          <div className="card-surface rounded-xl border border-border/50 overflow-hidden divide-y divide-border/50">
             {[1, 2, 3].map((i) => (
               <div key={i} className="flex items-center justify-between p-3 sm:p-4">
                 <Skeleton className="h-4 w-28" />
@@ -279,7 +279,7 @@ export function GoalsSkeleton() {
         {/* Activity */}
         <div className="space-y-2">
           <Skeleton className="h-3 w-20 ml-1" />
-          <div className="glass-card rounded-xl border border-border/50 overflow-hidden divide-y divide-border/50">
+          <div className="card-surface rounded-xl border border-border/50 overflow-hidden divide-y divide-border/50">
             {[1, 2].map((i) => (
               <div key={i} className="flex items-center justify-between p-3 sm:p-4">
                 <Skeleton className="h-4 w-32" />

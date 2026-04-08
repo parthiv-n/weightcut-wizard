@@ -30,7 +30,7 @@ function ScoreBar({ label, value, color }: BarProps) {
 
 function getBarColor(value: number): string {
   if (value >= 80) return '#22c55e';
-  if (value >= 55) return '#3b82f6';
+  if (value >= 55) return 'hsl(var(--primary))';
   if (value >= 35) return '#f59e0b';
   return '#ef4444';
 }
@@ -69,7 +69,7 @@ export const ReadinessBreakdownCard = memo(function ReadinessBreakdownCard({ bre
   }
 
   return (
-    <div className="glass-card rounded-[20px] border border-border/50 overflow-hidden">
+    <div className="card-surface rounded-[20px] border border-border/50 overflow-hidden">
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}

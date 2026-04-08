@@ -28,7 +28,7 @@ export const SessionCard = memo(function SessionCard({ session, customColors, us
 
   return (
     <div
-      className="glass-card rounded-2xl p-5 cursor-pointer active:scale-[0.98] transition-all duration-200 border-border/10 overflow-hidden relative"
+      className="card-surface rounded-2xl p-5 cursor-pointer active:scale-[0.98] transition-all duration-200 border-border/10 overflow-hidden relative"
       onClick={() => onView(session)}
     >
       {/* Top color accent */}

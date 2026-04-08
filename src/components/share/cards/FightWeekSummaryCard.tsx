@@ -69,7 +69,7 @@ export const FightWeekSummaryCard = forwardRef<HTMLDivElement, FightWeekSummaryC
                 fontWeight: 700,
                 letterSpacing: "0.15em",
                 textTransform: "uppercase",
-                color: "#2563eb",
+                color: "hsl(var(--primary))",
                 marginBottom: s ? 8 : 4,
               }}
             >
@@ -126,7 +126,7 @@ export const FightWeekSummaryCard = forwardRef<HTMLDivElement, FightWeekSummaryC
           }}
         >
           <span>{currentWeight.toFixed(1)} kg</span>
-          <span style={{ color: "#2563eb", fontSize: s ? 28 : 20 }}>&rarr;</span>
+          <span style={{ color: "hsl(var(--primary))", fontSize: s ? 28 : 20 }}>&rarr;</span>
           <span style={{ color: "#22c55e" }}>{targetWeight.toFixed(1)} kg</span>
         </div>
 
@@ -216,8 +216,8 @@ export const FightWeekSummaryCard = forwardRef<HTMLDivElement, FightWeekSummaryC
             <MiniChart
               data={chartData}
               type="area"
-              color="#2563eb"
-              fillColor="rgba(37,99,235,0.15)"
+              color="hsl(var(--primary))"
+              fillColor="hsl(var(--primary) / 0.15)"
               referenceLine={targetWeight}
               referenceColor="#22c55e"
               height={s ? 260 : 160}

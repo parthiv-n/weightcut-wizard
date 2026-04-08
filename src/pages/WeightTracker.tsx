@@ -6,12 +6,11 @@ import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { format } from "date-fns";
-import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Sparkles, Activity, Scale, Trash2, RefreshCw, Bug, Edit2, ChevronDown, Check, CheckCircle2, Gem, Minus, Plus } from "lucide-react";
+import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Sparkles, Activity, Scale, Trash2, RefreshCw, Edit2, ChevronDown, Check, CheckCircle2, Gem, Minus, Plus } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { useUser } from "@/contexts/UserContext";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,6 +28,7 @@ import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { WeightTrackerCard } from "@/components/share/cards/WeightTrackerCard";
 import { WeighInResultCard } from "@/components/share/cards/WeighInResultCard";
 import type { Profile } from "@/pages/weight/types";
+import { isFighter } from "@/lib/goalType";
 import { useWeightData } from "@/hooks/weight/useWeightData";
 import { useWeightAnalysis } from "@/hooks/weight/useWeightAnalysis";
 import { useGems } from "@/hooks/useGems";
@@ -57,7 +57,6 @@ export default function WeightTracker() {
   const {
     analyzingWeight, aiAnalysis, aiAnalysisWeight, aiAnalysisTarget,
     unsafeGoalDialogOpen, setUnsafeGoalDialogOpen,
-    debugDialogOpen, setDebugDialogOpen, debugData,
     loadPersistedAnalysis, clearAnalysis, getAIAnalysis, handleAICancel,
     targetsApplied, applyingTargets, applyNutritionTargets,
   } = useWeightAnalysis({ profile });
@@ -331,7 +330,7 @@ export default function WeightTracker() {
                   />
                   <ReferenceLine y={profile?.fight_week_target_kg || profile?.goal_weight_kg} stroke="hsl(var(--primary))" strokeDasharray="5 5" label={{ value: "Target", fill: "hsl(var(--primary))", fontSize: 10, position: "insideTopRight" }} />
                   {profile?.fight_week_target_kg && (
-                    <ReferenceLine y={profile.goal_weight_kg} stroke="hsl(var(--destructive))" strokeDasharray="3 3" label={{ value: "Fight Night", fill: "hsl(var(--destructive))", fontSize: 10, position: "insideBottomRight" }} />
+                    <ReferenceLine y={profile.goal_weight_kg} stroke="hsl(var(--destructive))" strokeDasharray="3 3" label={{ value: isFighter(profile?.goal_type) ? "Fight Night" : "Goal Weight", fill: "hsl(var(--destructive))", fontSize: 10, position: "insideBottomRight" }} />
                   )}
                   <Line type="monotone" dataKey="weight" stroke="hsl(var(--primary))" strokeWidth={2.5} dot={{ fill: "hsl(var(--primary))", r: 4, cursor: "pointer" }} activeDot={{ r: 6, cursor: "pointer" }} animationDuration={0} />
                   {aiAnalysis && showProjected && (
@@ -724,14 +723,6 @@ export default function WeightTracker() {
           </Button>
         )}
 
-        {/* Debug Button */}
-        {debugData && (
-          <Button onClick={() => setDebugDialogOpen(true)} variant="ghost" size="sm" className="w-full opacity-50 text-xs">
-            <Bug className="h-3 w-3 mr-1" />
-            Debug AI Request/Response
-          </Button>
-        )}
-
         <DeleteConfirmDialog
           open={deleteDialogOpen}
           onOpenChange={setDeleteDialogOpen}
@@ -754,53 +745,6 @@ export default function WeightTracker() {
           </AlertDialogContent>
         </AlertDialog>
 
-        <Dialog open={debugDialogOpen} onOpenChange={setDebugDialogOpen}>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>AI Weight Loss Strategy - Debug Info</DialogTitle>
-              <DialogDescription>Debug information for the AI weight loss strategy request and response</DialogDescription>
-            </DialogHeader>
-            {debugData && (
-              <div className="space-y-6 mt-4">
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-sm">Current Weight Information</h3>
-                  <div className="bg-muted p-3 rounded-md text-sm font-mono">
-                    <div><strong>Source:</strong> {debugData.currentWeightSource}</div>
-                    <div><strong>Value Used:</strong> {debugData.currentWeightValue} kg</div>
-                    {debugData.latestWeightLog && (
-                      <div className="mt-2">
-                        <strong>Latest Weight Log:</strong>
-                        <div className="ml-4">
-                          Weight: {debugData.latestWeightLog.weight_kg} kg
-                          {debugData.latestWeightLog.date && <div>Date: {debugData.latestWeightLog.date}</div>}
-                        </div>
-                      </div>
-                    )}
-                    {!debugData.latestWeightLog && <div className="mt-2 text-muted-foreground">No weight log found, using profile weight</div>}
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-sm">Profile Data</h3>
-                  <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto font-mono">{JSON.stringify(debugData.profileData, null, 2)}</pre>
-                </div>
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-sm">Request Payload (Sent to API)</h3>
-                  <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto font-mono">{JSON.stringify(debugData.requestPayload, null, 2)}</pre>
-                </div>
-                <div className="space-y-2">
-                  <h3 className="font-semibold text-sm">Raw API Response</h3>
-                  <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto font-mono max-h-96 overflow-y-auto">{JSON.stringify(debugData.rawResponse, null, 2)}</pre>
-                </div>
-                {debugData.parsedResponse && (
-                  <div className="space-y-2">
-                    <h3 className="font-semibold text-sm">Parsed Response (Analysis)</h3>
-                    <pre className="bg-muted p-3 rounded-md text-xs overflow-x-auto font-mono max-h-96 overflow-y-auto">{JSON.stringify(debugData.parsedResponse, null, 2)}</pre>
-                  </div>
-                )}
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
       </div>
 
       <ShareCardDialog open={shareOpen} onOpenChange={setShareOpen} title="Share Weight Progress" shareTitle="Weight Journey" shareText="Check out my weight progress on FightCamp Wizard">

@@ -354,7 +354,7 @@ export function RoutineGeneratorSheet({ open, onOpenChange, onGenerate, onSave, 
                       <button
                         key={g.value}
                         onClick={() => toggleGoal(g.value)}
-                        className={`glass-card rounded-2xl border p-4 text-center transition-all active:scale-[0.97] ${
+                        className={`card-surface rounded-2xl border p-4 text-center transition-all active:scale-[0.97] ${
                           selected
                             ? "border-primary/50 ring-1 ring-primary/30 bg-primary/5"
                             : "border-border/50 hover:border-border"
@@ -392,7 +392,7 @@ export function RoutineGeneratorSheet({ open, onOpenChange, onGenerate, onSave, 
                           className={`px-5 py-3 rounded-2xl text-sm font-semibold transition-all active:scale-[0.97] ${
                             selected
                               ? "bg-primary text-primary-foreground shadow-sm"
-                              : "glass-card border border-border/50 text-muted-foreground hover:text-foreground"
+                              : "card-surface border border-border/50 text-muted-foreground hover:text-foreground"
                           }`}
                         >
                           {s.label}
@@ -446,7 +446,7 @@ export function RoutineGeneratorSheet({ open, onOpenChange, onGenerate, onSave, 
                           className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all active:scale-[0.98] ${
                             selected
                               ? "bg-primary/10 border border-primary/30"
-                              : "glass-card border border-border/30 hover:border-border/50"
+                              : "card-surface border border-border/30 hover:border-border/50"
                           }`}
                         >
                           <Icon className={`h-4 w-4 ${selected ? "text-primary" : "text-muted-foreground"}`} />
@@ -511,7 +511,7 @@ export function RoutineGeneratorSheet({ open, onOpenChange, onGenerate, onSave, 
             {/* STEP 4: GENERATE (summary + button) */}
             {step === "generate" && (
               <motion.div key="generate" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }} className="flex flex-col items-center justify-center py-4">
-                <div className="glass-card rounded-2xl border border-border/50 p-5 w-full mb-8">
+                <div className="card-surface rounded-2xl border border-border/50 p-5 w-full mb-8">
                   <h4 className="text-xs font-semibold text-muted-foreground/70 uppercase tracking-widest mb-3">Summary</h4>
                   <div className="space-y-2 text-sm">
                     <div className="flex justify-between">
@@ -595,7 +595,7 @@ export function RoutineGeneratorSheet({ open, onOpenChange, onGenerate, onSave, 
                 <ExerciseListGrouped exercises={generatedExercises} />
 
                 {routineNotes && (
-                  <div className="glass-card rounded-xl border border-border/30 p-3">
+                  <div className="card-surface rounded-xl border border-border/30 p-3">
                     <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wide mb-1">Coach Notes</p>
                     <p className="text-xs text-muted-foreground leading-relaxed">{routineNotes}</p>
                   </div>
