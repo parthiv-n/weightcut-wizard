@@ -37,6 +37,24 @@ export async function checkAIUsage(
 
   if (error) {
     console.error('[subscriptionGuard] RPC error:', error);
+    // Fallback: check profile directly before denying — premium users should never be blocked
+    try {
+      const { data: profile } = await adminClient
+        .from('profiles')
+        .select('subscription_tier, subscription_expires_at')
+        .eq('id', userId)
+        .single();
+      if (
+        profile?.subscription_tier &&
+        profile.subscription_tier !== 'free' &&
+        (!profile.subscription_expires_at || new Date(profile.subscription_expires_at) > new Date())
+      ) {
+        console.log('[subscriptionGuard] RPC failed but user is premium — allowing');
+        return { allowed: true, is_premium: true, used: 0, limit: -1 };
+      }
+    } catch (fallbackErr) {
+      console.error('[subscriptionGuard] Fallback profile check also failed:', fallbackErr);
+    }
     // Default to DENY on failure — never degrade to open access
     return { allowed: false, is_premium: false, used: 0, limit: 1, reason: 'service_error' };
   }
