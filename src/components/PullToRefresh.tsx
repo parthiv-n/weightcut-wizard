@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { RefreshCw } from "lucide-react";
+import { useProfile } from "@/contexts/UserContext";
+import { triggerHaptic } from "@/lib/haptics";
+import { ImpactStyle } from "@capacitor/haptics";
 
 const THRESHOLD = 80;
 const HOLD_MS = 300;
@@ -9,7 +12,8 @@ export function PullToRefresh() {
   const [refreshing, setRefreshing] = useState(false);
   const startY = useRef(0);
   const pulling = useRef(false);
-  const reachedAt = useRef<number | null>(null); // timestamp when pull crossed threshold
+  const reachedAt = useRef<number | null>(null);
+  const { refreshProfile } = useProfile();
 
   const getMain = useCallback(() => document.querySelector("main"), []);
 
@@ -58,7 +62,19 @@ export function PullToRefresh() {
       if (heldLongEnough && pullDistance >= THRESHOLD) {
         setRefreshing(true);
         setPullDistance(THRESHOLD * 0.6);
-        setTimeout(() => window.location.reload(), 400);
+        triggerHaptic(ImpactStyle.Medium);
+        // Soft refresh: re-fetch profile + simulate visibility change to trigger page data reloads
+        refreshProfile().then(() => {
+          // Dispatch visibilitychange — pages already listen to this for data refresh
+          document.dispatchEvent(new Event('visibilitychange'));
+          setTimeout(() => {
+            setRefreshing(false);
+            setPullDistance(0);
+          }, 600);
+        }).catch(() => {
+          setRefreshing(false);
+          setPullDistance(0);
+        });
       } else {
         setPullDistance(0);
       }

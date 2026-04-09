@@ -112,7 +112,7 @@ export function useRehydrationProtocol() {
         { icon: Activity, label: "Planning timeline" },
         { icon: Sparkles, label: "Generating protocol" },
       ],
-      returnPath: "/hydration",
+      returnPath: "/weight-cut?tab=rehydration",
     });
 
     try {

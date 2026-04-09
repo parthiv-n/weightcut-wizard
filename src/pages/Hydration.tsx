@@ -125,7 +125,7 @@ export default function Hydration() {
           />
         </div>
       )}
-      <div className="space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
+      <div className="space-y-2.5">
         {/* Header */}
         <div className="mb-2">
           <h1 className="text-lg font-semibold tracking-tight">Post-Weigh-In Rehydration</h1>

@@ -200,7 +200,7 @@ export default function FightWeek() {
         { icon: Shield, label: "Checking safety thresholds" },
         { icon: Sparkles, label: "Generating protocol" },
       ],
-      returnPath: "/fight-week",
+      returnPath: "/weight-cut",
     });
 
     try {
@@ -247,7 +247,7 @@ export default function FightWeek() {
   // Loading skeleton — matches the actual page layout
   if (initialLoading) {
     return (
-      <div className="space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
+      <div className="space-y-2.5">
         {/* Header */}
         <div className="space-y-1">
           <Skeleton className="h-7 w-36" />
@@ -295,7 +295,7 @@ export default function FightWeek() {
   const fwAiTask = aiTasks.find(t => t.status === "running" && t.type === "fight-week");
 
   return (
-    <div className="space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6 text-foreground">
+    <div className="space-y-2.5 text-foreground">
       {fwAiTask && (
         <AICompactOverlay
           isOpen={true}

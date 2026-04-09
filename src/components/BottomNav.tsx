@@ -1,4 +1,4 @@
-import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Droplets, Calendar, LogOut, HeartPulse, GitBranch, Trash2, Dumbbell } from "lucide-react";
+import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Calendar, LogOut, HeartPulse, GitBranch, Trash2, Dumbbell, TrendingDown } from "lucide-react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, memo } from "react";
 import { triggerHaptic, triggerHapticSelection } from "@/lib/haptics";
@@ -35,8 +35,7 @@ const moreMenuItems = [
   { title: "Fight Camps", url: "/fight-camps", icon: Trophy },
   { title: "Training Calendar", url: "/training-calendar", icon: Calendar },
   { title: "Recovery", url: "/recovery", icon: HeartPulse },
-  { title: "Rehydration", url: "/hydration", icon: Droplets },
-  { title: "Fight Week", url: "/fight-week", icon: Calendar },
+  { title: "Weight Cut", url: "/weight-cut", icon: TrendingDown },
   { title: "Skill Tree", url: "/skill-tree", icon: GitBranch },
   { title: "Gym Tracker", url: "/gym", icon: Dumbbell },
 ];
@@ -82,8 +81,7 @@ export const BottomNav = memo(function BottomNav() {
       import("../pages/GymTracker").catch(() => {});
       if (isFighter(goalType)) {
         import("../pages/FightCamps").catch(() => {});
-        import("../pages/Hydration").catch(() => {});
-        import("../pages/FightWeek").catch(() => {});
+        import("../pages/WeightCut").catch(() => {});
       }
     }
   }, [moreMenuOpen, goalType]);

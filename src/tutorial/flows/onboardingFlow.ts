@@ -50,7 +50,7 @@ export const onboardingFlow: TutorialFlow = {
       description:
         "Your post-weigh-in rehydration tool. Enter the weight you lost and get a personalised recovery protocol with fluid schedules and electrolyte timing.",
       position: "center",
-      navigateTo: "/hydration",
+      navigateTo: "/weight-cut?tab=rehydration",
       condition: (state) => state.goalType === "cutting",
     },
     {
@@ -75,7 +75,7 @@ export const onboardingFlow: TutorialFlow = {
       description:
         "Your fight week planner. Input your current weight and weigh-in target, then get a day-by-day protocol for water loading, sodium manipulation and your final cut.",
       position: "center",
-      navigateTo: "/fight-week",
+      navigateTo: "/weight-cut",
       condition: (state) =>
         state.goalType === "cutting" &&
         state.profileData?.fight_week_target_kg != null,

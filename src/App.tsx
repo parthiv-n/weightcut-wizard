@@ -35,8 +35,7 @@ const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Goals = lazy(() => import("./pages/Goals"));
 const Nutrition = lazy(() => import("./pages/Nutrition"));
 const WeightTracker = lazy(() => import("./pages/WeightTracker"));
-const Hydration = lazy(() => import("./pages/Hydration"));
-const FightWeek = lazy(() => import("./pages/FightWeek"));
+const WeightCut = lazy(() => import("./pages/WeightCut"));
 const FightCamps = lazy(() => import("./pages/FightCamps"));
 const FightCampDetail = lazy(() => import("./pages/FightCampDetail"));
 const TrainingCalendar = lazy(() => import("./pages/TrainingCalendar"));
@@ -51,10 +50,9 @@ _idle(() => {
   import("./pages/Dashboard").catch(() => {});
   import("./pages/Nutrition").catch(() => {});
   import("./pages/WeightTracker").catch(() => {});
-  import("./pages/FightWeek").catch(() => {});
+  import("./pages/WeightCut").catch(() => {});
   import("./pages/Recovery").catch(() => {});
   import("./pages/Goals").catch(() => {});
-  import("./pages/Hydration").catch(() => {});
   import("./pages/FightCamps").catch(() => {});
   import("./pages/FightCampDetail").catch(() => {});
   import("./pages/TrainingCalendar").catch(() => {});
@@ -249,13 +247,14 @@ const App = () => (
                   <Route path="/goals" element={<Goals />} />
                   <Route path="/nutrition" element={<Nutrition />} />
                   <Route path="/weight" element={<WeightTracker />} />
-                  <Route path="/hydration" element={<Hydration />} />
+                  <Route path="/weight-cut" element={<WeightCut />} />
+                  <Route path="/hydration" element={<Navigate to="/weight-cut?tab=rehydration" replace />} />
+                  <Route path="/fight-week" element={<Navigate to="/weight-cut" replace />} />
                   <Route path="/fight-camps" element={<FightCamps />} />
                   <Route path="/fight-camps/:id" element={<FightCampDetail />} />
                   <Route path="/training-calendar" element={<TrainingCalendar />} />
                   <Route path="/fight-camp-calendar" element={<Navigate to="/training-calendar" replace />} />
                   <Route path="/recovery" element={<Recovery />} />
-                  <Route path="/fight-week" element={<FightWeek />} />
                   <Route path="/skill-tree" element={<SkillTree />} />
                   <Route path="/gym" element={<GymTracker />} />
                 </Route>
