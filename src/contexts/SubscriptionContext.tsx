@@ -1,28 +1,12 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, ReactNode } from "react";
 import { useProfile, useAuth } from "@/contexts/UserContext";
-import { supabase } from "@/integrations/supabase/client";
 import { Capacitor } from "@capacitor/core";
 import { initializePurchases, addCustomerInfoUpdateListener, isPremiumFromCustomerInfo } from "@/lib/purchases";
 import { logger } from "@/lib/logger";
 
-// ─── localStorage-backed limit tracking (synchronous, survives re-renders) ───
+// ─── localStorage gem persistence ───
 
-const FREE_DAILY_LIMIT = 2;
-const AI_LIMIT_KEY_PREFIX = "wcw_ai_count_";
 const GEMS_KEY = "wcw_gems";
-
-function getLimitKey(): string {
-  return AI_LIMIT_KEY_PREFIX + new Date().toISOString().split("T")[0];
-}
-
-function getUsageCountToday(): number {
-  const val = localStorage.getItem(getLimitKey());
-  return val ? parseInt(val, 10) || 0 : 0;
-}
-
-export function isLimitHitToday(): boolean {
-  return getUsageCountToday() >= FREE_DAILY_LIMIT;
-}
 
 /** Read persisted gem count from localStorage */
 function getLocalGems(): number | null {
@@ -35,65 +19,22 @@ function setLocalGems(count: number): void {
   localStorage.setItem(GEMS_KEY, String(Math.max(0, count)));
 }
 
-function clearLimitFlag(): void {
-  Object.keys(localStorage).forEach((k) => {
-    if (k.startsWith(AI_LIMIT_KEY_PREFIX)) {
-      localStorage.removeItem(k);
-    }
-  });
-  // Also clear old boolean keys from previous format
-  Object.keys(localStorage).forEach((k) => {
-    if (k.startsWith("wcw_ai_limit_")) {
-      localStorage.removeItem(k);
-    }
-  });
-}
-
-function incrementUsageCount(): void {
-  // Clear old dates
-  Object.keys(localStorage).forEach((k) => {
-    if (k.startsWith(AI_LIMIT_KEY_PREFIX) && k !== getLimitKey()) {
-      localStorage.removeItem(k);
-    }
-  });
-  const current = getUsageCountToday();
-  localStorage.setItem(getLimitKey(), String(current + 1));
-}
-
-function markLimitHitToday(): void {
-  // Clear old dates
-  Object.keys(localStorage).forEach((k) => {
-    if (k.startsWith(AI_LIMIT_KEY_PREFIX) && k !== getLimitKey()) {
-      localStorage.removeItem(k);
-    }
-  });
-  localStorage.setItem(getLimitKey(), String(FREE_DAILY_LIMIT));
-}
-
 // ─── Context ───
-
-interface AIUsage {
-  used: number;
-  limit: number;
-}
 
 interface SubscriptionContextType {
   isPremium: boolean;
   tier: "free" | "premium_monthly" | "premium_annual" | "premium_lifetime";
   expiresAt: Date | null;
-  aiUsageToday: AIUsage;
-  aiResetTime: Date | null;
   gems: number;
-  limitTimerVisible: boolean;
   isPaywallOpen: boolean;
   isNoGemsOpen: boolean;
   openPaywall: () => void;
   closePaywall: () => void;
   openNoGemsDialog: () => void;
   closeNoGemsDialog: () => void;
-  refreshAIUsage: () => Promise<void>;
-  incrementLocalUsage: () => void;
-  markLimitReached: () => void;
+  refreshGems: () => Promise<void>;
+  onAICallSuccess: () => void;
+  onAICallBlocked: (serverGems?: number) => void;
   showWelcomePro: boolean;
   dismissWelcomePro: () => void;
 }
@@ -106,12 +47,6 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [isPaywallOpen, setIsPaywallOpen] = useState(false);
   const [isNoGemsOpen, setIsNoGemsOpen] = useState(false);
   const [showWelcomePro, setShowWelcomePro] = useState(false);
-  const [limitTimerVisible, setLimitTimerVisible] = useState(false);
-  const limitTimerTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [aiUsageToday, setAiUsageToday] = useState<AIUsage>(() => ({
-    used: getUsageCountToday(),
-    limit: FREE_DAILY_LIMIT,
-  }));
 
   const tier = (profile?.subscription_tier as SubscriptionContextType["tier"]) || "free";
   const expiresAt = profile?.subscription_expires_at
@@ -120,7 +55,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const isPremium =
     tier !== "free" && (expiresAt === null || expiresAt > new Date());
 
-  // Gems: localStorage-backed for persistence across refresh, synced from DB
+  // Gems: localStorage-backed for instant UI, synced from DB as source of truth
   const [gems, setGemsState] = useState<number>(() => {
     const local = getLocalGems();
     if (local !== null) return local;
@@ -147,11 +82,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
   const wasPremiumRef = useRef(isPremium);
 
-  // Clear stale AI limit flags and show welcome dialog when user becomes premium
+  // Show welcome dialog when user becomes premium
   useEffect(() => {
     if (isPremium) {
-      clearLimitFlag();
-      // Show welcome only on transition from free → premium (not on app reload when already premium)
       if (!wasPremiumRef.current && userId) {
         const welcomeKey = `wcw_welcome_pro_shown_${userId}`;
         if (!localStorage.getItem(welcomeKey)) {
@@ -162,6 +95,15 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     }
     wasPremiumRef.current = isPremium;
   }, [isPremium, userId]);
+
+  // Clean up old rate-limit localStorage keys from previous system
+  useEffect(() => {
+    Object.keys(localStorage).forEach((k) => {
+      if (k.startsWith("wcw_ai_count_") || k.startsWith("wcw_ai_limit_")) {
+        localStorage.removeItem(k);
+      }
+    });
+  }, []);
 
   // Initialize RevenueCat when userId becomes available
   useEffect(() => {
@@ -175,10 +117,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       const cleanup = await addCustomerInfoUpdateListener(async (customerInfo) => {
         const isNowPremium = isPremiumFromCustomerInfo(customerInfo);
         if (isNowPremium) {
-          // Wait for RevenueCat webhook to update Supabase profile
           await new Promise(r => setTimeout(r, 2000));
           await refreshProfile();
-          refreshAIUsage();
         }
       });
       removeListener = cleanup;
@@ -193,115 +133,35 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     };
   }, [userId, refreshProfile]);
 
-  // Fetch current AI usage on mount — but respect localStorage flag
-  const refreshAIUsage = useCallback(async () => {
-    if (!userId || isPremium) {
-      if (isPremium) clearLimitFlag();
-      setAiUsageToday({ used: 0, limit: isPremium ? -1 : FREE_DAILY_LIMIT });
-      return;
-    }
+  // Refresh gems from profile (DB is source of truth)
+  const refreshGems = useCallback(async () => {
+    if (userId) await refreshProfile();
+  }, [userId, refreshProfile]);
 
-    // If localStorage says limit was hit today, don't let server reset it
-    if (isLimitHitToday()) {
-      setAiUsageToday({ used: FREE_DAILY_LIMIT, limit: FREE_DAILY_LIMIT });
-      return;
-    }
-
-    try {
-      const today = new Date().toISOString().split("T")[0];
-      const { data } = await supabase
-        .from("rate_limits")
-        .select("request_count, window_start")
-        .eq("function_name", "ai_daily")
-        .eq("user_id", userId)
-        .maybeSingle();
-
-      if (data && data.window_start?.startsWith(today)) {
-        const serverUsed = data.request_count;
-        if (serverUsed >= FREE_DAILY_LIMIT) {
-          markLimitHitToday();
-        }
-        setAiUsageToday({ used: serverUsed, limit: FREE_DAILY_LIMIT });
-      } else {
-        setAiUsageToday({ used: 0, limit: FREE_DAILY_LIMIT });
-      }
-    } catch {
-      // Fail silently — server is source of truth
-    }
-  }, [userId, isPremium]);
-
-  useEffect(() => {
-    refreshAIUsage();
-  }, [refreshAIUsage]);
-
-  // Called after a successful AI call — increments usage count + deducts gem
-  const incrementLocalUsage = useCallback(() => {
+  // Called after a successful AI call — optimistically deduct 1 gem, then sync from DB
+  const onAICallSuccess = useCallback(() => {
     if (!isPremium) {
-      incrementUsageCount();
-      const newCount = getUsageCountToday();
-      setAiUsageToday({ used: newCount, limit: FREE_DAILY_LIMIT });
-      // If over free limit, server already deducted a gem — sync profile immediately
-      if (newCount > FREE_DAILY_LIMIT) {
-        window.dispatchEvent(new Event('gem-consumed'));
-        if (userId) refreshProfile();
-      } else {
-        // Free call — sync profile to stay current
-        if (userId) refreshProfile();
-      }
+      setGems(prev => prev - 1);
+      window.dispatchEvent(new Event('gem-consumed'));
+      if (userId) refreshProfile();
     }
-  }, [isPremium, userId, refreshProfile]);
+  }, [isPremium, userId, refreshProfile, setGems]);
 
-  // Called when server returns 429 — ensures client stays blocked
-  const markLimitReached = useCallback(() => {
-    if (!isPremium) {
-      markLimitHitToday();
-      setAiUsageToday({ used: FREE_DAILY_LIMIT, limit: FREE_DAILY_LIMIT });
+  // Called when server returns 429 — sync gem count from server response
+  const onAICallBlocked = useCallback((serverGems?: number) => {
+    console.log("[onAICallBlocked]", { isPremium, gems, serverGems });
+    if (!isPremium && serverGems !== undefined) {
+      setGems(serverGems);
     }
-  }, [isPremium]);
-
-  // Compute reset time: midnight tonight (local) when limit is hit
-  const aiResetTime = useMemo<Date | null>(() => {
-    if (isPremium || !isLimitHitToday()) return null;
-    const midnight = new Date();
-    midnight.setHours(24, 0, 0, 0);
-    return midnight;
-  }, [isPremium, aiUsageToday]);
-
-  // Auto-unlock check every 30s — detects date rollover at midnight
-  useEffect(() => {
-    if (isPremium || !isLimitHitToday()) return;
-    const interval = setInterval(() => {
-      if (!isLimitHitToday()) {
-        clearLimitFlag();
-        setAiUsageToday({ used: 0, limit: FREE_DAILY_LIMIT });
-      }
-    }, 30_000);
-    return () => clearInterval(interval);
-  }, [isPremium]);
-
-  // Clean up limit timer on unmount
-  useEffect(() => {
-    return () => {
-      if (limitTimerTimeout.current) clearTimeout(limitTimerTimeout.current);
-    };
-  }, []);
-
-  // Flash the limit timer for 5s whenever a locked feature is tapped
-  const flashLimitTimer = useCallback(() => {
-    if (limitTimerTimeout.current) clearTimeout(limitTimerTimeout.current);
-    setLimitTimerVisible(true);
-    limitTimerTimeout.current = setTimeout(() => setLimitTimerVisible(false), 5000);
-  }, []);
+  }, [isPremium, gems, setGems]);
 
   const openPaywall = useCallback(() => {
-    if (isPremium) return; // Premium users never see the paywall
+    if (isPremium) return;
     setIsPaywallOpen(true);
-    // Also show the transient timer toast if limit is hit
-    if (isLimitHitToday()) flashLimitTimer();
-  }, [isPremium, flashLimitTimer]);
+  }, [isPremium]);
   const closePaywall = useCallback(() => setIsPaywallOpen(false), []);
   const openNoGemsDialog = useCallback(() => {
-    if (isPremium) return; // Premium users never see the no-gems dialog
+    if (isPremium) return;
     setIsNoGemsOpen(true);
   }, [isPremium]);
   const closeNoGemsDialog = useCallback(() => setIsNoGemsOpen(false), []);
@@ -313,19 +173,16 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         isPremium,
         tier,
         expiresAt,
-        aiUsageToday,
-        aiResetTime,
         gems,
-        limitTimerVisible,
         isPaywallOpen,
         isNoGemsOpen,
         openPaywall,
         closePaywall,
         openNoGemsDialog,
         closeNoGemsDialog,
-        refreshAIUsage,
-        incrementLocalUsage,
-        markLimitReached,
+        refreshGems,
+        onAICallSuccess,
+        onAICallBlocked,
         showWelcomePro,
         dismissWelcomePro,
       }}

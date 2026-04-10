@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { format, parseISO } from "date-fns";
-import { Activity, Moon, Ruler, Pencil, Trash2, Route, Timer, Gauge } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { decodeRunMeta } from "@/lib/runMeta";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -24,14 +24,11 @@ function isVideo(url: string): boolean {
   return /\.(mp4|mov|webm|avi|m4v)(\?|$)/i.test(url);
 }
 
-function MetricRow({ label, value, icon }: { label: string; value: string; icon?: React.ReactNode }) {
+function MetricChip({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <div className="flex items-center justify-between py-2.5 px-1">
-      <span className="text-sm text-muted-foreground flex items-center gap-1.5">
-        {icon}
-        {label}
-      </span>
-      <span className="text-sm font-semibold">{value}</span>
+    <div className="flex flex-col items-center gap-0.5 rounded-xl bg-muted/30 dark:bg-white/[0.03] border border-border/20 px-3 py-2 min-w-0">
+      <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{label}</span>
+      <span className="text-base font-bold tabular-nums" style={color ? { color } : undefined}>{value}</span>
     </div>
   );
 }
@@ -92,55 +89,41 @@ export function SessionDetailDrawer({
             </div>
           )}
 
-          {/* Metrics */}
-          <div className="rounded-2xl border border-border/10 divide-y divide-border/10 px-3">
+          {/* Notes — prominent, first thing the user sees */}
+          {(isRun ? cleanNotes : session.notes) && (
+            <div className="rounded-2xl border border-border/20 bg-muted/10 dark:bg-white/[0.02] p-4">
+              <p className="text-[13px] text-foreground leading-relaxed whitespace-pre-wrap">{isRun ? cleanNotes : session.notes}</p>
+            </div>
+          )}
+
+          {/* Metrics — compact chip grid */}
+          <div className="grid grid-cols-3 gap-2">
             {isRest ? (
               <>
-                {session.sleep_quality && (
-                  <MetricRow label="Sleep Quality" value={session.sleep_quality} icon={<Moon className="h-3.5 w-3.5 text-primary" />} />
-                )}
-                {session.fatigue_level != null && (
-                  <MetricRow label="Fatigue Level" value={`${session.fatigue_level}/10`} />
-                )}
-                {session.mobility_done != null && (
-                  <MetricRow label="Mobility" value={session.mobility_done ? "Done" : "Skipped"} />
-                )}
+                {session.sleep_quality && <MetricChip label="Sleep" value={session.sleep_quality} />}
+                {session.fatigue_level != null && <MetricChip label="Fatigue" value={`${session.fatigue_level}/10`} />}
+                {session.mobility_done != null && <MetricChip label="Mobility" value={session.mobility_done ? "Done" : "Skip"} />}
               </>
             ) : (
               <>
-                {isRun && runMeta && (
+                {isRun && runMeta ? (
                   <>
-                    {runMeta.distance && (
-                      <MetricRow label="Distance" value={`${runMeta.distance} ${runMeta.unit}`} icon={<Route className="h-3.5 w-3.5 text-primary" />} />
-                    )}
-                    {runMeta.time && (
-                      <MetricRow label="Time" value={runMeta.time} icon={<Timer className="h-3.5 w-3.5 text-primary" />} />
-                    )}
-                    {runMeta.pace && (
-                      <MetricRow label="Pace" value={`${runMeta.pace} /${runMeta.unit}`} icon={<Gauge className="h-3.5 w-3.5 text-primary" />} />
-                    )}
+                    {runMeta.distance && <MetricChip label="Distance" value={`${runMeta.distance} ${runMeta.unit}`} color={sessionColor} />}
+                    {runMeta.time && <MetricChip label="Time" value={runMeta.time} />}
+                    {runMeta.pace && <MetricChip label="Pace" value={`${runMeta.pace}/${runMeta.unit}`} />}
+                  </>
+                ) : (
+                  <>
+                    <MetricChip label="Duration" value={`${session.duration_minutes}m`} color={sessionColor} />
+                    <MetricChip label="RPE" value={`${session.rpe}/10`} />
+                    <MetricChip label="Intensity" value={`${intensityDisplay}/5`} />
                   </>
                 )}
-                <MetricRow label="Duration" value={`${session.duration_minutes} min`} icon={<Activity className="h-3.5 w-3.5 text-primary" />} />
-                <MetricRow label="RPE" value={`${session.rpe}/10`} icon={<Activity className="h-3.5 w-3.5 text-primary" />} />
-                <MetricRow label="Intensity" value={`${intensityDisplay}/5`} icon={<Ruler className="h-3.5 w-3.5 text-primary" />} />
-                {(session.soreness_level ?? 0) > 0 && (
-                  <MetricRow label="Soreness" value={`${session.soreness_level}/10`} />
-                )}
+                {(session.soreness_level ?? 0) > 0 && <MetricChip label="Soreness" value={`${session.soreness_level}/10`} />}
+                {(session.sleep_hours ?? 0) > 0 && <MetricChip label="Sleep" value={`${session.sleep_hours}h`} />}
               </>
             )}
-            {(session.sleep_hours ?? 0) > 0 && !isRest && (
-              <MetricRow label="Sleep" value={`${session.sleep_hours}h`} icon={<Moon className="h-3.5 w-3.5 text-primary" />} />
-            )}
           </div>
-
-          {/* Notes */}
-          {(isRun ? cleanNotes : session.notes) && (
-            <div>
-              <p className="text-xs font-medium tracking-wide uppercase text-muted-foreground mb-1.5">Notes</p>
-              <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">{isRun ? cleanNotes : session.notes}</p>
-            </div>
-          )}
 
           {/* Actions */}
           <div className="flex gap-3 pt-1">

@@ -345,15 +345,15 @@ ${sessionsText}${checkInText}${athleteBaselineText}`;
 
     if (!response!.ok) {
       if (response!.status === 429) {
-        let detail = "Rate limit exceeded. Please try again in a minute.";
+        let detail = "AI service is busy. Please try again in a moment.";
         try {
           const body = await response!.json();
           detail = body?.error?.message || body?.error || detail;
           edgeLogger.error("Grok 429 detail", undefined, { functionName: "fight-camp-coach", detail });
         } catch { /* body already consumed or not JSON */ }
         return new Response(
-          JSON.stringify({ error: detail }),
-          { status: 429, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
+          JSON.stringify({ error: detail, code: "AI_BUSY" }),
+          { status: 503, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
         );
       }
       const errorText = await response!.text();

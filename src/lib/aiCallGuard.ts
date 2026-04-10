@@ -23,7 +23,7 @@ export async function invokeAIFunction<T = any>(
     isPremium: boolean;
     checkAIAccess: () => boolean;
     openPaywall: () => void;
-    incrementLocalUsage: () => void;
+    onAICallSuccess: () => void;
   },
   options?: { signal?: AbortSignal }
 ): Promise<AICallResult<T>> {
@@ -66,7 +66,7 @@ export async function invokeAIFunction<T = any>(
     }
 
     // Success — increment local counter
-    subscriptionCtx.incrementLocalUsage();
+    subscriptionCtx.onAICallSuccess();
     return { data: data as T, error: null, blocked: false };
   } catch (err) {
     return { data: null, error: err, blocked: false };

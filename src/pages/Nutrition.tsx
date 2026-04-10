@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Sparkles, Calendar as CalendarIcon, Loader2, Settings, Edit2, X, Activity, Utensils, Database, PieChart as PieChartIcon, Search, CheckCircle, ChevronDown, ChevronUp, ChevronRight, ScanLine, Dumbbell, Sunrise, Salad, UtensilsCrossed, Apple, Mic, MicOff, Gem } from "lucide-react";
+import { Plus, Sparkles, Calendar as CalendarIcon, Loader2, Settings, Edit2, X, Activity, Utensils, Database, PieChart as PieChartIcon, Search, CheckCircle, ChevronDown, ChevronUp, ChevronRight, ScanLine, Dumbbell, Sunrise, Salad, UtensilsCrossed, Apple, Mic, MicOff, Gem, Copy, RotateCcw, Star } from "lucide-react";
 import wizardLogo from "@/assets/wizard-logo.webp";
 import { MealCard } from "@/components/nutrition/MealCard";
 import { MealCardSkeleton } from "@/components/ui/skeleton-loader";
@@ -45,6 +45,7 @@ import {
   useDietAnalysis,
   useNutritionWisdom,
   useMacroCalculation,
+  useQuickMealActions,
   setQuickAddSheetOpenRef,
 } from "@/hooks/nutrition";
 
@@ -119,6 +120,8 @@ export default function Nutrition() {
     totalCalories, totalProtein, totalCarbs, totalFats,
     dailyCalorieTarget, aiMacroGoals, mealsLength: meals.length,
   });
+
+  const quickActions = useQuickMealActions({ meals, selectedDate, saveMealToDb: mealOps.saveMealToDb });
 
   const macroCalc = useMacroCalculation();
 
@@ -568,11 +571,29 @@ export default function Nutrition() {
                 <p className="text-[11px] text-muted-foreground mt-0.5 leading-relaxed">
                   Describe what you ate and AI will calculate the macros for you.
                 </p>
-                <Button variant="outline" size="sm" className="mt-2 h-7 text-[11px] font-semibold"
-                  onClick={() => { setQuickAddTab("ai"); setIsQuickAddSheetOpen(true); }}
-                >
-                  <Sparkles className="h-3.5 w-3.5 mr-1.5" />Quick Add with AI
-                </Button>
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  <Button variant="outline" size="sm" className="h-7 text-[11px] font-semibold"
+                    onClick={() => { setQuickAddTab("ai"); setIsQuickAddSheetOpen(true); }}
+                  >
+                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />Quick Add with AI
+                  </Button>
+                  {quickActions.previousDayMealCount > 0 && (
+                    <Button variant="outline" size="sm" className="h-7 text-[11px] font-semibold"
+                      onClick={quickActions.copyPreviousDay} disabled={quickActions.copyingPreviousDay}
+                    >
+                      {quickActions.copyingPreviousDay ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Copy className="h-3.5 w-3.5 mr-1.5" />}
+                      Copy Yesterday ({quickActions.previousDayMealCount})
+                    </Button>
+                  )}
+                  {quickActions.lastMeal && (
+                    <Button variant="outline" size="sm" className="h-7 text-[11px] font-semibold max-w-[200px]"
+                      onClick={() => quickActions.repeatLastMeal()}
+                    >
+                      <RotateCcw className="h-3.5 w-3.5 mr-1.5 flex-shrink-0" />
+                      <span className="truncate">Repeat: {quickActions.lastMeal.meal_name}</span>
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -635,7 +656,7 @@ export default function Nutrition() {
                 {groupMeals.length > 0 ? (
                   <div className="px-2">
                     {groupMeals.map((meal) => (
-                      <MealCard key={meal.id} meal={meal} onDelete={() => handleDeleteMeal(meal)} />
+                      <MealCard key={meal.id} meal={meal} onDelete={() => handleDeleteMeal(meal)} onFavorite={() => quickActions.toggleFavorite(meal)} isFavorited={quickActions.isFavorited(meal)} />
                     ))}
                   </div>
                 ) : nutritionData.mealsLoading ? (
@@ -652,7 +673,7 @@ export default function Nutrition() {
                     {isActionExpanded ? <ChevronUp className="h-3 w-3 ml-0.5" /> : <ChevronDown className="h-3 w-3 ml-0.5" />}
                   </button>
                   {isActionExpanded && (
-                    <div className="grid grid-cols-4 gap-1 px-3 pb-3 pt-1 animate-fade-in">
+                    <div className={`grid ${quickActions.lastMeal ? "grid-cols-5" : "grid-cols-4"} gap-1 px-3 pb-3 pt-1 animate-fade-in`}>
                       <button onClick={() => openFoodSearch(mealType)} className="flex flex-col items-center gap-1 py-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors">
                         <Search className="h-4 w-4 text-blue-500" /><span className="text-[10px] text-muted-foreground">Search</span>
                       </button>
@@ -671,6 +692,12 @@ export default function Nutrition() {
                       }} className="flex flex-col items-center gap-1 py-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors">
                         <Edit2 className="h-4 w-4 text-green-500" /><span className="text-[10px] text-muted-foreground">Manual</span>
                       </button>
+                      {quickActions.lastMeal && (
+                        <button onClick={() => { quickActions.repeatLastMeal(mealType); setExpandedMealActions(null); }}
+                          className="flex flex-col items-center gap-1 py-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors">
+                          <RotateCcw className="h-4 w-4 text-amber-500" /><span className="text-[10px] text-muted-foreground">Repeat</span>
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -680,6 +707,46 @@ export default function Nutrition() {
             );
           })}
         </div>
+
+        {/* Favorites Section */}
+        {quickActions.favorites.length > 0 && (
+          <div className="card-surface overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setCollapsedSections(prev => {
+                const next = new Set(prev);
+                if (next.has("favorites")) next.delete("favorites"); else next.add("favorites");
+                return next;
+              })}
+              className="w-full flex items-center justify-between px-3 py-2 hover:bg-muted/30 active:bg-muted/50 transition-colors"
+            >
+              <div className="flex items-center gap-1.5">
+                <Star className="h-3.5 w-3.5 text-amber-400 fill-amber-400" />
+                <h3 className="text-[13px] font-semibold">Favorites</h3>
+                <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform duration-200 ${collapsedSections.has("favorites") ? "-rotate-90" : ""}`} />
+              </div>
+              <span className="text-xs font-medium text-muted-foreground tabular-nums">{quickActions.favorites.length}</span>
+            </button>
+            {!collapsedSections.has("favorites") && (
+              <div className="px-2 pb-2 space-y-0.5">
+                {quickActions.favorites.slice(0, 10).map((fav, i) => (
+                  <button key={`${fav.meal_name}-${i}`} onClick={() => quickActions.logFavorite(fav)}
+                    className="w-full flex items-center justify-between px-2.5 py-2 rounded-xl hover:bg-muted/30 active:bg-muted/50 transition-colors group"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Star className="h-3 w-3 fill-amber-400 text-amber-400 flex-shrink-0" />
+                      <span className="text-[11px] font-semibold truncate">{fav.meal_name}</span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="text-[10px] tabular-nums text-muted-foreground">{fav.calories} kcal</span>
+                      <Plus className="h-3 w-3 text-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Diet Analysis Section */}
         <div data-tutorial="analyse-diet">

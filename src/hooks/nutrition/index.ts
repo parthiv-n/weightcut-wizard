@@ -6,3 +6,4 @@ export { useMealPlanGeneration } from "./useMealPlanGeneration";
 export { useDietAnalysis } from "./useDietAnalysis";
 export { useNutritionWisdom } from "./useNutritionWisdom";
 export { useMacroCalculation, calculateMacrosFromCalories, adjustMacrosToMatchCalories } from "./useMacroCalculation";
+export { useQuickMealActions } from "./useQuickMealActions";

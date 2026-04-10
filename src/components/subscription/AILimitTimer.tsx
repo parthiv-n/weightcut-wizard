@@ -1,74 +1,58 @@
 import { useState, useEffect } from "react";
-import { Clock, Zap } from "lucide-react";
+import { Gem, Zap } from "lucide-react";
 import { useSubscriptionContext } from "@/contexts/SubscriptionContext";
 
-function formatCountdown(ms: number): string {
-  if (ms <= 0) return "0:00";
-  const totalSeconds = Math.floor(ms / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-  }
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
-}
-
-export function useAICountdown(): string | null {
-  const { aiResetTime, isPremium } = useSubscriptionContext();
-  const [now, setNow] = useState(() => Date.now());
+/** Returns "Xh Ym" until midnight local time, or null if not applicable */
+export function useNextGemCountdown(gems: number, isPremium: boolean): string | null {
+  const [countdown, setCountdown] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!aiResetTime || isPremium) return;
-    const interval = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(interval);
-  }, [aiResetTime, isPremium]);
+    if (isPremium || gems >= 2) {
+      setCountdown(null);
+      return;
+    }
 
-  if (!aiResetTime || isPremium) return null;
-  const remaining = aiResetTime.getTime() - now;
-  if (remaining <= 0) return null;
-  return formatCountdown(remaining);
+    const tick = () => {
+      const now = new Date();
+      const midnight = new Date();
+      midnight.setHours(24, 0, 0, 0);
+      const diff = midnight.getTime() - now.getTime();
+      if (diff <= 0) {
+        setCountdown(null);
+        return;
+      }
+      const h = Math.floor(diff / 3_600_000);
+      const m = Math.floor((diff % 3_600_000) / 60_000);
+      setCountdown(`${h}h ${m}m`);
+    };
+
+    tick();
+    const id = setInterval(tick, 60_000);
+    return () => clearInterval(id);
+  }, [gems, isPremium]);
+
+  return countdown;
 }
 
 export function AILimitTimer() {
-  const { openPaywall, refreshAIUsage, aiResetTime, isPremium, limitTimerVisible } = useSubscriptionContext();
-  const countdown = useAICountdown();
-  const [fading, setFading] = useState(false);
+  const { openPaywall, isPremium, gems } = useSubscriptionContext();
+  const countdown = useNextGemCountdown(gems, isPremium);
 
-  // Start fade-out 0.5s before hiding
-  useEffect(() => {
-    if (!limitTimerVisible) {
-      setFading(false);
-      return;
-    }
-    const fadeTimer = setTimeout(() => setFading(true), 4500);
-    return () => clearTimeout(fadeTimer);
-  }, [limitTimerVisible]);
-
-  // Auto-refresh when countdown expires
-  useEffect(() => {
-    if (!aiResetTime || isPremium) return;
-    const remaining = aiResetTime.getTime() - Date.now();
-    if (remaining <= 0) {
-      refreshAIUsage();
-    }
-  }, [countdown, aiResetTime, isPremium, refreshAIUsage]);
-
-  if (!limitTimerVisible || !countdown) return null;
+  if (isPremium || gems > 0) return null;
 
   return (
     <div
-      className={`fixed bottom-[calc(env(safe-area-inset-bottom,0px)+5rem)] left-1/2 -translate-x-1/2 z-[9999] md:hidden transition-all duration-500 ${
-        fading ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0 animate-in slide-in-from-bottom duration-300"
-      }`}
+      className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+5rem)] left-1/2 -translate-x-1/2 z-[9999] md:hidden animate-in slide-in-from-bottom duration-300"
     >
       <div className="flex items-center gap-2.5 rounded-xl card-surface border border-primary/20 bg-background/95 px-3.5 py-2.5 shadow-lg shadow-black/20">
         <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-          <Clock className="h-4 w-4 text-primary" />
+          <Gem className="h-4 w-4 text-primary" />
         </div>
         <div className="flex flex-col">
-          <span className="text-[11px] text-muted-foreground leading-tight">Free AI resets in</span>
-          <span className="text-sm font-bold text-foreground tabular-nums leading-tight">{countdown}</span>
+          <span className="text-[11px] text-muted-foreground leading-tight">No gems left</span>
+          {countdown && (
+            <span className="text-sm font-bold text-foreground tabular-nums leading-tight">Free gem in {countdown}</span>
+          )}
         </div>
         <button
           onClick={openPaywall}

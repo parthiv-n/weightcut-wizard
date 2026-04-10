@@ -24,7 +24,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
   const { userId } = useUser();
   const { toast } = useToast();
   const { isMounted } = useSafeAsync();
-  const { checkAIAccess, openPaywall, openNoGemsDialog, incrementLocalUsage, markLimitReached, handleAILimitError } = useSubscription();
+  const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
   const { addTask, completeTask, failTask } = useAITask();
   const aiAbortRef = useRef<AbortController | null>(null);
 
@@ -108,11 +108,11 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
         if (controller.signal.aborted) return;
         if (error) {
-          if (handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
+          if (await handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
           throw new Error(await extractEdgeFunctionError(error, "Failed to analyze meal"));
         }
         if (data?.error) throw new Error(data.error);
-        incrementLocalUsage();
+        onAICallSuccess();
         nutritionData = data.nutritionData;
         if (userId && nutritionData) {
           AIPersistence.save(userId, mealCacheKey, nutritionData, 24 * 7);
@@ -234,11 +234,11 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
       if (ingController.signal.aborted) return;
       if (error) {
-        if (handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
+        if (await handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
         throw new Error(await extractEdgeFunctionError(error, "Failed to analyze ingredient"));
       }
       if (data?.error) throw new Error(data.error);
-      incrementLocalUsage();
+      onAICallSuccess();
 
       const { nutritionData } = data;
 
@@ -388,7 +388,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       });
 
       if (error) {
-        if (handleAILimitError(error)) return null;
+        if (await handleAILimitError(error)) return null;
         logger.error("Ingredient lookup error", error);
         return null;
       }
@@ -399,7 +399,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       }
 
       if (data?.nutritionData) {
-        incrementLocalUsage();
+        onAICallSuccess();
         return data.nutritionData;
       }
 

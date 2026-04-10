@@ -26,10 +26,8 @@ export function useRoutines() {
   const { addTask, completeTask, failTask } = useAITask();
   const {
     checkAIAccess,
-    openPaywall,
     openNoGemsDialog,
-    incrementLocalUsage,
-    markLimitReached,
+    onAICallSuccess,
     handleAILimitError,
   } = useSubscription();
 
@@ -102,11 +100,11 @@ export function useRoutines() {
         );
 
         if (error) {
-          if (handleAILimitError(error)) { failTask(taskId, "Limit reached"); return null; }
+          if (await handleAILimitError(error)) { failTask(taskId, "Limit reached"); return null; }
           throw error;
         }
 
-        incrementLocalUsage();
+        onAICallSuccess();
         const routine = data?.routineData || data;
         if (!routine?.exercises) {
           failTask(taskId, "No exercises returned");
@@ -135,10 +133,8 @@ export function useRoutines() {
     },
     [
       checkAIAccess,
-      openPaywall,
       openNoGemsDialog,
-      incrementLocalUsage,
-      markLimitReached,
+      onAICallSuccess,
       handleAILimitError,
       safeAsync,
       isMounted,

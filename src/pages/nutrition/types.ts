@@ -79,6 +79,19 @@ export interface EditingTargets {
   fats: string;
 }
 
+export interface MealTemplate {
+  meal_name: string;
+  calories: number;
+  protein_g?: number;
+  carbs_g?: number;
+  fats_g?: number;
+  meal_type?: string;
+  portion_size?: string;
+  recipe_notes?: string;
+  ingredients?: Ingredient[];
+  savedAt: number;
+}
+
 export interface BarcodeBaseMacros {
   calories: number;
   protein_g: number;

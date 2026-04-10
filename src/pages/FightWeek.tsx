@@ -48,7 +48,7 @@ export default function FightWeek() {
 
   const { toast } = useToast();
   const { userId, profile } = useUser();
-  const { checkAIAccess, openNoGemsDialog, incrementLocalUsage, handleAILimitError } = useSubscription();
+  const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
   const { tasks: aiTasks, dismissTask: aiDismiss, addTask, completeTask, failTask } = useAITask();
   const { safeAsync, isMounted } = useSafeAsync();
   const aiAbortRef = useRef<AbortController | null>(null);
@@ -220,12 +220,12 @@ export default function FightWeek() {
       if (!isMounted()) return;
 
       if (error) {
-        if (handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
+        if (await handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
         const msg = await extractEdgeFunctionError(error, "AI advice unavailable");
         failTask(taskId, msg);
         toast({ title: "AI advice unavailable", description: msg, variant: "destructive" });
       } else if (data?.advice) {
-        incrementLocalUsage();
+        onAICallSuccess();
         setAiAdvice(data.advice);
         AIPersistence.save(userId, "fight_week_advice", data.advice, 48);
         completeTask(taskId, data.advice);

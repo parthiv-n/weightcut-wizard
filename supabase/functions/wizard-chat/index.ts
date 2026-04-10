@@ -321,8 +321,8 @@ Example of what TO do: "Eggs are a great choice here. Four to six whole eggs wou
 
       if (response.status === 429) {
         return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-          { status: 429, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
+          JSON.stringify({ error: "AI service is busy. Please try again in a moment.", code: "AI_BUSY" }),
+          { status: 503, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
         );
       }
 

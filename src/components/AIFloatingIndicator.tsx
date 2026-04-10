@@ -99,8 +99,21 @@ export function AIFloatingIndicator() {
     });
   }, [tasks]);
 
-  // Show all tasks not on their own page
-  const visible = tasks.filter((t) => location.pathname !== t.returnPath);
+  // Auto-dismiss error tasks when user is on the page that called the AI
+  // (they already see the error inline on that page)
+  useEffect(() => {
+    tasks.forEach((t) => {
+      if (t.status === "error" && location.pathname === t.returnPath) {
+        dismissTask(t.id);
+      }
+    });
+  }, [tasks, location.pathname, dismissTask]);
+
+  // Show running/done tasks not on their own page; never show error tasks
+  // (errors auto-fade via AITaskContext 5s cleanup, and are dismissed above when user is on the page)
+  const visible = tasks.filter(
+    (t) => t.status !== "error" && location.pathname !== t.returnPath
+  );
 
   if (visible.length === 0) return null;
 

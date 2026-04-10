@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Edit2, Trash2, ChevronDown, Sparkles } from "lucide-react";
+import { Edit2, Trash2, ChevronDown, Sparkles, Star } from "lucide-react";
 import { useState, useRef, useEffect, memo } from "react";
 import { motion, useMotionValue, useReducedMotion } from "motion/react";
 import { springs } from "@/lib/motion";
@@ -33,11 +33,13 @@ interface MealCardProps {
   };
   onEdit?: () => void;
   onDelete?: () => void;
+  onFavorite?: () => void;
+  isFavorited?: boolean;
 }
 
 const DELETE_THRESHOLD = -80;
 
-export const MealCard = memo(function MealCard({ meal, onEdit, onDelete }: MealCardProps) {
+export const MealCard = memo(function MealCard({ meal, onEdit, onDelete, onFavorite, isFavorited }: MealCardProps) {
   const [showHint, setShowHint] = useState(() => {
     return !localStorage.getItem('wcw_swipe_hint_shown');
   });
@@ -139,6 +141,17 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete }: MealC
 
           {/* Calorie badge */}
           <span className="text-[10px] font-semibold tabular-nums text-muted-foreground flex-shrink-0">{meal.calories}</span>
+
+          {/* Favorite star */}
+          {onFavorite && (
+            <button
+              onClick={(e) => { e.stopPropagation(); triggerHapticSelection(); onFavorite(); }}
+              className="h-6 w-6 flex-shrink-0 flex items-center justify-center"
+              aria-label={isFavorited ? "Remove from favorites" : "Add to favorites"}
+            >
+              <Star className={`h-3 w-3 transition-colors ${isFavorited ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40"}`} />
+            </button>
+          )}
 
           {/* Expand chevron */}
           {hasDetails && (

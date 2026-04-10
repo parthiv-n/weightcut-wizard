@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { useAuth, useUser } from "./UserContext";
-import { useSubscriptionContext, isLimitHitToday } from "./SubscriptionContext";
+import { useSubscriptionContext } from "./SubscriptionContext";
 import { syncWeightReminder } from "@/lib/weightReminder";
 import { logger } from "@/lib/logger";
 
@@ -25,7 +25,7 @@ const WizardBackgroundContext = createContext<WizardBackgroundContextType | unde
 export function WizardBackgroundProvider({ children }: { children: ReactNode }) {
   const { userId } = useAuth();
   const { userName } = useUser();
-  const { isPremium, openNoGemsDialog, incrementLocalUsage, markLimitReached, gems } = useSubscriptionContext();
+  const { isPremium, openNoGemsDialog, onAICallSuccess, onAICallBlocked, gems } = useSubscriptionContext();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -98,7 +98,7 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
     localStorage.setItem(`wizard_chat_history_${userId}`, JSON.stringify(newMessages));
 
     // Pre-flight subscription check (localStorage-backed, synchronous)
-    if (!isPremium && isLimitHitToday() && gems <= 0) {
+    if (!isPremium && gems <= 0) {
       const limitMessages: Message[] = [...newMessages, {
         role: "assistant",
         content: "Sorry, you've used all your AI tokens for today. Upgrade to **Premium** for unlimited access, or wait until tomorrow when your free tokens refresh."
@@ -127,7 +127,7 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
       );
 
       if (response.status === 429 && !isPremium) {
-        markLimitReached();
+        onAICallBlocked();
         const limitMessages: Message[] = [...newMessages, {
           role: "assistant",
           content: "Sorry, you've run out of AI gems. Upgrade to **Premium** for unlimited access, watch an ad to earn a gem, or wait until tomorrow when your free tokens refresh."
@@ -146,7 +146,7 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
         throw new Error("Failed to get response from Wizard");
       }
 
-      incrementLocalUsage();
+      onAICallSuccess();
       const data = await response.json();
       const assistantMessage = data.choices[0].message.content;
 
@@ -167,7 +167,7 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
     } finally {
       setIsLoading(false);
     }
-  }, [userId, messages, isLoading, isPremium, markLimitReached, openNoGemsDialog, gems, incrementLocalUsage]);
+  }, [userId, messages, isLoading, isPremium, onAICallBlocked, openNoGemsDialog, gems, onAICallSuccess]);
 
   const value = useMemo(
     () => ({ messages, isLoading, sendMessage, clearChat, loadHistory }),
