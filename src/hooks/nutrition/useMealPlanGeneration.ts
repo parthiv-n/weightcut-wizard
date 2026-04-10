@@ -239,7 +239,7 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
     } finally {
       setGeneratingPlan(false);
     }
-  }, [aiPrompt, isSessionValid, checkSessionValidity, userId, profile, selectedDate, dailyCalorieTarget, safetyStatus, safetyMessage, mealPlanIdeas, setMealPlanIdeas, setDailyCalorieTarget, setSafetyStatus, setSafetyMessage, aiAbortRef, refreshSession, toast]);
+  }, [aiPrompt, isSessionValid, checkSessionValidity, userId, profile, selectedDate, dailyCalorieTarget, safetyStatus, safetyMessage, mealPlanIdeas, setMealPlanIdeas, setDailyCalorieTarget, setSafetyStatus, setSafetyMessage, aiAbortRef, refreshSession, toast, checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError]);
 
   return {
     generatingPlan, setGeneratingPlan,

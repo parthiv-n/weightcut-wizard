@@ -175,15 +175,68 @@ export async function getCustomerInfo(): Promise<any | null> {
 
   try {
     const result = await Purchases.getCustomerInfo();
-    return result?.customerInfo ?? null;
-  } catch {
+    const info = result?.customerInfo ?? null;
+    logger.info("getCustomerInfo", {
+      hasInfo: !!info,
+      entitlementKeys: info?.entitlements?.active ? Object.keys(info.entitlements.active) : [],
+      activeSubs: info?.activeSubscriptions ?? [],
+    });
+    return info;
+  } catch (err) {
+    logger.error("getCustomerInfo failed", err);
     return null;
   }
 }
 
 export function isPremiumFromCustomerInfo(customerInfo: any): boolean {
-  if (!customerInfo?.entitlements?.active) return false;
-  return customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined;
+  if (!customerInfo?.entitlements?.active) {
+    // Fallback: check if ANY active subscription exists (sandbox may not map entitlements)
+    const subs = customerInfo?.activeSubscriptions;
+    if (Array.isArray(subs) && subs.length > 0) {
+      logger.info("isPremium: no entitlement found, but activeSubscriptions present", { subs });
+      return true;
+    }
+    return false;
+  }
+  // Check by entitlement ID first
+  if (customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined) return true;
+  // Fallback: if ANY entitlement is active, treat as premium
+  if (Object.keys(customerInfo.entitlements.active).length > 0) {
+    logger.info("isPremium: entitlement ID mismatch, but has active entitlements", {
+      expected: ENTITLEMENT_ID,
+      found: Object.keys(customerInfo.entitlements.active),
+    });
+    return true;
+  }
+  return false;
+}
+
+/** Extract subscription tier and expiry from RevenueCat CustomerInfo */
+export function getSubscriptionFromCustomerInfo(customerInfo: any): { tier: string; expiresAt: string | null } | null {
+  // Try exact entitlement first
+  let entitlement = customerInfo?.entitlements?.active?.[ENTITLEMENT_ID];
+  // Fallback: grab first active entitlement (sandbox/mismatch)
+  if (!entitlement && customerInfo?.entitlements?.active) {
+    const keys = Object.keys(customerInfo.entitlements.active);
+    if (keys.length > 0) entitlement = customerInfo.entitlements.active[keys[0]];
+  }
+  // Fallback: derive from activeSubscriptions
+  if (!entitlement) {
+    const subs = customerInfo?.activeSubscriptions;
+    if (Array.isArray(subs) && subs.length > 0) {
+      const productId = subs[0] || "";
+      const tier = productId.includes("yearly") || productId.includes("annual")
+        ? "premium_annual" : "premium_monthly";
+      return { tier, expiresAt: null };
+    }
+    return null;
+  }
+  const productId = entitlement.productIdentifier || "";
+  const tier = productId.includes("yearly") || productId.includes("annual")
+    ? "premium_annual"
+    : "premium_monthly";
+  const expiresAt = entitlement.expirationDate || null;
+  return { tier, expiresAt };
 }
 
 // ─── RevenueCat Native Paywall ───
@@ -200,6 +253,11 @@ export async function presentPaywall(): Promise<{ customerInfo: any; paywallResu
 
   try {
     const result = await RevenueCatUI.presentPaywall();
+    logger.info("RevenueCatUI.presentPaywall raw result", {
+      keys: result ? Object.keys(result) : "null",
+      paywallResult: result?.paywallResult,
+      hasCustomerInfo: !!result?.customerInfo,
+    });
     return {
       customerInfo: result?.customerInfo ?? null,
       paywallResult: result?.paywallResult ?? "NOT_PRESENTED",

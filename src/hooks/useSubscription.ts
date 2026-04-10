@@ -5,7 +5,7 @@ export function useSubscription() {
   const ctx = useSubscriptionContext();
 
   // Gems are the sole limiter: premium = unlimited, free = 1 gem per AI call
-  const checkAIAccess = (): boolean => {
+  const checkAIAccess = useCallback((): boolean => {
     const allowed = ctx.isPremium || ctx.gems > 0;
     console.log("[AI Access Check]", {
       allowed,
@@ -13,7 +13,7 @@ export function useSubscription() {
       gems: ctx.gems,
     });
     return allowed;
-  };
+  }, [ctx.isPremium, ctx.gems]);
 
   /**
    * Handle a 429/rate-limit error from an edge function.

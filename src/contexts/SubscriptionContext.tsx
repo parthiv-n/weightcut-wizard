@@ -1,7 +1,8 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, ReactNode } from "react";
 import { useProfile, useAuth } from "@/contexts/UserContext";
 import { Capacitor } from "@capacitor/core";
-import { initializePurchases, addCustomerInfoUpdateListener, isPremiumFromCustomerInfo } from "@/lib/purchases";
+import { initializePurchases, addCustomerInfoUpdateListener, isPremiumFromCustomerInfo, getSubscriptionFromCustomerInfo } from "@/lib/purchases";
+import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
 
 // ─── localStorage gem persistence ───
@@ -35,6 +36,7 @@ interface SubscriptionContextType {
   refreshGems: () => Promise<void>;
   onAICallSuccess: () => void;
   onAICallBlocked: (serverGems?: number) => void;
+  forcePremium: (tier: string, expiresAt: string | null) => void;
   showWelcomePro: boolean;
   dismissWelcomePro: () => void;
 }
@@ -47,11 +49,15 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [isPaywallOpen, setIsPaywallOpen] = useState(false);
   const [isNoGemsOpen, setIsNoGemsOpen] = useState(false);
   const [showWelcomePro, setShowWelcomePro] = useState(false);
+  // Local override: forcePremium sets this immediately without waiting for DB/profile
+  const [tierOverride, setTierOverride] = useState<{ tier: string; expiresAt: string | null } | null>(null);
 
-  const tier = (profile?.subscription_tier as SubscriptionContextType["tier"]) || "free";
-  const expiresAt = profile?.subscription_expires_at
-    ? new Date(profile.subscription_expires_at)
-    : null;
+  const tier = (tierOverride?.tier || profile?.subscription_tier || "free") as SubscriptionContextType["tier"];
+  const expiresAt = tierOverride?.expiresAt
+    ? new Date(tierOverride.expiresAt)
+    : profile?.subscription_expires_at
+      ? new Date(profile.subscription_expires_at)
+      : null;
   const isPremium =
     tier !== "free" && (expiresAt === null || expiresAt > new Date());
 
@@ -72,12 +78,24 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // Sync gems from profile: server is authoritative
+  // Sync gems from profile — only accept server value if it's lower than local
+  // (optimistic deductions should never be reverted by a stale profile fetch)
+  const lastSyncRef = useRef(0);
   useEffect(() => {
     const serverGems = (profile as any)?.gems;
     if (serverGems === undefined) return;
-    setGemsState(serverGems);
-    setLocalGems(serverGems);
+    setGemsState(prev => {
+      // If server reports fewer gems, always trust it (deduction confirmed or admin change)
+      // If server reports more gems (ad reward, daily grant), also trust it
+      // Only skip if we recently did an optimistic deduction and server is stale
+      const timeSinceSync = Date.now() - lastSyncRef.current;
+      if (timeSinceSync < 3000 && serverGems > prev) {
+        // Stale server data arrived within 3s of an optimistic deduction — ignore
+        return prev;
+      }
+      setLocalGems(serverGems);
+      return serverGems;
+    });
   }, [profile]);
 
   const wasPremiumRef = useRef(isPremium);
@@ -117,7 +135,16 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       const cleanup = await addCustomerInfoUpdateListener(async (customerInfo) => {
         const isNowPremium = isPremiumFromCustomerInfo(customerInfo);
         if (isNowPremium) {
-          await new Promise(r => setTimeout(r, 2000));
+          // Sync premium to DB directly — don't wait for webhook
+          const sub = getSubscriptionFromCustomerInfo(customerInfo);
+          if (sub) {
+            try {
+              await supabase.from("profiles").update({
+                subscription_tier: sub.tier,
+                subscription_expires_at: sub.expiresAt,
+              }).eq("id", userId);
+            } catch (err) { logger.warn("Failed to sync premium in listener", err); }
+          }
           await refreshProfile();
         }
       });
@@ -138,12 +165,14 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     if (userId) await refreshProfile();
   }, [userId, refreshProfile]);
 
-  // Called after a successful AI call — optimistically deduct 1 gem, then sync from DB
+  // Called after a successful AI call — optimistically deduct 1 gem immediately
   const onAICallSuccess = useCallback(() => {
     if (!isPremium) {
+      lastSyncRef.current = Date.now(); // Mark optimistic deduction time
       setGems(prev => prev - 1);
       window.dispatchEvent(new Event('gem-consumed'));
-      if (userId) refreshProfile();
+      // Delay profile refresh so DB has time to process the server-side deduction
+      if (userId) setTimeout(() => refreshProfile(), 3000);
     }
   }, [isPremium, userId, refreshProfile, setGems]);
 
@@ -154,6 +183,12 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       setGems(serverGems);
     }
   }, [isPremium, gems, setGems]);
+
+  // Force premium state immediately — used after purchase before DB/profile syncs
+  const forcePremium = useCallback((newTier: string, newExpiresAt: string | null) => {
+    logger.info("[forcePremium] Setting tier override", { newTier, newExpiresAt });
+    setTierOverride({ tier: newTier, expiresAt: newExpiresAt });
+  }, []);
 
   const openPaywall = useCallback(() => {
     if (isPremium) return;
@@ -183,6 +218,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         refreshGems,
         onAICallSuccess,
         onAICallBlocked,
+        forcePremium,
         showWelcomePro,
         dismissWelcomePro,
       }}

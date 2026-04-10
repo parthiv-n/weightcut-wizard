@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Gem, Play, Crown, Loader2, Plus, Clock } from "lucide-react";
+import { Gem, Play, Crown, Loader2, Clock } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { useNextGemCountdown } from "./AILimitTimer";
@@ -9,12 +9,11 @@ interface NoGemsDialogProps {
   onOpenChange: (open: boolean) => void;
   onWatchAd: () => Promise<void>;
   onGoPro: () => void;
-  onAddGem?: () => Promise<void>;
   adsRemaining: number;
   loading: boolean;
 }
 
-export function NoGemsDialog({ open, onOpenChange, onWatchAd, onGoPro, onAddGem, adsRemaining, loading }: NoGemsDialogProps) {
+export function NoGemsDialog({ open, onOpenChange, onWatchAd, onGoPro, adsRemaining, loading }: NoGemsDialogProps) {
   const canWatchAd = adsRemaining > 0;
   const countdown = useNextGemCountdown(0, false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -73,21 +72,6 @@ export function NoGemsDialog({ open, onOpenChange, onWatchAd, onGoPro, onAddGem,
             </div>
           </button>
 
-          {/* TEST ONLY — remove before production */}
-          {onAddGem && (
-            <button
-              onClick={async () => { await onAddGem(); }}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl bg-amber-500/5 border border-amber-500/20 active:scale-[0.98] transition-all text-left"
-            >
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/10">
-                <Plus className="h-4 w-4 text-amber-500" />
-              </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-semibold text-foreground">Add Gem (Test)</p>
-                <p className="text-[11px] text-muted-foreground">Dev only — adds 1 gem</p>
-              </div>
-            </button>
-          )}
         </div>
 
         {/* Free gem countdown */}

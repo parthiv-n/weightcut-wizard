@@ -150,7 +150,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     } finally {
       setAiAnalyzing(false);
     }
-  }, [aiMealDescription, userId, setManualMeal, toast]);
+  }, [aiMealDescription, userId, setManualMeal, toast, checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError]);
 
   const handleSaveAiMeal = useCallback(async () => {
     if (aiLineItems.length === 0) return;
