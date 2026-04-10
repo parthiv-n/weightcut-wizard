@@ -17,6 +17,8 @@ import wizardLogo from "@/assets/wizard-logo.webp";
 import { celebrateSuccess, triggerHapticSelection } from "@/lib/haptics";
 import { logger } from "@/lib/logger";
 import { seedDemoData } from "@/lib/demoData";
+import { presentPaywallIfNeeded } from "@/lib/purchases";
+import { Capacitor } from "@capacitor/core";
 import { AnimatePresence, motion } from "motion/react";
 import { springs } from "@/lib/motion";
 
@@ -428,6 +430,15 @@ export default function Onboarding() {
       // Signal that onboarding just completed — tutorial should trigger on dashboard
       localStorage.setItem("wcw_onboarding_just_completed", "true");
 
+      // Show RevenueCat paywall on native platforms before proceeding
+      if (Capacitor.isNativePlatform()) {
+        try {
+          await presentPaywallIfNeeded();
+          // Refresh profile in case user purchased
+          await refreshProfile();
+        } catch { /* dismissed or unavailable — continue */ }
+      }
+
       if (hasCutPlan) {
         navigate("/cut-plan", { replace: true });
       } else {
@@ -752,12 +763,42 @@ export default function Onboarding() {
                 onChange={e => setFormData(prev => ({ ...prev, current_weight_kg: e.target.value }))}
                 className="h-14 rounded-2xl bg-card border-border/50 text-center text-xl font-semibold max-w-[200px]"
                 autoFocus />
-              {weightDiff && parseFloat(weightDiff) > 0 && formData.goal_type === "cutting" && (
-                <p className="text-sm text-muted-foreground text-center">
-                  You need to drop <strong className="text-foreground">{weightDiff} kg</strong>
-                  {weeksToFight ? <> in <strong className="text-foreground">{weeksToFight} weeks</strong></> : null}
-                </p>
-              )}
+              {weightDiff && parseFloat(weightDiff) > 0 && formData.goal_type === "cutting" && (() => {
+                const diff = parseFloat(weightDiff);
+                const weeklyLoss = weeksToFight ? diff / weeksToFight : 0;
+                const bodyPct = parseFloat(formData.current_weight_kg) > 0
+                  ? (diff / parseFloat(formData.current_weight_kg)) * 100 : 0;
+                // Risk: >1% bodyweight/week or >1.5 kg/week
+                const isAggressive = weeklyLoss > 1.0 && weeklyLoss <= 1.5;
+                const isDangerous = weeklyLoss > 1.5 || bodyPct > 10;
+
+                return (
+                  <div className="w-full max-w-[300px] space-y-2">
+                    <p className="text-sm text-muted-foreground text-center">
+                      You need to drop <strong className="text-foreground">{weightDiff} kg</strong>
+                      {weeksToFight ? <> in <strong className="text-foreground">{weeksToFight} weeks</strong>
+                        <span className="text-xs text-muted-foreground/60"> ({weeklyLoss.toFixed(1)} kg/wk)</span>
+                      </> : null}
+                    </p>
+                    {isDangerous && (
+                      <Alert className="border-red-500/30 bg-red-500/5 rounded-2xl">
+                        <AlertTriangle className="h-4 w-4 text-red-500" />
+                        <AlertDescription className="text-xs text-red-400">
+                          <strong className="text-red-300">High risk cut.</strong> Losing {weeklyLoss.toFixed(1)} kg/week ({bodyPct.toFixed(0)}% bodyweight) significantly increases risk of muscle loss, hormonal disruption, and performance decline. Consult a sports doctor. We'll still build your plan.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                    {isAggressive && !isDangerous && (
+                      <Alert className="border-yellow-500/30 bg-yellow-500/5 rounded-2xl">
+                        <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                        <AlertDescription className="text-xs text-yellow-400">
+                          <strong className="text-yellow-300">Aggressive pace.</strong> Losing {weeklyLoss.toFixed(1)} kg/week is doable but requires strict adherence. Monitor energy levels, strength, and sleep closely. We'll plan for this.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </StepLayout>
         )}
