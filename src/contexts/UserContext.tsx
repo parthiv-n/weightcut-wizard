@@ -313,47 +313,55 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const loadInProgressRef = useRef(false);
+  const lastLoadAttemptRef = useRef(0);
+
   const loadUserData = useCallback(async (providedSession?: { user: any; expires_at?: number } | null) => {
+    // Throttle: skip if already loading or called within last 3 seconds
+    const now = Date.now();
+    if (loadInProgressRef.current) return;
+    if (!providedSession && now - lastLoadAttemptRef.current < 3000) return;
+    loadInProgressRef.current = true;
+    lastLoadAttemptRef.current = now;
+
     setAuthError(false);
-    // Only show loading spinner if cache hasn't already resolved it
     if (!isUserLoadedRef.current) {
       setIsLoading(true);
     }
 
-    // Tight backoff for faster recovery from short network drops
     const DELAYS = [100, 200, 500];
 
-    for (let attempt = 0; attempt <= DELAYS.length; attempt++) {
-      // Use provided session on first attempt; subsequent retries fetch fresh
-      const result = await _performLoad(attempt === 0 ? providedSession : undefined);
+    try {
+      for (let attempt = 0; attempt <= DELAYS.length; attempt++) {
+        const result = await _performLoad(attempt === 0 ? providedSession : undefined);
 
-      if (result === 'success' || result === 'no_session') {
-        isUserLoadedRef.current = true;
-        setIsLoading(false);
+        if (result === 'success' || result === 'no_session') {
+          isUserLoadedRef.current = true;
+          setIsLoading(false);
+          return;
+        }
+
+        if (attempt < DELAYS.length) {
+          await new Promise(r => setTimeout(r, DELAYS[attempt]));
+        }
+      }
+
+      // All retries failed
+      if (isUserLoadedRef.current) {
+        logger.warn("loadUserData: DB unreachable, serving cached data");
         return;
       }
 
-      // 'error' — retry unless exhausted
-      if (attempt < DELAYS.length) {
-        await new Promise(r => setTimeout(r, DELAYS[attempt]));
-      }
+      setAuthError(true);
+      setIsSessionValid(false);
+      setUserId(null);
+      userIdRef.current = null;
+      setHasProfile(false);
+      isUserLoadedRef.current = true;
+      setIsLoading(false);
+    } finally {
+      loadInProgressRef.current = false;
     }
-
-    // All retries failed
-    // If cache already served content, don't show error screen — just stay with cached data
-    if (isUserLoadedRef.current) {
-      logger.warn("loadUserData: DB unreachable, serving cached data");
-      return;
-    }
-
-    // True first-launch with no cache and all retries exhausted → show error UI
-    setAuthError(true);
-    setIsSessionValid(false);
-    setUserId(null);
-    userIdRef.current = null;
-    setHasProfile(false);
-    isUserLoadedRef.current = true;
-    setIsLoading(false);
   }, []);
 
   const retryAuth = useCallback(async () => {

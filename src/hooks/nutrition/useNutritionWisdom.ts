@@ -121,7 +121,9 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
 
       if (!isMounted()) return;
       if (error) {
-        if (handleAILimitError(error)) return;
+        // Only show limit dialog if user explicitly requested it
+        if (userInitiated && handleAILimitError(error)) return;
+        if (!userInitiated) return; // silently fail for auto-triggered calls
         throw new Error(await extractEdgeFunctionError(error, "Could not generate nutrition advice"));
       }
       if (data?.error) throw new Error(data.error);
@@ -266,6 +268,8 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
       setAiWisdomAdvice(null);
       return;
     }
+    // Only auto-generate wisdom if user has AI access — don't waste a call that will 429
+    if (!checkAIAccess()) return;
     const timer = setTimeout(() => {
       generateWisdomAdvice();
     }, 1500);
