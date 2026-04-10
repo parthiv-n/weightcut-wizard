@@ -415,17 +415,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
     setHasProfile(false);
     setIsLoading(false);
 
-    // Now tell Supabase (fire-and-forget with timeout)
+    // Clear Supabase session — local scope avoids 403 from expired/invalid tokens
     try {
-      const signOutPromise = supabase.auth.signOut();
-      const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("timeout")), 3000)
-      );
-      await Promise.race([signOutPromise, timeout]);
+      await supabase.auth.signOut({ scope: "local" });
     } catch {
-      // Fallback: clear local session storage directly
       localStorage.removeItem("weightcut-wizard-auth");
-      try { await supabase.auth.signOut({ scope: "local" }); } catch {}
     }
 
     signingOutRef.current = false;

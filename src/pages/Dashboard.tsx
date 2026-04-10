@@ -25,6 +25,8 @@ import { triggerHaptic, triggerHapticSelection } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import { logger } from "@/lib/logger";
 import { trackInstallDate, maybeRequestReview } from "@/lib/appReview";
+import { CutPlanDialog } from "@/components/dashboard/CutPlanDialog";
+import { isFighter } from "@/lib/goalType";
 
 interface DailyWisdom {
   summary: string;
@@ -52,6 +54,7 @@ export default function Dashboard() {
   const [wisdomSheetOpen, setWisdomSheetOpen] = useState(false);
   const [questionnaireOpen, setQuestionnaireOpen] = useState(false);
   const [achievementSheetOpen, setAchievementSheetOpen] = useState(false);
+  const [cutPlanOpen, setCutPlanOpen] = useState(false);
   const { userName, currentWeight, userId, profile } = useUser();
   const navigate = useNavigate();
   const { safeAsync, isMounted } = useSafeAsync();
@@ -429,6 +432,23 @@ export default function Dashboard() {
           <ConsistencyRing {...weeklyConsistency} />
         </div>
 
+        {/* Weight Cut Plan — fighters only, if plan exists */}
+        {isFighter(profile?.goal_type) && localStorage.getItem('wcw_cut_plan') && (
+          <button
+            onClick={() => { setCutPlanOpen(true); triggerHaptic(ImpactStyle.Light); }}
+            className="w-full card-surface rounded-xl p-3 flex items-center gap-3 active:scale-[0.98] transition-transform"
+          >
+            <div className="rounded-xl bg-primary/10 p-2.5">
+              <TrendingDown className="h-5 w-5 text-primary" />
+            </div>
+            <div className="flex-1 text-left">
+              <p className="text-sm font-semibold">Your Weight Cut Plan</p>
+              <p className="text-xs text-muted-foreground">Tap to review your personalised plan</p>
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </button>
+        )}
+
         {/* Wizard's Daily Wisdom card — conditional states */}
         <div data-tutorial="daily-wisdom-card">
         {!hasTodayLog ? (
@@ -714,6 +734,8 @@ export default function Dashboard() {
         onOpenChange={setAchievementSheetOpen}
         categories={allAchievements}
       />
+
+      <CutPlanDialog open={cutPlanOpen} onOpenChange={setCutPlanOpen} />
     </ErrorBoundary>
   );
 }

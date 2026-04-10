@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useProfile, useAuth } from "@/contexts/UserContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Sparkles, AlertTriangle, CheckCircle, Zap, Shield, Activity } from "lucide-react";
+import { Sparkles, AlertTriangle, CheckCircle, Zap, Shield, Activity, TrendingDown } from "lucide-react";
 import { profileSchema } from "@/lib/validation";
 import wizardLogo from "@/assets/wizard-logo.webp";
 import { celebrateSuccess } from "@/lib/haptics";
@@ -22,6 +22,58 @@ const ACTIVITY_MULTIPLIERS = {
   very_active: 1.725,
   extra_active: 1.9,
 };
+
+/** Progress bar that crawls smoothly toward target — feels alive during long API calls */
+function ProgressCrawl({ targetPercent, className }: { targetPercent: number; className?: string }) {
+  const [display, setDisplay] = useState(0);
+  const rafRef = useRef<number>(0);
+  const displayRef = useRef(0);
+
+  useEffect(() => {
+    // When target jumps (step change), snap partway then crawl
+    if (targetPercent > displayRef.current + 10) {
+      displayRef.current = targetPercent - 8; // snap close, then crawl the rest
+    }
+  }, [targetPercent]);
+
+  useEffect(() => {
+    let lastTime = performance.now();
+    const tick = (now: number) => {
+      const dt = (now - lastTime) / 1000;
+      lastTime = now;
+      const target = Math.min(targetPercent, 95); // never reach 100 until explicitly set
+      const diff = target - displayRef.current;
+      // Crawl speed: fast when far, slow when close (logarithmic ease)
+      const speed = diff > 10 ? 12 : diff > 5 ? 4 : diff > 2 ? 1.5 : 0.4;
+      displayRef.current = Math.min(displayRef.current + speed * dt, target);
+      // Even when stuck at same target, crawl very slowly (+0.3%/s) to feel alive
+      if (diff < 1 && targetPercent < 95) {
+        displayRef.current = Math.min(displayRef.current + 0.3 * dt, targetPercent + 5);
+      }
+      setDisplay(displayRef.current);
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [targetPercent]);
+
+  // When target hits 100, snap to 100
+  useEffect(() => {
+    if (targetPercent >= 100) {
+      displayRef.current = 100;
+      setDisplay(100);
+    }
+  }, [targetPercent]);
+
+  return (
+    <div className={`w-full h-1.5 rounded-full bg-muted/50 overflow-hidden ${className || ""}`}>
+      <div
+        className="h-full rounded-full bg-primary"
+        style={{ width: `${display}%`, transition: "none" }}
+      />
+    </div>
+  );
+}
 
 export default function Onboarding() {
   const [step, setStep] = useState(1);
@@ -95,10 +147,10 @@ export default function Onboarding() {
     setGenerationStep(0);
 
     // Staged progress messages
+    const isFighterFlow = formData.goal_type === 'cutting';
     const stepTimers = [
       setTimeout(() => setGenerationStep(1), 600),
       setTimeout(() => setGenerationStep(2), 1400),
-      setTimeout(() => setGenerationStep(3), 2200),
     ];
 
     try {
@@ -108,6 +160,7 @@ export default function Onboarding() {
       const bmr = calculateBMR();
       const tdee = bmr * ACTIVITY_MULTIPLIERS[formData.activity_level as keyof typeof ACTIVITY_MULTIPLIERS];
 
+      // 1. Save profile to DB
       const { error } = await supabase.from("profiles").insert({
         id: user.id,
         age: parseInt(formData.age),
@@ -115,7 +168,7 @@ export default function Onboarding() {
         height_cm: parseFloat(formData.height_cm),
         current_weight_kg: parseFloat(formData.current_weight_kg),
         goal_weight_kg: parseFloat(formData.goal_weight_kg),
-        fight_week_target_kg: formData.goal_type === 'cutting' ? parseFloat(formData.fight_week_target_kg) : null,
+        fight_week_target_kg: isFighterFlow ? parseFloat(formData.fight_week_target_kg) : null,
         target_date: formData.target_date,
         activity_level: formData.activity_level,
         training_frequency: parseInt(formData.training_frequency),
@@ -125,29 +178,80 @@ export default function Onboarding() {
       });
 
       if (error) throw error;
-
-      const endTime = performance.now();
-      const duration = Math.round(endTime - startTime);
-      logger.info("Onboarding completed", { ms: duration });
-
-      // Ensure all 3 animation steps have had time to play (step 3 fires at 2200ms)
-      const minAnimMs = 2400;
-      const remainingAnim = Math.max(0, minAnimMs - (endTime - startTime));
-
       stepTimers.forEach(clearTimeout);
+      setGenerationStep(2);
 
-      setTimeout(async () => {
-        setGenerationStep(4);
-        const profileRefreshed = await refreshProfile();
-        if (!profileRefreshed) {
-          await refreshProfile();
+      // 2. For fighters: generate AI weight cut plan (stays on loading overlay until done)
+      let hasCutPlan = false;
+      if (isFighterFlow) {
+        setGenerationStep(3); // "Generating your AI weight cut plan"
+        try {
+          const { data: planData, error: planError } = await supabase.functions.invoke('generate-cut-plan', {
+            body: {
+              currentWeight: parseFloat(formData.current_weight_kg),
+              goalWeight: parseFloat(formData.goal_weight_kg),
+              fightWeekTarget: parseFloat(formData.fight_week_target_kg),
+              targetDate: formData.target_date,
+              age: parseInt(formData.age),
+              sex: formData.sex,
+              heightCm: parseFloat(formData.height_cm),
+              activityLevel: formData.activity_level,
+              trainingFrequency: parseInt(formData.training_frequency),
+              bmr,
+              tdee,
+            },
+          });
+          if (planError) {
+            logger.warn("Cut plan generation failed", { error: planError, data: planData });
+          }
+          // supabase.functions.invoke may return plan at data.plan or data directly
+          const plan = planData?.plan || planData;
+          if (plan?.weeklyPlan) {
+            localStorage.setItem('wcw_cut_plan', JSON.stringify({
+              ...plan,
+              currentWeight: parseFloat(formData.current_weight_kg),
+              goalWeight: parseFloat(formData.goal_weight_kg),
+              targetDate: formData.target_date,
+            }));
+            hasCutPlan = true;
+            logger.info("Cut plan generated successfully", { weeks: plan.weeklyPlan.length });
+
+            // Save week 1 calories/macros as the user's nutrition goals
+            const week1 = plan.weeklyPlan[0];
+            if (week1) {
+              const { data: { user: u } } = await supabase.auth.getUser();
+              if (u) {
+                await supabase.from("profiles").update({
+                  ai_recommended_calories: week1.calories,
+                  ai_recommended_protein_g: week1.protein_g,
+                  ai_recommended_carbs_g: week1.carbs_g,
+                  ai_recommended_fats_g: week1.fats_g,
+                }).eq("id", u.id);
+              }
+            }
+          } else {
+            logger.warn("Cut plan response missing weeklyPlan", { planData });
+          }
+        } catch (planErr) {
+          logger.warn("Cut plan generation error", planErr);
         }
-        // Seed demo data so dashboard looks populated during tutorial
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) seedDemoData(user.id);
-        celebrateSuccess();
+      }
+
+      // 3. Refresh profile + seed demo data
+      const finalStep = isFighterFlow ? 4 : 3;
+      setGenerationStep(finalStep);
+      await refreshProfile();
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      if (currentUser) seedDemoData(currentUser.id);
+      celebrateSuccess();
+
+      // 4. Navigate: fighters with plan → /cut-plan, everyone else → /dashboard
+      if (hasCutPlan) {
+        navigate("/cut-plan", { replace: true });
+      } else {
+        setGenerationStep(finalStep + 1);
         setTimeout(() => navigate("/dashboard"), 1000);
-      }, remainingAnim);
+      }
     } catch (error: any) {
       const endTime = performance.now();
       const duration = Math.round(endTime - startTime);
@@ -225,6 +329,9 @@ export default function Onboarding() {
     { icon: Activity, label: "Analyzing your profile", color: "text-blue-400" },
     { icon: Zap, label: "Calculating nutrition targets", color: "text-yellow-400" },
     { icon: Shield, label: formData.goal_type === 'losing' ? "Building your weight loss plan" : "Building your weight cut strategy", color: "text-blue-400" },
+    ...(formData.goal_type === 'cutting' ? [
+      { icon: TrendingDown, label: "Generating your AI weight cut plan", color: "text-primary" },
+    ] : []),
     { icon: Sparkles, label: "Finalizing your plan", color: "text-primary" },
     { icon: CheckCircle, label: "Your plan is ready!", color: "text-green-400" },
   ];
@@ -237,37 +344,31 @@ export default function Onboarding() {
 
   // Full-screen generating plan overlay
   if (generatingPlan) {
-    const progressPercent = Math.min((generationStep / 4) * 100, 100);
+    const totalSteps = GENERATION_STEPS.length - 1;
+    const progressPercent = Math.min((generationStep / totalSteps) * 100, 100);
+    const isReady = generationStep >= GENERATION_STEPS.length - 1;
     return (
-      <div className="fixed inset-0 bg-background dark:bg-black/95 text-foreground flex flex-col items-center justify-center z-50 px-6">
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-primary/15 rounded-full blur-[120px] pointer-events-none" />
-
+      <div className="fixed inset-0 bg-background text-foreground flex flex-col items-center justify-center z-50 px-6">
         <div className="relative z-10 flex flex-col items-center max-w-sm w-full">
           <div className="relative mb-8">
-            <div className="absolute inset-0 bg-primary/20 rounded-full blur-2xl animate-pulse" />
             <img
               src={wizardLogo}
               alt="Wizard"
-              className="relative h-20 w-20 object-contain drop-shadow-2xl"
+              className="relative h-20 w-20 object-contain"
             />
           </div>
 
-          <h2 className="text-2xl font-bold text-foreground tracking-tight mb-2 text-center">
-            {generationStep >= 4 ? "All Set!" : "Creating Your Plan"}
+          <h2 className="text-xl font-bold text-foreground tracking-tight mb-1 text-center">
+            {isReady ? "All Set!" : "Creating Your Plan"}
           </h2>
-          <p className="text-sm text-muted-foreground mb-10 text-center">
-            {generationStep >= 4 ? "Redirecting to your dashboard..." : "This will only take a moment"}
+          <p className="text-sm text-muted-foreground mb-8 text-center">
+            {isReady ? "Opening your dashboard..." : "This will only take a moment"}
           </p>
 
-          {/* Slim Apple-style progress bar */}
-          <div className="w-full h-1.5 rounded-full bg-muted/50 dark:bg-white/10 overflow-hidden mb-10">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-primary to-secondary transition-all duration-700 ease-out"
-              style={{ width: `${progressPercent}%` }}
-            />
-          </div>
+          {/* Smooth progress bar — crawls during AI generation to feel alive */}
+          <ProgressCrawl targetPercent={progressPercent} className="mb-8" />
 
-          <div className="w-full space-y-4">
+          <div className="w-full space-y-3.5">
             {GENERATION_STEPS.map((s, i) => {
               const Icon = s.icon;
               const isActive = i === generationStep;
@@ -277,22 +378,30 @@ export default function Onboarding() {
               return (
                 <div
                   key={i}
-                  className={`flex items-center gap-3 transition-all duration-500 ${isPending ? "opacity-20" : isDone ? "opacity-60" : "opacity-100"}`}
+                  className={`flex items-center gap-3 transition-all duration-500 ${isPending ? "opacity-15" : isDone ? "opacity-50" : "opacity-100"}`}
                 >
-                  <div
-                    className={`h-9 w-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all duration-500 ${
-                      isDone
-                        ? "bg-primary/20 dark:bg-primary/30"
-                        : isActive
-                          ? "bg-muted dark:bg-white/15"
-                          : "bg-muted/50 dark:bg-white/10"
-                    }`}
-                  >
-                    {isDone ? (
-                      <CheckCircle className="h-4 w-4 text-primary" />
-                    ) : (
-                      <Icon className={`h-4 w-4 ${isActive ? s.color : "text-muted-foreground"} ${isActive ? "animate-pulse" : ""}`} />
+                  <div className="relative h-9 w-9 flex-shrink-0">
+                    {/* Spinning ring around active step */}
+                    {isActive && !isDone && (
+                      <svg className="absolute inset-0 h-9 w-9 animate-spin" style={{ animationDuration: "2s" }} viewBox="0 0 36 36">
+                        <circle cx="18" cy="18" r="16" fill="none" stroke="hsl(var(--primary))" strokeWidth="2" strokeDasharray="80 20" strokeLinecap="round" opacity="0.4" />
+                      </svg>
                     )}
+                    <div
+                      className={`h-9 w-9 rounded-full flex items-center justify-center transition-all duration-500 ${
+                        isDone
+                          ? "bg-primary/20"
+                          : isActive
+                            ? "bg-muted"
+                            : "bg-muted/50"
+                      }`}
+                    >
+                      {isDone ? (
+                        <CheckCircle className="h-4 w-4 text-primary" />
+                      ) : (
+                        <Icon className={`h-4 w-4 ${isActive ? s.color : "text-muted-foreground"}`} />
+                      )}
+                    </div>
                   </div>
                   <span
                     className={`text-sm font-medium transition-colors duration-500 ${

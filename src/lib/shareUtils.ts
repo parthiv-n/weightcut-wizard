@@ -9,8 +9,8 @@ export async function captureCardAsBlob(
   const blob = await toBlob(element, {
     pixelRatio: options?.pixelRatio ?? 2,
     cacheBust: true,
-    // Inline styles for reliable capture
     skipAutoScale: true,
+    skipFonts: true, // skip cross-origin Google Fonts — cards use inline font-family
     ...(options?.transparent ? {} : { backgroundColor: "#080808" }),
   });
   if (!blob) throw new Error("Failed to capture card image");
