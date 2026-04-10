@@ -22,7 +22,6 @@ import { BottomNav } from "@/components/BottomNav";
 import { FloatingWizardChat } from "@/components/FloatingWizardChat";
 const FloatingWorkoutIndicator = lazy(() => import("@/components/gym/FloatingWorkoutIndicator").then(m => ({ default: m.FloatingWorkoutIndicator })));
 const AIFloatingIndicator = lazy(() => import("@/components/AIFloatingIndicator").then(m => ({ default: m.AIFloatingIndicator })));
-const AILimitTimer = lazy(() => import("@/components/subscription/AILimitTimer").then(m => ({ default: m.AILimitTimer })));
 import * as Sentry from "@sentry/react";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { OfflineBanner } from "@/components/OfflineBanner";
@@ -192,7 +191,6 @@ const AppLayoutContent = () => {
       <BottomNav />
       <Suspense fallback={null}><FloatingWorkoutIndicator /></Suspense>
       <Suspense fallback={null}><AIFloatingIndicator /></Suspense>
-      <Suspense fallback={null}><AILimitTimer /></Suspense>
       <FloatingWizardChat />
     </>
   );

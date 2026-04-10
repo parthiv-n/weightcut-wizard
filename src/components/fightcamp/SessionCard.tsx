@@ -82,32 +82,22 @@ export const SessionCard = memo(function SessionCard({ session, customColors, us
         <div className="flex items-end gap-4 mt-4">
           {session.sleep_quality && (
             <div className="flex-1 min-w-0">
-              <span className="text-[10px] font-medium uppercase tracking-widest text-foreground/40">
-                Sleep
-              </span>
-              <p className="display-number text-2xl text-foreground mt-0.5">
-                {session.sleep_quality}
-              </p>
+              <span className="text-[10px] font-medium uppercase tracking-widest text-foreground/40">Sleep</span>
+              <p className="display-number text-2xl text-foreground mt-0.5">{session.sleep_quality}</p>
             </div>
           )}
           {session.fatigue_level != null && (
             <div className="flex-1 min-w-0">
-              <span className="text-[10px] font-medium uppercase tracking-widest text-foreground/40">
-                Fatigue
-              </span>
+              <span className="text-[10px] font-medium uppercase tracking-widest text-foreground/40">Fatigue</span>
               <div className="flex items-baseline gap-1 mt-0.5">
-                <span className="display-number text-2xl text-foreground">
-                  {session.fatigue_level}
-                </span>
+                <span className="display-number text-2xl text-foreground">{session.fatigue_level}</span>
                 <span className="text-xs text-foreground/40 font-medium">/10</span>
               </div>
             </div>
           )}
           {session.mobility_done && (
             <div className="flex-1 min-w-0">
-              <span className="text-[10px] font-medium uppercase tracking-widest text-foreground/40">
-                Mobility
-              </span>
+              <span className="text-[10px] font-medium uppercase tracking-widest text-foreground/40">Mobility</span>
               <div className="flex items-center gap-1 mt-1.5">
                 <Check className="w-4 h-4 text-green-400" />
                 <span className="text-sm font-medium text-green-400">Done</span>
@@ -118,100 +108,71 @@ export const SessionCard = memo(function SessionCard({ session, customColors, us
       ) : isRun && runMeta ? (
         <div className="flex items-end gap-4 mt-4">
           <div className="flex-1 min-w-0">
-            <span className="text-[10px] font-medium uppercase tracking-widest text-foreground/40">
-              Distance
-            </span>
+            <span className="text-[10px] font-medium uppercase tracking-widest text-foreground/40">Distance</span>
             <div className="flex items-baseline gap-1 mt-0.5">
-              <span className="display-number text-2xl text-foreground">
-                {runMeta.distance}
-              </span>
+              <span className="display-number text-2xl text-foreground">{runMeta.distance}</span>
               <span className="text-xs text-foreground/40 font-medium">{runMeta.unit}</span>
             </div>
           </div>
           {runMeta.time && (
             <div className="flex-1 min-w-0">
-              <span className="text-[10px] font-medium uppercase tracking-widest text-foreground/40">
-                Time
-              </span>
+              <span className="text-[10px] font-medium uppercase tracking-widest text-foreground/40">Time</span>
               <div className="flex items-baseline gap-1 mt-0.5">
-                <span className="display-number text-2xl" style={{ color: sessionColor }}>
-                  {runMeta.time}
-                </span>
+                <span className="display-number text-2xl" style={{ color: sessionColor }}>{runMeta.time}</span>
               </div>
             </div>
           )}
           {runMeta.pace && (
             <div className="flex-1 min-w-0">
-              <span className="text-[10px] font-medium uppercase tracking-widest text-foreground/40">
-                Pace
-              </span>
+              <span className="text-[10px] font-medium uppercase tracking-widest text-foreground/40">Pace</span>
               <div className="flex items-baseline gap-1 mt-0.5">
-                <span className="display-number text-2xl text-foreground">
-                  {runMeta.pace}
-                </span>
+                <span className="display-number text-2xl text-foreground">{runMeta.pace}</span>
                 <span className="text-xs text-foreground/40 font-medium">/{runMeta.unit}</span>
               </div>
             </div>
           )}
         </div>
       ) : (
-        <div className="flex items-end gap-4 mt-4">
-          <div className="flex-1 min-w-0">
-            <span className="text-[10px] font-medium uppercase tracking-widest text-foreground/40">
-              Duration
-            </span>
-            <div className="flex items-baseline gap-1 mt-0.5">
-              <span className="display-number text-2xl text-foreground">
-                {session.duration_minutes}
-              </span>
+        <>
+          {/* Duration as hero stat */}
+          <div className="mt-3">
+            <div className="flex items-baseline gap-1">
+              <span className="display-number text-2xl text-foreground">{session.duration_minutes}</span>
               <span className="text-xs text-foreground/40 font-medium">min</span>
             </div>
           </div>
-          <div className="flex-1 min-w-0">
-            <span className="text-[10px] font-medium uppercase tracking-widest text-foreground/40">
-              RPE
+          {/* RPE + Intensity as compact inline pills */}
+          <div className="flex items-center gap-2 mt-2">
+            <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-white/5 border border-border/20">
+              RPE <span className="font-bold" style={{ color: sessionColor }}>{session.rpe}</span><span className="text-foreground/30">/10</span>
             </span>
-            <div className="flex items-baseline gap-1 mt-0.5">
-              <span className="display-number text-2xl" style={{ color: sessionColor }}>
-                {session.rpe}
-              </span>
-              <span className="text-xs text-foreground/40 font-medium">/10</span>
-            </div>
-          </div>
-          <div className="flex-1 min-w-0">
-            <span className="text-[10px] font-medium uppercase tracking-widest text-foreground/40">
-              Intensity
+            <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-white/5 border border-border/20">
+              Int <span className="font-bold text-foreground">{intensityDisplay}</span><span className="text-foreground/30">/5</span>
             </span>
-            <div className="flex items-baseline gap-1 mt-0.5">
-              <span className="display-number text-2xl text-foreground">
-                {intensityDisplay}
-              </span>
-              <span className="text-xs text-foreground/40 font-medium">/5</span>
-            </div>
           </div>
-        </div>
+        </>
       )}
 
       {/* Secondary indicators: soreness + sleep pills */}
-      {(session.soreness_level > 0 || session.sleep_hours > 0) && (
-        <div className="flex items-center gap-2 mt-3 flex-wrap">
+      {!isRest && (session.soreness_level > 0 || session.sleep_hours > 0) && (
+        <div className="flex items-center gap-2 mt-2 flex-wrap">
           {session.soreness_level > 0 && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full bg-red-500/10 text-red-400">
-              Soreness {session.soreness_level}/10
+            <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">
+              Sore {session.soreness_level}/10
             </span>
           )}
           {session.sleep_hours > 0 && (
-            <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-400">
+            <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-400">
               <Moon className="w-3 h-3" />
-              {session.sleep_hours}h sleep
+              {session.sleep_hours}h
             </span>
           )}
         </div>
       )}
 
-      {/* Notes preview */}
+      {/* Notes — show more of what the user wrote */}
       {(isRun ? cleanNotes : session.notes) && (
-        <p className="mt-3 text-[12px] text-foreground/35 line-clamp-1 leading-relaxed">
+        <p className="mt-3 text-[13px] text-foreground/50 line-clamp-3 leading-relaxed">
           {isRun ? cleanNotes : session.notes}
         </p>
       )}

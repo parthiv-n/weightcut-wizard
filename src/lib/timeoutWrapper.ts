@@ -17,7 +17,7 @@ export function withTimeout<T>(
 // Specific wrapper for Supabase queries
 export function withSupabaseTimeout<T>(
   supabaseQuery: PromiseLike<T>,
-  timeoutMs: number = 4000, // 4 second timeout for database queries
+  timeoutMs: number = 6000, // 6 second timeout for database queries
   operation: string = "Database query"
 ): Promise<T> {
   return withTimeout(
@@ -73,7 +73,7 @@ export async function extractEdgeFunctionError(error: any, fallback = "Something
 // Wrapper for authentication operations
 export function withAuthTimeout<T>(
   authOperation: Promise<T>,
-  timeoutMs: number = 8000 // 8 second timeout for auth operations (mobile can be slow)
+  timeoutMs: number = 10000 // 10 second timeout for auth operations (mobile can be slow)
 ): Promise<T> {
   return withTimeout(
     authOperation,

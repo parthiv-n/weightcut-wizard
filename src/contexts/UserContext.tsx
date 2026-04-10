@@ -265,7 +265,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
             .select(PROFILE_COLUMNS)
             .eq("id", user.id)
             .maybeSingle(),
-          5000,
+          8000,
           "Profile query"
         ),
         withSupabaseTimeout(
@@ -276,7 +276,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
             .order("date", { ascending: false })
             .limit(1)
             .maybeSingle(),
-          5000,
+          8000,
           "Weight log query"
         ),
       ]);
