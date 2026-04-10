@@ -123,6 +123,12 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // Force premium state immediately — used after purchase before DB/profile syncs
+  const forcePremium = useCallback((newTier: string, newExpiresAt: string | null) => {
+    logger.info("[forcePremium] Setting tier override", { newTier, newExpiresAt });
+    setTierOverride({ tier: newTier, expiresAt: newExpiresAt });
+  }, []);
+
   // Initialize RevenueCat when userId becomes available
   useEffect(() => {
     if (!userId || !Capacitor.isNativePlatform()) return;
@@ -206,12 +212,6 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       setGems(serverGems);
     }
   }, [isPremium, gems, setGems]);
-
-  // Force premium state immediately — used after purchase before DB/profile syncs
-  const forcePremium = useCallback((newTier: string, newExpiresAt: string | null) => {
-    logger.info("[forcePremium] Setting tier override", { newTier, newExpiresAt });
-    setTierOverride({ tier: newTier, expiresAt: newExpiresAt });
-  }, []);
 
   const openPaywall = useCallback(() => {
     if (isPremium) return;

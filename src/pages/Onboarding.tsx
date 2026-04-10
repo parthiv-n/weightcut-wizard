@@ -345,7 +345,12 @@ export default function Onboarding() {
         current_weight_kg: parseFloat(formData.current_weight_kg),
         goal_weight_kg: parseFloat(formData.goal_weight_kg),
         fight_week_target_kg: isFighterFlow ? parseFloat(formData.fight_week_target_kg) : null,
-        target_date: formData.target_date || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+        target_date: formData.target_date || (() => {
+          // For non-fighters: estimate target date based on weight difference at 0.5 kg/week
+          const diff = Math.abs(parseFloat(formData.current_weight_kg) - parseFloat(formData.goal_weight_kg));
+          const weeks = Math.max(4, Math.ceil(diff / 0.5));
+          return new Date(Date.now() + weeks * 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        })(),
         activity_level: activityLevel,
         training_frequency: trainingFreq,
         goal_type: formData.goal_type || "losing",
@@ -765,41 +770,79 @@ export default function Onboarding() {
                 onChange={e => setFormData(prev => ({ ...prev, current_weight_kg: e.target.value }))}
                 className="h-14 rounded-2xl bg-card border-border/50 text-center text-xl font-semibold max-w-[200px]"
                 autoFocus />
-              {weightDiff && parseFloat(weightDiff) > 0 && formData.goal_type === "cutting" && (() => {
-                const diff = parseFloat(weightDiff);
-                const weeklyLoss = weeksToFight ? diff / weeksToFight : 0;
-                const bodyPct = parseFloat(formData.current_weight_kg) > 0
-                  ? (diff / parseFloat(formData.current_weight_kg)) * 100 : 0;
-                // Risk: >1% bodyweight/week or >1.5 kg/week
-                const isAggressive = weeklyLoss > 1.0 && weeklyLoss <= 1.5;
-                const isDangerous = weeklyLoss > 1.5 || bodyPct > 10;
+              {weightDiff && formData.goal_weight_kg && (() => {
+                const current = parseFloat(formData.current_weight_kg);
+                const goal = parseFloat(formData.goal_weight_kg);
+                const diff = Math.abs(current - goal);
+                if (diff < 0.1) return null;
+                const isLosing = current > goal;
+                const isGaining = current < goal;
 
-                return (
-                  <div className="w-full max-w-[300px] space-y-2">
-                    <p className="text-sm text-muted-foreground text-center">
-                      You need to drop <strong className="text-foreground">{weightDiff} kg</strong>
-                      {weeksToFight ? <> in <strong className="text-foreground">{weeksToFight} weeks</strong>
+                // Fighter with fight date — show risk warnings
+                if (weeksToFight && formData.has_fight === "yes" && isLosing) {
+                  const weeklyLoss = diff / weeksToFight;
+                  const bodyPct = current > 0 ? (diff / current) * 100 : 0;
+                  const isAggressivePace = weeklyLoss > 1.0 && weeklyLoss <= 1.5;
+                  const isDangerous = weeklyLoss > 1.5 || bodyPct > 10;
+
+                  return (
+                    <div className="w-full max-w-[300px] space-y-2">
+                      <p className="text-sm text-muted-foreground text-center">
+                        You need to drop <strong className="text-foreground">{diff.toFixed(1)} kg</strong>
+                        {" "}in <strong className="text-foreground">{weeksToFight} weeks</strong>
                         <span className="text-xs text-muted-foreground/60"> ({weeklyLoss.toFixed(1)} kg/wk)</span>
-                      </> : null}
-                    </p>
-                    {isDangerous && (
-                      <Alert className="border-red-500/30 bg-red-500/5 rounded-2xl">
-                        <AlertTriangle className="h-4 w-4 text-red-500" />
-                        <AlertDescription className="text-xs text-red-400">
-                          <strong className="text-red-300">High risk cut.</strong> Losing {weeklyLoss.toFixed(1)} kg/week ({bodyPct.toFixed(0)}% bodyweight) significantly increases risk of muscle loss, hormonal disruption, and performance decline. Consult a sports doctor. We'll still build your plan.
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                    {isAggressive && !isDangerous && (
-                      <Alert className="border-yellow-500/30 bg-yellow-500/5 rounded-2xl">
-                        <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                        <AlertDescription className="text-xs text-yellow-400">
-                          <strong className="text-yellow-300">Aggressive pace.</strong> Losing {weeklyLoss.toFixed(1)} kg/week is doable but requires strict adherence. Monitor energy levels, strength, and sleep closely. We'll plan for this.
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                  </div>
-                );
+                      </p>
+                      {isDangerous && (
+                        <Alert className="border-red-500/30 bg-red-500/5 rounded-2xl">
+                          <AlertTriangle className="h-4 w-4 text-red-500" />
+                          <AlertDescription className="text-xs text-red-400">
+                            <strong className="text-red-300">High risk cut.</strong> Losing {weeklyLoss.toFixed(1)} kg/week ({bodyPct.toFixed(0)}% bodyweight) increases risk of muscle loss and performance decline. Consult a sports doctor. We'll still build your plan.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                      {isAggressivePace && !isDangerous && (
+                        <Alert className="border-yellow-500/30 bg-yellow-500/5 rounded-2xl">
+                          <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                          <AlertDescription className="text-xs text-yellow-400">
+                            <strong className="text-yellow-300">Aggressive pace.</strong> Losing {weeklyLoss.toFixed(1)} kg/week requires strict adherence. We'll plan for this.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </div>
+                  );
+                }
+
+                // Non-fighter or no fight date — show timeline estimate
+                if (isLosing) {
+                  const weeksConservative = Math.ceil(diff / 0.5);
+                  const weeksAggressive = Math.ceil(diff / 1.0);
+                  const monthsEst = Math.ceil(weeksConservative / 4.3);
+                  return (
+                    <div className="w-full max-w-[300px]">
+                      <p className="text-sm text-muted-foreground text-center">
+                        <strong className="text-foreground">{diff.toFixed(1)} kg</strong> to lose — at a safe pace that's
+                        {" "}<strong className="text-foreground">{weeksAggressive}-{weeksConservative} weeks</strong>
+                        <span className="text-xs text-muted-foreground/60"> (~{monthsEst} {monthsEst === 1 ? "month" : "months"})</span>
+                      </p>
+                    </div>
+                  );
+                }
+
+                if (isGaining) {
+                  const weeksToGain = Math.ceil(diff / 0.35);
+                  const monthsEst = Math.ceil(weeksToGain / 4.3);
+                  return (
+                    <div className="w-full max-w-[300px]">
+                      <p className="text-sm text-muted-foreground text-center">
+                        <strong className="text-foreground">{diff.toFixed(1)} kg</strong> to gain — at a lean pace that's
+                        {" "}<strong className="text-foreground">~{weeksToGain} weeks</strong>
+                        <span className="text-xs text-muted-foreground/60"> (~{monthsEst} {monthsEst === 1 ? "month" : "months"})</span>
+                      </p>
+                    </div>
+                  );
+                }
+
+                return null;
               })()}
             </div>
           </StepLayout>
