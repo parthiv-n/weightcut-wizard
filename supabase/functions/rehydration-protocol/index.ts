@@ -88,13 +88,15 @@ serve(async (req) => {
     }
 
     const {
-      weightLostKg, weighInTiming, availableHours: rawAvailableHours, currentWeightKg,
+      weightLostKg, weighInTiming, availableHours: rawAvailableHours, awakeHours: rawAwakeHours, currentWeightKg,
       glycogenDepletion = "moderate",
       sex, age, heightCm, activityLevel, trainingFrequency,
       tdee, goalWeightKg, fightWeekTargetKg,
     } = await req.json();
 
     const availableHours = rawAvailableHours ?? (weighInTiming === "same-day" ? 5 : 16);
+    // Awake hours: protocol steps are only generated for awake time
+    const awakeHours = rawAwakeHours ?? (availableHours > 10 ? Math.round(availableHours - 8) : availableHours);
 
     const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
     if (!GROK_API_KEY) {
@@ -102,6 +104,8 @@ serve(async (req) => {
     }
 
     const targets = computeTargets(weightLostKg, currentWeightKg, availableHours, glycogenDepletion);
+    // Recalculate hourly rate for awake hours only (more fluid per hour to compensate for sleep)
+    const awakeHourlyFluidML = Math.min(1000, Math.round(targets.totalFluidML / awakeHours));
 
     const profileLines = [
       `Body weight: ${currentWeightKg}kg`,
@@ -115,20 +119,22 @@ serve(async (req) => {
       fightWeekTargetKg ? `Fight week target: ${fightWeekTargetKg}kg` : null,
     ].filter(Boolean).join(" | ");
 
-    const systemPrompt = `You are a combat sports rehydration expert. Output valid JSON only, no markdown.
+    const sleepNote = awakeHours < availableHours ? ` (${availableHours}h total, ${availableHours - awakeHours}h sleep)` : '';
+    const systemPrompt = `Combat sports rehydration expert. Output valid JSON only, no markdown.
 
 ATHLETE: ${profileLines}
+TARGETS: Fluid ${targets.totalFluidLitres}L (${awakeHourlyFluidML}ml/h) | ${awakeHours}h awake${sleepNote} | Na ${targets.totalSodiumMg}mg | K ${targets.totalPotassiumMg}mg | Mg ${targets.totalMagnesiumMg}mg | Carbs ${targets.totalCarbsG}g (max ${targets.maxCarbsPerHour}g/h) | Depletion: ${glycogenDepletion}
 
-TARGETS (use exactly):
-Fluid: ${targets.totalFluidLitres}L (${targets.totalFluidML}ml) | Max/h: ${targets.hourlyFluidML}ml | Window: ${availableHours}h
-Na: ${targets.totalSodiumMg}mg | K: ${targets.totalPotassiumMg}mg | Mg: ${targets.totalMagnesiumMg}mg
-Carbs: ${targets.totalCarbsG}g (${targets.carbTargetLabel}g/kg) max ${targets.maxCarbsPerHour}g/h | Depletion: ${glycogenDepletion}
-Caffeine: ${targets.caffeineLowMg}-${targets.caffeineHighMg}mg 60min pre-comp
+Output JSON:
+- summary: 1-2 sentence overview
+- phases: array of 3-4 phase groups. Each phase covers a RANGE of consecutive hours with the same fluid/electrolyte per hour:
+  {startHour,endHour,phase,fluidMLPerHour,sodiumMgPerHour,potassiumMgPerHour,magnesiumMgPerHour,carbsGPerHour,drinkRecipe,notes,foods:[]}
+  Example: {startHour:1,endHour:4,phase:"Aggressive",fluidMLPerHour:600,sodiumMgPerHour:900,...}
+  Phases must cover hours 1 to ${awakeHours} with no gaps. Front-load sodium in early phases. foods must be array of strings.
+- carbRefuelPlan: {strategy:"1 sentence",meals:[{timing,carbsG,foods:[],rationale}]} 2-3 meals.
+- warnings: 2 strings, athlete-specific risks`;
 
-JSON schema:
-{"summary":"2-3 line overview","hourlyProtocol":[{"hour":1,"timeLabel":"","phase":"","fluidML":0,"sodiumMg":0,"potassiumMg":0,"magnesiumMg":0,"carbsG":0,"drinkRecipe":"","notes":"","foods":[]}],"carbRefuelPlan":{"strategy":"","meals":[{"timing":"","carbsG":0,"foods":[],"rationale":""}]},"warnings":[""],"education":{"howItWorks":[{"title":"","content":""}],"caffeineGuidance":"","carbMouthRinse":""}}`;
-
-    const userPrompt = `Generate rehydration protocol. Lost ${weightLostKg}kg (${((weightLostKg / currentWeightKg) * 100).toFixed(1)}% BM), ${availableHours}h window, ${glycogenDepletion} depletion. ${availableHours <= 6 ? "Short window: aggressive liquid-first protocol." : "Extended: liquid→solid after 3h."} Include drink recipes, foods, 3 warnings, 3 education items.`;
+    const userPrompt = `Lost ${weightLostKg}kg (${((weightLostKg / currentWeightKg) * 100).toFixed(1)}% BM), ${awakeHours}h awake, ${glycogenDepletion} depletion. ${awakeHours <= 6 ? "Short window — liquid-only first 3h." : "Extended — solids after 3h."}`;
 
     edgeLogger.info("Calling Grok API for rehydration protocol");
 
@@ -145,7 +151,7 @@ JSON schema:
           { role: "user", content: userPrompt },
         ],
         temperature: 0.1,
-        max_completion_tokens: 5000,
+        max_completion_tokens: 2500,
       }),
     });
 
@@ -180,6 +186,37 @@ JSON schema:
     }
 
     const protocol = parseJSON(content);
+
+    // ── Expand phase groups into hourly steps (client expects hourlyProtocol) ────
+    if (protocol.phases && Array.isArray(protocol.phases) && !protocol.hourlyProtocol) {
+      const hourlyProtocol: any[] = [];
+      for (const phase of protocol.phases) {
+        const start = phase.startHour ?? phase.start_hour ?? 1;
+        const end = phase.endHour ?? phase.end_hour ?? start;
+        for (let h = start; h <= end; h++) {
+          hourlyProtocol.push({
+            hour: h,
+            phase: phase.phase || "",
+            fluidML: phase.fluidMLPerHour ?? phase.fluidML ?? 0,
+            sodiumMg: phase.sodiumMgPerHour ?? phase.sodiumMg ?? 0,
+            potassiumMg: phase.potassiumMgPerHour ?? phase.potassiumMg ?? 0,
+            magnesiumMg: phase.magnesiumMgPerHour ?? phase.magnesiumMg ?? 0,
+            carbsG: phase.carbsGPerHour ?? phase.carbsG ?? 0,
+            drinkRecipe: phase.drinkRecipe || "",
+            notes: phase.notes || "",
+            foods: Array.isArray(phase.foods) ? phase.foods : [],
+          });
+        }
+      }
+      protocol.hourlyProtocol = hourlyProtocol;
+      delete protocol.phases;
+    }
+    // Fallback: if AI returned hourlyProtocol directly, ensure foods are arrays
+    if (protocol.hourlyProtocol) {
+      for (const step of protocol.hourlyProtocol) {
+        if (step.foods && !Array.isArray(step.foods)) step.foods = [];
+      }
+    }
 
     // ── Attach deterministic totals (overrides any LLM-computed values) ────
     protocol.totals = {

@@ -38,7 +38,7 @@ export default function Hydration() {
     glycogenDepletion,
     normalCarbs, setNormalCarbs,
     fightWeekCarbs, setFightWeekCarbs,
-    availableHours,
+    availableHours, awakeHours,
     protocol, loading,
     currentWeight, profileParts,
     handleGenerateProtocol, handleAICancel,
@@ -46,16 +46,10 @@ export default function Hydration() {
   const { gems, isPremium: gemsIsPremium } = useGems();
 
   const [activeTab, setActiveTab] = useState<"fluid" | "carbs">("fluid");
-  const [expandedStep, setExpandedStep] = useState<number | null>(null);
-  const [expandedMeal, setExpandedMeal] = useState<number | null>(null);
   const [warningsOpen, setWarningsOpen] = useState(false);
   const [scienceOpen, setScienceOpen] = useState(false);
-  const [caffeineOpen, setCaffeineOpen] = useState(false);
-  const [mouthRinseOpen, setMouthRinseOpen] = useState(false);
-  const [electrolyteGuideOpen, setElectrolyteGuideOpen] = useState(false);
-
-  const toggleStep = (idx: number) => setExpandedStep((prev) => (prev === idx ? null : idx));
-  const toggleMeal = (idx: number) => setExpandedMeal((prev) => (prev === idx ? null : idx));
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [disclaimerOpen, setDisclaimerOpen] = useState(false);
 
   const getWeightLossColor = () => {
     if (!currentWeight || !weightLost) return { ring: "text-blue-500 border-blue-500/20", shadow: "" };
@@ -132,31 +126,6 @@ export default function Hydration() {
           <p className="text-[11px] text-muted-foreground mt-0.5">Science-based recovery protocol</p>
         </div>
 
-        {/* Disclaimer Banner */}
-        <div className="rounded-xl bg-muted/50 border border-border p-3 mb-4">
-          <div className="flex items-start gap-2">
-            <Shield className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-            <div>
-              <p className="text-[11px] text-muted-foreground leading-snug">
-                <span className="font-semibold text-foreground/80">Not medical advice.</span> This
-                protocol is an educational guideline based on sports science research. Always consult
-                a qualified sports dietitian or physician before implementing any rehydration
-                protocol, especially after significant weight cuts. Individual responses vary. Stop
-                and seek medical attention if you experience dizziness, confusion, nausea, or chest
-                pain.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Safety Banner */}
-        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20 mb-4">
-          <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-          <p className="text-[11px] text-amber-600 dark:text-amber-300 leading-snug">
-            For athletes who have safely completed their weight cut. Never rehydrate without guidance.
-          </p>
-        </div>
-
         {/* Input Form */}
         <div className="rounded-xl border border-border p-4 mb-4 relative overflow-hidden bg-card">
           <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
@@ -175,27 +144,54 @@ export default function Hydration() {
               </div>
             )}
 
-            {/* Weight Lost Ring */}
-            <div className="flex flex-col items-center justify-center space-y-3">
-              <p className="text-[11px] text-blue-400 font-bold uppercase tracking-[0.2em]">Weight Lost (kg)</p>
-              <div className={`relative w-22 h-22 rounded-full border-[5px] transition-colors duration-500 flex flex-col items-center justify-center bg-background ring-1 ring-border/30 ${ringColorClasses.split(" ")[1]}`} style={{ width: 88, height: 88, boxShadow: ringShadow || undefined }}>
-                <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" className={`transition-colors duration-500 ${ringColorClasses.split(" ")[0]}`} strokeWidth="5" strokeDasharray="289" strokeDashoffset="40" strokeLinecap="round" />
-                </svg>
-                <Input type="number" inputMode="decimal" step="0.1" placeholder="0.0" value={weightLost} onChange={(e) => setWeightLost(e.target.value)} required className="w-20 text-center text-3xl font-black bg-transparent border-none text-foreground focus-visible:ring-0 placeholder:text-muted-foreground/30 p-0 h-auto min-h-0 relative z-10" />
+            {/* Weight Lost */}
+            <div className="flex flex-col items-center pt-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Weight Lost</p>
+              <div className="flex items-baseline gap-1">
+                <Input type="number" inputMode="decimal" step="0.1" placeholder="0.0" value={weightLost} onChange={(e) => setWeightLost(e.target.value)} required
+                  className="w-24 text-center text-4xl font-black bg-transparent border-none text-foreground focus-visible:ring-0 placeholder:text-muted-foreground/20 p-0 h-auto" />
+                <span className="text-lg text-muted-foreground font-medium">kg</span>
               </div>
+              {currentWeight && weightLost && parseFloat(weightLost) > 0 && (
+                <p className={`text-[11px] mt-1 font-medium ${
+                  (parseFloat(weightLost) / currentWeight) * 100 <= 5 ? 'text-emerald-400' :
+                  (parseFloat(weightLost) / currentWeight) * 100 <= 8 ? 'text-amber-400' : 'text-red-400'
+                }`}>
+                  {((parseFloat(weightLost) / currentWeight) * 100).toFixed(1)}% body mass
+                </p>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col items-center text-center py-3">
-                <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-[0.15em] mb-1.5">Weigh-In</p>
-                <input type="time" value={weighInTime} onChange={(e) => setWeighInTime(e.target.value)} required className="bg-transparent border-none text-center text-2xl font-black text-foreground focus:outline-none w-auto mx-auto block relative" />
-                <input type="date" value={weighInDate} onChange={(e) => setWeighInDate(e.target.value)} required className="bg-transparent border-none text-center text-[11px] font-medium text-muted-foreground/60 focus:outline-none w-auto mx-auto block mt-1 relative" />
+              <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.03] p-3 space-y-2">
+                <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider text-center">Weigh-In</p>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2 rounded-xl bg-background/60 border border-border/30 px-3 py-2">
+                    <Clock className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                    <input type="time" value={weighInTime} onChange={(e) => setWeighInTime(e.target.value)} required
+                      className="flex-1 bg-transparent border-none text-sm font-bold text-foreground focus:outline-none" />
+                  </div>
+                  <div className="flex items-center gap-2 rounded-xl bg-background/60 border border-border/30 px-3 py-2">
+                    <Droplets className="h-3.5 w-3.5 text-emerald-400/50 shrink-0" />
+                    <input type="date" value={weighInDate} onChange={(e) => setWeighInDate(e.target.value)} required
+                      className="flex-1 bg-transparent border-none text-sm font-medium text-foreground focus:outline-none" />
+                  </div>
+                </div>
               </div>
-              <div className="flex flex-col items-center text-center py-3">
-                <p className="text-[10px] text-amber-500 font-bold uppercase tracking-[0.15em] mb-1.5">Fight</p>
-                <input type="time" value={fightTime} onChange={(e) => setFightTime(e.target.value)} required className="bg-transparent border-none text-center text-2xl font-black text-foreground focus:outline-none w-auto mx-auto block relative" />
-                <input type="date" value={fightDate} onChange={(e) => setFightDate(e.target.value)} required className="bg-transparent border-none text-center text-[11px] font-medium text-muted-foreground/60 focus:outline-none w-auto mx-auto block mt-1 relative" />
+              <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.03] p-3 space-y-2">
+                <p className="text-[10px] text-amber-500 font-bold uppercase tracking-wider text-center">Fight</p>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2 rounded-xl bg-background/60 border border-border/30 px-3 py-2">
+                    <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                    <input type="time" value={fightTime} onChange={(e) => setFightTime(e.target.value)} required
+                      className="flex-1 bg-transparent border-none text-sm font-bold text-foreground focus:outline-none" />
+                  </div>
+                  <div className="flex items-center gap-2 rounded-xl bg-background/60 border border-border/30 px-3 py-2">
+                    <Zap className="h-3.5 w-3.5 text-amber-500/50 shrink-0" />
+                    <input type="date" value={fightDate} onChange={(e) => setFightDate(e.target.value)} required
+                      className="flex-1 bg-transparent border-none text-sm font-medium text-foreground focus:outline-none" />
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -203,52 +199,85 @@ export default function Hydration() {
             <div className="flex items-center justify-center">
               <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${availableHours <= 5 ? "bg-red-500/10 border-red-500/30 text-red-400" : availableHours <= 10 ? "bg-amber-500/10 border-amber-500/30 text-amber-400" : "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"}`}>
                 <Clock className="w-3 h-3" />
-                {availableHours}h rehydration window
+                {awakeHours}h awake{awakeHours < availableHours && <span className="text-[10px] opacity-60 ml-1">· {Math.round(availableHours - awakeHours)}h sleep</span>}
               </div>
             </div>
 
-            {/* Glycogen Depletion Calculator */}
-            <div className="pt-2">
-              <p className="text-[10px] text-blue-400 font-bold uppercase tracking-[0.15em] text-center mb-3">Glycogen Depletion</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col items-center text-center">
-                  <label className="text-[9px] text-muted-foreground/60 uppercase tracking-wider mb-1">Normal (g/day)</label>
-                  <input type="number" inputMode="numeric" placeholder="300" value={normalCarbs} onChange={(e) => setNormalCarbs(e.target.value)} className="bg-transparent border-none text-center text-xl font-black text-foreground focus:outline-none w-20 mx-auto relative" />
-                </div>
-                <div className="flex flex-col items-center text-center">
-                  <label className="text-[9px] text-muted-foreground/60 uppercase tracking-wider mb-1">Fight Week (g/day)</label>
-                  <input type="number" inputMode="numeric" placeholder="50" value={fightWeekCarbs} onChange={(e) => setFightWeekCarbs(e.target.value)} className="bg-transparent border-none text-center text-xl font-black text-foreground focus:outline-none w-20 mx-auto relative" />
-                </div>
-              </div>
-              {(() => {
-                const normal = parseFloat(normalCarbs);
-                const fightWeek = parseFloat(fightWeekCarbs);
-                const hasInputs = normal > 0 && fightWeek >= 0;
-                const reduction = hasInputs ? Math.round(((normal - fightWeek) / normal) * 100) : 0;
-                const level = glycogenDepletion;
-                const config = {
-                  significant: { color: "text-red-400", label: "Significant", target: "8-12 g/kg" },
-                  moderate: { color: "text-amber-400", label: "Moderate", target: "6-8 g/kg" },
-                  none: { color: "text-emerald-400", label: "None", target: "4-5 g/kg" },
-                }[level] ?? { color: "text-amber-400", label: "Moderate", target: "6-8 g/kg" };
-
-                return (
-                  <div className="mt-3 text-center">
-                    <div className={`flex items-center justify-center gap-2 ${config.color}`}>
-                      <span className="text-xs font-bold">{config.label}</span>
-                      <span className="text-[10px] font-semibold opacity-70">· Replenish: {config.target}</span>
+            {/* Advanced: Glycogen Depletion */}
+            <div className="rounded-xl border border-border/30 overflow-hidden">
+              <button type="button" className="w-full px-3 py-2.5 flex items-center gap-2 text-left" onClick={() => setAdvancedOpen(o => !o)}>
+                <Beaker className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-[11px] font-medium text-muted-foreground">Advanced: Glycogen Depletion</span>
+                <span className="ml-auto text-muted-foreground">{advancedOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}</span>
+              </button>
+              {advancedOpen && (
+                <div className="px-3 pb-3 border-t border-border/20">
+                  <div className="pt-2">
+                    <p className="text-[11px] text-muted-foreground leading-snug mb-3 text-center">
+                      How many grams of carbs do you eat on a <strong className="text-foreground/70">normal training day</strong> vs during <strong className="text-foreground/70">fight week</strong>? This helps us calculate how depleted your glycogen stores are and how aggressively to refuel.
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex flex-col items-center text-center">
+                        <label className="text-[9px] text-muted-foreground/60 uppercase tracking-wider mb-1">Normal (g/day)</label>
+                        <input type="number" inputMode="numeric" placeholder="300" value={normalCarbs} onChange={(e) => setNormalCarbs(e.target.value)} className="bg-transparent border-none text-center text-xl font-black text-foreground focus:outline-none w-20 mx-auto relative" />
+                      </div>
+                      <div className="flex flex-col items-center text-center">
+                        <label className="text-[9px] text-muted-foreground/60 uppercase tracking-wider mb-1">Fight Week (g/day)</label>
+                        <input type="number" inputMode="numeric" placeholder="50" value={fightWeekCarbs} onChange={(e) => setFightWeekCarbs(e.target.value)} className="bg-transparent border-none text-center text-xl font-black text-foreground focus:outline-none w-20 mx-auto relative" />
+                      </div>
                     </div>
-                    {hasInputs ? (
-                      <p className="text-[10px] text-muted-foreground/50 mt-1">
-                        {fightWeek < 50 ? `< 50g/day during fight week` : `${reduction}% reduction`}
-                        {" — "}reduced from {normal}g to {fightWeek}g/day
-                      </p>
-                    ) : (
-                      <p className="text-[10px] text-muted-foreground/40 mt-1">Enter carb intake to detect depletion level</p>
-                    )}
+                    {(() => {
+                      const normal = parseFloat(normalCarbs);
+                      const fightWeek = parseFloat(fightWeekCarbs);
+                      const hasInputs = normal > 0 && fightWeek >= 0;
+                      const reduction = hasInputs ? Math.round(((normal - fightWeek) / normal) * 100) : 0;
+                      const level = glycogenDepletion;
+                      const config = {
+                        significant: { color: "text-red-400", label: "Significant", target: "8-12 g/kg" },
+                        moderate: { color: "text-amber-400", label: "Moderate", target: "6-8 g/kg" },
+                        none: { color: "text-emerald-400", label: "None", target: "4-5 g/kg" },
+                      }[level] ?? { color: "text-amber-400", label: "Moderate", target: "6-8 g/kg" };
+
+                      return (
+                        <div className="mt-3 text-center">
+                          <div className={`flex items-center justify-center gap-2 ${config.color}`}>
+                            <span className="text-xs font-bold">{config.label}</span>
+                            <span className="text-[10px] font-semibold opacity-70">· Replenish: {config.target}</span>
+                          </div>
+                          {hasInputs ? (
+                            <p className="text-[10px] text-muted-foreground/50 mt-1">
+                              {fightWeek < 50 ? `< 50g/day during fight week` : `${reduction}% reduction`}
+                              {" — "}reduced from {normal}g to {fightWeek}g/day
+                            </p>
+                          ) : (
+                            <p className="text-[10px] text-muted-foreground/40 mt-1">Enter carb intake to detect depletion level</p>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
-                );
-              })()}
+                </div>
+              )}
+            </div>
+
+            {/* Safety & Disclaimer */}
+            <div className="rounded-xl border border-border/30 overflow-hidden">
+              <button type="button" className="w-full px-3 py-2.5 flex items-center gap-2 text-left" onClick={() => setDisclaimerOpen(o => !o)}>
+                <Shield className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-[11px] font-medium text-muted-foreground">Safety & Disclaimer</span>
+                <span className="ml-auto text-muted-foreground">{disclaimerOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}</span>
+              </button>
+              {disclaimerOpen && (
+                <div className="px-3 pb-3 border-t border-border/20 space-y-2 pt-2">
+                  <p className="text-[11px] text-muted-foreground leading-snug">
+                    <span className="font-semibold text-foreground/80">Not medical advice.</span> This protocol is an educational guideline based on sports science research. Consult a qualified sports dietitian before implementing. Stop and seek medical attention if you experience dizziness, confusion, nausea, or chest pain.
+                  </p>
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-3 w-3 text-amber-400 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-amber-400 leading-snug">For athletes who have safely completed their weight cut. Never rehydrate without guidance.</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <Button type="submit" className="w-full h-10 mt-1 font-bold text-sm rounded-2xl transition-all active:scale-[0.98] bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90" disabled={loading || !currentWeight}>
@@ -322,91 +351,56 @@ export default function Hydration() {
               )}
             </div>
 
-            {/* How This Protocol Works */}
+            {/* Learn More */}
             <div className="rounded-xl bg-muted/50 border border-border overflow-hidden">
               <button className="w-full px-4 py-3 flex items-center gap-2 text-left hover:bg-muted/30 transition-colors" onClick={() => setScienceOpen((o) => !o)}>
                 <BookOpen className="h-3.5 w-3.5 text-blue-400 shrink-0" />
-                <span className="text-sm font-medium">How This Protocol Works</span>
+                <span className="text-sm font-medium">Learn More</span>
                 <span className="ml-auto text-muted-foreground">{scienceOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}</span>
               </button>
               {scienceOpen && (
-                <div className="px-4 pb-4 space-y-3 border-t border-border">
-                  <div className="pt-3 space-y-3">
-                    {educationItems.map((item, idx) => (
-                      <div key={idx}>
-                        <p className="text-xs font-semibold text-foreground/80 mb-1">{item.title}</p>
-                        <p className="text-xs text-muted-foreground leading-relaxed">{item.content}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Why Electrolytes Matter */}
-            <div className="rounded-xl bg-muted/50 border border-border overflow-hidden">
-              <button className="w-full px-4 py-3 flex items-center gap-2 text-left hover:bg-muted/30 transition-colors" onClick={() => setElectrolyteGuideOpen((o) => !o)}>
-                <Beaker className="h-3.5 w-3.5 text-blue-400 shrink-0" />
-                <span className="text-sm font-medium">Why Electrolytes Matter</span>
-                <span className="ml-auto text-muted-foreground">{electrolyteGuideOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}</span>
-              </button>
-              {electrolyteGuideOpen && (
-                <div className="px-4 pb-4 space-y-3 border-t border-border">
-                  <div className="pt-3 space-y-3">
-                    {[
-                      { symbol: "Na", name: "Sodium", desc: "The #1 electrolyte for rehydration. Sodium creates the osmotic gradient that pulls water into your cells and bloodstream. After a weight cut, your sodium stores are severely depleted. Without adequate sodium, you'll urinate out most of the water you drink. Target: 50-90 mmol/L in rehydration fluid (ISSN 2025)." },
-                      { symbol: "K", name: "Potassium", desc: "Essential for intracellular hydration and muscle function. Potassium works with sodium to maintain fluid balance across cell membranes. Low potassium leads to muscle cramps, weakness, and impaired reflexes — critical for fight performance." },
-                      { symbol: "Mg", name: "Magnesium", desc: "Supports neuromuscular function, energy production, and reduces cramping risk. Magnesium is lost through sweat during the cut and is critical for maintaining reaction time and power output during competition." },
-                    ].map(({ symbol, name, desc }) => (
-                      <div key={symbol} className="flex items-start gap-2">
-                        <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-md px-1.5 py-0.5 shrink-0 mt-0.5">{symbol}</span>
-                        <div>
-                          <p className="text-xs font-semibold text-foreground/80">{name}</p>
-                          <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
+                <div className="px-4 pb-4 space-y-4 border-t border-border pt-3">
+                  {/* How It Works */}
+                  <div>
+                    <p className="text-xs font-bold text-foreground/80 mb-2">How This Protocol Works</p>
+                    <div className="space-y-2">
+                      {educationItems.map((item, idx) => (
+                        <div key={idx}>
+                          <p className="text-[11px] font-semibold text-foreground/70">{item.title}</p>
+                          <p className="text-[11px] text-muted-foreground leading-relaxed">{item.content}</p>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-
-            {/* Caffeine Strategy */}
-            <div className="rounded-xl bg-muted/50 border border-border overflow-hidden">
-              <button className="w-full px-4 py-3 flex items-center gap-2 text-left hover:bg-muted/30 transition-colors" onClick={() => setCaffeineOpen((o) => !o)}>
-                <Coffee className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-                <span className="text-sm font-medium">Caffeine Strategy</span>
-                <span className="ml-auto text-muted-foreground">{caffeineOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}</span>
-              </button>
-              {caffeineOpen && (
-                <div className="px-4 pb-4 border-t border-border">
-                  <div className="pt-3 space-y-2">
-                    {totals && (
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-md px-1.5 py-0.5">Your dose: {totals.caffeineLowMg}-{totals.caffeineHighMg}mg</span>
-                      </div>
-                    )}
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      {education?.caffeineGuidance ?? `Consume 3-6 mg/kg of caffeine approximately 60 minutes before competition. Mild-to-moderate doses improve reaction time, reduce perceived effort, and enhance fine motor control. Higher doses may cause overstimulation, anxiety, and potential decrements in performance (Reale SSE #183). Become familiar with your individual response to caffeine before competition day.`}
-                    </p>
+                  {/* Electrolytes */}
+                  <div>
+                    <p className="text-xs font-bold text-foreground/80 mb-2">Why Electrolytes Matter</p>
+                    <div className="space-y-2">
+                      {[
+                        { symbol: "Na", name: "Sodium", desc: "Creates osmotic gradient for cell absorption. Target: 50-90 mmol/L in fluid." },
+                        { symbol: "K", name: "Potassium", desc: "Intracellular hydration + muscle function. Prevents cramps and impaired reflexes." },
+                        { symbol: "Mg", name: "Magnesium", desc: "Neuromuscular function, energy production. Critical for reaction time." },
+                      ].map(({ symbol, name, desc }) => (
+                        <div key={symbol} className="flex items-start gap-2">
+                          <span className="text-[10px] font-bold text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-md px-1.5 py-0.5 shrink-0 mt-0.5">{symbol}</span>
+                          <div>
+                            <span className="text-[11px] font-semibold text-foreground/70">{name}: </span>
+                            <span className="text-[11px] text-muted-foreground leading-relaxed">{desc}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-
-            {/* Carb Mouth Rinse */}
-            <div className="rounded-xl bg-muted/50 border border-border overflow-hidden">
-              <button className="w-full px-4 py-3 flex items-center gap-2 text-left hover:bg-muted/30 transition-colors" onClick={() => setMouthRinseOpen((o) => !o)}>
-                <Info className="h-3.5 w-3.5 text-blue-400 shrink-0" />
-                <span className="text-sm font-medium">GI Distress? Carb Mouth Rinse</span>
-                <span className="ml-auto text-muted-foreground">{mouthRinseOpen ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}</span>
-              </button>
-              {mouthRinseOpen && (
-                <div className="px-4 pb-4 border-t border-border">
-                  <div className="pt-3">
-                    <p className="text-xs text-muted-foreground leading-relaxed">
-                      {education?.carbMouthRinse ?? `If GI distress prevents you from eating or drinking close to competition, rinsing your mouth for ~10 seconds with a sports drink or carbohydrate solution may enhance performance. This activates regions in the central nervous system that increase drive and reduce perceived effort — a low-risk strategy when swallowing fluids feels impossible (Burke & Maughan 2015).`}
-                    </p>
+                  {/* Caffeine */}
+                  <div>
+                    <p className="text-xs font-bold text-foreground/80 mb-1">Caffeine Strategy</p>
+                    {totals && <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-md px-1.5 py-0.5 inline-block mb-1.5">Your dose: {totals.caffeineLowMg}-{totals.caffeineHighMg}mg</span>}
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">{education?.caffeineGuidance ?? "Consume 3-6 mg/kg caffeine ~60 min before competition. Improves reaction time and reduces perceived effort."}</p>
+                  </div>
+                  {/* Mouth Rinse */}
+                  <div>
+                    <p className="text-xs font-bold text-foreground/80 mb-1">GI Distress? Carb Mouth Rinse</p>
+                    <p className="text-[11px] text-muted-foreground leading-relaxed">{education?.carbMouthRinse ?? "Rinse mouth ~10s with sports drink to activate CNS drive when swallowing feels impossible."}</p>
                   </div>
                 </div>
               )}
@@ -443,54 +437,42 @@ export default function Hydration() {
                     </p>
                   </div>
                   {protocol.hourlyProtocol.map((step, idx) => {
-                    const cumulativeML = getCumulativeFluid(idx);
-                    const totalML = totals?.totalFluidLitres ? totals.totalFluidLitres * 1000 : protocol.hourlyProtocol.reduce((s, st) => s + st.fluidML, 0);
-                    const progressPct = Math.min(100, Math.round((cumulativeML / totalML) * 100));
                     const phaseBadge = getPhaseBadge(step.phase);
-
                     return (
-                      <div key={idx}>
-                        {idx > 0 && <div className="h-px bg-border mx-4" />}
-                        <button className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-muted/30 transition-colors" onClick={() => toggleStep(idx)}>
-                          <div className="flex flex-col items-center justify-center bg-muted border border-border rounded-xl px-2 py-1.5 shrink-0 min-w-[64px] shadow-sm">
-                            <span className="text-[9px] font-bold text-blue-500 uppercase tracking-wider">Hour {step.hour}</span>
+                      <div key={idx} className="flex gap-3 px-4 py-3">
+                        {/* Timeline dot + line */}
+                        <div className="flex flex-col items-center shrink-0">
+                          <div className="w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-background shadow-sm" />
+                          {idx < protocol.hourlyProtocol.length - 1 && <div className="w-0.5 flex-1 bg-border/40 mt-1" />}
+                        </div>
+                        {/* Content */}
+                        <div className="flex-1 min-w-0 pb-3">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-[10px] font-bold text-blue-500 uppercase">H{step.hour}</span>
                             <span className="text-xs font-bold text-foreground">{formatTime(weighInTime, step.hour)}</span>
+                            <span className="text-sm font-bold tabular-nums text-foreground ml-auto">{step.fluidML}ml</span>
                           </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <span className="text-sm font-semibold tabular-nums text-foreground">{step.fluidML}ml</span>
-                              <span className="text-[10px] text-muted-foreground">Na {getSodium(step)}mg</span>
-                              <span className="text-[10px] text-muted-foreground">K {getPotassium(step)}mg</span>
-                              {getCarbs(step) > 0 && <span className="text-[10px] text-emerald-400 font-medium">{getCarbs(step)}g carbs</span>}
+                          <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                            <span className="text-[10px] text-muted-foreground">Na {getSodium(step)}mg</span>
+                            <span className="text-[10px] text-muted-foreground">K {getPotassium(step)}mg</span>
+                            {getCarbs(step) > 0 && <span className="text-[10px] text-emerald-400 font-medium">{getCarbs(step)}g carbs</span>}
+                            {phaseBadge && <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-md border ${phaseBadge.bg} ${phaseBadge.text}`}>{step.phase}</span>}
+                          </div>
+                          {step.drinkRecipe && (
+                            <div className="flex items-start gap-1.5 bg-blue-500/5 border border-blue-500/20 rounded-lg px-2.5 py-1.5 mb-1.5">
+                              <Beaker className="h-3 w-3 text-blue-400 shrink-0 mt-0.5" />
+                              <p className="text-[11px] text-blue-400 font-medium leading-snug">{step.drinkRecipe}</p>
                             </div>
-                            {phaseBadge && <span className={`inline-block mt-1 text-[9px] font-medium px-1.5 py-0.5 rounded-md border ${phaseBadge.bg} ${phaseBadge.text}`}>{step.phase}</span>}
-                          </div>
-                          <div className="flex flex-col items-end gap-1 shrink-0">
-                            <span className="text-[9px] text-muted-foreground tabular-nums">{progressPct}%</span>
-                            <span className="text-muted-foreground">{expandedStep === idx ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}</span>
-                          </div>
-                        </button>
-                        {expandedStep === idx && (
-                          <div className="px-4 pb-3 space-y-2">
-                            <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-                              <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${progressPct}%` }} />
+                          )}
+                          {Array.isArray(step.foods) && step.foods.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mb-1.5">
+                              {step.foods.map((food, fIdx) => (
+                                <span key={fIdx} className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">{food}</span>
+                              ))}
                             </div>
-                            {step.drinkRecipe && (
-                              <div className="flex items-start gap-2 bg-blue-500/5 border border-blue-500/20 rounded-lg px-3 py-2">
-                                <Beaker className="h-3 w-3 text-blue-400 shrink-0 mt-0.5" />
-                                <p className="text-xs text-blue-400 font-medium">{step.drinkRecipe}</p>
-                              </div>
-                            )}
-                            {step.foods && step.foods.length > 0 && (
-                              <div className="flex flex-wrap gap-1">
-                                {step.foods.map((food, fIdx) => (
-                                  <span key={fIdx} className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">{food}</span>
-                                ))}
-                              </div>
-                            )}
-                            <p className="text-xs text-muted-foreground leading-relaxed">{step.notes}</p>
-                          </div>
-                        )}
+                          )}
+                          {step.notes && <p className="text-[11px] text-muted-foreground leading-relaxed line-clamp-2">{step.notes}</p>}
+                        </div>
                       </div>
                     );
                   })}
@@ -518,25 +500,25 @@ export default function Hydration() {
                   </div>
 
                   {protocol.carbRefuelPlan.meals.map((meal, idx) => (
-                    <div key={idx}>
-                      {idx > 0 && <div className="h-px bg-border mx-4" />}
-                      <button className="w-full px-4 py-3 flex items-center gap-3 text-left hover:bg-muted/30 transition-colors" onClick={() => toggleMeal(idx)}>
-                        <span className="text-[10px] font-medium text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-md px-1.5 py-0.5 shrink-0 max-w-[80px] truncate">{meal.timing}</span>
-                        <span className="text-sm font-semibold tabular-nums text-emerald-400">{meal.carbsG}g</span>
-                        <span className="ml-auto text-muted-foreground">{expandedMeal === idx ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}</span>
-                      </button>
-                      {expandedMeal === idx && (
-                        <div className="px-4 pb-3 space-y-2">
-                          {getMealFoods(meal).length > 0 && (
-                            <div className="flex flex-wrap gap-1">
-                              {getMealFoods(meal).map((food, foodIdx) => (
-                                <span key={foodIdx} className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">{food}</span>
-                              ))}
-                            </div>
-                          )}
-                          <p className="text-xs text-muted-foreground italic leading-relaxed">{meal.rationale}</p>
+                    <div key={idx} className="flex gap-3 px-4 py-3">
+                      <div className="flex flex-col items-center shrink-0">
+                        <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-background shadow-sm" />
+                        {idx < protocol.carbRefuelPlan.meals.length - 1 && <div className="w-0.5 flex-1 bg-border/40 mt-1" />}
+                      </div>
+                      <div className="flex-1 min-w-0 pb-3">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="text-[10px] font-medium text-emerald-400">{meal.timing}</span>
+                          <span className="text-sm font-bold tabular-nums text-emerald-400 ml-auto">{meal.carbsG}g</span>
                         </div>
-                      )}
+                        {getMealFoods(meal).length > 0 && (
+                          <div className="flex flex-wrap gap-1 mb-1.5">
+                            {getMealFoods(meal).map((food, foodIdx) => (
+                              <span key={foodIdx} className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">{food}</span>
+                            ))}
+                          </div>
+                        )}
+                        {meal.rationale && <p className="text-[11px] text-muted-foreground leading-relaxed">{meal.rationale}</p>}
+                      </div>
                     </div>
                   ))}
 

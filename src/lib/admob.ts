@@ -9,7 +9,7 @@ const PROD_AD_UNIT_ID = 'ca-app-pub-5228937380128191/9961045291';
 // Google test ID — use until account is approved
 const TEST_AD_UNIT_ID = 'ca-app-pub-3940256099942544/5224354917';
 
-const USE_TEST_ADS = true;
+const USE_TEST_ADS = false;
 const REWARDED_AD_UNIT_ID = USE_TEST_ADS ? TEST_AD_UNIT_ID : PROD_AD_UNIT_ID;
 
 export async function initializeAdMob(): Promise<void> {

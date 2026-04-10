@@ -41,6 +41,11 @@ export function useRehydrationProtocol() {
     return Math.max(1, Math.round(hours * 2) / 2);
   }, [weighInDate, weighInTime, fightDate, fightTime]);
 
+  // Awake hours: subtract 8h sleep for long windows (>10h)
+  const awakeHours = useMemo(() => {
+    return availableHours > 10 ? Math.round(availableHours - 8) : availableHours;
+  }, [availableHours]);
+
   // Auto-derive glycogen depletion from carb inputs
   useEffect(() => {
     const normal = parseFloat(normalCarbs);
@@ -121,6 +126,7 @@ export function useRehydrationProtocol() {
         body: {
           weightLostKg: parseFloat(weightLost),
           availableHours,
+          awakeHours,
           weighInTiming: availableHours <= 6 ? "same-day" : "day-before",
           currentWeightKg: currentWeight,
           glycogenDepletion,
@@ -199,6 +205,7 @@ export function useRehydrationProtocol() {
     normalCarbs, setNormalCarbs,
     fightWeekCarbs, setFightWeekCarbs,
     availableHours,
+    awakeHours,
     // Protocol state
     protocol,
     loading,

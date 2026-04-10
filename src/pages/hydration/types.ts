@@ -135,7 +135,8 @@ export function getCarbs(step: HourlyStep): number {
   return step.carbsG ?? step.carbs ?? 0;
 }
 export function getMealFoods(meal: MealPlan): string[] {
-  return meal.foods ?? meal.mealIdeas ?? [];
+  const foods = meal.foods ?? meal.mealIdeas ?? [];
+  return Array.isArray(foods) ? foods : [];
 }
 
 export function getPhaseBadge(phase?: string) {
