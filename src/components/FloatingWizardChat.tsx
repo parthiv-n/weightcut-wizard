@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from "react";
 import { useWizardBackground } from "@/contexts/WizardBackgroundContext";
-import { Sparkles, Send, Trash2, User, Bot, Loader2, X, Lock } from "lucide-react";
+import { Sparkles, Send, Trash2, User, Bot, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
 import { triggerHapticSelection, triggerHapticSuccess } from "@/lib/haptics";
@@ -11,12 +11,12 @@ import { useSubscription } from "@/hooks/useSubscription";
 
 export function FloatingWizardChat() {
   const { messages, isLoading, sendMessage, clearChat } = useWizardBackground();
-  const { checkAIAccess, openNoGemsDialog, isPremium } = useSubscription();
+  const { isPremium, gems, openNoGemsDialog } = useSubscription();
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const hasAccess = isPremium || checkAIAccess();
+  const hasAccess = isPremium || gems > 0;
 
   // Edge function warmup on mount
   useEffect(() => {
@@ -59,10 +59,7 @@ export function FloatingWizardChat() {
 
   const handleFabPress = () => {
     triggerHapticSelection();
-    if (!checkAIAccess()) {
-      openNoGemsDialog();
-      return;
-    }
+    // Always open the chat — gem is only deducted when user sends a message
     setOpen(true);
   };
 
@@ -81,7 +78,7 @@ export function FloatingWizardChat() {
           style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 5.5rem)" }}
           aria-label="Open AI Wizard"
         >
-          {hasAccess ? <Sparkles className="h-5 w-5" /> : <Lock className="h-4 w-4" />}
+          <Sparkles className="h-5 w-5" />
         </button>
       )}
 

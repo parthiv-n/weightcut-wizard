@@ -39,7 +39,7 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
   const { userId } = useAuth();
-  const { checkAIAccess, openPaywall, incrementLocalUsage, markLimitReached } = useSubscription();
+  const { checkAIAccess, openPaywall, onAICallSuccess } = useSubscription();
 
   const requestNativePermission = async (): Promise<boolean> => {
     if (!Capacitor.isNativePlatform()) return true;
@@ -94,7 +94,7 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
         return;
       }
 
-      incrementLocalUsage();
+      onAICallSuccess();
       setScannedProduct(data);
       setIsProcessing(false);
 

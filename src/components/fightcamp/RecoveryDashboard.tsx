@@ -161,7 +161,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
   const [rateLimitUntil, setRateLimitUntil] = useState<number>(0);
   const [cooldownLeft, setCooldownLeft] = useState(0);
   const [checkIn, setCheckIn] = useState<Partial<FeelCheckIn>>({});
-  const { checkAIAccess, openNoGemsDialog, handleAILimitError, incrementLocalUsage, markLimitReached } = useSubscription();
+  const { checkAIAccess, openNoGemsDialog, handleAILimitError, onAICallSuccess } = useSubscription();
 
   // Enhanced wellness state
   const [wellnessCheckIn, setWellnessCheckIn] = useState<WellnessCheckInData | null>(null);
@@ -400,7 +400,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
 
       if (error) throw error;
       if (data?.coach) {
-        incrementLocalUsage();
+        onAICallSuccess();
         setCoachData(data.coach);
         AIPersistence.save(userId, cacheKey, data.coach, 24);
         completeTask(taskId, data.coach);
@@ -410,7 +410,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
     } catch (err: any) {
       if (err?.name === 'AbortError' || controller.signal.aborted) return;
       logger.error("Coach error", err);
-      if (handleAILimitError(err)) {
+      if (await handleAILimitError(err)) {
         failTask(taskId, "Limit reached");
         return;
       }

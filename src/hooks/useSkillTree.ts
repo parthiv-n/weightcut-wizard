@@ -25,7 +25,7 @@ interface SkillTreeState {
 
 export function useSkillTree() {
   const { userId } = useAuth();
-  const { checkAIAccess, openPaywall, openNoGemsDialog, incrementLocalUsage, markLimitReached, handleAILimitError } = useSubscription();
+  const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
   const [state, setState] = useState<SkillTreeState>({ techniques: [], edges: [], progress: [] });
   const [graphNodes, setGraphNodes] = useState<GraphNode[]>([]);
   const [graphEdges, setGraphEdges] = useState<GraphEdge[]>([]);
@@ -156,11 +156,11 @@ export function useSkillTree() {
 
       if (controller.signal.aborted) return;
       if (chainError) {
-        if (handleAILimitError(chainError)) return;
+        if (await handleAILimitError(chainError)) return;
         if (chainError?.name === "AbortError") throw chainError;
         throw new Error(await extractEdgeFunctionError(chainError, "Chain generation failed"));
       }
-      incrementLocalUsage();
+      onAICallSuccess();
       const chainData = chainResponse as TechniqueChainResponse;
 
       if (!chainData?.chains?.length) return;

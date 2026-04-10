@@ -92,7 +92,7 @@ function weekLabel(weekStartStr: string): string {
 export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrigger, customColors }: TrainingSummarySectionProps) {
     const { toast } = useToast();
     const { gems, isPremium: gemsIsPremium } = useGems();
-    const { checkAIAccess, openPaywall, openNoGemsDialog, incrementLocalUsage, markLimitReached, handleAILimitError } = useSubscription();
+    const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
     const { tasks, addTask, completeTask, failTask, dismissTask } = useAITask();
     const [savedSummaries, setSavedSummaries] = useState<SavedSummaryRow[]>([]);
     const [weekSessions, setWeekSessions] = useState<SessionRow[]>([]);
@@ -262,12 +262,12 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
             if (controller.signal.aborted) return;
 
             if (error) {
-                if (handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
+                if (await handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
                 throw error;
             }
             if (!data?.summary) throw new Error("No summary returned");
 
-            incrementLocalUsage();
+            onAICallSuccess();
             const fingerprint = computeFingerprint(weekSessions);
             const allSessionIds = sessionsWithNotes.map(s => s.id);
 

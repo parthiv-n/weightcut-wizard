@@ -124,8 +124,8 @@ Return ONLY valid JSON in this exact format:
 
       if (response.status === 429) {
         return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-          { status: 429, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
+          JSON.stringify({ error: "AI service is busy. Please try again in a moment.", code: "AI_BUSY" }),
+          { status: 503, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
         );
       }
 

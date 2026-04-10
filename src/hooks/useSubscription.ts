@@ -1,37 +1,46 @@
-import { useSubscriptionContext, isLimitHitToday } from "@/contexts/SubscriptionContext";
+import { useSubscriptionContext } from "@/contexts/SubscriptionContext";
 import { useCallback } from "react";
 
 export function useSubscription() {
   const ctx = useSubscriptionContext();
 
-  // Synchronous check — allows access if premium, under rate limit, or has gems
+  // Gems are the sole limiter: premium = unlimited, free = 1 gem per AI call
   const checkAIAccess = (): boolean => {
-    if (ctx.isPremium) return true;
-    if (!isLimitHitToday()) return true;
-    // Rate limit hit — but allow if user has gems (server will deduct one)
-    return ctx.gems > 0;
+    const allowed = ctx.isPremium || ctx.gems > 0;
+    console.log("[AI Access Check]", {
+      allowed,
+      isPremium: ctx.isPremium,
+      gems: ctx.gems,
+    });
+    return allowed;
   };
 
   /**
    * Handle a 429/rate-limit error from an edge function.
-   * If the server says "no_gems", opens the NoGemsDialog; otherwise opens the paywall.
+   * Parses the response body to sync gem count and show the right dialog.
    */
-  const handleAILimitError = useCallback((error: any) => {
-    if (ctx.isPremium) return false; // Premium users are never rate-limited
+  const handleAILimitError = useCallback(async (error: any): Promise<boolean> => {
+    if (ctx.isPremium) return false;
     const errBody = typeof error === "object" && "context" in error ? (error as any).context : null;
     const status = errBody?.status;
-    if (status !== 429) return false; // not a limit error
+    console.log("[AI Limit Error]", { status, isPremium: ctx.isPremium, gems: ctx.gems });
+    if (status !== 429) return false;
 
-    ctx.markLimitReached();
-    // Try to parse the response body for the reason
+    // Parse the Response body
+    let body: any = null;
     try {
-      const body = errBody?.body ? JSON.parse(errBody.body) : errBody;
-      if (body?.code === "NO_GEMS" || body?.reason === "no_gems") {
-        ctx.openNoGemsDialog();
-        return true;
+      if (errBody && typeof errBody.json === "function") {
+        body = await errBody.json();
       }
-    } catch {}
-    ctx.openPaywall();
+    } catch { /* body already consumed or not JSON */ }
+    console.log("[AI Limit Error] Parsed body:", body);
+
+    // Sync gem count from server
+    const serverGems = typeof body?.gems === "number" ? body.gems : undefined;
+    ctx.onAICallBlocked(serverGems);
+
+    // Show no-gems dialog (the only reason a free user gets 429 in gem-only system)
+    ctx.openNoGemsDialog();
     return true;
   }, [ctx]);
 
@@ -39,15 +48,15 @@ export function useSubscription() {
     isPremium: ctx.isPremium,
     tier: ctx.tier,
     expiresAt: ctx.expiresAt,
-    aiUsage: ctx.aiUsageToday,
+    gems: ctx.gems,
     checkAIAccess,
     openPaywall: ctx.openPaywall,
     openNoGemsDialog: ctx.openNoGemsDialog,
     closeNoGemsDialog: ctx.closeNoGemsDialog,
     isNoGemsOpen: ctx.isNoGemsOpen,
     handleAILimitError,
-    refreshAIUsage: ctx.refreshAIUsage,
-    incrementLocalUsage: ctx.incrementLocalUsage,
-    markLimitReached: ctx.markLimitReached,
+    refreshGems: ctx.refreshGems,
+    onAICallSuccess: ctx.onAICallSuccess,
+    onAICallBlocked: ctx.onAICallBlocked,
   };
 }

@@ -100,8 +100,8 @@ Provide: 1) 2-3 sentence summary, 2) 5-8 day-by-day tips, 3) safety warning if o
     if (!response.ok) {
       if (response.status === 429) {
         return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-          { status: 429, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
+          JSON.stringify({ error: "AI service is busy. Please try again in a moment.", code: "AI_BUSY" }),
+          { status: 503, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
         );
       }
       if (response.status === 401 || response.status === 403) {

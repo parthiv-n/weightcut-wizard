@@ -29,7 +29,7 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
   const { userId } = useUser();
   const { toast } = useToast();
   const { safeAsync, isMounted } = useSafeAsync();
-  const { checkAIAccess, openPaywall, openNoGemsDialog, incrementLocalUsage, markLimitReached, handleAILimitError } = useSubscription();
+  const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
 
   const [trainingWisdom, setTrainingWisdom] = useState<TrainingFoodTip | null>(null);
   const [trainingWisdomLoading, setTrainingWisdomLoading] = useState(false);
@@ -122,12 +122,12 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
       if (!isMounted()) return;
       if (error) {
         // Only show limit dialog if user explicitly requested it
-        if (userInitiated && handleAILimitError(error)) return;
+        if (userInitiated && await handleAILimitError(error)) return;
         if (!userInitiated) return; // silently fail for auto-triggered calls
         throw new Error(await extractEdgeFunctionError(error, "Could not generate nutrition advice"));
       }
       if (data?.error) throw new Error(data.error);
-      incrementLocalUsage();
+      onAICallSuccess();
 
       let advice: string | null = null;
       if (data?.mealPlan) {
@@ -208,11 +208,11 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
 
       if (!isMounted()) return;
       if (error) {
-        if (handleAILimitError(error)) return;
+        if (await handleAILimitError(error)) return;
         throw new Error(await extractEdgeFunctionError(error, "Could not generate training food ideas"));
       }
       if (data?.error) throw new Error(data.error);
-      incrementLocalUsage();
+      onAICallSuccess();
 
       let trainingData: TrainingFoodTip | null = null;
 

@@ -148,19 +148,20 @@ RULES:
 - ALWAYS generate a full plan regardless of how aggressive the goal is
 - If requiredWeeklyLoss > 1.5: set riskLevel="red", include strong medical warning in riskExplanation urging consultation with a doctor/sports nutritionist, but still provide complete calorie/macro recommendations
 
-STYLE — provide genuinely useful, actionable information:
-- riskExplanation: 2-3 sentences. State risk level, explain why, and what the athlete should monitor. Include specific warning signs to watch for.
-- strategicGuidance: 3-4 sentences. Explain the overall calorie strategy, how to structure deficit across training vs rest days, and when to adjust. Be specific about numbers.
-- weeklyWorkflow: 3 steps describing the weekly check-in process:
-  Step 1: When and how to weigh (same day, same conditions, morning fasted)
-  Step 2: Compare to target weekly weight — if ABOVE target, reduce daily calories by 100-200 kcal; if BELOW target, increase by 100-150 kcal to fuel training and prevent muscle loss
-  Step 3: What to do if weight stalls for 2+ weeks or drops too fast
-  Each step should be 1-2 sentences with specific numbers.
-- trainingConsiderations: 3-4 sentences. Concrete training adjustments for the weight cut phase — how to modify intensity, volume, and session structure to preserve performance while in deficit.
-- timeline: 2-3 sentences. Break down the cut into phases with specific weekly weight targets and milestones. Include the expected trajectory.
-- weeklyPlan: each week value should be 20-30 words. Include specific calorie targets, training adjustments, and the target weight for that week.
+STYLE — you are a sports nutritionist writing a personalised protocol. Be specific with numbers. No filler.
+- riskExplanation: 3-4 sentences. State the risk level and why. List 2-3 specific warning signs to watch for (e.g., strength dropping >10% on compounds, persistent dizziness during training, mood/sleep disruption, menstrual irregularity for females). State when the athlete should stop the cut and consult a sports doctor.
+- strategicGuidance: 4-5 sentences. Explain the calorie strategy with training-day vs rest-day cycling (e.g., "Eat X kcal on training days, Y kcal on rest days"). Explain how to structure the deficit — front-load or back-load carbs around training, keep protein steady. Mention when to schedule a refeed day (every 7-10 days if deficit >500 kcal) and what that looks like (+300-500 kcal from carbs). Include hydration target (e.g., 40ml/kg bodyweight minimum).
+- weeklyWorkflow: 3-4 steps for the weekly check-in process:
+  Step 1: When/how to weigh — same day, morning, post-bathroom, pre-food. Take 3-day average to smooth out fluctuations.
+  Step 2: Compare 3-day average to target. If ABOVE by >0.3kg, reduce daily intake by 100-200 kcal from carbs. If BELOW target or losing >1% bodyweight/week, increase by 100-150 kcal.
+  Step 3: If weight stalls for 2+ weeks despite adherence, add 1-2 low-intensity cardio sessions (30 min walk/cycle) before reducing calories further.
+  Step 4: If the cut exceeds 4 weeks, schedule a 2-day diet break at maintenance calories to restore leptin and training performance.
+  Each step 2-3 sentences with specific numbers.
+- trainingConsiderations: 4-5 sentences. Prioritise preserving compound lift strength (squat, deadlift, bench, overhead press) — keep intensity (% 1RM) high but reduce volume by 20-30%. Drop accessory/isolation volume first. Limit HIIT; prefer steady-state cardio (heart rate 120-140 bpm) to avoid CNS fatigue. If sparring or fight-specific training, schedule it on higher-calorie days. Consider a deload week every 3-4 weeks during an extended cut.
+- timeline: 3-4 sentences. Break the cut into named phases (Aggressive Phase, Moderate Phase, Maintenance/Peak Week) with specific target weights per phase and calorie levels. Include expected rate of loss per phase. Mention when to transition between phases.
+- weeklyPlan: each week value should be 30-50 words. Include training-day and rest-day calorie targets, protein target, recommended cardio, hydration note, and the target weight for the end of that week. Week 1 should be a slightly gentler start; Week 2 full deficit; Ongoing should describe the steady-state approach with adjustment triggers.
 
-DO NOT include specific food recommendations (no meal suggestions, no food names). Focus on calorie/macro numbers, training adjustments, and the weekly monitoring workflow.
+DO NOT include specific food recommendations (no meal suggestions, no food names). Focus on calorie/macro numbers, training adjustments, hydration, and the weekly monitoring workflow.
 
 OUTPUT:
 {
@@ -236,8 +237,8 @@ OUTPUT:
     if (!response.ok) {
       if (response.status === 429) {
         return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-          { status: 429, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
+          JSON.stringify({ error: "AI service is busy. Please try again in a moment.", code: "AI_BUSY" }),
+          { status: 503, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
         );
       }
       if (response.status === 401) {

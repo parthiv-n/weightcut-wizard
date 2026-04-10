@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { X, Zap, Check, Loader2, RotateCcw, Clock } from "lucide-react";
-import { useAICountdown } from "@/components/subscription/AILimitTimer";
+import { useNextGemCountdown } from "@/components/subscription/AILimitTimer";
 import { Button } from "@/components/ui/button";
 import { useSubscriptionContext } from "@/contexts/SubscriptionContext";
 import { useProfile } from "@/contexts/UserContext";
@@ -26,7 +26,7 @@ const FEATURES = [
 ];
 
 export function PaywallOverlay() {
-  const { isPaywallOpen, closePaywall, refreshAIUsage } = useSubscriptionContext();
+  const { isPaywallOpen, closePaywall, refreshGems } = useSubscriptionContext();
   const { refreshProfile } = useProfile();
 
   useEffect(() => {
@@ -41,7 +41,7 @@ export function PaywallOverlay() {
           // Wait for RevenueCat webhook to update Supabase profile
           await new Promise(r => setTimeout(r, 2000));
           await refreshProfile();
-          await refreshAIUsage();
+          await refreshGems();
         }
       } catch (err) {
         logger.error("Native paywall error", err);
@@ -50,7 +50,7 @@ export function PaywallOverlay() {
       }
     })();
     return () => { cancelled = true; };
-  }, [isPaywallOpen, closePaywall, refreshProfile, refreshAIUsage]);
+  }, [isPaywallOpen, closePaywall, refreshProfile, refreshGems]);
 
   if (!isPaywallOpen) return null;
   // On native iOS, the native paywall is shown via the effect above
@@ -63,10 +63,11 @@ export function PaywallOverlay() {
  * On native iOS, RevenueCat's built-in paywall UI is used instead.
  */
 function WebFallbackPaywall() {
-  const { closePaywall, refreshAIUsage } = useSubscriptionContext();
+  const { closePaywall, refreshGems } = useSubscriptionContext();
   const { refreshProfile } = useProfile();
   const { toast } = useToast();
-  const countdown = useAICountdown();
+  const { gems, isPremium } = useSubscriptionContext();
+  const countdown = useNextGemCountdown(gems, isPremium);
   const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">("yearly");
   const [offerings, setOfferings] = useState<any>(null);
   const [purchasing, setPurchasing] = useState(false);
@@ -104,7 +105,7 @@ function WebFallbackPaywall() {
       if (customerInfo && isPremiumFromCustomerInfo(customerInfo)) {
         await new Promise((r) => setTimeout(r, 2000));
         await refreshProfile();
-        await refreshAIUsage();
+        await refreshGems();
         closePaywall();
         toast({ title: "Welcome to Pro!", description: "You now have unlimited AI access." });
       }
@@ -123,7 +124,7 @@ function WebFallbackPaywall() {
       if (customerInfo && isPremiumFromCustomerInfo(customerInfo)) {
         await new Promise((r) => setTimeout(r, 2000));
         await refreshProfile();
-        await refreshAIUsage();
+        await refreshGems();
         closePaywall();
         toast({ title: "Purchases restored!", description: "Premium access has been restored." });
       } else {

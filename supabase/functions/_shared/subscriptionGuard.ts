@@ -3,16 +3,14 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 export interface AIUsageResult {
   allowed: boolean;
   is_premium: boolean;
-  used: number;
-  limit: number;
-  reason?: string;
   gems?: number;
+  reason?: string;
 }
 
 /**
- * Check AI usage limits for a user. Premium users get unlimited access.
- * Free users consume gems (1 per AI call). Falls back to rate_limits table.
- * Uses SECURITY DEFINER Postgres functions for atomic operations.
+ * Check AI usage limits for a user.
+ * Premium users get unlimited access.
+ * Free users spend 1 gem per AI call. No separate rate limit.
  */
 export async function checkAIUsage(
   userId: string
@@ -22,78 +20,59 @@ export async function checkAIUsage(
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   );
 
-  // 1. Grant daily free gem (idempotent)
+  // 1. Grant daily free gem (idempotent — caps at 2 gems)
   try {
     await adminClient.rpc('grant_daily_free_gem', { p_user_id: userId });
   } catch (e) {
     console.error('[subscriptionGuard] grant_daily_free_gem error:', e);
   }
 
-  // 2. Try the existing rate limit check (handles premium detection)
-  const { data, error } = await adminClient.rpc('check_ai_usage_and_increment', {
-    p_user_id: userId,
-    p_max_requests: 2,
-  });
+  // 2. Check if premium
+  try {
+    const { data: profile } = await adminClient
+      .from('profiles')
+      .select('subscription_tier, subscription_expires_at, gems')
+      .eq('id', userId)
+      .single();
 
-  if (error) {
-    console.error('[subscriptionGuard] RPC error:', error);
-    // Fallback: check profile directly before denying — premium users should never be blocked
-    try {
-      const { data: profile } = await adminClient
-        .from('profiles')
-        .select('subscription_tier, subscription_expires_at')
-        .eq('id', userId)
-        .single();
-      if (
-        profile?.subscription_tier &&
-        profile.subscription_tier !== 'free' &&
-        (!profile.subscription_expires_at || new Date(profile.subscription_expires_at) > new Date())
-      ) {
-        console.log('[subscriptionGuard] RPC failed but user is premium — allowing');
-        return { allowed: true, is_premium: true, used: 0, limit: -1 };
-      }
-    } catch (fallbackErr) {
-      console.error('[subscriptionGuard] Fallback profile check also failed:', fallbackErr);
+    if (
+      profile?.subscription_tier &&
+      profile.subscription_tier !== 'free' &&
+      (!profile.subscription_expires_at || new Date(profile.subscription_expires_at) > new Date())
+    ) {
+      return { allowed: true, is_premium: true };
     }
-    // Default to DENY on failure — never degrade to open access
-    return { allowed: false, is_premium: false, used: 0, limit: 1, reason: 'service_error' };
-  }
 
-  const result = data as AIUsageResult;
+    console.log('[subscriptionGuard] Free user, gems in DB:', profile?.gems, 'userId:', userId);
 
-  // Premium users bypass everything
-  if (result.is_premium) return result;
-
-  // 3. If rate limit says blocked, try gem deduction as fallback
-  if (!result.allowed) {
+    // 3. Free user — deduct 1 gem
     const { data: gemsLeft, error: gemErr } = await adminClient.rpc('deduct_gem', {
       p_user_id: userId,
     });
 
+    console.log('[subscriptionGuard] deduct_gem result:', { gemsLeft, gemErr: gemErr?.message });
+
     if (gemErr || gemsLeft === -1) {
-      // No gems either — truly blocked
-      const { data: profile } = await adminClient
-        .from('profiles')
-        .select('gems')
-        .eq('id', userId)
-        .single();
+      // No gems — blocked
       return {
-        ...result,
         allowed: false,
+        is_premium: false,
         reason: 'no_gems',
         gems: profile?.gems ?? 0,
       };
     }
 
-    // Gem deducted successfully — allow the request
-    return { ...result, allowed: true, gems: gemsLeft as number };
+    // Gem deducted — allow
+    console.log('[subscriptionGuard] Gem deducted, allowing. Gems remaining:', gemsLeft);
+    return { allowed: true, is_premium: false, gems: gemsLeft as number };
+  } catch (e) {
+    console.error('[subscriptionGuard] Error:', e);
+    return { allowed: false, is_premium: false, reason: 'service_error', gems: 0 };
   }
-
-  return result;
 }
 
 /**
- * Returns a 429 response when AI usage limit is reached.
+ * Returns a 429 response when AI usage limit is reached (no gems).
  */
 export function aiLimitResponse(
   req: Request,
@@ -102,16 +81,12 @@ export function aiLimitResponse(
 ): Response {
   return new Response(
     JSON.stringify({
-      error: 'AI usage limit reached',
-      code: usage.reason === 'no_gems' ? 'NO_GEMS' : 'AI_LIMIT_REACHED',
-      used: usage.used,
-      limit: usage.limit,
+      error: 'No gems remaining',
+      code: 'NO_GEMS',
       gems: usage.gems ?? 0,
-      reason: usage.reason || 'rate_limit',
+      reason: usage.reason || 'no_gems',
       is_premium: false,
-      message: usage.reason === 'no_gems'
-        ? 'You\'re out of AI gems. Watch an ad or upgrade to Pro for unlimited access.'
-        : 'You\'ve used your free AI analysis for today. Upgrade to Premium for unlimited access.',
+      message: 'You\'re out of AI gems. Watch an ad or upgrade to Pro for unlimited access.',
     }),
     {
       status: 429,

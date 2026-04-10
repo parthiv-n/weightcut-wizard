@@ -28,6 +28,7 @@ export interface AITask {
 
 interface AITaskInternal extends AITask {
   completedAt?: number;
+  failedAt?: number;
 }
 
 interface AITaskContextType {
@@ -80,7 +81,7 @@ export function AITaskProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const failTask = useCallback((id: string, error: string) => {
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, status: "error" as const, error } : t)));
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, status: "error" as const, error, failedAt: Date.now() } : t)));
   }, []);
 
   const dismissTask = useCallback((id: string) => {
@@ -97,7 +98,11 @@ export function AITaskProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
-      setTasks((prev) => prev.filter((t) => !(t.status === "done" && t.completedAt && now - t.completedAt > 300_000)));
+      setTasks((prev) => prev.filter((t) => {
+        if (t.status === "done" && t.completedAt && now - t.completedAt > 300_000) return false;
+        if (t.status === "error" && t.failedAt && now - t.failedAt > 5_000) return false;
+        return true;
+      }));
     }, 1000);
     return () => clearInterval(interval);
   }, []);
