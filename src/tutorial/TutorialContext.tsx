@@ -161,17 +161,25 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
         return () => clearTimeout(timer);
       }
 
-      // Check if onboarding already completed (persistence + localStorage guard)
-      if (tutorialPersistence.isFlowCompleted(userId, onboardingFlow)) {
-        autoTriggeredRef.current = true;
-        return;
-      }
+      // If user just finished onboarding, always show the tutorial
+      const justOnboarded = localStorage.getItem("wcw_onboarding_just_completed");
+      if (justOnboarded) {
+        localStorage.removeItem("wcw_onboarding_just_completed");
+        // Clear any stale completion state so the tutorial runs fresh
+        tutorialPersistence.clearFlow(userId, "onboarding");
+      } else {
+        // Check if onboarding already completed (persistence + localStorage guard)
+        if (tutorialPersistence.isFlowCompleted(userId, onboardingFlow)) {
+          autoTriggeredRef.current = true;
+          return;
+        }
 
-      // Extra guard: check if tutorial was already shown this session
-      const sessionKey = `wcw_tutorial_shown_${userId}`;
-      if (localStorage.getItem(sessionKey)) {
-        autoTriggeredRef.current = true;
-        return;
+        // Extra guard: check if tutorial was already shown this session
+        const sessionKey = `wcw_tutorial_shown_${userId}`;
+        if (localStorage.getItem(sessionKey)) {
+          autoTriggeredRef.current = true;
+          return;
+        }
       }
 
       // Seed demo data only for brand-new users (no cached weight data yet)
@@ -181,6 +189,7 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
       }
 
       // Start onboarding after dashboard animations finish — mark as shown immediately
+      const sessionKey = `wcw_tutorial_shown_${userId}`;
       localStorage.setItem(sessionKey, 'true');
       const timer = setTimeout(() => {
         autoTriggeredRef.current = true;

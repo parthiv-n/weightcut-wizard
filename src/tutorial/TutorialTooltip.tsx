@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useCallback } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
 import type { TutorialStep } from "./types";
 
@@ -22,7 +22,8 @@ export function TutorialTooltip({
   onSkip,
 }: TooltipProps) {
   const prefersReduced = useReducedMotion();
-  const tooltipRef = useRef<HTMLDivElement>(null);
+  const tooltipEl = useRef<HTMLDivElement | null>(null);
+  const setTooltipRef = useCallback((el: HTMLDivElement | null) => { tooltipEl.current = el; }, []);
 
   const isFirstStep = stepIndex === 0;
   const isLastStep = stepIndex === totalSteps - 1;
@@ -40,7 +41,7 @@ export function TutorialTooltip({
     <AnimatePresence mode="wait">
       <motion.div
         key={step.id}
-        ref={tooltipRef}
+        ref={setTooltipRef}
         className="fixed max-w-[340px] rounded-3xl p-5
           bg-[rgba(18,18,20,0.97)]
           border border-[rgba(255,255,255,0.08)]
