@@ -126,7 +126,7 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
         }
       );
 
-      if (response.status === 429) {
+      if (response.status === 429 && !isPremium) {
         markLimitReached();
         const limitMessages: Message[] = [...newMessages, {
           role: "assistant",
@@ -137,6 +137,9 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
         openNoGemsDialog();
         setIsLoading(false);
         return;
+      }
+      if (response.status === 429) {
+        throw new Error("Temporary server error — please try again");
       }
 
       if (!response.ok) {
@@ -164,7 +167,7 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
     } finally {
       setIsLoading(false);
     }
-  }, [userId, messages, isLoading]);
+  }, [userId, messages, isLoading, isPremium, markLimitReached, openNoGemsDialog, gems, incrementLocalUsage]);
 
   const value = useMemo(
     () => ({ messages, isLoading, sendMessage, clearChat, loadHistory }),

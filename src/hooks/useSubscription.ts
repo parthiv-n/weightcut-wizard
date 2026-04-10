@@ -17,6 +17,7 @@ export function useSubscription() {
    * If the server says "no_gems", opens the NoGemsDialog; otherwise opens the paywall.
    */
   const handleAILimitError = useCallback((error: any) => {
+    if (ctx.isPremium) return false; // Premium users are never rate-limited
     const errBody = typeof error === "object" && "context" in error ? (error as any).context : null;
     const status = errBody?.status;
     if (status !== 429) return false; // not a limit error

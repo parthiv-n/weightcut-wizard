@@ -43,6 +43,7 @@ const Recovery = lazy(() => import("./pages/Recovery"));
 const SkillTree = lazy(() => import("./pages/SkillTree"));
 const GymTracker = lazy(() => import("./pages/GymTracker"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const CutPlanReview = lazy(() => import("./pages/CutPlanReview"));
 const Legal = lazy(() => import("./pages/Legal"));
 
 const _idle = window.requestIdleCallback || ((cb: IdleRequestCallback) => setTimeout(cb, 50));
@@ -238,6 +239,11 @@ const App = () => (
                 <Route path="/onboarding" element={
                   <ProtectedRoute>
                     <Onboarding />
+                  </ProtectedRoute>
+                } />
+                <Route path="/cut-plan" element={
+                  <ProtectedRoute>
+                    <Suspense fallback={null}><CutPlanReview /></Suspense>
                   </ProtectedRoute>
                 } />
 

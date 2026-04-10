@@ -161,8 +161,15 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
         return () => clearTimeout(timer);
       }
 
-      // Check if onboarding already completed
+      // Check if onboarding already completed (persistence + localStorage guard)
       if (tutorialPersistence.isFlowCompleted(userId, onboardingFlow)) {
+        autoTriggeredRef.current = true;
+        return;
+      }
+
+      // Extra guard: check if tutorial was already shown this session
+      const sessionKey = `wcw_tutorial_shown_${userId}`;
+      if (localStorage.getItem(sessionKey)) {
         autoTriggeredRef.current = true;
         return;
       }
@@ -173,7 +180,8 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
         seedDemoData(userId);
       }
 
-      // Start onboarding after dashboard animations finish
+      // Start onboarding after dashboard animations finish — mark as shown immediately
+      localStorage.setItem(sessionKey, 'true');
       const timer = setTimeout(() => {
         autoTriggeredRef.current = true;
         managerRef.current.start("onboarding", getUserState());

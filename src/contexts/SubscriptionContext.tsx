@@ -294,12 +294,16 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const openPaywall = useCallback(() => {
+    if (isPremium) return; // Premium users never see the paywall
     setIsPaywallOpen(true);
     // Also show the transient timer toast if limit is hit
     if (isLimitHitToday()) flashLimitTimer();
-  }, [flashLimitTimer]);
+  }, [isPremium, flashLimitTimer]);
   const closePaywall = useCallback(() => setIsPaywallOpen(false), []);
-  const openNoGemsDialog = useCallback(() => setIsNoGemsOpen(true), []);
+  const openNoGemsDialog = useCallback(() => {
+    if (isPremium) return; // Premium users never see the no-gems dialog
+    setIsNoGemsOpen(true);
+  }, [isPremium]);
   const closeNoGemsDialog = useCallback(() => setIsNoGemsOpen(false), []);
   const dismissWelcomePro = useCallback(() => setShowWelcomePro(false), []);
 

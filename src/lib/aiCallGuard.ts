@@ -54,8 +54,12 @@ export async function invokeAIFunction<T = any>(
       }
 
       if (parsed?.code === "AI_LIMIT_REACHED") {
-        subscriptionCtx.openPaywall();
-        return { data: null, error: parsed, blocked: true };
+        if (!subscriptionCtx.isPremium) {
+          subscriptionCtx.openPaywall();
+          return { data: null, error: parsed, blocked: true };
+        }
+        // Premium user hit a spurious 429 — treat as transient error, not a block
+        return { data: null, error: parsed, blocked: false };
       }
 
       return { data: null, error, blocked: false };
