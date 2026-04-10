@@ -1,21 +1,26 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useProfile, useAuth } from "@/contexts/UserContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Sparkles, AlertTriangle, CheckCircle, Zap, Shield, Activity, TrendingDown } from "lucide-react";
+import {
+  Sparkles, AlertTriangle, CheckCircle, Zap, Shield, Activity,
+  TrendingDown, ChevronLeft, Swords, Target, Flame, Dumbbell,
+  Moon, Brain, Gauge, Utensils, Wallet,
+} from "lucide-react";
 import { profileSchema } from "@/lib/validation";
 import wizardLogo from "@/assets/wizard-logo.webp";
-import { celebrateSuccess } from "@/lib/haptics";
+import { celebrateSuccess, triggerHapticSelection } from "@/lib/haptics";
 import { logger } from "@/lib/logger";
 import { seedDemoData } from "@/lib/demoData";
+import { AnimatePresence, motion } from "motion/react";
+import { springs } from "@/lib/motion";
 
-const ACTIVITY_MULTIPLIERS = {
+const ACTIVITY_MULTIPLIERS: Record<string, number> = {
   sedentary: 1.2,
   lightly_active: 1.375,
   moderately_active: 1.55,
@@ -23,16 +28,17 @@ const ACTIVITY_MULTIPLIERS = {
   extra_active: 1.9,
 };
 
-/** Progress bar that crawls smoothly toward target — feels alive during long API calls */
+const TOTAL_STEPS = 15;
+
+// ── Progress bar that crawls smoothly ──
 function ProgressCrawl({ targetPercent, className }: { targetPercent: number; className?: string }) {
   const [display, setDisplay] = useState(0);
   const rafRef = useRef<number>(0);
   const displayRef = useRef(0);
 
   useEffect(() => {
-    // When target jumps (step change), snap partway then crawl
     if (targetPercent > displayRef.current + 10) {
-      displayRef.current = targetPercent - 8; // snap close, then crawl the rest
+      displayRef.current = targetPercent - 8;
     }
   }, [targetPercent]);
 
@@ -41,12 +47,10 @@ function ProgressCrawl({ targetPercent, className }: { targetPercent: number; cl
     const tick = (now: number) => {
       const dt = (now - lastTime) / 1000;
       lastTime = now;
-      const target = Math.min(targetPercent, 95); // never reach 100 until explicitly set
+      const target = Math.min(targetPercent, 95);
       const diff = target - displayRef.current;
-      // Crawl speed: fast when far, slow when close (logarithmic ease)
       const speed = diff > 10 ? 12 : diff > 5 ? 4 : diff > 2 ? 1.5 : 0.4;
       displayRef.current = Math.min(displayRef.current + speed * dt, target);
-      // Even when stuck at same target, crawl very slowly (+0.3%/s) to feel alive
       if (diff < 1 && targetPercent < 95) {
         displayRef.current = Math.min(displayRef.current + 0.3 * dt, targetPercent + 5);
       }
@@ -57,26 +61,87 @@ function ProgressCrawl({ targetPercent, className }: { targetPercent: number; cl
     return () => cancelAnimationFrame(rafRef.current);
   }, [targetPercent]);
 
-  // When target hits 100, snap to 100
   useEffect(() => {
-    if (targetPercent >= 100) {
-      displayRef.current = 100;
-      setDisplay(100);
-    }
+    if (targetPercent >= 100) { displayRef.current = 100; setDisplay(100); }
   }, [targetPercent]);
 
   return (
     <div className={`w-full h-1.5 rounded-full bg-muted/50 overflow-hidden ${className || ""}`}>
-      <div
-        className="h-full rounded-full bg-primary"
-        style={{ width: `${display}%`, transition: "none" }}
-      />
+      <div className="h-full rounded-full bg-primary" style={{ width: `${display}%`, transition: "none" }} />
+    </div>
+  );
+}
+
+// ── Selectable card ──
+function OptionCard({ selected, icon, label, description, onClick }: {
+  selected: boolean; icon?: React.ReactNode; label: string; description?: string; onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full flex items-center gap-3.5 p-4 rounded-2xl border transition-all active:scale-[0.98] text-left ${
+        selected
+          ? "border-primary bg-primary/10 ring-1 ring-primary/30"
+          : "border-border/50 bg-card hover:bg-muted/30"
+      }`}
+    >
+      {icon && <span className="text-lg flex-shrink-0">{icon}</span>}
+      <div className="flex-1 min-w-0">
+        <p className="font-semibold text-sm text-foreground">{label}</p>
+        {description && <p className="text-xs text-muted-foreground mt-0.5">{description}</p>}
+      </div>
+      {selected && <CheckCircle className="h-5 w-5 text-primary flex-shrink-0" />}
+    </button>
+  );
+}
+
+// ── Multi-select card ──
+function MultiCard({ selected, label, onClick }: {
+  selected: boolean; label: string; onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex items-center gap-2.5 px-4 py-3 rounded-2xl border transition-all active:scale-[0.98] ${
+        selected
+          ? "border-primary bg-primary/10 ring-1 ring-primary/30"
+          : "border-border/50 bg-card hover:bg-muted/30"
+      }`}
+    >
+      <div className={`h-5 w-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+        selected ? "border-primary bg-primary" : "border-muted-foreground/30"
+      }`}>
+        {selected && <CheckCircle className="h-3.5 w-3.5 text-primary-foreground" />}
+      </div>
+      <span className="text-sm font-medium text-foreground">{label}</span>
+    </button>
+  );
+}
+
+// ── Screen layout wrapper ──
+function StepLayout({ step, title, subtitle, children, footer }: {
+  step: number; title: string; subtitle: string; children: React.ReactNode; footer?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col min-h-[calc(100dvh-56px)] px-5 pb-6">
+      <div className="pt-8 pb-5">
+        <p className="text-[10px] uppercase tracking-[0.15em] text-primary/60 font-bold mb-2">
+          Step {step} of {TOTAL_STEPS}
+        </p>
+        <h1 className="text-[22px] font-bold leading-tight text-foreground">{title}</h1>
+        <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">{subtitle}</p>
+      </div>
+      <div className="flex-1">{children}</div>
+      {footer && <div className="pt-4">{footer}</div>}
     </div>
   );
 }
 
 export default function Onboarding() {
   const [step, setStep] = useState(1);
+  const [direction, setDirection] = useState(1); // 1=forward, -1=back
   const [loading, setLoading] = useState(false);
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const [generationStep, setGenerationStep] = useState(0);
@@ -86,59 +151,168 @@ export default function Onboarding() {
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
-    age: "",
-    sex: "",
-    height_cm: "",
-    current_weight_kg: "",
+    // Screen 1
+    athlete_type: "",
+    // Screen 2
+    goal_type: "",
+    // Screen 3
+    has_fight: "",
+    competition_level: "", // hobbyist | amateur | pro
     goal_weight_kg: "",
     fight_week_target_kg: "",
     target_date: "",
-    activity_level: "",
+    // Screen 4
+    height_cm: "",
+    // Screen 5
+    current_weight_kg: "",
+    // Screen 6
+    body_fat_pct: "",
+    // Screen 7
+    experience_level: "",
+    // Screen 8
     training_frequency: "",
-    goal_type: "cutting" as "cutting" | "losing",
+    // Screen 9
+    training_types: [] as string[],
+    // Screen 10
+    sleep_hours: "",
+    // Screen 11
+    primary_struggle: "",
+    // Screen 12
+    plan_aggressiveness: "",
+    // Screen 13
+    dietary_restrictions: [] as string[],
+    // Screen 14
+    food_budget: "",
+    // Derived
+    sex: "male",
+    age: "",
   });
 
   const [useAutoTarget, setUseAutoTarget] = useState(true);
-  const [targetSafetyLevel, setTargetSafetyLevel] = useState<"safe" | "moderate" | "risky">("safe");
 
-  // Redirect immediately if profile already exists (no async flash)
+  // Redirect if profile exists
   useEffect(() => {
-    if (!authLoading && hasProfile) {
-      navigate("/dashboard", { replace: true });
-    }
+    if (!authLoading && hasProfile) navigate("/dashboard", { replace: true });
   }, [authLoading, hasProfile, navigate]);
 
+  const goNext = useCallback(() => {
+    triggerHapticSelection();
+    setDirection(1);
+    setStep(s => Math.min(s + 1, TOTAL_STEPS));
+  }, []);
+
+  const goBack = useCallback(() => {
+    triggerHapticSelection();
+    setDirection(-1);
+    setStep(s => {
+      // Skip screen 3 when going back if goal is not cutting
+      if (s === 4 && formData.goal_type !== "cutting") return 2;
+      return Math.max(s - 1, 1);
+    });
+  }, [formData.goal_type]);
+
+  // Auto-advance helper for single-select screens
+  const selectAndAdvance = useCallback((field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    triggerHapticSelection();
+    setDirection(1);
+    setTimeout(() => setStep(s => {
+      // Skip screen 3 if goal is not fight-related
+      if (s === 2 && value !== "cutting") return 4;
+      return Math.min(s + 1, TOTAL_STEPS);
+    }), 250);
+  }, []);
+
+  const toggleMulti = useCallback((field: "training_types" | "dietary_restrictions", value: string) => {
+    triggerHapticSelection();
+    setFormData(prev => {
+      const arr = prev[field];
+      return { ...prev, [field]: arr.includes(value) ? arr.filter(v => v !== value) : [...arr, value] };
+    });
+  }, []);
+
+  // Derive activity_level from training_frequency
+  const deriveActivityLevel = (freq: string): string => {
+    const f = parseInt(freq);
+    if (f <= 2) return "lightly_active";
+    if (f <= 4) return "moderately_active";
+    if (f <= 6) return "very_active";
+    return "extra_active";
+  };
+
+  // BMR calculation
   const calculateBMR = () => {
     const weight = parseFloat(formData.current_weight_kg);
     const height = parseFloat(formData.height_cm);
-    const age = parseInt(formData.age);
-
-    if (formData.sex === "male") {
-      return 10 * weight + 6.25 * height - 5 * age + 5;
-    } else {
-      return 10 * weight + 6.25 * height - 5 * age - 161;
-    }
+    const age = parseInt(formData.age) || 25;
+    if (formData.sex === "male") return 10 * weight + 6.25 * height - 5 * age + 5;
+    return 10 * weight + 6.25 * height - 5 * age - 161;
   };
 
-  const handleSubmit = async () => {
-    const startTime = performance.now();
+  // Fight week target calculations — water cut % scales with competition level
+  // Hobbyist: 3% (safe, minimal water cut)
+  // Amateur: 5.5% (standard safe dehydration)
+  // Pro: 8% (aggressive, experienced athletes with medical oversight)
+  const getWaterCutPercent = (level: string): number => {
+    if (level === "pro") return 0.08;
+    if (level === "amateur") return 0.055;
+    return 0.03; // hobbyist
+  };
 
-    // Validate input
+  const getWaterCutLabel = (level: string): string => {
+    if (level === "pro") return "8% water cut — aggressive, requires medical oversight";
+    if (level === "amateur") return "5.5% water cut — standard safe dehydration";
+    return "3% water cut — gentle, minimal risk";
+  };
+
+  const calculateRecommendedTarget = (fightNightWeight: number, level: string) => {
+    const pct = getWaterCutPercent(level);
+    return Math.round(fightNightWeight * (1 + pct) * 10) / 10;
+  };
+
+  useEffect(() => {
+    if (useAutoTarget && formData.goal_weight_kg && formData.goal_type === "cutting") {
+      const level = formData.competition_level || "amateur";
+      const rec = calculateRecommendedTarget(parseFloat(formData.goal_weight_kg), level);
+      setFormData(prev => ({ ...prev, fight_week_target_kg: rec.toString() }));
+    }
+  }, [formData.goal_weight_kg, formData.competition_level, useAutoTarget, formData.goal_type]);
+
+  // Dynamic weight feedback
+  const weightDiff = formData.current_weight_kg && formData.goal_weight_kg
+    ? (parseFloat(formData.current_weight_kg) - parseFloat(formData.goal_weight_kg)).toFixed(1)
+    : null;
+  const weeksToFight = formData.target_date
+    ? Math.max(1, Math.ceil((new Date(formData.target_date).getTime() - Date.now()) / (7 * 24 * 60 * 60 * 1000)))
+    : null;
+
+  // ── Submit ──
+  const handleSubmit = async () => {
+    // Quick age/sex prompt — we collect these minimally at submit time
+    // since they don't need their own screen (low friction)
+    if (!formData.age || !formData.sex) {
+      // Default age 25, sex male if not set — user can change in settings later
+      setFormData(prev => ({
+        ...prev,
+        age: prev.age || "25",
+        sex: prev.sex || "male",
+      }));
+    }
+
+    const activityLevel = deriveActivityLevel(formData.training_frequency);
+
     const validationResult = profileSchema.safeParse({
-      age: parseInt(formData.age),
+      age: parseInt(formData.age || "25"),
       height_cm: parseFloat(formData.height_cm),
       current_weight_kg: parseFloat(formData.current_weight_kg),
       goal_weight_kg: parseFloat(formData.goal_weight_kg),
-      fight_week_target_kg: formData.goal_type === 'cutting' ? parseFloat(formData.fight_week_target_kg) : undefined,
-      training_frequency: parseInt(formData.training_frequency),
+      fight_week_target_kg: formData.goal_type === "cutting" ? parseFloat(formData.fight_week_target_kg) : undefined,
+      training_frequency: parseInt(formData.training_frequency) || 3,
+      body_fat_pct: formData.body_fat_pct ? parseFloat(formData.body_fat_pct) : undefined,
     });
 
     if (!validationResult.success) {
-      toast({
-        variant: "destructive",
-        title: "Validation Error",
-        description: validationResult.error.errors[0].message,
-      });
+      toast({ variant: "destructive", title: "Check your inputs", description: validationResult.error.errors[0].message });
       return;
     }
 
@@ -146,8 +320,7 @@ export default function Onboarding() {
     setGeneratingPlan(true);
     setGenerationStep(0);
 
-    // Staged progress messages
-    const isFighterFlow = formData.goal_type === 'cutting';
+    const isFighterFlow = formData.goal_type === "cutting";
     const stepTimers = [
       setTimeout(() => setGenerationStep(1), 600),
       setTimeout(() => setGenerationStep(2), 1400),
@@ -158,86 +331,93 @@ export default function Onboarding() {
       if (!user) throw new Error("No user found");
 
       const bmr = calculateBMR();
-      const tdee = bmr * ACTIVITY_MULTIPLIERS[formData.activity_level as keyof typeof ACTIVITY_MULTIPLIERS];
+      const tdee = bmr * (ACTIVITY_MULTIPLIERS[activityLevel] || 1.55);
+      const trainingFreq = parseInt(formData.training_frequency) || 3;
 
-      // 1. Save profile to DB
+      // 1. Save profile
       const { error } = await supabase.from("profiles").insert({
         id: user.id,
-        age: parseInt(formData.age),
-        sex: formData.sex,
+        age: parseInt(formData.age || "25"),
+        sex: formData.sex || "male",
         height_cm: parseFloat(formData.height_cm),
         current_weight_kg: parseFloat(formData.current_weight_kg),
         goal_weight_kg: parseFloat(formData.goal_weight_kg),
         fight_week_target_kg: isFighterFlow ? parseFloat(formData.fight_week_target_kg) : null,
-        target_date: formData.target_date,
-        activity_level: formData.activity_level,
-        training_frequency: parseInt(formData.training_frequency),
-        goal_type: formData.goal_type,
+        target_date: formData.target_date || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+        activity_level: activityLevel,
+        training_frequency: trainingFreq,
+        goal_type: formData.goal_type || "losing",
         bmr,
         tdee,
+        athlete_type: formData.athlete_type || null,
+        experience_level: formData.experience_level || null,
+        training_types: formData.training_types.length > 0 ? formData.training_types : null,
+        sleep_hours: formData.sleep_hours || null,
+        primary_struggle: formData.primary_struggle || null,
+        plan_aggressiveness: formData.plan_aggressiveness || "balanced",
+        food_budget: formData.food_budget || null,
+        body_fat_pct: formData.body_fat_pct ? parseFloat(formData.body_fat_pct) : null,
       });
 
       if (error) throw error;
+
+      // Save dietary preferences if selected
+      if (formData.dietary_restrictions.length > 0) {
+        await supabase.from("user_dietary_preferences").insert({
+          user_id: user.id,
+          dietary_restrictions: formData.dietary_restrictions,
+        });
+      }
+
       stepTimers.forEach(clearTimeout);
       setGenerationStep(2);
 
-      // 2. For fighters: generate AI weight cut plan (stays on loading overlay until done)
+      // 2. AI cut plan for fighters
       let hasCutPlan = false;
       if (isFighterFlow) {
-        setGenerationStep(3); // "Generating your AI weight cut plan"
+        setGenerationStep(3);
         try {
-          const { data: planData, error: planError } = await supabase.functions.invoke('generate-cut-plan', {
+          const { data: planData, error: planError } = await supabase.functions.invoke("generate-cut-plan", {
             body: {
               currentWeight: parseFloat(formData.current_weight_kg),
               goalWeight: parseFloat(formData.goal_weight_kg),
               fightWeekTarget: parseFloat(formData.fight_week_target_kg),
               targetDate: formData.target_date,
-              age: parseInt(formData.age),
-              sex: formData.sex,
+              age: parseInt(formData.age || "25"),
+              sex: formData.sex || "male",
               heightCm: parseFloat(formData.height_cm),
-              activityLevel: formData.activity_level,
-              trainingFrequency: parseInt(formData.training_frequency),
+              activityLevel,
+              trainingFrequency: trainingFreq,
               bmr,
               tdee,
             },
           });
-          if (planError) {
-            logger.warn("Cut plan generation failed", { error: planError, data: planData });
-          }
-          // supabase.functions.invoke may return plan at data.plan or data directly
+          if (planError) logger.warn("Cut plan generation failed", { error: planError });
           const plan = planData?.plan || planData;
           if (plan?.weeklyPlan) {
-            localStorage.setItem('wcw_cut_plan', JSON.stringify({
+            localStorage.setItem("wcw_cut_plan", JSON.stringify({
               ...plan,
               currentWeight: parseFloat(formData.current_weight_kg),
               goalWeight: parseFloat(formData.goal_weight_kg),
               targetDate: formData.target_date,
             }));
             hasCutPlan = true;
-            logger.info("Cut plan generated successfully", { weeks: plan.weeklyPlan.length });
-
-            // Save week 1 calories/macros as the user's nutrition goals
             const week1 = plan.weeklyPlan[0];
             if (week1) {
-              const { data: { user: u } } = await supabase.auth.getUser();
-              if (u) {
-                await supabase.from("profiles").update({
-                  ai_recommended_calories: week1.calories,
-                  ai_recommended_protein_g: week1.protein_g,
-                  ai_recommended_carbs_g: week1.carbs_g,
-                  ai_recommended_fats_g: week1.fats_g,
-                }).eq("id", u.id);
-              }
+              await supabase.from("profiles").update({
+                ai_recommended_calories: week1.calories,
+                ai_recommended_protein_g: week1.protein_g,
+                ai_recommended_carbs_g: week1.carbs_g,
+                ai_recommended_fats_g: week1.fats_g,
+              }).eq("id", user.id);
             }
-          } else {
-            logger.warn("Cut plan response missing weeklyPlan", { planData });
           }
         } catch (planErr) {
           logger.warn("Cut plan generation error", planErr);
         }
       }
 
-      // 3. Refresh profile + seed demo data
+      // 3. Finalize
       const finalStep = isFighterFlow ? 4 : 3;
       setGenerationStep(finalStep);
       await refreshProfile();
@@ -245,7 +425,9 @@ export default function Onboarding() {
       if (currentUser) seedDemoData(currentUser.id);
       celebrateSuccess();
 
-      // 4. Navigate: fighters with plan → /cut-plan, everyone else → /dashboard
+      // Signal that onboarding just completed — tutorial should trigger on dashboard
+      localStorage.setItem("wcw_onboarding_just_completed", "true");
+
       if (hasCutPlan) {
         navigate("/cut-plan", { replace: true });
       } else {
@@ -253,96 +435,26 @@ export default function Onboarding() {
         setTimeout(() => navigate("/dashboard"), 1000);
       }
     } catch (error: any) {
-      const endTime = performance.now();
-      const duration = Math.round(endTime - startTime);
-      logger.error("Onboarding failed", error, { ms: duration });
-
+      logger.error("Onboarding failed", error);
       stepTimers.forEach(clearTimeout);
       setGeneratingPlan(false);
       setGenerationStep(0);
-
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: error.message,
-      });
+      toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
       setLoading(false);
     }
   };
 
-  const progress = (step / 4) * 100;
-
-  // Calculate AI-recommended fight week target
-  const calculateRecommendedTarget = (fightNightWeight: number) => {
-    // Safe dehydration is 5-7% of body weight with water loading
-    // Conservative recommendation: 5.5% of fight night weight
-    const safeDehydrationPercentage = 0.055;
-    const recommendedTarget = fightNightWeight * (1 + safeDehydrationPercentage);
-    return Math.round(recommendedTarget * 10) / 10; // Round to 1 decimal
-  };
-
-  // Assess safety level of manual target
-  const assessTargetSafety = (fightNightWeight: number, fightWeekTarget: number) => {
-    const cutAmount = fightWeekTarget - fightNightWeight;
-    const cutPercentage = (cutAmount / fightNightWeight) * 100;
-
-    if (cutPercentage <= 5) {
-      return { level: "safe" as const, message: "Safe range (≤5% dehydration)", color: "text-green-600 dark:text-green-400" };
-    } else if (cutPercentage <= 7) {
-      return { level: "moderate" as const, message: "Moderate risk (5-7% dehydration)", color: "text-yellow-600 dark:text-yellow-400" };
-    } else {
-      return { level: "risky" as const, message: "High risk (>7% dehydration)", color: "text-red-600 dark:text-red-400" };
-    }
-  };
-
-  // Update fight week target when goal weight changes or auto mode is enabled
-  useEffect(() => {
-    if (useAutoTarget && formData.goal_weight_kg) {
-      const recommended = calculateRecommendedTarget(parseFloat(formData.goal_weight_kg));
-      setFormData(prev => ({ ...prev, fight_week_target_kg: recommended.toString() }));
-      setTargetSafetyLevel("safe");
-    }
-  }, [formData.goal_weight_kg, useAutoTarget]);
-
-  // Assess safety when manual target changes
-  useEffect(() => {
-    if (!useAutoTarget && formData.goal_weight_kg && formData.fight_week_target_kg) {
-      const assessment = assessTargetSafety(
-        parseFloat(formData.goal_weight_kg),
-        parseFloat(formData.fight_week_target_kg)
-      );
-      setTargetSafetyLevel(assessment.level);
-    }
-  }, [formData.fight_week_target_kg, formData.goal_weight_kg, useAutoTarget]);
-
-  const getSafetyFeedback = () => {
-    if (!formData.goal_weight_kg || !formData.fight_week_target_kg) return null;
-
-    return assessTargetSafety(
-      parseFloat(formData.goal_weight_kg),
-      parseFloat(formData.fight_week_target_kg)
-    );
-  };
-
+  // ── Generation overlay ──
   const GENERATION_STEPS = [
-    { icon: Activity, label: "Analyzing your profile", color: "text-blue-400" },
+    { icon: Activity, label: "Analyzing your fight profile", color: "text-blue-400" },
     { icon: Zap, label: "Calculating nutrition targets", color: "text-yellow-400" },
-    { icon: Shield, label: formData.goal_type === 'losing' ? "Building your weight loss plan" : "Building your weight cut strategy", color: "text-blue-400" },
-    ...(formData.goal_type === 'cutting' ? [
-      { icon: TrendingDown, label: "Generating your AI weight cut plan", color: "text-primary" },
-    ] : []),
+    { icon: Shield, label: formData.goal_type === "cutting" ? "Building your weight cut strategy" : "Building your weight loss plan", color: "text-blue-400" },
+    ...(formData.goal_type === "cutting" ? [{ icon: TrendingDown, label: "Generating your AI fight plan", color: "text-primary" }] : []),
     { icon: Sparkles, label: "Finalizing your plan", color: "text-primary" },
-    { icon: CheckCircle, label: "Your plan is ready!", color: "text-green-400" },
+    { icon: CheckCircle, label: "Your fight camp starts now", color: "text-green-400" },
   ];
 
-  // Shared input/select styles — Apple Health / Watch style
-  const inputClass =
-    "h-12 min-h-[44px] rounded-2xl bg-card dark:bg-white/5 border border-border dark:border-white/10 text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-0 focus-visible:border-primary/40 px-4 text-base transition-colors touch-manipulation";
-  const selectTriggerClass =
-    "h-12 min-h-[44px] rounded-2xl bg-card dark:bg-white/5 border border-border dark:border-white/10 text-foreground data-[placeholder]:text-muted-foreground focus:ring-2 focus:ring-primary/30 focus:ring-offset-0 focus:border-primary/40 px-4 text-base transition-colors";
-
-  // Full-screen generating plan overlay
   if (generatingPlan) {
     const totalSteps = GENERATION_STEPS.length - 1;
     const progressPercent = Math.min((generationStep / totalSteps) * 100, 100);
@@ -351,63 +463,34 @@ export default function Onboarding() {
       <div className="fixed inset-0 bg-background text-foreground flex flex-col items-center justify-center z-50 px-6">
         <div className="relative z-10 flex flex-col items-center max-w-sm w-full">
           <div className="relative mb-8">
-            <img
-              src={wizardLogo}
-              alt="Wizard"
-              className="relative h-20 w-20 object-contain"
-            />
+            <img src={wizardLogo} alt="Wizard" className="relative h-20 w-20 object-contain" />
           </div>
-
           <h2 className="text-xl font-bold text-foreground tracking-tight mb-1 text-center">
-            {isReady ? "All Set!" : "Creating Your Plan"}
+            {isReady ? "All Set!" : "Building Your Fight Plan"}
           </h2>
           <p className="text-sm text-muted-foreground mb-8 text-center">
             {isReady ? "Opening your dashboard..." : "This will only take a moment"}
           </p>
-
-          {/* Smooth progress bar — crawls during AI generation to feel alive */}
           <ProgressCrawl targetPercent={progressPercent} className="mb-8" />
-
           <div className="w-full space-y-3.5">
             {GENERATION_STEPS.map((s, i) => {
               const Icon = s.icon;
               const isActive = i === generationStep;
               const isDone = i < generationStep;
               const isPending = i > generationStep;
-
               return (
-                <div
-                  key={i}
-                  className={`flex items-center gap-3 transition-all duration-500 ${isPending ? "opacity-15" : isDone ? "opacity-50" : "opacity-100"}`}
-                >
+                <div key={i} className={`flex items-center gap-3 transition-all duration-500 ${isPending ? "opacity-15" : isDone ? "opacity-50" : "opacity-100"}`}>
                   <div className="relative h-9 w-9 flex-shrink-0">
-                    {/* Spinning ring around active step */}
                     {isActive && !isDone && (
                       <svg className="absolute inset-0 h-9 w-9 animate-spin" style={{ animationDuration: "2s" }} viewBox="0 0 36 36">
                         <circle cx="18" cy="18" r="16" fill="none" stroke="hsl(var(--primary))" strokeWidth="2" strokeDasharray="80 20" strokeLinecap="round" opacity="0.4" />
                       </svg>
                     )}
-                    <div
-                      className={`h-9 w-9 rounded-full flex items-center justify-center transition-all duration-500 ${
-                        isDone
-                          ? "bg-primary/20"
-                          : isActive
-                            ? "bg-muted"
-                            : "bg-muted/50"
-                      }`}
-                    >
-                      {isDone ? (
-                        <CheckCircle className="h-4 w-4 text-primary" />
-                      ) : (
-                        <Icon className={`h-4 w-4 ${isActive ? s.color : "text-muted-foreground"}`} />
-                      )}
+                    <div className={`h-9 w-9 rounded-full flex items-center justify-center transition-all duration-500 ${isDone ? "bg-primary/20" : isActive ? "bg-muted" : "bg-muted/50"}`}>
+                      {isDone ? <CheckCircle className="h-4 w-4 text-primary" /> : <Icon className={`h-4 w-4 ${isActive ? s.color : "text-muted-foreground"}`} />}
                     </div>
                   </div>
-                  <span
-                    className={`text-sm font-medium transition-colors duration-500 ${
-                      isDone ? "text-muted-foreground line-through" : isActive ? "text-foreground" : "text-muted-foreground"
-                    }`}
-                  >
+                  <span className={`text-sm font-medium transition-colors duration-500 ${isDone ? "text-muted-foreground line-through" : isActive ? "text-foreground" : "text-muted-foreground"}`}>
                     {s.label}
                   </span>
                 </div>
@@ -419,311 +502,443 @@ export default function Onboarding() {
     );
   }
 
-  // Don't flash onboarding UI if user already has a profile
   if (authLoading || hasProfile) return null;
 
+  const progress = (step / TOTAL_STEPS) * 100;
+
+  // ── Render screens ──
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background dark:bg-[#020204] p-4">
-      <div className="card-surface w-full max-w-2xl rounded-xl border border-border shadow-xl overflow-hidden">
-        <div className="p-6 md:p-8">
-          <div className="mb-6">
-            <h1 className="text-2xl font-title font-semibold text-foreground">Set Up Your Plan</h1>
-            <p className="text-muted-foreground mt-1">Let's personalize your journey ({step}/4)</p>
-            {/* Slim Apple-style progress bar */}
-            <div className="mt-4 w-full h-1.5 rounded-full bg-muted/50 dark:bg-white/10 overflow-hidden">
-              <div
-                className="h-full rounded-full bg-gradient-to-r from-primary to-secondary transition-all duration-500 ease-out"
-                style={{ width: `${progress}%` }}
-              />
+    <div className="min-h-screen bg-background dark:bg-[#020204]">
+      {/* Top bar: back arrow + progress bar */}
+      <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-sm px-4 pt-3 pb-2 flex items-center gap-3">
+        {step > 1 ? (
+          <button onClick={goBack} className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-muted/50 active:scale-95 transition-all flex-shrink-0">
+            <ChevronLeft className="h-5 w-5 text-foreground" />
+          </button>
+        ) : (
+          <div className="w-8 flex-shrink-0" />
+        )}
+        <div className="flex-1 h-1 rounded-full bg-muted/30 overflow-hidden">
+          <div className="h-full rounded-full bg-gradient-to-r from-primary to-secondary transition-all duration-500 ease-out" style={{ width: `${progress}%` }} />
+        </div>
+        <div className="w-8 flex-shrink-0" />
+      </div>
+
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={step}
+          initial={{ opacity: 0, x: direction > 0 ? 60 : -60 }}
+          animate={{ opacity: 1, x: 0 }}
+          exit={{ opacity: 0, x: direction > 0 ? -60 : 60 }}
+          transition={springs.responsive}
+        >
+
+        {/* ── Screen 1: Athlete Type ── */}
+        {step === 1 && (
+          <StepLayout step={1} title="What's your discipline?" subtitle="We'll tailor everything to your sport.">
+            <div className="space-y-2.5">
+              {[
+                { value: "muay_thai", label: "Muay Thai", icon: <Swords className="h-5 w-5 text-orange-400" /> },
+                { value: "boxing", label: "Boxing", icon: <Swords className="h-5 w-5 text-red-400" /> },
+                { value: "mma", label: "MMA", icon: <Swords className="h-5 w-5 text-blue-400" /> },
+                { value: "bjj", label: "BJJ", icon: <Swords className="h-5 w-5 text-purple-400" /> },
+                { value: "other", label: "Other", icon: <Dumbbell className="h-5 w-5 text-muted-foreground" /> },
+              ].map(opt => (
+                <OptionCard key={opt.value} selected={formData.athlete_type === opt.value} icon={opt.icon}
+                  label={opt.label} onClick={() => selectAndAdvance("athlete_type", opt.value)} />
+              ))}
             </div>
-            <p className="text-xs text-muted-foreground mt-2">
-              {step === 1 && "Basic information"}
-              {step === 2 && "Weight goals"}
-              {step === 3 && "Activity level"}
-              {step === 4 && "Review and create"}
-            </p>
-          </div>
+          </StepLayout>
+        )}
 
-          <div className="space-y-6">
-          {step === 1 && (
-            <div className="space-y-4">
-              <h3 className="font-semibold text-lg text-foreground">Basic Information</h3>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="age" className="text-foreground text-sm font-medium">Age</Label>
-                  <Input
-                    id="age"
-                    type="number"
-                    inputMode="numeric"
-                    value={formData.age}
-                    onChange={(e) => setFormData({ ...formData, age: e.target.value })}
-                    required
-                    className={inputClass}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="sex" className="text-foreground text-sm font-medium">Sex</Label>
-                  <Select value={formData.sex} onValueChange={(value) => setFormData({ ...formData, sex: value })}>
-                    <SelectTrigger className={selectTriggerClass}>
-                      <SelectValue placeholder="Select sex" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="male">Male</SelectItem>
-                      <SelectItem value="female">Female</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="height" className="text-foreground text-sm font-medium">Height (cm)</Label>
-                  <Input
-                    id="height"
-                    type="number"
-                    inputMode="decimal"
-                    step="0.1"
-                    value={formData.height_cm}
-                    onChange={(e) => setFormData({ ...formData, height_cm: e.target.value })}
-                    required
-                    className={inputClass}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="current_weight" className="text-foreground text-sm font-medium">Current Weight (kg)</Label>
-                  <Input
-                    id="current_weight"
-                    type="number"
-                    inputMode="decimal"
-                    step="0.1"
-                    value={formData.current_weight_kg}
-                    onChange={(e) => setFormData({ ...formData, current_weight_kg: e.target.value })}
-                    required
-                    className={inputClass}
-                  />
-                </div>
-              </div>
-              <Button onClick={() => setStep(2)} className="w-full h-12 rounded-2xl text-base font-medium bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90">Next</Button>
+        {/* ── Screen 2: Primary Goal ── */}
+        {step === 2 && (
+          <StepLayout step={2} title="What's your goal right now?" subtitle="This sets the pace for your entire plan.">
+            <div className="space-y-2.5">
+              {[
+                { value: "cutting", label: "Make weight for a fight", description: "Structured cut with a deadline", icon: <Target className="h-5 w-5 text-red-400" /> },
+                { value: "losing", label: "Lose fat", description: "Steady body composition improvement", icon: <Flame className="h-5 w-5 text-orange-400" /> },
+                { value: "performance", label: "Improve performance", description: "Fuel training without cutting", icon: <Zap className="h-5 w-5 text-yellow-400" /> },
+                { value: "maintenance", label: "Stay fight-ready year round", description: "Maintain weight between camps", icon: <Shield className="h-5 w-5 text-green-400" /> },
+              ].map(opt => (
+                <OptionCard key={opt.value} selected={formData.goal_type === opt.value} icon={opt.icon}
+                  label={opt.label} description={opt.description} onClick={() => selectAndAdvance("goal_type", opt.value)} />
+              ))}
             </div>
-          )}
+          </StepLayout>
+        )}
 
-          {step === 2 && (
+        {/* ── Screen 3: Fight Status (only for cutting) ── */}
+        {step === 3 && (
+          <StepLayout step={3} title="Do you have a fight booked?" subtitle="We'll plan backwards from your fight date."
+            footer={
+              <Button onClick={goNext} disabled={!formData.goal_weight_kg || (formData.has_fight === "yes" && !formData.target_date)}
+                className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>
+            }
+          >
             <div className="space-y-4">
-              <h3 className="font-semibold text-lg text-foreground">Weight Goals</h3>
-
-              {/* Goal type toggle */}
-              <div className="flex gap-1 p-1 rounded-2xl bg-muted/50 dark:bg-white/5 border border-border dark:border-white/10">
-                <button
-                  type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, goal_type: "cutting" }))}
-                  className={`flex-1 py-2.5 text-sm font-semibold rounded-xl transition-all ${
-                    formData.goal_type === "cutting"
-                      ? "bg-background dark:bg-white/10 text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  I have a fight
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, goal_type: "losing" }))}
-                  className={`flex-1 py-2.5 text-sm font-semibold rounded-xl transition-all ${
-                    formData.goal_type === "losing"
-                      ? "bg-background dark:bg-white/10 text-foreground shadow-sm"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Just lose weight
-                </button>
+              <div className="flex gap-2">
+                {["yes", "no"].map(v => (
+                  <button key={v} type="button"
+                    onClick={() => { triggerHapticSelection(); setFormData(prev => ({ ...prev, has_fight: v })); }}
+                    className={`flex-1 py-3 rounded-2xl text-sm font-semibold border transition-all ${
+                      formData.has_fight === v
+                        ? "border-primary bg-primary/10 text-foreground"
+                        : "border-border/50 bg-card text-muted-foreground"
+                    }`}
+                  >
+                    {v === "yes" ? "Yes" : "No"}
+                  </button>
+                ))}
               </div>
 
-              <p className="text-sm text-muted-foreground">
-                {formData.goal_type === 'cutting'
-                  ? "Set your fight night weight (weigh-in) and fight week target (before dehydration cut)"
-                  : "Set your goal weight and target date"}
-              </p>
-              <div className="grid gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="goal_weight" className="text-foreground text-sm font-medium">
-                    {formData.goal_type === 'cutting' ? 'Fight Night Weight (kg)' : 'Goal Weight (kg)'}
-                    {formData.goal_type === 'cutting' && (
-                      <span className="text-xs text-muted-foreground ml-2 font-normal">Your competition weight class</span>
-                    )}
-                  </Label>
-                  <Input
-                    id="goal_weight"
-                    type="number"
-                    inputMode="decimal"
-                    step="0.1"
-                    placeholder="e.g., 70"
-                    value={formData.goal_weight_kg}
-                    onChange={(e) => setFormData({ ...formData, goal_weight_kg: e.target.value })}
-                    required
-                    className={inputClass}
-                  />
-                </div>
-
-                {formData.goal_type === 'cutting' && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between flex-wrap gap-2">
-                    <Label htmlFor="fight_week_target" className="text-foreground text-sm font-medium">
-                      Fight Week Target (kg)
-                      <span className="text-xs text-muted-foreground ml-2 font-normal">Weight before dehydration</span>
-                    </Label>
-                    <Button
-                      type="button"
-                      variant={useAutoTarget ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setUseAutoTarget(!useAutoTarget)}
-                      className="gap-2 rounded-2xl h-9"
-                    >
-                      <Sparkles className="h-3 w-3" />
-                      {useAutoTarget ? "AI Auto" : "Manual"}
-                    </Button>
+              {formData.has_fight === "yes" && (
+                <div className="space-y-3 animate-fade-in">
+                  {/* Competition level — determines water cut aggressiveness */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Competition Level</label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { value: "hobbyist", label: "Hobbyist" },
+                        { value: "amateur", label: "Amateur" },
+                        { value: "pro", label: "Pro" },
+                      ].map(opt => (
+                        <button key={opt.value} type="button"
+                          onClick={() => { triggerHapticSelection(); setFormData(prev => ({ ...prev, competition_level: opt.value })); }}
+                          className={`h-11 rounded-2xl text-sm font-semibold border transition-all ${
+                            formData.competition_level === opt.value
+                              ? "border-primary bg-primary/10 text-foreground"
+                              : "border-border/50 bg-card text-muted-foreground"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-
-                  <Input
-                    id="fight_week_target"
-                    type="number"
-                    inputMode="decimal"
-                    step="0.1"
-                    placeholder="e.g., 77"
-                    value={formData.fight_week_target_kg}
-                    onChange={(e) => {
-                      setFormData({ ...formData, fight_week_target_kg: e.target.value });
-                      setUseAutoTarget(false);
-                    }}
-                    disabled={useAutoTarget}
-                    required
-                    className={inputClass}
-                  />
-
-                  {useAutoTarget ? (
-                    <Alert className="border-primary/40 bg-primary/10 dark:bg-primary/20 rounded-2xl">
-                      <Sparkles className="h-4 w-4 text-primary" />
-                      <AlertDescription className="text-sm text-foreground">
-                        AI calculated safe target based on 5.5% dehydration capacity with water loading protocol
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Fight Date</label>
+                    <Input type="date" value={formData.target_date}
+                      onChange={e => setFormData(prev => ({ ...prev, target_date: e.target.value }))}
+                      className="h-12 rounded-2xl bg-card border-border/50" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Weight Class (kg)</label>
+                    <Input type="number" inputMode="decimal" step="0.1" placeholder="e.g. 70"
+                      value={formData.goal_weight_kg}
+                      onChange={e => setFormData(prev => ({ ...prev, goal_weight_kg: e.target.value }))}
+                      className="h-12 rounded-2xl bg-card border-border/50" />
+                  </div>
+                  {/* Auto fight week target */}
+                  {formData.goal_weight_kg && formData.competition_level && (
+                    <Alert className={`rounded-2xl ${formData.competition_level === 'pro' ? 'border-red-500/30 bg-red-500/5' : 'border-primary/30 bg-primary/5'}`}>
+                      <Sparkles className={`h-4 w-4 ${formData.competition_level === 'pro' ? 'text-red-500' : 'text-primary'}`} />
+                      <AlertDescription className="text-xs text-muted-foreground">
+                        Fight week target: <strong className="text-foreground">{formData.fight_week_target_kg} kg</strong>
+                        <br />
+                        <span className="text-[10px]">{getWaterCutLabel(formData.competition_level)}</span>
                       </AlertDescription>
                     </Alert>
-                  ) : (
-                    getSafetyFeedback() && (
-                      <Alert className={`rounded-2xl ${targetSafetyLevel === "safe" ? "border-green-500/40 bg-green-500/10 dark:bg-green-500/20" :
-                        targetSafetyLevel === "moderate" ? "border-yellow-500/40 bg-yellow-500/10 dark:bg-yellow-500/20" :
-                          "border-red-500/40 bg-red-500/10 dark:bg-red-500/20"
-                        }`}>
-                        {targetSafetyLevel === "safe" ? (
-                          <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-                        ) : (
-                          <AlertTriangle className={`h-4 w-4 ${targetSafetyLevel === "moderate" ? "text-yellow-600 dark:text-yellow-400" : "text-red-600 dark:text-red-400"}`} />
-                        )}
-                        <AlertDescription className={`text-sm ${getSafetyFeedback()?.color}`}>
-                          {getSafetyFeedback()?.message}
-                          {formData.goal_weight_kg && formData.fight_week_target_kg && (
-                            <span className="block mt-1">
-                              Dehydration cut: {(parseFloat(formData.fight_week_target_kg) - parseFloat(formData.goal_weight_kg)).toFixed(1)}kg
-                              ({((parseFloat(formData.fight_week_target_kg) - parseFloat(formData.goal_weight_kg)) / parseFloat(formData.goal_weight_kg) * 100).toFixed(1)}% of body weight)
-                            </span>
-                          )}
-                        </AlertDescription>
-                      </Alert>
-                    )
                   )}
-
-                  <p className="text-xs text-muted-foreground">
-                    {useAutoTarget
-                      ? "AI will calculate the optimal target based on safe dehydration limits"
-                      : "Manual mode: Set your own target (typically 5-7kg above fight night weight)"}
-                  </p>
                 </div>
-                )}
+              )}
 
-                <div className="space-y-2">
-                  <Label htmlFor="target_date" className="text-foreground text-sm font-medium">Target Date</Label>
-                  <Input
-                    id="target_date"
-                    type="date"
-                    value={formData.target_date}
-                    onChange={(e) => setFormData({ ...formData, target_date: e.target.value })}
-                    required
-                    className={inputClass}
-                  />
+              {formData.has_fight === "no" && (
+                <div className="space-y-1.5 animate-fade-in">
+                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Target Weight (kg)</label>
+                  <Input type="number" inputMode="decimal" step="0.1" placeholder="What weight do you want to walk around at?"
+                    value={formData.goal_weight_kg}
+                    onChange={e => setFormData(prev => ({ ...prev, goal_weight_kg: e.target.value }))}
+                    className="h-12 rounded-2xl bg-card border-border/50" />
                 </div>
+              )}
+            </div>
+          </StepLayout>
+        )}
+
+        {/* ── Screen 4: Height ── */}
+        {/* ── Screen 4: Age + Sex ── */}
+        {step === 4 && (
+          <StepLayout step={4} title="How old are you?" subtitle="We'll use this to dial in your metabolic rate."
+            footer={<Button onClick={goNext} disabled={!formData.age}
+              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+          >
+            <div className="flex flex-col items-center pt-8 gap-8">
+              <div className="text-center">
+                <motion.span
+                  key={formData.age || "empty"}
+                  initial={{ opacity: 0, y: 12, scale: 0.9 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  className="text-6xl font-bold tabular-nums text-foreground inline-block"
+                >
+                  {formData.age || "—"}
+                </motion.span>
+                <span className="text-lg text-muted-foreground ml-2">years</span>
               </div>
-              <div className="flex gap-2 pt-2">
-                <Button variant="outline" onClick={() => setStep(1)} className="h-12 rounded-2xl flex-1 border-border dark:border-white/15 text-foreground">Back</Button>
-                <Button onClick={() => setStep(3)} className="flex-1 h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90">Next</Button>
+              <Input type="number" inputMode="numeric" placeholder="e.g. 25"
+                value={formData.age}
+                onChange={e => setFormData(prev => ({ ...prev, age: e.target.value }))}
+                className="h-14 rounded-2xl bg-card border-border/50 text-center text-xl font-semibold max-w-[200px]"
+                autoFocus />
+              <div className="w-full max-w-[240px] space-y-1.5">
+                <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider text-center block">Sex</label>
+                <div className="flex gap-2">
+                  {["male", "female"].map(s => (
+                    <button key={s} type="button"
+                      onClick={() => { triggerHapticSelection(); setFormData(prev => ({ ...prev, sex: s })); }}
+                      className={`flex-1 h-11 rounded-2xl text-sm font-semibold border transition-all capitalize ${
+                        formData.sex === s ? "border-primary bg-primary/10 text-foreground" : "border-border/50 bg-card text-muted-foreground"
+                      }`}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
-          )}
+          </StepLayout>
+        )}
 
-          {step === 3 && (
-            <div className="space-y-4">
-              <h3 className="font-semibold text-lg text-foreground">Activity Level</h3>
-              <div className="space-y-2">
-                <Label htmlFor="activity_level" className="text-foreground text-sm font-medium">Activity Level</Label>
-                <Select value={formData.activity_level} onValueChange={(value) => setFormData({ ...formData, activity_level: value })}>
-                  <SelectTrigger className={selectTriggerClass}>
-                    <SelectValue placeholder="Select activity level" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="sedentary">Sedentary (little or no exercise)</SelectItem>
-                    <SelectItem value="lightly_active">Lightly Active (1-3 days/week)</SelectItem>
-                    <SelectItem value="moderately_active">Moderately Active (3-5 days/week)</SelectItem>
-                    <SelectItem value="very_active">Very Active (6-7 days/week)</SelectItem>
-                    <SelectItem value="extra_active">Extra Active (2x per day)</SelectItem>
-                  </SelectContent>
-                </Select>
+        {/* ── Screen 5: Height ── */}
+        {step === 5 && (
+          <StepLayout step={5} title="What's your height?" subtitle="Used to calculate your metabolic rate."
+            footer={<Button onClick={goNext} disabled={!formData.height_cm}
+              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+          >
+            <div className="flex flex-col items-center pt-8 gap-6">
+              <div className="text-center">
+                <motion.span
+                  key={formData.height_cm || "empty"}
+                  initial={{ opacity: 0, y: 12, scale: 0.9 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  className="text-6xl font-bold tabular-nums text-foreground inline-block"
+                >
+                  {formData.height_cm || "—"}
+                </motion.span>
+                <span className="text-lg text-muted-foreground ml-2">cm</span>
               </div>
+              <Input type="number" inputMode="decimal" step="0.1" placeholder="e.g. 175"
+                value={formData.height_cm}
+                onChange={e => setFormData(prev => ({ ...prev, height_cm: e.target.value }))}
+                className="h-14 rounded-2xl bg-card border-border/50 text-center text-xl font-semibold max-w-[200px]"
+                autoFocus />
+            </div>
+          </StepLayout>
+        )}
+
+        {/* ── Screen 6: Current Weight ── */}
+        {step === 6 && (
+          <StepLayout step={6} title="What's your current weight?" subtitle="Step on the scale. Be honest — this is your starting line."
+            footer={<Button onClick={goNext} disabled={!formData.current_weight_kg}
+              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+          >
+            <div className="flex flex-col items-center pt-8 gap-6">
+              <div className="text-center">
+                <motion.span
+                  key={formData.current_weight_kg || "empty"}
+                  initial={{ opacity: 0, y: 12, scale: 0.9 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  className="text-6xl font-bold tabular-nums text-foreground inline-block"
+                >
+                  {formData.current_weight_kg || "—"}
+                </motion.span>
+                <span className="text-lg text-muted-foreground ml-2">kg</span>
+              </div>
+              <Input type="number" inputMode="decimal" step="0.1" placeholder="e.g. 78"
+                value={formData.current_weight_kg}
+                onChange={e => setFormData(prev => ({ ...prev, current_weight_kg: e.target.value }))}
+                className="h-14 rounded-2xl bg-card border-border/50 text-center text-xl font-semibold max-w-[200px]"
+                autoFocus />
+              {weightDiff && parseFloat(weightDiff) > 0 && formData.goal_type === "cutting" && (
+                <p className="text-sm text-muted-foreground text-center">
+                  You need to drop <strong className="text-foreground">{weightDiff} kg</strong>
+                  {weeksToFight ? <> in <strong className="text-foreground">{weeksToFight} weeks</strong></> : null}
+                </p>
+              )}
+            </div>
+          </StepLayout>
+        )}
+
+        {/* ── Screen 7: Body Fat (Optional) ── */}
+        {step === 7 && (
+          <StepLayout step={6} title="Estimate your body fat" subtitle="Drag the slider. Skip if you're not sure."
+            footer={
               <div className="space-y-2">
-                <Label htmlFor="training_frequency" className="text-foreground text-sm font-medium">Training Frequency (sessions per week)</Label>
-                <Input
-                  id="training_frequency"
-                  type="number"
-                  inputMode="numeric"
-                  value={formData.training_frequency}
-                  onChange={(e) => setFormData({ ...formData, training_frequency: e.target.value })}
-                  required
-                  className={inputClass}
+                <Button onClick={goNext} className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90">Continue</Button>
+                <button onClick={() => { setFormData(prev => ({ ...prev, body_fat_pct: "" })); goNext(); }} className="w-full text-center text-xs text-muted-foreground/60 py-2 hover:text-muted-foreground transition-colors">
+                  Skip this step
+                </button>
+              </div>
+            }
+          >
+            <div className="flex flex-col items-center pt-8 gap-8">
+              <div className="text-center">
+                <span className="text-5xl font-bold tabular-nums text-foreground">
+                  {formData.body_fat_pct || "—"}
+                </span>
+                <span className="text-lg text-muted-foreground ml-1">%</span>
+              </div>
+              <div className="w-full max-w-xs space-y-3">
+                <Slider
+                  value={[formData.body_fat_pct ? parseFloat(formData.body_fat_pct) : 15]}
+                  onValueChange={([v]) => setFormData(prev => ({ ...prev, body_fat_pct: v.toString() }))}
+                  min={5} max={40} step={1}
+                  className="w-full"
                 />
-              </div>
-              <div className="flex gap-2 pt-2">
-                <Button variant="outline" onClick={() => setStep(2)} className="h-12 rounded-2xl flex-1 border-border dark:border-white/15 text-foreground">Back</Button>
-                <Button onClick={() => setStep(4)} className="flex-1 h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90">Next</Button>
+                <div className="flex justify-between text-[10px] text-muted-foreground/50">
+                  <span>Lean</span><span>Average</span><span>Higher</span>
+                </div>
               </div>
             </div>
-          )}
+          </StepLayout>
+        )}
 
-          {step === 4 && (
-            <div className="space-y-4">
-              <h3 className="font-semibold text-lg text-foreground">Review & Confirm</h3>
-              <div className="rounded-2xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 p-4 space-y-2 text-sm text-foreground">
-                <p><strong className="text-foreground">Age:</strong> <span className="text-muted-foreground">{formData.age} years</span></p>
-                <p><strong className="text-foreground">Sex:</strong> <span className="text-muted-foreground">{formData.sex}</span></p>
-                <p><strong className="text-foreground">Height:</strong> <span className="text-muted-foreground">{formData.height_cm} cm</span></p>
-                <p><strong className="text-foreground">Current Weight:</strong> <span className="text-muted-foreground">{formData.current_weight_kg} kg</span></p>
-                <p><strong className="text-foreground">{formData.goal_type === 'cutting' ? 'Fight Night Weight' : 'Goal Weight'}:</strong> <span className="text-muted-foreground">{formData.goal_weight_kg} kg</span></p>
-                {formData.goal_type === 'cutting' && (
-                  <p><strong className="text-foreground">Fight Week Target:</strong> <span className="text-muted-foreground">{formData.fight_week_target_kg} kg</span></p>
-                )}
-                <p><strong className="text-foreground">Target Date:</strong> <span className="text-muted-foreground">{formData.target_date}</span></p>
-                <p><strong className="text-foreground">Activity Level:</strong> <span className="text-muted-foreground">{formData.activity_level?.replace(/_/g, " ")}</span></p>
-                <p><strong className="text-foreground">Training Frequency:</strong> <span className="text-muted-foreground">{formData.training_frequency} sessions/week</span></p>
-              </div>
-              <div className="flex gap-2 pt-2">
-                <Button variant="outline" onClick={() => setStep(3)} className="h-12 rounded-2xl flex-1 border-border dark:border-white/15 text-foreground">Back</Button>
-                <Button onClick={handleSubmit} disabled={loading} className="flex-1 h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-70">
-                  {loading ? (
-                    <div className="flex items-center gap-2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground"></div>
-                      Creating your plan...
-                    </div>
-                  ) : (
-                    "Create Plan"
-                  )}
-                </Button>
-              </div>
+        {/* ── Screen 8: Experience Level ── */}
+        {step === 8 && (
+          <StepLayout step={8} title="What's your experience level?" subtitle="No judgment. We just need to know where you're at.">
+            <div className="space-y-2.5">
+              {[
+                { value: "beginner", label: "Beginner", description: "Less than 1 year training" },
+                { value: "amateur", label: "Amateur Fighter", description: "Some fights, still learning the game" },
+                { value: "pro", label: "Experienced / Pro", description: "Multiple fights, know the weight cut drill" },
+              ].map(opt => (
+                <OptionCard key={opt.value} selected={formData.experience_level === opt.value}
+                  label={opt.label} description={opt.description} onClick={() => selectAndAdvance("experience_level", opt.value)} />
+              ))}
             </div>
-          )}
-          </div>
-        </div>
-      </div>
+          </StepLayout>
+        )}
+
+        {/* ── Screen 9: Training Frequency ── */}
+        {step === 9 && (
+          <StepLayout step={9} title="How often do you train?" subtitle="All sessions — pads, sparring, gym, running.">
+            <div className="space-y-2.5">
+              {[
+                { value: "2", label: "1-2 times per week", description: "Just getting started" },
+                { value: "4", label: "3-4 times per week", description: "Consistent training" },
+                { value: "6", label: "5-6 times per week", description: "Serious camp schedule" },
+                { value: "10", label: "Twice a day", description: "Full-time fighter mode" },
+              ].map(opt => (
+                <OptionCard key={opt.value} selected={formData.training_frequency === opt.value}
+                  label={opt.label} description={opt.description} onClick={() => selectAndAdvance("training_frequency", opt.value)} />
+              ))}
+            </div>
+          </StepLayout>
+        )}
+
+        {/* ── Screen 10: Training Types ── */}
+        {step === 10 && (
+          <StepLayout step={10} title="What does your training include?" subtitle="Select all that apply."
+            footer={<Button onClick={goNext} disabled={formData.training_types.length === 0}
+              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+          >
+            <div className="space-y-2.5">
+              {["Pads", "Sparring", "Strength & Conditioning", "Running"].map(t => (
+                <MultiCard key={t} label={t} selected={formData.training_types.includes(t.toLowerCase().replace(/ & /g, "_"))}
+                  onClick={() => toggleMulti("training_types", t.toLowerCase().replace(/ & /g, "_"))} />
+              ))}
+            </div>
+          </StepLayout>
+        )}
+
+        {/* ── Screen 11: Sleep ── */}
+        {step === 11 && (
+          <StepLayout step={11} title="How many hours do you sleep?" subtitle="Recovery is half the game.">
+            <div className="space-y-2.5">
+              {[
+                { value: "less_than_6", label: "Less than 6 hours", icon: <Moon className="h-5 w-5 text-red-400" /> },
+                { value: "6_to_7", label: "6-7 hours", icon: <Moon className="h-5 w-5 text-yellow-400" /> },
+                { value: "7_to_8", label: "7-8 hours", icon: <Moon className="h-5 w-5 text-green-400" /> },
+                { value: "8_plus", label: "8+ hours", icon: <Moon className="h-5 w-5 text-emerald-400" /> },
+              ].map(opt => (
+                <OptionCard key={opt.value} selected={formData.sleep_hours === opt.value} icon={opt.icon}
+                  label={opt.label} onClick={() => selectAndAdvance("sleep_hours", opt.value)} />
+              ))}
+            </div>
+          </StepLayout>
+        )}
+
+        {/* ── Screen 12: Struggles ── */}
+        {step === 12 && (
+          <StepLayout step={12} title="What do you struggle with most?" subtitle="Be real. We'll build around your weak spots.">
+            <div className="space-y-2.5">
+              {[
+                { value: "making_weight", label: "Making weight", icon: <TrendingDown className="h-5 w-5 text-red-400" /> },
+                { value: "low_energy", label: "Low energy in training", icon: <Zap className="h-5 w-5 text-yellow-400" /> },
+                { value: "binge_eating", label: "Binge eating after cuts", icon: <Utensils className="h-5 w-5 text-orange-400" /> },
+                { value: "no_progress", label: "Not seeing progress", icon: <Brain className="h-5 w-5 text-purple-400" /> },
+              ].map(opt => (
+                <OptionCard key={opt.value} selected={formData.primary_struggle === opt.value} icon={opt.icon}
+                  label={opt.label} onClick={() => selectAndAdvance("primary_struggle", opt.value)} />
+              ))}
+            </div>
+          </StepLayout>
+        )}
+
+        {/* ── Screen 13: Aggressiveness ── */}
+        {step === 13 && (
+          <StepLayout step={13} title="How aggressive do you want to go?" subtitle="This controls how fast we push your weight cut and plan intensity.">
+            <div className="space-y-2.5">
+              {[
+                { value: "safe", label: "Safe & Steady", description: "Slow, sustainable. Best if you have 8+ weeks.", icon: <Shield className="h-5 w-5 text-green-400" /> },
+                { value: "balanced", label: "Balanced", description: "Standard fight camp pace. 4-8 weeks out.", icon: <Gauge className="h-5 w-5 text-yellow-400" /> },
+                { value: "aggressive", label: "Aggressive", description: "Hard cuts. Less than 4 weeks to fight.", icon: <Flame className="h-5 w-5 text-red-400" /> },
+              ].map(opt => (
+                <OptionCard key={opt.value} selected={formData.plan_aggressiveness === opt.value} icon={opt.icon}
+                  label={opt.label} description={opt.description} onClick={() => selectAndAdvance("plan_aggressiveness", opt.value)} />
+              ))}
+            </div>
+          </StepLayout>
+        )}
+
+        {/* ── Screen 14: Dietary Preferences ── */}
+        {step === 14 && (
+          <StepLayout step={14} title="Any dietary preferences?" subtitle="We'll keep your meal plans compatible."
+            footer={
+              <div className="space-y-2">
+                <Button onClick={goNext} className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90">Continue</Button>
+                <button onClick={() => { setFormData(prev => ({ ...prev, dietary_restrictions: [] })); goNext(); }} className="w-full text-center text-xs text-muted-foreground/60 py-2 hover:text-muted-foreground transition-colors">
+                  No restrictions — skip
+                </button>
+              </div>
+            }
+          >
+            <div className="space-y-2.5">
+              {["Halal", "Vegetarian", "Vegan", "Gluten-free", "Dairy-free"].map(d => (
+                <MultiCard key={d} label={d} selected={formData.dietary_restrictions.includes(d.toLowerCase().replace("-", "_"))}
+                  onClick={() => toggleMulti("dietary_restrictions", d.toLowerCase().replace("-", "_"))} />
+              ))}
+            </div>
+          </StepLayout>
+        )}
+
+        {/* ── Screen 15: Budget ── */}
+        {step === 15 && (
+          <StepLayout step={15} title="What's your food budget?" subtitle="We'll match meal suggestions to what you can spend.">
+            <div className="space-y-2.5">
+              {[
+                { value: "student", label: "Student Budget", description: "Simple, cheap, effective meals", icon: <Wallet className="h-5 w-5 text-yellow-400" /> },
+                { value: "flexible", label: "Flexible", description: "Wider range of food options", icon: <Wallet className="h-5 w-5 text-green-400" /> },
+              ].map(opt => (
+                <OptionCard key={opt.value} selected={formData.food_budget === opt.value} icon={opt.icon}
+                  label={opt.label} description={opt.description}
+                  onClick={() => {
+                    setFormData(prev => ({ ...prev, food_budget: opt.value }));
+                    triggerHapticSelection();
+                    setTimeout(handleSubmit, 300);
+                  }}
+                />
+              ))}
+            </div>
+          </StepLayout>
+        )}
+
+        </motion.div>
+      </AnimatePresence>
+
     </div>
   );
 }

@@ -730,24 +730,32 @@ export type Database = {
           ai_recommended_carbs_g: number | null
           ai_recommended_fats_g: number | null
           ai_recommended_protein_g: number | null
+          athlete_type: string | null
           avatar_url: string | null
           bmr: number | null
+          body_fat_pct: number | null
           created_at: string | null
           current_weight_kg: number
+          experience_level: string | null
           fight_week_target_kg: number | null
+          food_budget: string | null
           goal_type: string
           goal_weight_kg: number
           height_cm: number
           id: string
           manual_nutrition_override: boolean | null
+          plan_aggressiveness: string | null
+          primary_struggle: string | null
           revenuecat_customer_id: string | null
           sex: string
+          sleep_hours: string | null
           subscription_expires_at: string | null
           subscription_tier: string
           subscription_updated_at: string | null
           target_date: string
           tdee: number | null
           training_frequency: number | null
+          training_types: string[] | null
           updated_at: string | null
         }
         Insert: {
@@ -758,24 +766,32 @@ export type Database = {
           ai_recommended_carbs_g?: number | null
           ai_recommended_fats_g?: number | null
           ai_recommended_protein_g?: number | null
+          athlete_type?: string | null
           avatar_url?: string | null
           bmr?: number | null
+          body_fat_pct?: number | null
           created_at?: string | null
           current_weight_kg: number
+          experience_level?: string | null
           fight_week_target_kg?: number | null
+          food_budget?: string | null
           goal_type?: string
           goal_weight_kg: number
           height_cm: number
           id: string
           manual_nutrition_override?: boolean | null
+          plan_aggressiveness?: string | null
+          primary_struggle?: string | null
           revenuecat_customer_id?: string | null
           sex: string
+          sleep_hours?: string | null
           subscription_expires_at?: string | null
           subscription_tier?: string
           subscription_updated_at?: string | null
           target_date: string
           tdee?: number | null
           training_frequency?: number | null
+          training_types?: string[] | null
           updated_at?: string | null
         }
         Update: {
@@ -786,24 +802,32 @@ export type Database = {
           ai_recommended_carbs_g?: number | null
           ai_recommended_fats_g?: number | null
           ai_recommended_protein_g?: number | null
+          athlete_type?: string | null
           avatar_url?: string | null
           bmr?: number | null
+          body_fat_pct?: number | null
           created_at?: string | null
           current_weight_kg?: number
+          experience_level?: string | null
           fight_week_target_kg?: number | null
+          food_budget?: string | null
           goal_type?: string
           goal_weight_kg?: number
           height_cm?: number
           id?: string
           manual_nutrition_override?: boolean | null
+          plan_aggressiveness?: string | null
+          primary_struggle?: string | null
           revenuecat_customer_id?: string | null
           sex?: string
+          sleep_hours?: string | null
           subscription_expires_at?: string | null
           subscription_tier?: string
           subscription_updated_at?: string | null
           target_date?: string
           tdee?: number | null
           training_frequency?: number | null
+          training_types?: string[] | null
           updated_at?: string | null
         }
         Relationships: []

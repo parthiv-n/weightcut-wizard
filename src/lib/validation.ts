@@ -36,6 +36,7 @@ export const profileSchema = z.object({
   goal_weight_kg: z.number().positive("Goal weight must be positive").min(30).max(250),
   fight_week_target_kg: z.number().positive("Fight week target must be positive").min(30).max(250).optional().nullable(),
   training_frequency: z.number().int().nonnegative("Training frequency cannot be negative").max(21, "Training frequency too high").optional().nullable(),
+  body_fat_pct: z.number().min(3).max(60).optional().nullable(),
 });
 
 // Gym set validation schema
