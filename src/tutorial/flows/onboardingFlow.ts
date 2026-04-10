@@ -45,10 +45,19 @@ export const onboardingFlow: TutorialFlow = {
       navigateTo: "/weight",
     },
     {
-      id: "hydration-page",
+      id: "fight-week-page",
+      title: "Fight Week",
+      description:
+        "Your fight week command centre. Get AI-generated advice for your final week — water loading, sodium manipulation, and weight management strategies tailored to your cut.",
+      position: "center",
+      navigateTo: "/weight-cut",
+      condition: (state) => state.goalType === "cutting",
+    },
+    {
+      id: "rehydration-page",
       title: "Rehydration Planner",
       description:
-        "Your post-weigh-in rehydration tool. Enter the weight you lost and get a personalised recovery protocol with fluid schedules and electrolyte timing.",
+        "Switch to the Rehydration tab after weigh-in. Enter how much weight you lost and get a personalised hourly protocol — fluid schedules, electrolyte timing, and carb refuelling plan.",
       position: "center",
       navigateTo: "/weight-cut?tab=rehydration",
       condition: (state) => state.goalType === "cutting",

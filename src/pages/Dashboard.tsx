@@ -42,6 +42,17 @@ interface DailyWisdom {
 }
 
 export default function Dashboard() {
+  const navigate = useNavigate();
+
+  // Redirect to cut plan if it hasn't been seen yet
+  useEffect(() => {
+    const cutPlan = localStorage.getItem("wcw_cut_plan");
+    const cutPlanSeen = localStorage.getItem("wcw_cut_plan_seen");
+    if (cutPlan && !cutPlanSeen) {
+      navigate("/cut-plan", { replace: true });
+    }
+  }, [navigate]);
+
   const [weightLogs, setWeightLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lb'>(() => {
@@ -56,7 +67,6 @@ export default function Dashboard() {
   const [achievementSheetOpen, setAchievementSheetOpen] = useState(false);
   const [cutPlanOpen, setCutPlanOpen] = useState(false);
   const { userName, currentWeight, userId, profile } = useUser();
-  const navigate = useNavigate();
   const { safeAsync, isMounted } = useSafeAsync();
   const { streak, streakIncludesToday, weeklyConsistency, badges, badgesLoading, allAchievements } = useGamification(userId, weightLogs, todayCalories, profile);
 

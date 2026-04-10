@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, ReactNode } from "react";
 import { useProfile, useAuth } from "@/contexts/UserContext";
 import { Capacitor } from "@capacitor/core";
-import { initializePurchases, addCustomerInfoUpdateListener, isPremiumFromCustomerInfo, getSubscriptionFromCustomerInfo } from "@/lib/purchases";
+import { initializePurchases, addCustomerInfoUpdateListener, isPremiumFromCustomerInfo, getSubscriptionFromCustomerInfo, getCustomerInfo } from "@/lib/purchases";
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
 
@@ -138,6 +138,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
           // Sync premium to DB directly — don't wait for webhook
           const sub = getSubscriptionFromCustomerInfo(customerInfo);
           if (sub) {
+            forcePremium(sub.tier, sub.expiresAt);
             try {
               await supabase.from("profiles").update({
                 subscription_tier: sub.tier,
@@ -145,6 +146,11 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
               }).eq("id", userId);
             } catch (err) { logger.warn("Failed to sync premium in listener", err); }
           }
+          await refreshProfile();
+        } else {
+          // User lost premium (cancelled/expired) — clear override, refresh from DB
+          logger.info("RevenueCat: user no longer premium, clearing override");
+          setTierOverride(null);
           await refreshProfile();
         }
       });
@@ -158,7 +164,24 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     return () => {
       removeListener?.();
     };
-  }, [userId, refreshProfile]);
+  }, [userId, refreshProfile, forcePremium]);
+
+  // On app resume: re-validate premium via RevenueCat (catches expiry/cancellation)
+  useEffect(() => {
+    if (!userId || !Capacitor.isNativePlatform()) return;
+    const handler = async () => {
+      const info = await getCustomerInfo();
+      if (!info) return;
+      if (!isPremiumFromCustomerInfo(info) && tierOverride) {
+        logger.info("App resume: premium expired, clearing override");
+        setTierOverride(null);
+        await refreshProfile();
+      }
+    };
+    const onVisibility = () => { if (document.visibilityState === "visible") handler(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [userId, tierOverride, refreshProfile]);
 
   // Refresh gems from profile (DB is source of truth)
   const refreshGems = useCallback(async () => {

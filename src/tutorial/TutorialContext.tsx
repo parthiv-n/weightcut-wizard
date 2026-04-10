@@ -37,7 +37,7 @@ export interface TutorialContextValue {
 export const TutorialContext = createContext<TutorialContextValue | null>(null);
 
 /** Delay before showing tooltip after a route navigation (lets lazy page load + animate) */
-const NAV_SETTLE_MS = 1000;
+const NAV_SETTLE_MS = 1500;
 
 export function TutorialProvider({ children }: { children: ReactNode }) {
   const { userId, profile, hasProfile } = useUser();
@@ -114,33 +114,39 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   // --- Navigation handling ---
   // When the current step has a `navigateTo` that differs from location, navigate there.
   // Hide the tooltip while navigating, then reveal once the route matches.
+  // Compare current location against a navigateTo target (which may include query params)
+  const locationMatches = (target: string): boolean => {
+    const currentFull = location.pathname + location.search;
+    // Match if pathname matches (ignoring query) or full path+search matches
+    const targetPath = target.split("?")[0];
+    return currentFull === target || location.pathname === targetPath;
+  };
+
   useEffect(() => {
     if (!state.isActive || !state.currentStep) return;
 
     const target = state.currentStep.navigateTo;
     if (!target) {
-      // No navigation needed — make sure overlay is visible
       setWaitingForNav(false);
       return;
     }
 
-    if (location.pathname !== target) {
-      // Need to navigate — hide overlay during transition
+    if (!locationMatches(target)) {
       setWaitingForNav(true);
       navigate(target);
     }
-  }, [state.currentStep, state.isActive, location.pathname, navigate]);
+  }, [state.currentStep, state.isActive, location.pathname, location.search, navigate]);
 
   // When we arrive at the correct route after a navigateTo, reveal the tooltip after settling
   useEffect(() => {
     if (!waitingForNav || !state.isActive || !state.currentStep) return;
 
     const target = state.currentStep.navigateTo;
-    if (target && location.pathname === target) {
+    if (target && locationMatches(target)) {
       const t = setTimeout(() => setWaitingForNav(false), NAV_SETTLE_MS);
       return () => clearTimeout(t);
     }
-  }, [waitingForNav, location.pathname, state.isActive, state.currentStep]);
+  }, [waitingForNav, location.pathname, location.search, state.isActive, state.currentStep]);
 
   // Auto-trigger onboarding on /dashboard
   useEffect(() => {

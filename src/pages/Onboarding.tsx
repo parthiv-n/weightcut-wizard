@@ -441,6 +441,7 @@ export default function Onboarding() {
       }
 
       if (hasCutPlan) {
+        localStorage.removeItem("wcw_cut_plan_seen"); // Force user to see plan first
         navigate("/cut-plan", { replace: true });
       } else {
         setGenerationStep(finalStep + 1);

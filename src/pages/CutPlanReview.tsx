@@ -75,6 +75,7 @@ export default function CutPlanReview() {
 
   const handleContinue = () => {
     triggerHaptic(ImpactStyle.Medium);
+    localStorage.setItem("wcw_cut_plan_seen", "true");
     navigate("/dashboard", { replace: true });
   };
 
