@@ -218,6 +218,16 @@ Output JSON:
       }
     }
 
+    // Guard: if neither phases nor hourlyProtocol produced data, fail
+    if (!protocol.hourlyProtocol?.length) {
+      throw new Error("AI did not return a valid rehydration protocol. Please try again.");
+    }
+
+    // Ensure carbRefuelPlan exists
+    if (!protocol.carbRefuelPlan) {
+      protocol.carbRefuelPlan = { strategy: "", meals: [] };
+    }
+
     // ── Attach deterministic totals (overrides any LLM-computed values) ────
     protocol.totals = {
       totalFluidLitres: targets.totalFluidLitres,

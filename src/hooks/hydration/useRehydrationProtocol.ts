@@ -43,7 +43,7 @@ export function useRehydrationProtocol() {
 
   // Awake hours: subtract 8h sleep for long windows (>10h)
   const awakeHours = useMemo(() => {
-    return availableHours > 10 ? Math.round(availableHours - 8) : availableHours;
+    return availableHours > 10 ? Math.max(4, Math.round(availableHours - 8)) : availableHours;
   }, [availableHours]);
 
   // Auto-derive glycogen depletion from carb inputs

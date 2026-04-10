@@ -234,7 +234,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
       if (ingController.signal.aborted) return;
       if (error) {
-        if (await handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
+        if (await handleAILimitError(error)) { failTask(ingTaskId, "Limit reached"); return; }
         throw new Error(await extractEdgeFunctionError(error, "Failed to analyze ingredient"));
       }
       if (data?.error) throw new Error(data.error);
@@ -271,12 +271,16 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
           ingredientGrams = parseFloat(gramsMatch[1]);
         } else {
           toast({ title: "Weight Required", description: "Could not determine ingredient weight. Please specify weight (e.g., '250g chicken breast')", variant: "destructive" });
+          failTask(ingTaskId, "Weight required");
+          setAiAnalyzingIngredient(false);
           return;
         }
       }
 
       if (ingredientGrams <= 0) {
         toast({ title: "Invalid Weight", description: "Could not determine ingredient weight. Please specify weight (e.g., '250g chicken breast')", variant: "destructive" });
+        failTask(ingTaskId, "Invalid weight");
+        setAiAnalyzingIngredient(false);
         return;
       }
 

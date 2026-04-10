@@ -19,12 +19,13 @@ export function NoGemsDialog({ open, onOpenChange, onWatchAd, onGoPro, onAddGem,
   const countdown = useNextGemCountdown(0, false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Auto-dismiss after 8 seconds unless user is interacting (loading ad)
+  // Auto-dismiss after 8 seconds — pauses during ad loading, restarts when done
   useEffect(() => {
-    if (!open) return;
-    timerRef.current = setTimeout(() => {
-      if (!loading) onOpenChange(false);
-    }, 8000);
+    if (!open || loading) {
+      if (timerRef.current) clearTimeout(timerRef.current);
+      return;
+    }
+    timerRef.current = setTimeout(() => onOpenChange(false), 8000);
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, [open, loading, onOpenChange]);
 

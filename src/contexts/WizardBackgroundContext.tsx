@@ -127,7 +127,9 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
       );
 
       if (response.status === 429 && !isPremium) {
-        onAICallBlocked();
+        let serverGems: number | undefined;
+        try { const body = await response.json(); serverGems = body?.gems; } catch { /* body unavailable */ }
+        onAICallBlocked(serverGems);
         const limitMessages: Message[] = [...newMessages, {
           role: "assistant",
           content: "Sorry, you've run out of AI gems. Upgrade to **Premium** for unlimited access, watch an ad to earn a gem, or wait until tomorrow when your free tokens refresh."

@@ -60,10 +60,7 @@ export function useRoutines() {
       safeAsync(setRoutines)(typed);
       localCache.set(userId, CACHE_KEY, typed);
     } catch (err) {
-      logger.error("Failed to fetch routines", err);
-      if (!localCache.get(userId, CACHE_KEY)) {
-        toast({ description: "Failed to load routines", variant: "destructive" });
-      }
+      logger.warn("Failed to fetch routines", err);
     } finally {
       if (isMounted()) safeAsync(setRoutinesLoading)(false);
     }

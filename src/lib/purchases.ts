@@ -14,27 +14,38 @@ export const PRODUCT_IDS = {
   yearly: "com.weightcutwizard.premium.yearly",
 } as const;
 
+let rcPromise: Promise<void> | null = null;
+let rcUIPromise: Promise<void> | null = null;
+
 async function loadRC() {
   if (Purchases) return;
   if (!Capacitor.isNativePlatform()) return;
-  try {
-    const mod = await import("@revenuecat/purchases-capacitor");
-    Purchases = mod.Purchases;
-    LOG_LEVEL = mod.LOG_LEVEL;
-  } catch (err) {
-    logger.warn("RevenueCat plugin not available", { error: String(err) });
-  }
+  if (rcPromise) return rcPromise;
+  rcPromise = (async () => {
+    try {
+      const mod = await import("@revenuecat/purchases-capacitor");
+      Purchases = mod.Purchases;
+      LOG_LEVEL = mod.LOG_LEVEL;
+    } catch (err) {
+      logger.warn("RevenueCat plugin not available", { error: String(err) });
+    }
+  })();
+  return rcPromise;
 }
 
 async function loadRCUI() {
   if (RevenueCatUI) return;
   if (!Capacitor.isNativePlatform()) return;
-  try {
-    const mod = await import("@revenuecat/purchases-capacitor-ui");
-    RevenueCatUI = mod.RevenueCatUI;
-  } catch (err) {
-    logger.warn("RevenueCat UI plugin not available", { error: String(err) });
-  }
+  if (rcUIPromise) return rcUIPromise;
+  rcUIPromise = (async () => {
+    try {
+      const mod = await import("@revenuecat/purchases-capacitor-ui");
+      RevenueCatUI = mod.RevenueCatUI;
+    } catch (err) {
+      logger.warn("RevenueCat UI plugin not available", { error: String(err) });
+    }
+  })();
+  return rcUIPromise;
 }
 
 // ─── Initialization ───

@@ -1,4 +1,5 @@
 import { useEffect, lazy, Suspense } from "react";
+import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -180,7 +181,7 @@ const AppLayoutContent = () => {
           <main className="flex-1 overflow-auto overflow-x-hidden relative min-h-0 w-full pt-2 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right" style={{ paddingBottom: "calc(4rem + env(safe-area-inset-bottom, 0px))" }}>
             <PullToRefresh />
             <PageTransition>
-              <Suspense fallback={null}>
+              <Suspense fallback={<DashboardSkeleton />}>
                 <Outlet />
               </Suspense>
             </PageTransition>

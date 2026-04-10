@@ -242,10 +242,10 @@ export default function Onboarding() {
     return "extra_active";
   };
 
-  // BMR calculation
+  // BMR calculation (Mifflin-St Jeor)
   const calculateBMR = () => {
-    const weight = parseFloat(formData.current_weight_kg);
-    const height = parseFloat(formData.height_cm);
+    const weight = parseFloat(formData.current_weight_kg) || 70;
+    const height = parseFloat(formData.height_cm) || 175;
     const age = parseInt(formData.age) || 25;
     if (formData.sex === "male") return 10 * weight + 6.25 * height - 5 * age + 5;
     return 10 * weight + 6.25 * height - 5 * age - 161;
@@ -416,6 +416,7 @@ export default function Onboarding() {
           }
         } catch (planErr) {
           logger.warn("Cut plan generation error", planErr);
+          toast({ title: "Cut plan unavailable", description: "We couldn't generate your cut plan right now. You can generate it later from the dashboard." });
         }
       }
 
@@ -436,7 +437,7 @@ export default function Onboarding() {
           await presentPaywallIfNeeded();
           // Refresh profile in case user purchased
           await refreshProfile();
-        } catch { /* dismissed or unavailable — continue */ }
+        } catch (err) { logger.warn("Paywall presentation error", err); }
       }
 
       if (hasCutPlan) {
