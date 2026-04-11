@@ -46,13 +46,21 @@ export async function prepareRewardedAd(): Promise<void> {
 export async function showRewardedAd(): Promise<boolean> {
   if (!isNativePlatform || !initialized) return false;
 
-  return new Promise((resolve) => {
+  const adPromise = new Promise<boolean>((resolve) => {
     let rewarded = false;
+    let settled = false;
     const listeners: { remove: () => void }[] = [];
 
     const cleanup = () => {
       listeners.forEach(l => l.remove());
       listeners.length = 0;
+    };
+
+    const settle = (result: boolean) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(result);
     };
 
     listeners.push(
@@ -63,22 +71,25 @@ export async function showRewardedAd(): Promise<boolean> {
 
     listeners.push(
       AdMob.addListener(RewardAdPluginEvents.Dismissed, () => {
-        cleanup();
-        resolve(rewarded);
+        settle(rewarded);
         prepareRewardedAd().catch(() => {});
       })
     );
 
     listeners.push(
       AdMob.addListener(RewardAdPluginEvents.FailedToLoad, () => {
-        cleanup();
-        resolve(false);
+        settle(false);
       })
     );
 
     AdMob.showRewardVideoAd().catch(() => {
-      cleanup();
-      resolve(false);
+      settle(false);
     });
   });
+
+  // Timeout: if ad hangs for 30s, resolve false to unblock UI
+  return Promise.race([
+    adPromise,
+    new Promise<boolean>(r => setTimeout(() => r(false), 30000)),
+  ]);
 }

@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Sparkles, AlertTriangle, CheckCircle, Zap, Shield, Activity,
-  TrendingDown, ChevronLeft, Swords, Target, Flame, Dumbbell,
+  TrendingDown, ChevronLeft, Swords, Flame, Dumbbell,
   Moon, Brain, Gauge, Utensils, Wallet,
 } from "lucide-react";
 import { profileSchema } from "@/lib/validation";
@@ -153,11 +153,13 @@ export default function Onboarding() {
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
-    // Screen 1
-    athlete_type: "",
-    // Screen 2
+    // Screen 1 — flow split
     goal_type: "",
-    // Screen 3
+    // Screen 2 (cutting) — athlete type
+    athlete_type: "",
+    // Screen 2 (losing) — target weeks
+    target_weeks: "",
+    // Screen 3 (cutting only) — fight status
     has_fight: "",
     competition_level: "", // hobbyist | amateur | pro
     goal_weight_kg: "",
@@ -200,16 +202,18 @@ export default function Onboarding() {
   const goNext = useCallback(() => {
     triggerHapticSelection();
     setDirection(1);
-    setStep(s => Math.min(s + 1, TOTAL_STEPS));
-  }, []);
+    setStep(prev => {
+      let next = prev + 1;
+      return Math.min(next, TOTAL_STEPS);
+    });
+  }, [formData.goal_type]);
 
   const goBack = useCallback(() => {
     triggerHapticSelection();
     setDirection(-1);
-    setStep(s => {
-      // Skip screen 3 when going back if goal is not cutting
-      if (s === 4 && formData.goal_type !== "cutting") return 2;
-      return Math.max(s - 1, 1);
+    setStep(prev => {
+      let next = prev - 1;
+      return Math.max(next, 1);
     });
   }, [formData.goal_type]);
 
@@ -219,11 +223,11 @@ export default function Onboarding() {
     triggerHapticSelection();
     setDirection(1);
     setTimeout(() => setStep(s => {
-      // Skip screen 3 if goal is not fight-related
-      if (s === 2 && value !== "cutting") return 4;
-      return Math.min(s + 1, TOTAL_STEPS);
+      let next = s + 1;
+      // When selecting goal_type on screen 1, both flows go to screen 2
+      return Math.min(next, TOTAL_STEPS);
     }), 250);
-  }, []);
+  }, [formData.goal_type]);
 
   const toggleMulti = useCallback((field: "training_types" | "dietary_restrictions", value: string) => {
     triggerHapticSelection();
@@ -242,10 +246,10 @@ export default function Onboarding() {
     return "extra_active";
   };
 
-  // BMR calculation
+  // BMR calculation (Mifflin-St Jeor)
   const calculateBMR = () => {
-    const weight = parseFloat(formData.current_weight_kg);
-    const height = parseFloat(formData.height_cm);
+    const weight = parseFloat(formData.current_weight_kg) || 70;
+    const height = parseFloat(formData.height_cm) || 175;
     const age = parseInt(formData.age) || 25;
     if (formData.sex === "male") return 10 * weight + 6.25 * height - 5 * age + 5;
     return 10 * weight + 6.25 * height - 5 * age - 161;
@@ -323,9 +327,10 @@ export default function Onboarding() {
     setGenerationStep(0);
 
     const isFighterFlow = formData.goal_type === "cutting";
+    // Staggered UI steps — give each "analysis" step enough time to feel real
     const stepTimers = [
-      setTimeout(() => setGenerationStep(1), 600),
-      setTimeout(() => setGenerationStep(2), 1400),
+      setTimeout(() => setGenerationStep(1), 1800),
+      setTimeout(() => setGenerationStep(2), 4000),
     ];
 
     try {
@@ -345,7 +350,16 @@ export default function Onboarding() {
         current_weight_kg: parseFloat(formData.current_weight_kg),
         goal_weight_kg: parseFloat(formData.goal_weight_kg),
         fight_week_target_kg: isFighterFlow ? parseFloat(formData.fight_week_target_kg) : null,
-        target_date: formData.target_date || new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+        target_date: formData.target_date || (() => {
+          if (formData.target_weeks) {
+            const weeks = parseInt(formData.target_weeks) || 12;
+            return new Date(Date.now() + weeks * 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+          }
+          // Fallback: estimate target date based on weight difference at 0.5 kg/week
+          const diff = Math.abs(parseFloat(formData.current_weight_kg) - parseFloat(formData.goal_weight_kg));
+          const weeks = Math.max(4, Math.ceil(diff / 0.5));
+          return new Date(Date.now() + weeks * 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        })(),
         activity_level: activityLevel,
         training_frequency: trainingFreq,
         goal_type: formData.goal_type || "losing",
@@ -373,10 +387,13 @@ export default function Onboarding() {
 
       stepTimers.forEach(clearTimeout);
       setGenerationStep(2);
+      // Let "Building your weight cut strategy" breathe before moving on
+      await new Promise(r => setTimeout(r, 2000));
 
-      // 2. AI cut plan for fighters
-      let hasCutPlan = false;
+      // 2. AI plan generation
+      let hasPlan = false;
       if (isFighterFlow) {
+        // Fighter: generate fight camp cut plan
         setGenerationStep(3);
         try {
           const { data: planData, error: planError } = await supabase.functions.invoke("generate-cut-plan", {
@@ -403,7 +420,7 @@ export default function Onboarding() {
               goalWeight: parseFloat(formData.goal_weight_kg),
               targetDate: formData.target_date,
             }));
-            hasCutPlan = true;
+            hasPlan = true;
             const week1 = plan.weeklyPlan[0];
             if (week1) {
               await supabase.from("profiles").update({
@@ -416,12 +433,62 @@ export default function Onboarding() {
           }
         } catch (planErr) {
           logger.warn("Cut plan generation error", planErr);
+          toast({ title: "Plan unavailable", description: "We couldn't generate your plan right now. You can generate it later from the dashboard." });
+        }
+      } else {
+        // General user: generate weight loss plan
+        logger.info("Generating weight loss plan for non-fighter", { goalType: formData.goal_type, targetWeeks: formData.target_weeks });
+        setGenerationStep(3);
+        try {
+          const targetWeeks = parseInt(formData.target_weeks) || Math.max(4, Math.ceil(Math.abs(parseFloat(formData.current_weight_kg) - parseFloat(formData.goal_weight_kg)) / 0.5));
+          const { data: planData, error: planError } = await supabase.functions.invoke("generate-weight-plan", {
+            body: {
+              currentWeight: parseFloat(formData.current_weight_kg),
+              goalWeight: parseFloat(formData.goal_weight_kg),
+              targetWeeks,
+              age: parseInt(formData.age || "25"),
+              sex: formData.sex || "male",
+              heightCm: parseFloat(formData.height_cm),
+              activityLevel,
+              trainingFrequency: trainingFreq,
+              bmr,
+              tdee,
+              foodBudget: formData.food_budget || "flexible",
+              planAggressiveness: formData.plan_aggressiveness || "balanced",
+            },
+          });
+          if (planError) logger.warn("Weight plan generation failed", { error: planError });
+          const plan = planData?.plan || planData;
+          if (plan?.weeklyPlan) {
+            localStorage.setItem("wcw_cut_plan", JSON.stringify({
+              ...plan,
+              currentWeight: parseFloat(formData.current_weight_kg),
+              goalWeight: parseFloat(formData.goal_weight_kg),
+              targetDate: formData.target_date,
+              planType: "weight_loss",
+            }));
+            hasPlan = true;
+            const week1 = plan.weeklyPlan[0];
+            if (week1) {
+              await supabase.from("profiles").update({
+                ai_recommended_calories: week1.calories,
+                ai_recommended_protein_g: week1.protein_g,
+                ai_recommended_carbs_g: week1.carbs_g,
+                ai_recommended_fats_g: week1.fats_g,
+              }).eq("id", user.id);
+            }
+          }
+        } catch (planErr) {
+          logger.warn("Weight plan generation error", planErr);
+          toast({ title: "Plan unavailable", description: "We couldn't generate your plan right now. You can use AI tools on the dashboard." });
         }
       }
 
       // 3. Finalize
-      const finalStep = isFighterFlow ? 4 : 3;
+      const finalStep = 4;
       setGenerationStep(finalStep);
+      // Let "Finalizing your plan" show for a moment
+      await new Promise(r => setTimeout(r, 1500));
       await refreshProfile();
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (currentUser) seedDemoData(currentUser.id);
@@ -436,10 +503,11 @@ export default function Onboarding() {
           await presentPaywallIfNeeded();
           // Refresh profile in case user purchased
           await refreshProfile();
-        } catch { /* dismissed or unavailable — continue */ }
+        } catch (err) { logger.warn("Paywall presentation error", err); }
       }
 
-      if (hasCutPlan) {
+      if (hasPlan) {
+        localStorage.removeItem("wcw_cut_plan_seen"); // Force user to see plan first
         navigate("/cut-plan", { replace: true });
       } else {
         setGenerationStep(finalStep + 1);
@@ -457,13 +525,14 @@ export default function Onboarding() {
   };
 
   // ── Generation overlay ──
+  const isFight = formData.goal_type === "cutting";
   const GENERATION_STEPS = [
-    { icon: Activity, label: "Analyzing your fight profile", color: "text-blue-400" },
+    { icon: Activity, label: isFight ? "Analyzing your fight profile" : "Analyzing your profile", color: "text-blue-400" },
     { icon: Zap, label: "Calculating nutrition targets", color: "text-yellow-400" },
-    { icon: Shield, label: formData.goal_type === "cutting" ? "Building your weight cut strategy" : "Building your weight loss plan", color: "text-blue-400" },
-    ...(formData.goal_type === "cutting" ? [{ icon: TrendingDown, label: "Generating your AI fight plan", color: "text-primary" }] : []),
+    { icon: Shield, label: isFight ? "Building your weight cut strategy" : "Building your weight loss plan", color: "text-blue-400" },
+    { icon: TrendingDown, label: isFight ? "Generating your AI fight plan" : "Generating your meal plan", color: "text-primary" },
     { icon: Sparkles, label: "Finalizing your plan", color: "text-primary" },
-    { icon: CheckCircle, label: "Your fight camp starts now", color: "text-green-400" },
+    { icon: CheckCircle, label: isFight ? "Your fight camp starts now" : "Your plan is ready", color: "text-green-400" },
   ];
 
   if (generatingPlan) {
@@ -477,7 +546,7 @@ export default function Onboarding() {
             <img src={wizardLogo} alt="Wizard" className="relative h-20 w-20 object-contain" />
           </div>
           <h2 className="text-xl font-bold text-foreground tracking-tight mb-1 text-center">
-            {isReady ? "All Set!" : "Building Your Fight Plan"}
+            {isReady ? "All Set!" : isFight ? "Building Your Fight Plan" : "Building Your Plan"}
           </h2>
           <p className="text-sm text-muted-foreground mb-8 text-center">
             {isReady ? "Opening your dashboard..." : "This will only take a moment"}
@@ -521,7 +590,7 @@ export default function Onboarding() {
   return (
     <div className="min-h-screen bg-background dark:bg-[#020204]">
       {/* Top bar: back arrow + progress bar */}
-      <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-sm px-4 pt-3 pb-2 flex items-center gap-3">
+      <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-sm px-4 pb-2 flex items-center gap-3" style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)" }}>
         {step > 1 ? (
           <button onClick={goBack} className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-muted/50 active:scale-95 transition-all flex-shrink-0">
             <ChevronLeft className="h-5 w-5 text-foreground" />
@@ -544,9 +613,24 @@ export default function Onboarding() {
           transition={springs.responsive}
         >
 
-        {/* ── Screen 1: Athlete Type ── */}
+        {/* ── Screen 1: Flow Split — "What brings you here?" ── */}
         {step === 1 && (
-          <StepLayout step={1} title="What's your discipline?" subtitle="We'll tailor everything to your sport.">
+          <StepLayout step={1} title="What brings you here?" subtitle="We'll build your plan around this.">
+            <div className="space-y-2.5">
+              {[
+                { value: "cutting", label: "I have a fight coming up", description: "Structured weight cut with a deadline", icon: <Swords className="h-5 w-5 text-red-400" /> },
+                { value: "losing", label: "I want to lose weight", description: "Steady, sustainable fat loss", icon: <Flame className="h-5 w-5 text-orange-400" /> },
+              ].map(opt => (
+                <OptionCard key={opt.value} selected={formData.goal_type === opt.value} icon={opt.icon}
+                  label={opt.label} description={opt.description} onClick={() => selectAndAdvance("goal_type", opt.value)} />
+              ))}
+            </div>
+          </StepLayout>
+        )}
+
+        {/* ── Screen 2: Branching ── */}
+        {step === 2 && formData.goal_type === "cutting" && (
+          <StepLayout step={2} title="What's your discipline?" subtitle="We'll tailor everything to your sport.">
             <div className="space-y-2.5">
               {[
                 { value: "muay_thai", label: "Muay Thai", icon: <Swords className="h-5 w-5 text-orange-400" /> },
@@ -561,116 +645,267 @@ export default function Onboarding() {
             </div>
           </StepLayout>
         )}
-
-        {/* ── Screen 2: Primary Goal ── */}
-        {step === 2 && (
-          <StepLayout step={2} title="What's your goal right now?" subtitle="This sets the pace for your entire plan.">
-            <div className="space-y-2.5">
-              {[
-                { value: "cutting", label: "Make weight for a fight", description: "Structured cut with a deadline", icon: <Target className="h-5 w-5 text-red-400" /> },
-                { value: "losing", label: "Lose fat", description: "Steady body composition improvement", icon: <Flame className="h-5 w-5 text-orange-400" /> },
-                { value: "performance", label: "Improve performance", description: "Fuel training without cutting", icon: <Zap className="h-5 w-5 text-yellow-400" /> },
-                { value: "maintenance", label: "Stay fight-ready year round", description: "Maintain weight between camps", icon: <Shield className="h-5 w-5 text-green-400" /> },
-              ].map(opt => (
-                <OptionCard key={opt.value} selected={formData.goal_type === opt.value} icon={opt.icon}
-                  label={opt.label} description={opt.description} onClick={() => selectAndAdvance("goal_type", opt.value)} />
-              ))}
+        {/* ── Lose weight flow: Screen 2 — Current Weight ── */}
+        {step === 2 && formData.goal_type === "losing" && (
+          <StepLayout step={2} title="What's your current weight?" subtitle="Step on the scale — this is your starting line."
+            footer={<Button onClick={goNext} disabled={!formData.current_weight_kg}
+              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+          >
+            <div className="flex flex-col items-center pt-8 gap-6">
+              <div className="text-center">
+                <motion.span
+                  key={formData.current_weight_kg || "empty"}
+                  initial={{ opacity: 0, y: 12, scale: 0.9 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  className="text-6xl font-bold tabular-nums text-foreground inline-block"
+                >
+                  {formData.current_weight_kg || "—"}
+                </motion.span>
+                <span className="text-lg text-muted-foreground ml-2">kg</span>
+              </div>
+              <Input type="number" inputMode="decimal" step="0.1" placeholder="e.g. 85"
+                value={formData.current_weight_kg}
+                onChange={e => setFormData(prev => ({ ...prev, current_weight_kg: e.target.value }))}
+                className="h-14 rounded-2xl bg-card border-border/50 text-center text-xl font-semibold max-w-[200px]"
+                autoFocus />
             </div>
           </StepLayout>
         )}
 
-        {/* ── Screen 3: Fight Status (only for cutting) ── */}
-        {step === 3 && (
-          <StepLayout step={3} title="Do you have a fight booked?" subtitle="We'll plan backwards from your fight date."
+        {/* ── Lose weight flow: Screen 3 — Goal Weight ── */}
+        {step === 3 && formData.goal_type === "losing" && (
+          <StepLayout step={3} title="What's your goal weight?" subtitle="The weight you want to reach."
+            footer={<Button onClick={goNext} disabled={!formData.goal_weight_kg}
+              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+          >
+            <div className="flex flex-col items-center pt-8 gap-6">
+              <div className="text-center">
+                <motion.span
+                  key={formData.goal_weight_kg || "empty-goal"}
+                  initial={{ opacity: 0, y: 12, scale: 0.9 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  className="text-6xl font-bold tabular-nums text-primary inline-block"
+                >
+                  {formData.goal_weight_kg || "—"}
+                </motion.span>
+                <span className="text-lg text-muted-foreground ml-2">kg</span>
+              </div>
+              <Input type="number" inputMode="decimal" step="0.1" placeholder="e.g. 75"
+                value={formData.goal_weight_kg}
+                onChange={e => setFormData(prev => ({ ...prev, goal_weight_kg: e.target.value }))}
+                className="h-14 rounded-2xl bg-card border-border/50 text-center text-xl font-semibold max-w-[200px]"
+                autoFocus />
+              {formData.current_weight_kg && formData.goal_weight_kg && (
+                <p className="text-sm text-muted-foreground">
+                  <strong className="text-foreground">{Math.abs(parseFloat(formData.current_weight_kg) - parseFloat(formData.goal_weight_kg)).toFixed(1)} kg</strong> to {parseFloat(formData.current_weight_kg) > parseFloat(formData.goal_weight_kg) ? "lose" : "gain"}
+                </p>
+              )}
+            </div>
+          </StepLayout>
+        )}
+
+        {/* ── Lose weight flow: Screen 4 — Timeframe + Calculation ── */}
+        {step === 4 && formData.goal_type === "losing" && (
+          <StepLayout step={4} title="How long do you want to take?" subtitle="We'll calculate your weekly target."
+            footer={<Button onClick={goNext} disabled={!formData.target_weeks || parseInt(formData.target_weeks) < 1}
+              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+          >
+            <div className="flex flex-col items-center pt-6 gap-5">
+              <div className="text-center">
+                <motion.span
+                  key={formData.target_weeks || "empty-weeks"}
+                  initial={{ opacity: 0, y: 12, scale: 0.9 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.2, ease: "easeOut" }}
+                  className="text-6xl font-bold tabular-nums text-foreground inline-block"
+                >
+                  {formData.target_weeks || "—"}
+                </motion.span>
+                <span className="text-lg text-muted-foreground ml-2">weeks</span>
+              </div>
+              <Input type="number" inputMode="numeric" placeholder="e.g. 12"
+                value={formData.target_weeks}
+                onChange={e => setFormData(prev => ({ ...prev, target_weeks: e.target.value }))}
+                className="h-14 rounded-2xl bg-card border-border/50 text-center text-xl font-semibold max-w-[200px]"
+                autoFocus />
+
+              {/* Live kg/week calculation + safety advice */}
+              {formData.current_weight_kg && formData.goal_weight_kg && formData.target_weeks && parseInt(formData.target_weeks) > 0 && (() => {
+                const diff = Math.abs(parseFloat(formData.current_weight_kg) - parseFloat(formData.goal_weight_kg));
+                const weeks = parseInt(formData.target_weeks);
+                const kgPerWeek = diff / weeks;
+                const isSafe = kgPerWeek <= 0.75;
+                const isModerate = kgPerWeek > 0.75 && kgPerWeek <= 1.0;
+                const isAggressive = kgPerWeek > 1.0 && kgPerWeek <= 1.5;
+                const isDangerous = kgPerWeek > 1.5;
+
+                return (
+                  <div className="w-full max-w-[280px] space-y-3">
+                    <div className={`rounded-2xl p-4 text-center border ${
+                      isSafe ? "bg-emerald-500/5 border-emerald-500/20" :
+                      isModerate ? "bg-primary/5 border-primary/20" :
+                      isAggressive ? "bg-yellow-500/5 border-yellow-500/20" :
+                      "bg-red-500/5 border-red-500/20"
+                    }`}>
+                      <p className={`text-2xl font-black tabular-nums ${
+                        isSafe ? "text-emerald-400" : isModerate ? "text-primary" : isAggressive ? "text-yellow-400" : "text-red-400"
+                      }`}>
+                        {kgPerWeek.toFixed(1)} <span className="text-sm font-semibold">kg/week</span>
+                      </p>
+                      <p className={`text-xs mt-1 font-medium ${
+                        isSafe ? "text-emerald-400" : isModerate ? "text-primary" : isAggressive ? "text-yellow-400" : "text-red-400"
+                      }`}>
+                        {isSafe ? "Safe & sustainable" : isModerate ? "Good pace" : isAggressive ? "Aggressive — stay disciplined" : "Very aggressive — consider more time"}
+                      </p>
+                    </div>
+                    {isDangerous && (
+                      <p className="text-[11px] text-muted-foreground text-center leading-snug">
+                        Losing more than 1.5 kg/week risks muscle loss and fatigue. Try adding a few more weeks for better results.
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          </StepLayout>
+        )}
+
+        {/* ── Screen 3: Fight Details (cutting flow only) ── */}
+        {step === 3 && formData.goal_type === "cutting" && (
+          <StepLayout step={3} title="Tell us about your fight" subtitle="We'll plan backwards from your fight date."
             footer={
-              <Button onClick={goNext} disabled={!formData.goal_weight_kg || (formData.has_fight === "yes" && !formData.target_date)}
+              <Button onClick={goNext} disabled={!formData.goal_weight_kg || !formData.target_date}
                 className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>
             }
           >
             <div className="space-y-4">
-              <div className="flex gap-2">
-                {["yes", "no"].map(v => (
-                  <button key={v} type="button"
-                    onClick={() => { triggerHapticSelection(); setFormData(prev => ({ ...prev, has_fight: v })); }}
-                    className={`flex-1 py-3 rounded-2xl text-sm font-semibold border transition-all ${
-                      formData.has_fight === v
-                        ? "border-primary bg-primary/10 text-foreground"
-                        : "border-border/50 bg-card text-muted-foreground"
-                    }`}
-                  >
-                    {v === "yes" ? "Yes" : "No"}
-                  </button>
-                ))}
+              {/* Competition level — determines water cut aggressiveness */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Competition Level</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { value: "hobbyist", label: "Hobbyist" },
+                    { value: "amateur", label: "Amateur" },
+                    { value: "pro", label: "Pro" },
+                  ].map(opt => (
+                    <button key={opt.value} type="button"
+                      onClick={() => { triggerHapticSelection(); setFormData(prev => ({ ...prev, competition_level: opt.value, has_fight: "yes" })); }}
+                      className={`h-11 rounded-2xl text-sm font-semibold border transition-all ${
+                        formData.competition_level === opt.value
+                          ? "border-primary bg-primary/10 text-foreground"
+                          : "border-border/50 bg-card text-muted-foreground"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Fight Date</label>
+                <Input type="date" value={formData.target_date}
+                  onChange={e => setFormData(prev => ({ ...prev, target_date: e.target.value, has_fight: "yes" }))}
+                  className="h-12 rounded-2xl bg-card border-border/50" />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Weight Class (kg)</label>
+                <Input type="number" inputMode="decimal" step="0.1" placeholder="e.g. 70"
+                  value={formData.goal_weight_kg}
+                  onChange={e => setFormData(prev => ({ ...prev, goal_weight_kg: e.target.value }))}
+                  className="h-12 rounded-2xl bg-card border-border/50" />
               </div>
 
-              {formData.has_fight === "yes" && (
-                <div className="space-y-3 animate-fade-in">
-                  {/* Competition level — determines water cut aggressiveness */}
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Competition Level</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[
-                        { value: "hobbyist", label: "Hobbyist" },
-                        { value: "amateur", label: "Amateur" },
-                        { value: "pro", label: "Pro" },
-                      ].map(opt => (
-                        <button key={opt.value} type="button"
-                          onClick={() => { triggerHapticSelection(); setFormData(prev => ({ ...prev, competition_level: opt.value })); }}
-                          className={`h-11 rounded-2xl text-sm font-semibold border transition-all ${
-                            formData.competition_level === opt.value
-                              ? "border-primary bg-primary/10 text-foreground"
-                              : "border-border/50 bg-card text-muted-foreground"
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Fight Date</label>
-                    <Input type="date" value={formData.target_date}
-                      onChange={e => setFormData(prev => ({ ...prev, target_date: e.target.value }))}
-                      className="h-12 rounded-2xl bg-card border-border/50" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Weight Class (kg)</label>
-                    <Input type="number" inputMode="decimal" step="0.1" placeholder="e.g. 70"
-                      value={formData.goal_weight_kg}
-                      onChange={e => setFormData(prev => ({ ...prev, goal_weight_kg: e.target.value }))}
-                      className="h-12 rounded-2xl bg-card border-border/50" />
-                  </div>
-                  {/* Auto fight week target */}
-                  {formData.goal_weight_kg && formData.competition_level && (
-                    <Alert className={`rounded-2xl ${formData.competition_level === 'pro' ? 'border-red-500/30 bg-red-500/5' : 'border-primary/30 bg-primary/5'}`}>
-                      <Sparkles className={`h-4 w-4 ${formData.competition_level === 'pro' ? 'text-red-500' : 'text-primary'}`} />
-                      <AlertDescription className="text-xs text-muted-foreground">
-                        Fight week target: <strong className="text-foreground">{formData.fight_week_target_kg} kg</strong>
-                        <br />
-                        <span className="text-[10px]">{getWaterCutLabel(formData.competition_level)}</span>
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                </div>
-              )}
+              {/* Fight week target — editable with AI default */}
+              {formData.goal_weight_kg && formData.competition_level && (() => {
+                const goalKg = parseFloat(formData.goal_weight_kg);
+                const targetKg = parseFloat(formData.fight_week_target_kg);
+                const waterCutKg = targetKg - goalKg;
+                const waterCutPct = goalKg > 0 ? (waterCutKg / targetKg) * 100 : 0;
+                const isSafe = waterCutPct <= 5;
+                const isModerate = waterCutPct > 5 && waterCutPct <= 8;
+                const isDangerous = waterCutPct > 8;
 
-              {formData.has_fight === "no" && (
-                <div className="space-y-1.5 animate-fade-in">
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Target Weight (kg)</label>
-                  <Input type="number" inputMode="decimal" step="0.1" placeholder="What weight do you want to walk around at?"
-                    value={formData.goal_weight_kg}
-                    onChange={e => setFormData(prev => ({ ...prev, goal_weight_kg: e.target.value }))}
-                    className="h-12 rounded-2xl bg-card border-border/50" />
-                </div>
-              )}
+                const recommendedTarget = calculateRecommendedTarget(goalKg, formData.competition_level);
+
+                return (
+                  <div className="space-y-3">
+                    {/* Editable target input */}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pre-Dehydration Target (kg)</label>
+                        {!useAutoTarget && (
+                          <button type="button" onClick={() => { setUseAutoTarget(true); setFormData(prev => ({ ...prev, fight_week_target_kg: recommendedTarget.toString() })); }}
+                            className="text-[10px] text-primary font-medium">Reset to {recommendedTarget}kg</button>
+                        )}
+                      </div>
+                      <Input type="number" inputMode="decimal" step="0.1"
+                        value={formData.fight_week_target_kg}
+                        onChange={e => { setUseAutoTarget(false); setFormData(prev => ({ ...prev, fight_week_target_kg: e.target.value })); }}
+                        className="h-12 rounded-2xl bg-card border-border/50" />
+                      <p className="text-[10px] text-muted-foreground">
+                        {useAutoTarget ? "AI recommended based on your competition level" : "Manually set — AI recommendation was " + recommendedTarget + "kg"}
+                      </p>
+                    </div>
+
+                    {/* Water cut stats */}
+                    {targetKg > 0 && goalKg > 0 && (
+                      <div className={`rounded-2xl p-3 border ${isSafe ? "border-emerald-500/20 bg-emerald-500/5" : isModerate ? "border-amber-500/20 bg-amber-500/5" : "border-red-500/20 bg-red-500/5"}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className={`text-sm font-bold ${isSafe ? "text-emerald-400" : isModerate ? "text-amber-400" : "text-red-400"}`}>
+                            {waterCutKg.toFixed(1)}kg water cut ({waterCutPct.toFixed(1)}%)
+                          </span>
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${isSafe ? "bg-emerald-500/20 text-emerald-400" : isModerate ? "bg-amber-500/20 text-amber-400" : "bg-red-500/20 text-red-400"}`}>
+                            {isSafe ? "Safe" : isModerate ? "Moderate Risk" : "High Risk"}
+                          </span>
+                        </div>
+
+                        {/* Education bullets */}
+                        <div className="space-y-1.5">
+                          {isSafe && (
+                            <>
+                              <p className="text-[11px] text-emerald-400/80 flex items-start gap-1.5"><span className="mt-0.5">•</span>Within safe limits for most athletes</p>
+                              <p className="text-[11px] text-emerald-400/80 flex items-start gap-1.5"><span className="mt-0.5">•</span>Minimal impact on strength, reaction time, and cardio</p>
+                              <p className="text-[11px] text-emerald-400/80 flex items-start gap-1.5"><span className="mt-0.5">•</span>Most recovery happens within 4-6 hours post weigh-in</p>
+                            </>
+                          )}
+                          {isModerate && (
+                            <>
+                              <p className="text-[11px] text-amber-400/80 flex items-start gap-1.5"><span className="mt-0.5">•</span>May reduce power output by 5-10% if poorly rehydrated</p>
+                              <p className="text-[11px] text-amber-400/80 flex items-start gap-1.5"><span className="mt-0.5">•</span>Increased cramping risk — prioritise sodium and potassium</p>
+                              <p className="text-[11px] text-amber-400/80 flex items-start gap-1.5"><span className="mt-0.5">•</span>Allow at least 12 hours between weigh-in and fight for full recovery</p>
+                              <p className="text-[11px] text-amber-400/80 flex items-start gap-1.5"><span className="mt-0.5">•</span>Monitor for dizziness, dark urine, or rapid heart rate</p>
+                            </>
+                          )}
+                          {isDangerous && (
+                            <>
+                              <p className="text-[11px] text-red-400/80 flex items-start gap-1.5"><span className="mt-0.5">•</span>Significant risk of impaired reaction time and decision-making</p>
+                              <p className="text-[11px] text-red-400/80 flex items-start gap-1.5"><span className="mt-0.5">•</span>Strength reduction of 10-20% even with proper rehydration</p>
+                              <p className="text-[11px] text-red-400/80 flex items-start gap-1.5"><span className="mt-0.5">•</span>Kidney stress increases sharply above 8% — consult a doctor</p>
+                              <p className="text-[11px] text-red-400/80 flex items-start gap-1.5"><span className="mt-0.5">•</span>Recovery may take 24+ hours — same-day fights are dangerous at this level</p>
+                              <p className="text-[11px] text-red-400/80 flex items-start gap-1.5"><span className="mt-0.5">•</span>Consider moving up a weight class for long-term career health</p>
+                            </>
+                          )}
+                          {/* Universal advice */}
+                          <div className="border-t border-border/20 pt-1.5 mt-1.5">
+                            <p className="text-[11px] text-muted-foreground flex items-start gap-1.5"><span className="mt-0.5">•</span>Weigh yourself morning of fight week to confirm starting point</p>
+                            <p className="text-[11px] text-muted-foreground flex items-start gap-1.5"><span className="mt-0.5">•</span>Rehydrate with electrolytes after weigh-in — plain water isn't enough</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </StepLayout>
         )}
 
         {/* ── Screen 4: Height ── */}
         {/* ── Screen 4: Age + Sex ── */}
-        {step === 4 && (
-          <StepLayout step={4} title="How old are you?" subtitle="We'll use this to dial in your metabolic rate."
+        {((step === 4 && formData.goal_type !== "losing") || (step === 5 && formData.goal_type === "losing")) && (
+          <StepLayout step={step} title="How old are you?" subtitle="We'll use this to dial in your metabolic rate."
             footer={<Button onClick={goNext} disabled={!formData.age}
               className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
           >
@@ -712,8 +947,8 @@ export default function Onboarding() {
         )}
 
         {/* ── Screen 5: Height ── */}
-        {step === 5 && (
-          <StepLayout step={5} title="What's your height?" subtitle="Used to calculate your metabolic rate."
+        {((step === 5 && formData.goal_type !== "losing") || (step === 6 && formData.goal_type === "losing")) && (
+          <StepLayout step={step} title="What's your height?" subtitle="Used to calculate your metabolic rate."
             footer={<Button onClick={goNext} disabled={!formData.height_cm}
               className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
           >
@@ -740,7 +975,7 @@ export default function Onboarding() {
         )}
 
         {/* ── Screen 6: Current Weight ── */}
-        {step === 6 && (
+        {step === 6 && formData.goal_type !== "losing" && (
           <StepLayout step={6} title="What's your current weight?" subtitle="Step on the scale. Be honest — this is your starting line."
             footer={<Button onClick={goNext} disabled={!formData.current_weight_kg}
               className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
@@ -763,41 +998,100 @@ export default function Onboarding() {
                 onChange={e => setFormData(prev => ({ ...prev, current_weight_kg: e.target.value }))}
                 className="h-14 rounded-2xl bg-card border-border/50 text-center text-xl font-semibold max-w-[200px]"
                 autoFocus />
-              {weightDiff && parseFloat(weightDiff) > 0 && formData.goal_type === "cutting" && (() => {
-                const diff = parseFloat(weightDiff);
-                const weeklyLoss = weeksToFight ? diff / weeksToFight : 0;
-                const bodyPct = parseFloat(formData.current_weight_kg) > 0
-                  ? (diff / parseFloat(formData.current_weight_kg)) * 100 : 0;
-                // Risk: >1% bodyweight/week or >1.5 kg/week
-                const isAggressive = weeklyLoss > 1.0 && weeklyLoss <= 1.5;
-                const isDangerous = weeklyLoss > 1.5 || bodyPct > 10;
+              {weightDiff && formData.goal_weight_kg && (() => {
+                const current = parseFloat(formData.current_weight_kg);
+                const goal = parseFloat(formData.goal_weight_kg);
+                const diff = Math.abs(current - goal);
+                if (diff < 0.1) return null;
+                const isLosing = current > goal;
+                const isGaining = current < goal;
 
-                return (
-                  <div className="w-full max-w-[300px] space-y-2">
-                    <p className="text-sm text-muted-foreground text-center">
-                      You need to drop <strong className="text-foreground">{weightDiff} kg</strong>
-                      {weeksToFight ? <> in <strong className="text-foreground">{weeksToFight} weeks</strong>
+                // Fighter with fight date — show risk warnings
+                if (weeksToFight && formData.has_fight === "yes" && isLosing) {
+                  const weeklyLoss = diff / weeksToFight;
+                  const bodyPct = current > 0 ? (diff / current) * 100 : 0;
+                  const isAggressivePace = weeklyLoss > 1.0 && weeklyLoss <= 1.5;
+                  const isDangerous = weeklyLoss > 1.5 || bodyPct > 10;
+
+                  return (
+                    <div className="w-full max-w-[300px] space-y-2">
+                      <p className="text-sm text-muted-foreground text-center">
+                        You need to drop <strong className="text-foreground">{diff.toFixed(1)} kg</strong>
+                        {" "}in <strong className="text-foreground">{weeksToFight} weeks</strong>
                         <span className="text-xs text-muted-foreground/60"> ({weeklyLoss.toFixed(1)} kg/wk)</span>
-                      </> : null}
-                    </p>
-                    {isDangerous && (
-                      <Alert className="border-red-500/30 bg-red-500/5 rounded-2xl">
-                        <AlertTriangle className="h-4 w-4 text-red-500" />
-                        <AlertDescription className="text-xs text-red-400">
-                          <strong className="text-red-300">High risk cut.</strong> Losing {weeklyLoss.toFixed(1)} kg/week ({bodyPct.toFixed(0)}% bodyweight) significantly increases risk of muscle loss, hormonal disruption, and performance decline. Consult a sports doctor. We'll still build your plan.
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                    {isAggressive && !isDangerous && (
-                      <Alert className="border-yellow-500/30 bg-yellow-500/5 rounded-2xl">
-                        <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                        <AlertDescription className="text-xs text-yellow-400">
-                          <strong className="text-yellow-300">Aggressive pace.</strong> Losing {weeklyLoss.toFixed(1)} kg/week is doable but requires strict adherence. Monitor energy levels, strength, and sleep closely. We'll plan for this.
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                  </div>
-                );
+                      </p>
+                      {isDangerous && (
+                        <Alert className="border-red-500/30 bg-red-500/5 rounded-2xl">
+                          <AlertTriangle className="h-4 w-4 text-red-500" />
+                          <AlertDescription className="text-xs text-red-400">
+                            <strong className="text-red-300">High risk cut.</strong> Losing {weeklyLoss.toFixed(1)} kg/week ({bodyPct.toFixed(0)}% bodyweight) increases risk of muscle loss and performance decline. Consult a sports doctor. We'll still build your plan.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                      {isAggressivePace && !isDangerous && (
+                        <Alert className="border-yellow-500/30 bg-yellow-500/5 rounded-2xl">
+                          <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                          <AlertDescription className="text-xs text-yellow-400">
+                            <strong className="text-yellow-300">Aggressive pace.</strong> Losing {weeklyLoss.toFixed(1)} kg/week requires strict adherence. We'll plan for this.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </div>
+                  );
+                }
+
+                // Non-fighter or no fight date — show timeline estimate
+                if (isLosing) {
+                  const targetWeeks = formData.target_weeks ? parseInt(formData.target_weeks) : 0;
+                  if (targetWeeks > 0 && formData.goal_type === "losing") {
+                    const kgPerWeek = diff / targetWeeks;
+                    return (
+                      <div className="w-full max-w-[300px] space-y-2">
+                        <p className="text-sm text-muted-foreground text-center">
+                          <strong className="text-foreground">{diff.toFixed(1)} kg</strong> to lose in{" "}
+                          <strong className="text-foreground">{targetWeeks} weeks</strong>
+                          {" "}&mdash; that's <strong className="text-foreground">{kgPerWeek.toFixed(1)} kg/week</strong>
+                        </p>
+                        {kgPerWeek > 1.0 && (
+                          <Alert className="border-yellow-500/30 bg-yellow-500/5 rounded-2xl">
+                            <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                            <AlertDescription className="text-xs text-yellow-400">
+                              Losing more than 1 kg/week increases muscle loss risk. Consider extending your timeframe for safer results.
+                            </AlertDescription>
+                          </Alert>
+                        )}
+                      </div>
+                    );
+                  }
+                  const weeksConservative = Math.ceil(diff / 0.5);
+                  const weeksAggressive = Math.ceil(diff / 1.0);
+                  const monthsEst = Math.ceil(weeksConservative / 4.3);
+                  return (
+                    <div className="w-full max-w-[300px]">
+                      <p className="text-sm text-muted-foreground text-center">
+                        <strong className="text-foreground">{diff.toFixed(1)} kg</strong> to lose — at a safe pace that's
+                        {" "}<strong className="text-foreground">{weeksAggressive}-{weeksConservative} weeks</strong>
+                        <span className="text-xs text-muted-foreground/60"> (~{monthsEst} {monthsEst === 1 ? "month" : "months"})</span>
+                      </p>
+                    </div>
+                  );
+                }
+
+                if (isGaining) {
+                  const weeksToGain = Math.ceil(diff / 0.35);
+                  const monthsEst = Math.ceil(weeksToGain / 4.3);
+                  return (
+                    <div className="w-full max-w-[300px]">
+                      <p className="text-sm text-muted-foreground text-center">
+                        <strong className="text-foreground">{diff.toFixed(1)} kg</strong> to gain — at a lean pace that's
+                        {" "}<strong className="text-foreground">~{weeksToGain} weeks</strong>
+                        <span className="text-xs text-muted-foreground/60"> (~{monthsEst} {monthsEst === 1 ? "month" : "months"})</span>
+                      </p>
+                    </div>
+                  );
+                }
+
+                return null;
               })()}
             </div>
           </StepLayout>
@@ -805,7 +1099,7 @@ export default function Onboarding() {
 
         {/* ── Screen 7: Body Fat (Optional) ── */}
         {step === 7 && (
-          <StepLayout step={6} title="Estimate your body fat" subtitle="Drag the slider. Skip if you're not sure."
+          <StepLayout step={7} title="Estimate your body fat" subtitle="Drag the slider. Skip if you're not sure."
             footer={
               <div className="space-y-2">
                 <Button onClick={goNext} className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90">Continue</Button>
@@ -815,13 +1109,38 @@ export default function Onboarding() {
               </div>
             }
           >
-            <div className="flex flex-col items-center pt-8 gap-8">
+            <div className="flex flex-col items-center pt-8 gap-6">
               <div className="text-center">
                 <span className="text-5xl font-bold tabular-nums text-foreground">
                   {formData.body_fat_pct || "—"}
                 </span>
                 <span className="text-lg text-muted-foreground ml-1">%</span>
               </div>
+              {/* Visual hint based on body fat range */}
+              {formData.body_fat_pct && (() => {
+                const bf = parseFloat(formData.body_fat_pct);
+                const isMale = formData.sex !== "female";
+                const hint = isMale
+                  ? bf <= 8 ? { label: "Competition lean", desc: "Visible abs, vascularity, very defined. Hard to maintain.", color: "text-red-400" }
+                    : bf <= 12 ? { label: "Athletic", desc: "Clear abs, muscle definition, visible veins on arms.", color: "text-emerald-400" }
+                    : bf <= 15 ? { label: "Fit", desc: "Some ab definition, lean arms and face. Most fighters walk around here.", color: "text-primary" }
+                    : bf <= 20 ? { label: "Average", desc: "Soft midsection, no visible abs. Some face fullness.", color: "text-muted-foreground" }
+                    : bf <= 25 ? { label: "Above average", desc: "Noticeable belly, rounder face. Harder to see muscle.", color: "text-amber-400" }
+                    : { label: "Higher", desc: "Significant midsection, wide waist. Focus on building habits first.", color: "text-amber-400" }
+                  : bf <= 14 ? { label: "Competition lean", desc: "Very defined, visible muscle striations. Hard to maintain.", color: "text-red-400" }
+                    : bf <= 18 ? { label: "Athletic", desc: "Toned, some ab definition, lean arms.", color: "text-emerald-400" }
+                    : bf <= 23 ? { label: "Fit", desc: "Healthy, some curves, lean face. Most active women are here.", color: "text-primary" }
+                    : bf <= 28 ? { label: "Average", desc: "Soft midsection, fuller arms and thighs.", color: "text-muted-foreground" }
+                    : bf <= 33 ? { label: "Above average", desc: "Rounder shape, less muscle definition visible.", color: "text-amber-400" }
+                    : { label: "Higher", desc: "Fuller figure. Focus on building habits first.", color: "text-amber-400" };
+
+                return (
+                  <div className="text-center max-w-[260px] animate-in fade-in duration-300">
+                    <p className={`text-sm font-semibold ${hint.color}`}>{hint.label}</p>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{hint.desc}</p>
+                  </div>
+                );
+              })()}
               <div className="w-full max-w-xs space-y-3">
                 <Slider
                   value={[formData.body_fat_pct ? parseFloat(formData.body_fat_pct) : 15]}

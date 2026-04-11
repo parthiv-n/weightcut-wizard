@@ -1,4 +1,4 @@
-import { Home, Utensils, Weight, Calendar, Trophy, RotateCcw, Target, HeartPulse, GitBranch, Dumbbell, TrendingDown } from "lucide-react";
+import { Home, Utensils, Weight, Calendar, Trophy, RotateCcw, Target, HeartPulse, Dumbbell, TrendingDown } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { useState } from "react";
 import {
@@ -31,7 +31,6 @@ const menuItems = [
   { title: "Nutrition", url: "/nutrition", icon: Utensils },
   { title: "Weight Tracker", url: "/weight", icon: Weight },
   { title: "Weight Cut", url: "/weight-cut", icon: TrendingDown },
-  { title: "Skill Tree", url: "/skill-tree", icon: GitBranch },
   { title: "Gym Tracker", url: "/gym", icon: Dumbbell },
 ];
 

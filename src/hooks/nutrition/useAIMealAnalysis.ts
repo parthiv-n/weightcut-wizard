@@ -8,7 +8,8 @@ import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
-import { Search, Database, CheckCircle, PieChart } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
+import { Search, Database, CheckCircle, PieChart, Camera } from "lucide-react";
 import type { AiLineItem, Ingredient, ManualMealForm, ManualNutritionDialogState, BarcodeBaseMacros, INITIAL_MANUAL_MEAL, INITIAL_MANUAL_NUTRITION_DIALOG } from "@/pages/nutrition/types";
 
 interface UseAIMealAnalysisParams {
@@ -24,7 +25,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
   const { userId } = useUser();
   const { toast } = useToast();
   const { isMounted } = useSafeAsync();
-  const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
+  const { checkAIAccess, openNoGemsDialog, onAICallSuccess, onAICallBlocked, handleAILimitError } = useSubscription();
   const { addTask, completeTask, failTask } = useAITask();
   const aiAbortRef = useRef<AbortController | null>(null);
 
@@ -50,6 +51,175 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     carbs_per_100g: "",
     fats_per_100g: "",
   });
+
+  // Photo capture state
+  const [photoBase64, setPhotoBase64] = useState<string | null>(null);
+  const [photoAnalyzing, setPhotoAnalyzing] = useState(false);
+
+  const capturePhoto = useCallback(async () => {
+    try {
+      if (Capacitor.isNativePlatform()) {
+        const { Camera, CameraResultType, CameraSource, CameraDirection } = await import("@capacitor/camera");
+
+        // Check and request permission
+        const perms = await Camera.checkPermissions();
+        if (perms.camera !== "granted") {
+          const requested = await Camera.requestPermissions({ permissions: ["camera"] });
+          if (requested.camera === "denied") {
+            toast({ title: "Camera access denied", description: "Go to Settings > FightCamp Wizard > Camera to enable.", variant: "destructive" });
+            return null;
+          }
+        }
+
+        const photo = await Camera.getPhoto({
+          quality: 70,
+          allowEditing: false,
+          resultType: CameraResultType.Base64,
+          source: CameraSource.Camera,
+          direction: CameraDirection.Rear,
+          width: 1024,
+          height: 1024,
+          promptLabelHeader: "Snap your meal",
+          promptLabelPhoto: "Take Photo",
+        });
+        if (photo.base64String) {
+          setPhotoBase64(photo.base64String);
+          return photo.base64String;
+        }
+      } else {
+        // Web fallback: file input
+        return new Promise<string | null>((resolve) => {
+          const input = document.createElement("input");
+          input.type = "file";
+          input.accept = "image/*";
+          input.capture = "user";
+          input.onchange = async () => {
+            const file = input.files?.[0];
+            if (!file) { resolve(null); return; }
+            const reader = new FileReader();
+            reader.onload = () => {
+              const base64 = (reader.result as string).split(",")[1];
+              setPhotoBase64(base64);
+              resolve(base64);
+            };
+            reader.readAsDataURL(file);
+          };
+          input.click();
+        });
+      }
+    } catch (err: any) {
+      // User cancelled the camera — not an error
+      const msg = err?.message?.toLowerCase() || "";
+      if (msg.includes("cancel") || msg.includes("dismissed") || msg.includes("user denied")) return null;
+      logger.warn("Photo capture failed", err);
+    }
+    return null;
+  }, [toast]);
+
+  const handlePhotoAnalyze = useCallback(async (base64?: string) => {
+    const imageData = base64 || photoBase64;
+    if (!imageData) {
+      toast({ title: "No photo", description: "Take a photo first", variant: "destructive" });
+      return;
+    }
+    if (!checkAIAccess()) { openNoGemsDialog(); return; }
+
+    aiAbortRef.current?.abort();
+    const controller = createAIAbortController();
+    aiAbortRef.current = controller;
+
+    setPhotoAnalyzing(true);
+    setAiAnalyzing(true);
+    setAiAnalysisComplete(false);
+    setAiLineItems([]);
+
+    const taskId = addTask({
+      id: `photo-meal-${Date.now()}`,
+      type: "meal-analysis",
+      label: "Analyzing Photo",
+      steps: [
+        { icon: Camera, label: "Processing image" },
+        { icon: Search, label: "Identifying foods" },
+        { icon: PieChart, label: "Estimating nutrition" },
+        { icon: CheckCircle, label: "Building breakdown" },
+      ],
+      returnPath: "/nutrition",
+    });
+
+    try {
+      // Use raw fetch instead of supabase.functions.invoke to handle large base64 payloads
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("No active session");
+
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-meal`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            imageBase64: imageData,
+            mealDescription: aiMealDescription.trim() || undefined,
+          }),
+          signal: controller.signal,
+        }
+      );
+
+      if (controller.signal.aborted) return;
+
+      if (response.status === 429) {
+        onAICallBlocked();
+        openNoGemsDialog();
+        failTask(taskId, "Limit reached");
+        return;
+      }
+
+      if (!response.ok) {
+        const errText = await response.text().catch(() => "Unknown error");
+        throw new Error(errText || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      if (data?.error) throw new Error(data.error);
+      onAICallSuccess();
+
+      const nutritionData = data.nutritionData;
+      if (nutritionData.items && Array.isArray(nutritionData.items) && nutritionData.items.length > 0) {
+        setAiLineItems(nutritionData.items.map((item: any) => ({
+          name: item.name || "Unknown",
+          quantity: item.quantity || "",
+          calories: item.calories || 0,
+          protein_g: item.protein_g || 0,
+          carbs_g: item.carbs_g || 0,
+          fats_g: item.fats_g || 0,
+        })));
+      } else {
+        setAiLineItems([{
+          name: nutritionData.meal_name || "Meal",
+          quantity: "",
+          calories: nutritionData.calories || 0,
+          protein_g: nutritionData.protein_g || 0,
+          carbs_g: nutritionData.carbs_g || 0,
+          fats_g: nutritionData.fats_g || 0,
+        }]);
+      }
+
+      // Auto-set meal name from AI
+      setManualMeal(prev => ({ ...prev, meal_name: nutritionData.meal_name || prev.meal_name }));
+      setAiAnalysisComplete(true);
+      completeTask(taskId, nutritionData);
+    } catch (err: any) {
+      if (err?.name === "AbortError" || controller.signal.aborted) return;
+      logger.error("Photo analysis failed", err);
+      failTask(taskId, err.message || "Analysis failed");
+      toast({ title: "Analysis failed", description: err.message || "Could not analyze photo", variant: "destructive" });
+    } finally {
+      setPhotoAnalyzing(false);
+      setAiAnalyzing(false);
+    }
+  }, [photoBase64, aiMealDescription, checkAIAccess, openNoGemsDialog, onAICallSuccess, onAICallBlocked, handleAILimitError, toast, addTask, completeTask, failTask, setManualMeal]);
 
   const extractIngredientName = (userInput: string): string => {
     let cleaned = userInput.trim();
@@ -150,7 +320,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     } finally {
       setAiAnalyzing(false);
     }
-  }, [aiMealDescription, userId, setManualMeal, toast]);
+  }, [aiMealDescription, userId, setManualMeal, toast, checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError]);
 
   const handleSaveAiMeal = useCallback(async () => {
     if (aiLineItems.length === 0) return;
@@ -234,7 +404,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
       if (ingController.signal.aborted) return;
       if (error) {
-        if (await handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
+        if (await handleAILimitError(error)) { failTask(ingTaskId, "Limit reached"); return; }
         throw new Error(await extractEdgeFunctionError(error, "Failed to analyze ingredient"));
       }
       if (data?.error) throw new Error(data.error);
@@ -271,12 +441,16 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
           ingredientGrams = parseFloat(gramsMatch[1]);
         } else {
           toast({ title: "Weight Required", description: "Could not determine ingredient weight. Please specify weight (e.g., '250g chicken breast')", variant: "destructive" });
+          failTask(ingTaskId, "Weight required");
+          setAiAnalyzingIngredient(false);
           return;
         }
       }
 
       if (ingredientGrams <= 0) {
         toast({ title: "Invalid Weight", description: "Could not determine ingredient weight. Please specify weight (e.g., '250g chicken breast')", variant: "destructive" });
+        failTask(ingTaskId, "Invalid weight");
+        setAiAnalyzingIngredient(false);
         return;
       }
 
@@ -482,5 +656,10 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     lookupIngredientNutrition,
     handleManualNutritionSubmit,
     cancelAI,
+    // Photo analysis
+    photoBase64, setPhotoBase64,
+    photoAnalyzing,
+    capturePhoto,
+    handlePhotoAnalyze,
   };
 }

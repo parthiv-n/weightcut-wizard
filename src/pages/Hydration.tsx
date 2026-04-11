@@ -51,14 +51,6 @@ export default function Hydration() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [disclaimerOpen, setDisclaimerOpen] = useState(false);
 
-  const getWeightLossColor = () => {
-    if (!currentWeight || !weightLost) return { ring: "text-blue-500 border-blue-500/20", shadow: "" };
-    const pct = (parseFloat(weightLost) / currentWeight) * 100;
-    if (pct <= 5) return { ring: "text-emerald-500 border-emerald-500/20", shadow: "0 0 15px rgba(16,185,129,0.3)" };
-    if (pct <= 8) return { ring: "text-amber-500 border-amber-500/20", shadow: "0 0 15px rgba(245,158,11,0.3)" };
-    return { ring: "text-red-500 border-red-500/20", shadow: "0 0 15px rgba(239,68,68,0.3)" };
-  };
-  const { ring: ringColorClasses, shadow: ringShadow } = getWeightLossColor();
 
   const formatTime = (startStr: string, hourIndex: number) => {
     if (!startStr) return `H${hourIndex}`;
@@ -280,7 +272,7 @@ export default function Hydration() {
               )}
             </div>
 
-            <Button type="submit" className="w-full h-10 mt-1 font-bold text-sm rounded-2xl transition-all active:scale-[0.98] bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90" disabled={loading || !currentWeight}>
+            <Button type="submit" className="w-full h-10 mt-1 font-bold text-sm rounded-2xl transition-all active:scale-[0.98] bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90" disabled={loading || !currentWeight || !weightLost || parseFloat(weightLost) <= 0}>
               {loading ? "Generating Protocol..." : <>Generate Protocol{!gemsIsPremium && <span className="inline-flex items-center gap-0.5 ml-1.5 text-amber-500"><Gem className="h-3 w-3" /><span className="text-[10px] font-bold tabular-nums">{gems}</span></span>}</>}
             </Button>
           </form>

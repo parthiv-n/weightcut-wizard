@@ -76,7 +76,7 @@ export const AICompactOverlay = memo(function AICompactOverlay({
           transition={springs.gentle}
           className="w-full"
         >
-          <div className="bg-zinc-900/95 border border-zinc-800 rounded-xl shadow-2xl p-4">
+          <div className="bg-background/95 border border-border rounded-xl shadow-2xl p-4">
             {/* Header row: icon + title + buttons */}
             <div className="flex items-center gap-3">
               {/* Animated icon */}
@@ -100,7 +100,7 @@ export const AICompactOverlay = memo(function AICompactOverlay({
               </div>
 
               {/* Title */}
-              <span className="text-sm font-semibold text-white truncate flex-1">
+              <span className="text-sm font-semibold text-foreground truncate flex-1">
                 {title}
               </span>
 
@@ -109,7 +109,7 @@ export const AICompactOverlay = memo(function AICompactOverlay({
                 {onMinimize && (
                   <button
                     onClick={onMinimize}
-                    className="flex items-center gap-1 px-2 py-1 text-xs text-zinc-400 hover:text-white transition-colors rounded-lg"
+                    className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded-lg"
                   >
                     <ChevronDown className="w-3.5 h-3.5" />
                     <span className="hidden sm:inline">Minimize</span>
@@ -123,7 +123,7 @@ export const AICompactOverlay = memo(function AICompactOverlay({
                       exit={{ scale: 0, opacity: 0 }}
                       transition={springs.snappy}
                       onClick={onCancel}
-                      className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-zinc-400 hover:text-white bg-zinc-800/60 hover:bg-red-500/20 hover:text-red-400 border border-zinc-700/50 rounded-xl transition-colors touch-manipulation"
+                      className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-muted-foreground hover:text-foreground bg-muted/60 hover:bg-red-500/20 hover:text-red-400 border border-border/50 rounded-xl transition-colors touch-manipulation"
                     >
                       <X className="w-4 h-4" />
                       Cancel
@@ -144,7 +144,7 @@ export const AICompactOverlay = memo(function AICompactOverlay({
                       ? "bg-primary"
                       : i === currentStep
                         ? "bg-primary animate-pulse"
-                        : "bg-zinc-700"
+                        : "bg-muted-foreground/20"
                   )}
                 />
               ))}
@@ -157,7 +157,7 @@ export const AICompactOverlay = memo(function AICompactOverlay({
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={springs.snappy}
-                className="text-xs text-zinc-400 mt-2 ml-[52px] truncate"
+                className="text-xs text-muted-foreground mt-2 ml-[52px] truncate"
               >
                 {activeLabel}
               </motion.p>

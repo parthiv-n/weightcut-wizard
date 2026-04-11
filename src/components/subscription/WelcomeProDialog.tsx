@@ -1,16 +1,6 @@
-import { Zap, Check, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Zap, Crown, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-
-const UNLOCKED_FEATURES = [
-  "Unlimited AI meal analysis",
-  "AI Coach chat — no limits",
-  "AI workout routine generator",
-  "Fight week protocols & analysis",
-  "Rehydration protocol generation",
-  "Diet analysis & meal planning",
-  "Training load analytics",
-  "Weight trend AI insights",
-];
 
 interface WelcomeProDialogProps {
   open: boolean;
@@ -18,15 +8,26 @@ interface WelcomeProDialogProps {
 }
 
 export function WelcomeProDialog({ open, onClose }: WelcomeProDialogProps) {
+  const [stage, setStage] = useState(0); // 0=hidden, 1=icon, 2=text, 3=button
+
+  useEffect(() => {
+    if (!open) { setStage(0); return; }
+    // Staggered reveal
+    const t1 = setTimeout(() => setStage(1), 100);
+    const t2 = setTimeout(() => setStage(2), 500);
+    const t3 = setTimeout(() => setStage(3), 900);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
+  }, [open]);
+
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[10004] flex items-center justify-center p-6">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/60 animate-in fade-in duration-300" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/70 animate-in fade-in duration-500" onClick={onClose} />
 
       {/* Dialog */}
-      <div className="relative w-full max-w-sm rounded-3xl border border-primary/20 bg-background/98 dark:bg-zinc-900/98 shadow-[0_24px_80px_hsl(var(--primary)/0.15)] animate-in zoom-in-95 fade-in duration-300 overflow-hidden">
+      <div className="relative w-full max-w-[320px] rounded-[28px] border border-primary/20 bg-background shadow-[0_32px_80px_rgba(0,0,0,0.5)] animate-in zoom-in-90 fade-in slide-in-from-bottom-4 duration-500 overflow-hidden">
         {/* Close */}
         <button
           onClick={onClose}
@@ -35,39 +36,67 @@ export function WelcomeProDialog({ open, onClose }: WelcomeProDialogProps) {
           <X className="h-4 w-4" />
         </button>
 
-        {/* Glow accent */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-24 bg-primary/20 blur-3xl rounded-full pointer-events-none" />
+        {/* Top glow */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-32 bg-gradient-to-b from-primary/25 to-transparent blur-3xl rounded-full pointer-events-none" />
 
-        <div className="relative p-6 pt-8 flex flex-col items-center text-center">
-          {/* Icon */}
-          <div className="h-16 w-16 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center mb-4 shadow-lg shadow-primary/30">
-            <Zap className="h-8 w-8 text-primary-foreground" />
+        <div className="relative px-6 pt-10 pb-6 flex flex-col items-center text-center">
+          {/* Animated icon */}
+          <div
+            className={`transition-all duration-700 ease-out ${
+              stage >= 1 ? "opacity-100 scale-100" : "opacity-0 scale-50"
+            }`}
+          >
+            <div className="relative">
+              <div className="h-20 w-20 rounded-[22px] bg-gradient-to-br from-primary via-primary to-secondary flex items-center justify-center shadow-xl shadow-primary/40">
+                <Crown className="h-10 w-10 text-primary-foreground drop-shadow-[0_2px_8px_rgba(0,0,0,0.3)]" />
+              </div>
+              {/* Pulse ring */}
+              <div className="absolute inset-0 rounded-[22px] bg-primary/20 animate-ping" style={{ animationDuration: "2s" }} />
+            </div>
           </div>
 
-          <h2 className="text-xl font-bold text-foreground">Welcome to Pro!</h2>
-          <p className="text-sm text-muted-foreground mt-1.5 max-w-[260px]">
-            You've unlocked the full FightCamp Wizard experience.
-          </p>
+          {/* Text */}
+          <div
+            className={`mt-5 transition-all duration-600 ease-out ${
+              stage >= 2 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+            }`}
+          >
+            <h2 className="text-2xl font-black tracking-tight text-foreground">
+              You're Pro
+            </h2>
+            <p className="text-sm text-muted-foreground mt-2 max-w-[240px] leading-relaxed">
+              Unlimited AI access unlocked. No gems needed — every feature is yours.
+            </p>
+          </div>
 
-          {/* Features grid */}
-          <div className="w-full mt-6 space-y-2.5 text-left">
-            {UNLOCKED_FEATURES.map((feature) => (
-              <div key={feature} className="flex items-center gap-2.5">
-                <div className="h-5 w-5 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
-                  <Check className="h-3 w-3 text-primary" />
-                </div>
-                <span className="text-[13px] text-foreground">{feature}</span>
-              </div>
+          {/* Feature pills */}
+          <div
+            className={`mt-5 flex flex-wrap justify-center gap-1.5 transition-all duration-600 ease-out ${
+              stage >= 2 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+            }`}
+            style={{ transitionDelay: "150ms" }}
+          >
+            {["Unlimited AI", "No Ads", "All Features", "Priority"].map((tag) => (
+              <span key={tag} className="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary">
+                <Zap className="h-2.5 w-2.5" />
+                {tag}
+              </span>
             ))}
           </div>
 
-          {/* CTA */}
-          <Button
-            onClick={onClose}
-            className="w-full h-12 rounded-xl text-[15px] font-bold bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/25 mt-6 active:scale-[0.97] transition-transform"
+          {/* Button */}
+          <div
+            className={`w-full mt-6 transition-all duration-500 ease-out ${
+              stage >= 3 ? "opacity-100 translate-y-0" : "opacity-0 translate-y-3"
+            }`}
           >
-            Let's Go
-          </Button>
+            <Button
+              onClick={onClose}
+              className="w-full h-12 rounded-2xl text-[15px] font-bold bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/25 active:scale-[0.97] transition-transform"
+            >
+              Let's Go
+            </Button>
+          </div>
         </div>
       </div>
     </div>

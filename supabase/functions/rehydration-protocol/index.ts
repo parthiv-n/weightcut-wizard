@@ -96,7 +96,7 @@ serve(async (req) => {
 
     const availableHours = rawAvailableHours ?? (weighInTiming === "same-day" ? 5 : 16);
     // Awake hours: protocol steps are only generated for awake time
-    const awakeHours = rawAwakeHours ?? (availableHours > 10 ? Math.round(availableHours - 8) : availableHours);
+    const awakeHours = Math.max(4, rawAwakeHours ?? (availableHours > 10 ? Math.round(availableHours - 8) : availableHours));
 
     const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
     if (!GROK_API_KEY) {
@@ -216,6 +216,16 @@ Output JSON:
       for (const step of protocol.hourlyProtocol) {
         if (step.foods && !Array.isArray(step.foods)) step.foods = [];
       }
+    }
+
+    // Guard: if neither phases nor hourlyProtocol produced data, fail
+    if (!protocol.hourlyProtocol?.length) {
+      throw new Error("AI did not return a valid rehydration protocol. Please try again.");
+    }
+
+    // Ensure carbRefuelPlan exists
+    if (!protocol.carbRefuelPlan) {
+      protocol.carbRefuelPlan = { strategy: "", meals: [] };
     }
 
     // ── Attach deterministic totals (overrides any LLM-computed values) ────

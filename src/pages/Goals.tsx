@@ -133,9 +133,9 @@ export default function Goals() {
   }, [userId, contextProfile]);
 
   const calculateBMR = () => {
-    const weight = parseFloat(formData.current_weight_kg);
-    const height = parseFloat(formData.height_cm);
-    const age = parseInt(formData.age);
+    const weight = parseFloat(formData.current_weight_kg) || 70;
+    const height = parseFloat(formData.height_cm) || 175;
+    const age = parseInt(formData.age) || 25;
     return formData.sex === "male"
       ? 10 * weight + 6.25 * height - 5 * age + 5
       : 10 * weight + 6.25 * height - 5 * age - 161;
@@ -186,7 +186,7 @@ export default function Goals() {
     try {
       if (!userId) throw new Error("No user found");
       const bmr = calculateBMR();
-      const tdee = bmr * ACTIVITY_MULTIPLIERS[formData.activity_level as keyof typeof ACTIVITY_MULTIPLIERS];
+      const tdee = bmr * (ACTIVITY_MULTIPLIERS[formData.activity_level as keyof typeof ACTIVITY_MULTIPLIERS] ?? 1.55);
 
       const { error } = await supabase.from("profiles").update({
         age: parseInt(formData.age),
@@ -230,7 +230,7 @@ export default function Goals() {
     : null;
 
   return (
-    <div className="space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
+    <div className="animate-page-in space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
       <div>
         <h1 className="text-xl font-bold tracking-tight">Goals</h1>
         <p className="text-muted-foreground mt-0.5 text-xs">Update your profile and targets</p>

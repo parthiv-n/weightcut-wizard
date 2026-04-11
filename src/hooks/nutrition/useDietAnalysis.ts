@@ -127,7 +127,7 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
     } finally {
       setDietAnalysisLoading(false);
     }
-  }, [userId, meals, selectedDate, dailyCalorieTarget, aiMacroGoals, setDietAnalysis, setDietAnalysisLoading, aiAbortRef, contextProfile, toast]);
+  }, [userId, meals, selectedDate, dailyCalorieTarget, aiMacroGoals, setDietAnalysis, setDietAnalysisLoading, aiAbortRef, contextProfile, toast, checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError]);
 
   return { handleAnalyseDiet };
 }

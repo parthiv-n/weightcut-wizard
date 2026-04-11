@@ -79,7 +79,7 @@ export default function Recovery() {
     }
 
     return (
-        <div className="space-y-3 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
+        <div className="animate-page-in space-y-3 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
             {userId && (
                 <RecoveryDashboard
                     sessions28d={sessions28d as any}

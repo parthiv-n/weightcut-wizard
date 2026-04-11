@@ -2,7 +2,7 @@ import type { TutorialFlow } from "../types";
 
 export const onboardingFlow: TutorialFlow = {
   id: "onboarding",
-  version: 6,
+  version: 7,
   steps: [
     {
       id: "welcome",
@@ -45,10 +45,19 @@ export const onboardingFlow: TutorialFlow = {
       navigateTo: "/weight",
     },
     {
-      id: "hydration-page",
+      id: "fight-week-page",
+      title: "Fight Week",
+      description:
+        "Your fight week command centre. Get AI-generated advice for your final week — water loading, sodium manipulation, and weight management strategies tailored to your cut.",
+      position: "center",
+      navigateTo: "/weight-cut",
+      condition: (state) => state.goalType === "cutting",
+    },
+    {
+      id: "rehydration-page",
       title: "Rehydration Planner",
       description:
-        "Your post-weigh-in rehydration tool. Enter the weight you lost and get a personalised recovery protocol with fluid schedules and electrolyte timing.",
+        "Switch to the Rehydration tab after weigh-in. Enter how much weight you lost and get a personalised hourly protocol — fluid schedules, electrolyte timing, and carb refuelling plan.",
       position: "center",
       navigateTo: "/weight-cut?tab=rehydration",
       condition: (state) => state.goalType === "cutting",
@@ -70,15 +79,12 @@ export const onboardingFlow: TutorialFlow = {
       navigateTo: "/training-calendar",
     },
     {
-      id: "fight-week-page",
-      title: "Fight Week Protocol",
+      id: "recovery-page",
+      title: "Recovery Dashboard",
       description:
-        "Your fight week planner. Input your current weight and weigh-in target, then get a day-by-day protocol for water loading, sodium manipulation and your final cut.",
+        "Your recovery hub. Every session you log in the Training Calendar feeds into recovery metrics here — fatigue levels, sleep quality, soreness trends, and an AI recovery coach. The more you log, the smarter it gets.",
       position: "center",
-      navigateTo: "/weight-cut",
-      condition: (state) =>
-        state.goalType === "cutting" &&
-        state.profileData?.fight_week_target_kg != null,
+      navigateTo: "/recovery",
     },
     {
       id: "quick-tips",
