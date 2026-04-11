@@ -82,10 +82,6 @@ export default function Auth() {
           },
         });
         if (error) throw error;
-        toast({
-          title: "Account created!",
-          description: "Please check your email to verify your account.",
-        });
       }
     } catch (error: any) {
       toast({

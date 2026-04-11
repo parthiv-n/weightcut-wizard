@@ -76,6 +76,8 @@ export default function CutPlanReview() {
   const handleContinue = () => {
     triggerHaptic(ImpactStyle.Medium);
     localStorage.setItem("wcw_cut_plan_seen", "true");
+    // Re-assert so tutorial triggers on dashboard arrival (onboarding may have consumed it)
+    localStorage.setItem("wcw_onboarding_just_completed", "true");
     navigate("/dashboard", { replace: true });
   };
 

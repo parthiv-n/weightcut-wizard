@@ -85,16 +85,16 @@ export function RoutineLibrary({ routines, loading, onDelete, onRename, onStartW
         <p className="text-sm font-medium text-muted-foreground">No routines yet</p>
         <p className="text-xs text-muted-foreground/60 mt-1 mb-4">Create your first routine</p>
         <div className="flex gap-2 justify-center">
-          <Button onClick={onOpenManualCreator} variant="outline" className="h-11 rounded-xl text-sm font-semibold">
-            <Plus className="h-4 w-4 mr-2" />
-            Create Manual
+          <Button onClick={onOpenManualCreator} variant="outline" className="h-10 px-3.5 rounded-xl text-xs font-medium">
+            <Plus className="!size-3.5" />
+            Manual
           </Button>
-          <Button onClick={onOpenGenerator} className="h-11 rounded-xl text-sm font-semibold bg-gradient-to-r from-primary to-primary/80">
-            <Sparkles className="h-4 w-4 mr-2" />
-            Generate with AI
+          <Button onClick={onOpenGenerator} className="h-10 px-3.5 rounded-xl text-xs font-medium bg-gradient-to-r from-primary to-primary/80">
+            <Sparkles className="!size-3.5" />
+            AI Generate
             {!gemsIsPremium && (
-              <span className="inline-flex items-center gap-0.5 ml-1.5 text-amber-500">
-                <Gem className="h-3 w-3" />
+              <span className="inline-flex items-center gap-0.5 ml-0.5 text-amber-500">
+                <Gem className="!size-2.5" />
                 <span className="text-[10px] font-bold tabular-nums">{gems}</span>
               </span>
             )}
@@ -112,22 +112,22 @@ export function RoutineLibrary({ routines, loading, onDelete, onRename, onStartW
           <Button
             onClick={onOpenManualCreator}
             size="sm"
-            className="h-9 rounded-xl text-xs font-semibold"
+            className="h-8 px-2.5 rounded-xl text-xs font-medium"
             variant="outline"
           >
-            <Plus className="h-3.5 w-3.5 mr-1.5" />
-            Create Manual
+            <Plus className="!size-3.5" />
+            Manual
           </Button>
           <Button
             onClick={onOpenGenerator}
             size="sm"
-            className="h-9 rounded-xl text-xs font-semibold bg-gradient-to-r from-primary to-primary/80 shadow-sm shadow-primary/10"
+            className="h-8 px-2.5 rounded-xl text-xs font-medium bg-gradient-to-r from-primary to-primary/80"
           >
-            <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-            Generate with AI
+            <Sparkles className="!size-3.5" />
+            AI Generate
             {!gemsIsPremium && (
-              <span className="inline-flex items-center gap-0.5 ml-1.5 text-amber-500">
-                <Gem className="h-3 w-3" />
+              <span className="inline-flex items-center gap-0.5 ml-0.5 text-amber-500">
+                <Gem className="!size-2.5" />
                 <span className="text-[10px] font-bold tabular-nums">{gems}</span>
               </span>
             )}

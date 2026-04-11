@@ -150,59 +150,61 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
 
   // Auto-trigger onboarding on /dashboard
   useEffect(() => {
-    if (
-      location.pathname === "/dashboard" &&
-      userId &&
-      hasProfile &&
-      !autoTriggeredRef.current &&
-      !state.isActive
-    ) {
-      // Check if we should resume a paused flow
-      if (pausedFlowRef.current) {
-        const { flowId, stepIndex } = pausedFlowRef.current;
-        pausedFlowRef.current = null;
-        const timer = setTimeout(() => {
-          managerRef.current.start(flowId, getUserState(), stepIndex);
-        }, 400);
-        return () => clearTimeout(timer);
-      }
+    if (location.pathname !== "/dashboard" || !userId || !hasProfile || state.isActive) return;
 
-      // If user just finished onboarding, always show the tutorial
-      const justOnboarded = localStorage.getItem("wcw_onboarding_just_completed");
-      if (justOnboarded) {
-        localStorage.removeItem("wcw_onboarding_just_completed");
-        // Clear any stale completion state so the tutorial runs fresh
-        tutorialPersistence.clearFlow(userId, "onboarding");
-      } else {
-        // Check if onboarding already completed (persistence + localStorage guard)
-        if (tutorialPersistence.isFlowCompleted(userId, onboardingFlow)) {
-          autoTriggeredRef.current = true;
-          return;
-        }
+    // Check for fresh onboarding completion — must come before autoTriggeredRef check
+    // so we can reset the ref (it may have been set during the /cut-plan render cycle)
+    const justOnboarded = localStorage.getItem("wcw_onboarding_just_completed");
+    if (justOnboarded) {
+      autoTriggeredRef.current = false;
+    }
 
-        // Extra guard: check if tutorial was already shown this session
-        const sessionKey = `wcw_tutorial_shown_${userId}`;
-        if (localStorage.getItem(sessionKey)) {
-          autoTriggeredRef.current = true;
-          return;
-        }
-      }
+    if (autoTriggeredRef.current) return;
 
-      // Seed demo data only for brand-new users (no cached weight data yet)
-      const hasRealData = localCache.get(userId, "dashboard_weight_logs");
-      if (!hasRealData && !isDemoActive(userId)) {
-        seedDemoData(userId);
-      }
-
-      // Start onboarding after dashboard animations finish — mark as shown immediately
-      const sessionKey = `wcw_tutorial_shown_${userId}`;
-      localStorage.setItem(sessionKey, 'true');
+    // Check if we should resume a paused flow
+    if (pausedFlowRef.current) {
+      const { flowId, stepIndex } = pausedFlowRef.current;
+      pausedFlowRef.current = null;
       const timer = setTimeout(() => {
-        autoTriggeredRef.current = true;
-        managerRef.current.start("onboarding", getUserState());
-      }, 800);
+        managerRef.current.start(flowId, getUserState(), stepIndex);
+      }, 400);
       return () => clearTimeout(timer);
     }
+
+    // If user just finished onboarding, always show the tutorial
+    if (justOnboarded) {
+      localStorage.removeItem("wcw_onboarding_just_completed");
+      // Clear any stale completion state so the tutorial runs fresh
+      tutorialPersistence.clearFlow(userId, "onboarding");
+    } else {
+      // Check if onboarding already completed (persistence + localStorage guard)
+      if (tutorialPersistence.isFlowCompleted(userId, onboardingFlow)) {
+        autoTriggeredRef.current = true;
+        return;
+      }
+
+      // Extra guard: check if tutorial was already shown this session
+      const sessionKey = `wcw_tutorial_shown_${userId}`;
+      if (localStorage.getItem(sessionKey)) {
+        autoTriggeredRef.current = true;
+        return;
+      }
+    }
+
+    // Seed demo data only for brand-new users (no cached weight data yet)
+    const hasRealData = localCache.get(userId, "dashboard_weight_logs");
+    if (!hasRealData && !isDemoActive(userId)) {
+      seedDemoData(userId);
+    }
+
+    // Start onboarding after dashboard animations finish — mark as shown immediately
+    const sessionKey = `wcw_tutorial_shown_${userId}`;
+    localStorage.setItem(sessionKey, 'true');
+    const timer = setTimeout(() => {
+      autoTriggeredRef.current = true;
+      managerRef.current.start("onboarding", getUserState());
+    }, 800);
+    return () => clearTimeout(timer);
   }, [location.pathname, userId, hasProfile, state.isActive]);
 
   // Pause on route change — ONLY if the user navigated manually (not via tutorial navigation).
