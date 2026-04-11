@@ -2,7 +2,7 @@ import type { TutorialFlow } from "../types";
 
 export const onboardingFlow: TutorialFlow = {
   id: "onboarding",
-  version: 6,
+  version: 7,
   steps: [
     {
       id: "welcome",
@@ -79,15 +79,12 @@ export const onboardingFlow: TutorialFlow = {
       navigateTo: "/training-calendar",
     },
     {
-      id: "fight-week-page",
-      title: "Fight Week Protocol",
+      id: "recovery-page",
+      title: "Recovery Dashboard",
       description:
-        "Your fight week planner. Input your current weight and weigh-in target, then get a day-by-day protocol for water loading, sodium manipulation and your final cut.",
+        "Your recovery hub. Every session you log in the Training Calendar feeds into recovery metrics here — fatigue levels, sleep quality, soreness trends, and an AI recovery coach. The more you log, the smarter it gets.",
       position: "center",
-      navigateTo: "/weight-cut",
-      condition: (state) =>
-        state.goalType === "cutting" &&
-        state.profileData?.fight_week_target_kg != null,
+      navigateTo: "/recovery",
     },
     {
       id: "quick-tips",

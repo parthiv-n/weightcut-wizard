@@ -50,6 +50,13 @@ serve(async (req) => {
       );
     }
 
+    if (imageBase64 && imageBase64.length > 5_000_000) {
+      return new Response(
+        JSON.stringify({ error: "Image too large. Please use a smaller photo." }),
+        { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
+      );
+    }
+
     if (mealDescription && mealDescription.length > 1000) {
       return new Response(
         JSON.stringify({ error: "Meal description too long (max 1000 characters)" }),

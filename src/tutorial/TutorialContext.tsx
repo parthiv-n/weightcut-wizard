@@ -37,7 +37,7 @@ export interface TutorialContextValue {
 export const TutorialContext = createContext<TutorialContextValue | null>(null);
 
 /** Delay before showing tooltip after a route navigation (lets lazy page load + animate) */
-const NAV_SETTLE_MS = 1500;
+const NAV_SETTLE_MS = 600;
 
 export function TutorialProvider({ children }: { children: ReactNode }) {
   const { userId, profile, hasProfile } = useUser();
@@ -203,7 +203,7 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
     const timer = setTimeout(() => {
       autoTriggeredRef.current = true;
       managerRef.current.start("onboarding", getUserState());
-    }, 800);
+    }, 400);
     return () => clearTimeout(timer);
   }, [location.pathname, userId, hasProfile, state.isActive]);
 

@@ -47,7 +47,7 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
     if (!userId) return;
     const history = localStorage.getItem(`wizard_chat_history_${userId}`);
     if (history) {
-      setMessages(JSON.parse(history));
+      try { setMessages(JSON.parse(history)); } catch { setMessages([{ role: "assistant", content: getGreeting() }]); }
     } else {
       setMessages([
         { role: "assistant", content: getGreeting() }
@@ -90,7 +90,9 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
   const sendMessage = useCallback(async (content: string) => {
     if (!content.trim() || isLoading || !userId) return;
 
-    const newMessages: Message[] = [...messages, { role: "user", content: content.trim() }];
+    // Use ref to get current messages without adding to deps
+    const currentMessages = JSON.parse(localStorage.getItem(`wizard_chat_history_${userId}`) || "[]") as Message[];
+    const newMessages: Message[] = [...currentMessages, { role: "user", content: content.trim() }];
     setMessages(newMessages);
     setIsLoading(true);
     
@@ -169,7 +171,7 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
     } finally {
       setIsLoading(false);
     }
-  }, [userId, messages, isLoading, isPremium, onAICallBlocked, openNoGemsDialog, gems, onAICallSuccess]);
+  }, [userId, isLoading, isPremium, onAICallBlocked, openNoGemsDialog, gems, onAICallSuccess]);
 
   const value = useMemo(
     () => ({ messages, isLoading, sendMessage, clearChat, loadHistory }),

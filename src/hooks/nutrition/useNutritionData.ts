@@ -159,7 +159,9 @@ export function useNutritionData(params: UseNutritionDataParams) {
     if (!skipCache) {
       const localMeals = localCache.getForDate<Meal[]>(userId, "nutrition_logs", fetchDate, 120 * 60 * 1000);
       if (localMeals && localMeals.length > 0) {
-        setMeals(localMeals);
+        // Normalize meal_name to prevent "Untitled" display from stale cache
+        const normalized = localMeals.map(m => ({ ...m, meal_name: m.meal_name || "Meal" }));
+        setMeals(normalized);
         nutritionCache.setMeals(userId, fetchDate, localMeals);
         safeAsync(setMealsLoading)(false);
         servedFromLocal = true;

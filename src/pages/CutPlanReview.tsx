@@ -93,9 +93,35 @@ export default function CutPlanReview() {
           <p className="text-sm text-muted-foreground">Personalised · Science-backed · Adaptive</p>
         </div>
 
-        {/* Summary */}
-        <div className="card-surface rounded-xl p-4 mb-3">
-          <p className="text-sm text-muted-foreground leading-relaxed">{plan.summary}</p>
+        {/* Summary — structured breakdown */}
+        <div className="card-surface rounded-xl p-4 mb-3 space-y-3">
+          {/* Key stats at a glance */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-lg bg-muted/30 dark:bg-white/[0.03] p-2.5 text-center">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Start</p>
+              <p className="text-lg font-bold tabular-nums">{currentWeight}<span className="text-xs font-normal text-muted-foreground ml-0.5">kg</span></p>
+            </div>
+            <div className="rounded-lg bg-primary/5 border border-primary/10 p-2.5 text-center">
+              <p className="text-[10px] text-primary uppercase tracking-wider">Target</p>
+              <p className="text-lg font-bold tabular-nums text-primary">{goalWeight}<span className="text-xs font-normal text-primary/60 ml-0.5">kg</span></p>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2">
+            <div className="rounded-lg bg-muted/30 dark:bg-white/[0.03] p-2 text-center">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Duration</p>
+              <p className="text-sm font-bold tabular-nums">{plan.totalWeeks} <span className="text-[10px] font-normal text-muted-foreground">wks</span></p>
+            </div>
+            <div className="rounded-lg bg-muted/30 dark:bg-white/[0.03] p-2 text-center">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Weekly Loss</p>
+              <p className="text-sm font-bold tabular-nums">{plan.weeklyLossTarget}</p>
+            </div>
+            <div className="rounded-lg bg-muted/30 dark:bg-white/[0.03] p-2 text-center">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total</p>
+              <p className="text-sm font-bold tabular-nums">{Math.abs(currentWeight - goalWeight).toFixed(1)} <span className="text-[10px] font-normal text-muted-foreground">kg</span></p>
+            </div>
+          </div>
+          {/* AI summary as supporting text */}
+          <p className="text-[12px] text-muted-foreground leading-relaxed">{plan.summary}</p>
         </div>
 
         {/* Your Numbers */}

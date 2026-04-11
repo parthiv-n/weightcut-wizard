@@ -1099,7 +1099,7 @@ export default function Onboarding() {
 
         {/* ── Screen 7: Body Fat (Optional) ── */}
         {step === 7 && (
-          <StepLayout step={6} title="Estimate your body fat" subtitle="Drag the slider. Skip if you're not sure."
+          <StepLayout step={7} title="Estimate your body fat" subtitle="Drag the slider. Skip if you're not sure."
             footer={
               <div className="space-y-2">
                 <Button onClick={goNext} className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90">Continue</Button>

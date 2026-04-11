@@ -28,50 +28,29 @@ export default function Auth() {
 
   const isPasswordReset = searchParams.get("reset") === "true";
 
-  // Redirect when user is authenticated — but skip if we're in password reset flow
   useEffect(() => {
-    if (userId && !isPasswordReset) {
-      navigate("/dashboard");
-    }
+    if (userId && !isPasswordReset) navigate("/dashboard");
   }, [userId, isPasswordReset, navigate]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setPasswordError("");
-
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       } else {
-        // Validate password match before sign up
         if (password !== confirmPassword) {
           setPasswordError("Passwords do not match");
-          toast({
-            variant: "destructive",
-            title: "Password Mismatch",
-            description: "Please ensure both passwords match.",
-          });
           setLoading(false);
           return;
         }
-
-        // Validate password length
         if (password.length < 6) {
-          setPasswordError("Password must be at least 6 characters long");
-          toast({
-            variant: "destructive",
-            title: "Invalid Password",
-            description: "Password must be at least 6 characters long.",
-          });
+          setPasswordError("Password must be at least 6 characters");
           setLoading(false);
           return;
         }
-
         const { error } = await supabase.auth.signUp({
           email,
           password,
@@ -84,11 +63,7 @@ export default function Auth() {
         if (error) throw error;
       }
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: error.message || "An error occurred during authentication",
-      });
+      toast({ variant: "destructive", title: "Error", description: error.message || "Authentication failed" });
     } finally {
       setLoading(false);
     }
@@ -97,66 +72,35 @@ export default function Auth() {
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/auth?reset=true`,
       });
       if (error) throw error;
-      toast({
-        title: "Password reset email sent!",
-        description: "Check your inbox for instructions to reset your password.",
-      });
+      toast({ title: "Email sent", description: "Check your inbox for the reset link." });
       setShowForgotPassword(false);
       setEmail("");
     } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Error",
-        description: error.message || "Failed to send reset email. Please try again.",
-      });
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to send reset email" });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleToggleMode = () => {
-    setIsLogin(!isLogin);
-    setConfirmPassword("");
-    setPasswordError("");
-    setShowForgotPassword(false);
-  };
-
-  const handleToggleForgotPassword = () => {
-    setShowForgotPassword(!showForgotPassword);
-    setPasswordError("");
-    if (!showForgotPassword) {
-      setPassword("");
     }
   };
 
   const handlePasswordUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError("");
-
-    if (password !== confirmPassword) {
-      setPasswordError("Passwords do not match");
-      return;
-    }
-    if (password.length < 6) {
-      setPasswordError("Password must be at least 6 characters long");
-      return;
-    }
-
+    if (password !== confirmPassword) { setPasswordError("Passwords do not match"); return; }
+    if (password.length < 6) { setPasswordError("Must be at least 6 characters"); return; }
     setLoading(true);
     try {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
-      toast({ title: "Password updated!", description: "Your password has been changed successfully." });
+      toast({ title: "Password updated!" });
       setSearchParams({});
       navigate("/dashboard");
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update password." });
+      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update password" });
     } finally {
       setLoading(false);
     }
@@ -166,13 +110,10 @@ export default function Auth() {
     setLoading(true);
     try {
       if (Capacitor.isNativePlatform()) {
-        // Generate nonce for security
         const rawNonce = crypto.randomUUID();
         const encoder = new TextEncoder();
         const hashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(rawNonce));
         const hashedNonce = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
-
-        // Native iOS: lazy-load Apple Sign-In plugin, then authorize
         const { SignInWithApple } = await import("@capacitor-community/apple-sign-in");
         const result = await SignInWithApple.authorize({
           clientId: "com.weightcutwizard.app",
@@ -185,52 +126,31 @@ export default function Auth() {
           token: result.response.identityToken,
           nonce: rawNonce,
         });
-        // Supabase may return an error for first-time Apple sign-ups
-        // (e.g. email confirmation required) while still creating the session.
-        // If we got a session back, treat it as success regardless of the error.
         if (error && !signInData?.session) throw error;
       } else {
-        // Web fallback: use Supabase OAuth redirect flow
         const { error } = await supabase.auth.signInWithOAuth({
           provider: "apple",
-          options: {
-            redirectTo: `${window.location.origin}/dashboard`,
-          },
+          options: { redirectTo: `${window.location.origin}/dashboard` },
         });
         if (error) throw error;
       }
     } catch (error: any) {
-      // User cancelled the Apple sign-in dialog — not an error
-      if (
-        error?.message?.includes("canceled") ||
-        error?.message?.includes("Cancel") ||
-        error?.code === "ERR_CANCELED" ||
-        error?.code === 1001
-      ) {
+      const msg = error?.message?.toLowerCase() || "";
+      if (msg.includes("cancel") || error?.code === "ERR_CANCELED" || error?.code === 1001) {
         setLoading(false);
         return;
       }
-      // "Sign Up Not Complete" is an iOS system dialog issue, not a real failure.
-      // The user may need to retry — don't show a scary error.
-      if (error?.message?.includes("not complete") || error?.message?.includes("Not Complete")) {
-        toast({
-          title: "Please try again",
-          description: "Apple Sign-In was interrupted. Tap the button to retry.",
-        });
+      if (msg.includes("not complete")) {
+        toast({ title: "Please try again", description: "Apple Sign-In was interrupted." });
         setLoading(false);
         return;
       }
-      toast({
-        variant: "destructive",
-        title: "Apple Sign-In Failed",
-        description: error.message || "Could not sign in with Apple. Please try again.",
-      });
+      toast({ variant: "destructive", title: "Apple Sign-In Failed", description: error.message || "Please try again." });
     } finally {
       setLoading(false);
     }
   };
 
-  // Debounced password match validation
   const passwordTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (passwordTimerRef.current) clearTimeout(passwordTimerRef.current);
@@ -244,221 +164,129 @@ export default function Auth() {
     return () => { if (passwordTimerRef.current) clearTimeout(passwordTimerRef.current); };
   }, [password, confirmPassword, isLogin, isPasswordReset]);
 
+  const inputClass = "h-[50px] rounded-xl bg-muted/40 dark:bg-white/[0.06] border-border/40 text-foreground placeholder:text-muted-foreground/50 px-4 text-[16px] focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition-all";
+  const errorInputClass = "border-red-500/50 focus:ring-red-500/40";
+
   return (
-    <div className="min-h-screen bg-background dark:bg-[#020204] text-foreground flex flex-col items-center justify-center p-6 relative">
-      <div className="fixed top-[max(1rem,env(safe-area-inset-top))] left-[max(1rem,env(safe-area-inset-left))] right-[max(1rem,env(safe-area-inset-right))] z-50 flex items-center justify-between px-1">
+    <div className="min-h-screen bg-background text-foreground flex flex-col">
+      {/* Nav bar — iOS style */}
+      <div
+        className="flex items-center justify-between px-4 shrink-0"
+        style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 8px)", paddingBottom: "8px" }}
+      >
         <button
           type="button"
           onClick={() => navigate("/")}
-          className="flex items-center gap-1 min-h-[44px] min-w-[44px] -ml-2 pl-2 pr-3 rounded-full text-foreground hover:bg-black/5 dark:hover:bg-white/10 active:scale-[0.97] transition-all duration-200 touch-manipulation"
-          aria-label="Back to home"
+          className="flex items-center gap-0.5 min-h-[44px] min-w-[44px] -ml-2 pl-2 pr-3 rounded-full text-primary active:opacity-60 transition-opacity touch-manipulation"
+          aria-label="Back"
         >
-          <ChevronLeft className="h-6 w-6 shrink-0" strokeWidth={2.25} />
-          <span className="text-[17px] font-medium">Back</span>
+          <ChevronLeft className="h-5 w-5 shrink-0" strokeWidth={2.5} />
+          <span className="text-[17px] font-normal">Back</span>
         </button>
         <ThemeToggle />
       </div>
-      <div className="w-full max-w-[380px] z-10 animate-[fadeSlideUp_0.3s_ease-out_both]">
-        {/* Card container */}
-        <div className="card-surface relative rounded-2xl border border-border shadow-md overflow-hidden">
-          <div className="p-8 flex flex-col gap-6">
-            {/* Header */}
-            <div className="flex flex-col items-center text-center space-y-3">
-              <div className="relative">
-                <img
-                  src={wizardLogo}
-                  alt="FightCamp Wizard"
-                  className="h-20 w-20 object-contain ring-2 ring-primary/30 rounded-2xl bg-background/50 dark:bg-background/30 p-1"
-                />
-              </div>
-              <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                FightCamp Wizard
-              </h1>
-              <p className="text-muted-foreground text-base font-medium">
-                {isPasswordReset
-                  ? "Set New Password"
-                  : showForgotPassword
-                    ? "Reset Password"
-                    : isLogin
-                      ? "Welcome Back"
-                      : "Start Your Journey"}
-              </p>
-            </div>
 
-            {/* Form */}
-            <div className="w-full space-y-4">
-              {isPasswordReset ? (
-                <form onSubmit={handlePasswordUpdate} className="space-y-4">
-                  <div className="space-y-3">
-                    <Input
-                      id="new-password"
-                      type="password"
-                      placeholder="New Password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      minLength={6}
-                      className={`h-12 rounded-full bg-card border-border text-foreground placeholder:text-muted-foreground px-5 text-base focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-colors duration-200 font-medium ${passwordError ? "border-red-500 focus:ring-red-500/50" : ""}`}
-                    />
-                    <Input
-                      id="confirm-new-password"
-                      type="password"
-                      placeholder="Confirm New Password"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      required
-                      minLength={6}
-                      className={`h-12 rounded-full bg-card border-border text-foreground placeholder:text-muted-foreground px-5 text-base focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-colors duration-200 font-medium ${passwordError ? "border-red-500 focus:ring-red-500/50" : ""}`}
-                    />
-                    {passwordError && (
-                      <p className="text-xs text-red-500 text-center px-4 font-medium">{passwordError}</p>
-                    )}
-                  </div>
-                  <Button
-                    type="submit"
-                    className="w-full h-12 rounded-full text-base font-bold bg-primary text-primary-foreground shadow-sm hover:opacity-90 transition-opacity active:scale-[0.98]"
-                    disabled={loading}
-                  >
-                    {loading ? "Updating..." : "Update Password"}
-                  </Button>
-                </form>
-              ) : showForgotPassword ? (
-                <form onSubmit={handleForgotPassword} className="space-y-4">
-                  <div className="space-y-2">
-                    <Input
-                      id="reset-email"
-                      type="email"
-                      placeholder="Email Address"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      className="h-12 rounded-full bg-card border-border text-foreground placeholder:text-muted-foreground px-5 text-base focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-colors duration-200 font-medium"
-                    />
-                  </div>
-                  <Button
-                    type="submit"
-                    className="w-full h-12 rounded-full text-base font-bold bg-primary text-primary-foreground shadow-sm hover:opacity-90 transition-opacity active:scale-[0.98]"
-                    disabled={loading}
-                  >
-                    {loading ? "Sending..." : "Send Reset Link"}
-                  </Button>
-                  <button
-                    type="button"
-                    onClick={handleToggleForgotPassword}
-                    className="w-full text-center text-sm font-medium text-muted-foreground hover:text-foreground transition-colors py-2"
-                  >
-                    Back to Sign In
-                  </button>
-                </form>
-              ) : (
-                <form onSubmit={handleAuth} className="space-y-4">
-                  <div className="space-y-3">
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="Email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      className="h-12 rounded-full bg-card border-border text-foreground placeholder:text-muted-foreground px-5 text-base focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-colors duration-200 font-medium"
-                    />
-                    <Input
-                      id="password"
-                      type="password"
-                      placeholder="Password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      minLength={6}
-                      className={`h-12 rounded-full bg-card border-border text-foreground placeholder:text-muted-foreground px-5 text-base focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-colors duration-200 font-medium ${passwordError ? "border-red-500 focus:ring-red-500/50" : ""
-                        }`}
-                    />
-                    {!isLogin && (
-                      <Input
-                        id="confirmPassword"
-                        type="password"
-                        placeholder="Confirm Password"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        required
-                        minLength={6}
-                        className={`h-12 rounded-full bg-card border-border text-foreground placeholder:text-muted-foreground px-5 text-base focus:ring-2 focus:ring-primary/50 focus:border-primary/50 transition-colors duration-200 font-medium ${passwordError ? "border-red-500 focus:ring-red-500/50" : ""
-                          }`}
-                      />
-                    )}
-                    {passwordError && (
-                      <p className="text-xs text-red-500 text-center px-4 font-medium">{passwordError}</p>
-                    )}
-                  </div>
-
-                  <div className="pt-1">
-                    <Button
-                      type="submit"
-                      className="w-full h-12 rounded-full text-base font-bold bg-primary text-primary-foreground shadow-sm hover:opacity-90 transition-opacity active:scale-[0.98]"
-                      disabled={loading}
-                    >
-                      {loading ? "Please wait..." : isLogin ? "Sign In" : "Sign Up"}
-                    </Button>
-                  </div>
-                </form>
-              )}
-
-              {!showForgotPassword && !isPasswordReset && (
-                <>
-                  {/* Divider */}
-                  <div className="flex items-center gap-3 my-2">
-                    <div className="flex-1 h-px bg-border/60" />
-                    <span className="text-xs text-muted-foreground font-medium">or</span>
-                    <div className="flex-1 h-px bg-border/60" />
-                  </div>
-
-                  {/* Apple Sign-In */}
-                  <button
-                    type="button"
-                    onClick={handleAppleSignIn}
-                    disabled={loading}
-                    className="w-full h-12 rounded-full bg-foreground text-background font-semibold text-base flex items-center justify-center gap-2.5 active:scale-[0.98] transition-all touch-manipulation hover:opacity-90 disabled:opacity-50"
-                  >
-                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.52-3.23 0-1.44.62-2.2.44-3.06-.4C3.79 16.17 4.36 9.51 8.82 9.28c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.3 4.11zM12.03 9.2C11.88 7.16 13.5 5.5 15.42 5.35c.28 2.35-2.14 4.1-3.39 3.85z" />
-                    </svg>
-                    {isLogin ? "Sign in with Apple" : "Sign up with Apple"}
-                  </button>
-                </>
-              )}
-
-              {!showForgotPassword && (
-                <div className="space-y-4 text-center mt-6">
-                  {isLogin && (
-                    <button
-                      type="button"
-                      onClick={handleToggleForgotPassword}
-                      className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      Forgot your password?
-                    </button>
-                  )}
-                  <div className="pt-1">
-                    <button
-                      type="button"
-                      onClick={handleToggleMode}
-                      className="text-primary font-medium hover:text-primary/80 transition-colors text-base"
-                    >
-                      {isLogin ? "New here? Create Account" : "Have an account? Sign In"}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+      {/* Content */}
+      <div className="flex-1 flex flex-col items-center px-6 overflow-y-auto" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)" }}>
+        <div className="w-full max-w-[360px] pt-4">
+          {/* Logo + title */}
+          <div className="flex flex-col items-center text-center mb-8">
+            <img
+              src={wizardLogo}
+              alt="FightCamp Wizard"
+              className="h-16 w-16 object-contain rounded-2xl shadow-lg shadow-primary/10 mb-4"
+            />
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              {isPasswordReset ? "New Password" : showForgotPassword ? "Reset Password" : isLogin ? "Welcome Back" : "Create Account"}
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {isPasswordReset ? "Choose a strong password" : showForgotPassword ? "We'll send you a reset link" : isLogin ? "Sign in to continue" : "Get started with FightCamp Wizard"}
+            </p>
           </div>
-          <div className="flex items-center justify-center gap-2 pt-4 pb-6 text-xs text-muted-foreground">
-            <Link to="/legal?tab=privacy" className="hover:text-foreground transition-colors">
-              Privacy Policy
-            </Link>
+
+          {/* Forms */}
+          <div className="space-y-4">
+            {isPasswordReset ? (
+              <form onSubmit={handlePasswordUpdate} className="space-y-3">
+                <Input type="password" placeholder="New password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} className={`${inputClass} ${passwordError ? errorInputClass : ""}`} />
+                <Input type="password" placeholder="Confirm password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={6} className={`${inputClass} ${passwordError ? errorInputClass : ""}`} />
+                {passwordError && <p className="text-xs text-red-500 text-center">{passwordError}</p>}
+                <Button type="submit" disabled={loading} className="w-full h-[50px] rounded-xl text-[16px] font-semibold bg-primary text-primary-foreground active:scale-[0.98] transition-transform">
+                  {loading ? "Updating..." : "Update Password"}
+                </Button>
+              </form>
+            ) : showForgotPassword ? (
+              <form onSubmit={handleForgotPassword} className="space-y-3">
+                <Input type="email" placeholder="Email address" value={email} onChange={(e) => setEmail(e.target.value)} required className={inputClass} autoFocus />
+                <Button type="submit" disabled={loading} className="w-full h-[50px] rounded-xl text-[16px] font-semibold bg-primary text-primary-foreground active:scale-[0.98] transition-transform">
+                  {loading ? "Sending..." : "Send Reset Link"}
+                </Button>
+                <button type="button" onClick={() => setShowForgotPassword(false)} className="w-full text-center text-sm text-muted-foreground py-2">Back to Sign In</button>
+              </form>
+            ) : (
+              <form onSubmit={handleAuth} className="space-y-3">
+                <Input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required className={inputClass} autoFocus />
+                <Input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} className={`${inputClass} ${passwordError ? errorInputClass : ""}`} />
+                {!isLogin && (
+                  <Input type="password" placeholder="Confirm password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={6} className={`${inputClass} ${passwordError ? errorInputClass : ""}`} />
+                )}
+                {passwordError && <p className="text-xs text-red-500 text-center">{passwordError}</p>}
+                <Button type="submit" disabled={loading} className="w-full h-[50px] rounded-xl text-[16px] font-semibold bg-primary text-primary-foreground active:scale-[0.98] transition-transform">
+                  {loading ? "Please wait..." : isLogin ? "Sign In" : "Create Account"}
+                </Button>
+              </form>
+            )}
+
+            {!showForgotPassword && !isPasswordReset && (
+              <>
+                {/* Divider */}
+                <div className="flex items-center gap-3 py-1">
+                  <div className="flex-1 h-px bg-border/50" />
+                  <span className="text-xs text-muted-foreground">or</span>
+                  <div className="flex-1 h-px bg-border/50" />
+                </div>
+
+                {/* Apple Sign-In — iOS native style */}
+                <button
+                  type="button"
+                  onClick={handleAppleSignIn}
+                  disabled={loading}
+                  className="w-full h-[50px] rounded-xl bg-foreground text-background font-semibold text-[16px] flex items-center justify-center gap-2 active:scale-[0.98] transition-transform touch-manipulation disabled:opacity-50"
+                >
+                  <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.52-3.23 0-1.44.62-2.2.44-3.06-.4C3.79 16.17 4.36 9.51 8.82 9.28c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.3 4.11zM12.03 9.2C11.88 7.16 13.5 5.5 15.42 5.35c.28 2.35-2.14 4.1-3.39 3.85z" />
+                  </svg>
+                  {isLogin ? "Sign in with Apple" : "Sign up with Apple"}
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Footer links */}
+          {!showForgotPassword && !isPasswordReset && (
+            <div className="mt-8 space-y-3 text-center">
+              {isLogin && (
+                <button type="button" onClick={() => setShowForgotPassword(true)} className="text-sm text-muted-foreground">
+                  Forgot password?
+                </button>
+              )}
+              <div>
+                <button
+                  type="button"
+                  onClick={() => { setIsLogin(!isLogin); setConfirmPassword(""); setPasswordError(""); setShowForgotPassword(false); }}
+                  className="text-sm text-primary font-medium"
+                >
+                  {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Legal */}
+          <div className="flex items-center justify-center gap-2 mt-6 text-[11px] text-muted-foreground/50">
+            <Link to="/legal?tab=privacy" className="hover:text-muted-foreground transition-colors">Privacy</Link>
             <span>·</span>
-            <Link to="/legal?tab=terms" className="hover:text-foreground transition-colors">
-              Terms of Service
-            </Link>
+            <Link to="/legal?tab=terms" className="hover:text-muted-foreground transition-colors">Terms</Link>
           </div>
         </div>
       </div>

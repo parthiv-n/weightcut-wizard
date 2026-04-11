@@ -172,11 +172,12 @@ export const preloadNutritionData = (userId: string, dates: string[]) => {
           .eq('date', date)
           .order('created_at', { ascending: true });
         
-        // Cache the preloaded data — both in-memory and localStorage
+        // Cache the preloaded data — normalize meal_name to prevent "Untitled" display
         if (data) {
-          nutritionCache.setMeals(userId, date, data);
+          const normalized = data.map((m: any) => ({ ...m, meal_name: m.meal_name || "Meal" }));
+          nutritionCache.setMeals(userId, date, normalized);
           const { localCache } = await import('@/lib/localCache');
-          localCache.setForDate(userId, 'nutrition_logs', date, data);
+          localCache.setForDate(userId, 'nutrition_logs', date, normalized);
         }
         
         return data;

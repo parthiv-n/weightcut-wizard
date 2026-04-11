@@ -94,7 +94,7 @@ export const BottomNav = memo(function BottomNav() {
 
   const handleLogFood = () => {
     setQuickLogOpen(false);
-    setTimeout(() => navigate("/nutrition?openManualMeal=true"), 150);
+    setTimeout(() => navigate("/nutrition?openAddMeal=true"), 150);
   };
 
   const handleLogWeight = () => {
@@ -199,7 +199,7 @@ export const BottomNav = memo(function BottomNav() {
 
   return (
     <>
-      <nav className="fixed bottom-0 left-0 right-0 z-[9999] md:hidden bg-background/95 dark:bg-[hsl(0,0%,7%)] border-t border-border safe-area-inset-bottom">
+      <nav className="fixed bottom-0 left-0 right-0 z-[9999] md:hidden bg-background/95 dark:bg-[hsl(0,0%,7%)] border-t border-border" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
         <div className="flex items-center justify-around h-[52px] px-1">
           {/* Dashboard */}
           <NavLink
