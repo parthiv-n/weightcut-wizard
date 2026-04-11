@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Sparkles, Calendar as CalendarIcon, Loader2, Settings, Edit2, X, Activity, Utensils, Database, PieChart as PieChartIcon, Search, CheckCircle, ChevronDown, ChevronUp, ChevronRight, ScanLine, Dumbbell, Sunrise, Salad, UtensilsCrossed, Apple, Mic, MicOff, Gem, Copy, RotateCcw, Star } from "lucide-react";
+import { Plus, Sparkles, Calendar as CalendarIcon, Loader2, Settings, Edit2, X, Activity, Utensils, Database, PieChart as PieChartIcon, Search, CheckCircle, ChevronDown, ChevronUp, ChevronRight, ScanLine, Dumbbell, Sunrise, Salad, UtensilsCrossed, Apple, Mic, MicOff, Gem, Copy, RotateCcw, Star, Camera } from "lucide-react";
 import wizardLogo from "@/assets/wizard-logo.webp";
 import { MealCard } from "@/components/nutrition/MealCard";
 import { MealCardSkeleton } from "@/components/ui/skeleton-loader";
@@ -481,7 +481,7 @@ export default function Nutrition() {
           />
         </div>
       )}
-      <div className="space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto overflow-x-hidden">
+      <div className="animate-page-in space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto overflow-x-hidden">
 
         {/* Wizard's Nutrition Wisdom */}
         <button
@@ -920,13 +920,52 @@ export default function Nutrition() {
 
             {quickAddTab === "ai" && (
               <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await aiMeal.capturePhoto();
+                    }}
+                    disabled={aiMeal.aiAnalyzing}
+                    className="flex flex-col items-center gap-2 p-4 rounded-2xl border border-border/30 bg-muted/20 active:scale-[0.97] transition-all disabled:opacity-40"
+                  >
+                    <Camera className="h-6 w-6 text-primary" />
+                    <span className="text-xs font-semibold">Photo</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const ta = document.querySelector<HTMLTextAreaElement>("#ai-meal-description");
+                      if (ta) ta.focus();
+                    }}
+                    className="flex flex-col items-center gap-2 p-4 rounded-2xl border border-border/30 bg-muted/20 active:scale-[0.97] transition-all"
+                  >
+                    <Edit2 className="h-6 w-6 text-muted-foreground" />
+                    <span className="text-xs font-semibold">Describe</span>
+                  </button>
+                </div>
+                {aiMeal.photoBase64 && (
+                  <div className="relative rounded-2xl overflow-hidden border border-border/30">
+                    <img src={`data:image/jpeg;base64,${aiMeal.photoBase64}`} alt="Meal" className="w-full h-40 object-cover" />
+                    <button type="button" onClick={() => aiMeal.setPhotoBase64(null)} className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/50 flex items-center justify-center">
+                      <X className="h-4 w-4 text-white" />
+                    </button>
+                  </div>
+                )}
                 <div className="flex flex-col gap-2">
                   <div className="relative">
                     <Textarea
-                      placeholder={isListening ? "Listening... speak now" : (hasSeenAiPlaceholder ? "Describe what you ate..." : "e.g. 2 slices tiger bread with nutella, a glass of whole milk, and a banana")}
+                      id="ai-meal-description"
+                      placeholder={isListening ? "Listening... speak now" : (aiMeal.photoBase64 ? "Add details for better accuracy (optional)" : (hasSeenAiPlaceholder ? "Describe what you ate..." : "e.g. 2 slices tiger bread with nutella, a glass of whole milk, and a banana"))}
                       value={aiMeal.aiMealDescription} onChange={(e) => aiMeal.setAiMealDescription(e.target.value)} disabled={aiMeal.aiAnalyzing}
                       className={`flex-1 text-sm min-h-[80px] resize-none ${isListening ? "border-red-500/30" : ""}`} rows={3}
-                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && aiMeal.aiMealDescription.trim() && !aiMeal.aiAnalyzing) { e.preventDefault(); aiMeal.handleAiAnalyzeMeal(); } }} />
+                      onFocus={() => {
+                        setTimeout(() => {
+                          const el = document.activeElement;
+                          if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+                        }, 300);
+                      }}
+                      onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey && !aiMeal.aiAnalyzing) { e.preventDefault(); aiMeal.photoBase64 ? aiMeal.handlePhotoAnalyze() : aiMeal.handleAiAnalyzeMeal(); } }} />
                     {isListening && interimText && (
                       <p className="text-[11px] text-muted-foreground/60 italic mt-1 px-1">{interimText}</p>
                     )}
@@ -947,8 +986,8 @@ export default function Nutrition() {
                         {isListening ? "Stop" : "Voice"}
                       </button>
                     )}
-                    <Button type="button" size="sm" onClick={() => { if (isListening) stopListening(); aiMeal.handleAiAnalyzeMeal(); }} disabled={aiMeal.aiAnalyzing || !aiMeal.aiMealDescription.trim()} className="flex-1">
-                      <Sparkles className="h-3.5 w-3.5 mr-1.5" />{aiMeal.aiAnalyzing ? "Analyzing…" : <>Analyze{gemBadge}</>}
+                    <Button type="button" size="sm" onClick={() => { if (isListening) stopListening(); aiMeal.photoBase64 ? aiMeal.handlePhotoAnalyze() : aiMeal.handleAiAnalyzeMeal(); }} disabled={aiMeal.aiAnalyzing || (!aiMeal.photoBase64 && !aiMeal.aiMealDescription.trim())} className="flex-1">
+                      <Sparkles className="h-3.5 w-3.5 mr-1.5" />{aiMeal.aiAnalyzing ? "Analyzing…" : <>{aiMeal.photoBase64 ? "Analyze Photo" : "Analyze"}{gemBadge}</>}
                     </Button>
                   </div>
                 </div>
@@ -976,6 +1015,14 @@ export default function Nutrition() {
                           <span className="text-muted-foreground">{Math.round(aiMeal.aiLineItems.reduce((s, i) => s + i.fats_g, 0))}F</span>
                         </div>
                       </div>
+                    )}
+                    {aiMeal.aiAnalysisComplete && (
+                      <Input
+                        value={manualMeal.meal_name}
+                        onChange={(e) => setManualMeal(prev => ({ ...prev, meal_name: e.target.value }))}
+                        placeholder="Meal name"
+                        className="text-sm h-9"
+                      />
                     )}
                     <Button onClick={aiMeal.handleSaveAiMeal} disabled={aiMeal.aiLineItems.length === 0} className="w-full">Add Meal</Button>
                   </div>

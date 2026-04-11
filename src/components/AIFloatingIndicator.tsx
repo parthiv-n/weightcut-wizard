@@ -99,11 +99,11 @@ export function AIFloatingIndicator() {
     });
   }, [tasks]);
 
-  // Auto-dismiss error tasks when user is on the page that called the AI
-  // (they already see the error inline on that page)
+  // Auto-dismiss done/error tasks when user is on the page that has the result
+  // (they already see the content inline — no need for a "Ready" pill)
   useEffect(() => {
     tasks.forEach((t) => {
-      if (t.status === "error" && location.pathname === t.returnPath) {
+      if ((t.status === "done" || t.status === "error") && location.pathname === t.returnPath) {
         dismissTask(t.id);
       }
     });

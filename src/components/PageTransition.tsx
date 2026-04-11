@@ -43,7 +43,11 @@ export function PageTransition({ children }: PageTransitionProps) {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: DURATION, ease: "easeOut" }}
+          transition={{
+            duration: DURATION,
+            ease: "easeOut",
+            exit: { duration: 0.05 },
+          }}
           style={{ willChange: "opacity" }}
         >
           {children}

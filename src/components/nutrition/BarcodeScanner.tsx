@@ -32,7 +32,7 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
   const [isProcessing, setIsProcessing] = useState(false);
   const [cameraError, setCameraError] = useState<string>("");
   const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
-  const [useExactConstraint, setUseExactConstraint] = useState(true);
+  const [useExactConstraint, setUseExactConstraint] = useState(false);
   const [scannedProduct, setScannedProduct] = useState<any>(null);
   const [lastScannedBarcode, setLastScannedBarcode] = useState<string>("");
   const [permissionDenied, setPermissionDenied] = useState(false);
@@ -174,7 +174,7 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
       setScannedProduct(null);
       setLastScannedBarcode("");
       setPermissionDenied(false);
-      setUseExactConstraint(true);
+      setUseExactConstraint(false);
       if (scanTimeoutRef.current) {
         clearTimeout(scanTimeoutRef.current);
       }

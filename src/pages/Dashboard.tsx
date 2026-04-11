@@ -401,7 +401,7 @@ export default function Dashboard() {
 
   return (
     <ErrorBoundary>
-      <div className="space-y-3 p-3 sm:p-5 md:p-6 w-full max-w-7xl mx-auto">
+      <div className="animate-page-in space-y-3 p-3 sm:p-5 md:p-6 w-full max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-3">
           {daysUntilTarget > 0 && (

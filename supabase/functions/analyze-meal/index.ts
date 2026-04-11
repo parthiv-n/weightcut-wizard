@@ -40,16 +40,17 @@ serve(async (req) => {
       return aiLimitResponse(req, usage, corsHeaders);
     }
 
-    const { mealDescription } = await req.json();
+    const body = await req.json();
+    const { mealDescription, imageBase64 } = body;
 
-    if (!mealDescription || typeof mealDescription !== 'string') {
+    if (!mealDescription && !imageBase64) {
       return new Response(
-        JSON.stringify({ error: "Meal description must be a string" }),
+        JSON.stringify({ error: "Provide a meal description or photo" }),
         { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
 
-    if (mealDescription.length > 1000) {
+    if (mealDescription && mealDescription.length > 1000) {
       return new Response(
         JSON.stringify({ error: "Meal description too long (max 1000 characters)" }),
         { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
@@ -61,7 +62,8 @@ serve(async (req) => {
       throw new Error("GROK_API_KEY is not configured");
     }
 
-    edgeLogger.info("Analyzing meal", { mealDescription });
+    const hasImage = !!imageBase64;
+    edgeLogger.info("Analyzing meal", { hasDescription: !!mealDescription, hasImage });
 
     const systemPrompt = `Nutrition analysis expert. Return ONLY valid JSON.
 
@@ -70,6 +72,8 @@ Rules:
 - Do NOT split a single item into raw sub-ingredients (e.g., "tiger bread" stays as one item)
 - Each item: total macros (not per-100g), realistic portions
 - Use USDA/nutrition databases for reference
+- If analyzing a photo, estimate portion sizes from visual cues (plate size, utensils, hand for scale)
+- If both photo and text description are provided, use the description to refine portion estimates
 
 {
   "meal_name": "Clean meal name",
@@ -82,7 +86,21 @@ Rules:
   ]
 }`;
 
-    const userPrompt = `Analyze this meal and provide nutritional information: "${mealDescription}"`;
+    // Build user message — text only, image only, or both
+    let userContent: any;
+    if (hasImage && mealDescription) {
+      userContent = [
+        { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}` } },
+        { type: "text", text: `Analyze this meal photo. Additional context from the user: "${mealDescription}". Return nutritional JSON.` },
+      ];
+    } else if (hasImage) {
+      userContent = [
+        { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}` } },
+        { type: "text", text: "Analyze this meal photo and estimate the nutritional content. Return JSON." },
+      ];
+    } else {
+      userContent = `Analyze this meal and provide nutritional information: "${mealDescription}"`;
+    }
 
     const response = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
@@ -94,10 +112,10 @@ Rules:
         model: "grok-4-1-fast-reasoning",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
+          { role: "user", content: userContent }
         ],
         temperature: 0.2,
-        max_completion_tokens: 600
+        max_completion_tokens: 800
       })
     });
 

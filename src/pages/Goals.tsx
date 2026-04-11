@@ -230,7 +230,7 @@ export default function Goals() {
     : null;
 
   return (
-    <div className="space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
+    <div className="animate-page-in space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
       <div>
         <h1 className="text-xl font-bold tracking-tight">Goals</h1>
         <p className="text-muted-foreground mt-0.5 text-xs">Update your profile and targets</p>

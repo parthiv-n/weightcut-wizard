@@ -508,6 +508,15 @@ All colors MUST be HSL.
     width: 100%;
   }
 
+  /* Smooth fade-in for page content after skeleton/loading finishes */
+  @keyframes page-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  .animate-page-in {
+    animation: page-fade-in 0.18s ease-out both;
+  }
+
   /* Skip rendering off-screen sections until scrolled into view */
   .content-defer {
     content-visibility: auto;
@@ -523,6 +532,11 @@ All colors MUST be HSL.
       transition: none !important;
       opacity: 1 !important;
       transform: none !important;
+    }
+
+    .animate-page-in {
+      animation: none !important;
+      opacity: 1 !important;
     }
 
     .shimmer-skeleton::after {

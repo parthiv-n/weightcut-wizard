@@ -1,5 +1,4 @@
 import { useEffect, lazy, Suspense } from "react";
-import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -40,7 +39,7 @@ const FightCamps = lazy(() => import("./pages/FightCamps"));
 const FightCampDetail = lazy(() => import("./pages/FightCampDetail"));
 const TrainingCalendar = lazy(() => import("./pages/TrainingCalendar"));
 const Recovery = lazy(() => import("./pages/Recovery"));
-const SkillTree = lazy(() => import("./pages/SkillTree"));
+// const SkillTree = lazy(() => import("./pages/SkillTree"));
 const GymTracker = lazy(() => import("./pages/GymTracker"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const CutPlanReview = lazy(() => import("./pages/CutPlanReview"));
@@ -57,7 +56,7 @@ _idle(() => {
   import("./pages/FightCamps").catch(() => {});
   import("./pages/FightCampDetail").catch(() => {});
   import("./pages/TrainingCalendar").catch(() => {});
-  import("./pages/SkillTree").catch(() => {});
+  // import("./pages/SkillTree").catch(() => {});
   import("./pages/GymTracker").catch(() => {});
 });
 
@@ -181,7 +180,7 @@ const AppLayoutContent = () => {
           <main className="flex-1 overflow-auto overflow-x-hidden relative min-h-0 w-full pt-2 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right" style={{ paddingBottom: "calc(4rem + env(safe-area-inset-bottom, 0px))" }}>
             <PullToRefresh />
             <PageTransition>
-              <Suspense fallback={<DashboardSkeleton />}>
+              <Suspense fallback={<div className="min-h-screen" />}>
                 <Outlet />
               </Suspense>
             </PageTransition>
@@ -260,7 +259,7 @@ const App = () => (
                   <Route path="/training-calendar" element={<TrainingCalendar />} />
                   <Route path="/fight-camp-calendar" element={<Navigate to="/training-calendar" replace />} />
                   <Route path="/recovery" element={<Recovery />} />
-                  <Route path="/skill-tree" element={<SkillTree />} />
+                  {/* Skill Tree temporarily hidden from UI */}
                   <Route path="/gym" element={<GymTracker />} />
                 </Route>
 

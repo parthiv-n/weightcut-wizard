@@ -279,7 +279,7 @@ export default function WeightTracker() {
           />
         </div>
       )}
-      <div className="space-y-2.5 p-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
+      <div className="animate-page-in space-y-2.5 p-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
         {/* Chart + History */}
         <div className="card-surface p-3 space-y-3">
           <div className="flex items-center justify-between">
