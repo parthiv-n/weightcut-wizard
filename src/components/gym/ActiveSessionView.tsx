@@ -204,29 +204,31 @@ export function ActiveSessionView({
 
       {/* Finish workout dialog */}
       <Dialog open={finishSheetOpen} onOpenChange={setFinishSheetOpen}>
-        <DialogContent className="rounded-2xl max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="text-lg">Finish Workout</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3 pt-2">
-            <div className="rounded-xl bg-muted/30 p-4 space-y-2">
-              <label className="text-sm font-medium block">Duration (minutes)</label>
+        <DialogContent className="sm:max-w-[320px] rounded-xl p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0 max-h-[calc(100vh-6rem)] overflow-y-auto">
+          <div className="px-4 pt-4 pb-3">
+            <DialogHeader>
+              <DialogTitle className="text-[15px] font-semibold text-center">Finish Workout</DialogTitle>
+            </DialogHeader>
+          </div>
+          <div className="px-4 space-y-2.5">
+            <div className="rounded-lg bg-muted/20 p-3 space-y-1.5">
+              <label className="text-[12px] font-medium block">Duration (minutes)</label>
               <Input
                 type="number"
                 inputMode="numeric"
                 placeholder="Auto-calculated"
                 value={durationOverride}
                 onChange={(e) => setDurationOverride(e.target.value)}
-                className="h-11 bg-background/50"
+                className="h-8 text-[13px] rounded-lg border-border/30 bg-muted/20"
               />
-              <p className="text-xs text-muted-foreground">
-                Leave empty to use elapsed time ({Math.round((Date.now() - workout.startedAt) / 60000)} min)
+              <p className="text-[11px] text-muted-foreground">
+                Leave empty for elapsed time ({Math.round((Date.now() - workout.startedAt) / 60000)} min)
               </p>
             </div>
 
-            <div className="rounded-xl bg-muted/30 p-4 space-y-2">
-              <label className="text-sm font-medium block">
-                Perceived Fatigue: <span className="text-primary">{fatigue[0]}/10</span>
+            <div className="rounded-lg bg-muted/20 p-3 space-y-1.5">
+              <label className="text-[12px] font-medium block">
+                Fatigue: <span className="text-primary">{fatigue[0]}/10</span>
               </label>
               <Slider
                 value={fatigue}
@@ -234,7 +236,7 @@ export function ActiveSessionView({
                 min={1}
                 max={10}
                 step={1}
-                className="py-2"
+                className="py-1.5"
               />
               <div className="flex justify-between text-[10px] text-muted-foreground">
                 <span>Fresh</span>
@@ -242,22 +244,23 @@ export function ActiveSessionView({
               </div>
             </div>
 
-            <div className="rounded-xl bg-muted/30 p-4 space-y-2">
-              <label className="text-sm font-medium block">Notes</label>
+            <div className="rounded-lg bg-muted/20 p-3 space-y-1.5">
+              <label className="text-[12px] font-medium block">Notes</label>
               <Textarea
                 placeholder="How did the workout feel?"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                className="min-h-[80px] resize-none bg-background/50"
+                className="min-h-[60px] resize-none text-[13px] rounded-lg border-border/30 bg-muted/20"
               />
             </div>
+          </div>
 
+          <div className="border-t border-border/40 mt-3">
             <button
               onClick={handleFinish}
-              className="w-full py-3 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 active:scale-[0.98] transition-transform mt-2"
-              style={{ background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))" }}
+              className="w-full py-2.5 text-[14px] font-semibold text-primary active:bg-muted/50 transition-colors flex items-center justify-center gap-1.5"
             >
-              <Check className="h-4 w-4" />
+              <Check className="h-3.5 w-3.5" />
               Complete Workout
             </button>
           </div>

@@ -756,9 +756,9 @@ export default function WeightTracker() {
 
         {/* Get AI Button */}
         {!aiAnalysis && profile && (
-          <Button onClick={getAIAnalysis} disabled={analyzingWeight} variant="outline" className="w-full">
+          <Button onClick={getAIAnalysis} disabled={analyzingWeight} variant="outline" className="w-full rounded-xl h-11">
             <Sparkles className="h-4 w-4 mr-2" />
-            {analyzingWeight ? "Analyzing..." : <>Get AI Weight Loss Strategy{!gemsIsPremium && <span className="inline-flex items-center gap-0.5 ml-1.5 text-amber-500"><Gem className="h-3 w-3" /><span className="text-[10px] font-bold tabular-nums">{gems}</span></span>}</>}
+            {analyzingWeight ? "Analyzing..." : <>Get AI Weight Loss Strategy{!gemsIsPremium && <span className="inline-flex items-center gap-0.5 ml-1.5 text-muted-foreground"><Gem className="h-3 w-3" /><span className="text-[10px] font-medium tabular-nums">{gems}</span></span>}</>}
           </Button>
         )}
 

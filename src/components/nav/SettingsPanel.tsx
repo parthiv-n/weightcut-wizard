@@ -119,15 +119,15 @@ function GemsSection() {
     <div className="rounded-xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 overflow-hidden divide-y divide-border/30 dark:divide-white/5">
       <div className="flex items-center justify-between px-4 py-3">
         <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 dark:bg-amber-500/20">
-            <Gem className="h-5 w-5 text-amber-500" />
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/15">
+            <Gem className="h-5 w-5 text-primary" />
           </span>
           <div>
             <p className="text-[15px] font-medium text-foreground">AI Gems</p>
             <p className="text-xs text-muted-foreground">{gems} gem{gems !== 1 ? 's' : ''} available</p>
           </div>
         </div>
-        <span className="text-lg font-bold text-amber-500 tabular-nums">{gems}</span>
+        <span className="text-lg font-bold text-primary tabular-nums">{gems}</span>
       </div>
 
       <button

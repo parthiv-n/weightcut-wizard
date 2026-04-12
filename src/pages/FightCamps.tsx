@@ -62,7 +62,7 @@ export default function FightCamps() {
     if (!userId) return;
 
     // Cache-first: show cached data instantly
-    const cached = localCache.get<FightCamp[]>(userId, 'fight_camps');
+    const cached = localCache.get<FightCamp[]>(userId, 'fight_camps', 30 * 60 * 1000);
     if (cached) {
       setCamps(cached);
       setLoading(false);
@@ -330,44 +330,48 @@ export default function FightCamps() {
 
       {/* New Camp Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:rounded-3xl max-w-sm mx-auto">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold">New Fight Camp</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 pt-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="camp-name" className="text-muted-foreground pl-1 text-xs">Camp Name</Label>
+        <DialogContent className="sm:max-w-[280px] rounded-xl p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0">
+          <div className="px-4 pt-4 pb-3">
+            <DialogHeader>
+              <DialogTitle className="text-[15px] font-semibold text-center">New Fight Camp</DialogTitle>
+            </DialogHeader>
+          </div>
+          <div className="px-4 space-y-2.5">
+            <div className="space-y-1">
+              <Label htmlFor="camp-name" className="text-muted-foreground pl-0.5 text-[11px]">Camp Name</Label>
               <Input
                 id="camp-name"
                 placeholder="e.g. Summer 2025"
                 value={newCamp.name}
                 onChange={(e) => setNewCamp({ ...newCamp, name: e.target.value })}
-                className="h-10 rounded-xl focus:border-primary focus:ring-1 focus:ring-primary px-3"
+                className="h-8 text-[13px] rounded-lg border-border/30 bg-muted/20"
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="event-name" className="text-muted-foreground pl-1 text-xs">Event (Optional)</Label>
+            <div className="space-y-1">
+              <Label htmlFor="event-name" className="text-muted-foreground pl-0.5 text-[11px]">Event (Optional)</Label>
               <Input
                 id="event-name"
                 placeholder="e.g. UFC 300"
                 value={newCamp.event_name}
                 onChange={(e) => setNewCamp({ ...newCamp, event_name: e.target.value })}
-                className="h-10 rounded-xl focus:border-primary focus:ring-1 focus:ring-primary px-3"
+                className="h-8 text-[13px] rounded-lg border-border/30 bg-muted/20"
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="fight-date" className="text-muted-foreground pl-1 text-xs">Fight Date</Label>
+            <div className="space-y-1">
+              <Label htmlFor="fight-date" className="text-muted-foreground pl-0.5 text-[11px]">Fight Date</Label>
               <Input
                 id="fight-date"
                 type="date"
                 value={newCamp.fight_date}
                 onChange={(e) => setNewCamp({ ...newCamp, fight_date: e.target.value })}
-                className="h-10 rounded-xl focus:border-primary focus:ring-1 focus:ring-primary px-3 block w-full"
+                className="h-8 text-[13px] rounded-lg border-border/30 bg-muted/20 block w-full"
               />
             </div>
-            <Button onClick={handleCreateCamp} className="w-full h-10 rounded-xl text-sm font-bold mt-1">
+          </div>
+          <div className="border-t border-border/40 mt-3">
+            <button onClick={handleCreateCamp} className="w-full py-2.5 text-[14px] font-semibold text-primary active:bg-muted/50 transition-colors">
               Create Camp
-            </Button>
+            </button>
           </div>
         </DialogContent>
       </Dialog>

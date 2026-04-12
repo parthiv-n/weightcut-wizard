@@ -85,6 +85,16 @@ export function useNutritionData(params: UseNutritionDataParams) {
         return;
       }
 
+      // Check localStorage first for cold-start instant render
+      const persistedMacros = localCache.get<any>(userId, 'macro_goals', 60 * 60 * 1000);
+      if (persistedMacros?.macroGoals) {
+        safeAsync(setAiMacroGoals)(persistedMacros.macroGoals);
+        if (persistedMacros.dailyCalorieTarget) {
+          safeAsync(setDailyCalorieTarget)(persistedMacros.dailyCalorieTarget);
+        }
+        safeAsync(setFetchingMacroGoals)(false);
+      }
+
       const cachedMacroGoals = nutritionCache.getMacroGoals(userId);
       if (cachedMacroGoals) {
         safeAsync(setAiMacroGoals)(cachedMacroGoals.macroGoals);
@@ -116,11 +126,13 @@ export function useNutritionData(params: UseNutritionDataParams) {
           refreshProfile();
         }
 
-        nutritionCache.setMacroGoals(userId, {
+        const macroData = {
           macroGoals,
           dailyCalorieTarget: profileData.ai_recommended_calories,
           profileUpdate: { manual_nutrition_override: profileData.manual_nutrition_override }
-        });
+        };
+        nutritionCache.setMacroGoals(userId, macroData);
+        localCache.set(userId, 'macro_goals', macroData);
       } else {
         setAiMacroGoals(null);
       }

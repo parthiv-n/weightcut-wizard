@@ -276,6 +276,10 @@ export function useGamification(
       setBadgesLoading(false);
     }
 
+    // Skip network fetch if cache is fresh (< 10 min old)
+    const cacheAge = localCache.cachedAt(userId, CACHE_KEY);
+    if (cacheAge && Date.now() - cacheAge < 10 * 60 * 1000) return;
+
     let cancelled = false;
 
     const fetchData = async () => {

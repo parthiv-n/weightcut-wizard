@@ -122,13 +122,13 @@ export function FightCampLogForm({
   };
 
   return (
-    <div className="grid gap-3 py-3">
+    <div className="grid gap-2 py-1">
       {/* Session Type — Select dropdown + Add button */}
-      <div className="space-y-2">
-        <Label className="text-sm font-semibold text-muted-foreground">SESSION TYPE</Label>
-        <div className="flex gap-2">
+      <div className="space-y-1">
+        <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Session Type</Label>
+        <div className="flex gap-1.5">
           <Select value={sessionType} onValueChange={setSessionType}>
-            <SelectTrigger className="flex-1 rounded-xl h-11">
+            <SelectTrigger className="flex-1 rounded-lg h-8 text-[13px] border-border/30 bg-muted/20">
               <SelectValue placeholder="Select type" />
             </SelectTrigger>
             <SelectContent>
@@ -160,200 +160,151 @@ export function FightCampLogForm({
               )}
             </SelectContent>
           </Select>
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-11 w-11 rounded-xl shrink-0"
+          <button
+            className="h-8 w-8 rounded-lg bg-muted/30 flex items-center justify-center shrink-0 active:bg-muted/50 transition-colors"
             onClick={() => setIsAddingNew(!isAddingNew)}
             aria-label="Add custom type"
           >
-            <Plus className="h-4 w-4" />
-          </Button>
+            <Plus className="h-3.5 w-3.5" />
+          </button>
         </div>
 
         {isAddingNew && (
-          <div className="flex gap-2 mt-2">
+          <div className="flex gap-1.5 mt-1">
             <Input
-              placeholder="e.g. Swimming, Yoga, MMA..."
+              placeholder="e.g. Swimming, Yoga..."
               value={newTypeName}
               onChange={(e) => setNewTypeName(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleAddCustomType(); }}
-              className="rounded-xl flex-1"
+              className="rounded-lg flex-1 h-8 text-[13px] border-border/30 bg-muted/20"
               autoFocus
             />
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-10 w-10 rounded-xl shrink-0"
+            <button
+              className="h-8 w-8 rounded-lg bg-muted/30 flex items-center justify-center shrink-0 active:bg-muted/50 transition-colors disabled:opacity-40"
               onClick={handleAddCustomType}
               disabled={!newTypeName.trim()}
               aria-label="Confirm new type"
             >
-              <Check className="h-4 w-4" />
-            </Button>
+              <Check className="h-3.5 w-3.5" />
+            </button>
           </div>
         )}
       </div>
 
       {/* Group 1: Training Metrics */}
-      <div className="rounded-2xl border border-border/10 overflow-hidden">
+      <div className="rounded-lg bg-muted/20 overflow-hidden">
         {/* Duration */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-border/10">
-          <span className="text-xs font-medium tracking-wide uppercase text-muted-foreground">Duration</span>
-          <div className="flex items-center gap-2.5">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-border/20">
+          <span className="text-[10px] font-medium tracking-wide uppercase text-muted-foreground">Duration</span>
+          <div className="flex items-center gap-2">
             <button onClick={() => setDuration(String(Math.max(0, parseInt(duration) - 5)))}
-              className="h-6 w-6 rounded-full bg-white/5 border border-border/30 flex items-center justify-center text-sm font-medium hover:bg-white/10 transition-colors">
+              className="h-5 w-5 rounded-full bg-muted/40 flex items-center justify-center text-[12px] font-medium active:bg-muted/60 transition-colors">
               −
             </button>
-            <span className="text-base font-semibold display-number w-10 text-center">{duration}<span className="text-[11px] text-muted-foreground ml-0.5">m</span></span>
+            <span className="text-[13px] font-semibold tabular-nums w-8 text-center">{duration}<span className="text-[10px] text-muted-foreground ml-0.5">m</span></span>
             <button onClick={() => setDuration(String(parseInt(duration) + 5))}
-              className="h-6 w-6 rounded-full bg-white/5 border border-border/30 flex items-center justify-center text-sm font-medium hover:bg-white/10 transition-colors">
+              className="h-5 w-5 rounded-full bg-muted/40 flex items-center justify-center text-[12px] font-medium active:bg-muted/60 transition-colors">
               +
             </button>
           </div>
         </div>
 
         {/* Intensity */}
-        <div className="px-4 py-3 border-b border-border/10">
-          <div className="flex justify-between items-center mb-1">
-            <span className="text-xs font-medium tracking-wide uppercase text-muted-foreground flex items-center gap-1">
-              <Ruler className="h-3.5 w-3.5 text-primary" /> Intensity
+        <div className="px-3 py-2 border-b border-border/20">
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] font-medium tracking-wide uppercase text-muted-foreground flex items-center gap-1">
+              <Ruler className="h-3 w-3 text-primary" /> Intensity
             </span>
-            <span className="text-base font-semibold">{intensityLevel[0]}</span>
+            <span className="text-[13px] font-semibold">{intensityLevel[0]}</span>
           </div>
-          <Slider
-            value={intensityLevel}
-            onValueChange={setIntensityLevel}
-            max={5}
-            min={1}
-            step={1}
-            className="py-1"
-          />
-          <div className="flex justify-between text-[11px] text-muted-foreground/70 mt-0.5">
-            <span>1 (Easy)</span>
-            <span>3 (Mod)</span>
-            <span>5 (Max)</span>
+          <Slider value={intensityLevel} onValueChange={setIntensityLevel} max={5} min={1} step={1} className="py-1" />
+          <div className="flex justify-between text-[9px] text-muted-foreground/70">
+            <span>Easy</span>
+            <span>Mod</span>
+            <span>Max</span>
           </div>
         </div>
 
         {/* RPE */}
-        <div className="px-4 py-3">
-          <div className="flex justify-between items-center mb-1">
-            <span className="text-xs font-medium tracking-wide uppercase text-muted-foreground flex items-center gap-1">
-              <Activity className="h-3.5 w-3.5 text-primary" /> RPE
+        <div className="px-3 py-2">
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] font-medium tracking-wide uppercase text-muted-foreground flex items-center gap-1">
+              <Activity className="h-3 w-3 text-primary" /> RPE
             </span>
-            <span className="text-base font-semibold">{rpe[0]}</span>
+            <span className="text-[13px] font-semibold">{rpe[0]}</span>
           </div>
-          <Slider
-            value={rpe}
-            onValueChange={setRpe}
-            max={10}
-            min={1}
-            step={1}
-            className="py-1"
-          />
-          <div className="flex justify-between text-[11px] text-muted-foreground/70 mt-0.5">
-            <span>1 (Light)</span>
-            <span>10 (Max)</span>
+          <Slider value={rpe} onValueChange={setRpe} max={10} min={1} step={1} className="py-1" />
+          <div className="flex justify-between text-[9px] text-muted-foreground/70">
+            <span>Light</span>
+            <span>Max</span>
           </div>
         </div>
       </div>
 
       {/* Run Details — only when session type is Run */}
       {sessionType === "Run" && (
-        <div className="rounded-2xl border border-border/10 overflow-hidden">
-          {/* Distance */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border/10">
-            <span className="text-xs font-medium tracking-wide uppercase text-muted-foreground flex items-center gap-1">
-              <Route className="h-3.5 w-3.5 text-primary" /> Distance
+        <div className="rounded-lg bg-muted/20 overflow-hidden">
+          <div className="flex items-center justify-between px-3 py-2 border-b border-border/20">
+            <span className="text-[10px] font-medium tracking-wide uppercase text-muted-foreground flex items-center gap-1">
+              <Route className="h-3 w-3 text-primary" /> Distance
             </span>
-            <div className="flex items-center gap-2">
-              <Input
-                type="number"
-                inputMode="decimal"
-                step="0.1"
-                min="0"
-                value={runDistance}
-                onChange={(e) => setRunDistance(e.target.value)}
-                placeholder="0"
-                className="w-20 h-8 rounded-lg text-right text-sm font-semibold bg-transparent border-border/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-              />
-              <button
-                type="button"
-                onClick={() => setRunDistanceUnit(runDistanceUnit === "km" ? "mi" : "km")}
-                className="text-xs font-semibold px-2.5 py-1 rounded-full bg-white/5 border border-border/30 hover:bg-white/10 transition-colors min-w-[36px]"
-              >
+            <div className="flex items-center gap-1.5">
+              <Input type="number" inputMode="decimal" step="0.1" min="0" value={runDistance} onChange={(e) => setRunDistance(e.target.value)} placeholder="0"
+                className="w-16 h-7 rounded-md text-right text-[12px] font-semibold bg-transparent border-border/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+              <button type="button" onClick={() => setRunDistanceUnit(runDistanceUnit === "km" ? "mi" : "km")}
+                className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-muted/40 active:bg-muted/60 transition-colors min-w-[28px]">
                 {runDistanceUnit}
               </button>
             </div>
           </div>
-
-          {/* Time */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border/10">
-            <span className="text-xs font-medium tracking-wide uppercase text-muted-foreground flex items-center gap-1">
-              <Timer className="h-3.5 w-3.5 text-primary" /> Time
+          <div className="flex items-center justify-between px-3 py-2 border-b border-border/20">
+            <span className="text-[10px] font-medium tracking-wide uppercase text-muted-foreground flex items-center gap-1">
+              <Timer className="h-3 w-3 text-primary" /> Time
             </span>
-            <Input
-              type="text"
-              inputMode="numeric"
-              value={runTime}
-              onChange={(e) => setRunTime(e.target.value)}
-              placeholder="mm:ss"
-              className="w-24 h-8 rounded-lg text-right text-sm font-semibold bg-transparent border-border/30"
-            />
+            <Input type="text" inputMode="numeric" value={runTime} onChange={(e) => setRunTime(e.target.value)} placeholder="mm:ss"
+              className="w-20 h-7 rounded-md text-right text-[12px] font-semibold bg-transparent border-border/30" />
           </div>
-
-          {/* Pace (auto-calculated) */}
-          <div className="flex items-center justify-between px-4 py-3">
-            <span className="text-xs font-medium tracking-wide uppercase text-muted-foreground flex items-center gap-1">
-              <Gauge className="h-3.5 w-3.5 text-primary" /> Pace
+          <div className="flex items-center justify-between px-3 py-2">
+            <span className="text-[10px] font-medium tracking-wide uppercase text-muted-foreground flex items-center gap-1">
+              <Gauge className="h-3 w-3 text-primary" /> Pace
             </span>
-            <span className="text-sm font-semibold text-foreground/70">
-              {runPace ? `${runPace} /${runDistanceUnit}` : "—"}
-            </span>
+            <span className="text-[12px] font-semibold text-foreground/70">{runPace ? `${runPace} /${runDistanceUnit}` : "—"}</span>
           </div>
         </div>
       )}
 
       {/* Group 2: Recovery */}
-      <div className="rounded-2xl border border-border/10 overflow-hidden">
+      <div className="rounded-lg bg-muted/20 overflow-hidden">
         {/* Soreness */}
-        <div className="px-4 py-3 border-b border-border/10">
+        <div className="px-3 py-2 border-b border-border/20">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium tracking-wide uppercase text-muted-foreground">Soreness</span>
+            <span className="text-[10px] font-medium tracking-wide uppercase text-muted-foreground">Soreness</span>
             <Switch checked={hasSoreness} onCheckedChange={setHasSoreness} />
           </div>
           {hasSoreness && (
-            <div className="pt-2 pb-0.5">
-              <div className="flex justify-between items-center mb-1">
-                <span className="text-[11px] text-muted-foreground">Level</span>
-                <span className="text-base font-semibold">{sorenessLevel[0]}</span>
+            <div className="pt-1.5">
+              <div className="flex justify-between items-center">
+                <span className="text-[10px] text-muted-foreground">Level</span>
+                <span className="text-[13px] font-semibold">{sorenessLevel[0]}</span>
               </div>
-              <Slider
-                value={sorenessLevel}
-                onValueChange={setSorenessLevel}
-                max={10}
-                min={1}
-                step={1}
-                className="py-1"
-              />
+              <Slider value={sorenessLevel} onValueChange={setSorenessLevel} max={10} min={1} step={1} className="py-1" />
             </div>
           )}
         </div>
 
         {/* Sleep */}
-        <div className="flex items-center justify-between px-4 py-3">
-          <span className="text-xs font-medium tracking-wide uppercase text-muted-foreground flex items-center gap-1">
-            <Moon className="h-3.5 w-3.5" /> Sleep
+        <div className="flex items-center justify-between px-3 py-2">
+          <span className="text-[10px] font-medium tracking-wide uppercase text-muted-foreground flex items-center gap-1">
+            <Moon className="h-3 w-3" /> Sleep
           </span>
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
             <button onClick={() => setSleepHours(String(Math.max(0, parseFloat(sleepHours) - 0.5)))}
-              className="h-6 w-6 rounded-full bg-white/5 border border-border/30 flex items-center justify-center text-sm font-medium hover:bg-white/10 transition-colors">
+              className="h-5 w-5 rounded-full bg-muted/40 flex items-center justify-center text-[12px] font-medium active:bg-muted/60 transition-colors">
               −
             </button>
-            <span className="text-base font-semibold display-number w-10 text-center">{sleepHours}<span className="text-[11px] text-muted-foreground ml-0.5">h</span></span>
+            <span className="text-[13px] font-semibold tabular-nums w-8 text-center">{sleepHours}<span className="text-[10px] text-muted-foreground ml-0.5">h</span></span>
             <button onClick={() => setSleepHours(String(parseFloat(sleepHours) + 0.5))}
-              className="h-6 w-6 rounded-full bg-white/5 border border-border/30 flex items-center justify-center text-sm font-medium hover:bg-white/10 transition-colors">
+              className="h-5 w-5 rounded-full bg-muted/40 flex items-center justify-center text-[12px] font-medium active:bg-muted/60 transition-colors">
               +
             </button>
           </div>
@@ -361,46 +312,40 @@ export function FightCampLogForm({
       </div>
 
       {/* Session Notes */}
-      <div className="space-y-2">
+      <div className="space-y-1">
         <div className="flex items-center justify-between">
-          <Label className="text-sm font-semibold text-muted-foreground">SESSION NOTES</Label>
+          <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Notes</Label>
           {voiceSupported && (
             <button
               type="button"
-              onClick={() => {
-                triggerHapticSelection();
-                if (isListening) { stopListening(); } else { startListening(); }
-              }}
-              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all ${
+              onClick={() => { triggerHapticSelection(); isListening ? stopListening() : startListening(); }}
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all ${
                 isListening
                   ? "bg-red-500/15 text-red-500 animate-pulse"
-                  : "bg-white/5 border border-border/30 text-muted-foreground hover:text-foreground hover:bg-white/10"
+                  : "bg-muted/30 text-muted-foreground active:bg-muted/50"
               }`}
             >
-              {isListening ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
-              {isListening ? "Stop" : "Dictate"}
+              {isListening ? <MicOff className="h-3 w-3" /> : <Mic className="h-3 w-3" />}
+              {isListening ? "Stop" : "Voice"}
             </button>
           )}
         </div>
-        <div className="relative">
-          <Textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder={isListening ? "Listening... speak now" : "What did you work on? Techniques, drills, combos..."}
-            className={`bg-accent/20 border-border/50 rounded-2xl min-h-[80px] resize-none text-sm ${isListening ? "border-red-500/30" : ""}`}
-          />
-          {isListening && interimText && (
-            <p className="text-[11px] text-muted-foreground/60 italic mt-1 px-1">{interimText}</p>
-          )}
-        </div>
+        <Textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          placeholder={isListening ? "Listening..." : "Techniques, drills, notes..."}
+          className={`rounded-lg border-border/30 bg-muted/20 min-h-[50px] resize-none text-[13px] ${isListening ? "border-red-500/30" : ""}`}
+        />
+        {isListening && interimText && (
+          <p className="text-[10px] text-muted-foreground/60 italic px-1">{interimText}</p>
+        )}
       </div>
 
-      <Button
-        className="w-full h-12 rounded-2xl text-lg font-bold mt-2 shadow-lg"
-        onClick={onSave}
-      >
-        {isEditing ? 'Update Session' : 'Save Session'}
-      </Button>
+      <div className="border-t border-border/40 mt-1 -mx-4">
+        <button className="w-full py-2.5 text-[14px] font-semibold text-primary active:bg-muted/50 transition-colors" onClick={onSave}>
+          {isEditing ? 'Update Session' : 'Save Session'}
+        </button>
+      </div>
     </div>
   );
 }

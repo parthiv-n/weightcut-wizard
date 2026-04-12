@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useUser } from "@/contexts/UserContext";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { localCache } from "@/lib/localCache";
-import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
+import { withSupabaseTimeout, withRetry } from "@/lib/timeoutWrapper";
 import { syncQueue } from "@/lib/syncQueue";
 import { useToast } from "@/hooks/use-toast";
 import { triggerHaptic, celebrateSuccess, confirmDelete } from "@/lib/haptics";
@@ -195,22 +195,29 @@ export function useGymSessions() {
   }, [fetchHistory]);
 
   const startSession = useCallback(async (sessionType: SessionType): Promise<string | null> => {
-    if (!userId) return null;
+    if (!userId) {
+      toast({ description: "Please sign in to start a workout", variant: "destructive" });
+      return null;
+    }
 
     try {
-      const { data, error } = await withSupabaseTimeout(
-        supabase
-          .from("gym_sessions" as any)
-          .insert({
-            user_id: userId,
-            session_type: sessionType,
-            status: "in_progress",
-            date: new Date().toISOString().split("T")[0],
-          } as any)
-          .select()
-          .single(),
-        undefined,
-        "Start gym session"
+      const { data, error } = await withRetry(
+        () => withSupabaseTimeout(
+          supabase
+            .from("gym_sessions" as any)
+            .insert({
+              user_id: userId,
+              session_type: sessionType,
+              status: "in_progress",
+              date: new Date().toISOString().split("T")[0],
+            } as any)
+            .select()
+            .single(),
+          undefined,
+          "Start gym session"
+        ),
+        2,
+        500
       );
 
       if (error) throw error;
@@ -227,6 +234,7 @@ export function useGymSessions() {
       triggerHaptic(ImpactStyle.Medium);
       return session.id;
     } catch (err) {
+      logger.error("startSession failed", err);
       toast({ description: "Failed to start workout", variant: "destructive" });
       return null;
     }

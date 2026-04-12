@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Dumbbell, Plus, Calendar, Clock, Flame } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import { useGymSessions } from "@/hooks/gym/useGymSessions";
 import { useGymSets } from "@/hooks/gym/useGymSets";
 import { useExerciseLibrary } from "@/hooks/gym/useExerciseLibrary";
@@ -28,6 +29,7 @@ import type { SessionType, SessionWithSets, Exercise, SavedRoutine } from "@/pag
 type GymTab = "workouts" | "routines";
 
 export default function GymTracker() {
+  const { toast } = useToast();
   const {
     history, historyLoading, activeSession,
     startSession, finishSession, discardSession,
@@ -61,10 +63,18 @@ export default function GymTracker() {
   const newPRSetIdsRef = useRef(new Set<string>());
 
   const handleStartWorkout = useCallback(async () => {
-    await startSession(sessionType);
-  }, [startSession, sessionType]);
+    const sessionId = await startSession(sessionType);
+    if (!sessionId) {
+      toast({ description: "Failed to start workout", variant: "destructive" });
+    }
+  }, [startSession, sessionType, toast]);
 
   const handleStartFromRoutine = useCallback(async (routine: SavedRoutine, dayFilter?: string) => {
+    if (exercisesLoading) {
+      toast({ description: "Loading exercises, please try again", variant: "destructive" });
+      return;
+    }
+
     const typeMap: Record<string, SessionType> = {
       hypertrophy: "Hypertrophy",
       strength: "Strength",
@@ -73,16 +83,35 @@ export default function GymTracker() {
     };
     const sType = typeMap[routine.goal] || "Strength";
     const sessionId = await startSession(sType as SessionType);
-    if (!sessionId) return;
+    if (!sessionId) {
+      toast({ description: "Failed to start session", variant: "destructive" });
+      return;
+    }
 
     // Filter exercises by day if specified
     const routineExercises = dayFilter
       ? routine.exercises.filter(re => re.day === dayFilter)
       : routine.exercises;
 
+    if (routineExercises.length === 0) {
+      toast({ description: "No exercises in this routine", variant: "destructive" });
+      discardSession();
+      return;
+    }
+
+    // Map muscle group to valid ExerciseCategory
+    const muscleToCategory = (mg: string): import("@/pages/gym/types").ExerciseCategory => {
+      const m = mg.toLowerCase();
+      if (["chest", "shoulders", "triceps"].includes(m)) return "push";
+      if (["back", "biceps", "lats"].includes(m)) return "pull";
+      if (["legs", "quads", "hamstrings", "glutes", "calves"].includes(m)) return "legs";
+      if (["core", "abs", "obliques"].includes(m)) return "core";
+      if (["cardio"].includes(m)) return "cardio";
+      return "full_body";
+    };
+
     // Import routine exercises into the workout with empty sets
     const groups: import("@/pages/gym/types").ExerciseGroup[] = routineExercises.map((re, idx) => {
-      // Try to match to an exercise in the library by exercise_id or name
       const matched = (re.exercise_id && exercises.find(e => e.id === re.exercise_id))
         || exercises.find(e => e.name.toLowerCase() === re.name.toLowerCase());
 
@@ -90,7 +119,7 @@ export default function GymTracker() {
         id: re.exercise_id || `routine-${idx}`,
         user_id: null,
         name: re.name,
-        category: "compound" as any,
+        category: muscleToCategory(re.muscle_group),
         muscle_group: re.muscle_group,
         equipment: null,
         is_bodyweight: false,
@@ -105,12 +134,9 @@ export default function GymTracker() {
       };
     });
 
-    if (groups.length > 0) {
-      updateActiveSession(prev => ({ ...prev, exerciseGroups: groups }));
-    }
-
+    updateActiveSession(prev => ({ ...prev, exerciseGroups: groups }));
     setTab("workouts");
-  }, [startSession, exercises, updateActiveSession]);
+  }, [startSession, exercises, exercisesLoading, updateActiveSession, discardSession, toast]);
 
   const handleAddSet = useCallback(async (exerciseOrder: number, data: any) => {
     const set = await addSet(exerciseOrder, data);

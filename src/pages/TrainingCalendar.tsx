@@ -72,7 +72,7 @@ export default function TrainingCalendar() {
     const [viewingSession, setViewingSession] = useState<TrainingCalendarRow | null>(null);
     const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
 
-    const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+    const DISPLAY_TTL = 24 * 60 * 60 * 1000; // 24h — show stale cache instantly, refresh in background
     const fetchingRef = useRef(false);
     const toastRef = useRef(toast);
     toastRef.current = toast;
@@ -84,11 +84,11 @@ export default function TrainingCalendar() {
 
         // Cache-first: serve cached data instantly, then refresh in background
         const cacheKey = monthCacheKey(currentDate);
-        const cached = localCache.get<TrainingCalendarRow[]>(userId, cacheKey, CACHE_TTL);
+        const cached = localCache.get<TrainingCalendarRow[]>(userId, cacheKey, DISPLAY_TTL);
         if (cached) {
             setSessions(cached);
             setIsLoading(false);
-        } else {
+        } else if (!localCache.get<TrainingCalendarRow[]>(userId, cacheKey)) {
             setIsLoading(true);
         }
 
@@ -120,7 +120,7 @@ export default function TrainingCalendar() {
     const fetch28DaySessions = useCallback(async () => {
         if (!userId) return;
 
-        const cached28d = localCache.get<TrainingCalendarRow[]>(userId, "training_sessions_28d", CACHE_TTL);
+        const cached28d = localCache.get<TrainingCalendarRow[]>(userId, "training_sessions_28d", DISPLAY_TTL);
         if (cached28d) setSessions28d(cached28d);
 
         try {
@@ -422,12 +422,15 @@ export default function TrainingCalendar() {
                                     <Plus className="h-5 w-5" />
                                 </Button>
                             </DialogTrigger>
-                            <DialogContent className="sm:max-w-md rounded-[24px]">
-                                <DialogHeader>
-                                    <DialogTitle className="text-2xl font-bold">
-                                        {editingSession ? 'Edit Session' : 'Log Session'}
-                                    </DialogTitle>
-                                </DialogHeader>
+                            <DialogContent className="sm:max-w-[340px] rounded-xl p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0 max-h-[calc(100vh-6rem)] overflow-y-auto">
+                                <div className="px-4 pt-4 pb-3">
+                                    <DialogHeader>
+                                        <DialogTitle className="text-[15px] font-semibold text-center">
+                                            {editingSession ? 'Edit Session' : 'Log Session'}
+                                        </DialogTitle>
+                                    </DialogHeader>
+                                </div>
+                                <div className="px-4 pb-4">
                                 <FightCampLogForm
                                     isEditing={!!editingSession}
                                     userId={userId}
@@ -456,6 +459,7 @@ export default function TrainingCalendar() {
                                     }}
                                     onSave={handleSaveSession}
                                 />
+                                </div>
                             </DialogContent>
                         </Dialog>
                     </div>

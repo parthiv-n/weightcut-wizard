@@ -18,6 +18,8 @@ import { Button } from "@/components/ui/button";
 import { calculateCalorieTarget } from "@/lib/calorieCalculation";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { localCache } from "@/lib/localCache";
+import { nutritionCache } from "@/lib/nutritionCache";
+import { preloadNutritionData } from "@/lib/backgroundSync";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { WeightIncreaseQuestionnaire } from "@/components/dashboard/WeightIncreaseQuestionnaire";
 import { AchievementSheet } from "@/components/achievements/AchievementSheet";
@@ -197,8 +199,7 @@ export default function Dashboard() {
       checkAndGenerateWisdom(profile, cachedWeightLogs, cachedCalories, cachedHydrationTotal);
     }
 
-    // --- Fetch fresh data from Supabase (7 queries in one batch — profile comes from context) ---
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+    // --- Fetch fresh data from Supabase (3 core queries — gamification handled by useGamification) ---
     try {
       const results = await Promise.allSettled([
         withRetry(() => withSupabaseTimeout(
@@ -231,25 +232,6 @@ export default function Dashboard() {
           undefined,
           "Hydration logs query"
         )),
-
-        // Gamification queries (batched here to avoid separate round-trip)
-        supabase
-          .from("nutrition_logs")
-          .select("date")
-          .eq("user_id", userId)
-          .gte("date", sevenDaysAgo),
-        supabase
-          .from("nutrition_logs")
-          .select("*", { count: "exact", head: true })
-          .eq("user_id", userId),
-        supabase
-          .from("fight_week_plans")
-          .select("*", { count: "exact", head: true })
-          .eq("user_id", userId),
-        supabase
-          .from("fight_camps")
-          .select("is_completed")
-          .eq("user_id", userId),
       ]);
 
       if (!isMounted()) return;
@@ -285,21 +267,6 @@ export default function Dashboard() {
         localCache.setForDate(userId, 'hydration_logs', today, hydrationData);
       }
 
-      // Cache gamification data so useGamification picks it up instantly on next render
-      const logsData = logsOk ? (results[0] as PromiseFulfilledResult<any>).value.data || [] : [];
-      const gamNutritionDates = results[3].status === 'fulfilled' ? (results[3].value.data || []).map((r: any) => r.date) : [];
-      const gamMealCount = results[4].status === 'fulfilled' ? results[4].value.count || 0 : 0;
-      const gamFightWeekCount = results[5].status === 'fulfilled' ? results[5].value.count || 0 : 0;
-      const gamCampsData = results[6].status === 'fulfilled' ? results[6].value.data || [] : [];
-      localCache.set(userId, 'gamification_data', {
-        nutritionDates: gamNutritionDates,
-        mealCount: gamMealCount,
-        fightWeekCount: gamFightWeekCount,
-        completedCampCount: gamCampsData.filter((c: any) => c.is_completed).length,
-        totalCampCount: gamCampsData.length,
-        allWeightDates: logsData.map((l: any) => l.date),
-      });
-
       // Fire-and-forget wisdom with best available data (use fresh values, fall back to current state)
       const wisdomLogs = logsOk ? (results[0] as PromiseFulfilledResult<any>).value.data ?? [] : weightLogs;
       const wisdomCals = nutritionOk
@@ -309,6 +276,26 @@ export default function Dashboard() {
         ? ((results[2] as PromiseFulfilledResult<any>).value.data || []).reduce((s: number, l: any) => s + (l?.amount_ml || 0), 0)
         : todayHydration;
       checkAndGenerateWisdom(profile, wisdomLogs, wisdomCals, wisdomHydration);
+
+      // Prefetch nutrition data for today so Nutrition page opens instantly
+      setTimeout(() => {
+        if (userId) preloadNutritionData(userId, [today]);
+      }, 2000);
+
+      // Prefetch macro goals from profile so Nutrition page skips loading
+      if (profile?.ai_recommended_calories) {
+        const macroData = {
+          macroGoals: {
+            proteinGrams: (profile as any).ai_recommended_protein_g || 0,
+            carbsGrams: (profile as any).ai_recommended_carbs_g || 0,
+            fatsGrams: (profile as any).ai_recommended_fats_g || 0,
+            recommendedCalories: profile.ai_recommended_calories,
+          },
+          dailyCalorieTarget: profile.ai_recommended_calories,
+        };
+        nutritionCache.setMacroGoals(userId, macroData);
+        localCache.set(userId, 'macro_goals', macroData);
+      }
     } catch (error) {
       logger.error("Error loading dashboard data", error);
       if (!hasCachedData) {
@@ -652,80 +639,106 @@ export default function Dashboard() {
               </div>
             </SheetHeader>
 
-            {/* 3-col status grid */}
-            <div className="grid grid-cols-3 gap-3 mb-4">
-              <div className="rounded-xl border border-border p-3 text-center">
-                <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${riskColors[wisdom.riskLevel]}`}>
-                  {wisdom.riskLevel.charAt(0).toUpperCase() + wisdom.riskLevel.slice(1)}
-                </span>
-                <p className="text-xs text-muted-foreground mt-1">Risk Level</p>
+            <div className="space-y-3">
+              {/* 3-col status grid */}
+              <div className="grid grid-cols-3 gap-3">
+                <div className="rounded-xl border border-border p-3 text-center">
+                  <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${riskColors[wisdom.riskLevel]}`}>
+                    {wisdom.riskLevel.charAt(0).toUpperCase() + wisdom.riskLevel.slice(1)}
+                  </span>
+                  <p className="text-xs text-muted-foreground mt-1">Risk Level</p>
+                </div>
+                <div className="rounded-xl border border-border p-3 text-center">
+                  <p className="text-2xl font-bold display-number">{wisdom.daysToFight}</p>
+                  <p className="text-xs text-muted-foreground">Days Left</p>
+                </div>
+                <div className="rounded-xl border border-border p-3 text-center">
+                  <p className={`text-sm font-semibold ${paceColors[wisdom.paceStatus] ?? 'text-foreground'}`}>
+                    {paceLabels[wisdom.paceStatus] ?? wisdom.paceStatus}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Pace</p>
+                </div>
               </div>
-              <div className="rounded-xl border border-border p-3 text-center">
-                <p className="text-2xl font-bold display-number">{wisdom.daysToFight}</p>
-                <p className="text-xs text-muted-foreground">Days Left</p>
-              </div>
-              <div className="rounded-xl border border-border p-3 text-center">
-                <p className={`text-sm font-semibold ${paceColors[wisdom.paceStatus] ?? 'text-foreground'}`}>
-                  {paceLabels[wisdom.paceStatus] ?? wisdom.paceStatus}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">Pace</p>
-              </div>
-            </div>
 
-            {/* Weight Pace card */}
-            <div className="rounded-xl border border-border p-4 mb-3">
-              <div className="flex items-center gap-2 mb-3">
-                <TrendingDown className="h-4 w-4 text-primary" />
-                <h4 className="text-sm font-semibold">Weight Pace</h4>
-              </div>
-              <div className="grid grid-cols-2 gap-3 mb-2">
+              {/* Explainer for risk & pace */}
+              <div className="rounded-xl bg-muted/30 px-4 py-3 space-y-3">
                 <div>
-                  <p className="text-xs text-muted-foreground">Actual / week</p>
-                  <p className="text-lg font-bold display-number">{wisdom.weeklyPaceKg.toFixed(2)} kg</p>
+                  <p className="text-[11px] font-semibold text-foreground/70 mb-1.5">Risk Level</p>
+                  <p className="text-[11px] text-muted-foreground leading-snug mb-1">How aggressive your current cut rate is.</p>
+                  <div className="space-y-1">
+                    <p className="text-[11px] text-muted-foreground"><span className="text-green-400 font-medium">Green</span> — Safe and sustainable</p>
+                    <p className="text-[11px] text-muted-foreground"><span className="text-orange-400 font-medium">Orange</span> — Pace is high, may affect performance</p>
+                  </div>
                 </div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Needed / week</p>
-                  <p className="text-lg font-bold display-number">{wisdom.requiredWeeklyKg.toFixed(2)} kg</p>
+                  <p className="text-[11px] font-semibold text-foreground/70 mb-1.5">Pace</p>
+                  <p className="text-[11px] text-muted-foreground leading-snug mb-1">Whether your weekly loss matches the rate needed to hit your target.</p>
+                  <div className="space-y-1">
+                    <p className="text-[11px] text-muted-foreground"><span className="text-green-400 font-medium">On Track</span> — You're on schedule</p>
+                    <p className="text-[11px] text-muted-foreground"><span className="text-green-400 font-medium">At Target</span> — Already at goal weight</p>
+                    <p className="text-[11px] text-muted-foreground"><span className="text-blue-400 font-medium">Ahead</span> — Losing faster than needed</p>
+                    <p className="text-[11px] text-muted-foreground"><span className="text-yellow-400 font-medium">Behind</span> — May need to adjust</p>
+                  </div>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">{wisdom.riskReason}</p>
-            </div>
 
-            {/* Today's Guidance card */}
-            <div className="rounded-xl border border-border p-4 mb-3">
-              <div className="flex items-center gap-2 mb-2">
-                <Zap className="h-4 w-4 text-primary" />
-                <h4 className="text-sm font-semibold">Today's Guidance</h4>
-              </div>
-              <p className="text-sm text-muted-foreground leading-relaxed">{wisdom.adviceParagraph}</p>
-            </div>
-
-            {/* Action Items card */}
-            <div className="rounded-xl border border-border p-4 mb-3">
-              <div className="flex items-center gap-2 mb-3">
-                <CheckCircle2 className="h-4 w-4 text-primary" />
-                <h4 className="text-sm font-semibold">Action Items</h4>
-              </div>
-              <ol className="space-y-2">
-                {wisdom.actionItems.map((item, i) => (
-                  <li key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/20 text-primary text-xs font-semibold flex items-center justify-center mt-0.5">
-                      {i + 1}
-                    </span>
-                    {item}
-                  </li>
-                ))}
-              </ol>
-            </div>
-
-            {/* Nutrition status */}
-            <div className="grid grid-cols-1 gap-3">
-              <div className="rounded-xl border border-border p-3">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <Flame className="h-3.5 w-3.5 text-orange-400" />
-                  <p className="text-xs font-semibold">Nutrition</p>
+              {/* Weight Pace card */}
+              <div className="rounded-xl border border-border p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <TrendingDown className="h-4 w-4 text-primary" />
+                  <h4 className="text-sm font-semibold">Weight Pace</h4>
                 </div>
-                <p className="text-xs text-muted-foreground">{wisdom.nutritionStatus}</p>
+                <div className="grid grid-cols-2 gap-3 mb-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Actual / week</p>
+                    <p className="text-lg font-bold display-number">{wisdom.weeklyPaceKg.toFixed(2)} kg</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Needed / week</p>
+                    <p className="text-lg font-bold display-number">{wisdom.requiredWeeklyKg.toFixed(2)} kg</p>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground">{wisdom.riskReason}</p>
+              </div>
+
+              {/* Today's Guidance card */}
+              <div className="rounded-xl border border-border p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Zap className="h-4 w-4 text-primary" />
+                  <h4 className="text-sm font-semibold">Today's Guidance</h4>
+                </div>
+                <div className="space-y-2">
+                  {wisdom.adviceParagraph.split(/(?<=\.)\s+/).filter(Boolean).map((sentence, i) => (
+                    <p key={i} className="text-sm text-muted-foreground leading-relaxed">{sentence}</p>
+                  ))}
+                </div>
+              </div>
+
+              {/* Action Items card */}
+              <div className="rounded-xl border border-border p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <CheckCircle2 className="h-4 w-4 text-primary" />
+                  <h4 className="text-sm font-semibold">Action Items</h4>
+                </div>
+                <ol className="space-y-2.5">
+                  {wisdom.actionItems.map((item, i) => (
+                    <li key={i} className="flex items-start gap-2.5 text-sm text-muted-foreground">
+                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center mt-0.5">
+                        {i + 1}
+                      </span>
+                      <span className="leading-snug">{item}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+
+              {/* Nutrition status */}
+              <div className="rounded-xl border border-border p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Flame className="h-4 w-4 text-orange-400" />
+                  <h4 className="text-sm font-semibold">Nutrition</h4>
+                </div>
+                <p className="text-sm text-muted-foreground leading-relaxed">{wisdom.nutritionStatus}</p>
               </div>
             </div>
           </SheetContent>

@@ -46,28 +46,30 @@ export function CreateExerciseDialog({ open, onOpenChange, onSubmit }: CreateExe
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-3xl">
-        <SheetHeader>
-          <SheetTitle>Create Custom Exercise</SheetTitle>
-        </SheetHeader>
+      <SheetContent side="bottom" className="rounded-t-xl border-0 bg-card/95 backdrop-blur-xl p-0">
+        <div className="px-4 pt-4 pb-3">
+          <SheetHeader>
+            <SheetTitle className="text-[15px] font-semibold text-center">Create Exercise</SheetTitle>
+          </SheetHeader>
+        </div>
 
-        <div className="space-y-4 pt-4">
+        <div className="px-4 space-y-2.5">
           <div>
-            <label className="text-sm font-medium mb-1.5 block">Exercise Name</label>
+            <label className="text-[11px] font-medium text-muted-foreground mb-0.5 block">Exercise Name</label>
             <Input
               placeholder="e.g. Zercher Squat"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="h-10"
+              className="h-8 text-[13px] rounded-lg border-border/30 bg-muted/20"
               autoFocus
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-1.5">
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Category</label>
+              <label className="text-[11px] font-medium text-muted-foreground mb-0.5 block">Category</label>
               <Select value={category} onValueChange={(v) => setCategory(v as ExerciseCategory)}>
-                <SelectTrigger className="h-10">
+                <SelectTrigger className="h-8 text-[13px] rounded-lg border-border/30 bg-muted/20">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -79,9 +81,9 @@ export function CreateExerciseDialog({ open, onOpenChange, onSubmit }: CreateExe
             </div>
 
             <div>
-              <label className="text-sm font-medium mb-1.5 block">Muscle Group</label>
+              <label className="text-[11px] font-medium text-muted-foreground mb-0.5 block">Muscle Group</label>
               <Select value={muscleGroup} onValueChange={(v) => setMuscleGroup(v as MuscleGroup)}>
-                <SelectTrigger className="h-10">
+                <SelectTrigger className="h-8 text-[13px] rounded-lg border-border/30 bg-muted/20">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -94,9 +96,9 @@ export function CreateExerciseDialog({ open, onOpenChange, onSubmit }: CreateExe
           </div>
 
           <div>
-            <label className="text-sm font-medium mb-1.5 block">Equipment</label>
+            <label className="text-[11px] font-medium text-muted-foreground mb-0.5 block">Equipment</label>
             <Select value={equipment} onValueChange={(v) => setEquipment(v as Equipment)}>
-              <SelectTrigger className="h-10">
+              <SelectTrigger className="h-8 text-[13px] rounded-lg border-border/30 bg-muted/20">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -107,18 +109,20 @@ export function CreateExerciseDialog({ open, onOpenChange, onSubmit }: CreateExe
             </Select>
           </div>
 
-          <div className="flex items-center justify-between">
-            <label className="text-sm font-medium">Bodyweight Exercise</label>
+          <div className="flex items-center justify-between py-0.5">
+            <label className="text-[12px] font-medium">Bodyweight Exercise</label>
             <Switch checked={isBodyweight} onCheckedChange={setIsBodyweight} />
           </div>
+        </div>
 
-          <Button
+        <div className="border-t border-border/40 mt-3">
+          <button
             onClick={handleSubmit}
             disabled={!name.trim() || submitting}
-            className="w-full h-11"
+            className="w-full py-2.5 text-[14px] font-semibold text-primary active:bg-muted/50 transition-colors disabled:opacity-40"
           >
             {submitting ? "Creating..." : "Create Exercise"}
-          </Button>
+          </button>
         </div>
       </SheetContent>
     </Sheet>
