@@ -16,6 +16,8 @@ import { logger } from "@/lib/logger";
 import type { Meal, MacroGoals, Ingredient } from "@/pages/nutrition/types";
 import type { DietAnalysisResult } from "@/types/dietAnalysis";
 
+const LOCAL_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours — stale-while-revalidate handles freshness
+
 interface UseNutritionDataParams {
   selectedDate: string;
   meals: Meal[];
@@ -157,7 +159,7 @@ export function useNutritionData(params: UseNutritionDataParams) {
     // Try localStorage with 2hr TTL — serve from cache, then continue to DB for background revalidation
     let servedFromLocal = false;
     if (!skipCache) {
-      const localMeals = localCache.getForDate<Meal[]>(userId, "nutrition_logs", fetchDate, 120 * 60 * 1000);
+      const localMeals = localCache.getForDate<Meal[]>(userId, "nutrition_logs", fetchDate, LOCAL_CACHE_TTL_MS);
       if (localMeals && localMeals.length > 0) {
         // Normalize meal_name to prevent "Untitled" display from stale cache
         const normalized = localMeals.map(m => ({ ...m, meal_name: m.meal_name || "Meal" }));
@@ -272,7 +274,7 @@ export function useNutritionData(params: UseNutritionDataParams) {
     activeDateRef.current = selectedDate;
     const hasCachedMeals = userId && (
       nutritionCache.getMeals(userId, selectedDate) ||
-      localCache.getForDate(userId, "nutrition_logs", selectedDate, 120 * 60 * 1000)
+      localCache.getForDate(userId, "nutrition_logs", selectedDate, LOCAL_CACHE_TTL_MS)
     );
     if (!hasCachedMeals) setMealsLoading(true);
     loadMeals();

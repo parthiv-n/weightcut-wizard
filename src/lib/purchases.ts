@@ -189,25 +189,47 @@ export async function getCustomerInfo(): Promise<any | null> {
 }
 
 export function isPremiumFromCustomerInfo(customerInfo: any): boolean {
-  if (!customerInfo?.entitlements?.active) {
-    // Fallback: check if ANY active subscription exists (sandbox may not map entitlements)
-    const subs = customerInfo?.activeSubscriptions;
-    if (Array.isArray(subs) && subs.length > 0) {
-      logger.info("isPremium: no entitlement found, but activeSubscriptions present", { subs });
-      return true;
-    }
-    return false;
-  }
-  // Check by entitlement ID first
-  if (customerInfo.entitlements.active[ENTITLEMENT_ID] !== undefined) return true;
-  // Fallback: if ANY entitlement is active, treat as premium
-  if (Object.keys(customerInfo.entitlements.active).length > 0) {
-    logger.info("isPremium: entitlement ID mismatch, but has active entitlements", {
-      expected: ENTITLEMENT_ID,
-      found: Object.keys(customerInfo.entitlements.active),
-    });
+  if (!customerInfo) return false;
+
+  // Primary check: exact entitlement ID
+  const entitlement = customerInfo?.entitlements?.active?.[ENTITLEMENT_ID];
+  if (entitlement) {
+    if (entitlement.isActive === false) return false;
+    if (entitlement.expirationDate && new Date(entitlement.expirationDate) <= new Date()) return false;
     return true;
   }
+
+  // Fallback: any active entitlement (handles entitlement ID mismatches in sandbox)
+  const activeEntitlements = customerInfo?.entitlements?.active;
+  if (activeEntitlements && Object.keys(activeEntitlements).length > 0) {
+    const hasValid = Object.values(activeEntitlements).some((ent: any) => {
+      if (ent.isActive === false) return false;
+      if (ent.expirationDate && new Date(ent.expirationDate) <= new Date()) return false;
+      return true;
+    });
+    if (hasValid) {
+      logger.info("isPremium: entitlement ID mismatch, but has valid active entitlements", {
+        expected: ENTITLEMENT_ID,
+        found: Object.keys(activeEntitlements),
+      });
+      return true;
+    }
+  }
+
+  // Fallback: activeSubscriptions — only trust if it matches known product IDs
+  const subs = customerInfo?.activeSubscriptions;
+  if (Array.isArray(subs) && subs.length > 0) {
+    const knownIds = Object.values(PRODUCT_IDS);
+    const hasKnown = subs.some((sub: string) =>
+      knownIds.some(id => sub.includes(id) || id.includes(sub))
+    );
+    if (hasKnown) {
+      logger.info("isPremium: no entitlement found, but known activeSubscription present", { subs });
+      return true;
+    }
+    logger.warn("isPremium: activeSubscriptions present but none match known product IDs", { subs });
+  }
+
   return false;
 }
 
@@ -255,12 +277,12 @@ export async function presentPaywall(): Promise<{ customerInfo: any; paywallResu
     const result = await RevenueCatUI.presentPaywall();
     logger.info("RevenueCatUI.presentPaywall raw result", {
       keys: result ? Object.keys(result) : "null",
-      paywallResult: result?.paywallResult,
+      paywallResult: result?.result,
       hasCustomerInfo: !!result?.customerInfo,
     });
     return {
       customerInfo: result?.customerInfo ?? null,
-      paywallResult: result?.paywallResult ?? "NOT_PRESENTED",
+      paywallResult: result?.result ?? "NOT_PRESENTED",
     };
   } catch (err) {
     logger.error("Failed to present paywall", err);
@@ -283,7 +305,7 @@ export async function presentPaywallIfNeeded(): Promise<{ customerInfo: any; pay
     });
     return {
       customerInfo: result?.customerInfo ?? null,
-      paywallResult: result?.paywallResult ?? "NOT_PRESENTED",
+      paywallResult: result?.result ?? "NOT_PRESENTED",
     };
   } catch (err) {
     logger.error("Failed to present paywall", err);

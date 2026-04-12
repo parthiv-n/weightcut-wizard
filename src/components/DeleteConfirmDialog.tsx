@@ -1,15 +1,10 @@
 import { useEffect } from "react";
-import { Trash2 } from "lucide-react";
 import {
   AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
+import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
 import { triggerHapticWarning, confirmDelete } from "@/lib/haptics";
 
 interface DeleteConfirmDialogProps {
@@ -39,30 +34,32 @@ export function DeleteConfirmDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
-        <AlertDialogHeader className="text-center items-center">
-          <div className="mb-2 flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10 ring-1 ring-destructive/20">
-            <Trash2 className="h-6 w-6 text-destructive" />
+      <AlertDialogContent className="max-w-[240px] rounded-xl p-0 border-0 bg-card/90 backdrop-blur-xl overflow-hidden gap-0 shadow-2xl">
+        <VisuallyHidden><AlertDialogPrimitive.Title>Delete</AlertDialogPrimitive.Title></VisuallyHidden>
+        <AlertDialogPrimitive.Description asChild>
+          <div className="pt-4 pb-3 px-4 text-center">
+            <p className="text-[15px] font-semibold text-foreground">{title}</p>
+            <p className="text-[12px] text-muted-foreground mt-0.5 leading-snug">
+              {description || defaultDescription}
+            </p>
           </div>
-          <AlertDialogTitle className="text-center text-lg">{title}</AlertDialogTitle>
-          <AlertDialogDescription className="text-center text-[13px] leading-relaxed">
-            {description || defaultDescription}
-            <span className="block mt-2 text-xs text-muted-foreground/50">
-              This action cannot be undone.
-            </span>
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter className="flex-row gap-3 pt-2">
-          <AlertDialogCancel className="flex-1 h-12 rounded-2xl text-[15px] font-semibold">
-            Cancel
-          </AlertDialogCancel>
-          <AlertDialogAction
+        </AlertDialogPrimitive.Description>
+
+        <div className="border-t border-border/40">
+          <button
             onClick={() => { confirmDelete(); onConfirm(); }}
-            className="flex-1 h-12 rounded-2xl text-[15px] font-semibold bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            className="w-full py-2.5 text-[14px] font-semibold text-destructive active:bg-muted/50 transition-colors"
           >
             Delete
-          </AlertDialogAction>
-        </AlertDialogFooter>
+          </button>
+          <div className="border-t border-border/40" />
+          <button
+            onClick={() => onOpenChange(false)}
+            className="w-full py-2.5 text-[14px] font-normal text-primary active:bg-muted/50 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
       </AlertDialogContent>
     </AlertDialog>
   );

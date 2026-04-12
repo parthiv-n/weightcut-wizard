@@ -173,18 +173,20 @@ export function PaywallOverlay() {
         const result = await presentPaywall();
         logger.info("Native paywall closed", { result: JSON.stringify(result) });
         if (cancelled) return;
-        // Always check if user is now premium after paywall closes —
-        // don't rely on paywallResult string which varies between environments
-        const info = await getCustomerInfo();
-        logger.info("Post-paywall customerInfo", {
-          hasInfo: !!info,
-          activeEntitlements: info?.entitlements?.active ? Object.keys(info.entitlements.active) : [],
-          activeSubscriptions: info?.activeSubscriptions ?? [],
-        });
-        if (info && isPremiumFromCustomerInfo(info)) {
-          await activatePro(info);
-          return;
+
+        const paywallResult = result?.paywallResult;
+
+        // Only activate if the user actually purchased or restored
+        if (paywallResult === "PURCHASED" || paywallResult === "RESTORED") {
+          // Prefer customerInfo from presentPaywall result; fall back to fresh fetch
+          const info = result?.customerInfo ?? await getCustomerInfo();
+          if (info && isPremiumFromCustomerInfo(info)) {
+            await activatePro(info);
+            return;
+          }
         }
+
+        logger.info("Paywall dismissed without purchase", { paywallResult });
       } catch (err) {
         logger.error("Native paywall error", err);
       }

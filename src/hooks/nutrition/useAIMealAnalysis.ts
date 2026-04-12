@@ -8,6 +8,7 @@ import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
+import { lookupUSDA } from "@/lib/usdaLookup";
 import { Capacitor } from "@capacitor/core";
 import { Search, Database, CheckCircle, PieChart, Camera } from "lucide-react";
 import type { AiLineItem, Ingredient, ManualMealForm, ManualNutritionDialogState, BarcodeBaseMacros, INITIAL_MANUAL_MEAL, INITIAL_MANUAL_NUTRITION_DIALOG } from "@/pages/nutrition/types";
@@ -551,9 +552,16 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     fats_per_100g: number;
     source?: string;
   } | null> => {
+    // 1. Try USDA first — free, fast, no gems consumed
+    const usdaResult = await lookupUSDA(ingredientName);
+    if (usdaResult && usdaResult.calories_per_100g > 0) {
+      return usdaResult;
+    }
+
+    // 2. Fall back to AI lookup only if USDA returned nothing
     try {
       if (!checkAIAccess()) {
-        openNoGemsDialog();
+        setIngredientLookupError("No results found in food database. Please enter nutrition info manually.");
         return null;
       }
 
@@ -562,7 +570,10 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       });
 
       if (error) {
-        if (await handleAILimitError(error)) return null;
+        if (await handleAILimitError(error)) {
+          setIngredientLookupError("Daily AI limit reached. Please enter nutrition info manually.");
+          return null;
+        }
         logger.error("Ingredient lookup error", error);
         return null;
       }
@@ -582,7 +593,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       logger.error("Error looking up ingredient", error);
       return null;
     }
-  }, []);
+  }, [checkAIAccess, handleAILimitError, onAICallSuccess, setIngredientLookupError]);
 
   const handleManualNutritionSubmit = useCallback(() => {
     if (!manualNutritionDialog.calories_per_100g) {

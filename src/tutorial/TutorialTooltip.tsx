@@ -43,9 +43,9 @@ export function TutorialTooltip({
         key={step.id}
         ref={setTooltipRef}
         className="fixed max-w-[340px] rounded-3xl p-5
-          bg-[rgba(18,18,20,0.97)]
-          border border-[rgba(255,255,255,0.08)]
-          shadow-[0_12px_48px_rgba(0,0,0,0.6)]"
+          bg-white/[0.97] dark:bg-[rgba(18,18,20,0.97)]
+          border border-border/30 dark:border-[rgba(255,255,255,0.08)]
+          shadow-[0_12px_48px_rgba(0,0,0,0.15)] dark:shadow-[0_12px_48px_rgba(0,0,0,0.6)]"
         style={{
           pointerEvents: "auto",
           zIndex: 10004,

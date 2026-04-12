@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { RefreshCw } from "lucide-react";
-import { useProfile } from "@/contexts/UserContext";
 import { triggerHaptic } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 
@@ -11,8 +10,6 @@ export function PullToRefresh() {
   const [refreshing, setRefreshing] = useState(false);
   const startY = useRef(0);
   const pulling = useRef(false);
-  const { refreshProfile } = useProfile();
-
   const getMain = useCallback(() => document.querySelector("main"), []);
 
   useEffect(() => {
@@ -48,18 +45,8 @@ export function PullToRefresh() {
         setRefreshing(true);
         setPullDistance(THRESHOLD * 0.6);
         triggerHaptic(ImpactStyle.Medium);
-        // Soft refresh: re-fetch profile + simulate visibility change to trigger page data reloads
-        refreshProfile().then(() => {
-          // Dispatch visibilitychange — pages already listen to this for data refresh
-          document.dispatchEvent(new Event('visibilitychange'));
-          setTimeout(() => {
-            setRefreshing(false);
-            setPullDistance(0);
-          }, 600);
-        }).catch(() => {
-          setRefreshing(false);
-          setPullDistance(0);
-        });
+        // Hard refresh — reload the page like pressing the browser refresh button
+        setTimeout(() => window.location.reload(), 300);
       } else {
         setPullDistance(0);
       }

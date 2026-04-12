@@ -1,4 +1,4 @@
-import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Calendar, LogOut, HeartPulse, Trash2, Dumbbell, TrendingDown } from "lucide-react";
+import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Calendar, HeartPulse, Dumbbell, TrendingDown } from "lucide-react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, memo } from "react";
 import { triggerHaptic, triggerHapticSelection } from "@/lib/haptics";
@@ -11,15 +11,11 @@ import { useTutorial } from "@/tutorial/useTutorial";
 import { FIGHT_ONLY_PATHS, isFighter } from "@/lib/goalType";
 import {
   AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { QuickLogDialog } from "@/components/nav/QuickLogDialog";
 import { MoreMenuSheet } from "@/components/nav/MoreMenuSheet";
 import { SettingsPanel } from "@/components/nav/SettingsPanel";
@@ -333,55 +329,57 @@ export const BottomNav = memo(function BottomNav() {
 
       {/* Logout Confirmation Dialog */}
       <AlertDialog open={logoutDialogOpen} onOpenChange={setLogoutDialogOpen}>
-        <AlertDialogContent className="max-w-sm">
-          <AlertDialogHeader className="sm:text-center">
-            <div className="mx-auto mb-1 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 dark:bg-destructive/15 ring-1 ring-destructive/20">
-              <LogOut className="h-5 w-5 text-destructive" />
+        <AlertDialogContent className="max-w-[240px] rounded-xl p-0 border-0 bg-card/90 backdrop-blur-xl overflow-hidden gap-0 shadow-2xl">
+          <VisuallyHidden><AlertDialogTitle>Sign Out</AlertDialogTitle></VisuallyHidden>
+          <AlertDialogDescription asChild>
+            <div className="pt-4 pb-3 px-4 text-center">
+              <p className="text-[15px] font-semibold text-foreground">Sign Out</p>
+              <p className="text-[12px] text-muted-foreground mt-0.5 leading-snug">
+                Are you sure? You'll need to sign in again.
+              </p>
             </div>
-            <AlertDialogTitle className="text-center">Sign Out</AlertDialogTitle>
-            <AlertDialogDescription className="text-center">
-              Are you sure you want to sign out? You'll need to sign in again to access your data.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex-row gap-3 sm:justify-center pt-1">
-            <AlertDialogCancel className="flex-1 sm:flex-initial sm:min-w-[100px]">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleLogout}
-              className="flex-1 sm:flex-initial sm:min-w-[100px] rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
+          </AlertDialogDescription>
+          <div className="border-t border-border/40">
+            <button onClick={handleLogout} className="w-full py-2.5 text-[14px] font-semibold text-destructive active:bg-muted/50 transition-colors">
               Sign Out
-            </AlertDialogAction>
-          </AlertDialogFooter>
+            </button>
+            <div className="border-t border-border/40" />
+            <button onClick={() => setLogoutDialogOpen(false)} className="w-full py-2.5 text-[14px] font-normal text-primary active:bg-muted/50 transition-colors">
+              Cancel
+            </button>
+          </div>
         </AlertDialogContent>
       </AlertDialog>
 
       {/* Delete Account Confirmation Dialog */}
       <AlertDialog open={deleteAccountDialogOpen} onOpenChange={(open) => { if (!deleteLoading) setDeleteAccountDialogOpen(open); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader className="text-center items-center">
-            <div className="mb-2 flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10 ring-1 ring-destructive/20">
-              <Trash2 className="h-6 w-6 text-destructive" />
+        <AlertDialogContent className="max-w-[240px] rounded-xl p-0 border-0 bg-card/90 backdrop-blur-xl overflow-hidden gap-0 shadow-2xl">
+          <VisuallyHidden><AlertDialogTitle>Delete Account</AlertDialogTitle></VisuallyHidden>
+          <AlertDialogDescription asChild>
+            <div className="pt-4 pb-3 px-4 text-center">
+              <p className="text-[15px] font-semibold text-foreground">Delete Account</p>
+              <p className="text-[12px] text-muted-foreground mt-0.5 leading-snug">
+                This will permanently delete your account and all data. This cannot be undone.
+              </p>
             </div>
-            <AlertDialogTitle className="text-center text-lg">Delete Account</AlertDialogTitle>
-            <AlertDialogDescription className="text-center text-[13px] leading-relaxed">
-              This will permanently delete your account and all associated data.
-              <span className="block mt-2 text-xs text-muted-foreground/50">
-                This action cannot be undone.
-              </span>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex-row gap-3 pt-2">
-            <AlertDialogCancel className="flex-1 h-12 rounded-2xl text-[15px] font-semibold" disabled={deleteLoading}>
-              Cancel
-            </AlertDialogCancel>
-            <Button
+          </AlertDialogDescription>
+          <div className="border-t border-border/40">
+            <button
               onClick={handleDeleteAccount}
               disabled={deleteLoading}
-              className="flex-1 h-12 rounded-2xl text-[15px] font-semibold bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="w-full py-2.5 text-[14px] font-semibold text-destructive active:bg-muted/50 transition-colors disabled:opacity-40"
             >
-              {deleteLoading ? "Deleting…" : "Delete"}
-            </Button>
-          </AlertDialogFooter>
+              {deleteLoading ? "Deleting..." : "Delete Account"}
+            </button>
+            <div className="border-t border-border/40" />
+            <button
+              onClick={() => setDeleteAccountDialogOpen(false)}
+              disabled={deleteLoading}
+              className="w-full py-2.5 text-[14px] font-normal text-primary active:bg-muted/50 transition-colors disabled:opacity-40"
+            >
+              Cancel
+            </button>
+          </div>
         </AlertDialogContent>
       </AlertDialog>
     </>

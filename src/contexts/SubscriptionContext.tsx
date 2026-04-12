@@ -129,6 +129,13 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     setTierOverride({ tier: newTier, expiresAt: newExpiresAt });
   }, []);
 
+  // Track whether native paywall is currently open — prevents listener from
+  // granting premium from stale data while user is browsing the paywall
+  const isNativePaywallActiveRef = useRef(false);
+  useEffect(() => {
+    isNativePaywallActiveRef.current = isPaywallOpen && Capacitor.isNativePlatform();
+  }, [isPaywallOpen]);
+
   // Initialize RevenueCat when userId becomes available
   useEffect(() => {
     if (!userId || !Capacitor.isNativePlatform()) return;
@@ -141,6 +148,12 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       const cleanup = await addCustomerInfoUpdateListener(async (customerInfo) => {
         const isNowPremium = isPremiumFromCustomerInfo(customerInfo);
         if (isNowPremium) {
+          // Skip if the native paywall is currently open — PaywallOverlay
+          // handles activation based on the actual paywallResult
+          if (isNativePaywallActiveRef.current) {
+            logger.info("RevenueCat listener: skipping forcePremium while paywall is open");
+            return;
+          }
           // Sync premium to DB directly — don't wait for webhook
           const sub = getSubscriptionFromCustomerInfo(customerInfo);
           if (sub) {
