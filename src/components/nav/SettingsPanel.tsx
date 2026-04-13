@@ -40,70 +40,47 @@ function SubscriptionSection() {
 
   if (isPremium) {
     const expiryLabel = expiresAt
-      ? `Renews ${expiresAt.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+      ? `Renews ${expiresAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
       : "Active";
     const planLabel = tier === "premium_lifetime" ? "Lifetime" : tier === "premium_annual" ? "Annual" : "Monthly";
 
     return (
-      <div className="rounded-xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 overflow-hidden divide-y divide-border/30 dark:divide-white/5">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div className="flex items-center gap-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
-              <Crown className="h-5 w-5 text-primary" />
-            </span>
-            <div>
-              <div className="flex items-center gap-2">
-                <p className="text-[15px] font-medium text-foreground">Premium</p>
-                <PremiumBadge />
-              </div>
-              <p className="text-xs text-muted-foreground">{planLabel} · {expiryLabel}</p>
-            </div>
+      <div className="rounded-lg bg-muted/20 overflow-hidden divide-y divide-border/20">
+        <div className="flex items-center justify-between px-3 py-2">
+          <div className="flex items-center gap-2">
+            <Crown className="h-4 w-4 text-primary shrink-0" />
+            <p className="text-[13px] font-medium">Premium</p>
+            <PremiumBadge />
           </div>
+          <p className="text-[11px] text-muted-foreground">{planLabel} · {expiryLabel}</p>
         </div>
-        <button
-          type="button"
-          onClick={() => presentCustomerCenter()}
-          className="w-full flex items-center justify-between px-4 py-3 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left"
-        >
-          <p className="text-sm text-foreground">Manage Subscription</p>
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        <button type="button" onClick={() => presentCustomerCenter()}
+          className="w-full flex items-center justify-between px-3 py-2 active:bg-muted/40 transition-colors text-left">
+          <p className="text-[13px] text-foreground">Manage Subscription</p>
+          <ChevronRight className="h-3 w-3 text-muted-foreground" />
         </button>
       </div>
     );
   }
 
   return (
-    <div className="rounded-xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 overflow-hidden divide-y divide-border/30 dark:divide-white/5">
-      <button
-        type="button"
-        onClick={openPaywall}
-        className="w-full flex items-center justify-between px-4 py-3 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left"
-      >
-        <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-secondary/20">
-            <Zap className="h-5 w-5 text-primary" />
-          </span>
+    <div className="rounded-lg bg-muted/20 overflow-hidden divide-y divide-border/20">
+      <button type="button" onClick={openPaywall}
+        className="w-full flex items-center justify-between px-3 py-2 active:bg-muted/40 transition-colors text-left">
+        <div className="flex items-center gap-2">
+          <Zap className="h-4 w-4 text-primary shrink-0" />
           <div>
-            <p className="text-[15px] font-medium text-foreground">Upgrade to Premium</p>
-            <p className="text-xs text-muted-foreground">Unlimited AI · £7.99/mo</p>
+            <p className="text-[13px] font-medium">Upgrade to Premium</p>
+            <p className="text-[10px] text-muted-foreground">Unlimited AI</p>
           </div>
         </div>
-        <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
+        <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
       </button>
-      <button
-        type="button"
-        onClick={handleRestore}
-        disabled={restoringPurchases}
-        className="w-full flex items-center justify-between px-4 py-3 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left"
-      >
-        <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-muted/30 dark:bg-white/10">
-            <RotateCcw className="h-5 w-5 text-muted-foreground" />
-          </span>
-          <div>
-            <p className="text-[15px] font-medium text-foreground">Restore Purchases</p>
-            <p className="text-xs text-muted-foreground">Already subscribed?</p>
-          </div>
+      <button type="button" onClick={handleRestore} disabled={restoringPurchases}
+        className="w-full flex items-center justify-between px-3 py-2 active:bg-muted/40 transition-colors text-left disabled:opacity-50">
+        <div className="flex items-center gap-2">
+          <RotateCcw className="h-4 w-4 text-muted-foreground shrink-0" />
+          <p className="text-[13px] font-medium">Restore Purchases</p>
         </div>
       </button>
     </div>
@@ -116,40 +93,21 @@ function GemsSection() {
   if (isPremium) return null;
 
   return (
-    <div className="rounded-xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 overflow-hidden divide-y divide-border/30 dark:divide-white/5">
-      <div className="flex items-center justify-between px-4 py-3">
-        <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/15">
-            <Gem className="h-5 w-5 text-primary" />
-          </span>
-          <div>
-            <p className="text-[15px] font-medium text-foreground">AI Gems</p>
-            <p className="text-xs text-muted-foreground">{gems} gem{gems !== 1 ? 's' : ''} available</p>
-          </div>
+    <div className="rounded-lg bg-muted/20 overflow-hidden divide-y divide-border/20">
+      <div className="flex items-center justify-between px-3 py-2">
+        <div className="flex items-center gap-2">
+          <Gem className="h-4 w-4 text-primary shrink-0" />
+          <p className="text-[13px] font-medium">AI Gems</p>
         </div>
-        <span className="text-lg font-bold text-primary tabular-nums">{gems}</span>
+        <span className="text-[13px] font-bold text-primary tabular-nums">{gems}</span>
       </div>
-
-      <button
-        type="button"
-        onClick={watchAdForGem}
-        disabled={!canWatchAd || loading}
-        className="w-full flex items-center justify-between px-4 py-3 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left disabled:opacity-50"
-      >
-        <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-green-500/10 dark:bg-green-500/20">
-            <Play className="h-5 w-5 text-green-500" />
-          </span>
-          <div>
-            <p className="text-[15px] font-medium text-foreground">
-              {loading ? 'Loading ad...' : 'Watch Ad for 1 Gem'}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {adsRemaining > 0 ? `${adsRemaining} ad${adsRemaining !== 1 ? 's' : ''} remaining today` : 'Daily limit reached'}
-            </p>
-          </div>
+      <button type="button" onClick={watchAdForGem} disabled={!canWatchAd || loading}
+        className="w-full flex items-center justify-between px-3 py-2 active:bg-muted/40 transition-colors text-left disabled:opacity-50">
+        <div className="flex items-center gap-2">
+          <Play className="h-4 w-4 text-green-500 shrink-0" />
+          <p className="text-[13px] font-medium">{loading ? 'Loading...' : 'Watch Ad'}</p>
         </div>
-        <ChevronRight className="h-4 w-4 text-muted-foreground" />
+        <span className="text-[10px] text-muted-foreground">{adsRemaining > 0 ? `${adsRemaining} left` : 'Limit reached'}</span>
       </button>
     </div>
   );
@@ -224,306 +182,172 @@ export function SettingsPanel({
 
   return (
     <>
-      <div
-        className="fixed inset-0 z-[10001] bg-black/60 animate-in fade-in duration-200"
-        onClick={onClose}
-      />
-      <div className="fixed inset-x-0 bottom-0 z-[10002] bg-background/95 dark:bg-background/98 border-t border-border rounded-t-3xl animate-in slide-in-from-bottom duration-300 safe-area-inset-bottom flex flex-col" style={{ maxHeight: "85dvh" }}>
+      <div className="fixed inset-0 z-[10001] bg-black/60 animate-in fade-in duration-200" onClick={onClose} />
+      <div className="fixed inset-x-0 bottom-0 z-[10002] bg-card/95 backdrop-blur-xl border-0 rounded-t-xl animate-in slide-in-from-bottom duration-300 flex flex-col" style={{ maxHeight: "85dvh" }}>
         {/* Drag handle */}
-        <div className="flex justify-center pt-3 pb-1 shrink-0">
-          <div className="w-10 h-1 rounded-full bg-muted-foreground/25" />
+        <div className="flex justify-center pt-2.5 pb-1 shrink-0">
+          <div className="w-9 h-1 rounded-full bg-muted-foreground/20" />
         </div>
-        <div className="px-5 pb-2 pt-1 shrink-0">
-          <h2 className="text-lg font-semibold text-foreground">Settings</h2>
+        <div className="px-4 pb-1.5 shrink-0">
+          <h2 className="text-[15px] font-semibold">Settings</h2>
         </div>
 
-        <div className="px-4 space-y-3 overflow-y-auto overscroll-contain" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1.5rem)" }}>
-          {/* Profile Picture + Name row */}
-          <div className="rounded-xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 p-4">
-            <div className="flex items-center gap-4">
+        <div className="px-3 space-y-2 overflow-y-auto overscroll-contain" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}>
+          {/* Profile */}
+          <div className="rounded-lg bg-muted/20 p-3">
+            <div className="flex items-center gap-3">
               <div className="shrink-0">
                 {avatarUrl ? (
-                  <img src={avatarUrl} alt="Profile" className="h-14 w-14 rounded-full object-cover border-2 border-primary/20" />
+                  <img src={avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
                 ) : (
-                  <div className="h-14 w-14 rounded-full bg-muted/50 border-2 border-border flex items-center justify-center">
-                    <span className="text-xl font-bold text-muted-foreground">{(userName || "?")[0]?.toUpperCase()}</span>
+                  <div className="h-10 w-10 rounded-full bg-muted/40 flex items-center justify-center">
+                    <span className="text-sm font-bold text-muted-foreground">{(userName || "?")[0]?.toUpperCase()}</span>
                   </div>
                 )}
               </div>
-              <div className="flex-1 min-w-0 space-y-2">
-                <Input
-                  id="name"
-                  value={editedName}
-                  onChange={(e) => setEditedName(e.target.value)}
-                  placeholder="Your name"
-                  className="h-10 rounded-xl bg-background/60 dark:bg-white/5 border-border/40 text-sm font-medium"
-                />
-                <ProfilePictureUpload
-                  currentAvatarUrl={avatarUrl || undefined}
-                  onUploadSuccess={onAvatarChange}
-                />
+              <div className="flex-1 min-w-0 space-y-1.5">
+                <Input id="name" value={editedName} onChange={(e) => setEditedName(e.target.value)} placeholder="Your name"
+                  className="h-8 text-[13px] rounded-lg border-border/30 bg-muted/20" />
+                <ProfilePictureUpload currentAvatarUrl={avatarUrl || undefined} onUploadSuccess={onAvatarChange} />
               </div>
             </div>
+            {userEmail && <p className="text-[10px] text-muted-foreground mt-1.5 pl-[52px] truncate">{userEmail}</p>}
           </div>
-
-          {/* Email */}
-          {userEmail && (
-            <div className="rounded-xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 overflow-hidden">
-              <div className="flex items-center px-4 py-3 gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
-                  <Mail className="h-5 w-5 text-primary" />
-                </span>
-                <div className="min-w-0">
-                  <p className="text-[15px] font-medium text-foreground">Email</p>
-                  <p className="text-xs text-muted-foreground truncate">{userEmail}</p>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Subscription */}
           <SubscriptionSection />
 
-          {/* Gems & Rewards */}
+          {/* Gems */}
           <GemsSection />
 
-          {/* Appearance */}
-          <button
-            type="button"
-            onClick={onToggleTheme}
-            className="w-full rounded-xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 overflow-hidden active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left"
-          >
-            <div className="flex items-center justify-between px-4 py-3">
-              <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
-                  {theme === "light" ? (
-                    <Sun className="h-5 w-5 text-primary" />
-                  ) : (
-                    <Moon className="h-5 w-5 text-primary" />
-                  )}
-                </span>
-                <div>
-                  <p className="text-[15px] font-medium text-foreground">Appearance</p>
-                  <p className="text-xs text-muted-foreground">{theme === "dark" ? "Dark mode" : "Light mode"}</p>
-                </div>
+          {/* Preferences */}
+          <div className="rounded-lg bg-muted/20 overflow-hidden divide-y divide-border/20">
+            <button type="button" onClick={onToggleTheme}
+              className="w-full flex items-center justify-between px-3 py-2 active:bg-muted/40 transition-colors text-left">
+              <div className="flex items-center gap-2">
+                {theme === "dark" ? <Moon className="h-4 w-4 text-primary shrink-0" /> : <Sun className="h-4 w-4 text-primary shrink-0" />}
+                <p className="text-[13px] font-medium">{theme === "dark" ? "Dark Mode" : "Light Mode"}</p>
               </div>
-              <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-            </div>
-          </button>
+              <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+            </button>
 
-          {/* Fighter Mode Toggle */}
-          {onToggleGoalType && (
-            <div className="rounded-xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
-                    <Trophy className="h-5 w-5 text-primary" />
-                  </span>
-                  <div>
-                    <p className="text-[15px] font-medium text-foreground">Fighter Mode</p>
-                    <p className="text-xs text-muted-foreground">
-                      {goalType === 'cutting' ? 'Fight camps, dehydration & fight week' : 'Weight loss only'}
-                    </p>
-                  </div>
+            {onToggleGoalType && (
+              <div className="flex items-center justify-between px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <Trophy className="h-4 w-4 text-primary shrink-0" />
+                  <p className="text-[13px] font-medium">Fighter Mode</p>
                 </div>
-                <Switch
-                  checked={goalType === 'cutting'}
-                  onCheckedChange={onToggleGoalType}
-                />
+                <Switch checked={goalType === 'cutting'} onCheckedChange={onToggleGoalType} />
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Weight Reminder (native only) */}
-          {Capacitor.isNativePlatform() && (() => {
-            const h = reminderSettings.hour;
-            const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h;
-            const ampm = h < 12 ? "AM" : "PM";
-            const displayMinute = String(reminderSettings.minute).padStart(2, "0");
-            const timeLabel = `Daily at ${displayHour}:${displayMinute} ${ampm}`;
+            {Capacitor.isNativePlatform() && (() => {
+              const h = reminderSettings.hour;
+              const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h;
+              const ampm = h < 12 ? "AM" : "PM";
+              const displayMinute = String(reminderSettings.minute).padStart(2, "0");
 
-            return (
-              <div className="rounded-xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 overflow-hidden">
-                <div
-                  className="flex items-center justify-between px-4 py-3 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation cursor-pointer"
-                  onClick={() => { if (reminderSettings.enabled) setTimePickerOpen(!timePickerOpen); }}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
-                      <Bell className="h-5 w-5 text-primary" />
-                    </span>
-                    <div>
-                      <p className="text-[15px] font-medium text-foreground">Weight Reminder</p>
-                      <p className="text-xs text-muted-foreground">
-                        {reminderSettings.enabled ? timeLabel : "Off"}
-                      </p>
+              return (
+                <>
+                  <div className="flex items-center justify-between px-3 py-2 cursor-pointer"
+                    onClick={() => { if (reminderSettings.enabled) setTimePickerOpen(!timePickerOpen); }}>
+                    <div className="flex items-center gap-2">
+                      <Bell className="h-4 w-4 text-primary shrink-0" />
+                      <div>
+                        <p className="text-[13px] font-medium">Reminder</p>
+                        {reminderSettings.enabled && <p className="text-[10px] text-muted-foreground">{displayHour}:{displayMinute} {ampm}</p>}
+                      </div>
                     </div>
+                    <Switch checked={reminderSettings.enabled} onCheckedChange={handleToggle} onClick={(e) => e.stopPropagation()} />
                   </div>
-                  <Switch
-                    checked={reminderSettings.enabled}
-                    onCheckedChange={handleToggle}
-                    onClick={(e) => e.stopPropagation()}
-                  />
-                </div>
-
-                {timePickerOpen && reminderSettings.enabled && (() => {
-                  const curHour24 = reminderSettings.hour;
-                  const curHour12 = curHour24 === 0 ? 12 : curHour24 > 12 ? curHour24 - 12 : curHour24;
-                  const curAmpm = curHour24 < 12 ? "AM" : "PM";
-
-                  const selectClass = "h-10 rounded-xl bg-background/60 dark:bg-white/5 border border-border/40 text-sm font-medium px-3 appearance-none text-foreground";
-
-                  return (
-                    <div className="flex items-center gap-2 px-4 pb-3 pt-1">
-                      <select
-                        value={curHour12}
-                        onChange={(e) => handleTimeChange("hour12", Number(e.target.value))}
-                        className={selectClass}
-                      >
-                        {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
-                          <option key={h} value={h}>{h}</option>
-                        ))}
-                      </select>
-                      <span className="text-muted-foreground font-medium">:</span>
-                      <select
-                        value={reminderSettings.minute}
-                        onChange={(e) => handleTimeChange("minute", Number(e.target.value))}
-                        className={selectClass}
-                      >
-                        {[0, 15, 30, 45].map((m) => (
-                          <option key={m} value={m}>{String(m).padStart(2, "0")}</option>
-                        ))}
-                      </select>
-                      <select
-                        value={curAmpm}
-                        onChange={(e) => handleTimeChange("ampm", e.target.value)}
-                        className={selectClass}
-                      >
-                        <option value="AM">AM</option>
-                        <option value="PM">PM</option>
-                      </select>
-                    </div>
-                  );
-                })()}
-              </div>
-            );
-          })()}
-
-          {/* Replay Tutorial */}
-          <button
-            type="button"
-            onClick={onReplayTutorial}
-            className="w-full rounded-xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 overflow-hidden active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left"
-          >
-            <div className="flex items-center justify-between px-4 py-3">
-              <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
-                  <BookOpen className="h-5 w-5 text-primary" />
-                </span>
-                <div>
-                  <p className="text-[15px] font-medium text-foreground">Replay Tutorial</p>
-                  <p className="text-xs text-muted-foreground">Walk through the app again</p>
-                </div>
-              </div>
-              <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-            </div>
-          </button>
-
-          {/* Legal & Support */}
-          <div className="rounded-xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 overflow-hidden divide-y divide-border/30 dark:divide-white/5">
-            <Link
-              to="/legal?tab=privacy"
-              className="flex items-center justify-between px-4 py-3 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation"
-            >
-              <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
-                  <Shield className="h-5 w-5 text-primary" />
-                </span>
-                <div>
-                  <p className="text-[15px] font-medium text-foreground">Privacy Policy</p>
-                  <p className="text-xs text-muted-foreground">How we handle your data</p>
-                </div>
-              </div>
-              <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-            </Link>
-
-            <Link
-              to="/legal?tab=terms"
-              className="flex items-center justify-between px-4 py-3 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation"
-            >
-              <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
-                  <FileText className="h-5 w-5 text-primary" />
-                </span>
-                <div>
-                  <p className="text-[15px] font-medium text-foreground">Terms of Service</p>
-                  <p className="text-xs text-muted-foreground">Usage terms and conditions</p>
-                </div>
-              </div>
-              <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-            </Link>
-
-            <a
-              href="mailto:weightcutwizard@gmail.com"
-              className="flex items-center justify-between px-4 py-3 active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation"
-            >
-              <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 dark:bg-primary/20">
-                  <LifeBuoy className="h-5 w-5 text-primary" />
-                </span>
-                <div>
-                  <p className="text-[15px] font-medium text-foreground">Support</p>
-                  <p className="text-xs text-muted-foreground">weightcutwizard@gmail.com</p>
-                </div>
-              </div>
-              <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-            </a>
+                  {timePickerOpen && reminderSettings.enabled && (() => {
+                    const curHour24 = reminderSettings.hour;
+                    const curHour12 = curHour24 === 0 ? 12 : curHour24 > 12 ? curHour24 - 12 : curHour24;
+                    const curAmpm = curHour24 < 12 ? "AM" : "PM";
+                    const sc = "h-7 rounded-md bg-muted/30 text-[12px] font-medium px-2 appearance-none text-foreground";
+                    return (
+                      <div className="flex items-center gap-1.5 px-3 pb-2">
+                        <select value={curHour12} onChange={(e) => handleTimeChange("hour12", Number(e.target.value))} className={sc}>
+                          {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (<option key={h} value={h}>{h}</option>))}
+                        </select>
+                        <span className="text-muted-foreground text-[12px]">:</span>
+                        <select value={reminderSettings.minute} onChange={(e) => handleTimeChange("minute", Number(e.target.value))} className={sc}>
+                          {[0, 15, 30, 45].map((m) => (<option key={m} value={m}>{String(m).padStart(2, "0")}</option>))}
+                        </select>
+                        <select value={curAmpm} onChange={(e) => handleTimeChange("ampm", e.target.value)} className={sc}>
+                          <option value="AM">AM</option><option value="PM">PM</option>
+                        </select>
+                      </div>
+                    );
+                  })()}
+                </>
+              );
+            })()}
           </div>
 
-          {/* Medical Disclaimer */}
-          <div className="rounded-xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 overflow-hidden">
-            <div className="flex items-start gap-3 px-4 py-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 dark:bg-amber-500/15 mt-0.5">
-                <Heart className="h-5 w-5 text-amber-500" />
-              </span>
-              <div>
-                <p className="text-[15px] font-medium text-foreground">Medical Disclaimer</p>
-                <p className="text-xs text-muted-foreground leading-relaxed mt-1">
-                  This app is for informational purposes only and is not a substitute for professional medical advice, diagnosis, or treatment. Always consult a qualified healthcare provider before making changes to your diet, training, or weight management plan.
-                </p>
+          {/* Help */}
+          <div className="rounded-lg bg-muted/20 overflow-hidden divide-y divide-border/20">
+            <button type="button" onClick={onReplayTutorial}
+              className="w-full flex items-center justify-between px-3 py-2 active:bg-muted/40 transition-colors text-left">
+              <div className="flex items-center gap-2">
+                <BookOpen className="h-4 w-4 text-primary shrink-0" />
+                <p className="text-[13px] font-medium">Replay Tutorial</p>
               </div>
-            </div>
+              <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+            </button>
+            <Link to="/legal?tab=privacy" className="flex items-center justify-between px-3 py-2 active:bg-muted/40 transition-colors">
+              <div className="flex items-center gap-2">
+                <Shield className="h-4 w-4 text-muted-foreground shrink-0" />
+                <p className="text-[13px] font-medium">Privacy Policy</p>
+              </div>
+              <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+            </Link>
+            <Link to="/legal?tab=terms" className="flex items-center justify-between px-3 py-2 active:bg-muted/40 transition-colors">
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                <p className="text-[13px] font-medium">Terms of Service</p>
+              </div>
+              <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+            </Link>
+            <button type="button" onClick={() => window.open("mailto:weightcutwizard@gmail.com", "_blank")}
+              className="w-full flex items-center justify-between px-3 py-2 active:bg-muted/40 transition-colors text-left">
+              <div className="flex items-center gap-2">
+                <LifeBuoy className="h-4 w-4 text-muted-foreground shrink-0" />
+                <p className="text-[13px] font-medium">Support</p>
+              </div>
+              <p className="text-[10px] text-muted-foreground shrink-0">weightcutwizard@gmail.com</p>
+            </button>
           </div>
 
-          {/* Delete Account */}
-          <button
-            type="button"
-            onClick={onDeleteAccount}
-            className="w-full rounded-xl bg-muted/30 dark:bg-white/5 border border-border dark:border-white/10 overflow-hidden active:bg-muted/50 dark:active:bg-white/10 transition-colors touch-manipulation text-left"
-          >
-            <div className="flex items-center justify-between px-4 py-3">
-              <div className="flex items-center gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-destructive/10 dark:bg-destructive/15">
-                  <Trash2 className="h-5 w-5 text-destructive" />
-                </span>
-                <div>
-                  <p className="text-[15px] font-medium text-destructive">Delete Account</p>
-                  <p className="text-xs text-muted-foreground">Permanently delete your account and all data</p>
+          {/* Medical + Danger zone */}
+          <div className="rounded-lg bg-muted/20 overflow-hidden divide-y divide-border/20">
+            <details className="group">
+              <summary className="flex items-center justify-between px-3 py-2 cursor-pointer list-none active:bg-muted/40 transition-colors">
+                <div className="flex items-center gap-2">
+                  <Heart className="h-4 w-4 text-amber-500 shrink-0" />
+                  <p className="text-[13px] font-medium">Medical Disclaimer</p>
                 </div>
-              </div>
-              <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
-            </div>
-          </button>
+                <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0 transition-transform group-open:rotate-90" />
+              </summary>
+              <p className="text-[10px] text-muted-foreground leading-snug px-3 pb-2">
+                This app is for informational purposes only. Not a substitute for professional medical advice. Consult a healthcare provider before changing your diet or training.
+              </p>
+            </details>
+            <button type="button" onClick={onDeleteAccount}
+              className="w-full flex items-center gap-2 px-3 py-2 active:bg-muted/40 transition-colors text-left">
+              <Trash2 className="h-4 w-4 text-destructive shrink-0" />
+              <p className="text-[13px] font-medium text-destructive">Delete Account</p>
+            </button>
+          </div>
 
           {/* Save */}
-          <Button
-            onClick={onSave}
-            className="w-full h-11 rounded-xl text-base font-bold bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/20"
-          >
-            Save Changes
-          </Button>
+          <div className="border-t border-border/30">
+            <button onClick={onSave} className="w-full py-2.5 text-[14px] font-semibold text-primary active:bg-muted/50 transition-colors">
+              Save Changes
+            </button>
+          </div>
 
-          <p className="text-center text-xs text-muted-foreground/50 pt-1">v{__APP_VERSION__}</p>
+          <p className="text-center text-[9px] text-muted-foreground/40 pb-1">v{__APP_VERSION__}</p>
         </div>
       </div>
     </>

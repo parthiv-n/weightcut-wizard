@@ -52,8 +52,8 @@ export function ExercisePickerSheet({ open, onOpenChange, exercises, loading, on
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="h-[85vh] rounded-t-xl border-0 bg-card/95 backdrop-blur-xl p-0">
-        <div className="px-3 pt-3 pb-1.5">
+      <SheetContent side="bottom" className="h-[80vh] rounded-t-xl border-0 bg-card/95 backdrop-blur-xl p-0">
+        <div className="px-3 pt-4 pb-1.5">
           <SheetHeader>
             <SheetTitle className="text-[13px] font-semibold text-center">Add Exercise</SheetTitle>
           </SheetHeader>

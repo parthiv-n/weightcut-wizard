@@ -108,7 +108,10 @@ export function useGymSessions() {
     if (!userId) return;
 
     const cached = localCache.get<SessionWithSets[]>(userId, HISTORY_CACHE_KEY);
-    if (cached) safeAsync(setHistory)(cached);
+    if (cached) {
+      safeAsync(setHistory)(cached);
+      safeAsync(setHistoryLoading)(false);
+    }
 
     try {
       const { data: sessions, error: sessErr } = await withSupabaseTimeout(

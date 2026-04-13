@@ -23,7 +23,7 @@ export function SessionDetailSheet({ session, open, onOpenChange, onDelete }: Se
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="bottom" className="h-[80vh] rounded-t-3xl overflow-y-auto" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}>
+        <SheetContent side="bottom" className="h-[80vh] rounded-t-3xl overflow-y-auto" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 5rem)" }}>
           <SheetHeader className="pb-1">
             <SheetTitle className="flex items-center gap-2.5">
               <span className="px-3 py-1 rounded-full bg-primary/12 text-primary text-xs font-semibold">

@@ -39,7 +39,10 @@ export function useRoutines() {
     if (!userId) return;
 
     const cached = localCache.get<SavedRoutine[]>(userId, CACHE_KEY);
-    if (cached) safeAsync(setRoutines)(cached);
+    if (cached) {
+      safeAsync(setRoutines)(cached);
+      safeAsync(setRoutinesLoading)(false);
+    }
 
     try {
       const { data, error } = await withSupabaseTimeout(

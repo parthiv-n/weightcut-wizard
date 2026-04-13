@@ -25,7 +25,10 @@ export function useExercisePRs() {
     if (!userId) return;
 
     const cached = localCache.get<[string, ExercisePR][]>(userId, PR_CACHE_KEY, CACHE_TTL);
-    if (cached) safeAsync(setPrs)(new Map(cached));
+    if (cached) {
+      safeAsync(setPrs)(new Map(cached));
+      safeAsync(setLoading)(false);
+    }
 
     try {
       const { data, error } = await withSupabaseTimeout(

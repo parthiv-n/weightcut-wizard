@@ -186,19 +186,19 @@ export default function Dashboard() {
     const cachedNutrition = localCache.getForDate<any[]>(userId, 'nutrition_logs', today);
     const cachedHydration = localCache.getForDate<any[]>(userId, 'hydration_logs', today);
 
-    const hasCachedData = cachedWeightLogs !== null;
+    const hasCachedData = cachedWeightLogs !== null || cachedNutrition !== null || cachedHydration !== null;
 
     if (hasCachedData) {
       const cachedCalories = cachedNutrition?.reduce((sum: number, log: any) => sum + (log?.calories || 0), 0) || 0;
       const cachedHydrationTotal = cachedHydration?.reduce((sum: number, log: any) => sum + (log?.amount_ml || 0), 0) || 0;
 
-      safeAsync(setWeightLogs)(cachedWeightLogs);
+      if (cachedWeightLogs) safeAsync(setWeightLogs)(cachedWeightLogs);
       safeAsync(setTodayCalories)(cachedCalories);
       safeAsync(setTodayHydration)(cachedHydrationTotal);
       safeAsync(setLoading)(false);
 
       // Fire-and-forget wisdom with cached data
-      checkAndGenerateWisdom(profile, cachedWeightLogs, cachedCalories, cachedHydrationTotal);
+      if (cachedWeightLogs) checkAndGenerateWisdom(profile, cachedWeightLogs, cachedCalories, cachedHydrationTotal);
     }
 
     // --- Fetch fresh data from Supabase (3 core queries — gamification handled by useGamification) ---

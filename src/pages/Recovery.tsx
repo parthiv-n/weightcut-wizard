@@ -30,7 +30,7 @@ export default function Recovery() {
         if (cached) {
             setSessions28d(cached);
             setIsLoading(false);
-        } else if (!localCache.get<TrainingCalendarRow[]>(userId, "recovery_sessions_28d")) {
+        } else {
             setIsLoading(true);
         }
 

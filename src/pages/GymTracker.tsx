@@ -78,8 +78,12 @@ export default function GymTracker() {
     const typeMap: Record<string, SessionType> = {
       hypertrophy: "Hypertrophy",
       strength: "Strength",
-      explosiveness: "Conditioning",
-      conditioning: "Circuit",
+      explosiveness: "Explosiveness",
+      conditioning: "Conditioning",
+      powerlifting: "Powerlifting",
+      circuit: "Circuit",
+      endurance: "Endurance",
+      mobility: "Mobility",
     };
     const sType = typeMap[routine.goal] || "Strength";
     const sessionId = await startSession(sType as SessionType);
@@ -294,9 +298,9 @@ export default function GymTracker() {
               )}
 
               {/* Start workout card */}
-              <div className="card-surface rounded-xl border border-border p-3 space-y-3">
+              <div className="card-surface rounded-xl border border-border p-3 space-y-2.5">
                 <h2 className="font-semibold text-sm">Start Workout</h2>
-                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
+                <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1 snap-x snap-mandatory" style={{ WebkitOverflowScrolling: "touch" } as any}>
                   {SESSION_TYPES.map(t => (
                     <button
                       key={t}
@@ -304,10 +308,10 @@ export default function GymTracker() {
                         setSessionType(t as SessionType);
                         triggerHaptic(ImpactStyle.Light);
                       }}
-                      className={`shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-all duration-200 ${
+                      className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all snap-start ${
                         sessionType === t
-                          ? "bg-gradient-to-r from-primary to-primary/70 text-primary-foreground shadow-lg shadow-primary/25"
-                          : "bg-muted/50 text-muted-foreground hover:bg-muted active:scale-95"
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "bg-muted/40 text-muted-foreground active:bg-muted/60"
                       }`}
                     >
                       {t}
