@@ -19,17 +19,38 @@ export function groupByDate(sessions: SessionRow[]): Map<string, SessionRow[]> {
   return map;
 }
 
-export function getRecentSleepValues(sessions: SessionRow[], count: number): number[] {
+const DEFAULT_SLEEP_HOURS = 8;
+
+export function getRecentSleepValues(sessions: SessionRow[], count: number, sleepLogs?: { date: string; hours: number }[]): number[] {
   const grouped = groupByDate(sessions);
   const today = new Date();
+  const sleepByDate = new Map<string, number>();
+  if (sleepLogs) {
+    for (const log of sleepLogs) {
+      if (log.hours > 0) sleepByDate.set(log.date, log.hours);
+    }
+  }
+
   const values: number[] = [];
   for (let i = 0; i < 28 && values.length < count; i++) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
     const dateStr = d.toISOString().split('T')[0];
+
+    // Check sleep_logs first
+    const loggedSleep = sleepByDate.get(dateStr);
+    if (loggedSleep) {
+      values.push(loggedSleep);
+      continue;
+    }
+
+    // If training happened that day but no sleep was logged, default to 8h
     const daySessions = grouped.get(dateStr) || [];
-    const withSleep = daySessions.find(s => s.sleep_hours > 0);
-    if (withSleep) values.push(withSleep.sleep_hours);
+    if (daySessions.length > 0) {
+      const sessionSleep = daySessions.find(s => s.sleep_hours > 0);
+      values.push(sessionSleep ? sessionSleep.sleep_hours : DEFAULT_SLEEP_HOURS);
+      continue;
+    }
   }
   return values;
 }

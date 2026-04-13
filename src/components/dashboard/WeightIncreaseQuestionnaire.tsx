@@ -37,80 +37,53 @@ export function WeightIncreaseQuestionnaire({ open, onOpenChange, onComplete }: 
                 setTimeout(() => setStep("question"), 300);
             }
         }}>
-            <SheetContent side="bottom" className="max-h-[85vh] rounded-t-2xl overflow-y-auto" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 2rem)" }}>
-                <SheetHeader className="mb-4">
-                    <div className="flex items-center gap-3">
-                        <div className="rounded-xl bg-primary/10 p-2.5 flex-shrink-0">
-                            <Sparkles className="h-5 w-5 text-primary" />
+            <SheetContent side="bottom" className="rounded-t-xl border-0 bg-card/95 backdrop-blur-xl p-0 overflow-hidden" style={{ maxHeight: "calc(100vh - env(safe-area-inset-top, 0px) - 4rem)" }}>
+                <div className="px-3 pt-3 pb-1.5 shrink-0">
+                    <SheetHeader>
+                        <div className="flex items-center gap-2">
+                            <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
+                            <SheetTitle className="text-[12px] font-semibold text-left">Weight went up — what happened?</SheetTitle>
                         </div>
-                        <div>
-                            <SheetTitle className="text-base text-left">The Wizard is Analyzing...</SheetTitle>
-                            <p className="text-xs text-muted-foreground text-left">Analyzing today's slight weight increase.</p>
-                        </div>
-                    </div>
-                </SheetHeader>
+                    </SheetHeader>
+                </div>
 
+                <div className="overflow-y-auto overscroll-contain px-3 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)]" style={{ WebkitOverflowScrolling: "touch" } as any}>
                 {step === "question" ? (
-                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
-                        <div className="rounded-xl border border-border/50 p-4 mb-5 bg-gradient-to-r from-primary/5 to-secondary/5">
-                            <div className="flex items-start gap-2">
-                                <Quote className="h-4 w-4 text-primary mt-1 flex-shrink-0 opacity-50" />
-                                <p className="text-sm font-medium leading-relaxed">
-                                    "I see your weight went up slightly today. Don't panic! Before we look at your daily wisdom, what did you eat last night?"
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="space-y-3">
-                            <Button
-                                variant="outline"
-                                className="w-full justify-start h-auto p-4 text-left border-border/50 hover:bg-primary/10 hover:border-primary/30 transition-all font-normal whitespace-normal"
-                                onClick={() => handleSelect("Salty")}
-                            >
-                                Heavy on the salt (e.g., takeout, soy sauce, processed foods)
-                            </Button>
-                            <Button
-                                variant="outline"
-                                className="w-full justify-start h-auto p-4 text-left border-border/50 hover:bg-primary/10 hover:border-primary/30 transition-all font-normal whitespace-normal"
-                                onClick={() => handleSelect("Carbs")}
-                            >
-                                High in carbs (e.g., pasta, rice, bread, potatoes)
-                            </Button>
-                            <Button
-                                variant="outline"
-                                className="w-full justify-start h-auto p-4 text-left border-border/50 hover:bg-primary/10 hover:border-primary/30 transition-all font-normal whitespace-normal"
-                                onClick={() => handleSelect("Late")}
-                            >
-                                I ate a large meal very close to bedtime
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                className="w-full justify-center h-12 text-muted-foreground hover:text-foreground"
-                                onClick={() => handleSelect("Nothing unusual")}
-                            >
-                                None of the above / Nothing unusual
-                            </Button>
+                    <div className="space-y-1">
+                        <button className="w-full text-left rounded-md bg-muted/20 px-2.5 py-2 text-[11px] leading-snug active:bg-muted/40 transition-colors" onClick={() => handleSelect("Salty")}>
+                            Salty food (takeout, soy sauce, processed)
+                        </button>
+                        <button className="w-full text-left rounded-md bg-muted/20 px-2.5 py-2 text-[11px] leading-snug active:bg-muted/40 transition-colors" onClick={() => handleSelect("Carbs")}>
+                            High carbs (pasta, rice, bread)
+                        </button>
+                        <button className="w-full text-left rounded-md bg-muted/20 px-2.5 py-2 text-[11px] leading-snug active:bg-muted/40 transition-colors" onClick={() => handleSelect("Late")}>
+                            Big meal close to bedtime
+                        </button>
+                        <div className="border-t border-border/30 mt-1">
+                            <button className="w-full py-2 text-[11px] text-muted-foreground active:text-foreground transition-colors" onClick={() => handleSelect("Nothing unusual")}>
+                                Nothing unusual — skip
+                            </button>
                         </div>
                     </div>
                 ) : (
-                    <div className="animate-in fade-in slide-in-from-right-8 duration-300">
-                        <div className="rounded-xl border border-green-500/30 p-5 mb-5 bg-green-500/10">
-                            <div className="flex items-center gap-2 mb-3">
-                                <CheckCircle2 className="h-5 w-5 text-green-500" />
-                                <h3 className="font-bold text-green-500">Diagnosis: Water Retention</h3>
+                    <div className="animate-in fade-in duration-200">
+                        <div className="rounded-md bg-green-500/10 p-2.5">
+                            <div className="flex items-center gap-1.5 mb-1.5">
+                                <CheckCircle2 className="h-3 w-3 text-green-500" />
+                                <h3 className="text-[11px] font-semibold text-green-500">Water Retention</h3>
                             </div>
-                            <p className="text-sm text-muted-foreground leading-relaxed mb-4">
-                                This is completely normal! Carbs and sodium cause your body to hold onto extra water. For every gram of carbohydrate you store, your body holds about 3 grams of water.
-                                <br /><br />
-                                This is just temporary water weight, not fat. Stay hydrated, stick to your plan, and it will flush out in a day or two.
+                            <p className="text-[10px] text-muted-foreground leading-snug">
+                                Normal — carbs and sodium hold extra water (~3g per 1g carb). Temporary, not fat. Flushes in 1-2 days.
                             </p>
-
-                            <Button className="w-full" onClick={handleGotIt}>
-                                View Daily Wisdom →
-                            </Button>
+                        </div>
+                        <div className="border-t border-border/30 mt-2">
+                            <button onClick={handleGotIt} className="w-full py-2 text-[12px] font-semibold text-primary active:bg-muted/50 transition-colors">
+                                View Daily Wisdom
+                            </button>
                         </div>
                     </div>
                 )}
+                </div>
             </SheetContent>
         </Sheet>
     );

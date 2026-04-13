@@ -49,7 +49,6 @@ export default function TrainingCalendar() {
     const [intensityLevel, setIntensityLevel] = useState([3]);
     const [hasSoreness, setHasSoreness] = useState(false);
     const [sorenessLevel, setSorenessLevel] = useState([5]);
-    const [sleepHours, setSleepHours] = useState("8");
     const [notes, setNotes] = useState("");
     const [runDistance, setRunDistance] = useState("");
     const [runTime, setRunTime] = useState("");
@@ -222,7 +221,6 @@ export default function TrainingCalendar() {
         setIntensityLevel([il]);
         setHasSoreness((session.soreness_level ?? 0) > 0);
         setSorenessLevel([(session.soreness_level ?? 0) > 0 ? session.soreness_level! : 5]);
-        setSleepHours(String(session.sleep_hours ?? 8));
         const { meta, notes: cleanNotes } = decodeRunMeta(session.notes);
         setNotes(cleanNotes);
         if (meta) {
@@ -276,7 +274,6 @@ export default function TrainingCalendar() {
                 intensity: intensityMap[intensityLevel[0]] || 'moderate',
                 intensity_level: intensityLevel[0],
                 soreness_level: hasSoreness ? sorenessLevel[0] : 0,
-                sleep_hours: parseFloat(sleepHours) || 0,
                 notes: sessionType === "Run"
                     ? encodeRunMeta(
                         { distance: runDistance, unit: runDistanceUnit, time: runTime, pace: runPace },
@@ -440,7 +437,6 @@ export default function TrainingCalendar() {
                                     intensityLevel={intensityLevel} setIntensityLevel={setIntensityLevel}
                                     hasSoreness={hasSoreness} setHasSoreness={setHasSoreness}
                                     sorenessLevel={sorenessLevel} setSorenessLevel={setSorenessLevel}
-                                    sleepHours={sleepHours} setSleepHours={setSleepHours}
                                     notes={notes} setNotes={setNotes}
                                     runDistance={runDistance} setRunDistance={setRunDistance}
                                     runTime={runTime} setRunTime={setRunTime}

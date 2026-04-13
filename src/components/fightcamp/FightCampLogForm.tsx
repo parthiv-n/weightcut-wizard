@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Activity, Moon, Ruler, Plus, X, Check, Route, Timer, Gauge, Mic, MicOff } from "lucide-react";
+import { Activity, Ruler, Plus, X, Check, Route, Timer, Gauge, Mic, MicOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,8 +38,6 @@ interface FightCampLogFormProps {
   setHasSoreness: (v: boolean) => void;
   sorenessLevel: number[];
   setSorenessLevel: (v: number[]) => void;
-  sleepHours: string;
-  setSleepHours: (v: string) => void;
   notes: string;
   setNotes: (v: string) => void;
   runDistance: string;
@@ -65,7 +63,6 @@ export function FightCampLogForm({
   intensityLevel, setIntensityLevel,
   hasSoreness, setHasSoreness,
   sorenessLevel, setSorenessLevel,
-  sleepHours, setSleepHours,
   notes, setNotes,
   runDistance, setRunDistance,
   runTime, setRunTime,
@@ -292,23 +289,6 @@ export function FightCampLogForm({
           )}
         </div>
 
-        {/* Sleep */}
-        <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-[10px] font-medium tracking-wide uppercase text-muted-foreground flex items-center gap-1">
-            <Moon className="h-3 w-3" /> Sleep
-          </span>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setSleepHours(String(Math.max(0, parseFloat(sleepHours) - 0.5)))}
-              className="h-5 w-5 rounded-full bg-muted/40 flex items-center justify-center text-[12px] font-medium active:bg-muted/60 transition-colors">
-              −
-            </button>
-            <span className="text-[13px] font-semibold tabular-nums w-8 text-center">{sleepHours}<span className="text-[10px] text-muted-foreground ml-0.5">h</span></span>
-            <button onClick={() => setSleepHours(String(parseFloat(sleepHours) + 0.5))}
-              className="h-5 w-5 rounded-full bg-muted/40 flex items-center justify-center text-[12px] font-medium active:bg-muted/60 transition-colors">
-              +
-            </button>
-          </div>
-        </div>
       </div>
 
       {/* Session Notes */}

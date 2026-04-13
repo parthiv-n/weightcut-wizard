@@ -1,4 +1,4 @@
-import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Calendar, HeartPulse, Dumbbell, TrendingDown } from "lucide-react";
+import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Calendar, HeartPulse, Dumbbell, TrendingDown, Moon } from "lucide-react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, memo } from "react";
 import { triggerHaptic, triggerHapticSelection } from "@/lib/haptics";
@@ -31,6 +31,7 @@ const moreMenuItems = [
   { title: "Fight Camps", url: "/fight-camps", icon: Trophy },
   { title: "Training Calendar", url: "/training-calendar", icon: Calendar },
   { title: "Recovery", url: "/recovery", icon: HeartPulse },
+  { title: "Sleep", url: "/sleep", icon: Moon },
   { title: "Weight Cut", url: "/weight-cut", icon: TrendingDown },
   { title: "Gym Tracker", url: "/gym", icon: Dumbbell },
 ];

@@ -28,6 +28,7 @@ import { ImpactStyle } from "@capacitor/haptics";
 import { logger } from "@/lib/logger";
 import { trackInstallDate, maybeRequestReview } from "@/lib/appReview";
 import { CutPlanDialog } from "@/components/dashboard/CutPlanDialog";
+import { SleepLogger } from "@/components/dashboard/SleepLogger";
 import { isFighter } from "@/lib/goalType";
 
 interface DailyWisdom {
@@ -57,6 +58,7 @@ export default function Dashboard() {
   const [questionnaireOpen, setQuestionnaireOpen] = useState(false);
   const [achievementSheetOpen, setAchievementSheetOpen] = useState(false);
   const [cutPlanOpen, setCutPlanOpen] = useState(false);
+  const [expandedInfo, setExpandedInfo] = useState<'risk' | 'pace' | null>(null);
   const { userName, currentWeight, userId, profile } = useUser();
   const navigate = useNavigate();
   const { safeAsync, isMounted } = useSafeAsync();
@@ -365,7 +367,8 @@ export default function Dashboard() {
 
   const handleWisdomClick = () => {
     triggerHaptic(ImpactStyle.Light);
-    if (trendIsUp) {
+    const dismissedKey = `wcw_questionnaire_dismissed_${todayStr}`;
+    if (trendIsUp && !sessionStorage.getItem(dismissedKey)) {
       setQuestionnaireOpen(true);
     } else {
       setWisdomSheetOpen(true);
@@ -388,7 +391,7 @@ export default function Dashboard() {
 
   return (
     <ErrorBoundary>
-      <div className="animate-page-in space-y-3 p-3 sm:p-5 md:p-6 w-full max-w-7xl mx-auto">
+      <div className="animate-page-in space-y-2 p-3 sm:p-4 w-full max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-3">
           {daysUntilTarget > 0 && (
@@ -400,27 +403,14 @@ export default function Dashboard() {
         </div>
 
         {weightLogs.length === 0 && (
-          <div className="card-surface rounded-xl p-4">
-            <div className="flex items-start gap-3">
-              <div className="rounded-full bg-primary/15 p-2.5 flex-shrink-0">
-                <Scale className="h-5 w-5 text-primary" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-sm">Welcome{userName ? `, ${userName}` : ''}</h3>
-                <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
-                  Log your first weigh-in to unlock your progress chart, daily AI wisdom, and weight tracking.
-                </p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-3 h-8 text-xs font-semibold"
-                  onClick={() => navigate('/weight')}
-                >
-                  Log Weigh-In
-                </Button>
-              </div>
+          <button onClick={() => navigate('/weight')} className="w-full rounded-lg bg-muted/20 p-2.5 flex items-center gap-2 active:bg-muted/30 transition-colors">
+            <Scale className="h-4 w-4 text-primary shrink-0" />
+            <div className="flex-1 text-left min-w-0">
+              <p className="text-[12px] font-semibold">Welcome{userName ? `, ${userName}` : ''}</p>
+              <p className="text-[10px] text-muted-foreground">Log your first weigh-in to get started</p>
             </div>
-          </div>
+            <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+          </button>
         )}
 
         {/* Weekly Consistency Ring */}
@@ -432,103 +422,70 @@ export default function Dashboard() {
         {isFighter(profile?.goal_type) && localStorage.getItem('wcw_cut_plan') && (
           <button
             onClick={() => { setCutPlanOpen(true); triggerHaptic(ImpactStyle.Light); }}
-            className="w-full card-surface rounded-xl p-3 flex items-center gap-3 active:scale-[0.98] transition-transform"
+            className="w-full rounded-lg bg-muted/20 p-2 flex items-center gap-2 active:bg-muted/30 transition-colors"
           >
-            <div className="rounded-xl bg-primary/10 p-2.5">
-              <TrendingDown className="h-5 w-5 text-primary" />
+            <TrendingDown className="h-4 w-4 text-primary shrink-0" />
+            <div className="flex-1 text-left min-w-0">
+              <p className="text-[12px] font-semibold">Weight Cut Plan</p>
+              <p className="text-[10px] text-muted-foreground">Review your plan</p>
             </div>
-            <div className="flex-1 text-left">
-              <p className="text-sm font-semibold">Your Weight Cut Plan</p>
-              <p className="text-xs text-muted-foreground">Tap to review your personalised plan</p>
-            </div>
-            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+            <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
           </button>
         )}
 
         {/* Wizard's Daily Wisdom card — conditional states */}
         <div data-tutorial="daily-wisdom-card">
         {!hasTodayLog ? (
-          /* State 1: Locked — no today weight log */
-          <div className="card-surface rounded-xl p-3 sm:p-4">
-            <div className="flex items-start gap-3">
-              <div className="rounded-xl bg-primary/10 p-2.5 flex-shrink-0">
-                <Sparkles className="h-5 w-5 text-primary opacity-40" />
+          <button onClick={() => navigate('/weight')} className="w-full rounded-lg bg-muted/20 p-2 flex items-center gap-2 active:bg-muted/30 transition-colors">
+            <Sparkles className="h-4 w-4 text-primary opacity-40 shrink-0" />
+            <div className="flex-1 text-left min-w-0">
+              <div className="flex items-center gap-1.5">
+                <p className="text-[12px] font-semibold">Daily Insight</p>
+                <Lock className="h-3 w-3 text-muted-foreground" />
               </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold text-sm text-foreground">Daily Insight</h3>
-                  <Lock className="h-3.5 w-3.5 text-muted-foreground" />
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Log your weight to unlock today's insight.
-                </p>
-                <Button
-                  variant="link"
-                  className="h-auto p-0 mt-1 text-xs text-primary font-bold"
-                  onClick={() => navigate('/weight')}
-                >
-                  Go to Weight Tracker →
-                </Button>
-              </div>
+              <p className="text-[10px] text-muted-foreground">Log weight to unlock</p>
             </div>
-          </div>
+            <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+          </button>
         ) : wisdomLoading ? (
-          /* State 2: Loading */
-          <div className="card-surface rounded-xl p-3 sm:p-4">
-            <div className="flex items-start gap-3">
-              <div className="rounded-xl bg-primary/10 p-2.5 flex-shrink-0 animate-pulse">
-                <Sparkles className="h-5 w-5 text-primary opacity-40" />
-              </div>
-              <div className="flex-1 min-w-0 space-y-2 pt-1">
-                <div className="h-3 rounded shimmer-skeleton w-1/3" />
-                <div className="h-3 rounded shimmer-skeleton w-full" />
-                <div className="h-3 rounded shimmer-skeleton w-4/5" />
-              </div>
+          <div className="rounded-lg bg-muted/20 p-2 flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary opacity-40 shrink-0 animate-pulse" />
+            <div className="flex-1 min-w-0 space-y-1.5 py-0.5">
+              <div className="h-2.5 rounded shimmer-skeleton w-1/3" />
+              <div className="h-2.5 rounded shimmer-skeleton w-full" />
             </div>
           </div>
         ) : wisdom ? (
-          /* State 3: Active — AI insight loaded */
-          <button
-            className="w-full text-left card-surface rounded-xl p-3 sm:p-4 hover:border-primary/30 transition-colors"
-            onClick={handleWisdomClick}
-          >
-            <div className="flex items-start gap-3">
-              <div className="rounded-xl bg-primary/10 p-2.5 flex-shrink-0">
-                <Sparkles className="h-5 w-5 text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                  <h3 className="font-semibold text-sm text-foreground">Daily Insight</h3>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${riskColors[wisdom.riskLevel]}`}>
-                      {wisdom.riskLevel.charAt(0).toUpperCase() + wisdom.riskLevel.slice(1)}
-                    </span>
-                    <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                  </div>
+          <button className="w-full text-left rounded-lg bg-muted/20 p-2 flex items-center gap-2 active:bg-muted/30 transition-colors" onClick={handleWisdomClick}>
+            <Sparkles className="h-4 w-4 text-primary shrink-0" />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-1.5">
+                <p className="text-[12px] font-semibold">Daily Insight</p>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${riskColors[wisdom.riskLevel]}`}>
+                    {wisdom.riskLevel.charAt(0).toUpperCase() + wisdom.riskLevel.slice(1)}
+                  </span>
+                  <ChevronRight className="h-3 w-3 text-muted-foreground" />
                 </div>
-                <p className="text-xs text-muted-foreground mt-1 font-medium leading-snug">
-                  {wisdom.summary}
-                </p>
               </div>
+              <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug line-clamp-2">
+                {wisdom.summary}
+              </p>
             </div>
           </button>
         ) : (
-          /* State 4: Fallback — weight logged but AI failed */
-          <div className="card-surface rounded-xl p-3 sm:p-4">
-            <div className="flex items-start gap-3">
-              <div className="rounded-xl bg-primary/10 p-2.5 flex-shrink-0">
-                <Sparkles className="h-5 w-5 text-primary" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-sm text-foreground">Daily Insight</h3>
-                <p className="text-xs text-muted-foreground mt-1 font-medium leading-snug">
-                  {getWizardWisdom()}
-                </p>
-              </div>
+          <div className="rounded-lg bg-muted/20 p-2 flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-primary shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-semibold">Daily Insight</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug line-clamp-2">{getWizardWisdom()}</p>
             </div>
           </div>
         )}
         </div>
+
+        {/* Sleep Logger */}
+        {userId && <SleepLogger userId={userId} />}
 
         {/* Weight Progress Bar — full width */}
         {profile && (
@@ -542,9 +499,9 @@ export default function Dashboard() {
         )}
 
         {/* Weight History + Training — side by side */}
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-2">
           {/* Weight History Chart */}
-          <div className="card-surface rounded-xl p-3 aspect-square flex flex-col">
+          <div className="rounded-lg bg-muted/20 p-2 aspect-square flex flex-col">
             <div className="flex items-center justify-between mb-1">
               <span className="section-header">Weight</span>
               <div className="flex gap-0.5 bg-muted rounded-full p-0.5">
@@ -624,106 +581,98 @@ export default function Dashboard() {
       {/* Wisdom Detail Bottom Sheet */}
       {wisdom && (
         <Sheet open={wisdomSheetOpen} onOpenChange={setWisdomSheetOpen}>
-          <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl overflow-y-auto" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 5rem)" }}>
-            <SheetHeader className="mb-4">
-              <div className="flex items-center gap-3">
-                <div className="rounded-xl bg-primary/10 p-2.5 flex-shrink-0">
-                  <Sparkles className="h-5 w-5 text-primary" />
+          <SheetContent side="bottom" className="h-[85vh] rounded-t-xl border-0 bg-card/95 backdrop-blur-xl overflow-y-auto p-0" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 5rem)" }}>
+            <div className="px-4 pt-4 pb-2">
+              <SheetHeader>
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 text-primary shrink-0" />
+                  <div>
+                    <SheetTitle className="text-[13px] font-semibold">Daily Insight</SheetTitle>
+                    <p className="text-[10px] text-muted-foreground">
+                      {new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <SheetTitle className="text-base">Daily Insight</SheetTitle>
-                  <p className="text-xs text-muted-foreground">
-                    {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
-                  </p>
-                </div>
-              </div>
-            </SheetHeader>
+              </SheetHeader>
+            </div>
 
-            <div className="space-y-3">
+            <div className="px-4 space-y-2.5">
               {/* 3-col status grid */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-xl border border-border p-3 text-center">
-                  <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${riskColors[wisdom.riskLevel]}`}>
+              <div className="grid grid-cols-3 gap-1.5">
+                <button onClick={() => setExpandedInfo(expandedInfo === 'risk' ? null : 'risk')} className={`rounded-lg py-2 text-center transition-colors ${expandedInfo === 'risk' ? 'bg-muted/40' : 'bg-muted/20 active:bg-muted/30'}`}>
+                  <span className={`text-[10px] font-medium ${riskColors[wisdom.riskLevel]}`}>
                     {wisdom.riskLevel.charAt(0).toUpperCase() + wisdom.riskLevel.slice(1)}
                   </span>
-                  <p className="text-xs text-muted-foreground mt-1">Risk Level</p>
+                  <p className="text-[9px] text-muted-foreground mt-0.5">Risk</p>
+                </button>
+                <div className="rounded-lg bg-muted/20 py-2 text-center">
+                  <p className="text-[17px] font-bold tabular-nums">{wisdom.daysToFight}</p>
+                  <p className="text-[9px] text-muted-foreground">Days Left</p>
                 </div>
-                <div className="rounded-xl border border-border p-3 text-center">
-                  <p className="text-2xl font-bold display-number">{wisdom.daysToFight}</p>
-                  <p className="text-xs text-muted-foreground">Days Left</p>
-                </div>
-                <div className="rounded-xl border border-border p-3 text-center">
-                  <p className={`text-sm font-semibold ${paceColors[wisdom.paceStatus] ?? 'text-foreground'}`}>
+                <button onClick={() => setExpandedInfo(expandedInfo === 'pace' ? null : 'pace')} className={`rounded-lg py-2 text-center transition-colors ${expandedInfo === 'pace' ? 'bg-muted/40' : 'bg-muted/20 active:bg-muted/30'}`}>
+                  <p className={`text-[11px] font-semibold ${paceColors[wisdom.paceStatus] ?? 'text-foreground'}`}>
                     {paceLabels[wisdom.paceStatus] ?? wisdom.paceStatus}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Pace</p>
-                </div>
+                  <p className="text-[9px] text-muted-foreground mt-0.5">Pace</p>
+                </button>
               </div>
+              {expandedInfo === 'risk' && (
+                <div className="rounded-md bg-muted/30 px-2.5 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <p className="text-[10px] font-semibold mb-1">Risk Level</p>
+                  <p className="text-[10px] text-muted-foreground leading-snug mb-1">How aggressive your current cut rate is.</p>
+                  <p className="text-[10px] text-muted-foreground"><span className="text-green-400 font-medium">Green</span> — Safe, sustainable pace</p>
+                  <p className="text-[10px] text-muted-foreground"><span className="text-orange-400 font-medium">Orange</span> — High pace, may affect performance</p>
+                </div>
+              )}
+              {expandedInfo === 'pace' && (
+                <div className="rounded-md bg-muted/30 px-2.5 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <p className="text-[10px] font-semibold mb-1">Pace</p>
+                  <p className="text-[10px] text-muted-foreground leading-snug mb-1">Is your weekly loss on track to hit your target?</p>
+                  <p className="text-[10px] text-muted-foreground"><span className="text-green-400 font-medium">On Track</span> — On schedule</p>
+                  <p className="text-[10px] text-muted-foreground"><span className="text-green-400 font-medium">At Target</span> — Already at goal</p>
+                  <p className="text-[10px] text-muted-foreground"><span className="text-blue-400 font-medium">Ahead</span> — Faster than needed</p>
+                  <p className="text-[10px] text-muted-foreground"><span className="text-yellow-400 font-medium">Behind</span> — May need to adjust</p>
+                </div>
+              )}
 
-              {/* Explainer for risk & pace */}
-              <div className="rounded-xl bg-muted/30 px-4 py-3 space-y-3">
-                <div>
-                  <p className="text-[11px] font-semibold text-foreground/70 mb-1.5">Risk Level</p>
-                  <p className="text-[11px] text-muted-foreground leading-snug mb-1">How aggressive your current cut rate is.</p>
-                  <div className="space-y-1">
-                    <p className="text-[11px] text-muted-foreground"><span className="text-green-400 font-medium">Green</span> — Safe and sustainable</p>
-                    <p className="text-[11px] text-muted-foreground"><span className="text-orange-400 font-medium">Orange</span> — Pace is high, may affect performance</p>
-                  </div>
+              {/* Weight Pace */}
+              <div className="rounded-lg bg-muted/20 p-2.5">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <TrendingDown className="h-3.5 w-3.5 text-primary" />
+                  <h4 className="text-[12px] font-semibold">Weight Pace</h4>
                 </div>
-                <div>
-                  <p className="text-[11px] font-semibold text-foreground/70 mb-1.5">Pace</p>
-                  <p className="text-[11px] text-muted-foreground leading-snug mb-1">Whether your weekly loss matches the rate needed to hit your target.</p>
-                  <div className="space-y-1">
-                    <p className="text-[11px] text-muted-foreground"><span className="text-green-400 font-medium">On Track</span> — You're on schedule</p>
-                    <p className="text-[11px] text-muted-foreground"><span className="text-green-400 font-medium">At Target</span> — Already at goal weight</p>
-                    <p className="text-[11px] text-muted-foreground"><span className="text-blue-400 font-medium">Ahead</span> — Losing faster than needed</p>
-                    <p className="text-[11px] text-muted-foreground"><span className="text-yellow-400 font-medium">Behind</span> — May need to adjust</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Weight Pace card */}
-              <div className="rounded-xl border border-border p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <TrendingDown className="h-4 w-4 text-primary" />
-                  <h4 className="text-sm font-semibold">Weight Pace</h4>
-                </div>
-                <div className="grid grid-cols-2 gap-3 mb-2">
+                <div className="grid grid-cols-2 gap-2 mb-1.5">
                   <div>
-                    <p className="text-xs text-muted-foreground">Actual / week</p>
-                    <p className="text-lg font-bold display-number">{wisdom.weeklyPaceKg.toFixed(2)} kg</p>
+                    <p className="text-[10px] text-muted-foreground">Actual/wk</p>
+                    <p className="text-[15px] font-bold tabular-nums">{wisdom.weeklyPaceKg.toFixed(2)} kg</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground">Needed / week</p>
-                    <p className="text-lg font-bold display-number">{wisdom.requiredWeeklyKg.toFixed(2)} kg</p>
+                    <p className="text-[10px] text-muted-foreground">Needed/wk</p>
+                    <p className="text-[15px] font-bold tabular-nums">{wisdom.requiredWeeklyKg.toFixed(2)} kg</p>
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground">{wisdom.riskReason}</p>
+                <p className="text-[10px] text-muted-foreground">{wisdom.riskReason}</p>
               </div>
 
-              {/* Today's Guidance card */}
-              <div className="rounded-xl border border-border p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Zap className="h-4 w-4 text-primary" />
-                  <h4 className="text-sm font-semibold">Today's Guidance</h4>
+              {/* Guidance */}
+              <div className="rounded-lg bg-muted/20 p-2.5">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <Zap className="h-3.5 w-3.5 text-primary" />
+                  <h4 className="text-[12px] font-semibold">Guidance</h4>
                 </div>
-                <div className="space-y-2">
-                  {wisdom.adviceParagraph.split(/(?<=\.)\s+/).filter(Boolean).map((sentence, i) => (
-                    <p key={i} className="text-sm text-muted-foreground leading-relaxed">{sentence}</p>
-                  ))}
-                </div>
+                <p className="text-[11px] text-muted-foreground leading-snug">{wisdom.adviceParagraph}</p>
               </div>
 
-              {/* Action Items card */}
-              <div className="rounded-xl border border-border p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <CheckCircle2 className="h-4 w-4 text-primary" />
-                  <h4 className="text-sm font-semibold">Action Items</h4>
+              {/* Action Items */}
+              <div className="rounded-lg bg-muted/20 p-2.5">
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
+                  <h4 className="text-[12px] font-semibold">Action Items</h4>
                 </div>
-                <ol className="space-y-2.5">
+                <ol className="space-y-1.5">
                   {wisdom.actionItems.map((item, i) => (
-                    <li key={i} className="flex items-start gap-2.5 text-sm text-muted-foreground">
-                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center mt-0.5">
+                    <li key={i} className="flex items-start gap-2 text-[11px] text-muted-foreground">
+                      <span className="shrink-0 w-4 h-4 rounded-full bg-primary/10 text-primary text-[9px] font-bold flex items-center justify-center mt-0.5">
                         {i + 1}
                       </span>
                       <span className="leading-snug">{item}</span>
@@ -732,13 +681,13 @@ export default function Dashboard() {
                 </ol>
               </div>
 
-              {/* Nutrition status */}
-              <div className="rounded-xl border border-border p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Flame className="h-4 w-4 text-orange-400" />
-                  <h4 className="text-sm font-semibold">Nutrition</h4>
+              {/* Nutrition */}
+              <div className="rounded-lg bg-muted/20 p-2.5">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Flame className="h-3.5 w-3.5 text-orange-400" />
+                  <h4 className="text-[12px] font-semibold">Nutrition</h4>
                 </div>
-                <p className="text-sm text-muted-foreground leading-relaxed">{wisdom.nutritionStatus}</p>
+                <p className="text-[11px] text-muted-foreground leading-snug">{wisdom.nutritionStatus}</p>
               </div>
             </div>
           </SheetContent>
@@ -748,7 +697,7 @@ export default function Dashboard() {
       <WeightIncreaseQuestionnaire
         open={questionnaireOpen}
         onOpenChange={setQuestionnaireOpen}
-        onComplete={() => setWisdomSheetOpen(true)}
+        onComplete={() => { sessionStorage.setItem(`wcw_questionnaire_dismissed_${todayStr}`, '1'); setWisdomSheetOpen(true); }}
       />
 
       <AchievementSheet

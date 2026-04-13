@@ -1,5 +1,10 @@
 // WHOOP-style Deterministic Performance Engine — Types
 
+export interface SleepLog {
+  date: string;
+  hours: number;
+}
+
 export interface SessionRow {
   id: string;
   date: string;

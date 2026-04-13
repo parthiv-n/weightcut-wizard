@@ -39,6 +39,7 @@ const FightCamps = lazy(() => import("./pages/FightCamps"));
 const FightCampDetail = lazy(() => import("./pages/FightCampDetail"));
 const TrainingCalendar = lazy(() => import("./pages/TrainingCalendar"));
 const Recovery = lazy(() => import("./pages/Recovery"));
+const Sleep = lazy(() => import("./pages/Sleep"));
 // const SkillTree = lazy(() => import("./pages/SkillTree"));
 const GymTracker = lazy(() => import("./pages/GymTracker"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -259,6 +260,7 @@ const App = () => (
                   <Route path="/training-calendar" element={<TrainingCalendar />} />
                   <Route path="/fight-camp-calendar" element={<Navigate to="/training-calendar" replace />} />
                   <Route path="/recovery" element={<Recovery />} />
+                  <Route path="/sleep" element={<Sleep />} />
                   {/* Skill Tree temporarily hidden from UI */}
                   <Route path="/gym" element={<GymTracker />} />
                 </Route>
