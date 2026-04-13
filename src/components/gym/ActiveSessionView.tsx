@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
-import { Input } from "@/components/ui/input";
 import { Plus, Clock, Dumbbell, Trash2, TrendingUp, Check } from "lucide-react";
 import { motion } from "motion/react";
 import { staggerContainer, staggerItem, springs } from "@/lib/motion";
@@ -58,7 +57,6 @@ export function ActiveSessionView({
   const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
   const [notes, setNotes] = useState("");
   const [fatigue, setFatigue] = useState([5]);
-  const [durationOverride, setDurationOverride] = useState("");
 
   const totalSets = workout.exerciseGroups.reduce((sum, g) => sum + g.sets.filter(s => !s.is_warmup).length, 0);
 
@@ -75,14 +73,12 @@ export function ActiveSessionView({
   }, [workout.exerciseGroups]);
 
   const handleFinish = useCallback(() => {
-    const dur = durationOverride ? parseInt(durationOverride, 10) : undefined;
     onFinish({
-      durationMinutes: dur && !isNaN(dur) ? dur : undefined,
       notes: notes || undefined,
       perceivedFatigue: fatigue[0],
     });
     setFinishSheetOpen(false);
-  }, [durationOverride, notes, fatigue, onFinish]);
+  }, [notes, fatigue, onFinish]);
 
   return (
     <div className="space-y-4">
@@ -202,6 +198,9 @@ export function ActiveSessionView({
         </motion.div>
       )}
 
+      {/* Bottom spacer for nav bar */}
+      <div className="h-4" />
+
       {/* Finish workout dialog */}
       <Dialog open={finishSheetOpen} onOpenChange={setFinishSheetOpen}>
         <DialogContent className="sm:max-w-[320px] rounded-xl p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0 max-h-[calc(100vh-6rem)] overflow-y-auto">
@@ -211,21 +210,6 @@ export function ActiveSessionView({
             </DialogHeader>
           </div>
           <div className="px-4 space-y-2.5">
-            <div className="rounded-lg bg-muted/20 p-3 space-y-1.5">
-              <label className="text-[12px] font-medium block">Duration (minutes)</label>
-              <Input
-                type="number"
-                inputMode="numeric"
-                placeholder="Auto-calculated"
-                value={durationOverride}
-                onChange={(e) => setDurationOverride(e.target.value)}
-                className="h-8 text-[13px] rounded-lg border-border/30 bg-muted/20"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Leave empty for elapsed time ({Math.round((Date.now() - workout.startedAt) / 60000)} min)
-              </p>
-            </div>
-
             <div className="rounded-lg bg-muted/20 p-3 space-y-1.5">
               <label className="text-[12px] font-medium block">
                 Fatigue: <span className="text-primary">{fatigue[0]}/10</span>

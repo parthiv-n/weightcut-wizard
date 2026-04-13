@@ -150,7 +150,7 @@ export function ExercisePickerSheet({ open, onOpenChange, exercises, loading, on
         </div>
 
         {/* Create custom */}
-        <div className="px-3 border-t border-border/30 mt-1">
+        <div className="px-3 border-t border-border/30 mt-1" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)" }}>
           <button
             onClick={() => { onCreateCustom(); onOpenChange(false); }}
             className="w-full py-2 text-[12px] font-semibold text-primary active:bg-muted/50 transition-colors flex items-center justify-center gap-1"

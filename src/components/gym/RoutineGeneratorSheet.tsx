@@ -314,7 +314,7 @@ export function RoutineGeneratorSheet({ open, onOpenChange, onGenerate, onSave, 
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent side="bottom" className="h-[80vh] rounded-t-3xl flex flex-col !pb-0">
+      <SheetContent side="bottom" className="h-[80vh] rounded-t-3xl flex flex-col" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)" }}>
         <SheetHeader className="pb-2">
           <div className="flex items-center justify-between">
             {stepIndex > 0 && step !== "result" ? (

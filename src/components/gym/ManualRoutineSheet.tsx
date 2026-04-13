@@ -148,7 +148,7 @@ export function ManualRoutineSheet({
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent side="bottom" className="h-[92vh] flex flex-col rounded-t-3xl border-border/50 p-0 [&>button:last-of-type]:hidden">
+      <SheetContent side="bottom" className="h-[92vh] flex flex-col rounded-t-3xl border-border/50 p-0 [&>button:last-of-type]:hidden" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)" }}>
         <SheetHeader className="px-5 pb-3 shrink-0" style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 1.25rem)" }}>
           <div className="flex items-center gap-3">
             {step === 2 && (
