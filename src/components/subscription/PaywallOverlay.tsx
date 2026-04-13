@@ -149,14 +149,27 @@ export function PaywallOverlay() {
         forcePremium(sub.tier, sub.expiresAt);
         logger.info("activatePro: forced premium locally", sub);
       }
-      // Step 2: Write to DB in background (so it persists across restarts)
+      // Step 2: Write to DB and WAIT for it to persist
       const dbResult = await syncPremiumToDb(customerInfo);
       logger.info("activatePro: DB sync result", { success: !!dbResult });
-      // Step 3: Refresh profile to fully sync all state
-      await refreshProfile();
+
+      // Step 3: Verify the DB actually has the new tier (retry up to 3 times)
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const { data: verifyData } = await supabase.from("profiles").select("subscription_tier").eq("id", authUser.id).single();
+          if (verifyData?.subscription_tier && verifyData.subscription_tier !== "free") {
+            logger.info("activatePro: DB verified premium", { tier: verifyData.subscription_tier, attempt });
+            break;
+          }
+          // DB hasn't caught up yet — wait and retry
+          await new Promise(r => setTimeout(r, 800));
+        }
+      }
+
       await refreshGems();
       // Small delay so user sees the "Unlocking features" step complete
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise(r => setTimeout(r, 400));
     } catch (err) {
       logger.error("Pro activation error", err);
     } finally {

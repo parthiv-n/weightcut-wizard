@@ -171,8 +171,10 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       if (controller.signal.aborted) return;
 
       if (response.status === 429) {
-        onAICallBlocked();
-        openNoGemsDialog();
+        if (!checkAIAccess()) {
+          onAICallBlocked();
+          openNoGemsDialog();
+        }
         failTask(taskId, "Limit reached");
         return;
       }
