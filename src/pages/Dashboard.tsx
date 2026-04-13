@@ -406,8 +406,8 @@ export default function Dashboard() {
           <button onClick={() => navigate('/weight')} className="w-full rounded-lg bg-muted/20 p-2.5 flex items-center gap-2 active:bg-muted/30 transition-colors">
             <Scale className="h-4 w-4 text-primary shrink-0" />
             <div className="flex-1 text-left min-w-0">
-              <p className="text-[12px] font-semibold">Welcome{userName ? `, ${userName}` : ''}</p>
-              <p className="text-[10px] text-muted-foreground">Log your first weigh-in to get started</p>
+              <p className="text-[13px] font-semibold">Welcome{userName ? `, ${userName}` : ''}</p>
+              <p className="text-[13px] text-muted-foreground">Log your first weigh-in to get started</p>
             </div>
             <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
           </button>
@@ -418,20 +418,22 @@ export default function Dashboard() {
           <ConsistencyRing {...weeklyConsistency} />
         </div>
 
-        {/* Weight Cut Plan — fighters only, if plan exists */}
-        {isFighter(profile?.goal_type) && localStorage.getItem('wcw_cut_plan') && (
-          <button
-            onClick={() => { setCutPlanOpen(true); triggerHaptic(ImpactStyle.Light); }}
-            className="w-full rounded-lg bg-muted/20 p-2 flex items-center gap-2 active:bg-muted/30 transition-colors"
-          >
-            <TrendingDown className="h-4 w-4 text-primary shrink-0" />
-            <div className="flex-1 text-left min-w-0">
-              <p className="text-[12px] font-semibold">Weight Cut Plan</p>
-              <p className="text-[10px] text-muted-foreground">Review your plan</p>
-            </div>
-            <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
-          </button>
-        )}
+        {/* Cut Plan + Sleep — side by side */}
+        <div className="grid grid-cols-2 gap-2">
+          {isFighter(profile?.goal_type) && localStorage.getItem('wcw_cut_plan') ? (
+            <button
+              onClick={() => { setCutPlanOpen(true); triggerHaptic(ImpactStyle.Light); }}
+              className="rounded-lg bg-muted/20 p-2.5 flex flex-col items-start gap-1.5 active:bg-muted/30 transition-colors text-left"
+            >
+              <TrendingDown className="h-4 w-4 text-primary" />
+              <p className="text-[13px] font-semibold leading-tight">Cut Plan</p>
+              <p className="text-[11px] text-muted-foreground leading-tight">View your plan</p>
+            </button>
+          ) : (
+            <div />
+          )}
+          {userId && <SleepLogger userId={userId} compact />}
+        </div>
 
         {/* Wizard's Daily Wisdom card — conditional states */}
         <div data-tutorial="daily-wisdom-card">
@@ -440,10 +442,10 @@ export default function Dashboard() {
             <Sparkles className="h-4 w-4 text-primary opacity-40 shrink-0" />
             <div className="flex-1 text-left min-w-0">
               <div className="flex items-center gap-1.5">
-                <p className="text-[12px] font-semibold">Daily Insight</p>
+                <p className="text-[13px] font-semibold">Daily Insight</p>
                 <Lock className="h-3 w-3 text-muted-foreground" />
               </div>
-              <p className="text-[10px] text-muted-foreground">Log weight to unlock</p>
+              <p className="text-[13px] text-muted-foreground">Log weight to unlock</p>
             </div>
             <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
           </button>
@@ -460,15 +462,15 @@ export default function Dashboard() {
             <Sparkles className="h-4 w-4 text-primary shrink-0" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-1.5">
-                <p className="text-[12px] font-semibold">Daily Insight</p>
+                <p className="text-[13px] font-semibold">Daily Insight</p>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${riskColors[wisdom.riskLevel]}`}>
+                  <span className={`text-[13px] px-1.5 py-0.5 rounded-full font-medium ${riskColors[wisdom.riskLevel]}`}>
                     {wisdom.riskLevel.charAt(0).toUpperCase() + wisdom.riskLevel.slice(1)}
                   </span>
                   <ChevronRight className="h-3 w-3 text-muted-foreground" />
                 </div>
               </div>
-              <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug line-clamp-2">
+              <p className="text-[13px] text-muted-foreground mt-0.5 leading-snug line-clamp-2">
                 {wisdom.summary}
               </p>
             </div>
@@ -477,15 +479,12 @@ export default function Dashboard() {
           <div className="rounded-lg bg-muted/20 p-2 flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-primary shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-[12px] font-semibold">Daily Insight</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug line-clamp-2">{getWizardWisdom()}</p>
+              <p className="text-[13px] font-semibold">Daily Insight</p>
+              <p className="text-[13px] text-muted-foreground mt-0.5 leading-snug line-clamp-2">{getWizardWisdom()}</p>
             </div>
           </div>
         )}
         </div>
-
-        {/* Sleep Logger */}
-        {userId && <SleepLogger userId={userId} />}
 
         {/* Weight Progress Bar — full width */}
         {profile && (
@@ -509,7 +508,7 @@ export default function Dashboard() {
                   variant={weightUnit === 'kg' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => { setWeightUnit('kg'); localStorage.setItem('wcw_weight_unit', 'kg'); triggerHapticSelection(); }}
-                  className="h-5 min-h-0 text-[9px] px-1.5 rounded-full"
+                  className="h-5 min-h-0 text-[13px] px-1.5 rounded-full"
                 >
                   kg
                 </Button>
@@ -517,7 +516,7 @@ export default function Dashboard() {
                   variant={weightUnit === 'lb' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => { setWeightUnit('lb'); localStorage.setItem('wcw_weight_unit', 'lb'); triggerHapticSelection(); }}
-                  className="h-5 min-h-0 text-[9px] px-1.5 rounded-full"
+                  className="h-5 min-h-0 text-[13px] px-1.5 rounded-full"
                 >
                   lb
                 </Button>
@@ -557,8 +556,8 @@ export default function Dashboard() {
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <TrendingDown className="h-5 w-5 text-muted-foreground/40 mb-1" />
-                  <p className="text-[10px] text-muted-foreground">No data yet</p>
-                  <Button variant="ghost" size="sm" className="h-6 text-[10px] px-2" onClick={() => navigate('/weight')}>
+                  <p className="text-[13px] text-muted-foreground">No data yet</p>
+                  <Button variant="ghost" size="sm" className="h-6 text-[13px] px-2" onClick={() => navigate('/weight')}>
                     Log Weight
                   </Button>
                 </div>
@@ -588,7 +587,7 @@ export default function Dashboard() {
                   <Sparkles className="h-4 w-4 text-primary shrink-0" />
                   <div>
                     <SheetTitle className="text-[13px] font-semibold">Daily Insight</SheetTitle>
-                    <p className="text-[10px] text-muted-foreground">
+                    <p className="text-[13px] text-muted-foreground">
                       {new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
                     </p>
                   </div>
@@ -600,38 +599,38 @@ export default function Dashboard() {
               {/* 3-col status grid */}
               <div className="grid grid-cols-3 gap-1.5">
                 <button onClick={() => setExpandedInfo(expandedInfo === 'risk' ? null : 'risk')} className={`rounded-lg py-2 text-center transition-colors ${expandedInfo === 'risk' ? 'bg-muted/40' : 'bg-muted/20 active:bg-muted/30'}`}>
-                  <span className={`text-[10px] font-medium ${riskColors[wisdom.riskLevel]}`}>
+                  <span className={`text-[13px] font-medium ${riskColors[wisdom.riskLevel]}`}>
                     {wisdom.riskLevel.charAt(0).toUpperCase() + wisdom.riskLevel.slice(1)}
                   </span>
-                  <p className="text-[9px] text-muted-foreground mt-0.5">Risk</p>
+                  <p className="text-[13px] text-muted-foreground mt-0.5">Risk</p>
                 </button>
                 <div className="rounded-lg bg-muted/20 py-2 text-center">
                   <p className="text-[17px] font-bold tabular-nums">{wisdom.daysToFight}</p>
-                  <p className="text-[9px] text-muted-foreground">Days Left</p>
+                  <p className="text-[13px] text-muted-foreground">Days Left</p>
                 </div>
                 <button onClick={() => setExpandedInfo(expandedInfo === 'pace' ? null : 'pace')} className={`rounded-lg py-2 text-center transition-colors ${expandedInfo === 'pace' ? 'bg-muted/40' : 'bg-muted/20 active:bg-muted/30'}`}>
-                  <p className={`text-[11px] font-semibold ${paceColors[wisdom.paceStatus] ?? 'text-foreground'}`}>
+                  <p className={`text-[13px] font-semibold ${paceColors[wisdom.paceStatus] ?? 'text-foreground'}`}>
                     {paceLabels[wisdom.paceStatus] ?? wisdom.paceStatus}
                   </p>
-                  <p className="text-[9px] text-muted-foreground mt-0.5">Pace</p>
+                  <p className="text-[13px] text-muted-foreground mt-0.5">Pace</p>
                 </button>
               </div>
               {expandedInfo === 'risk' && (
                 <div className="rounded-md bg-muted/30 px-2.5 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <p className="text-[10px] font-semibold mb-1">Risk Level</p>
-                  <p className="text-[10px] text-muted-foreground leading-snug mb-1">How aggressive your current cut rate is.</p>
-                  <p className="text-[10px] text-muted-foreground"><span className="text-green-400 font-medium">Green</span> — Safe, sustainable pace</p>
-                  <p className="text-[10px] text-muted-foreground"><span className="text-orange-400 font-medium">Orange</span> — High pace, may affect performance</p>
+                  <p className="text-[13px] font-semibold mb-1">Risk Level</p>
+                  <p className="text-[13px] text-muted-foreground leading-snug mb-1">How aggressive your current cut rate is.</p>
+                  <p className="text-[13px] text-muted-foreground"><span className="text-green-400 font-medium">Green</span> — Safe, sustainable pace</p>
+                  <p className="text-[13px] text-muted-foreground"><span className="text-orange-400 font-medium">Orange</span> — High pace, may affect performance</p>
                 </div>
               )}
               {expandedInfo === 'pace' && (
                 <div className="rounded-md bg-muted/30 px-2.5 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <p className="text-[10px] font-semibold mb-1">Pace</p>
-                  <p className="text-[10px] text-muted-foreground leading-snug mb-1">Is your weekly loss on track to hit your target?</p>
-                  <p className="text-[10px] text-muted-foreground"><span className="text-green-400 font-medium">On Track</span> — On schedule</p>
-                  <p className="text-[10px] text-muted-foreground"><span className="text-green-400 font-medium">At Target</span> — Already at goal</p>
-                  <p className="text-[10px] text-muted-foreground"><span className="text-blue-400 font-medium">Ahead</span> — Faster than needed</p>
-                  <p className="text-[10px] text-muted-foreground"><span className="text-yellow-400 font-medium">Behind</span> — May need to adjust</p>
+                  <p className="text-[13px] font-semibold mb-1">Pace</p>
+                  <p className="text-[13px] text-muted-foreground leading-snug mb-1">Is your weekly loss on track to hit your target?</p>
+                  <p className="text-[13px] text-muted-foreground"><span className="text-green-400 font-medium">On Track</span> — On schedule</p>
+                  <p className="text-[13px] text-muted-foreground"><span className="text-green-400 font-medium">At Target</span> — Already at goal</p>
+                  <p className="text-[13px] text-muted-foreground"><span className="text-blue-400 font-medium">Ahead</span> — Faster than needed</p>
+                  <p className="text-[13px] text-muted-foreground"><span className="text-yellow-400 font-medium">Behind</span> — May need to adjust</p>
                 </div>
               )}
 
@@ -639,40 +638,40 @@ export default function Dashboard() {
               <div className="rounded-lg bg-muted/20 p-2.5">
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <TrendingDown className="h-3.5 w-3.5 text-primary" />
-                  <h4 className="text-[12px] font-semibold">Weight Pace</h4>
+                  <h4 className="text-[13px] font-semibold">Weight Pace</h4>
                 </div>
                 <div className="grid grid-cols-2 gap-2 mb-1.5">
                   <div>
-                    <p className="text-[10px] text-muted-foreground">Actual/wk</p>
+                    <p className="text-[13px] text-muted-foreground">Actual/wk</p>
                     <p className="text-[15px] font-bold tabular-nums">{wisdom.weeklyPaceKg.toFixed(2)} kg</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-muted-foreground">Needed/wk</p>
+                    <p className="text-[13px] text-muted-foreground">Needed/wk</p>
                     <p className="text-[15px] font-bold tabular-nums">{wisdom.requiredWeeklyKg.toFixed(2)} kg</p>
                   </div>
                 </div>
-                <p className="text-[10px] text-muted-foreground">{wisdom.riskReason}</p>
+                <p className="text-[13px] text-muted-foreground">{wisdom.riskReason}</p>
               </div>
 
               {/* Guidance */}
               <div className="rounded-lg bg-muted/20 p-2.5">
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <Zap className="h-3.5 w-3.5 text-primary" />
-                  <h4 className="text-[12px] font-semibold">Guidance</h4>
+                  <h4 className="text-[13px] font-semibold">Guidance</h4>
                 </div>
-                <p className="text-[11px] text-muted-foreground leading-snug">{wisdom.adviceParagraph}</p>
+                <p className="text-[13px] text-muted-foreground leading-snug">{wisdom.adviceParagraph}</p>
               </div>
 
               {/* Action Items */}
               <div className="rounded-lg bg-muted/20 p-2.5">
                 <div className="flex items-center gap-1.5 mb-1.5">
                   <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
-                  <h4 className="text-[12px] font-semibold">Action Items</h4>
+                  <h4 className="text-[13px] font-semibold">Action Items</h4>
                 </div>
                 <ol className="space-y-1.5">
                   {wisdom.actionItems.map((item, i) => (
-                    <li key={i} className="flex items-start gap-2 text-[11px] text-muted-foreground">
-                      <span className="shrink-0 w-4 h-4 rounded-full bg-primary/10 text-primary text-[9px] font-bold flex items-center justify-center mt-0.5">
+                    <li key={i} className="flex items-start gap-2 text-[13px] text-muted-foreground">
+                      <span className="shrink-0 w-4 h-4 rounded-full bg-primary/10 text-primary text-[13px] font-bold flex items-center justify-center mt-0.5">
                         {i + 1}
                       </span>
                       <span className="leading-snug">{item}</span>
@@ -685,9 +684,9 @@ export default function Dashboard() {
               <div className="rounded-lg bg-muted/20 p-2.5">
                 <div className="flex items-center gap-1.5 mb-1">
                   <Flame className="h-3.5 w-3.5 text-orange-400" />
-                  <h4 className="text-[12px] font-semibold">Nutrition</h4>
+                  <h4 className="text-[13px] font-semibold">Nutrition</h4>
                 </div>
-                <p className="text-[11px] text-muted-foreground leading-snug">{wisdom.nutritionStatus}</p>
+                <p className="text-[13px] text-muted-foreground leading-snug">{wisdom.nutritionStatus}</p>
               </div>
             </div>
           </SheetContent>

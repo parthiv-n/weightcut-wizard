@@ -267,20 +267,20 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                             {searching && (
                                 <div className="flex items-center justify-center py-8">
                                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                                    <span className="ml-1.5 text-[12px] text-muted-foreground">Searching…</span>
+                                    <span className="ml-1.5 text-[13px] text-muted-foreground">Searching…</span>
                                 </div>
                             )}
 
                             {!searching && query.length >= 2 && results.length === 0 && (
                                 <div className="text-center py-8">
-                                    <p className="text-[12px] text-muted-foreground">No results found</p>
+                                    <p className="text-[13px] text-muted-foreground">No results found</p>
                                 </div>
                             )}
 
                             {!searching && query.length < 2 && recentMeals.length > 0 && (
                                 <div>
                                     <div className="px-3 pt-2 pb-1 flex items-center justify-between">
-                                        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">Recent</span>
+                                        <span className="text-[13px] font-semibold uppercase tracking-wider text-muted-foreground/60">Recent</span>
                                         <button
                                             onClick={() => {
                                                 const hidden = getHiddenRecents();
@@ -288,7 +288,7 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                                                 setHiddenRecents(hidden);
                                                 setRecentMeals([]);
                                             }}
-                                            className="text-[10px] text-muted-foreground/60 active:text-destructive transition-colors"
+                                            className="text-[13px] text-muted-foreground/60 active:text-destructive transition-colors"
                                         >
                                             Clear
                                         </button>
@@ -313,8 +313,8 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                                                         className="flex-1 flex items-center gap-2 px-3 py-1.5 active:bg-muted/50 transition-colors text-left min-w-0"
                                                     >
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="text-[12px] font-medium truncate">{food.name}</p>
-                                                            <p className="text-[10px] text-muted-foreground/70">
+                                                            <p className="text-[13px] font-medium truncate">{food.name}</p>
+                                                            <p className="text-[13px] text-muted-foreground/70">
                                                                 {food.calories_per_100g} kcal · {food.protein_per_100g}P · {food.carbs_per_100g}C · {food.fats_per_100g}F
                                                             </p>
                                                         </div>
@@ -351,7 +351,7 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
 
                             {!searching && query.length < 2 && recentMeals.length === 0 && (
                                 <div className="text-center py-8">
-                                    <p className="text-[12px] text-muted-foreground">Type to search foods</p>
+                                    <p className="text-[13px] text-muted-foreground">Type to search foods</p>
                                 </div>
                             )}
 
@@ -367,11 +367,11 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                                             className="w-full flex items-center gap-2 px-3 py-1.5 active:bg-muted/50 transition-colors text-left"
                                         >
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-[12px] font-medium truncate">{food.name}</p>
+                                                <p className="text-[13px] font-medium truncate">{food.name}</p>
                                                 {food.brand && (
-                                                    <p className="text-[10px] text-muted-foreground/60 truncate">{food.brand}</p>
+                                                    <p className="text-[13px] text-muted-foreground/60 truncate">{food.brand}</p>
                                                 )}
-                                                <p className="text-[10px] text-muted-foreground/70">
+                                                <p className="text-[13px] text-muted-foreground/70">
                                                     {food.calories_per_100g} kcal · {food.protein_per_100g}P · {food.carbs_per_100g}C · {food.fats_per_100g}F
                                                 </p>
                                             </div>
@@ -395,7 +395,7 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                             <div className="flex-1 min-w-0">
                                 <h3 className="font-semibold text-[14px] truncate">{selectedFood.name}</h3>
                                 {selectedFood.brand && (
-                                    <p className="text-[11px] text-muted-foreground">{selectedFood.brand}</p>
+                                    <p className="text-[13px] text-muted-foreground">{selectedFood.brand}</p>
                                 )}
                             </div>
                         </div>
@@ -403,7 +403,7 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                         {/* Serving size input */}
                         <div className="space-y-2.5">
                             <div className="flex items-center justify-between">
-                                <span className="text-[12px] font-medium">Serving Size</span>
+                                <span className="text-[13px] font-medium">Serving Size</span>
                                 <div className="flex items-center gap-1.5">
                                     <button
                                         onClick={() => setServingGrams(Math.max(10, servingGrams - 10))}
@@ -423,7 +423,7 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                                             }}
                                             className="w-16 text-center text-[13px] h-7 font-semibold rounded-md border-border/30 bg-muted/20"
                                         />
-                                        <span className="text-[12px] text-muted-foreground">g</span>
+                                        <span className="text-[13px] text-muted-foreground">g</span>
                                     </div>
                                     <button
                                         onClick={() => setServingGrams(servingGrams + 10)}
@@ -440,7 +440,7 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                                     <button
                                         key={g}
                                         onClick={() => setServingGrams(g)}
-                                        className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${servingGrams === g
+                                        className={`px-2.5 py-1 rounded-full text-[13px] font-medium transition-colors ${servingGrams === g
                                                 ? "bg-primary text-primary-foreground"
                                                 : "bg-muted/40 text-muted-foreground active:bg-muted/60"
                                             }`}
@@ -454,7 +454,7 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                                             const match = selectedFood.serving_size?.match(/(\d+(?:\.\d+)?)\s*g/i);
                                             if (match) setServingGrams(Math.round(parseFloat(match[1])));
                                         }}
-                                        className="px-2.5 py-1 rounded-full text-[11px] font-medium bg-muted/40 text-muted-foreground active:bg-muted/60"
+                                        className="px-2.5 py-1 rounded-full text-[13px] font-medium bg-muted/40 text-muted-foreground active:bg-muted/60"
                                     >
                                         1 srv ({selectedFood.serving_size})
                                     </button>
@@ -466,23 +466,23 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                         <div className="rounded-lg bg-muted/20 p-3 space-y-2">
                             <div className="text-center">
                                 <p className="text-2xl font-bold text-primary tabular-nums">{scaledCalories}</p>
-                                <p className="text-[10px] text-muted-foreground uppercase tracking-wider">calories</p>
+                                <p className="text-[13px] text-muted-foreground uppercase tracking-wider">calories</p>
                             </div>
                             <div className="grid grid-cols-3 gap-2 pt-1.5 border-t border-border/20">
                                 <div className="text-center">
                                     <p className="text-[15px] font-semibold text-blue-500 tabular-nums">{scaledProtein}g</p>
-                                    <p className="text-[9px] uppercase tracking-wider text-muted-foreground">Protein</p>
+                                    <p className="text-[13px] uppercase tracking-wider text-muted-foreground">Protein</p>
                                 </div>
                                 <div className="text-center">
                                     <p className="text-[15px] font-semibold text-orange-500 tabular-nums">{scaledCarbs}g</p>
-                                    <p className="text-[9px] uppercase tracking-wider text-muted-foreground">Carbs</p>
+                                    <p className="text-[13px] uppercase tracking-wider text-muted-foreground">Carbs</p>
                                 </div>
                                 <div className="text-center">
                                     <p className="text-[15px] font-semibold text-purple-500 tabular-nums">{scaledFats}g</p>
-                                    <p className="text-[9px] uppercase tracking-wider text-muted-foreground">Fats</p>
+                                    <p className="text-[13px] uppercase tracking-wider text-muted-foreground">Fats</p>
                                 </div>
                             </div>
-                            <p className="text-[9px] text-muted-foreground/50 text-center">
+                            <p className="text-[13px] text-muted-foreground/50 text-center">
                                 Per 100g: {selectedFood.calories_per_100g} kcal · P {selectedFood.protein_per_100g}g · C {selectedFood.carbs_per_100g}g · F {selectedFood.fats_per_100g}g
                             </p>
                         </div>

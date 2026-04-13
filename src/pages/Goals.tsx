@@ -22,7 +22,7 @@ function ChipSelect({ value, options, onChange, columns = 3 }: {
       {options.map(opt => (
         <button key={opt.value} type="button"
           onClick={() => { triggerHapticSelection(); onChange(opt.value); }}
-          className={`h-7 rounded-lg text-[10px] font-semibold transition-all active:scale-[0.97] ${
+          className={`h-7 rounded-lg text-[13px] font-semibold transition-all active:scale-[0.97] ${
             value === opt.value
               ? "bg-primary/15 text-foreground shadow-sm"
               : "bg-muted/30 text-muted-foreground active:bg-muted/50"
@@ -233,13 +233,13 @@ export default function Goals() {
     <div className="animate-page-in space-y-2 p-3 sm:p-4 max-w-7xl mx-auto pb-16 md:pb-6">
       <div className="flex items-center justify-between">
         <h1 className="text-[15px] font-bold tracking-tight">Goals</h1>
-        <p className="text-muted-foreground text-[10px]">Profile & targets</p>
+        <p className="text-muted-foreground text-[13px]">Profile & targets</p>
       </div>
 
       {!contextProfile?.goal_weight_kg && (
         <div className="rounded-lg bg-muted/20 p-2.5 flex items-start gap-2">
           <Target className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
-          <p className="text-[10px] text-muted-foreground leading-snug">
+          <p className="text-[13px] text-muted-foreground leading-snug">
             Fill in your details so the Wizard can calculate targets and guide your cut.
           </p>
         </div>
@@ -248,16 +248,16 @@ export default function Goals() {
       <div className="space-y-2.5">
         {/* Section: Athlete Profile */}
         <div>
-          <h2 className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground mb-1 ml-0.5">Athlete Profile</h2>
+          <h2 className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1 ml-0.5">Athlete Profile</h2>
           <div className="rounded-lg bg-muted/10 overflow-hidden divide-y divide-border/20">
             <div className="px-2.5 py-2 space-y-1">
-              <Label className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Sport</Label>
+              <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Sport</Label>
               <ChipSelect value={formData.athlete_type} columns={4}
                 options={Object.entries(ATHLETE_TYPES).map(([k, v]) => ({ value: k, label: v }))}
                 onChange={(v) => setFormData(prev => ({ ...prev, athlete_type: v }))} />
             </div>
             <div className="px-2.5 py-2 space-y-1">
-              <Label className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Goal</Label>
+              <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Goal</Label>
               <ChipSelect value={formData.goal_type} columns={4}
                 options={[
                   { value: "cutting", label: "Cut" },
@@ -268,13 +268,13 @@ export default function Goals() {
                 onChange={(v) => setFormData(prev => ({ ...prev, goal_type: v }))} />
             </div>
             <div className="px-2.5 py-2 space-y-1">
-              <Label className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Experience</Label>
+              <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Experience</Label>
               <ChipSelect value={formData.experience_level}
                 options={Object.entries(EXPERIENCE_LABELS).map(([k, v]) => ({ value: k, label: v }))}
                 onChange={(v) => setFormData(prev => ({ ...prev, experience_level: v }))} />
             </div>
             <div className="px-2.5 py-2 space-y-1">
-              <Label className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Plan Style</Label>
+              <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Plan Style</Label>
               <ChipSelect value={formData.plan_aggressiveness}
                 options={Object.entries(AGGRESSIVENESS_LABELS).map(([k, v]) => ({ value: k, label: v }))}
                 onChange={(v) => setFormData(prev => ({ ...prev, plan_aggressiveness: v }))} />
@@ -284,47 +284,47 @@ export default function Goals() {
 
         {/* Section: Personal Details */}
         <div>
-          <h2 className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground mb-1 ml-0.5">Personal Details</h2>
+          <h2 className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1 ml-0.5">Personal Details</h2>
           <div className="rounded-lg bg-muted/10 overflow-hidden divide-y divide-border/20">
             <div className="flex items-center justify-between px-2.5 py-1.5">
-              <Label className="text-[12px] font-medium">Age</Label>
+              <Label className="text-[13px] font-medium">Age</Label>
               <Input type="number" value={formData.age} onChange={(e) => setFormData(prev => ({ ...prev, age: e.target.value }))}
                 className="w-16 text-right h-7 border-transparent focus-visible:ring-0 bg-transparent p-0 text-[13px]" placeholder="-" />
             </div>
             <div className="px-2.5 py-2 space-y-1">
-              <Label className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Sex</Label>
+              <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Sex</Label>
               <ChipSelect value={formData.sex} columns={2}
                 options={[{ value: "male", label: "Male" }, { value: "female", label: "Female" }]}
                 onChange={(v) => setFormData(prev => ({ ...prev, sex: v }))} />
             </div>
             <div className="flex items-center justify-between px-2.5 py-1.5">
-              <Label className="text-[12px] font-medium">Height</Label>
+              <Label className="text-[13px] font-medium">Height</Label>
               <div className="flex items-center gap-0.5">
                 <Input type="number" value={formData.height_cm} onChange={(e) => setFormData(prev => ({ ...prev, height_cm: e.target.value }))}
                   className="w-16 text-right h-7 border-transparent focus-visible:ring-0 bg-transparent p-0 text-[13px]" placeholder="-" />
-                <span className="text-muted-foreground text-[11px]">cm</span>
+                <span className="text-muted-foreground text-[13px]">cm</span>
               </div>
             </div>
             <div className="flex items-center justify-between px-2.5 py-1.5">
-              <Label className="text-[12px] font-medium">Weight</Label>
+              <Label className="text-[13px] font-medium">Weight</Label>
               <div className="flex items-center gap-0.5">
                 <Input type="number" step="0.1" value={formData.current_weight_kg} onChange={(e) => setFormData(prev => ({ ...prev, current_weight_kg: e.target.value }))}
                   className="w-16 text-right h-7 border-transparent focus-visible:ring-0 bg-transparent p-0 text-[13px]" placeholder="-" />
-                <span className="text-muted-foreground text-[11px]">kg</span>
+                <span className="text-muted-foreground text-[13px]">kg</span>
               </div>
             </div>
             {formData.body_fat_pct !== undefined && (
               <div className="flex items-center justify-between px-2.5 py-1.5">
-                <Label className="text-[12px] font-medium">Body Fat</Label>
+                <Label className="text-[13px] font-medium">Body Fat</Label>
                 <div className="flex items-center gap-0.5">
                   <Input type="number" step="0.1" value={formData.body_fat_pct} onChange={(e) => setFormData(prev => ({ ...prev, body_fat_pct: e.target.value }))}
                     className="w-16 text-right h-7 border-transparent focus-visible:ring-0 bg-transparent p-0 text-[13px]" placeholder="-" />
-                  <span className="text-muted-foreground text-[11px]">%</span>
+                  <span className="text-muted-foreground text-[13px]">%</span>
                 </div>
               </div>
             )}
             <div className="px-2.5 py-2 space-y-1">
-              <Label className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Sleep</Label>
+              <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Sleep</Label>
               <ChipSelect value={formData.sleep_hours} columns={5}
                 options={[
                   { value: "<5", label: "<5h" },
@@ -340,14 +340,14 @@ export default function Goals() {
 
         {/* Section: Targets */}
         <div>
-          <h2 className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground mb-1 ml-0.5">Targets</h2>
+          <h2 className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1 ml-0.5">Targets</h2>
           <div className="rounded-lg bg-muted/10 overflow-hidden divide-y divide-border/20">
             <div className="flex items-center justify-between px-2.5 py-1.5">
-              <Label className="text-[12px] font-medium">{isFighter ? 'Weight Class' : 'Goal Weight'}</Label>
+              <Label className="text-[13px] font-medium">{isFighter ? 'Weight Class' : 'Goal Weight'}</Label>
               <div className="flex items-center gap-0.5">
                 <Input type="number" step="0.1" value={formData.goal_weight_kg} onChange={(e) => setFormData(prev => ({ ...prev, goal_weight_kg: e.target.value }))}
                   className="w-16 text-right h-7 border-transparent focus-visible:ring-0 bg-transparent p-0 text-[13px] font-semibold text-primary" placeholder="-" />
-                <span className="text-muted-foreground text-[11px]">kg</span>
+                <span className="text-muted-foreground text-[13px]">kg</span>
               </div>
             </div>
 
@@ -355,7 +355,7 @@ export default function Goals() {
               <div className="px-2.5 py-1.5 space-y-1.5 bg-muted/10">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <Label className="text-[12px] font-medium">Diet Target</Label>
+                    <Label className="text-[13px] font-medium">Diet Target</Label>
                     <button type="button" onClick={() => setUseAutoTarget(!useAutoTarget)}
                       className={`text-[8px] px-1.5 py-0.5 rounded-full transition-colors ${useAutoTarget ? "bg-primary text-primary-foreground" : "bg-muted/40 text-muted-foreground"}`}>
                       {useAutoTarget ? "AUTO" : "MANUAL"}
@@ -366,16 +366,16 @@ export default function Goals() {
                       onChange={(e) => { setFormData(prev => ({ ...prev, fight_week_target_kg: e.target.value })); setUseAutoTarget(false); }}
                       disabled={useAutoTarget}
                       className="w-16 text-right h-7 border-transparent focus-visible:ring-0 bg-transparent p-0 text-[13px] disabled:opacity-60" placeholder="-" />
-                    <span className="text-muted-foreground text-[11px]">kg</span>
+                    <span className="text-muted-foreground text-[13px]">kg</span>
                   </div>
                 </div>
                 {useAutoTarget ? (
-                  <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                  <div className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
                     <Sparkles className="h-3 w-3 text-primary shrink-0" />
                     <span>Safe pre-cut weight (5.5% buffer)</span>
                   </div>
                 ) : safetyFeedback && (
-                  <div className={`flex items-center gap-1.5 text-[10px] font-medium ${
+                  <div className={`flex items-center gap-1.5 text-[13px] font-medium ${
                     targetSafetyLevel === "safe" ? "text-green-500" :
                     targetSafetyLevel === "moderate" ? "text-yellow-500" :
                     "text-red-500"
@@ -388,7 +388,7 @@ export default function Goals() {
             )}
 
             <div className="flex items-center justify-between px-2.5 py-1.5">
-              <Label className="text-[12px] font-medium">Target Date</Label>
+              <Label className="text-[13px] font-medium">Target Date</Label>
               <Input type="date" value={formData.target_date} onChange={(e) => setFormData(prev => ({ ...prev, target_date: e.target.value }))}
                 className="w-auto h-7 border-transparent focus-visible:ring-0 bg-transparent p-0 text-[13px] text-right" />
             </div>
@@ -397,10 +397,10 @@ export default function Goals() {
 
         {/* Section: Activity & Training */}
         <div>
-          <h2 className="text-[9px] font-semibold uppercase tracking-widest text-muted-foreground mb-1 ml-0.5">Activity & Training</h2>
+          <h2 className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1 ml-0.5">Activity & Training</h2>
           <div className="rounded-lg bg-muted/10 overflow-hidden divide-y divide-border/20">
             <div className="px-2.5 py-2 space-y-1">
-              <Label className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Activity Level</Label>
+              <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Activity Level</Label>
               <ChipSelect value={formData.activity_level} columns={3}
                 options={[
                   { value: "sedentary", label: "Sedentary" },
@@ -412,15 +412,15 @@ export default function Goals() {
                 onChange={(v) => setFormData(prev => ({ ...prev, activity_level: v }))} />
             </div>
             <div className="flex items-center justify-between px-2.5 py-1.5">
-              <Label className="text-[12px] font-medium">Training</Label>
+              <Label className="text-[13px] font-medium">Training</Label>
               <div className="flex items-center gap-0.5">
                 <Input type="number" value={formData.training_frequency} onChange={(e) => setFormData(prev => ({ ...prev, training_frequency: e.target.value }))}
                   className="w-12 text-right h-7 border-transparent focus-visible:ring-0 bg-transparent p-0 text-[13px]" placeholder="-" />
-                <span className="text-muted-foreground text-[11px]">/wk</span>
+                <span className="text-muted-foreground text-[13px]">/wk</span>
               </div>
             </div>
             <div className="px-2.5 py-2 space-y-1">
-              <Label className="text-[9px] font-semibold uppercase tracking-wider text-muted-foreground">Food Budget</Label>
+              <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Food Budget</Label>
               <ChipSelect value={formData.food_budget}
                 options={Object.entries(BUDGET_LABELS).map(([k, v]) => ({ value: k, label: v }))}
                 onChange={(v) => setFormData(prev => ({ ...prev, food_budget: v }))} />

@@ -8,6 +8,7 @@ import { triggerHapticSuccess } from "@/lib/haptics";
 
 interface SleepLoggerProps {
   userId: string;
+  compact?: boolean;
 }
 
 const MIN_HOURS = 0;
@@ -18,7 +19,7 @@ const DEFAULT_HOURS = 7.5;
 const today = () => new Date().toISOString().split("T")[0];
 const cacheKey = (date: string) => `sleep_log_${date}`;
 
-export const SleepLogger = memo(function SleepLogger({ userId }: SleepLoggerProps) {
+export const SleepLogger = memo(function SleepLogger({ userId, compact }: SleepLoggerProps) {
   const [hours, setHours] = useState(DEFAULT_HOURS);
   const [saved, setSaved] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -92,6 +93,28 @@ export const SleepLogger = memo(function SleepLogger({ userId }: SleepLoggerProp
 
   // Collapsed state
   if (!isEditing) {
+    if (compact) {
+      return (
+        <button
+          type="button"
+          className="rounded-lg bg-muted/20 p-2.5 flex flex-col items-start gap-1.5 active:bg-muted/30 transition-colors text-left w-full"
+          onClick={() => setIsEditing(true)}
+        >
+          <Moon className="w-4 h-4 text-primary" />
+          {saved ? (
+            <>
+              <p className="text-[13px] font-semibold leading-tight"><span className="tabular-nums">{hours}</span><span className="text-muted-foreground">h</span> sleep</p>
+              <p className="text-[11px] text-emerald-400 leading-tight">Logged</p>
+            </>
+          ) : (
+            <>
+              <p className="text-[13px] font-semibold leading-tight">Sleep</p>
+              <p className="text-[11px] text-muted-foreground leading-tight">Tap to log</p>
+            </>
+          )}
+        </button>
+      );
+    }
     return (
       <button
         type="button"

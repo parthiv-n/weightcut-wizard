@@ -210,7 +210,7 @@ export default function GymTracker() {
       <div className="space-y-3">
         {/* Header */}
         <div>
-          <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest mb-0.5">{todayLabel}</p>
+          <p className="text-[13px] text-muted-foreground font-medium uppercase tracking-widest mb-0.5">{todayLabel}</p>
           <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/60 bg-clip-text text-transparent">
             Gym
           </h1>
@@ -282,17 +282,17 @@ export default function GymTracker() {
                   <div className="card-surface rounded-xl border border-border p-3 text-center">
                     <Calendar className="h-3.5 w-3.5 text-primary mx-auto mb-1.5" />
                     <div className="display-number text-lg">{analytics.sessionsThisWeek}</div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">This Week</div>
+                    <div className="text-[13px] text-muted-foreground mt-0.5">This Week</div>
                   </div>
                   <div className="card-surface rounded-xl border border-border p-3 text-center">
                     <Clock className="h-3.5 w-3.5 text-primary mx-auto mb-1.5" />
                     <div className="display-number text-lg">{analytics.avgDuration}<span className="text-xs text-muted-foreground font-normal">m</span></div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">Avg Duration</div>
+                    <div className="text-[13px] text-muted-foreground mt-0.5">Avg Duration</div>
                   </div>
                   <div className="card-surface rounded-xl border border-border p-3 text-center">
                     <Flame className="h-3.5 w-3.5 text-orange-400 mx-auto mb-1.5" />
                     <div className="display-number text-lg">{formatVol(weeklyVolume)}<span className="text-xs text-muted-foreground font-normal">kg</span></div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">Week Volume</div>
+                    <div className="text-[13px] text-muted-foreground mt-0.5">Week Volume</div>
                   </div>
                 </div>
               )}
@@ -308,7 +308,7 @@ export default function GymTracker() {
                         setSessionType(t as SessionType);
                         triggerHaptic(ImpactStyle.Light);
                       }}
-                      className={`shrink-0 px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all snap-start ${
+                      className={`shrink-0 px-3 py-1.5 rounded-full text-[13px] font-semibold transition-all snap-start ${
                         sessionType === t
                           ? "bg-primary text-primary-foreground shadow-sm"
                           : "bg-muted/40 text-muted-foreground active:bg-muted/60"
@@ -392,8 +392,8 @@ export default function GymTracker() {
               <div className="space-y-1">
                 {loggedExercises.length === 0 ? (
                   <div className="text-center py-8">
-                    <p className="text-[12px] text-muted-foreground">No exercises logged yet</p>
-                    <p className="text-[10px] text-muted-foreground/60 mt-0.5">Complete a workout to see your progress</p>
+                    <p className="text-[13px] text-muted-foreground">No exercises logged yet</p>
+                    <p className="text-[13px] text-muted-foreground/60 mt-0.5">Complete a workout to see your progress</p>
                   </div>
                 ) : (
                   <div className="divide-y divide-border/20">
@@ -404,10 +404,10 @@ export default function GymTracker() {
                         className="w-full flex items-center gap-2.5 px-2 py-2 active:bg-muted/50 transition-colors text-left"
                       >
                         <div className="flex-1 min-w-0">
-                          <p className="text-[12px] font-medium truncate">{ex.name}</p>
-                          <p className="text-[10px] text-muted-foreground">{ex.muscle_group?.replace("_", " ")}</p>
+                          <p className="text-[13px] font-medium truncate">{ex.name}</p>
+                          <p className="text-[13px] text-muted-foreground">{ex.muscle_group?.replace("_", " ")}</p>
                         </div>
-                        <div className="flex items-center gap-2 text-[10px] tabular-nums text-muted-foreground shrink-0">
+                        <div className="flex items-center gap-2 text-[13px] tabular-nums text-muted-foreground shrink-0">
                           {bestWeight > 0 ? (
                             <span><span className="font-semibold text-foreground">{bestWeight}</span>kg <span className="text-muted-foreground/60">× {bestReps}</span></span>
                           ) : bestReps > 0 ? (

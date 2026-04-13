@@ -23,7 +23,7 @@ export function NoGemsDialog({ open, onOpenChange, onWatchAd, onGoPro, adsRemain
 
         <div className="pt-4 pb-3 px-4 text-center">
           <p className="text-[15px] font-semibold text-foreground">Out of Gems</p>
-          <p className="text-[12px] text-muted-foreground mt-0.5 leading-snug">
+          <p className="text-[13px] text-muted-foreground mt-0.5 leading-snug">
             {countdown
               ? <>Free gem in <span className="font-medium tabular-nums text-foreground">{countdown}</span></>
               : "Watch an ad or upgrade."

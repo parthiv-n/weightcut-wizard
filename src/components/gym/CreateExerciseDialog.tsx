@@ -55,7 +55,7 @@ export function CreateExerciseDialog({ open, onOpenChange, onSubmit }: CreateExe
 
         <div className="px-4 space-y-2.5">
           <div>
-            <label className="text-[11px] font-medium text-muted-foreground mb-0.5 block">Exercise Name</label>
+            <label className="text-[13px] font-medium text-muted-foreground mb-0.5 block">Exercise Name</label>
             <Input
               placeholder="e.g. Zercher Squat"
               value={name}
@@ -67,7 +67,7 @@ export function CreateExerciseDialog({ open, onOpenChange, onSubmit }: CreateExe
 
           <div className="grid grid-cols-2 gap-1.5">
             <div>
-              <label className="text-[11px] font-medium text-muted-foreground mb-0.5 block">Category</label>
+              <label className="text-[13px] font-medium text-muted-foreground mb-0.5 block">Category</label>
               <Select value={category} onValueChange={(v) => setCategory(v as ExerciseCategory)}>
                 <SelectTrigger className="h-8 text-[13px] rounded-lg border-border/30 bg-muted/20">
                   <SelectValue />
@@ -81,7 +81,7 @@ export function CreateExerciseDialog({ open, onOpenChange, onSubmit }: CreateExe
             </div>
 
             <div>
-              <label className="text-[11px] font-medium text-muted-foreground mb-0.5 block">Muscle Group</label>
+              <label className="text-[13px] font-medium text-muted-foreground mb-0.5 block">Muscle Group</label>
               <Select value={muscleGroup} onValueChange={(v) => setMuscleGroup(v as MuscleGroup)}>
                 <SelectTrigger className="h-8 text-[13px] rounded-lg border-border/30 bg-muted/20">
                   <SelectValue />
@@ -96,7 +96,7 @@ export function CreateExerciseDialog({ open, onOpenChange, onSubmit }: CreateExe
           </div>
 
           <div>
-            <label className="text-[11px] font-medium text-muted-foreground mb-0.5 block">Equipment</label>
+            <label className="text-[13px] font-medium text-muted-foreground mb-0.5 block">Equipment</label>
             <Select value={equipment} onValueChange={(v) => setEquipment(v as Equipment)}>
               <SelectTrigger className="h-8 text-[13px] rounded-lg border-border/30 bg-muted/20">
                 <SelectValue />
@@ -110,7 +110,7 @@ export function CreateExerciseDialog({ open, onOpenChange, onSubmit }: CreateExe
           </div>
 
           <div className="flex items-center justify-between py-0.5">
-            <label className="text-[12px] font-medium">Bodyweight Exercise</label>
+            <label className="text-[13px] font-medium">Bodyweight Exercise</label>
             <Switch checked={isBodyweight} onCheckedChange={setIsBodyweight} />
           </div>
         </div>

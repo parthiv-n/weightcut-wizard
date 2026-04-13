@@ -124,17 +124,17 @@ export function ActiveSessionView({
             <div className="rounded-xl bg-muted/30 p-2.5 text-center">
               <Dumbbell className="h-3.5 w-3.5 text-primary mx-auto mb-1" />
               <div className="display-number text-sm">{workout.exerciseGroups.length}</div>
-              <div className="text-[10px] text-muted-foreground">Exercises</div>
+              <div className="text-[13px] text-muted-foreground">Exercises</div>
             </div>
             <div className="rounded-xl bg-muted/30 p-2.5 text-center">
               <TrendingUp className="h-3.5 w-3.5 text-primary mx-auto mb-1" />
               <div className="display-number text-sm">{totalSets}</div>
-              <div className="text-[10px] text-muted-foreground">Working Sets</div>
+              <div className="text-[13px] text-muted-foreground">Working Sets</div>
             </div>
             <div className="rounded-xl bg-muted/30 p-2.5 text-center">
               <Clock className="h-3.5 w-3.5 text-primary mx-auto mb-1" />
-              <div className="display-number text-sm">{formatVolume(totalVolume)}<span className="text-[10px] text-muted-foreground font-normal"> kg</span></div>
-              <div className="text-[10px] text-muted-foreground">Volume</div>
+              <div className="display-number text-sm">{formatVolume(totalVolume)}<span className="text-[13px] text-muted-foreground font-normal"> kg</span></div>
+              <div className="text-[13px] text-muted-foreground">Volume</div>
             </div>
           </div>
         </div>
@@ -211,7 +211,7 @@ export function ActiveSessionView({
           </div>
           <div className="px-4 space-y-2.5">
             <div className="rounded-lg bg-muted/20 p-3 space-y-1.5">
-              <label className="text-[12px] font-medium block">
+              <label className="text-[13px] font-medium block">
                 Fatigue: <span className="text-primary">{fatigue[0]}/10</span>
               </label>
               <Slider
@@ -222,14 +222,14 @@ export function ActiveSessionView({
                 step={1}
                 className="py-1.5"
               />
-              <div className="flex justify-between text-[10px] text-muted-foreground">
+              <div className="flex justify-between text-[13px] text-muted-foreground">
                 <span>Fresh</span>
                 <span>Destroyed</span>
               </div>
             </div>
 
             <div className="rounded-lg bg-muted/20 p-3 space-y-1.5">
-              <label className="text-[12px] font-medium block">Notes</label>
+              <label className="text-[13px] font-medium block">Notes</label>
               <Textarea
                 placeholder="How did the workout feel?"
                 value={notes}

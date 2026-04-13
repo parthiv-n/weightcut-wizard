@@ -52,7 +52,7 @@ function SubscriptionSection() {
             <p className="text-[13px] font-medium">Premium</p>
             <PremiumBadge />
           </div>
-          <p className="text-[11px] text-muted-foreground">{planLabel} · {expiryLabel}</p>
+          <p className="text-[13px] text-muted-foreground">{planLabel} · {expiryLabel}</p>
         </div>
         <button type="button" onClick={() => presentCustomerCenter()}
           className="w-full flex items-center justify-between px-3 py-2 active:bg-muted/40 transition-colors text-left">
@@ -71,7 +71,7 @@ function SubscriptionSection() {
           <Zap className="h-4 w-4 text-primary shrink-0" />
           <div>
             <p className="text-[13px] font-medium">Upgrade to Premium</p>
-            <p className="text-[10px] text-muted-foreground">Unlimited AI</p>
+            <p className="text-[13px] text-muted-foreground">Unlimited AI</p>
           </div>
         </div>
         <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
@@ -107,7 +107,7 @@ function GemsSection() {
           <Play className="h-4 w-4 text-green-500 shrink-0" />
           <p className="text-[13px] font-medium">{loading ? 'Loading...' : 'Watch Ad'}</p>
         </div>
-        <span className="text-[10px] text-muted-foreground">{adsRemaining > 0 ? `${adsRemaining} left` : 'Limit reached'}</span>
+        <span className="text-[13px] text-muted-foreground">{adsRemaining > 0 ? `${adsRemaining} left` : 'Limit reached'}</span>
       </button>
     </div>
   );
@@ -211,7 +211,7 @@ export function SettingsPanel({
                 <ProfilePictureUpload currentAvatarUrl={avatarUrl || undefined} onUploadSuccess={onAvatarChange} />
               </div>
             </div>
-            {userEmail && <p className="text-[10px] text-muted-foreground mt-1.5 pl-[52px] truncate">{userEmail}</p>}
+            {userEmail && <p className="text-[13px] text-muted-foreground mt-1.5 pl-[52px] truncate">{userEmail}</p>}
           </div>
 
           {/* Subscription */}
@@ -255,7 +255,7 @@ export function SettingsPanel({
                       <Bell className="h-4 w-4 text-primary shrink-0" />
                       <div>
                         <p className="text-[13px] font-medium">Reminder</p>
-                        {reminderSettings.enabled && <p className="text-[10px] text-muted-foreground">{displayHour}:{displayMinute} {ampm}</p>}
+                        {reminderSettings.enabled && <p className="text-[13px] text-muted-foreground">{displayHour}:{displayMinute} {ampm}</p>}
                       </div>
                     </div>
                     <Switch checked={reminderSettings.enabled} onCheckedChange={handleToggle} onClick={(e) => e.stopPropagation()} />
@@ -264,13 +264,13 @@ export function SettingsPanel({
                     const curHour24 = reminderSettings.hour;
                     const curHour12 = curHour24 === 0 ? 12 : curHour24 > 12 ? curHour24 - 12 : curHour24;
                     const curAmpm = curHour24 < 12 ? "AM" : "PM";
-                    const sc = "h-7 rounded-md bg-muted/30 text-[12px] font-medium px-2 appearance-none text-foreground";
+                    const sc = "h-7 rounded-md bg-muted/30 text-[13px] font-medium px-2 appearance-none text-foreground";
                     return (
                       <div className="flex items-center gap-1.5 px-3 pb-2">
                         <select value={curHour12} onChange={(e) => handleTimeChange("hour12", Number(e.target.value))} className={sc}>
                           {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (<option key={h} value={h}>{h}</option>))}
                         </select>
-                        <span className="text-muted-foreground text-[12px]">:</span>
+                        <span className="text-muted-foreground text-[13px]">:</span>
                         <select value={reminderSettings.minute} onChange={(e) => handleTimeChange("minute", Number(e.target.value))} className={sc}>
                           {[0, 15, 30, 45].map((m) => (<option key={m} value={m}>{String(m).padStart(2, "0")}</option>))}
                         </select>
@@ -315,7 +315,7 @@ export function SettingsPanel({
                 <LifeBuoy className="h-4 w-4 text-muted-foreground shrink-0" />
                 <p className="text-[13px] font-medium">Support</p>
               </div>
-              <p className="text-[10px] text-muted-foreground shrink-0">weightcutwizard@gmail.com</p>
+              <p className="text-[13px] text-muted-foreground shrink-0">weightcutwizard@gmail.com</p>
             </button>
           </div>
 
@@ -329,7 +329,7 @@ export function SettingsPanel({
                 </div>
                 <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0 transition-transform group-open:rotate-90" />
               </summary>
-              <p className="text-[10px] text-muted-foreground leading-snug px-3 pb-2">
+              <p className="text-[13px] text-muted-foreground leading-snug px-3 pb-2">
                 This app is for informational purposes only. Not a substitute for professional medical advice. Consult a healthcare provider before changing your diet or training.
               </p>
             </details>
@@ -347,7 +347,7 @@ export function SettingsPanel({
             </button>
           </div>
 
-          <p className="text-center text-[9px] text-muted-foreground/40 pb-1">v{__APP_VERSION__}</p>
+          <p className="text-center text-[13px] text-muted-foreground/40 pb-1">v{__APP_VERSION__}</p>
         </div>
       </div>
     </>

@@ -39,7 +39,7 @@ export function DeleteConfirmDialog({
         <AlertDialogPrimitive.Description asChild>
           <div className="pt-4 pb-3 px-4 text-center">
             <p className="text-[15px] font-semibold text-foreground">{title}</p>
-            <p className="text-[12px] text-muted-foreground mt-0.5 leading-snug">
+            <p className="text-[13px] text-muted-foreground mt-0.5 leading-snug">
               {description || defaultDescription}
             </p>
           </div>

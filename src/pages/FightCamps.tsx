@@ -285,17 +285,17 @@ export default function FightCamps() {
                   {(camp.starting_weight_kg || camp.total_weight_cut) ? (
                     <div className="mt-3 bg-muted/50 rounded-xl p-2.5 flex items-center justify-around border border-border">
                       <div className="text-center">
-                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-0.5">Start</p>
+                        <p className="text-[13px] uppercase tracking-widest text-muted-foreground mb-0.5">Start</p>
                         <p className="text-sm font-bold">{camp.starting_weight_kg ? `${camp.starting_weight_kg}kg` : '-'}</p>
                       </div>
                       <div className="h-5 w-px bg-border" />
                       <div className="text-center">
-                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-0.5">Cut</p>
+                        <p className="text-[13px] uppercase tracking-widest text-muted-foreground mb-0.5">Cut</p>
                         <p className="text-sm font-bold text-primary">{camp.total_weight_cut ? `-${camp.total_weight_cut.toFixed(1)}kg` : '-'}</p>
                       </div>
                       <div className="h-5 w-px bg-border" />
                       <div className="text-center">
-                        <p className="text-[10px] uppercase tracking-widest text-muted-foreground mb-0.5">End</p>
+                        <p className="text-[13px] uppercase tracking-widest text-muted-foreground mb-0.5">End</p>
                         <p className="text-sm font-bold">{camp.end_weight_kg ? `${camp.end_weight_kg}kg` : '-'}</p>
                       </div>
                     </div>
@@ -339,7 +339,7 @@ export default function FightCamps() {
           </div>
           <div className="px-4 space-y-2.5">
             <div className="space-y-1">
-              <Label htmlFor="camp-name" className="text-muted-foreground pl-0.5 text-[11px]">Camp Name</Label>
+              <Label htmlFor="camp-name" className="text-muted-foreground pl-0.5 text-[13px]">Camp Name</Label>
               <Input
                 id="camp-name"
                 placeholder="e.g. Summer 2025"
@@ -349,7 +349,7 @@ export default function FightCamps() {
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="event-name" className="text-muted-foreground pl-0.5 text-[11px]">Event (Optional)</Label>
+              <Label htmlFor="event-name" className="text-muted-foreground pl-0.5 text-[13px]">Event (Optional)</Label>
               <Input
                 id="event-name"
                 placeholder="e.g. UFC 300"
@@ -359,7 +359,7 @@ export default function FightCamps() {
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="fight-date" className="text-muted-foreground pl-0.5 text-[11px]">Fight Date</Label>
+              <Label htmlFor="fight-date" className="text-muted-foreground pl-0.5 text-[13px]">Fight Date</Label>
               <Input
                 id="fight-date"
                 type="date"

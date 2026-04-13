@@ -210,7 +210,7 @@ export const BottomNav = memo(function BottomNav() {
             {({ isActive }) => (
               <>
                 <DashboardIcon className="h-5 w-5" strokeWidth={isActive ? 2.5 : 1.8} />
-                <span className={`text-[9px] leading-none mt-0.5 ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[0].title}</span>
+                <span className={`text-[10px] leading-none mt-0.5 ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[0].title}</span>
               </>
             )}
           </NavLink>
@@ -227,7 +227,7 @@ export const BottomNav = memo(function BottomNav() {
             {({ isActive }) => (
               <>
                 <NutritionIcon className="h-5 w-5" strokeWidth={isActive ? 2.5 : 1.8} />
-                <span className={`text-[9px] leading-none mt-0.5 ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[1].title}</span>
+                <span className={`text-[10px] leading-none mt-0.5 ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[1].title}</span>
               </>
             )}
           </NavLink>
@@ -256,7 +256,7 @@ export const BottomNav = memo(function BottomNav() {
             {({ isActive }) => (
               <>
                 <WeightIcon className="h-5 w-5" strokeWidth={isActive ? 2.5 : 1.8} />
-                <span className={`text-[9px] leading-none mt-0.5 ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[2].title}</span>
+                <span className={`text-[10px] leading-none mt-0.5 ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[2].title}</span>
               </>
             )}
           </NavLink>
@@ -269,7 +269,7 @@ export const BottomNav = memo(function BottomNav() {
             aria-label="More"
           >
             <MoreHorizontal className="h-5 w-5" strokeWidth={1.8} />
-            <span className="text-[9px] font-medium leading-none mt-0.5">More</span>
+            <span className="text-[13px] font-medium leading-none mt-0.5">More</span>
           </button>
         </div>
       </nav>
@@ -319,7 +319,7 @@ export const BottomNav = memo(function BottomNav() {
           <AlertDialogDescription asChild>
             <div className="pt-4 pb-3 px-4 text-center">
               <p className="text-[15px] font-semibold text-foreground">Sign Out</p>
-              <p className="text-[12px] text-muted-foreground mt-0.5 leading-snug">
+              <p className="text-[13px] text-muted-foreground mt-0.5 leading-snug">
                 Are you sure? You'll need to sign in again.
               </p>
             </div>
@@ -343,7 +343,7 @@ export const BottomNav = memo(function BottomNav() {
           <AlertDialogDescription asChild>
             <div className="pt-4 pb-3 px-4 text-center">
               <p className="text-[15px] font-semibold text-foreground">Delete Account</p>
-              <p className="text-[12px] text-muted-foreground mt-0.5 leading-snug">
+              <p className="text-[13px] text-muted-foreground mt-0.5 leading-snug">
                 This will permanently delete your account and all data. This cannot be undone.
               </p>
             </div>

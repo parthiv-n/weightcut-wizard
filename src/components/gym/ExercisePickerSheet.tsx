@@ -67,7 +67,7 @@ export function ExercisePickerSheet({ open, onOpenChange, exercises, loading, on
               placeholder="Search exercises..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-7 h-7 text-[11px] rounded-md bg-muted/20 border-border/30"
+              className="pl-7 h-7 text-[13px] rounded-md bg-muted/20 border-border/30"
               autoFocus
             />
           </div>
@@ -78,7 +78,7 @@ export function ExercisePickerSheet({ open, onOpenChange, exercises, loading, on
               <button
                 key={cat.value}
                 onClick={() => setCategoryFilter(categoryFilter === cat.value ? null : cat.value as ExerciseCategory)}
-                className={`shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-semibold transition-all ${
+                className={`shrink-0 px-2.5 py-0.5 rounded-full text-[13px] font-semibold transition-all ${
                   categoryFilter === cat.value
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted/40 text-muted-foreground active:bg-muted/60"
@@ -95,7 +95,7 @@ export function ExercisePickerSheet({ open, onOpenChange, exercises, loading, on
               <button
                 key={eq.value}
                 onClick={() => setEquipmentFilter(equipmentFilter === eq.value ? null : eq.value as Equipment)}
-                className={`shrink-0 px-2.5 py-0.5 rounded-full text-[10px] font-semibold transition-all ${
+                className={`shrink-0 px-2.5 py-0.5 rounded-full text-[13px] font-semibold transition-all ${
                   equipmentFilter === eq.value
                     ? "bg-primary text-primary-foreground"
                     : "bg-muted/30 text-muted-foreground active:bg-muted/50"
@@ -112,7 +112,7 @@ export function ExercisePickerSheet({ open, onOpenChange, exercises, loading, on
           <motion.div variants={staggerContainer(30)} initial="hidden" animate="visible" className="space-y-2">
             {Array.from(grouped.entries()).map(([muscle, exs]) => (
               <motion.div key={muscle} variants={staggerItem}>
-                <h4 className="text-[9px] font-semibold text-muted-foreground/70 uppercase tracking-widest mb-0.5 px-0.5">
+                <h4 className="text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-widest mb-0.5 px-0.5">
                   {muscle.replace("_", " ")}
                 </h4>
                 <div className="divide-y divide-border/20">
@@ -123,8 +123,8 @@ export function ExercisePickerSheet({ open, onOpenChange, exercises, loading, on
                       className="w-full flex items-center gap-2 px-2 py-1.5 active:bg-muted/50 transition-colors text-left"
                     >
                       <div className="min-w-0 flex-1">
-                        <div className="text-[12px] font-medium truncate">{ex.name}</div>
-                        <div className="text-[9px] text-muted-foreground">
+                        <div className="text-[13px] font-medium truncate">{ex.name}</div>
+                        <div className="text-[11px] text-muted-foreground">
                           {ex.equipment || "bodyweight"}{ex.is_custom ? " · Custom" : ""}
                         </div>
                       </div>
@@ -135,7 +135,7 @@ export function ExercisePickerSheet({ open, onOpenChange, exercises, loading, on
             ))}
 
             {loading && filtered.length === 0 && (
-              <div className="flex items-center justify-center py-6 gap-1.5 text-muted-foreground text-[11px]">
+              <div className="flex items-center justify-center py-6 gap-1.5 text-muted-foreground text-[13px]">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 Loading...
               </div>
@@ -143,7 +143,7 @@ export function ExercisePickerSheet({ open, onOpenChange, exercises, loading, on
 
             {!loading && filtered.length === 0 && (
               <div className="text-center py-6">
-                <p className="text-[11px] text-muted-foreground">No exercises found</p>
+                <p className="text-[13px] text-muted-foreground">No exercises found</p>
               </div>
             )}
           </motion.div>
@@ -153,7 +153,7 @@ export function ExercisePickerSheet({ open, onOpenChange, exercises, loading, on
         <div className="px-3 border-t border-border/30 mt-1" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)" }}>
           <button
             onClick={() => { onCreateCustom(); onOpenChange(false); }}
-            className="w-full py-2 text-[12px] font-semibold text-primary active:bg-muted/50 transition-colors flex items-center justify-center gap-1"
+            className="w-full py-2 text-[13px] font-semibold text-primary active:bg-muted/50 transition-colors flex items-center justify-center gap-1"
           >
             <Plus className="h-3 w-3" />
             Create Custom Exercise

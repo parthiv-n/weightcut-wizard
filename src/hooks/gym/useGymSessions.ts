@@ -192,9 +192,7 @@ export function useGymSessions() {
         localCache.set(userId, HISTORY_CACHE_KEY, enriched);
       }
     } catch (err) {
-      if (!localCache.get(userId, HISTORY_CACHE_KEY)) {
-        toast({ description: "Failed to load workout history", variant: "destructive" });
-      }
+      logger.warn("Failed to fetch workout history", err);
     } finally {
       if (isMounted()) safeAsync(setHistoryLoading)(false);
     }

@@ -42,7 +42,7 @@ export function WeightIncreaseQuestionnaire({ open, onOpenChange, onComplete }: 
                     <SheetHeader>
                         <div className="flex items-center gap-2">
                             <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
-                            <SheetTitle className="text-[12px] font-semibold text-left">Weight went up — what happened?</SheetTitle>
+                            <SheetTitle className="text-[13px] font-semibold text-left">Weight went up — what happened?</SheetTitle>
                         </div>
                     </SheetHeader>
                 </div>
@@ -50,17 +50,17 @@ export function WeightIncreaseQuestionnaire({ open, onOpenChange, onComplete }: 
                 <div className="overflow-y-auto overscroll-contain px-3 pb-[calc(env(safe-area-inset-bottom,0px)+1rem)]" style={{ WebkitOverflowScrolling: "touch" } as any}>
                 {step === "question" ? (
                     <div className="space-y-1">
-                        <button className="w-full text-left rounded-md bg-muted/20 px-2.5 py-2 text-[11px] leading-snug active:bg-muted/40 transition-colors" onClick={() => handleSelect("Salty")}>
+                        <button className="w-full text-left rounded-md bg-muted/20 px-2.5 py-2 text-[13px] leading-snug active:bg-muted/40 transition-colors" onClick={() => handleSelect("Salty")}>
                             Salty food (takeout, soy sauce, processed)
                         </button>
-                        <button className="w-full text-left rounded-md bg-muted/20 px-2.5 py-2 text-[11px] leading-snug active:bg-muted/40 transition-colors" onClick={() => handleSelect("Carbs")}>
+                        <button className="w-full text-left rounded-md bg-muted/20 px-2.5 py-2 text-[13px] leading-snug active:bg-muted/40 transition-colors" onClick={() => handleSelect("Carbs")}>
                             High carbs (pasta, rice, bread)
                         </button>
-                        <button className="w-full text-left rounded-md bg-muted/20 px-2.5 py-2 text-[11px] leading-snug active:bg-muted/40 transition-colors" onClick={() => handleSelect("Late")}>
+                        <button className="w-full text-left rounded-md bg-muted/20 px-2.5 py-2 text-[13px] leading-snug active:bg-muted/40 transition-colors" onClick={() => handleSelect("Late")}>
                             Big meal close to bedtime
                         </button>
                         <div className="border-t border-border/30 mt-1">
-                            <button className="w-full py-2 text-[11px] text-muted-foreground active:text-foreground transition-colors" onClick={() => handleSelect("Nothing unusual")}>
+                            <button className="w-full py-2 text-[13px] text-muted-foreground active:text-foreground transition-colors" onClick={() => handleSelect("Nothing unusual")}>
                                 Nothing unusual — skip
                             </button>
                         </div>
@@ -70,14 +70,14 @@ export function WeightIncreaseQuestionnaire({ open, onOpenChange, onComplete }: 
                         <div className="rounded-md bg-green-500/10 p-2.5">
                             <div className="flex items-center gap-1.5 mb-1.5">
                                 <CheckCircle2 className="h-3 w-3 text-green-500" />
-                                <h3 className="text-[11px] font-semibold text-green-500">Water Retention</h3>
+                                <h3 className="text-[13px] font-semibold text-green-500">Water Retention</h3>
                             </div>
-                            <p className="text-[10px] text-muted-foreground leading-snug">
+                            <p className="text-[13px] text-muted-foreground leading-snug">
                                 Normal — carbs and sodium hold extra water (~3g per 1g carb). Temporary, not fat. Flushes in 1-2 days.
                             </p>
                         </div>
                         <div className="border-t border-border/30 mt-2">
-                            <button onClick={handleGotIt} className="w-full py-2 text-[12px] font-semibold text-primary active:bg-muted/50 transition-colors">
+                            <button onClick={handleGotIt} className="w-full py-2 text-[13px] font-semibold text-primary active:bg-muted/50 transition-colors">
                                 View Daily Wisdom
                             </button>
                         </div>
