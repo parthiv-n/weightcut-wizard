@@ -148,8 +148,8 @@ export function ManualRoutineSheet({
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent side="bottom" className="h-[92vh] flex flex-col rounded-t-3xl border-border/50 p-0">
-        <SheetHeader className="px-5 pt-5 pb-3">
+      <SheetContent side="bottom" className="h-[92vh] flex flex-col rounded-t-3xl border-border/50 p-0 [&>button:last-of-type]:hidden">
+        <SheetHeader className="px-5 pb-3 shrink-0" style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 1.25rem)" }}>
           <div className="flex items-center gap-3">
             {step === 2 && (
               <button
@@ -160,6 +160,12 @@ export function ManualRoutineSheet({
               </button>
             )}
             <SheetTitle className="flex-1">{step === 1 ? "New Routine" : "Add Exercises"}</SheetTitle>
+            <button
+              onClick={() => onOpenChange(false)}
+              className="h-8 w-8 rounded-xl bg-muted/30 flex items-center justify-center shrink-0"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
         </SheetHeader>
 
