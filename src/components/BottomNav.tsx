@@ -196,25 +196,21 @@ export const BottomNav = memo(function BottomNav() {
 
   return (
     <>
-      <nav className="fixed bottom-0 left-0 right-0 z-[9999] md:hidden bg-background/95 dark:bg-[hsl(0,0%,7%)] border-t border-border" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
-        <div className="flex items-center justify-around h-[52px] px-1">
+      <nav className="fixed bottom-0 left-0 right-0 z-[9999] md:hidden bg-background/98 backdrop-blur-lg border-t border-border/30" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+        <div className="flex items-center justify-around h-[44px] px-2">
           {/* Dashboard */}
           <NavLink
             to={mainNavItems[0].url}
             data-tutorial="nav-dashboard"
             onClick={() => triggerHaptic(ImpactStyle.Light)}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center gap-0.5 py-1 touch-target transition-colors duration-100 ${isActive
-                ? "text-primary"
-                : "text-muted-foreground"
-              }`
+              `flex-1 flex flex-col items-center justify-center py-0.5 transition-colors duration-100 ${isActive ? "text-primary" : "text-muted-foreground/70"}`
             }
           >
             {({ isActive }) => (
               <>
-                <DashboardIcon className="h-[22px] w-[22px]" strokeWidth={isActive ? 2.5 : 1.8} />
-                <span className={`text-[10px] leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[0].title}</span>
-                {isActive && <span className="w-1 h-1 rounded-full bg-primary mt-0.5" />}
+                <DashboardIcon className="h-5 w-5" strokeWidth={isActive ? 2.5 : 1.8} />
+                <span className={`text-[9px] leading-none mt-0.5 ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[0].title}</span>
               </>
             )}
           </NavLink>
@@ -225,35 +221,27 @@ export const BottomNav = memo(function BottomNav() {
             data-tutorial="nav-nutrition"
             onClick={() => triggerHaptic(ImpactStyle.Light)}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center gap-0.5 py-1 touch-target transition-colors duration-100 ${isActive
-                ? "text-primary"
-                : "text-muted-foreground"
-              }`
+              `flex-1 flex flex-col items-center justify-center py-0.5 transition-colors duration-100 ${isActive ? "text-primary" : "text-muted-foreground/70"}`
             }
           >
             {({ isActive }) => (
               <>
-                <NutritionIcon className="h-[22px] w-[22px]" strokeWidth={isActive ? 2.5 : 1.8} />
-                <span className={`text-[10px] leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[1].title}</span>
-                {isActive && <span className="w-1 h-1 rounded-full bg-primary mt-0.5" />}
+                <NutritionIcon className="h-5 w-5" strokeWidth={isActive ? 2.5 : 1.8} />
+                <span className={`text-[9px] leading-none mt-0.5 ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[1].title}</span>
               </>
             )}
           </NavLink>
 
-          {/* Log button - inline tab style */}
+          {/* Log button */}
           <button
-            onClick={() => {
-              triggerHaptic(ImpactStyle.Medium);
-              setQuickLogOpen(true);
-            }}
+            onClick={() => { triggerHaptic(ImpactStyle.Medium); setQuickLogOpen(true); }}
             data-tutorial="nav-quick-log"
-            className="flex-1 flex flex-col items-center justify-center gap-0.5 py-1 touch-target text-muted-foreground active:scale-95 transition-transform duration-100"
+            className="flex flex-col items-center justify-center px-3 py-0.5 active:scale-90 transition-transform duration-100"
             aria-label="Quick Log"
           >
-            <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
-              <Plus className="h-5 w-5 text-primary-foreground" strokeWidth={2.5} />
+            <div className="h-7 w-7 rounded-full bg-primary flex items-center justify-center">
+              <Plus className="h-4 w-4 text-primary-foreground" strokeWidth={2.5} />
             </div>
-            <span className="text-[10px] font-medium leading-tight">Log</span>
           </button>
 
           {/* Weight */}
@@ -262,30 +250,26 @@ export const BottomNav = memo(function BottomNav() {
             data-tutorial="nav-weight"
             onClick={() => triggerHaptic(ImpactStyle.Light)}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center gap-0.5 py-1 touch-target transition-colors duration-100 ${isActive
-                ? "text-primary"
-                : "text-muted-foreground"
-              }`
+              `flex-1 flex flex-col items-center justify-center py-0.5 transition-colors duration-100 ${isActive ? "text-primary" : "text-muted-foreground/70"}`
             }
           >
             {({ isActive }) => (
               <>
-                <WeightIcon className="h-[22px] w-[22px]" strokeWidth={isActive ? 2.5 : 1.8} />
-                <span className={`text-[10px] leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[2].title}</span>
-                {isActive && <span className="w-1 h-1 rounded-full bg-primary mt-0.5" />}
+                <WeightIcon className="h-5 w-5" strokeWidth={isActive ? 2.5 : 1.8} />
+                <span className={`text-[9px] leading-none mt-0.5 ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[2].title}</span>
               </>
             )}
           </NavLink>
 
-          {/* More button */}
+          {/* More */}
           <button
             onClick={() => { setMoreMenuOpen(true); triggerHapticSelection(); }}
             data-tutorial="nav-more"
-            className="flex-1 flex flex-col items-center justify-center gap-0.5 py-1 touch-target transition-colors duration-100 text-muted-foreground"
+            className="flex-1 flex flex-col items-center justify-center py-0.5 transition-colors duration-100 text-muted-foreground/70"
             aria-label="More"
           >
-            <MoreHorizontal className="h-[22px] w-[22px]" strokeWidth={1.8} />
-            <span className="text-[10px] font-medium leading-tight">More</span>
+            <MoreHorizontal className="h-5 w-5" strokeWidth={1.8} />
+            <span className="text-[9px] font-medium leading-none mt-0.5">More</span>
           </button>
         </div>
       </nav>
