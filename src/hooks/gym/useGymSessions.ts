@@ -59,7 +59,14 @@ export function useGymSessions() {
 
     const intervalId = setInterval(async () => {
       if (syncQueue.size(userId) > 0) {
-        try { await supabase.auth.refreshSession(); } catch { /* process() will fail gracefully */ }
+        // Only refresh token if it might be stale (session expiry is typically 1hr)
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const expiresAt = session.expires_at ? session.expires_at * 1000 : 0;
+          if (expiresAt - Date.now() < 5 * 60 * 1000) {
+            try { await supabase.auth.refreshSession(); } catch { /* process() will fail gracefully */ }
+          }
+        }
         await syncQueue.process(userId);
       }
     }, 2 * 60 * 1000);

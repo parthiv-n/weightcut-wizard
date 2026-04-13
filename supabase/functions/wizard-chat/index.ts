@@ -235,15 +235,15 @@ serve(async (req) => {
     ] = await Promise.allSettled([
       supabaseClient.from('profiles').select('*').eq('id', user.id).single(),
       supabaseClient.from('weight_logs').select('date, weight_kg').eq('user_id', user.id).gte('date', thirtyDaysAgo).order('date', { ascending: false }).limit(15),
-      supabaseClient.from('nutrition_logs').select('date, calories, protein_g, carbs_g, fats_g, meal_type, meal_name').eq('user_id', user.id).gte('date', sevenDaysAgo).order('date', { ascending: false }),
-      supabaseClient.from('hydration_logs').select('date, amount_ml, sodium_mg').eq('user_id', user.id).gte('date', sevenDaysAgo).order('date', { ascending: false }),
-      supabaseClient.from('fight_camp_calendar').select('date, session_type, duration_minutes, rpe, soreness_level, sleep_hours').eq('user_id', user.id).gte('date', sevenDaysAgo).order('date', { ascending: false }),
+      supabaseClient.from('nutrition_logs').select('date, calories, protein_g, carbs_g, fats_g, meal_type, meal_name').eq('user_id', user.id).gte('date', sevenDaysAgo).order('date', { ascending: false }).limit(50),
+      supabaseClient.from('hydration_logs').select('date, amount_ml, sodium_mg').eq('user_id', user.id).gte('date', sevenDaysAgo).order('date', { ascending: false }).limit(30),
+      supabaseClient.from('fight_camp_calendar').select('date, session_type, duration_minutes, rpe, soreness_level, sleep_hours').eq('user_id', user.id).gte('date', sevenDaysAgo).order('date', { ascending: false }).limit(20),
       supabaseClient.from('fight_week_plans').select('fight_date, starting_weight_kg, target_weight_kg').eq('user_id', user.id).gte('fight_date', today).order('fight_date', { ascending: true }).limit(1).maybeSingle(),
       supabaseClient.from('user_dietary_preferences').select('dietary_restrictions, disliked_foods, favorite_cuisines').eq('user_id', user.id).maybeSingle(),
-      supabaseClient.from('daily_wellness_checkins').select('date, sleep_quality, stress_level, fatigue_level, soreness_level, energy_level, motivation_level, sleep_hours, hooper_index, readiness_score').eq('user_id', user.id).gte('date', sevenDaysAgo).order('date', { ascending: false }),
-      supabaseClient.from('user_insights').select('insight_type, insight_data, confidence_score').eq('user_id', user.id),
+      supabaseClient.from('daily_wellness_checkins').select('date, sleep_quality, stress_level, fatigue_level, soreness_level, energy_level, motivation_level, sleep_hours, hooper_index, readiness_score').eq('user_id', user.id).gte('date', sevenDaysAgo).order('date', { ascending: false }).limit(7),
+      supabaseClient.from('user_insights').select('insight_type, insight_data, confidence_score').eq('user_id', user.id).limit(10),
       supabaseClient.from('fight_camps').select('name, event_name, fight_date, starting_weight_kg, end_weight_kg, is_completed, performance_feeling').eq('user_id', user.id).order('fight_date', { ascending: false }).limit(4),
-      supabaseClient.from('fight_week_logs').select('log_date, weight_kg, carbs_g, fluid_intake_ml, sweat_session_min, notes').eq('user_id', user.id).gte('log_date', sevenDaysAgo).order('log_date', { ascending: false }),
+      supabaseClient.from('fight_week_logs').select('log_date, weight_kg, carbs_g, fluid_intake_ml, sweat_session_min, notes').eq('user_id', user.id).gte('log_date', sevenDaysAgo).order('log_date', { ascending: false }).limit(7),
     ]);
 
     const getData = (res: PromiseSettledResult<any>) =>

@@ -66,7 +66,8 @@ export function useSkillTree() {
         const { data: progressData, error: progressError } = await supabase
           .from("user_technique_progress")
           .select("id, user_id, technique_id, level, times_logged, first_logged_at, last_logged_at")
-          .eq("user_id", userId);
+          .eq("user_id", userId)
+          .limit(200);
 
         if (progressError) throw progressError;
         const progress = (progressData ?? []) as UserTechniqueProgress[];

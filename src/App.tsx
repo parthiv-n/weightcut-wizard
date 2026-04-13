@@ -24,6 +24,7 @@ const FloatingWorkoutIndicator = lazy(() => import("@/components/gym/FloatingWor
 const AIFloatingIndicator = lazy(() => import("@/components/AIFloatingIndicator").then(m => ({ default: m.AIFloatingIndicator })));
 import * as Sentry from "@sentry/react";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import Index from "./pages/Index";
@@ -46,19 +47,25 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const CutPlanReview = lazy(() => import("./pages/CutPlanReview"));
 const Legal = lazy(() => import("./pages/Legal"));
 
+// Prioritized idle preloading — critical routes first, rest deferred
 const _idle = window.requestIdleCallback || ((cb: IdleRequestCallback) => setTimeout(cb, 50));
 _idle(() => {
+  // Primary routes — likely first navigation
   import("./pages/Dashboard").catch(() => {});
   import("./pages/Nutrition").catch(() => {});
   import("./pages/WeightTracker").catch(() => {});
-  import("./pages/WeightCut").catch(() => {});
-  import("./pages/Recovery").catch(() => {});
-  import("./pages/Goals").catch(() => {});
-  import("./pages/FightCamps").catch(() => {});
-  import("./pages/FightCampDetail").catch(() => {});
-  import("./pages/TrainingCalendar").catch(() => {});
-  // import("./pages/SkillTree").catch(() => {});
-  import("./pages/GymTracker").catch(() => {});
+  // Secondary routes — defer to avoid network contention
+  setTimeout(() => {
+    import("./pages/Goals").catch(() => {});
+    import("./pages/WeightCut").catch(() => {});
+    import("./pages/GymTracker").catch(() => {});
+    import("./pages/TrainingCalendar").catch(() => {});
+  }, 3000);
+  setTimeout(() => {
+    import("./pages/Recovery").catch(() => {});
+    import("./pages/FightCamps").catch(() => {});
+    import("./pages/FightCampDetail").catch(() => {});
+  }, 6000);
 });
 
 const queryClient = new QueryClient();
@@ -181,7 +188,7 @@ const AppLayoutContent = () => {
           <main className="flex-1 overflow-auto overflow-x-hidden relative min-h-0 w-full pt-2 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right" style={{ paddingBottom: "calc(4rem + env(safe-area-inset-bottom, 0px))" }}>
             <PullToRefresh />
             <PageTransition>
-              <Suspense fallback={<div className="min-h-screen" />}>
+              <Suspense fallback={<DashboardSkeleton />}>
                 <Outlet />
               </Suspense>
             </PageTransition>
@@ -248,21 +255,21 @@ const App = () => (
 
                 {/* Shared layout route — AppLayout persists across all child navigations */}
                 <Route element={<ProtectedAppLayout />}>
-                  <Route path="/dashboard" element={<Dashboard />} />
-                  <Route path="/goals" element={<Goals />} />
-                  <Route path="/nutrition" element={<Nutrition />} />
-                  <Route path="/weight" element={<WeightTracker />} />
-                  <Route path="/weight-cut" element={<WeightCut />} />
+                  <Route path="/dashboard" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+                  <Route path="/goals" element={<ErrorBoundary><Goals /></ErrorBoundary>} />
+                  <Route path="/nutrition" element={<ErrorBoundary><Nutrition /></ErrorBoundary>} />
+                  <Route path="/weight" element={<ErrorBoundary><WeightTracker /></ErrorBoundary>} />
+                  <Route path="/weight-cut" element={<ErrorBoundary><WeightCut /></ErrorBoundary>} />
                   <Route path="/hydration" element={<Navigate to="/weight-cut?tab=rehydration" replace />} />
                   <Route path="/fight-week" element={<Navigate to="/weight-cut" replace />} />
-                  <Route path="/fight-camps" element={<FightCamps />} />
-                  <Route path="/fight-camps/:id" element={<FightCampDetail />} />
-                  <Route path="/training-calendar" element={<TrainingCalendar />} />
+                  <Route path="/fight-camps" element={<ErrorBoundary><FightCamps /></ErrorBoundary>} />
+                  <Route path="/fight-camps/:id" element={<ErrorBoundary><FightCampDetail /></ErrorBoundary>} />
+                  <Route path="/training-calendar" element={<ErrorBoundary><TrainingCalendar /></ErrorBoundary>} />
                   <Route path="/fight-camp-calendar" element={<Navigate to="/training-calendar" replace />} />
-                  <Route path="/recovery" element={<Recovery />} />
-                  <Route path="/sleep" element={<Sleep />} />
+                  <Route path="/recovery" element={<ErrorBoundary><Recovery /></ErrorBoundary>} />
+                  <Route path="/sleep" element={<ErrorBoundary><Sleep /></ErrorBoundary>} />
                   {/* Skill Tree temporarily hidden from UI */}
-                  <Route path="/gym" element={<GymTracker />} />
+                  <Route path="/gym" element={<ErrorBoundary><GymTracker /></ErrorBoundary>} />
                 </Route>
 
                 <Route path="*" element={<NotFound />} />

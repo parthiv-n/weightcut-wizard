@@ -97,7 +97,8 @@ export default function TrainingCalendar() {
                 .select('*')
                 .eq('user_id', userId)
                 .gte('date', format(startOfMonth(currentDate), "yyyy-MM-dd"))
-                .lte('date', format(endOfMonth(currentDate), "yyyy-MM-dd"));
+                .lte('date', format(endOfMonth(currentDate), "yyyy-MM-dd"))
+                .limit(100);
 
             if (error) throw error;
             setSessions(data || []);
@@ -130,7 +131,8 @@ export default function TrainingCalendar() {
                 .select('*')
                 .eq('user_id', userId)
                 .gte('date', from)
-                .lte('date', to);
+                .lte('date', to)
+                .limit(100);
 
             if (error) throw error;
             setSessions28d(data || []);
@@ -151,7 +153,8 @@ export default function TrainingCalendar() {
                 .select('*')
                 .eq('user_id', userId)
                 .gte('date', format(startOfMonth(date), "yyyy-MM-dd"))
-                .lte('date', format(endOfMonth(date), "yyyy-MM-dd"));
+                .lte('date', format(endOfMonth(date), "yyyy-MM-dd"))
+                .limit(100);
             if (data) localCache.set(userId, key, data);
         } catch { /* silent preload */ }
     }, [userId]);

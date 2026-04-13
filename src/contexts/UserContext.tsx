@@ -509,6 +509,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
         import('@/lib/syncQueue').then(({ syncQueue }) => {
           syncQueue.process(userIdRef.current!).catch(() => { });
         });
+        // Proactive localStorage cleanup — prune stale date-bucketed entries (>90 days)
+        import('@/lib/localCache').then(({ localCache }) => {
+          localCache.pruneStale(userIdRef.current!);
+        });
       }
     };
 

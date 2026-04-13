@@ -44,7 +44,8 @@ export function useWeightData({ profile }: UseWeightDataParams) {
           .from("weight_logs")
           .select("id, date, weight_kg")
           .eq("user_id", userId)
-          .order("date", { ascending: true }),
+          .order("date", { ascending: true })
+          .limit(365),
         undefined,
         "Weight logs query"
       );

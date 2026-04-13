@@ -42,7 +42,8 @@ export default function Recovery() {
                 .select('*')
                 .eq('user_id', userId)
                 .gte('date', from)
-                .lte('date', to);
+                .lte('date', to)
+                .limit(100);
 
             if (error) throw error;
             setSessions28d(data || []);

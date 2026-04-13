@@ -404,7 +404,8 @@ export function useNutritionData(params: UseNutritionDataParams) {
         supabase.from("nutrition_logs").select("*", { count: "exact", head: true }).eq("user_id", userId),
         supabase.from("nutrition_logs").select("date").eq("user_id", userId)
           .gte("date", format(subDays(new Date(), 90), "yyyy-MM-dd"))
-          .order("date", { ascending: false }),
+          .order("date", { ascending: false })
+          .limit(90),
       ]);
 
       const totalMeals = countResult.status === "fulfilled" ? countResult.value.count || 0 : 0;

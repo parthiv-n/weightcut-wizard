@@ -5,7 +5,7 @@ import { edgeLogger } from "../_shared/errorReporter.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { RESEARCH_SUMMARY } from "../_shared/researchSummary.ts";
 
-// FREE for all users — no subscription guard
+// FREE for all users — generated during onboarding, no gem cost
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {

@@ -4,7 +4,7 @@ import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
 import { edgeLogger } from "../_shared/errorReporter.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
-// FREE for all users — no subscription guard (generated during onboarding)
+// FREE for all users — generated during onboarding, no gem cost
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {

@@ -120,6 +120,12 @@ class LocalCache {
     this.pruneTableBefore(userId, "hydration_logs", keepDays);
   }
 
+  /** Proactive cleanup — prune all date-bucketed data older than 90 days. Call on app resume. */
+  pruneStale(userId: string): void {
+    this.pruneTableBefore(userId, "nutrition_logs", 90);
+    this.pruneTableBefore(userId, "hydration_logs", 90);
+  }
+
   clearUser(userId: string): void {
     const scanPrefix = `${this.prefix}_${userId}_`;
     const keysToRemove: string[] = [];

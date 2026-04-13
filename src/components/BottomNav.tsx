@@ -91,22 +91,22 @@ export const BottomNav = memo(function BottomNav() {
 
   const handleLogFood = () => {
     setQuickLogOpen(false);
-    setTimeout(() => navigate("/nutrition?openAddMeal=true"), 150);
+    navigate("/nutrition?openAddMeal=true");
   };
 
   const handleLogWeight = () => {
     setQuickLogOpen(false);
-    setTimeout(() => navigate("/weight?focusWeightInput=true"), 150);
+    navigate("/weight?focusWeightInput=true");
   };
 
   const handleLogTraining = () => {
     setQuickLogOpen(false);
-    setTimeout(() => navigate("/training-calendar?openLogSession=true"), 150);
+    navigate("/training-calendar?openLogSession=true");
   };
 
   const handleLogGym = () => {
     setQuickLogOpen(false);
-    setTimeout(() => navigate("/gym"), 150);
+    navigate("/gym");
   };
 
   const handleMoreItemClick = (url: string) => {

@@ -76,7 +76,8 @@ export default function FightCamps() {
           .from("fight_camps")
           .select("id, name, event_name, fight_date, profile_pic_url, is_completed, starting_weight_kg, end_weight_kg, total_weight_cut, weight_via_dehydration, weight_via_carb_reduction, weigh_in_timing")
           .eq("user_id", userId)
-          .order("fight_date", { ascending: false }),
+          .order("fight_date", { ascending: false })
+          .limit(50),
         undefined,
         "Load fight camps"
       );

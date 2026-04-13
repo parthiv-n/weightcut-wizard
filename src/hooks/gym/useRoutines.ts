@@ -48,7 +48,8 @@ export function useRoutines() {
           .select("*")
           .eq("user_id", userId)
           .order("sort_order")
-          .order("created_at", { ascending: false }),
+          .order("created_at", { ascending: false })
+          .limit(50),
         undefined,
         "Fetch saved routines"
       );

@@ -47,7 +47,8 @@ export function useExerciseLibrary() {
         supabase
           .from("exercises" as any)
           .select("*")
-          .order("name"),
+          .order("name")
+          .limit(500),
         undefined,
         "Fetch exercises"
       );

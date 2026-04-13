@@ -32,7 +32,8 @@ export function useExercisePRs() {
         supabase
           .from("exercise_prs" as any)
           .select("*")
-          .eq("user_id", userId),
+          .eq("user_id", userId)
+          .limit(200),
         undefined,
         "Fetch exercise PRs"
       );

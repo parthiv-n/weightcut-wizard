@@ -52,7 +52,8 @@ export default function Sleep() {
   const [allData, setAllData] = useState<SleepRow[]>(() => {
     // Hydrate from cache synchronously to avoid skeleton flash
     if (!userId) return [];
-    return localCache.get<SleepRow[]>(userId, "sleep_logs") ?? [];
+    const cached = localCache.get<any[]>(userId, "sleep_logs");
+    return cached ? cached.map(r => ({ date: r.date, hours: Number(r.hours) })) : [];
   });
   const [loading, setLoading] = useState(!allData.length);
 
@@ -61,9 +62,9 @@ export default function Sleep() {
 
     // Serve cache instantly if not already hydrated from initializer
     if (!allData.length) {
-      const cached = localCache.get<SleepRow[]>(userId, "sleep_logs");
+      const cached = localCache.get<any[]>(userId, "sleep_logs");
       if (cached) {
-        setAllData(cached);
+        setAllData(cached.map(r => ({ date: r.date, hours: Number(r.hours) })));
         setLoading(false);
       }
     }
@@ -84,8 +85,10 @@ export default function Sleep() {
         if (cancelled) return;
         if (error) throw error;
         if (data) {
-          setAllData(data as SleepRow[]);
-          localCache.set(userId, "sleep_logs", data);
+          // Postgres numeric type returns as string — coerce to number
+          const typed = (data as any[]).map(r => ({ date: r.date, hours: Number(r.hours) }));
+          setAllData(typed);
+          localCache.set(userId, "sleep_logs", typed);
         }
       } catch (err) {
         logger.error("Failed to fetch sleep logs", err);
@@ -100,8 +103,8 @@ export default function Sleep() {
   useEffect(() => {
     const handler = () => {
       if (!userId) return;
-      const cached = localCache.get<SleepRow[]>(userId, "sleep_logs");
-      if (cached) setAllData(cached);
+      const cached = localCache.get<any[]>(userId, "sleep_logs");
+      if (cached) setAllData(cached.map(r => ({ date: r.date, hours: Number(r.hours) })));
     };
     window.addEventListener("sleep-logged", handler);
     return () => window.removeEventListener("sleep-logged", handler);
