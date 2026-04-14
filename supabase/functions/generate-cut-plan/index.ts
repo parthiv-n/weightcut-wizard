@@ -103,7 +103,7 @@ RULES:
 9. keyPrinciples: exactly 3 clear, informative bullet points
 10. fightWeek: 4 sections, each written as 2-4 professional sentences:
     - lowCarb: explain what happens when carbs drop below 50g, why glycogen depletion causes water loss, and what foods to eat instead
-    - sodium: explain the sodium loading then cutting protocol day by day
+    - sodium: explain the sodium restriction protocol (<2300mg/d during fight week). Note: sodium loading is NOT evidence-based (ISSN 2025). Only restriction is validated. Takes 2-3 days for balance to shift, yielding 0.5-1% BM.
     - waterLoading: explain the water loading protocol with specific timing
     - nutrition: explain what meals look like during fight week with examples
 
