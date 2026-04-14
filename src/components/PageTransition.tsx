@@ -34,7 +34,7 @@ export function PageTransition({ children }: PageTransitionProps) {
   return (
     <div className="page-transition-container">
       <AnimatePresence
-        mode="wait"
+        mode="popLayout"
         initial={false}
       >
         <motion.div
@@ -46,7 +46,7 @@ export function PageTransition({ children }: PageTransitionProps) {
           transition={{
             duration: DURATION,
             ease: "easeOut",
-            exit: { duration: 0.05 },
+            exit: { duration: 0 },
           }}
           style={{ willChange: "opacity" }}
         >

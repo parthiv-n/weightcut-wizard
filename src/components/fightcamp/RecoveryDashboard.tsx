@@ -168,6 +168,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
   const [baseline, setBaseline] = useState<PersonalBaseline | null>(null);
   const [todayCheckedIn, setTodayCheckedIn] = useState(false);
   const [checkInDaysCount, setCheckInDaysCount] = useState(0);
+  const [sleepLogs, setSleepLogs] = useState<{ date: string; hours: number }[]>([]);
   const baselineLoadedRef = useRef(false);
 
   const uniqueDays = new Set(sessions28d.map(s => s.date)).size;
@@ -205,6 +206,19 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
       .then(({ count }) => {
         setCheckInDaysCount(count ?? 0);
       }).catch(() => {});
+
+    // Fetch sleep logs (28 days) for performance engine
+    const from28d = new Date();
+    from28d.setDate(from28d.getDate() - 28);
+    supabase
+      .from('sleep_logs')
+      .select('date, hours')
+      .eq('user_id', userId)
+      .gte('date', from28d.toISOString().split('T')[0])
+      .order('date', { ascending: true })
+      .then(({ data }) => {
+        if (data) setSleepLogs(data);
+      }).catch(() => {});
   }, [userId, tdee]);
 
   // Compute metrics whenever sessions or wellness data changes
@@ -219,6 +233,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
         wellnessCheckIn,
         baseline,
         prevReadiness,
+        sleepLogs,
       ));
     } else {
       setMetrics(computeAllMetrics(
@@ -228,9 +243,10 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
         wellnessCheckIn,
         baseline,
         prevReadiness,
+        sleepLogs,
       ));
     }
-  }, [sessions28d, athleteProfile?.trainingFrequency, athleteProfile?.activityLevel, wellnessCheckIn, baseline, userId]);
+  }, [sessions28d, athleteProfile?.trainingFrequency, athleteProfile?.activityLevel, wellnessCheckIn, baseline, userId, sleepLogs]);
 
   // Store readiness for autoregressive smoothing when it changes (deduplicated)
   const lastStoredScoreRef = useRef<number | null>(null);

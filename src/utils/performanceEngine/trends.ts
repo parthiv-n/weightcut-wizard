@@ -4,6 +4,7 @@ import { getRecentSorenessValues, getRecentSleepValues, zScore } from "./helpers
 export function detectTrends(
   sessions28d: SessionRow[],
   dailyLoadsArr: { date: string; load: number }[],
+  sleepLogs?: { date: string; hours: number }[],
 ): TrendAlerts {
   const alerts: string[] = [];
   let sorenessRising = false;
@@ -19,7 +20,7 @@ export function detectTrends(
     }
   }
 
-  const recentSleep = getRecentSleepValues(sessions28d, 4);
+  const recentSleep = getRecentSleepValues(sessions28d, 4, sleepLogs);
   if (recentSleep.length >= 4) {
     let decliningCount = 0;
     for (let i = 0; i < 3; i++) {
@@ -66,8 +67,9 @@ export function detectEnhancedTrends(
   sessions28d: SessionRow[],
   dailyLoadsArr: { date: string; load: number }[],
   baseline?: PersonalBaseline | null,
+  sleepLogs?: { date: string; hours: number }[],
 ): TrendAlerts {
-  const baseTrends = detectTrends(sessions28d, dailyLoadsArr);
+  const baseTrends = detectTrends(sessions28d, dailyLoadsArr, sleepLogs);
 
   if (!baseline) return baseTrends;
 

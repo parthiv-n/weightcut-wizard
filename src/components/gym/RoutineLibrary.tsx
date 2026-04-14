@@ -89,13 +89,13 @@ export function RoutineLibrary({ routines, loading, onDelete, onRename, onStartW
             <Plus className="!size-3.5" />
             Manual
           </Button>
-          <Button onClick={onOpenGenerator} className="h-10 px-3.5 rounded-xl text-xs font-medium bg-gradient-to-r from-primary to-primary/80">
+          <Button onClick={onOpenGenerator} className="h-10 px-3.5 rounded-xl text-xs font-medium">
             <Sparkles className="!size-3.5" />
             AI Generate
             {!gemsIsPremium && (
-              <span className="inline-flex items-center gap-0.5 ml-0.5 text-amber-500">
+              <span className="inline-flex items-center gap-0.5 ml-0.5 text-muted-foreground">
                 <Gem className="!size-2.5" />
-                <span className="text-[10px] font-bold tabular-nums">{gems}</span>
+                <span className="text-[10px] font-medium tabular-nums">{gems}</span>
               </span>
             )}
           </Button>
@@ -121,14 +121,14 @@ export function RoutineLibrary({ routines, loading, onDelete, onRename, onStartW
           <Button
             onClick={onOpenGenerator}
             size="sm"
-            className="h-8 px-2.5 rounded-xl text-xs font-medium bg-gradient-to-r from-primary to-primary/80"
+            className="h-8 px-2.5 rounded-xl text-xs font-medium"
           >
             <Sparkles className="!size-3.5" />
             AI Generate
             {!gemsIsPremium && (
-              <span className="inline-flex items-center gap-0.5 ml-0.5 text-amber-500">
+              <span className="inline-flex items-center gap-0.5 ml-0.5 text-muted-foreground">
                 <Gem className="!size-2.5" />
-                <span className="text-[10px] font-bold tabular-nums">{gems}</span>
+                <span className="text-[10px] font-medium tabular-nums">{gems}</span>
               </span>
             )}
           </Button>

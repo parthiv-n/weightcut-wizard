@@ -314,7 +314,7 @@ export function RoutineGeneratorSheet({ open, onOpenChange, onGenerate, onSave, 
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent side="bottom" className="h-[80vh] rounded-t-3xl flex flex-col !pb-0">
+      <SheetContent side="bottom" className="h-[80vh] rounded-t-3xl flex flex-col" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)" }}>
         <SheetHeader className="pb-2">
           <div className="flex items-center justify-between">
             {stepIndex > 0 && step !== "result" ? (
@@ -555,7 +555,7 @@ export function RoutineGeneratorSheet({ open, onOpenChange, onGenerate, onSave, 
                   <Button
                     onClick={handleGenerate}
                     disabled={generating}
-                    className="w-full h-14 rounded-2xl text-[15px] font-semibold bg-gradient-to-r from-primary to-primary/80 shadow-lg shadow-primary/20"
+                    className="w-full h-14 rounded-2xl text-[15px] font-semibold"
                     size="lg"
                   >
                     <Sparkles className="h-5 w-5 mr-2" />Generate Routine

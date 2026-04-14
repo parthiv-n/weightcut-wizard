@@ -47,7 +47,8 @@ export const TrainingWeekWidget = memo(function TrainingWeekWidget({ userId, com
         .eq("user_id", userId)
         .gte("date", format(ws, "yyyy-MM-dd"))
         .lte("date", format(we, "yyyy-MM-dd"))
-        .neq("session_type", "Rest");
+        .neq("session_type", "Rest")
+        .limit(30);
 
       if (error) throw error;
       const result = (data as WeekSession[]) || [];

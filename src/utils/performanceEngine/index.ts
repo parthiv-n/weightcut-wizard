@@ -129,6 +129,7 @@ export function computeAllMetrics(
   todayCheckIn?: WellnessCheckIn | null,
   baseline?: PersonalBaseline | null,
   previousDayReadiness?: number | null,
+  sleepLogs?: { date: string; hours: number }[],
 ): AllMetrics {
   const calibration = deriveCalibration(
     profileFreq ?? null,
@@ -148,8 +149,8 @@ export function computeAllMetrics(
   const sessionsLast7d = getSessionsLast7d(sessions28d);
 
   const trends = baseline
-    ? detectEnhancedTrends(sessions28d, dailyLoadsArr, baseline)
-    : detectTrends(sessions28d, dailyLoadsArr);
+    ? detectEnhancedTrends(sessions28d, dailyLoadsArr, baseline, sleepLogs)
+    : detectTrends(sessions28d, dailyLoadsArr, sleepLogs);
 
   const overtrainingRisk = computeAdaptiveOvertrainingScore(
     loadRatio,
@@ -186,8 +187,8 @@ export function computeAllMetrics(
 
   const forecast = computeForecast(dailyLoadsArr, overtrainingRisk.score, calibration);
 
-  const sleepScore = computeSleepScore(sessions28d);
-  const avgSleepLast3 = getAvgSleepLast3(sessions28d);
+  const sleepScore = computeSleepScore(sessions28d, sleepLogs);
+  const avgSleepLast3 = getAvgSleepLast3(sessions28d, sleepLogs);
 
   const enhancedFields: Partial<AllMetrics> = {};
 
@@ -229,8 +230,8 @@ export function computeAllMetrics(
     loadZone: getLoadZone(loadRatio, calibration),
     overtrainingRisk,
     weeklySessionCount: sessionsLast7d,
-    avgSleep: getAvgSleep(sessions28d),
-    latestSleep: getLatestSleep(sessions28d),
+    avgSleep: getAvgSleep(sessions28d, sleepLogs),
+    latestSleep: getLatestSleep(sessions28d, sleepLogs),
     latestSoreness: getLatestSoreness(sessions28d),
     avgRPE7d: avgRPE,
     avgSoreness7d: avgSoreness,
@@ -252,7 +253,7 @@ export function computeAllMetrics(
 // All consumers import from @/utils/performanceEngine — barrel re-exports everything
 
 export type {
-  SessionRow, OvertrainingRisk, DailyStrainEntry, LoadZone, LoadZoneInfo,
+  SessionRow, SleepLog, OvertrainingRisk, DailyStrainEntry, LoadZone, LoadZoneInfo,
   ForecastResult, AthleteTier, AthleteCalibration, TrendAlerts,
   ReadinessBreakdown, EnhancedReadinessBreakdown, ReadinessResult,
   WellnessCheckIn, BalanceDirection, BalanceSeverity, BalanceMetric,

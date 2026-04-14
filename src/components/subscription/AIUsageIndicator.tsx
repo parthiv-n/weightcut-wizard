@@ -26,7 +26,7 @@ export function AIUsageIndicator({ className = "" }: AIUsageIndicatorProps) {
       } ${className}`}
     >
       <Gem className="h-2.5 w-2.5" />
-      {gems > 0 ? `${gems} gems` : "No gems"}
+      {gems > 0 ? `${gems}` : "No gems"}
     </span>
   );
 }

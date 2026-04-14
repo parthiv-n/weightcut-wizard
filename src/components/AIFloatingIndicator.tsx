@@ -3,9 +3,8 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { triggerHapticSelection, celebrateSuccess } from "@/lib/haptics";
 import { useAITask } from "@/contexts/AITaskContext";
+import { useActiveGymSession } from "@/hooks/useActiveGymSession";
 import type { AITask } from "@/contexts/AITaskContext";
-
-const ACTIVE_SESSION_KEY = "wcw_active_gym_session";
 const PILL_HEIGHT = 40;
 const PILL_GAP = 8;
 
@@ -76,18 +75,10 @@ function IndicatorPill({
 
 export function AIFloatingIndicator() {
   const { tasks, dismissTask } = useAITask();
-  const [gymActive, setGymActive] = useState(false);
+  const { isActive: gymActive } = useActiveGymSession();
   const celebratedRef = useRef<Set<string>>(new Set());
   const navigate = useNavigate();
   const location = useLocation();
-
-  // Poll localStorage for gym session (to offset position)
-  useEffect(() => {
-    const check = () => setGymActive(!!localStorage.getItem(ACTIVE_SESSION_KEY));
-    check();
-    const id = setInterval(check, 2000);
-    return () => clearInterval(id);
-  }, []);
 
   // Fire haptic on completion for each task
   useEffect(() => {

@@ -5,9 +5,32 @@ import { initializePurchases, addCustomerInfoUpdateListener, isPremiumFromCustom
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
 
-// ─── localStorage gem persistence ───
+// ─── localStorage persistence ───
 
 const GEMS_KEY = "wcw_gems";
+const PREMIUM_KEY = "wcw_premium_override";
+
+/** Read persisted premium override from localStorage (survives WebView reloads) */
+function getLocalPremium(): { tier: string; expiresAt: string | null } | null {
+  try {
+    const raw = localStorage.getItem(PREMIUM_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    // Validate expiry — don't serve expired overrides
+    if (parsed.expiresAt && new Date(parsed.expiresAt) <= new Date()) {
+      localStorage.removeItem(PREMIUM_KEY);
+      return null;
+    }
+    return parsed;
+  } catch { return null; }
+}
+
+function setLocalPremium(data: { tier: string; expiresAt: string | null } | null): void {
+  try {
+    if (data) localStorage.setItem(PREMIUM_KEY, JSON.stringify(data));
+    else localStorage.removeItem(PREMIUM_KEY);
+  } catch {}
+}
 
 /** Read persisted gem count from localStorage */
 function getLocalGems(): number | null {
@@ -50,7 +73,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [isNoGemsOpen, setIsNoGemsOpen] = useState(false);
   const [showWelcomePro, setShowWelcomePro] = useState(false);
   // Local override: forcePremium sets this immediately without waiting for DB/profile
-  const [tierOverride, setTierOverride] = useState<{ tier: string; expiresAt: string | null } | null>(null);
+  // Initialized from localStorage so it survives WebView reloads (Capacitor restarts WebView frequently)
+  const [tierOverride, setTierOverride] = useState<{ tier: string; expiresAt: string | null } | null>(getLocalPremium);
 
   const tier = (tierOverride?.tier || profile?.subscription_tier || "free") as SubscriptionContextType["tier"];
   const expiresAt = tierOverride?.expiresAt
@@ -124,10 +148,20 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Force premium state immediately — used after purchase before DB/profile syncs
+  // Persisted to localStorage so it survives WebView reloads
   const forcePremium = useCallback((newTier: string, newExpiresAt: string | null) => {
-    logger.info("[forcePremium] Setting tier override", { newTier, newExpiresAt });
-    setTierOverride({ tier: newTier, expiresAt: newExpiresAt });
+    logger.info("[forcePremium] Setting tier override + persisting to localStorage", { newTier, newExpiresAt });
+    const data = { tier: newTier, expiresAt: newExpiresAt };
+    setTierOverride(data);
+    setLocalPremium(data);
   }, []);
+
+  // Track whether native paywall is currently open — prevents listener from
+  // granting premium from stale data while user is browsing the paywall
+  const isNativePaywallActiveRef = useRef(false);
+  useEffect(() => {
+    isNativePaywallActiveRef.current = isPaywallOpen && Capacitor.isNativePlatform();
+  }, [isPaywallOpen]);
 
   // Initialize RevenueCat when userId becomes available
   useEffect(() => {
@@ -141,26 +175,56 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       const cleanup = await addCustomerInfoUpdateListener(async (customerInfo) => {
         const isNowPremium = isPremiumFromCustomerInfo(customerInfo);
         if (isNowPremium) {
-          // Sync premium to DB directly — don't wait for webhook
+          // Skip if the native paywall is currently open — PaywallOverlay
+          // handles activation based on the actual paywallResult
+          if (isNativePaywallActiveRef.current) {
+            logger.info("RevenueCat listener: skipping forcePremium while paywall is open");
+            return;
+          }
+          // Sync premium to DB via edge function (bypasses RLS trigger)
           const sub = getSubscriptionFromCustomerInfo(customerInfo);
           if (sub) {
             forcePremium(sub.tier, sub.expiresAt);
             try {
-              await supabase.from("profiles").update({
-                subscription_tier: sub.tier,
-                subscription_expires_at: sub.expiresAt,
-              }).eq("id", userId);
+              await supabase.functions.invoke("activate-premium", {
+                body: { tier: sub.tier, expiresAt: sub.expiresAt },
+              });
+              logger.info("RevenueCat listener: synced premium via edge function", sub);
             } catch (err) { logger.warn("Failed to sync premium in listener", err); }
           }
           await refreshProfile();
         } else {
           // User lost premium (cancelled/expired) — clear override, refresh from DB
           logger.info("RevenueCat: user no longer premium, clearing override");
-          setTierOverride(null);
+          setTierOverride(null); setLocalPremium(null);
           await refreshProfile();
         }
       });
       removeListener = cleanup;
+
+      // Startup check: always verify RevenueCat status and sync to DB
+      const info = await getCustomerInfo();
+      if (info && isPremiumFromCustomerInfo(info)) {
+        const sub = getSubscriptionFromCustomerInfo(info);
+        if (sub) {
+          // Always force premium locally (instant, cheap)
+          forcePremium(sub.tier, sub.expiresAt);
+          // Always sync to DB via edge function (idempotent, ensures DB is correct)
+          try {
+            await supabase.functions.invoke("activate-premium", {
+              body: { tier: sub.tier, expiresAt: sub.expiresAt },
+            });
+            logger.info("Startup: premium synced to DB", sub);
+          } catch (err) {
+            logger.warn("Startup: failed to sync premium to DB (will retry on next launch)", err);
+          }
+          await refreshProfile();
+        }
+      } else if (info && !isPremiumFromCustomerInfo(info)) {
+        // RevenueCat says not premium — clear any stale localStorage override
+        setTierOverride(null); setLocalPremium(null);
+        await refreshProfile();
+      }
     };
 
     init().catch((err) =>

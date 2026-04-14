@@ -26,7 +26,7 @@ export default function Recovery() {
         if (!userId) return;
 
         // Cache-first: serve cached data instantly
-        const cached = localCache.get<TrainingCalendarRow[]>(userId, "recovery_sessions_28d", 5 * 60 * 1000);
+        const cached = localCache.get<TrainingCalendarRow[]>(userId, "recovery_sessions_28d", 24 * 60 * 60 * 1000);
         if (cached) {
             setSessions28d(cached);
             setIsLoading(false);
@@ -42,7 +42,8 @@ export default function Recovery() {
                 .select('*')
                 .eq('user_id', userId)
                 .gte('date', from)
-                .lte('date', to);
+                .lte('date', to)
+                .limit(100);
 
             if (error) throw error;
             setSessions28d(data || []);

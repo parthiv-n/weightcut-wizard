@@ -60,7 +60,7 @@ export function SetRow({ set, index, prTypes, onUpdate, onDelete }: SetRowProps)
         value={weightStr}
         onChange={(e) => setWeightStr(e.target.value)}
         onBlur={handleWeightBlur}
-        className="h-10 flex-1 text-center text-sm font-medium tabular-nums bg-background/50 border-border/40 focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary/40"
+        className="h-10 w-[72px] text-center text-sm font-medium tabular-nums bg-background/50 border-border/40 focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary/40"
         disabled={set.is_bodyweight}
       />
 
@@ -72,42 +72,44 @@ export function SetRow({ set, index, prTypes, onUpdate, onDelete }: SetRowProps)
         value={repsStr}
         onChange={(e) => setRepsStr(e.target.value)}
         onBlur={handleRepsBlur}
-        className="h-10 flex-1 text-center text-sm font-medium tabular-nums bg-background/50 border-border/40 focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary/40"
+        className="h-10 w-[72px] text-center text-sm font-medium tabular-nums bg-background/50 border-border/40 focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:border-primary/40"
       />
 
       {/* Warmup toggle */}
       <button
         onClick={() => onUpdate(set.id, { is_warmup: !set.is_warmup })}
-        className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+        className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center transition-all ${
           set.is_warmup
-            ? "text-orange-400 bg-orange-500/15 shadow-[0_0_8px_rgba(249,115,22,0.15)]"
-            : "text-muted-foreground/40 hover:text-orange-400 hover:bg-orange-500/10"
+            ? "text-orange-400 bg-orange-500/15"
+            : "text-muted-foreground/40 active:text-orange-400 active:bg-orange-500/10"
         }`}
         aria-label="Toggle warmup"
       >
-        <Flame className="h-3.5 w-3.5" />
+        <Flame className="h-3 w-3" />
       </button>
 
-      {/* PR badge */}
-      {hasPR && (
-        <motion.span
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={springs.bouncy}
-          className="shrink-0 flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-yellow-500/15 text-yellow-500 shadow-[0_0_12px_rgba(234,179,8,0.2)]"
-        >
-          <Trophy className="h-3 w-3" />
-          <span className="text-[9px] font-bold">PR</span>
-        </motion.span>
-      )}
+      {/* PR slot — fixed width, always present for alignment */}
+      <div className="shrink-0 w-9 flex items-center justify-center">
+        {hasPR && (
+          <motion.span
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={springs.bouncy}
+            className="flex items-center gap-0.5 px-1 py-0.5 rounded-full bg-yellow-500/15 text-yellow-500"
+          >
+            <Trophy className="h-2.5 w-2.5" />
+            <span className="text-[8px] font-bold">PR</span>
+          </motion.span>
+        )}
+      </div>
 
       {/* Delete button */}
       <button
         onClick={() => onDelete(set.id)}
-        className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground/30 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all md:opacity-100"
+        className="shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-muted-foreground/30 active:text-destructive active:bg-destructive/10 transition-all"
         aria-label="Delete set"
       >
-        <Trash2 className="h-3.5 w-3.5" />
+        <Trash2 className="h-3 w-3" />
       </button>
     </motion.div>
   );

@@ -10,8 +10,9 @@ export type Equipment =
   | "bodyweight" | "kettlebell" | "bands" | "none";
 
 export type SessionType =
-  | "Strength" | "Conditioning" | "Muay Thai S&C"
-  | "Hypertrophy" | "Powerlifting" | "Circuit" | "Custom";
+  | "Strength" | "Hypertrophy" | "Powerlifting" | "Explosiveness"
+  | "Conditioning" | "Circuit" | "Endurance" | "Mobility"
+  | "Muay Thai S&C" | "Custom";
 
 export type SessionStatus = "in_progress" | "completed";
 

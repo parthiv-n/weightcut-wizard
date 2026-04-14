@@ -40,14 +40,18 @@ export function useExerciseLibrary() {
 
     // Cache first
     const cached = localCache.get<Exercise[]>(userId, CACHE_KEY, CACHE_TTL);
-    if (cached) safeAsync(setExercises)(cached);
+    if (cached) {
+      safeAsync(setExercises)(cached);
+      safeAsync(setLoading)(false);
+    }
 
     try {
       const { data, error } = await withSupabaseTimeout(
         supabase
           .from("exercises" as any)
           .select("*")
-          .order("name"),
+          .order("name")
+          .limit(500),
         undefined,
         "Fetch exercises"
       );

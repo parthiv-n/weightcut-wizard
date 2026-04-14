@@ -39,7 +39,10 @@ export function useRoutines() {
     if (!userId) return;
 
     const cached = localCache.get<SavedRoutine[]>(userId, CACHE_KEY);
-    if (cached) safeAsync(setRoutines)(cached);
+    if (cached) {
+      safeAsync(setRoutines)(cached);
+      safeAsync(setRoutinesLoading)(false);
+    }
 
     try {
       const { data, error } = await withSupabaseTimeout(
@@ -48,7 +51,8 @@ export function useRoutines() {
           .select("*")
           .eq("user_id", userId)
           .order("sort_order")
-          .order("created_at", { ascending: false }),
+          .order("created_at", { ascending: false })
+          .limit(50),
         undefined,
         "Fetch saved routines"
       );

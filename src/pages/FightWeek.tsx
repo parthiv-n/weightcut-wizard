@@ -105,14 +105,7 @@ export default function FightWeek() {
   const loadExistingPlan = async () => {
     if (!userId) return;
 
-    // Cache-first: show cached plan instantly
-    const cached = localCache.get<DBPlan>(userId, "fight_week_plan");
-    if (cached) {
-      hydrateFromPlan(cached);
-      safeAsync(setInitialLoading)(false);
-    }
-
-    // Then refresh from DB in background
+    // Cache already checked in useEffect — go straight to DB refresh
     try {
       const { data } = await withSupabaseTimeout(
         supabase

@@ -242,10 +242,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setUserName(formattedName);
       }
 
-      // Cold-start seed: serve from cache immediately so the app never blocks on DB
-      // Profile cache expires after 1 hour to prevent serving very stale data
-      const PROFILE_CACHE_TTL = 60 * 60 * 1000;
-      const cachedProfile = localCache.get<ProfileData>(user.id, 'profiles', PROFILE_CACHE_TTL);
+      // Cold-start seed: serve ANY cached profile immediately so the app never blocks on DB
+      // Fresh data replaces stale data via the DB query below
+      const cachedProfile = localCache.get<ProfileData>(user.id, 'profiles');
       if (cachedProfile) {
         setProfile(cachedProfile);
         profileRef.current = cachedProfile;
@@ -509,6 +508,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
       if (userIdRef.current) {
         import('@/lib/syncQueue').then(({ syncQueue }) => {
           syncQueue.process(userIdRef.current!).catch(() => { });
+        });
+        // Proactive localStorage cleanup — prune stale date-bucketed entries (>90 days)
+        import('@/lib/localCache').then(({ localCache }) => {
+          localCache.pruneStale(userIdRef.current!);
         });
       }
     };

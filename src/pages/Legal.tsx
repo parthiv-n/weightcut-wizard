@@ -84,7 +84,7 @@ function BulletList({ items }: { items: string[] }) {
 
 function LastUpdated() {
   return (
-    <p className="text-[11px] text-muted-foreground/50 mb-4">Last updated: April 5, 2026</p>
+    <p className="text-[11px] text-muted-foreground/50 mb-4">Last updated: April 13, 2026</p>
   );
 }
 
@@ -114,9 +114,17 @@ function PrivacyPolicy() {
         "Body weight logs (date and weight entries)",
         "Nutrition logs (meal descriptions, calories, macronutrients)",
         "Hydration intake records",
+        "Sleep logs (date and hours slept)",
         "Training session logs (type, duration, intensity, RPE, notes)",
         "Fight camp records (dates, weight targets, progress)",
         "Recovery and wellness check-in data",
+      ]} />
+
+      <SubTitle>Subscription & Purchase Data</SubTitle>
+      <BulletList items={[
+        "Subscription status and tier (managed by RevenueCat)",
+        "Anonymous purchase identifiers (no payment card details are stored by us)",
+        "AI gem balance and usage count",
       ]} />
 
       <SubTitle>App Usage Data</SubTitle>
@@ -128,9 +136,10 @@ function PrivacyPolicy() {
 
       <SectionTitle>2. How We Use Your Data</SectionTitle>
       <BulletList items={[
-        "To provide personalised weight tracking, nutrition analysis, and training insights",
+        "To provide personalised weight tracking, nutrition analysis, sleep tracking, and training insights",
         "To generate AI-powered meal plans, diet analysis, and coaching advice",
-        "To calculate rehydration protocols and fight week schedules",
+        "To calculate recovery scores, readiness metrics, and fight week schedules",
+        "To manage your subscription and AI gem balance",
         "To maintain your account and sync data across sessions",
         "To improve app stability and fix bugs (crash reports)",
       ]} />
@@ -149,6 +158,13 @@ function PrivacyPolicy() {
         Powers AI features including meal analysis, diet scoring, fight week protocols, daily coaching,
         training summaries, and the AI chatbot. Meal descriptions and anonymised health context are sent
         to generate personalised responses. No personal identifiers are included in AI requests.
+      </P>
+
+      <SubTitle>RevenueCat</SubTitle>
+      <P>
+        Subscription management and in-app purchase processing. RevenueCat receives anonymous
+        app user identifiers and purchase receipts from Apple to verify subscription status.
+        No personal data, health data, or account credentials are shared with RevenueCat.
       </P>
 
       <SubTitle>Sentry</SubTitle>
@@ -236,7 +252,8 @@ function TermsOfService() {
       <P>
         FightCamp Wizard is a fitness and nutrition tracking application designed for combat sport
         athletes and individuals managing their weight. The app provides tools for weight tracking,
-        meal logging, training session management, and AI-generated nutritional guidance.
+        meal logging, sleep tracking, training session management, recovery analytics,
+        and AI-generated nutritional guidance.
       </P>
 
       <SectionTitle>2. Medical Disclaimer</SectionTitle>
@@ -285,7 +302,37 @@ function TermsOfService() {
         "May vary between requests for the same input",
       ]} />
 
-      <SectionTitle>6. Data & Privacy</SectionTitle>
+      <SectionTitle>6. Subscriptions & In-App Purchases</SectionTitle>
+
+      <SubTitle>Free Tier</SubTitle>
+      <P>
+        Free users receive 1 AI gem per day and may earn additional gems by watching rewarded ads
+        (up to 5 per day). Each AI feature usage costs 1 gem. The "daily-wisdom" feature is free
+        for all users.
+      </P>
+
+      <SubTitle>Pro Subscription</SubTitle>
+      <BulletList items={[
+        "Pro unlocks unlimited AI features with no gem cost",
+        "Available as a monthly or annual subscription via Apple In-App Purchase",
+        "Payment is charged to your Apple ID account at confirmation of purchase",
+        "Subscription automatically renews unless cancelled at least 24 hours before the end of the current billing period",
+        "You can manage or cancel your subscription in your Apple ID account settings or via the app's Settings > Manage Subscription",
+      ]} />
+
+      <SubTitle>Refunds</SubTitle>
+      <P>
+        All purchases are processed by Apple. Refund requests must be submitted through Apple's
+        support channels. We do not process refunds directly.
+      </P>
+
+      <SubTitle>Price Changes</SubTitle>
+      <P>
+        We may change subscription pricing. Any price change will take effect at the start of your
+        next billing period after notice. You may cancel before the new price takes effect.
+      </P>
+
+      <SectionTitle>7. Data & Privacy</SectionTitle>
       <P>
         Your use of the app is also governed by our{" "}
         <button
@@ -297,21 +344,22 @@ function TermsOfService() {
         . By using the app, you consent to the collection and use of your data as described therein.
       </P>
 
-      <SectionTitle>7. Intellectual Property</SectionTitle>
+      <SectionTitle>8. Intellectual Property</SectionTitle>
       <P>
         The app, its design, code, branding, and content are the intellectual property of Pratik Rai.
         You may not reproduce, distribute, or create derivative works from any part of the app
         without written permission.
       </P>
 
-      <SectionTitle>8. Account Termination</SectionTitle>
+      <SectionTitle>9. Account Termination</SectionTitle>
       <BulletList items={[
         "You may delete your account at any time from Settings — this permanently removes all your data",
+        "Deleting your account does not automatically cancel an active subscription — cancel via Apple ID settings first",
         "We reserve the right to suspend or terminate accounts that violate these terms",
         "Upon termination, all data associated with your account will be permanently deleted",
       ]} />
 
-      <SectionTitle>9. Limitation of Liability</SectionTitle>
+      <SectionTitle>10. Limitation of Liability</SectionTitle>
       <P>
         To the maximum extent permitted by law, FightCamp Wizard and its developers are not liable
         for any direct, indirect, incidental, or consequential damages arising from your use of the
@@ -324,19 +372,19 @@ function TermsOfService() {
         "Third-party service outages (Supabase, xAI, etc.)",
       ]} />
 
-      <SectionTitle>10. Changes to Terms</SectionTitle>
+      <SectionTitle>11. Changes to Terms</SectionTitle>
       <P>
         We may update these terms from time to time. Changes take effect when posted on this page.
         Continued use of the app after changes constitutes acceptance of the updated terms.
       </P>
 
-      <SectionTitle>11. Governing Law</SectionTitle>
+      <SectionTitle>12. Governing Law</SectionTitle>
       <P>
         These terms are governed by the laws of England and Wales. Any disputes will be subject
         to the exclusive jurisdiction of the courts of England and Wales.
       </P>
 
-      <SectionTitle>12. Contact</SectionTitle>
+      <SectionTitle>13. Contact</SectionTitle>
       <P>
         For questions about these terms, email us at{" "}
         <a href="mailto:weightcutwizard@gmail.com" className="text-primary font-medium">

@@ -16,6 +16,8 @@ import { logger } from "@/lib/logger";
 import type { Meal, MacroGoals, Ingredient } from "@/pages/nutrition/types";
 import type { DietAnalysisResult } from "@/types/dietAnalysis";
 
+const LOCAL_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours — stale-while-revalidate handles freshness
+
 interface UseNutritionDataParams {
   selectedDate: string;
   meals: Meal[];
@@ -83,6 +85,16 @@ export function useNutritionData(params: UseNutritionDataParams) {
         return;
       }
 
+      // Check localStorage first for cold-start instant render
+      const persistedMacros = localCache.get<any>(userId, 'macro_goals', 60 * 60 * 1000);
+      if (persistedMacros?.macroGoals) {
+        safeAsync(setAiMacroGoals)(persistedMacros.macroGoals);
+        if (persistedMacros.dailyCalorieTarget) {
+          safeAsync(setDailyCalorieTarget)(persistedMacros.dailyCalorieTarget);
+        }
+        safeAsync(setFetchingMacroGoals)(false);
+      }
+
       const cachedMacroGoals = nutritionCache.getMacroGoals(userId);
       if (cachedMacroGoals) {
         safeAsync(setAiMacroGoals)(cachedMacroGoals.macroGoals);
@@ -114,11 +126,13 @@ export function useNutritionData(params: UseNutritionDataParams) {
           refreshProfile();
         }
 
-        nutritionCache.setMacroGoals(userId, {
+        const macroData = {
           macroGoals,
           dailyCalorieTarget: profileData.ai_recommended_calories,
           profileUpdate: { manual_nutrition_override: profileData.manual_nutrition_override }
-        });
+        };
+        nutritionCache.setMacroGoals(userId, macroData);
+        localCache.set(userId, 'macro_goals', macroData);
       } else {
         setAiMacroGoals(null);
       }
@@ -157,7 +171,7 @@ export function useNutritionData(params: UseNutritionDataParams) {
     // Try localStorage with 2hr TTL — serve from cache, then continue to DB for background revalidation
     let servedFromLocal = false;
     if (!skipCache) {
-      const localMeals = localCache.getForDate<Meal[]>(userId, "nutrition_logs", fetchDate, 120 * 60 * 1000);
+      const localMeals = localCache.getForDate<Meal[]>(userId, "nutrition_logs", fetchDate, LOCAL_CACHE_TTL_MS);
       if (localMeals && localMeals.length > 0) {
         // Normalize meal_name to prevent "Untitled" display from stale cache
         const normalized = localMeals.map(m => ({ ...m, meal_name: m.meal_name || "Meal" }));
@@ -272,7 +286,7 @@ export function useNutritionData(params: UseNutritionDataParams) {
     activeDateRef.current = selectedDate;
     const hasCachedMeals = userId && (
       nutritionCache.getMeals(userId, selectedDate) ||
-      localCache.getForDate(userId, "nutrition_logs", selectedDate, 120 * 60 * 1000)
+      localCache.getForDate(userId, "nutrition_logs", selectedDate, LOCAL_CACHE_TTL_MS)
     );
     if (!hasCachedMeals) setMealsLoading(true);
     loadMeals();
@@ -390,7 +404,8 @@ export function useNutritionData(params: UseNutritionDataParams) {
         supabase.from("nutrition_logs").select("*", { count: "exact", head: true }).eq("user_id", userId),
         supabase.from("nutrition_logs").select("date").eq("user_id", userId)
           .gte("date", format(subDays(new Date(), 90), "yyyy-MM-dd"))
-          .order("date", { ascending: false }),
+          .order("date", { ascending: false })
+          .limit(90),
       ]);
 
       const totalMeals = countResult.status === "fulfilled" ? countResult.value.count || 0 : 0;

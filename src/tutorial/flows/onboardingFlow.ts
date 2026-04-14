@@ -2,7 +2,7 @@ import type { TutorialFlow } from "../types";
 
 export const onboardingFlow: TutorialFlow = {
   id: "onboarding",
-  version: 7,
+  version: 8,
   steps: [
     {
       id: "welcome",
@@ -85,6 +85,14 @@ export const onboardingFlow: TutorialFlow = {
         "Your recovery hub. Every session you log in the Training Calendar feeds into recovery metrics here — fatigue levels, sleep quality, soreness trends, and an AI recovery coach. The more you log, the smarter it gets.",
       position: "center",
       navigateTo: "/recovery",
+    },
+    {
+      id: "sleep-page",
+      title: "Sleep Tracking",
+      description:
+        "Log your sleep daily from the dashboard widget. Your hours are tracked over time and displayed in a graph on the Sleep page — filter by week, month, or 3 months. Consistent logging helps the AI give better recovery and cut advice.",
+      position: "center",
+      navigateTo: "/sleep",
     },
     {
       id: "quick-tips",

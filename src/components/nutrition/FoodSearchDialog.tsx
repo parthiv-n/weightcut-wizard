@@ -232,59 +232,55 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-lg w-[95vw] sm:w-full max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+            <DialogContent className="sm:max-w-[340px] w-[92vw] max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden rounded-xl border-0 bg-card/95 backdrop-blur-xl shadow-2xl">
                 {!selectedFood ? (
                     <>
                         {/* Search header */}
-                        <div className="p-4 pb-3 border-b border-border/40">
-                            <DialogHeader className="mb-3">
-                                <DialogTitle className="text-base">
+                        <div className="px-4 pt-4 pb-3 border-b border-border/30">
+                            <DialogHeader className="mb-2.5">
+                                <DialogTitle className="text-[15px] font-semibold text-center">
                                     Search Food {mealType ? `· ${mealType.charAt(0).toUpperCase() + mealType.slice(1)}` : ""}
                                 </DialogTitle>
                             </DialogHeader>
                             <div className="relative">
-                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
                                 <Input
-                                    placeholder="Search foods (e.g. chicken breast, banana…)"
+                                    placeholder="Search foods..."
                                     value={query}
                                     onChange={(e) => setQuery(e.target.value)}
-                                    className="pl-9 text-sm h-10"
+                                    className="pl-9 text-[13px] h-8 rounded-lg border-border/30 bg-muted/20"
                                     autoFocus
                                 />
                                 {query && (
                                     <button
                                         onClick={() => setQuery("")}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground active:text-foreground"
                                     >
-                                        <X className="h-3.5 w-3.5" />
+                                        <X className="h-3 w-3" />
                                     </button>
                                 )}
                             </div>
                         </div>
 
                         {/* Results list */}
-                        <div className="flex-1 overflow-y-auto min-h-[200px] max-h-[55vh]">
+                        <div className="flex-1 overflow-y-auto min-h-[180px] max-h-[60vh]">
                             {searching && (
-                                <div className="flex items-center justify-center py-12">
-                                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                                    <span className="ml-2 text-sm text-muted-foreground">Searching…</span>
+                                <div className="flex items-center justify-center py-8">
+                                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                    <span className="ml-1.5 text-[13px] text-muted-foreground">Searching…</span>
                                 </div>
                             )}
 
                             {!searching && query.length >= 2 && results.length === 0 && (
-                                <div className="text-center py-12">
-                                    <p className="text-sm text-muted-foreground">No results found</p>
-                                    <p className="text-xs text-muted-foreground/60 mt-1">Try a different search term</p>
+                                <div className="text-center py-8">
+                                    <p className="text-[13px] text-muted-foreground">No results found</p>
                                 </div>
                             )}
 
                             {!searching && query.length < 2 && recentMeals.length > 0 && (
                                 <div>
-                                    <div className="px-4 pt-3 pb-1.5 flex items-center justify-between">
-                                        <div className="flex items-center gap-1.5">
-                                            <Clock className="h-3.5 w-3.5 text-muted-foreground/60" />
-                                            <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Recent</span>
-                                        </div>
+                                    <div className="px-3 pt-2 pb-1 flex items-center justify-between">
+                                        <span className="text-[13px] font-semibold uppercase tracking-wider text-muted-foreground/60">Recent</span>
                                         <button
                                             onClick={() => {
                                                 const hidden = getHiddenRecents();
@@ -292,12 +288,12 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                                                 setHiddenRecents(hidden);
                                                 setRecentMeals([]);
                                             }}
-                                            className="text-xs text-muted-foreground/60 hover:text-destructive transition-colors"
+                                            className="text-[13px] text-muted-foreground/60 active:text-destructive transition-colors"
                                         >
-                                            Clear all
+                                            Clear
                                         </button>
                                     </div>
-                                    <div className="divide-y divide-border/30">
+                                    <div className="divide-y divide-border/20">
                                         {recentMeals.map((food) => (
                                             <SwipeToDelete
                                                 key={food.id}
@@ -314,19 +310,15 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                                                             setSelectedFood(food);
                                                             setServingGrams(food.lastPortionGrams);
                                                         }}
-                                                        className="flex-1 flex items-center gap-3 px-4 py-3 hover:bg-muted/50 active:bg-muted transition-colors text-left min-w-0"
+                                                        className="flex-1 flex items-center gap-2 px-3 py-1.5 active:bg-muted/50 transition-colors text-left min-w-0"
                                                     >
-                                                        <div className="w-10 h-10 rounded-lg bg-muted/60 flex items-center justify-center flex-shrink-0">
-                                                            <Clock className="h-4 w-4 text-muted-foreground/50" />
-                                                        </div>
                                                         <div className="flex-1 min-w-0">
-                                                            <p className="text-sm font-medium truncate">{food.name}</p>
-                                                            <p className="text-xs text-muted-foreground/70 mt-0.5">
-                                                                {food.calories_per_100g} kcal · P {food.protein_per_100g}g · C {food.carbs_per_100g}g · F {food.fats_per_100g}g
-                                                                <span className="text-muted-foreground/40 ml-1">per 100g</span>
+                                                            <p className="text-[13px] font-medium truncate">{food.name}</p>
+                                                            <p className="text-[13px] text-muted-foreground/70">
+                                                                {food.calories_per_100g} kcal · {food.protein_per_100g}P · {food.carbs_per_100g}C · {food.fats_per_100g}F
                                                             </p>
                                                         </div>
-                                                        <ChevronRight className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
+                                                        <ChevronRight className="h-3 w-3 text-muted-foreground/30 flex-shrink-0" />
                                                     </button>
                                                     <button
                                                         onClick={() => {
@@ -345,10 +337,10 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                                                             onOpenChange(false);
                                                             requestAnimationFrame(() => { if (mainEl) mainEl.scrollTop = scrollY; });
                                                         }}
-                                                        className="px-3 py-3 mr-2 text-primary hover:text-primary/80 active:scale-95 transition-all flex-shrink-0"
+                                                        className="px-2 py-1.5 mr-1 text-primary active:scale-95 transition-all flex-shrink-0"
                                                         title={`Quick add · ${food.lastPortionGrams}g`}
                                                     >
-                                                        <PlusCircle className="h-5 w-5" />
+                                                        <PlusCircle className="h-4 w-4" />
                                                     </button>
                                                 </div>
                                             </SwipeToDelete>
@@ -358,15 +350,13 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                             )}
 
                             {!searching && query.length < 2 && recentMeals.length === 0 && (
-                                <div className="text-center py-12">
-                                    <Search className="h-8 w-8 text-muted-foreground/30 mx-auto mb-3" />
-                                    <p className="text-sm text-muted-foreground">Type to search the food database</p>
-                                    <p className="text-xs text-muted-foreground/60 mt-1">Powered by USDA FoodData Central</p>
+                                <div className="text-center py-8">
+                                    <p className="text-[13px] text-muted-foreground">Type to search foods</p>
                                 </div>
                             )}
 
                             {!searching && results.length > 0 && (
-                                <div className="divide-y divide-border/30">
+                                <div className="divide-y divide-border/20">
                                     {results.map((food) => (
                                         <button
                                             key={food.id}
@@ -374,22 +364,18 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                                                 setSelectedFood(food);
                                                 setServingGrams(100);
                                             }}
-                                            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/50 active:bg-muted transition-colors text-left"
+                                            className="w-full flex items-center gap-2 px-3 py-1.5 active:bg-muted/50 transition-colors text-left"
                                         >
-                                            <div className="w-10 h-10 rounded-lg bg-muted/60 flex items-center justify-center flex-shrink-0">
-                                                <span className="text-lg">🍽</span>
-                                            </div>
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-sm font-medium truncate">{food.name}</p>
+                                                <p className="text-[13px] font-medium truncate">{food.name}</p>
                                                 {food.brand && (
-                                                    <p className="text-xs text-muted-foreground truncate">{food.brand}</p>
+                                                    <p className="text-[13px] text-muted-foreground/60 truncate">{food.brand}</p>
                                                 )}
-                                                <p className="text-xs text-muted-foreground/70 mt-0.5">
-                                                    {food.calories_per_100g} kcal · P {food.protein_per_100g}g · C {food.carbs_per_100g}g · F {food.fats_per_100g}g
-                                                    <span className="text-muted-foreground/40 ml-1">per 100g</span>
+                                                <p className="text-[13px] text-muted-foreground/70">
+                                                    {food.calories_per_100g} kcal · {food.protein_per_100g}P · {food.carbs_per_100g}C · {food.fats_per_100g}F
                                                 </p>
                                             </div>
-                                            <ChevronRight className="h-4 w-4 text-muted-foreground/40 flex-shrink-0" />
+                                            <ChevronRight className="h-3 w-3 text-muted-foreground/30 flex-shrink-0" />
                                         </button>
                                     ))}
                                 </div>
@@ -398,34 +384,34 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                     </>
                 ) : (
                     /* Serving size panel */
-                    <div className="p-4 space-y-5">
-                        <div className="flex items-start gap-3">
+                    <div className="px-4 pt-3 pb-4 space-y-3">
+                        <div className="flex items-center gap-2.5">
                             <button
                                 onClick={() => setSelectedFood(null)}
-                                className="mt-0.5 p-1 rounded-md hover:bg-muted text-muted-foreground"
+                                className="p-1 rounded-md active:bg-muted/50 text-muted-foreground"
                             >
                                 ←
                             </button>
                             <div className="flex-1 min-w-0">
-                                <h3 className="font-semibold text-base truncate">{selectedFood.name}</h3>
+                                <h3 className="font-semibold text-[14px] truncate">{selectedFood.name}</h3>
                                 {selectedFood.brand && (
-                                    <p className="text-xs text-muted-foreground">{selectedFood.brand}</p>
+                                    <p className="text-[13px] text-muted-foreground">{selectedFood.brand}</p>
                                 )}
                             </div>
                         </div>
 
                         {/* Serving size input */}
-                        <div className="space-y-3">
+                        <div className="space-y-2.5">
                             <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium">Serving Size</span>
-                                <div className="flex items-center gap-2">
+                                <span className="text-[13px] font-medium">Serving Size</span>
+                                <div className="flex items-center gap-1.5">
                                     <button
                                         onClick={() => setServingGrams(Math.max(10, servingGrams - 10))}
-                                        className="h-8 w-8 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors"
+                                        className="h-6 w-6 rounded-full bg-muted/40 flex items-center justify-center active:bg-muted/60 transition-colors"
                                     >
-                                        <Minus className="h-3.5 w-3.5" />
+                                        <Minus className="h-3 w-3" />
                                     </button>
-                                    <div className="flex items-center gap-1">
+                                    <div className="flex items-center gap-0.5">
                                         <Input
                                             type="number"
                                             min="1"
@@ -435,28 +421,28 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                                                 const v = parseInt(e.target.value);
                                                 if (!isNaN(v) && v > 0) setServingGrams(v);
                                             }}
-                                            className="w-20 text-center text-sm h-8 font-semibold"
+                                            className="w-16 text-center text-[13px] h-7 font-semibold rounded-md border-border/30 bg-muted/20"
                                         />
-                                        <span className="text-sm text-muted-foreground">g</span>
+                                        <span className="text-[13px] text-muted-foreground">g</span>
                                     </div>
                                     <button
                                         onClick={() => setServingGrams(servingGrams + 10)}
-                                        className="h-8 w-8 rounded-full border border-border flex items-center justify-center hover:bg-muted transition-colors"
+                                        className="h-6 w-6 rounded-full bg-muted/40 flex items-center justify-center active:bg-muted/60 transition-colors"
                                     >
-                                        <Plus className="h-3.5 w-3.5" />
+                                        <Plus className="h-3 w-3" />
                                     </button>
                                 </div>
                             </div>
 
                             {/* Quick presets */}
-                            <div className="flex gap-1.5 flex-wrap">
+                            <div className="flex gap-1 flex-wrap">
                                 {SERVING_PRESETS.map((g) => (
                                     <button
                                         key={g}
                                         onClick={() => setServingGrams(g)}
-                                        className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${servingGrams === g
+                                        className={`px-2.5 py-1 rounded-full text-[13px] font-medium transition-colors ${servingGrams === g
                                                 ? "bg-primary text-primary-foreground"
-                                                : "bg-muted text-muted-foreground hover:bg-muted/80"
+                                                : "bg-muted/40 text-muted-foreground active:bg-muted/60"
                                             }`}
                                     >
                                         {g}g
@@ -468,43 +454,44 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                                             const match = selectedFood.serving_size?.match(/(\d+(?:\.\d+)?)\s*g/i);
                                             if (match) setServingGrams(Math.round(parseFloat(match[1])));
                                         }}
-                                        className="px-3 py-1.5 rounded-full text-xs font-medium bg-muted text-muted-foreground hover:bg-muted/80"
+                                        className="px-2.5 py-1 rounded-full text-[13px] font-medium bg-muted/40 text-muted-foreground active:bg-muted/60"
                                     >
-                                        1 serving ({selectedFood.serving_size})
+                                        1 srv ({selectedFood.serving_size})
                                     </button>
                                 )}
                             </div>
                         </div>
 
                         {/* Nutrition breakdown */}
-                        <div className="rounded-xl border border-border/50 bg-muted/20 p-4 space-y-3">
+                        <div className="rounded-lg bg-muted/20 p-3 space-y-2">
                             <div className="text-center">
-                                <p className="text-3xl font-bold text-primary tabular-nums">{scaledCalories}</p>
-                                <p className="text-xs text-muted-foreground uppercase tracking-wider">calories</p>
+                                <p className="text-2xl font-bold text-primary tabular-nums">{scaledCalories}</p>
+                                <p className="text-[13px] text-muted-foreground uppercase tracking-wider">calories</p>
                             </div>
-                            <div className="grid grid-cols-3 gap-3 pt-2 border-t border-border/30">
+                            <div className="grid grid-cols-3 gap-2 pt-1.5 border-t border-border/20">
                                 <div className="text-center">
-                                    <p className="text-lg font-semibold text-blue-500 tabular-nums">{scaledProtein}g</p>
-                                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Protein</p>
+                                    <p className="text-[15px] font-semibold text-blue-500 tabular-nums">{scaledProtein}g</p>
+                                    <p className="text-[13px] uppercase tracking-wider text-muted-foreground">Protein</p>
                                 </div>
                                 <div className="text-center">
-                                    <p className="text-lg font-semibold text-orange-500 tabular-nums">{scaledCarbs}g</p>
-                                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Carbs</p>
+                                    <p className="text-[15px] font-semibold text-orange-500 tabular-nums">{scaledCarbs}g</p>
+                                    <p className="text-[13px] uppercase tracking-wider text-muted-foreground">Carbs</p>
                                 </div>
                                 <div className="text-center">
-                                    <p className="text-lg font-semibold text-purple-500 tabular-nums">{scaledFats}g</p>
-                                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Fats</p>
+                                    <p className="text-[15px] font-semibold text-purple-500 tabular-nums">{scaledFats}g</p>
+                                    <p className="text-[13px] uppercase tracking-wider text-muted-foreground">Fats</p>
                                 </div>
                             </div>
-                            {/* Per 100g reference */}
-                            <p className="text-[10px] text-muted-foreground/50 text-center pt-1">
+                            <p className="text-[13px] text-muted-foreground/50 text-center">
                                 Per 100g: {selectedFood.calories_per_100g} kcal · P {selectedFood.protein_per_100g}g · C {selectedFood.carbs_per_100g}g · F {selectedFood.fats_per_100g}g
                             </p>
                         </div>
 
-                        <Button onClick={handleLogFood} className="w-full h-11 font-semibold text-sm">
-                            Log Food · {scaledCalories} kcal
-                        </Button>
+                        <div className="border-t border-border/30 pt-1">
+                            <button onClick={handleLogFood} className="w-full py-2.5 text-[14px] font-semibold text-primary active:bg-muted/50 transition-colors">
+                                Log Food · {scaledCalories} kcal
+                            </button>
+                        </div>
                     </div>
                 )}
             </DialogContent>

@@ -6,7 +6,7 @@ import { useUser } from "@/contexts/UserContext";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { weightLogSchema } from "@/lib/validation";
 import { localCache } from "@/lib/localCache";
-import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
+import { withSupabaseTimeout, withRetry } from "@/lib/timeoutWrapper";
 import { triggerHapticSuccess, celebrateSuccess } from "@/lib/haptics";
 import { logger } from "@/lib/logger";
 import type { WeightLog, Profile } from "@/pages/weight/types";
@@ -28,6 +28,7 @@ export function useWeightData({ profile }: UseWeightDataParams) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [logToDelete, setLogToDelete] = useState<WeightLog | null>(null);
   const weightInputRef = useRef<HTMLInputElement>(null);
+  const submittingRef = useRef(false);
 
   const fetchData = async () => {
     if (!userId) return;
@@ -43,7 +44,8 @@ export function useWeightData({ profile }: UseWeightDataParams) {
           .from("weight_logs")
           .select("id, date, weight_kg")
           .eq("user_id", userId)
-          .order("date", { ascending: true }),
+          .order("date", { ascending: true })
+          .limit(365),
         undefined,
         "Weight logs query"
       );
@@ -62,6 +64,8 @@ export function useWeightData({ profile }: UseWeightDataParams) {
   const handleAddWeight = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (submittingRef.current) return;
+
     const validationResult = weightLogSchema.safeParse({
       weight_kg: parseFloat(newWeight),
       date: newDate,
@@ -76,56 +80,97 @@ export function useWeightData({ profile }: UseWeightDataParams) {
       return;
     }
 
+    submittingRef.current = true;
     setLoading(true);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (!user || authError) {
+      toast({
+        title: "Session Expired",
+        description: "Please sign in again to log your weight.",
+        variant: "destructive",
+      });
+      setLoading(false);
+      submittingRef.current = false;
+      return;
+    }
 
+    const loggedWeight = parseFloat(newWeight);
     let opError = null;
 
+    // Optimistic update — show weight in list immediately
+    const prevLogs = [...weightLogs];
     if (editingLogId) {
-      const { error } = await withSupabaseTimeout(
-        supabase
-          .from("weight_logs")
-          .update({
-            weight_kg: parseFloat(newWeight),
-            date: newDate,
-          })
-          .eq("id", editingLogId),
-        undefined,
-        "Weight log update"
+      setWeightLogs(prev => prev.map(log =>
+        log.id === editingLogId ? { ...log, weight_kg: loggedWeight, date: newDate } : log
+      ));
+    } else {
+      setWeightLogs(prev => {
+        const updated = [...prev, { id: `optimistic-${Date.now()}`, date: newDate, weight_kg: loggedWeight }]
+          .sort((a, b) => a.date.localeCompare(b.date));
+        return updated;
+      });
+    }
+
+    if (editingLogId) {
+      const { error } = await withRetry(
+        () => withSupabaseTimeout(
+          supabase
+            .from("weight_logs")
+            .update({
+              weight_kg: loggedWeight,
+              date: newDate,
+            })
+            .eq("id", editingLogId),
+          undefined,
+          "Weight log update"
+        ),
+        2,
+        500
       );
       opError = error;
     } else {
-      const { error } = await withSupabaseTimeout(
-        supabase.from("weight_logs").insert({
-          user_id: user.id,
-          weight_kg: parseFloat(newWeight),
-          date: newDate,
-        }),
-        undefined,
-        "Weight log insert"
+      const { error } = await withRetry(
+        () => withSupabaseTimeout(
+          supabase.from("weight_logs").insert({
+            user_id: user.id,
+            weight_kg: loggedWeight,
+            date: newDate,
+          }),
+          undefined,
+          "Weight log insert"
+        ),
+        2,
+        500
       );
       opError = error;
     }
 
     if (opError) {
+      // Rollback optimistic update
+      setWeightLogs(prevLogs);
       toast({
         title: "Error",
         description: `Failed to ${editingLogId ? 'update' : 'log'} weight`,
         variant: "destructive",
       });
     } else {
-      const loggedWeight = parseFloat(newWeight);
-
-      await withSupabaseTimeout(
-        supabase
-          .from("profiles")
-          .update({ current_weight_kg: loggedWeight })
-          .eq("id", user.id),
-        undefined,
-        "Profile weight update"
-      );
+      try {
+        await withRetry(
+          () => withSupabaseTimeout(
+            supabase
+              .from("profiles")
+              .update({ current_weight_kg: loggedWeight })
+              .eq("id", user.id),
+            undefined,
+            "Profile weight update"
+          ),
+          1,
+          500
+        );
+      } catch (profileErr) {
+        logger.warn("Profile weight update failed (weight log succeeded)", profileErr);
+      }
 
       await updateCurrentWeight(loggedWeight);
 
@@ -150,13 +195,15 @@ export function useWeightData({ profile }: UseWeightDataParams) {
 
       setNewWeight("");
       setEditingLogId(null);
-      fetchData();
+      // Background sync to get real DB IDs
+      setTimeout(() => fetchData(), 500);
     }
 
     setLoading(false);
+    submittingRef.current = false;
 
     // Return the logged weight for weigh-in share card check
-    return parseFloat(newWeight);
+    return loggedWeight;
   };
 
   const handleDeleteLog = async () => {

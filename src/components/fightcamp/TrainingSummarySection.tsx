@@ -422,13 +422,13 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
                     ) : (
                         <>
                             <Brain className="h-5 w-5 text-primary" />
-                            <span className="text-sm font-semibold bg-gradient-to-r from-primary to-blue-400 bg-clip-text text-transparent">
+                            <span className="text-sm font-semibold text-primary">
                                 {buttonState === "update" ? "Update Training Summary" : "Generate Training Summary"}
                             </span>
                             {!gemsIsPremium && (
-                                <span className="inline-flex items-center gap-0.5 ml-1.5 text-amber-500">
+                                <span className="inline-flex items-center gap-0.5 ml-1.5 text-muted-foreground">
                                     <Gem className="h-3 w-3" />
-                                    <span className="text-[10px] font-bold tabular-nums">{gems}</span>
+                                    <span className="text-[10px] font-medium tabular-nums">{gems}</span>
                                 </span>
                             )}
                         </>

@@ -67,6 +67,7 @@ export function useMealOperations(params: UseMealOperationsParams) {
       const updatedMeals = [...prev, optimisticMeal];
       localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
       nutritionCache.setMeals(userId, selectedDate, updatedMeals);
+      localCache.remove(userId, 'gamification_data');
       return updatedMeals;
     });
 
@@ -129,6 +130,7 @@ export function useMealOperations(params: UseMealOperationsParams) {
         const updatedMeals = [...prev, optimisticMeal];
         localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
         nutritionCache.setMeals(userId, selectedDate, updatedMeals);
+        localCache.remove(userId, 'gamification_data');
         return updatedMeals;
       });
 
@@ -249,6 +251,7 @@ export function useMealOperations(params: UseMealOperationsParams) {
         const updatedMeals = [...prev, ...optimisticMeals];
         localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
         nutritionCache.setMeals(userId, selectedDate, updatedMeals);
+        localCache.remove(userId, 'gamification_data');
         return updatedMeals;
       });
       setMealPlanIdeas([]);

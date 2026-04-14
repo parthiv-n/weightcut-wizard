@@ -1,13 +1,26 @@
-import { useRef, useEffect, useState } from "react";
+import { useRef, useEffect, useState, useCallback } from "react";
 import { useWizardBackground } from "@/contexts/WizardBackgroundContext";
 import { Sparkles, Send, Trash2, User, Bot, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
-import { triggerHapticSelection, triggerHapticSuccess } from "@/lib/haptics";
+import { triggerHapticSelection, triggerHapticSuccess, triggerHaptic } from "@/lib/haptics";
+import { ImpactStyle } from "@capacitor/haptics";
 import wizardAvatar from "@/assets/wizard-logo.webp";
 import { GlowingEffect } from "@/components/ui/glowing-effect";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/hooks/useSubscription";
+
+const FAB_SIZE = 48;
+const EDGE_MARGIN = 16;
+const SNAP_SPRING = "transform 0.35s cubic-bezier(0.25, 1, 0.5, 1)";
+const FAB_POS_KEY = "wcw_fab_position";
+
+function loadSavedPosition(): { x: number; y: number } | null {
+  try {
+    const raw = localStorage.getItem(FAB_POS_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
 
 export function FloatingWizardChat() {
   const { messages, isLoading, sendMessage, clearChat } = useWizardBackground();
@@ -17,6 +30,84 @@ export function FloatingWizardChat() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const hasAccess = isPremium || gems > 0;
+
+  // Drag state — all refs for 60fps performance (no React re-renders during drag)
+  const fabRef = useRef<HTMLButtonElement>(null);
+  const dragState = useRef({
+    isDragging: false,
+    startX: 0,
+    startY: 0,
+    startTouchX: 0,
+    startTouchY: 0,
+    moved: false,
+  });
+  const posRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+
+  // Initialize + restore position (runs on mount AND when chat closes)
+  useEffect(() => {
+    if (open) return; // Don't reposition while chat is open
+    const saved = loadSavedPosition();
+    const defaultY = window.innerHeight - FAB_SIZE - 88 - 20;
+    if (saved) {
+      posRef.current = { x: Math.min(saved.x, window.innerWidth - FAB_SIZE - EDGE_MARGIN), y: Math.min(saved.y, defaultY) };
+    } else if (posRef.current.x === 0 && posRef.current.y === 0) {
+      posRef.current = { x: window.innerWidth - FAB_SIZE - EDGE_MARGIN, y: defaultY };
+    }
+    if (fabRef.current) {
+      fabRef.current.style.transition = "none";
+      fabRef.current.style.transform = `translate(${posRef.current.x}px, ${posRef.current.y}px)`;
+    }
+  }, [open]);
+
+  const snapToEdge = useCallback(() => {
+    const el = fabRef.current;
+    if (!el) return;
+    const { x, y } = posRef.current;
+    const midX = window.innerWidth / 2;
+    const snappedX = x + FAB_SIZE / 2 < midX ? EDGE_MARGIN : window.innerWidth - FAB_SIZE - EDGE_MARGIN;
+    const clampedY = Math.max(60, Math.min(y, window.innerHeight - FAB_SIZE - 80));
+    posRef.current = { x: snappedX, y: clampedY };
+    el.style.transition = SNAP_SPRING;
+    el.style.transform = `translate(${snappedX}px, ${clampedY}px)`;
+    try { localStorage.setItem(FAB_POS_KEY, JSON.stringify(posRef.current)); } catch {}
+    setTimeout(() => { if (el) el.style.transition = "none"; }, 350);
+  }, []);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    const { x, y } = posRef.current;
+    dragState.current = { isDragging: true, startX: x, startY: y, startTouchX: touch.clientX, startTouchY: touch.clientY, moved: false };
+    if (fabRef.current) {
+      fabRef.current.style.transition = "none";
+      fabRef.current.style.transform = `translate(${x}px, ${y}px) scale(1.08)`;
+    }
+  }, []);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!dragState.current.isDragging) return;
+    const touch = e.touches[0];
+    const dx = touch.clientX - dragState.current.startTouchX;
+    const dy = touch.clientY - dragState.current.startTouchY;
+    if (Math.abs(dx) > 6 || Math.abs(dy) > 6) dragState.current.moved = true;
+    const nx = Math.max(0, Math.min(dragState.current.startX + dx, window.innerWidth - FAB_SIZE));
+    const ny = Math.max(40, Math.min(dragState.current.startY + dy, window.innerHeight - FAB_SIZE - 60));
+    posRef.current = { x: nx, y: ny };
+    if (fabRef.current) fabRef.current.style.transform = `translate(${nx}px, ${ny}px) scale(1.08)`;
+  }, []);
+
+  const handleTouchEnd = useCallback(() => {
+    if (!dragState.current.isDragging) return;
+    dragState.current.isDragging = false;
+    if (fabRef.current) fabRef.current.style.transform = `translate(${posRef.current.x}px, ${posRef.current.y}px) scale(1)`;
+    if (!dragState.current.moved) {
+      // Tap — open chat
+      handleFabPress();
+    } else {
+      // Drag ended — snap to nearest edge
+      triggerHaptic(ImpactStyle.Light);
+      snapToEdge();
+    }
+  }, [snapToEdge]);
 
   // Edge function warmup on mount
   useEffect(() => {
@@ -65,22 +156,24 @@ export function FloatingWizardChat() {
 
   return (
     <>
-      {/* Floating button — hidden when panel is open */}
-      {!open && (
-        <button
-          onClick={handleFabPress}
-          data-tutorial="wizard-chat"
-          className={`fixed right-4 z-[10000] w-12 h-12 rounded-full shadow-lg flex items-center justify-center active:scale-95 transition-transform duration-150 md:hidden ${
-            hasAccess
-              ? "bg-gradient-to-br from-primary to-secondary text-primary-foreground shadow-primary/30"
-              : "bg-zinc-800 text-zinc-400 shadow-none border border-white/10"
-          }`}
-          style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 5.5rem)" }}
-          aria-label="Open AI Wizard"
-        >
-          <Sparkles className="h-5 w-5" />
-        </button>
-      )}
+      {/* Floating button — draggable, snaps to edges. Always mounted to preserve position. */}
+      <button
+        ref={fabRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        data-tutorial="wizard-chat"
+        className={`fixed top-0 left-0 z-[10000] w-12 h-12 rounded-full shadow-lg flex items-center justify-center md:hidden touch-none ${
+          hasAccess
+            ? "bg-gradient-to-br from-primary to-secondary text-primary-foreground shadow-primary/30"
+            : "bg-zinc-800 text-zinc-400 shadow-none border border-white/10"
+        } ${open ? "pointer-events-none opacity-0" : "opacity-100"}`}
+        style={{ willChange: "transform", transition: open ? "opacity 0.15s" : undefined }}
+        aria-label="Open AI Wizard"
+        aria-hidden={open}
+      >
+        <Sparkles className="h-5 w-5" />
+      </button>
 
       {/* Backdrop */}
       {open && (

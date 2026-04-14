@@ -1,7 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Dumbbell, Plus, Calendar, Clock, Flame } from "lucide-react";
+import { Dumbbell, Plus, Calendar, Clock, Flame, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 import { useGymSessions } from "@/hooks/gym/useGymSessions";
 import { useGymSets } from "@/hooks/gym/useGymSets";
 import { useExerciseLibrary } from "@/hooks/gym/useExerciseLibrary";
@@ -25,9 +26,10 @@ import { AICompactOverlay } from "@/components/AICompactOverlay";
 import { ImpactStyle } from "@capacitor/haptics";
 import type { SessionType, SessionWithSets, Exercise, SavedRoutine } from "@/pages/gym/types";
 
-type GymTab = "workouts" | "routines";
+type GymTab = "workouts" | "routines" | "progress";
 
 export default function GymTracker() {
+  const { toast } = useToast();
   const {
     history, historyLoading, activeSession,
     startSession, finishSession, discardSession,
@@ -61,28 +63,59 @@ export default function GymTracker() {
   const newPRSetIdsRef = useRef(new Set<string>());
 
   const handleStartWorkout = useCallback(async () => {
-    await startSession(sessionType);
-  }, [startSession, sessionType]);
+    const sessionId = await startSession(sessionType);
+    if (!sessionId) {
+      toast({ description: "Failed to start workout", variant: "destructive" });
+    }
+  }, [startSession, sessionType, toast]);
 
   const handleStartFromRoutine = useCallback(async (routine: SavedRoutine, dayFilter?: string) => {
+    if (exercisesLoading) {
+      toast({ description: "Loading exercises, please try again", variant: "destructive" });
+      return;
+    }
+
     const typeMap: Record<string, SessionType> = {
       hypertrophy: "Hypertrophy",
       strength: "Strength",
-      explosiveness: "Conditioning",
-      conditioning: "Circuit",
+      explosiveness: "Explosiveness",
+      conditioning: "Conditioning",
+      powerlifting: "Powerlifting",
+      circuit: "Circuit",
+      endurance: "Endurance",
+      mobility: "Mobility",
     };
     const sType = typeMap[routine.goal] || "Strength";
     const sessionId = await startSession(sType as SessionType);
-    if (!sessionId) return;
+    if (!sessionId) {
+      toast({ description: "Failed to start session", variant: "destructive" });
+      return;
+    }
 
     // Filter exercises by day if specified
     const routineExercises = dayFilter
       ? routine.exercises.filter(re => re.day === dayFilter)
       : routine.exercises;
 
+    if (routineExercises.length === 0) {
+      toast({ description: "No exercises in this routine", variant: "destructive" });
+      discardSession();
+      return;
+    }
+
+    // Map muscle group to valid ExerciseCategory
+    const muscleToCategory = (mg: string): import("@/pages/gym/types").ExerciseCategory => {
+      const m = mg.toLowerCase();
+      if (["chest", "shoulders", "triceps"].includes(m)) return "push";
+      if (["back", "biceps", "lats"].includes(m)) return "pull";
+      if (["legs", "quads", "hamstrings", "glutes", "calves"].includes(m)) return "legs";
+      if (["core", "abs", "obliques"].includes(m)) return "core";
+      if (["cardio"].includes(m)) return "cardio";
+      return "full_body";
+    };
+
     // Import routine exercises into the workout with empty sets
     const groups: import("@/pages/gym/types").ExerciseGroup[] = routineExercises.map((re, idx) => {
-      // Try to match to an exercise in the library by exercise_id or name
       const matched = (re.exercise_id && exercises.find(e => e.id === re.exercise_id))
         || exercises.find(e => e.name.toLowerCase() === re.name.toLowerCase());
 
@@ -90,7 +123,7 @@ export default function GymTracker() {
         id: re.exercise_id || `routine-${idx}`,
         user_id: null,
         name: re.name,
-        category: "compound" as any,
+        category: muscleToCategory(re.muscle_group),
         muscle_group: re.muscle_group,
         equipment: null,
         is_bodyweight: false,
@@ -105,12 +138,9 @@ export default function GymTracker() {
       };
     });
 
-    if (groups.length > 0) {
-      updateActiveSession(prev => ({ ...prev, exerciseGroups: groups }));
-    }
-
+    updateActiveSession(prev => ({ ...prev, exerciseGroups: groups }));
     setTab("workouts");
-  }, [startSession, exercises, updateActiveSession]);
+  }, [startSession, exercises, exercisesLoading, updateActiveSession, discardSession, toast]);
 
   const handleAddSet = useCallback(async (exerciseOrder: number, data: any) => {
     const set = await addSet(exerciseOrder, data);
@@ -167,7 +197,7 @@ export default function GymTracker() {
   const formatVol = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : `${v}`;
 
   return (
-    <div className="animate-page-in space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
+    <div className="animate-page-in space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto md:pb-6" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 5rem)" }}>
       {gymAiTask && (
         <AICompactOverlay
           isOpen={true}
@@ -180,7 +210,7 @@ export default function GymTracker() {
       <div className="space-y-3">
         {/* Header */}
         <div>
-          <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest mb-0.5">{todayLabel}</p>
+          <p className="text-[13px] text-muted-foreground font-medium uppercase tracking-widest mb-0.5">{todayLabel}</p>
           <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/60 bg-clip-text text-transparent">
             Gym
           </h1>
@@ -214,6 +244,16 @@ export default function GymTracker() {
           >
             Routines
           </button>
+          <button
+            onClick={() => { setTab("progress"); triggerHaptic(ImpactStyle.Light); }}
+            className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all ${
+              tab === "progress"
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground"
+            }`}
+          >
+            Progress
+          </button>
         </div>
 
         {/* Tab content */}
@@ -242,25 +282,25 @@ export default function GymTracker() {
                   <div className="card-surface rounded-xl border border-border p-3 text-center">
                     <Calendar className="h-3.5 w-3.5 text-primary mx-auto mb-1.5" />
                     <div className="display-number text-lg">{analytics.sessionsThisWeek}</div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">This Week</div>
+                    <div className="text-[13px] text-muted-foreground mt-0.5">This Week</div>
                   </div>
                   <div className="card-surface rounded-xl border border-border p-3 text-center">
                     <Clock className="h-3.5 w-3.5 text-primary mx-auto mb-1.5" />
                     <div className="display-number text-lg">{analytics.avgDuration}<span className="text-xs text-muted-foreground font-normal">m</span></div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">Avg Duration</div>
+                    <div className="text-[13px] text-muted-foreground mt-0.5">Avg Duration</div>
                   </div>
                   <div className="card-surface rounded-xl border border-border p-3 text-center">
                     <Flame className="h-3.5 w-3.5 text-orange-400 mx-auto mb-1.5" />
                     <div className="display-number text-lg">{formatVol(weeklyVolume)}<span className="text-xs text-muted-foreground font-normal">kg</span></div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">Week Volume</div>
+                    <div className="text-[13px] text-muted-foreground mt-0.5">Week Volume</div>
                   </div>
                 </div>
               )}
 
               {/* Start workout card */}
-              <div className="card-surface rounded-xl border border-border p-3 space-y-3">
+              <div className="card-surface rounded-xl border border-border p-3 space-y-2.5">
                 <h2 className="font-semibold text-sm">Start Workout</h2>
-                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
+                <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1 snap-x snap-mandatory" style={{ WebkitOverflowScrolling: "touch" } as any}>
                   {SESSION_TYPES.map(t => (
                     <button
                       key={t}
@@ -268,10 +308,10 @@ export default function GymTracker() {
                         setSessionType(t as SessionType);
                         triggerHaptic(ImpactStyle.Light);
                       }}
-                      className={`shrink-0 px-4 py-2 rounded-full text-xs font-semibold transition-all duration-200 ${
+                      className={`shrink-0 px-3 py-1.5 rounded-full text-[13px] font-semibold transition-all snap-start ${
                         sessionType === t
-                          ? "bg-gradient-to-r from-primary to-primary/70 text-primary-foreground shadow-lg shadow-primary/25"
-                          : "bg-muted/50 text-muted-foreground hover:bg-muted active:scale-95"
+                          ? "bg-primary text-primary-foreground shadow-sm"
+                          : "bg-muted/40 text-muted-foreground active:bg-muted/60"
                       }`}
                     >
                       {t}
@@ -308,7 +348,7 @@ export default function GymTracker() {
               </div>
             </>
           )
-        ) : (
+        ) : tab === "routines" ? (
           /* Routines tab */
           <RoutineLibrary
             routines={routines}
@@ -319,6 +359,69 @@ export default function GymTracker() {
             onOpenGenerator={() => setGeneratorOpen(true)}
             onOpenManualCreator={() => setManualRoutineOpen(true)}
           />
+        ) : (
+          /* Progress tab — only exercises with actual logged sets */
+          (() => {
+            // Derive unique exercises from completed session history — track best set (heaviest weight + its reps)
+            const exerciseStats = new Map<string, { bestWeight: number; bestReps: number; exercise: typeof exercises[number] | undefined }>();
+            for (const session of history) {
+              for (const group of session.exerciseGroups) {
+                for (const set of group.sets) {
+                  if (set.is_warmup) continue;
+                  const w = set.weight_kg ?? 0;
+                  const r = set.reps ?? 0;
+                  const prev = exerciseStats.get(group.exercise.id);
+                  if (!prev) {
+                    exerciseStats.set(group.exercise.id, { bestWeight: w, bestReps: r, exercise: exercises.find(e => e.id === group.exercise.id) || group.exercise as any });
+                  } else if (w > prev.bestWeight) {
+                    // New best weight — use this set's reps
+                    prev.bestWeight = w;
+                    prev.bestReps = r;
+                  } else if (w === prev.bestWeight && r > prev.bestReps) {
+                    // Same weight, more reps
+                    prev.bestReps = r;
+                  }
+                }
+              }
+            }
+            const loggedExercises = Array.from(exerciseStats.entries())
+              .map(([id, stats]) => ({ id, exercise: stats.exercise!, bestWeight: stats.bestWeight, bestReps: stats.bestReps }))
+              .filter(item => !!item.exercise);
+
+            return (
+              <div className="space-y-1">
+                {loggedExercises.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-[13px] text-muted-foreground">No exercises logged yet</p>
+                    <p className="text-[13px] text-muted-foreground/60 mt-0.5">Complete a workout to see your progress</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-border/20">
+                    {loggedExercises.map(({ id, exercise: ex, bestWeight, bestReps }) => (
+                      <button
+                        key={id}
+                        onClick={() => { setStatsExercise(ex); setStatsOpen(true); triggerHaptic(ImpactStyle.Light); }}
+                        className="w-full flex items-center gap-2.5 px-2 py-2 active:bg-muted/50 transition-colors text-left"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[13px] font-medium truncate">{ex.name}</p>
+                          <p className="text-[13px] text-muted-foreground">{ex.muscle_group?.replace("_", " ")}</p>
+                        </div>
+                        <div className="flex items-center gap-2 text-[13px] tabular-nums text-muted-foreground shrink-0">
+                          {bestWeight > 0 ? (
+                            <span><span className="font-semibold text-foreground">{bestWeight}</span>kg <span className="text-muted-foreground/60">× {bestReps}</span></span>
+                          ) : bestReps > 0 ? (
+                            <span><span className="font-semibold text-foreground">{bestReps}</span> reps</span>
+                          ) : null}
+                        </div>
+                        <ChevronRight className="h-3 w-3 text-muted-foreground/30 shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()
         )}
       </div>
 

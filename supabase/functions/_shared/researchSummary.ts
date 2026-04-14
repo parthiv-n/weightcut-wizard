@@ -16,18 +16,41 @@ GLYCOGEN & WATER MANIPULATION (ISSN 2025 Position Stand — Ricci et al.)
 - Max carb delivery: ≤60g/h (ISSN point 13)
 - Caffeine: 3-6 mg/kg, 60 min pre-competition
 
+SODIUM — RESTRICTION ONLY (ISSN 2025 Section 5.4.3)
+- The ISSN 2025 paper does NOT validate "sodium loading then cutting" protocols
+- Only sodium restriction is evidence-based: <2300mg/d during fight week
+- Do NOT drop significantly below 2300mg (combat athletes lose sodium in sweat)
+- Takes 2-3 days for sodium/body mass balance to shift
+- Yield: 0.5-1% BM over 3-5 days
+
 SAFE ACUTE WEIGHT LOSS (AWL) THRESHOLDS (ISSN 2025)
 - ≥72h before weigh-in: up to 6.7% BM
 - 48h: up to 5.7% BM
 - 24h: up to 4.4% BM
-- Dry sauna: 0.5-0.9% BM per session (4×10min at 90°C)
-- Hot bath + wrap: up to 4.5% BM (aggressive)
+
+SWEATING METHODS (ISSN 2025 Sections 5.4.5-5.4.7)
+- Dry sauna (PREFERRED): 4×10min at 90°C (194°F), 5-min breaks. Loss: 0.5-0.9% BM/session. Males: 0.7% BM, Females: 0.6% BM
+- Hot bath + wrap (Connor & Egan study): 20min at 39-40°C + 40min full body wrap. Loss: ~2% BM/session, up to 4.5% BM double protocol. Epsom salt = NO additional benefit
+- Active sweating: up to 2L/hr. Do active BEFORE passive (less cardiac strain). Depletes peripheral glycogen
+- Mummy wraps: 15-30min post bath/sauna. Lower heat stress, extends sweating
+- SAFETY: Core temp must NOT reach 40°C. Women 5x higher orthostatic risk ages 18-35
 
 DEHYDRATION & RECOVERY (Reale et al. 2017)
 - 2.8% BM dehydration: reversible after 3h aggressive recovery
 - 6% BM dehydration: NOT fully reversed even after 15h
 - Gut transit time: 10-96h (individual variation)
 - Dehydration zones: GREEN ≤2% (minimal impact), ORANGE 2-4% (needs ≥12h recovery), RED >4% (significant decrement)
+- By recovery window: <4h (BJJ/wrestling) max 3%. 4-12h (amateur boxing) max 4%. 12-24h max 5%. 24-36h (pro MMA/boxing) max 6%
+
+MEDICAL RED FLAGS — STOP THE CUT
+- Core temperature approaching 40°C (hyperthermia)
+- Persistent dizziness or syncope (fainting)
+- Resting heart rate >120 bpm
+- Confusion or disorientation
+- Muscle cramps that don't resolve
+- Dark brown/cola-coloured urine (rhabdomyolysis risk)
+- >8% BM total cut attempted
+- Energy availability <30 kcal/kg FFM (RED-S risk)
 
 REHYDRATION PROTOCOL (Reale 2018 — Gatorade SSE #183)
 - Replace 125-150% of fluid lost (Shirreffs & Maughan 1998)
@@ -49,5 +72,8 @@ NUTRITION FOR COMBAT ATHLETES (Nutrients reviews)
 
 RECOMMENDED RECOVERY FOODS (from research protocols)
 White rice, white bread, bananas, honey, rice cakes, sports drinks (Gatorade/Powerade), ORS, sweetened milk, chicken breast, sports gels, sports chews, candy, diluted fruit juice with salt.
+
+FOODS TO AVOID POST WEIGH-IN (ISSN 2025 Section 6.1.2)
+Coffee (relaxes esophageal sphincter), citrus/acidic fruits, carbonated beverages (bloating), chocolate, peppermint, garlic, onion, fatty/spicy/fried foods, high-fibre foods (do NOT reintroduce fibre — slows gastric emptying, causes GI distress).
 
 PHASE LABELS: Rapid Rehydration, Active Rehydration, Glycogen Loading, Sustained Recovery, Pre-Competition, Maintenance.`;

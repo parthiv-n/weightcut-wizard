@@ -66,7 +66,8 @@ export function useSkillTree() {
         const { data: progressData, error: progressError } = await supabase
           .from("user_technique_progress")
           .select("id, user_id, technique_id, level, times_logged, first_logged_at, last_logged_at")
-          .eq("user_id", userId);
+          .eq("user_id", userId)
+          .limit(200);
 
         if (progressError) throw progressError;
         const progress = (progressData ?? []) as UserTechniqueProgress[];
@@ -151,7 +152,7 @@ export function useSkillTree() {
       const existingNames = stateRef.current.techniques.map((t) => t.name);
       const { data: chainResponse, error: chainError } = await supabase.functions.invoke(
         "generate-technique-chains",
-        { body: { techniqueName: name, sport, existingTechniques: existingNames }, signal: controller.signal }
+        { body: { techniqueName: name, sport, existingTechniques: existingNames } }
       );
 
       if (controller.signal.aborted) return;

@@ -68,16 +68,29 @@ export function getSessionsLast7d(sessions28d: SessionRow[]): number {
   return count;
 }
 
-export function getLatestSleep(sessions28d: SessionRow[]): number {
+export function getLatestSleep(sessions28d: SessionRow[], sleepLogs?: { date: string; hours: number }[]): number {
+  const sleepByDate = new Map<string, number>();
+  if (sleepLogs) {
+    for (const log of sleepLogs) {
+      if (log.hours > 0) sleepByDate.set(log.date, log.hours);
+    }
+  }
+
   const grouped = groupByDate(sessions28d);
   const today = new Date();
   for (let i = 0; i < 3; i++) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
     const dateStr = d.toISOString().split('T')[0];
+    // Check sleep_logs first
+    const logged = sleepByDate.get(dateStr);
+    if (logged) return logged;
+    // Fall back to session sleep or default 8h if training happened
     const daySessions = grouped.get(dateStr) || [];
-    const withSleep = daySessions.find(s => s.sleep_hours > 0);
-    if (withSleep) return withSleep.sleep_hours;
+    if (daySessions.length > 0) {
+      const withSleep = daySessions.find(s => s.sleep_hours > 0);
+      return withSleep ? withSleep.sleep_hours : 8;
+    }
   }
   return 8;
 }
@@ -96,10 +109,29 @@ export function getLatestSoreness(sessions28d: SessionRow[]): number {
   return 0;
 }
 
-export function getAvgSleep(sessions28d: SessionRow[]): number {
-  const withSleep = sessions28d.filter(s => s.sleep_hours > 0);
-  if (withSleep.length === 0) return 0;
-  return withSleep.reduce((sum, s) => sum + s.sleep_hours, 0) / withSleep.length;
+export function getAvgSleep(sessions28d: SessionRow[], sleepLogs?: { date: string; hours: number }[]): number {
+  const sleepByDate = new Map<string, number>();
+  if (sleepLogs) {
+    for (const log of sleepLogs) {
+      if (log.hours > 0) sleepByDate.set(log.date, log.hours);
+    }
+  }
+
+  // Collect sleep values: sleep_logs first, then session sleep, then 8h default for training days
+  const grouped = groupByDate(sessions28d);
+  const allDates = new Set([...sleepByDate.keys(), ...grouped.keys()]);
+  const values: number[] = [];
+  for (const date of allDates) {
+    const logged = sleepByDate.get(date);
+    if (logged) { values.push(logged); continue; }
+    const daySessions = grouped.get(date) || [];
+    if (daySessions.length > 0) {
+      const sessionSleep = daySessions.find(s => s.sleep_hours > 0);
+      values.push(sessionSleep ? sessionSleep.sleep_hours : 8);
+    }
+  }
+  if (values.length === 0) return 0;
+  return values.reduce((sum, v) => sum + v, 0) / values.length;
 }
 
 export function getRecentSessions(sessions28d: SessionRow[]): SessionRow[] {
@@ -178,14 +210,22 @@ export function computeForecast(
   };
 }
 
-export function computeSleepScore(sessions28d: SessionRow[]): number {
-  const recentSleep = getRecentSleepValues(sessions28d, 3);
+export function computeSleepScore(sessions28d: SessionRow[], sleepLogs?: { date: string; hours: number }[]): number {
+  const recentSleep = getRecentSleepValues(sessions28d, 3, sleepLogs);
   if (recentSleep.length === 0) return 50;
 
-  const allSleep = sessions28d.filter(s => s.sleep_hours > 0);
-  const baseline = allSleep.length > 0
-    ? allSleep.reduce((sum, s) => sum + s.sleep_hours, 0) / allSleep.length
-    : 7.5;
+  let baseline: number;
+  if (sleepLogs && sleepLogs.length > 0) {
+    const withHours = sleepLogs.filter(log => log.hours > 0);
+    baseline = withHours.length > 0
+      ? withHours.reduce((sum, log) => sum + log.hours, 0) / withHours.length
+      : 7.5;
+  } else {
+    const allSleep = sessions28d.filter(s => s.sleep_hours > 0);
+    baseline = allSleep.length > 0
+      ? allSleep.reduce((sum, s) => sum + s.sleep_hours, 0) / allSleep.length
+      : 7.5;
+  }
 
   const weights = [0.5, 0.3, 0.2];
   let weightedSleep = 0;
@@ -201,8 +241,8 @@ export function computeSleepScore(sessions28d: SessionRow[]): number {
   return Math.round(clamp(0, 100, mapRange(weightedSleep, baseline - 3, baseline + 1, 0, 100)));
 }
 
-export function getAvgSleepLast3(sessions28d: SessionRow[]): number {
-  const recentSleep = getRecentSleepValues(sessions28d, 3);
+export function getAvgSleepLast3(sessions28d: SessionRow[], sleepLogs?: { date: string; hours: number }[]): number {
+  const recentSleep = getRecentSleepValues(sessions28d, 3, sleepLogs);
   if (recentSleep.length === 0) return 0;
   return recentSleep.reduce((s, h) => s + h, 0) / recentSleep.length;
 }

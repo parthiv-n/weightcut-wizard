@@ -1,4 +1,4 @@
-import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Calendar, LogOut, HeartPulse, Trash2, Dumbbell, TrendingDown } from "lucide-react";
+import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Calendar, HeartPulse, Dumbbell, TrendingDown, Moon } from "lucide-react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, memo } from "react";
 import { triggerHaptic, triggerHapticSelection } from "@/lib/haptics";
@@ -11,15 +11,11 @@ import { useTutorial } from "@/tutorial/useTutorial";
 import { FIGHT_ONLY_PATHS, isFighter } from "@/lib/goalType";
 import {
   AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { QuickLogDialog } from "@/components/nav/QuickLogDialog";
 import { MoreMenuSheet } from "@/components/nav/MoreMenuSheet";
 import { SettingsPanel } from "@/components/nav/SettingsPanel";
@@ -35,6 +31,7 @@ const moreMenuItems = [
   { title: "Fight Camps", url: "/fight-camps", icon: Trophy },
   { title: "Training Calendar", url: "/training-calendar", icon: Calendar },
   { title: "Recovery", url: "/recovery", icon: HeartPulse },
+  { title: "Sleep", url: "/sleep", icon: Moon },
   { title: "Weight Cut", url: "/weight-cut", icon: TrendingDown },
   { title: "Gym Tracker", url: "/gym", icon: Dumbbell },
 ];
@@ -94,22 +91,22 @@ export const BottomNav = memo(function BottomNav() {
 
   const handleLogFood = () => {
     setQuickLogOpen(false);
-    setTimeout(() => navigate("/nutrition?openAddMeal=true"), 150);
+    navigate("/nutrition?openAddMeal=true");
   };
 
   const handleLogWeight = () => {
     setQuickLogOpen(false);
-    setTimeout(() => navigate("/weight?focusWeightInput=true"), 150);
+    navigate("/weight?focusWeightInput=true");
   };
 
   const handleLogTraining = () => {
     setQuickLogOpen(false);
-    setTimeout(() => navigate("/training-calendar?openLogSession=true"), 150);
+    navigate("/training-calendar?openLogSession=true");
   };
 
   const handleLogGym = () => {
     setQuickLogOpen(false);
-    setTimeout(() => navigate("/gym"), 150);
+    navigate("/gym");
   };
 
   const handleMoreItemClick = (url: string) => {
@@ -199,25 +196,21 @@ export const BottomNav = memo(function BottomNav() {
 
   return (
     <>
-      <nav className="fixed bottom-0 left-0 right-0 z-[9999] md:hidden bg-background/95 dark:bg-[hsl(0,0%,7%)] border-t border-border" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
-        <div className="flex items-center justify-around h-[52px] px-1">
+      <nav className="fixed bottom-0 left-0 right-0 z-[9999] md:hidden bg-background/98 backdrop-blur-lg border-t border-border/30" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
+        <div className="flex items-center justify-around h-[44px] px-2">
           {/* Dashboard */}
           <NavLink
             to={mainNavItems[0].url}
             data-tutorial="nav-dashboard"
             onClick={() => triggerHaptic(ImpactStyle.Light)}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center gap-0.5 py-1 touch-target transition-colors duration-100 ${isActive
-                ? "text-primary"
-                : "text-muted-foreground"
-              }`
+              `flex-1 flex flex-col items-center justify-center py-0.5 transition-colors duration-100 ${isActive ? "text-primary" : "text-muted-foreground/70"}`
             }
           >
             {({ isActive }) => (
               <>
-                <DashboardIcon className="h-[22px] w-[22px]" strokeWidth={isActive ? 2.5 : 1.8} />
-                <span className={`text-[10px] leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[0].title}</span>
-                {isActive && <span className="w-1 h-1 rounded-full bg-primary mt-0.5" />}
+                <DashboardIcon className="h-5 w-5" strokeWidth={isActive ? 2.5 : 1.8} />
+                <span className={`text-[10px] leading-none mt-0.5 ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[0].title}</span>
               </>
             )}
           </NavLink>
@@ -228,35 +221,27 @@ export const BottomNav = memo(function BottomNav() {
             data-tutorial="nav-nutrition"
             onClick={() => triggerHaptic(ImpactStyle.Light)}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center gap-0.5 py-1 touch-target transition-colors duration-100 ${isActive
-                ? "text-primary"
-                : "text-muted-foreground"
-              }`
+              `flex-1 flex flex-col items-center justify-center py-0.5 transition-colors duration-100 ${isActive ? "text-primary" : "text-muted-foreground/70"}`
             }
           >
             {({ isActive }) => (
               <>
-                <NutritionIcon className="h-[22px] w-[22px]" strokeWidth={isActive ? 2.5 : 1.8} />
-                <span className={`text-[10px] leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[1].title}</span>
-                {isActive && <span className="w-1 h-1 rounded-full bg-primary mt-0.5" />}
+                <NutritionIcon className="h-5 w-5" strokeWidth={isActive ? 2.5 : 1.8} />
+                <span className={`text-[10px] leading-none mt-0.5 ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[1].title}</span>
               </>
             )}
           </NavLink>
 
-          {/* Log button - inline tab style */}
+          {/* Log button */}
           <button
-            onClick={() => {
-              triggerHaptic(ImpactStyle.Medium);
-              setQuickLogOpen(true);
-            }}
+            onClick={() => { triggerHaptic(ImpactStyle.Medium); setQuickLogOpen(true); }}
             data-tutorial="nav-quick-log"
-            className="flex-1 flex flex-col items-center justify-center gap-0.5 py-1 touch-target text-muted-foreground active:scale-95 transition-transform duration-100"
+            className="flex flex-col items-center justify-center px-3 py-0.5 active:scale-90 transition-transform duration-100"
             aria-label="Quick Log"
           >
-            <div className="h-8 w-8 rounded-full bg-primary flex items-center justify-center">
-              <Plus className="h-5 w-5 text-primary-foreground" strokeWidth={2.5} />
+            <div className="h-7 w-7 rounded-full bg-primary flex items-center justify-center">
+              <Plus className="h-4 w-4 text-primary-foreground" strokeWidth={2.5} />
             </div>
-            <span className="text-[10px] font-medium leading-tight">Log</span>
           </button>
 
           {/* Weight */}
@@ -265,30 +250,26 @@ export const BottomNav = memo(function BottomNav() {
             data-tutorial="nav-weight"
             onClick={() => triggerHaptic(ImpactStyle.Light)}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center gap-0.5 py-1 touch-target transition-colors duration-100 ${isActive
-                ? "text-primary"
-                : "text-muted-foreground"
-              }`
+              `flex-1 flex flex-col items-center justify-center py-0.5 transition-colors duration-100 ${isActive ? "text-primary" : "text-muted-foreground/70"}`
             }
           >
             {({ isActive }) => (
               <>
-                <WeightIcon className="h-[22px] w-[22px]" strokeWidth={isActive ? 2.5 : 1.8} />
-                <span className={`text-[10px] leading-tight ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[2].title}</span>
-                {isActive && <span className="w-1 h-1 rounded-full bg-primary mt-0.5" />}
+                <WeightIcon className="h-5 w-5" strokeWidth={isActive ? 2.5 : 1.8} />
+                <span className={`text-[10px] leading-none mt-0.5 ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[2].title}</span>
               </>
             )}
           </NavLink>
 
-          {/* More button */}
+          {/* More */}
           <button
             onClick={() => { setMoreMenuOpen(true); triggerHapticSelection(); }}
             data-tutorial="nav-more"
-            className="flex-1 flex flex-col items-center justify-center gap-0.5 py-1 touch-target transition-colors duration-100 text-muted-foreground"
+            className="flex-1 flex flex-col items-center justify-center py-0.5 transition-colors duration-100 text-muted-foreground/70"
             aria-label="More"
           >
-            <MoreHorizontal className="h-[22px] w-[22px]" strokeWidth={1.8} />
-            <span className="text-[10px] font-medium leading-tight">More</span>
+            <MoreHorizontal className="h-5 w-5" strokeWidth={1.8} />
+            <span className="text-[13px] font-medium leading-none mt-0.5">More</span>
           </button>
         </div>
       </nav>
@@ -333,55 +314,57 @@ export const BottomNav = memo(function BottomNav() {
 
       {/* Logout Confirmation Dialog */}
       <AlertDialog open={logoutDialogOpen} onOpenChange={setLogoutDialogOpen}>
-        <AlertDialogContent className="max-w-sm">
-          <AlertDialogHeader className="sm:text-center">
-            <div className="mx-auto mb-1 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 dark:bg-destructive/15 ring-1 ring-destructive/20">
-              <LogOut className="h-5 w-5 text-destructive" />
+        <AlertDialogContent className="max-w-[240px] rounded-xl p-0 border-0 bg-card/90 backdrop-blur-xl overflow-hidden gap-0 shadow-2xl">
+          <VisuallyHidden><AlertDialogTitle>Sign Out</AlertDialogTitle></VisuallyHidden>
+          <AlertDialogDescription asChild>
+            <div className="pt-4 pb-3 px-4 text-center">
+              <p className="text-[15px] font-semibold text-foreground">Sign Out</p>
+              <p className="text-[13px] text-muted-foreground mt-0.5 leading-snug">
+                Are you sure? You'll need to sign in again.
+              </p>
             </div>
-            <AlertDialogTitle className="text-center">Sign Out</AlertDialogTitle>
-            <AlertDialogDescription className="text-center">
-              Are you sure you want to sign out? You'll need to sign in again to access your data.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex-row gap-3 sm:justify-center pt-1">
-            <AlertDialogCancel className="flex-1 sm:flex-initial sm:min-w-[100px]">Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleLogout}
-              className="flex-1 sm:flex-initial sm:min-w-[100px] rounded-xl bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
+          </AlertDialogDescription>
+          <div className="border-t border-border/40">
+            <button onClick={handleLogout} className="w-full py-2.5 text-[14px] font-semibold text-destructive active:bg-muted/50 transition-colors">
               Sign Out
-            </AlertDialogAction>
-          </AlertDialogFooter>
+            </button>
+            <div className="border-t border-border/40" />
+            <button onClick={() => setLogoutDialogOpen(false)} className="w-full py-2.5 text-[14px] font-normal text-primary active:bg-muted/50 transition-colors">
+              Cancel
+            </button>
+          </div>
         </AlertDialogContent>
       </AlertDialog>
 
       {/* Delete Account Confirmation Dialog */}
       <AlertDialog open={deleteAccountDialogOpen} onOpenChange={(open) => { if (!deleteLoading) setDeleteAccountDialogOpen(open); }}>
-        <AlertDialogContent>
-          <AlertDialogHeader className="text-center items-center">
-            <div className="mb-2 flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10 ring-1 ring-destructive/20">
-              <Trash2 className="h-6 w-6 text-destructive" />
+        <AlertDialogContent className="max-w-[240px] rounded-xl p-0 border-0 bg-card/90 backdrop-blur-xl overflow-hidden gap-0 shadow-2xl">
+          <VisuallyHidden><AlertDialogTitle>Delete Account</AlertDialogTitle></VisuallyHidden>
+          <AlertDialogDescription asChild>
+            <div className="pt-4 pb-3 px-4 text-center">
+              <p className="text-[15px] font-semibold text-foreground">Delete Account</p>
+              <p className="text-[13px] text-muted-foreground mt-0.5 leading-snug">
+                This will permanently delete your account and all data. This cannot be undone.
+              </p>
             </div>
-            <AlertDialogTitle className="text-center text-lg">Delete Account</AlertDialogTitle>
-            <AlertDialogDescription className="text-center text-[13px] leading-relaxed">
-              This will permanently delete your account and all associated data.
-              <span className="block mt-2 text-xs text-muted-foreground/50">
-                This action cannot be undone.
-              </span>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex-row gap-3 pt-2">
-            <AlertDialogCancel className="flex-1 h-12 rounded-2xl text-[15px] font-semibold" disabled={deleteLoading}>
-              Cancel
-            </AlertDialogCancel>
-            <Button
+          </AlertDialogDescription>
+          <div className="border-t border-border/40">
+            <button
               onClick={handleDeleteAccount}
               disabled={deleteLoading}
-              className="flex-1 h-12 rounded-2xl text-[15px] font-semibold bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="w-full py-2.5 text-[14px] font-semibold text-destructive active:bg-muted/50 transition-colors disabled:opacity-40"
             >
-              {deleteLoading ? "Deleting…" : "Delete"}
-            </Button>
-          </AlertDialogFooter>
+              {deleteLoading ? "Deleting..." : "Delete Account"}
+            </button>
+            <div className="border-t border-border/40" />
+            <button
+              onClick={() => setDeleteAccountDialogOpen(false)}
+              disabled={deleteLoading}
+              className="w-full py-2.5 text-[14px] font-normal text-primary active:bg-muted/50 transition-colors disabled:opacity-40"
+            >
+              Cancel
+            </button>
+          </div>
         </AlertDialogContent>
       </AlertDialog>
     </>

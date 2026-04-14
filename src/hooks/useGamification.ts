@@ -251,8 +251,11 @@ export function useGamification(
   profile?: ProfileData | null
 ) {
   const [gamificationData, setGamificationData] =
-    useState<GamificationData | null>(null);
-  const [badgesLoading, setBadgesLoading] = useState(true);
+    useState<GamificationData | null>(() => {
+      if (!userId) return null;
+      return localCache.get<GamificationData>(userId, CACHE_KEY) ?? null;
+    });
+  const [badgesLoading, setBadgesLoading] = useState(!gamificationData);
 
   // Streak — computed from full weight date set when available, fallback to weightLogs prop
   const { streak, streakIncludesToday } = useMemo(() => {
@@ -275,6 +278,10 @@ export function useGamification(
       setGamificationData(cached);
       setBadgesLoading(false);
     }
+
+    // Skip network fetch if cache is fresh (< 10 min old)
+    const cacheAge = localCache.cachedAt(userId, CACHE_KEY);
+    if (cacheAge && Date.now() - cacheAge < 10 * 60 * 1000) return;
 
     let cancelled = false;
 

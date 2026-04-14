@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useUser } from "@/contexts/UserContext";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { localCache } from "@/lib/localCache";
-import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
+import { withSupabaseTimeout, withRetry } from "@/lib/timeoutWrapper";
 import { syncQueue } from "@/lib/syncQueue";
 import { useToast } from "@/hooks/use-toast";
 import { triggerHaptic, celebrateSuccess, confirmDelete } from "@/lib/haptics";
@@ -59,7 +59,14 @@ export function useGymSessions() {
 
     const intervalId = setInterval(async () => {
       if (syncQueue.size(userId) > 0) {
-        try { await supabase.auth.refreshSession(); } catch { /* process() will fail gracefully */ }
+        // Only refresh token if it might be stale (session expiry is typically 1hr)
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const expiresAt = session.expires_at ? session.expires_at * 1000 : 0;
+          if (expiresAt - Date.now() < 5 * 60 * 1000) {
+            try { await supabase.auth.refreshSession(); } catch { /* process() will fail gracefully */ }
+          }
+        }
         await syncQueue.process(userId);
       }
     }, 2 * 60 * 1000);
@@ -101,7 +108,10 @@ export function useGymSessions() {
     if (!userId) return;
 
     const cached = localCache.get<SessionWithSets[]>(userId, HISTORY_CACHE_KEY);
-    if (cached) safeAsync(setHistory)(cached);
+    if (cached) {
+      safeAsync(setHistory)(cached);
+      safeAsync(setHistoryLoading)(false);
+    }
 
     try {
       const { data: sessions, error: sessErr } = await withSupabaseTimeout(
@@ -182,9 +192,7 @@ export function useGymSessions() {
         localCache.set(userId, HISTORY_CACHE_KEY, enriched);
       }
     } catch (err) {
-      if (!localCache.get(userId, HISTORY_CACHE_KEY)) {
-        toast({ description: "Failed to load workout history", variant: "destructive" });
-      }
+      logger.warn("Failed to fetch workout history", err);
     } finally {
       if (isMounted()) safeAsync(setHistoryLoading)(false);
     }
@@ -195,22 +203,29 @@ export function useGymSessions() {
   }, [fetchHistory]);
 
   const startSession = useCallback(async (sessionType: SessionType): Promise<string | null> => {
-    if (!userId) return null;
+    if (!userId) {
+      toast({ description: "Please sign in to start a workout", variant: "destructive" });
+      return null;
+    }
 
     try {
-      const { data, error } = await withSupabaseTimeout(
-        supabase
-          .from("gym_sessions" as any)
-          .insert({
-            user_id: userId,
-            session_type: sessionType,
-            status: "in_progress",
-            date: new Date().toISOString().split("T")[0],
-          } as any)
-          .select()
-          .single(),
-        undefined,
-        "Start gym session"
+      const { data, error } = await withRetry(
+        () => withSupabaseTimeout(
+          supabase
+            .from("gym_sessions" as any)
+            .insert({
+              user_id: userId,
+              session_type: sessionType,
+              status: "in_progress",
+              date: new Date().toISOString().split("T")[0],
+            } as any)
+            .select()
+            .single(),
+          undefined,
+          "Start gym session"
+        ),
+        2,
+        500
       );
 
       if (error) throw error;
@@ -227,6 +242,7 @@ export function useGymSessions() {
       triggerHaptic(ImpactStyle.Medium);
       return session.id;
     } catch (err) {
+      logger.error("startSession failed", err);
       toast({ description: "Failed to start workout", variant: "destructive" });
       return null;
     }

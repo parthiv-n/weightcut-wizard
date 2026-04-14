@@ -99,7 +99,6 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
           } : {},
           date: selectedDate,
         },
-        signal: dietController.signal,
       });
 
       if (dietController.signal.aborted) return;

@@ -2,34 +2,13 @@ import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Dumbbell } from "lucide-react";
 import { triggerHapticSelection } from "@/lib/haptics";
-
-const ACTIVE_SESSION_KEY = "wcw_active_gym_session";
+import { useActiveGymSession } from "@/hooks/useActiveGymSession";
 
 export function FloatingWorkoutIndicator() {
-  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const { startedAt } = useActiveGymSession();
   const [elapsed, setElapsed] = useState("");
   const navigate = useNavigate();
   const location = useLocation();
-
-  // Poll localStorage for active session (lightweight — no context needed)
-  useEffect(() => {
-    const check = () => {
-      try {
-        const raw = localStorage.getItem(ACTIVE_SESSION_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          setStartedAt(parsed.startedAt || null);
-        } else {
-          setStartedAt(null);
-        }
-      } catch {
-        setStartedAt(null);
-      }
-    };
-    check();
-    const id = setInterval(check, 2000);
-    return () => clearInterval(id);
-  }, []);
 
   // Update elapsed time display
   useEffect(() => {

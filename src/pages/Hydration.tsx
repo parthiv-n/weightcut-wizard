@@ -272,8 +272,8 @@ export default function Hydration() {
               )}
             </div>
 
-            <Button type="submit" className="w-full h-10 mt-1 font-bold text-sm rounded-2xl transition-all active:scale-[0.98] bg-gradient-to-r from-primary to-secondary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90" disabled={loading || !currentWeight || !weightLost || parseFloat(weightLost) <= 0}>
-              {loading ? "Generating Protocol..." : <>Generate Protocol{!gemsIsPremium && <span className="inline-flex items-center gap-0.5 ml-1.5 text-amber-500"><Gem className="h-3 w-3" /><span className="text-[10px] font-bold tabular-nums">{gems}</span></span>}</>}
+            <Button type="submit" className="w-full h-11 mt-1 font-semibold text-sm rounded-2xl transition-all active:scale-[0.98]" disabled={loading || !currentWeight || !weightLost || parseFloat(weightLost) <= 0}>
+              {loading ? "Generating Protocol..." : <>Generate Protocol{!gemsIsPremium && <span className="inline-flex items-center gap-0.5 ml-1.5 text-primary-foreground/60"><Gem className="h-3 w-3" /><span className="text-[10px] font-medium tabular-nums">{gems}</span></span>}</>}
             </Button>
           </form>
         </div>
