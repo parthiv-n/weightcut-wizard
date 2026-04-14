@@ -58,6 +58,18 @@ export const AIAdviceCard = memo(function AIAdviceCard({ advice, isGenerating, o
             )}
           </div>
 
+          {!advice && isGenerating && (
+            <div className="text-center py-6">
+              <Sparkles className="h-5 w-5 text-primary mx-auto mb-1.5 animate-pulse" />
+              <p className="text-[13px] font-medium">Generating advice...</p>
+              <div className="flex justify-center gap-1 mt-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }} />
+                <div className="h-1.5 w-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "150ms" }} />
+                <div className="h-1.5 w-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "300ms" }} />
+              </div>
+            </div>
+          )}
+
           {!advice && !isGenerating && (
             <div className="text-center py-4 space-y-3">
               <p className="text-sm text-muted-foreground">

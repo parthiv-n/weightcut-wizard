@@ -152,7 +152,7 @@ export function useSkillTree() {
       const existingNames = stateRef.current.techniques.map((t) => t.name);
       const { data: chainResponse, error: chainError } = await supabase.functions.invoke(
         "generate-technique-chains",
-        { body: { techniqueName: name, sport, existingTechniques: existingNames }, signal: controller.signal }
+        { body: { techniqueName: name, sport, existingTechniques: existingNames } }
       );
 
       if (controller.signal.aborted) return;

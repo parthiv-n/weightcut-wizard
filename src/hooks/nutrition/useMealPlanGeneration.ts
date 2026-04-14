@@ -93,7 +93,6 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
 
       const response = await supabase.functions.invoke("meal-planner", {
         body: { prompt: aiPrompt, userData, action: "generate" },
-        signal: controller.signal,
       });
 
       if (controller.signal.aborted) return;

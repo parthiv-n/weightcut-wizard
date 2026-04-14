@@ -141,6 +141,8 @@ All colors MUST be HSL.
   }
 
   html {
+    /* Global base font size — bumped from 16px to 18px (+2pt) */
+    font-size: 18px;
     /* Fix iOS Safari 100vh bug - use CSS custom property for dynamic viewport height */
     height: 100%;
     height: -webkit-fill-available;

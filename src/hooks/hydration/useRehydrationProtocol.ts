@@ -139,7 +139,6 @@ export function useRehydrationProtocol() {
           goalWeightKg: contextProfile?.goal_weight_kg,
           fightWeekTargetKg: contextProfile?.fight_week_target_kg,
         },
-        signal: controller.signal,
       });
 
       if (controller.signal.aborted) return;

@@ -471,7 +471,7 @@ export default function Nutrition() {
   return (
     <>
       {aiTask && (
-        <div className="px-3 sm:px-5 md:px-6 pt-3 max-w-7xl mx-auto">
+        <div className="sticky top-0 z-50 px-3 sm:px-5 md:px-6 pt-2 pb-2 max-w-7xl mx-auto bg-background/95">
           <AICompactOverlay
             isOpen={true}
             isGenerating={true}
@@ -778,9 +778,23 @@ export default function Nutrition() {
           </div>
           {mealPlanIdeas.length === 0 ? (
             <div className="card-surface border-dashed py-7 text-center">
-              <Sparkles className="h-5 w-5 text-primary/50 mx-auto mb-1.5 mix-blend-screen" />
-              <p className="text-[13px] font-medium text-foreground">No meal ideas yet</p>
-              <p className="text-[13px] text-foreground/60 mt-0.5">Generate AI meal suggestions above</p>
+              {mealPlan.generatingPlan ? (
+                <>
+                  <Sparkles className="h-5 w-5 text-primary mx-auto mb-1.5 animate-pulse" />
+                  <p className="text-[13px] font-medium text-foreground">Generating meal ideas...</p>
+                  <div className="flex justify-center gap-1 mt-2">
+                    <div className="h-1.5 w-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <div className="h-1.5 w-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <div className="h-1.5 w-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "300ms" }} />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-5 w-5 text-primary/50 mx-auto mb-1.5 mix-blend-screen" />
+                  <p className="text-[13px] font-medium text-foreground">No meal ideas yet</p>
+                  <p className="text-[13px] text-foreground/60 mt-0.5">Generate AI meal suggestions above</p>
+                </>
+              )}
             </div>
           ) : (
             <ErrorBoundary>

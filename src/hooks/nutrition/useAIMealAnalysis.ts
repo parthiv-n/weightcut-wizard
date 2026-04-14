@@ -164,7 +164,6 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
             imageBase64: imageData,
             mealDescription: aiMealDescription.trim() || undefined,
           }),
-          signal: controller.signal,
         }
       );
 
@@ -276,7 +275,6 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
         const { data, error } = await supabase.functions.invoke("analyze-meal", {
           body: { mealDescription: aiMealDescription },
-          signal: controller.signal,
         });
 
         if (controller.signal.aborted) return;
@@ -402,7 +400,6 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
       const { data, error } = await supabase.functions.invoke("analyze-meal", {
         body: { mealDescription: aiIngredientDescription },
-        signal: ingController.signal,
       });
 
       if (ingController.signal.aborted) return;

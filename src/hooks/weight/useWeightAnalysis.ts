@@ -126,9 +126,12 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
 
       const { data, error } = await supabase.functions.invoke("weight-tracker-analysis", {
         body: requestPayload,
-        signal: controller.signal,
       });
 
+      // Always persist result even if user navigated away — they'll see it when they return
+      if (data?.analysis && userId) {
+        AIPersistence.save(userId, "weight_analysis", { analysis: data.analysis, currentWeight, fightWeekTarget }, 24);
+      }
       if (controller.signal.aborted) return;
 
       const debugInfo: DebugData = {
