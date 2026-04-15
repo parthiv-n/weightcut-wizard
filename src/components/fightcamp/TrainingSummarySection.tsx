@@ -388,7 +388,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
                     isOpen={true}
                     isGenerating={true}
                     steps={aiTrainingTask.steps}
-                    title={aiTrainingTask.label}
+                    startedAt={aiTrainingTask.startedAt}                    title={aiTrainingTask.label}
                     onCancel={() => { abortRef.current?.abort(); dismissTask(aiTrainingTask.id); setIsLoading(false); }}
                 />
             )}

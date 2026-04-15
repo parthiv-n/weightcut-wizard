@@ -45,9 +45,9 @@ serve(async (req) => {
     const { currentWeight, targetWeight, daysUntilWeighIn, sex, age, projection } =
       await req.json();
 
-    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
-    if (!GROK_API_KEY) {
-      throw new Error("GROK_API_KEY is not configured");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+    if (!GROQ_API_KEY) {
+      throw new Error("GROQ_API_KEY is not configured");
     }
 
     const systemPrompt = `You are the FightCamp Wizard, a science-based combat sports weight cutting expert. You INTERPRET pre-computed projection data — do NOT recalculate. All advice must be evidence-based (ISSN 2025 Position Stand, Reale 2017/2018).
@@ -118,20 +118,21 @@ Provide: 1) 2-3 sentence summary, 2) 5-8 day-by-day tips, 3) safety warning if o
 
     edgeLogger.info("Calling Grok API for fight week advice");
 
-    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${GROK_API_KEY}`,
+        Authorization: `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "grok-4-1-fast-reasoning",
+        model: "openai/gpt-oss-120b",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
         temperature: 0.1,
-        max_completion_tokens: 3000,
+        max_tokens: 3000,
+        response_format: { type: "json_object" },
       }),
     });
 
@@ -149,7 +150,7 @@ Provide: 1) 2-3 sentence summary, 2) 5-8 day-by-day tips, 3) safety warning if o
         );
       }
       const errorData = await response.json();
-      edgeLogger.error("Grok API error", undefined, { functionName: "fight-week-analysis", status: response.status, errorData });
+      edgeLogger.error("Groq API error", undefined, { functionName: "fight-week-analysis", status: response.status, errorData });
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
@@ -161,7 +162,7 @@ Provide: 1) 2-3 sentence summary, 2) 5-8 day-by-day tips, 3) safety warning if o
 
     if (!content) {
       if (filtered) throw new Error("Content was filtered for safety.");
-      throw new Error("No response from Grok API");
+      throw new Error("No response from Groq API");
     }
 
     let advice;

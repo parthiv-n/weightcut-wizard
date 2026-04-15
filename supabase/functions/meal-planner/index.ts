@@ -107,10 +107,10 @@ serve(async (req) => {
     } : null;
 
     const { prompt, action, userData } = await req.json();
-    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
 
-    if (!GROK_API_KEY) {
-      edgeLogger.error("GROK_API_KEY environment variable is not configured", undefined, { functionName: "meal-planner" });
+    if (!GROQ_API_KEY) {
+      edgeLogger.error("GROQ_API_KEY environment variable is not configured", undefined, { functionName: "meal-planner" });
       return new Response(
         JSON.stringify({ error: "AI service not configured" }),
         { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
@@ -220,26 +220,27 @@ Respond ONLY with this exact JSON structure:
 
     let response;
     try {
-      response = await fetch("https://api.x.ai/v1/chat/completions", {
+      response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${GROK_API_KEY}`,
+          "Authorization": `Bearer ${GROQ_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "grok-4-1-fast-reasoning",
+          model: "openai/gpt-oss-120b",
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: userPrompt }
           ],
           temperature: 0.3,
-          max_completion_tokens: 4096
+          max_tokens: 4096,
+        response_format: { type: "json_object" },
         }),
       });
 
-      edgeLogger.info("Grok API response status", { status: response.status });
+      edgeLogger.info("Groq API response status", { status: response.status });
     } catch (fetchError) {
-      edgeLogger.error("Grok API fetch error", fetchError, { functionName: "meal-planner" });
+      edgeLogger.error("Groq API fetch error", fetchError, { functionName: "meal-planner" });
       return new Response(
         JSON.stringify({ error: "Failed to connect to AI service" }),
         { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
@@ -248,7 +249,7 @@ Respond ONLY with this exact JSON structure:
 
     if (!response.ok) {
       const errorData = await response.json();
-      edgeLogger.error("Grok API error", undefined, { functionName: "meal-planner", status: response.status, errorData });
+      edgeLogger.error("Groq API error", undefined, { functionName: "meal-planner", status: response.status, errorData });
 
       if (response.status === 429) {
         return new Response(
@@ -272,7 +273,7 @@ Respond ONLY with this exact JSON structure:
       }
 
       return new Response(
-        JSON.stringify({ error: `Grok API error: ${errorData.error?.message || 'Unknown error'}` }),
+        JSON.stringify({ error: `Groq API error: ${errorData.error?.message || 'Unknown error'}` }),
         { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
@@ -283,7 +284,7 @@ Respond ONLY with this exact JSON structure:
     // Extract content from Grok response and strip <think> tags
     const { content, filtered } = extractContent(data);
 
-    edgeLogger.info("Grok response debug", { contentType: typeof content, contentLength: content?.length });
+    edgeLogger.info("Groq response debug", { contentType: typeof content, contentLength: content?.length });
 
     if (!content) {
       edgeLogger.error("No content found in Grok response", undefined, {
@@ -293,7 +294,7 @@ Respond ONLY with this exact JSON structure:
       });
 
       if (filtered) {
-        edgeLogger.warn("Grok finish reason", { functionName: "meal-planner", finishReason: 'content_filter' });
+        edgeLogger.warn("Groq finish reason", { functionName: "meal-planner", finishReason: 'content_filter' });
         return new Response(
           JSON.stringify({ error: "Content was filtered for safety. Please try a different prompt." }),
           { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
@@ -302,7 +303,7 @@ Respond ONLY with this exact JSON structure:
 
       const finishReason = data.choices?.[0]?.finish_reason;
       if (finishReason === 'length') {
-        edgeLogger.warn("Grok finish reason", { functionName: "meal-planner", finishReason });
+        edgeLogger.warn("Groq finish reason", { functionName: "meal-planner", finishReason });
         return new Response(
           JSON.stringify({ error: "Response was too long. Please try a shorter prompt." }),
           { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
@@ -434,7 +435,7 @@ Respond ONLY with this exact JSON structure:
     return new Response(
       JSON.stringify({
         error: error instanceof Error ? error.message : "Unknown error occurred",
-        details: "Grok API integration error"
+        details: "Groq API integration error"
       }),
       { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
     );

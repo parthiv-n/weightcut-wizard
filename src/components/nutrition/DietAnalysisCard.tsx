@@ -121,7 +121,7 @@ export function DietAnalysisCard({ analysis, onDismiss, onRefresh, refreshing }:
       <p className="text-sm text-foreground/80 leading-relaxed">{analysis.summary}</p>
 
       {/* Per-Meal Nutrient Breakdown */}
-      {analysis.mealBreakdown && analysis.mealBreakdown.length > 0 && (
+      {analysis.mealBreakdown?.length > 0 && (
         <div>
           <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2.5">
             Per Meal
@@ -153,7 +153,7 @@ export function DietAnalysisCard({ analysis, onDismiss, onRefresh, refreshing }:
       )}
 
       {/* Micronutrient Rings */}
-      {analysis.micronutrients.length > 0 && (
+      {analysis.micronutrients?.length > 0 && (
         <div>
           <p className="text-xs uppercase tracking-widest text-muted-foreground text-center mb-3">
             Micronutrients
@@ -172,7 +172,7 @@ export function DietAnalysisCard({ analysis, onDismiss, onRefresh, refreshing }:
       )}
 
       {/* Gaps */}
-      {analysis.gaps.length > 0 && (
+      {analysis.gaps?.length > 0 && (
         <div>
           <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
             What's Lacking
@@ -202,7 +202,7 @@ export function DietAnalysisCard({ analysis, onDismiss, onRefresh, refreshing }:
       )}
 
       {/* Suggestions */}
-      {analysis.suggestions.length > 0 && (
+      {analysis.suggestions?.length > 0 && (
         <div>
           <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
             Suggested Foods

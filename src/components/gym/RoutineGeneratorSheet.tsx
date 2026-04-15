@@ -548,7 +548,7 @@ export function RoutineGeneratorSheet({ open, onOpenChange, onGenerate, onSave, 
                     isOpen={true}
                     isGenerating={true}
                     steps={gymAiTask.steps}
-                    title={gymAiTask.label}
+            startedAt={gymAiTask.startedAt}                    title={gymAiTask.label}
                     onCancel={() => aiDismissTask(gymAiTask.id)}
                   />
                 ) : (

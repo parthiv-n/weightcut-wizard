@@ -134,9 +134,9 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
     }
 
-    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
-    if (!GROK_API_KEY) {
-      throw new Error("GROK_API_KEY is not configured");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+    if (!GROQ_API_KEY) {
+      throw new Error("GROQ_API_KEY is not configured");
     }
 
     const sessionsText = Array.isArray(recentSessions)
@@ -310,23 +310,24 @@ Recent sessions:
 ${sessionsText}${checkInText}${athleteBaselineText}`;
 
     const grokBody = JSON.stringify({
-      model: "grok-4-1-fast-reasoning",
+      model: "openai/gpt-oss-120b",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
       temperature: 0.3,
-      max_completion_tokens: 4096,
+      max_tokens: 4096,
+        response_format: { type: "json_object" },
     });
 
     const grokHeaders = {
-      "Authorization": `Bearer ${GROK_API_KEY}`,
+      "Authorization": `Bearer ${GROQ_API_KEY}`,
       "Content-Type": "application/json",
     };
 
     let response: Response | null = null;
     for (let attempt = 0; attempt < 3; attempt++) {
-      response = await fetch("https://api.x.ai/v1/chat/completions", {
+      response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: grokHeaders,
         body: grokBody,
@@ -349,7 +350,7 @@ ${sessionsText}${checkInText}${athleteBaselineText}`;
         try {
           const body = await response!.json();
           detail = body?.error?.message || body?.error || detail;
-          edgeLogger.error("Grok 429 detail", undefined, { functionName: "fight-camp-coach", detail });
+          edgeLogger.error("Groq 429 detail", undefined, { functionName: "fight-camp-coach", detail });
         } catch { /* body already consumed or not JSON */ }
         return new Response(
           JSON.stringify({ error: detail, code: "AI_BUSY" }),
@@ -357,7 +358,7 @@ ${sessionsText}${checkInText}${athleteBaselineText}`;
         );
       }
       const errorText = await response!.text();
-      edgeLogger.error("Grok API error", undefined, { functionName: "fight-camp-coach", status: response!.status, errorText });
+      edgeLogger.error("Groq API error", undefined, { functionName: "fight-camp-coach", status: response!.status, errorText });
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
@@ -365,12 +366,12 @@ ${sessionsText}${checkInText}${athleteBaselineText}`;
     }
 
     const data = await response.json();
-    edgeLogger.info("Grok fight-camp-coach response received");
+    edgeLogger.info("Groq fight-camp-coach response received");
 
     const { content, filtered } = extractContent(data);
     if (!content) {
       if (filtered) throw new Error("Content was filtered. Please try again.");
-      throw new Error("No response from Grok API");
+      throw new Error("No response from Groq API");
     }
 
     const coach = parseJSON(content);

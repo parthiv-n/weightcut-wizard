@@ -495,7 +495,7 @@ export default function Nutrition() {
             isOpen={true}
             isGenerating={true}
             steps={aiTask.steps}
-            title={aiTask.label}
+            startedAt={aiTask.startedAt}            title={aiTask.label}
             onCancel={() => { cancelAI(); dismissTask(aiTask.id); }}
           />
         </div>
@@ -926,7 +926,7 @@ export default function Nutrition() {
                 isOpen={true}
                 isGenerating={true}
                 steps={aiTask.steps}
-                title={aiTask.label}
+            startedAt={aiTask.startedAt}                title={aiTask.label}
                 onCancel={() => { cancelAI(); dismissTask(aiTask.id); }}
               />
             )}
@@ -996,10 +996,10 @@ export default function Nutrition() {
                 {aiMeal.aiAnalysisComplete && aiMeal.aiLineItems.length > 0 && (
                   <div className="space-y-1 animate-fade-in pt-0.5">
                     <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Items</p>
-                    <div className="rounded-md divide-y divide-border/20 overflow-hidden bg-muted/20">
+                    <div className="rounded-md divide-y divide-border/20 overflow-hidden bg-muted/20 max-h-40 overflow-y-auto">
                       {aiMeal.aiLineItems.map((item, idx) => (
                         <div key={idx} className="flex items-center gap-1.5 px-2 py-1">
-                          <div className="flex-1 min-w-0"><p className="text-[13px] font-medium truncate">{item.name}</p><p className="text-[13px] text-muted-foreground">{item.quantity}</p></div>
+                          <div className="flex-1 min-w-0"><p className="text-[13px] font-medium truncate">{item.name}</p><p className="text-[13px] text-muted-foreground truncate">{item.quantity}</p></div>
                           <div className="flex items-center gap-1 text-[13px] text-muted-foreground tabular-nums flex-shrink-0">
                             <span className="font-semibold text-foreground">{item.calories}</span><span>{Math.round(item.protein_g)}P</span><span>{Math.round(item.carbs_g)}C</span><span>{Math.round(item.fats_g)}F</span>
                           </div>

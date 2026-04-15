@@ -89,9 +89,9 @@ serve(async (req) => {
       );
     }
 
-    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
-    if (!GROK_API_KEY) {
-      throw new Error("GROK_API_KEY is not configured");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+    if (!GROQ_API_KEY) {
+      throw new Error("GROQ_API_KEY is not configured");
     }
 
     const goalsStr = goals.join(", ");
@@ -147,26 +147,27 @@ Return ONLY valid JSON. IMPORTANT: Each exercise MUST include a "day" field that
 
     const userPrompt = `Generate a gym workout routine for a ${sport.replace("_", " ")} athlete who trains their sport ${sportTrainingDays} days per week. Goals: ${goalsStr}. Focus areas: ${focusStr}. Split preference: ${splitStr}. Session length: ${sessionDurationMinutes} minutes. Equipment: ${availableEquipment.join(", ")}.`;
 
-    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${GROK_API_KEY}`,
+        "Authorization": `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "grok-4-1-fast-reasoning",
+        model: "llama-3.1-8b-instant",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
         ],
         temperature: 0.4,
-        max_completion_tokens: 1500
+        max_tokens: 1500,
+        response_format: { type: "json_object" },
       })
     });
 
     if (!response.ok) {
       const errorData = await response.json();
-      edgeLogger.error("Grok API error", undefined, { functionName: "workout-generator", status: response.status, errorData });
+      edgeLogger.error("Groq API error", undefined, { functionName: "workout-generator", status: response.status, errorData });
 
       if (response.status === 429) {
         return new Response(
@@ -189,16 +190,16 @@ Return ONLY valid JSON. IMPORTANT: Each exercise MUST include a "day" field that
         );
       }
 
-      throw new Error(`Grok API error: ${errorData.error?.message || 'Unknown error'}`);
+      throw new Error(`Groq API error: ${errorData.error?.message || 'Unknown error'}`);
     }
 
     const data = await response.json();
-    edgeLogger.info("Grok response received");
+    edgeLogger.info("Groq response received");
 
     const { content, filtered } = extractContent(data);
     if (!content) {
       if (filtered) throw new Error("Content was filtered for safety. Please try different parameters.");
-      throw new Error("No response from Grok API");
+      throw new Error("No response from Groq API");
     }
 
     const routineData = parseJSON(content);

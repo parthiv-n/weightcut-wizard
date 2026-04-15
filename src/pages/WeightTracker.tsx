@@ -274,7 +274,7 @@ export default function WeightTracker() {
             isOpen={true}
             isGenerating={true}
             steps={aiTask.steps}
-            title={aiTask.label}
+            startedAt={aiTask.startedAt}            title={aiTask.label}
             onCancel={() => aiDismiss(aiTask.id)}
           />
         </div>

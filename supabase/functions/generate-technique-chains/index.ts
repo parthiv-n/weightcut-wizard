@@ -61,9 +61,9 @@ serve(async (req) => {
       );
     }
 
-    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
-    if (!GROK_API_KEY) {
-      throw new Error("GROK_API_KEY is not configured");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+    if (!GROQ_API_KEY) {
+      throw new Error("GROQ_API_KEY is not configured");
     }
 
     edgeLogger.info("Generating technique chains", { techniqueName, sport });
@@ -97,26 +97,27 @@ Return ONLY valid JSON in this exact format:
 
     const userPrompt = `Generate technique chains for "${techniqueName}" in ${sport}.`;
 
-    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${GROK_API_KEY}`,
+        Authorization: `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "grok-4-1-fast-reasoning",
+        model: "openai/gpt-oss-120b",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
         temperature: 0.2,
-        max_completion_tokens: 800,
+        max_tokens: 800,
+        response_format: { type: "json_object" },
       }),
     });
 
     if (!response.ok) {
       const errorData = await response.json();
-      edgeLogger.error("Grok API error", undefined, {
+      edgeLogger.error("Groq API error", undefined, {
         functionName: "generate-technique-chains",
         status: response.status,
         errorData,
@@ -136,16 +137,16 @@ Return ONLY valid JSON in this exact format:
         );
       }
 
-      throw new Error(`Grok API error: ${errorData.error?.message || "Unknown error"}`);
+      throw new Error(`Groq API error: ${errorData.error?.message || "Unknown error"}`);
     }
 
     const data = await response.json();
-    edgeLogger.info("Grok response received for technique chains");
+    edgeLogger.info("Groq response received for technique chains");
 
     const { content, filtered } = extractContent(data);
     if (!content) {
       if (filtered) throw new Error("Content was filtered for safety.");
-      throw new Error("No response from Grok API");
+      throw new Error("No response from Groq API");
     }
 
     const chainData = parseJSON(content);

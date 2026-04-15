@@ -203,7 +203,7 @@ export default function GymTracker() {
           isOpen={true}
           isGenerating={true}
           steps={gymAiTask.steps}
-          title={gymAiTask.label}
+            startedAt={gymAiTask.startedAt}          title={gymAiTask.label}
           onCancel={() => aiDismiss(gymAiTask.id)}
         />
       )}

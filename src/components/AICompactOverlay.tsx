@@ -17,6 +17,7 @@ interface AICompactOverlayProps {
   steps: AIStep[];
   title?: string;
   subtitle?: string;
+  startedAt?: number;
   onCompletion?: () => void;
   onCancel?: () => void;
   onMinimize?: () => void;
@@ -27,31 +28,52 @@ export const AICompactOverlay = memo(function AICompactOverlay({
   isGenerating,
   steps,
   title = "Processing",
+  startedAt,
   onCompletion,
   onCancel,
   onMinimize,
 }: AICompactOverlayProps) {
-  const [currentStep, setCurrentStep] = useState(0);
-  const [showCancel, setShowCancel] = useState(false);
+  const STEP_INTERVAL = 1200;
+  const [currentStep, setCurrentStep] = useState(() => {
+    // Calculate initial step from elapsed time so returning to page continues smoothly
+    if (startedAt && isGenerating && steps.length > 0) {
+      const elapsed = Date.now() - startedAt;
+      return Math.min(Math.floor(elapsed / STEP_INTERVAL), steps.length - 1);
+    }
+    return 0;
+  });
+  const [showCancel, setShowCancel] = useState(() => {
+    if (startedAt && isGenerating) return Date.now() - startedAt > 3000;
+    return false;
+  });
   const prevGenerating = useRef(isGenerating);
 
   // Advance steps every 1.2s while generating
   useEffect(() => {
     if (!isGenerating || steps.length === 0) return;
-    setCurrentStep(0);
-    setShowCancel(false);
+
+    // Resume from elapsed time instead of resetting to 0
+    if (startedAt) {
+      const elapsed = Date.now() - startedAt;
+      setCurrentStep(Math.min(Math.floor(elapsed / STEP_INTERVAL), steps.length - 1));
+      if (elapsed > 3000) setShowCancel(true);
+    } else {
+      setCurrentStep(0);
+      setShowCancel(false);
+    }
 
     const stepTimer = setInterval(() => {
       setCurrentStep((s) => (s < steps.length - 1 ? s + 1 : s));
-    }, 1200);
+    }, STEP_INTERVAL);
 
-    const cancelTimer = setTimeout(() => setShowCancel(true), 3000);
+    const cancelDelay = startedAt ? Math.max(0, 3000 - (Date.now() - startedAt)) : 3000;
+    const cancelTimer = setTimeout(() => setShowCancel(true), cancelDelay);
 
     return () => {
       clearInterval(stepTimer);
       clearTimeout(cancelTimer);
     };
-  }, [isGenerating, steps.length]);
+  }, [isGenerating, steps.length, startedAt]);
 
   // Detect generating true -> false transition
   useEffect(() => {

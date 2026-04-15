@@ -53,10 +53,10 @@ serve(async (req) => {
       weightHistory: clientWeightHistory
     } = await req.json();
 
-    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
 
-    if (!GROK_API_KEY) {
-      throw new Error("GROK_API_KEY is not configured");
+    if (!GROQ_API_KEY) {
+      throw new Error("GROQ_API_KEY is not configured");
     }
 
     // Use client-provided weight history if available (saves a DB round-trip)
@@ -217,20 +217,21 @@ OUTPUT:
 
     // Call Grok API
     edgeLogger.info("Calling Grok API for weight tracker analysis");
-    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${GROK_API_KEY}`,
+        "Authorization": `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "grok-4-1-fast-reasoning",
+        model: "llama-3.1-8b-instant",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
         temperature: 0.1,
-        max_completion_tokens: 1000
+        max_tokens: 1000,
+        response_format: { type: "json_object" },
       }),
     });
 
@@ -254,7 +255,7 @@ OUTPUT:
         );
       }
       const errorText = await response.text();
-      edgeLogger.error("Grok API error", undefined, { functionName: "weight-tracker-analysis", status: response.status, errorText });
+      edgeLogger.error("Groq API error", undefined, { functionName: "weight-tracker-analysis", status: response.status, errorText });
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
@@ -262,12 +263,12 @@ OUTPUT:
     }
 
     const data = await response.json();
-    edgeLogger.info("Grok weight tracker response received", { responseKeys: Object.keys(data) });
+    edgeLogger.info("Groq weight tracker response received", { responseKeys: Object.keys(data) });
 
     const { content, filtered } = extractContent(data);
     if (!content) {
       if (filtered) throw new Error("Content was filtered for safety. Please try a different request.");
-      throw new Error("No response from Grok API");
+      throw new Error("No response from Groq API");
     }
 
     const analysis = parseJSON(content);

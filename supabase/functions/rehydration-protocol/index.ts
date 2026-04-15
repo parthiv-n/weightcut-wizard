@@ -98,9 +98,9 @@ serve(async (req) => {
     // Awake hours: protocol steps are only generated for awake time
     const awakeHours = Math.max(4, rawAwakeHours ?? (availableHours > 10 ? Math.round(availableHours - 8) : availableHours));
 
-    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
-    if (!GROK_API_KEY) {
-      throw new Error("GROK_API_KEY is not configured");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+    if (!GROQ_API_KEY) {
+      throw new Error("GROQ_API_KEY is not configured");
     }
 
     const targets = computeTargets(weightLostKg, currentWeightKg, availableHours, glycogenDepletion);
@@ -120,7 +120,8 @@ serve(async (req) => {
     ].filter(Boolean).join(" | ");
 
     const sleepNote = awakeHours < availableHours ? ` (${availableHours}h total, ${availableHours - awakeHours}h sleep)` : '';
-    const systemPrompt = `Combat sports rehydration expert. Output valid JSON only, no markdown.
+    const systemPrompt = `You are a JSON API. Respond with ONLY the JSON object. No preamble, no explanation, no markdown — just raw JSON.
+Combat sports rehydration expert.
 
 ATHLETE: ${profileLines}
 TARGETS: Fluid ${targets.totalFluidLitres}L (${awakeHourlyFluidML}ml/h) | ${awakeHours}h awake${sleepNote} | Na ${targets.totalSodiumMg}mg | K ${targets.totalPotassiumMg}mg | Mg ${targets.totalMagnesiumMg}mg | Carbs ${targets.totalCarbsG}g (max ${targets.maxCarbsPerHour}g/h) | Depletion: ${glycogenDepletion}
@@ -138,20 +139,21 @@ Output JSON:
 
     edgeLogger.info("Calling Grok API for rehydration protocol");
 
-    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${GROK_API_KEY}`,
+        Authorization: `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "grok-4-1-fast-reasoning",
+        model: "openai/gpt-oss-120b",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
         temperature: 0.1,
-        max_completion_tokens: 2500,
+        max_tokens: 2500,
+        response_format: { type: "json_object" },
       }),
     });
 
@@ -169,7 +171,7 @@ Output JSON:
         );
       }
       const errorData = await response.json();
-      edgeLogger.error("Grok API error", undefined, { functionName: "rehydration-protocol", status: response.status, errorData });
+      edgeLogger.error("Groq API error", undefined, { functionName: "rehydration-protocol", status: response.status, errorData });
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
@@ -177,12 +179,12 @@ Output JSON:
     }
 
     const data = await response.json();
-    edgeLogger.info("Grok rehydration response received");
+    edgeLogger.info("Groq rehydration response received");
 
     const { content, filtered } = extractContent(data);
     if (!content) {
       if (filtered) throw new Error("Content was filtered for safety. Please try a different request.");
-      throw new Error("No response from Grok API");
+      throw new Error("No response from Groq API");
     }
 
     const protocol = parseJSON(content);

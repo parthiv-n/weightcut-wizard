@@ -673,7 +673,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
             isOpen={true}
             isGenerating={true}
             steps={aiCoachTask.steps}
-            title={aiCoachTask.label}
+            startedAt={aiCoachTask.startedAt}            title={aiCoachTask.label}
             onCancel={() => { coachAbortRef.current?.abort(); dismissTask(aiCoachTask.id); setIsCoachLoading(false); }}
           />
         )}

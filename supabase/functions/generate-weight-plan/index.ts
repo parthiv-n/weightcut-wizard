@@ -50,8 +50,8 @@ serve(async (req) => {
     const fatTarget = Math.round((targetCalories * 0.25) / 9);
     const carbTarget = Math.round((targetCalories - (proteinTarget * 4) - (fatTarget * 9)) / 4);
 
-    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
-    if (!GROK_API_KEY) throw new Error("GROK_API_KEY not configured");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+    if (!GROQ_API_KEY) throw new Error("GROQ_API_KEY not configured");
 
     const budgetNote = foodBudget === "budget" ? "Prioritise affordable foods: eggs, oats, rice, beans, frozen veg, canned fish, chicken thighs." : "";
     const aggressivenessNote = planAggressiveness === "aggressive" ? "User prefers an aggressive approach — push deficit to 750-1000 kcal/day if safe." :
@@ -97,20 +97,21 @@ Return ONLY valid JSON:
   "weeklyChecklist": ["","",""]
 }`;
 
-    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${GROK_API_KEY}`,
+        Authorization: `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "grok-4-1-fast-reasoning",
+        model: "openai/gpt-oss-120b",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: `Generate a ${weeks}-week weight loss plan for ${currentWeight}kg → ${goalWeight}kg.` },
         ],
         temperature: 0.2,
-        max_completion_tokens: 3000,
+        max_tokens: 3000,
+        response_format: { type: "json_object" },
       }),
     });
 
@@ -120,8 +121,8 @@ Return ONLY valid JSON:
           { status: 503, headers: { ...corsHeaders(req), "Content-Type": "application/json" } });
       }
       const err = await response.text();
-      edgeLogger.error("Grok API error", undefined, { status: response.status, err });
-      throw new Error(`Grok API error: ${response.status}`);
+      edgeLogger.error("Groq API error", undefined, { status: response.status, err });
+      throw new Error(`Groq API error: ${response.status}`);
     }
 
     const data = await response.json();

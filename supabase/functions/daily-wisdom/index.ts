@@ -49,9 +49,9 @@ serve(async (req) => {
       weightHistory,
     } = await req.json();
 
-    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
-    if (!GROK_API_KEY) {
-      throw new Error("GROK_API_KEY is not configured");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+    if (!GROQ_API_KEY) {
+      throw new Error("GROQ_API_KEY is not configured");
     }
 
     const today = new Date();
@@ -117,20 +117,21 @@ OUTPUT:
 - Today: ${todayCalories} / ${calorieGoal} kcal (${caloriePercentage.toFixed(0)}%)
 - Last 7 logs: ${historyText}`;
 
-    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${GROK_API_KEY}`,
+        "Authorization": `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "grok-4-1-fast-reasoning",
+        model: "llama-3.1-8b-instant",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
         temperature: 0.3,
-        max_completion_tokens: 500,
+        max_tokens: 500,
+        response_format: { type: "json_object" },
       }),
     });
 
@@ -154,7 +155,7 @@ OUTPUT:
         );
       }
       const errorText = await response.text();
-      edgeLogger.error("Grok API error", undefined, { functionName: "daily-wisdom", status: response.status, errorText });
+      edgeLogger.error("Groq API error", undefined, { functionName: "daily-wisdom", status: response.status, errorText });
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
@@ -162,12 +163,12 @@ OUTPUT:
     }
 
     const data = await response.json();
-    edgeLogger.info("Grok daily-wisdom response received");
+    edgeLogger.info("Groq daily-wisdom response received");
 
     const { content, filtered } = extractContent(data);
     if (!content) {
       if (filtered) throw new Error("Content was filtered. Please try again.");
-      throw new Error("No response from Grok API");
+      throw new Error("No response from Groq API");
     }
 
     const wisdom = parseJSON(content);
