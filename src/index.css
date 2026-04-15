@@ -558,5 +558,4 @@ All colors MUST be HSL.
     .shimmer-skeleton::after {
       animation: none !important;
     }
-  }
-}
+  }}

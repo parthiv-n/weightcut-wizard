@@ -55,7 +55,7 @@ export const NutritionCard = forwardRef<HTMLDivElement, NutritionCardProps>(
 
     const macros = [
       { label: "Protein", value: protein, goal: proteinGoal, color: "#3b82f6" },
-      { label: "Carbs", value: carbs, goal: carbsGoal, color: "#f59e0b" },
+      { label: "Carbs", value: carbs, goal: carbsGoal, color: "#f97316" },
       { label: "Fat", value: fats, goal: fatsGoal, color: "#a855f7" },
     ];
 

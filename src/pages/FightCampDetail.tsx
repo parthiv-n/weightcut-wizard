@@ -38,8 +38,14 @@ export default function FightCampDetail() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { safeAsync, isMounted } = useSafeAsync();
-  const [camp, setCamp] = useState<FightCamp | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [camp, setCamp] = useState<FightCamp | null>(() => {
+    if (!id) return null;
+    return localCache.get<FightCamp>("shared", `fight_camp_${id}`, 10 * 60 * 1000);
+  });
+  const [loading, setLoading] = useState(() => {
+    if (!id) return true;
+    return localCache.get("shared", `fight_camp_${id}`, 10 * 60 * 1000) === null;
+  });
   const [uploading, setUploading] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
 

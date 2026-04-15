@@ -45,8 +45,15 @@ interface DailyWisdom {
 }
 
 export default function Dashboard() {
-  const [weightLogs, setWeightLogs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { userName, currentWeight, userId, profile } = useUser();
+  const [weightLogs, setWeightLogs] = useState<any[]>(() => {
+    if (!userId) return [];
+    return localCache.get<any[]>(userId, 'dashboard_weight_logs') || [];
+  });
+  const [loading, setLoading] = useState(() => {
+    if (!userId) return true;
+    return localCache.get(userId, 'dashboard_weight_logs') === null;
+  });
   const [weightUnit, setWeightUnit] = useState<'kg' | 'lb'>(() => {
     return (localStorage.getItem('wcw_weight_unit') as 'kg' | 'lb') || 'kg';
   });
@@ -59,7 +66,6 @@ export default function Dashboard() {
   const [achievementSheetOpen, setAchievementSheetOpen] = useState(false);
   const [cutPlanOpen, setCutPlanOpen] = useState(false);
   const [expandedInfo, setExpandedInfo] = useState<'risk' | 'pace' | null>(null);
-  const { userName, currentWeight, userId, profile } = useUser();
   const navigate = useNavigate();
   const { safeAsync, isMounted } = useSafeAsync();
   const { streak, streakIncludesToday, weeklyConsistency, badges, badgesLoading, allAchievements } = useGamification(userId, weightLogs, todayCalories, profile);
@@ -323,12 +329,17 @@ export default function Dashboard() {
     return weightUnit === 'kg' ? kg : kg * 2.20462;
   }, [weightUnit]);
 
-  const chartData = useMemo(() => weightLogs
-    .filter((log) => !isNaN(parseFloat(log.weight_kg)))
-    .map((log) => ({
-      date: new Date(log.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      weight: convertWeight(parseFloat(log.weight_kg)),
-    })), [weightLogs, convertWeight]);
+  const chartData = useMemo(() => {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const cutoff = sevenDaysAgo.toISOString().split('T')[0];
+    return weightLogs
+      .filter((log) => !isNaN(parseFloat(log.weight_kg)) && log.date >= cutoff)
+      .map((log) => ({
+        date: new Date(log.date).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        weight: convertWeight(parseFloat(log.weight_kg)),
+      }));
+  }, [weightLogs, convertWeight]);
 
   if (loading) {
     return <DashboardSkeleton />;

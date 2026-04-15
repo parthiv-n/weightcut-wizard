@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { format } from "date-fns";
 import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Sparkles, Activity, Scale, Trash2, RefreshCw, Edit2, ChevronDown, Check, CheckCircle2, Gem, Minus, Plus } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
@@ -283,9 +283,6 @@ export default function WeightTracker() {
         {/* Chart + History */}
         <div className="card-surface p-3 space-y-3">
           <div className="flex items-center justify-between">
-            <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Progress Chart</p>
-            <div className="flex items-center gap-2">
-            {weightLogs.length >= 2 && <ShareButton onClick={() => setShareOpen(true)} />}
             <div className="flex rounded-full bg-muted p-0.5">
               {(["1W", "1M", "ALL"] as const).map((filter) => (
                 <button
@@ -300,15 +297,14 @@ export default function WeightTracker() {
                 </button>
               ))}
             </div>
-            </div>
+            {weightLogs.length >= 2 && <ShareButton onClick={() => setShareOpen(true)} />}
           </div>
-          {getChartData().length > 0 ? (
+          {(() => { const chartData = getChartData(); const xTicks = chartData.length > 1 ? [chartData[0].date, chartData[chartData.length - 1].date] : chartData.map(d => d.date); return chartData.length > 0 ? (
             <>
-              <ResponsiveContainer width="100%" height={140}>
-                <LineChart data={getChartData()} onClick={handleChartClick}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.2} />
-                  <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={9} tickLine={false} axisLine={false} />
-                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={9} tickLine={false} axisLine={false} domain={["dataMin - 2", "dataMax + 2"]} width={30} />
+              <ResponsiveContainer width="100%" height={160}>
+                <LineChart data={chartData} onClick={handleChartClick} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
+                  <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={9} tickLine={false} axisLine={false} opacity={0.5} ticks={xTicks} />
+                  <YAxis hide domain={["dataMin - 2", "dataMax + 2"]} />
                   <Tooltip
                     content={({ active, payload }) => {
                       if (active && payload && payload.length) {
@@ -317,33 +313,42 @@ export default function WeightTracker() {
                         const projectedWeight = entry.projected;
                         const isProjectedOnly = !actualWeight && projectedWeight;
                         return (
-                          <div className="bg-card border border-border rounded-lg p-3 shadow-lg">
-                            <p className="text-xs text-muted-foreground">{entry.fullDate}</p>
-                            {actualWeight && <p className="text-lg font-bold text-primary">{actualWeight}kg</p>}
-                            {isProjectedOnly && <p className="text-lg font-bold text-muted-foreground">{projectedWeight.toFixed(1)}kg <span className="text-xs font-normal">projected</span></p>}
-                            {actualWeight && <p className="text-[10px] text-muted-foreground mt-1">Tap to delete</p>}
+                          <div className="bg-card border border-border/50 rounded-xl px-3 py-2 shadow-lg">
+                            <p className="text-[10px] text-muted-foreground">{entry.fullDate}</p>
+                            {actualWeight && <p className="text-base font-bold text-primary">{actualWeight}kg</p>}
+                            {isProjectedOnly && <p className="text-base font-bold text-muted-foreground">{projectedWeight.toFixed(1)}kg <span className="text-[10px] font-normal">projected</span></p>}
                           </div>
                         );
                       }
                       return null;
                     }}
                   />
-                  <ReferenceLine y={profile?.fight_week_target_kg || profile?.goal_weight_kg} stroke="hsl(var(--primary))" strokeDasharray="5 5" label={{ value: "Target", fill: "hsl(var(--primary))", fontSize: 10, position: "insideTopRight" }} />
+                  <ReferenceLine y={profile?.fight_week_target_kg || profile?.goal_weight_kg} stroke="hsl(var(--primary))" strokeDasharray="5 5" strokeOpacity={0.3} />
                   {profile?.fight_week_target_kg && (
-                    <ReferenceLine y={profile.goal_weight_kg} stroke="hsl(var(--destructive))" strokeDasharray="3 3" label={{ value: isFighter(profile?.goal_type) ? "Fight Night" : "Goal Weight", fill: "hsl(var(--destructive))", fontSize: 10, position: "insideBottomRight" }} />
+                    <ReferenceLine y={profile.goal_weight_kg} stroke="hsl(var(--destructive))" strokeDasharray="3 3" strokeOpacity={0.25} />
                   )}
-                  <Line type="monotone" dataKey="weight" stroke="hsl(var(--primary))" strokeWidth={2.5} dot={{ fill: "hsl(var(--primary))", r: 4, cursor: "pointer" }} activeDot={{ r: 6, cursor: "pointer" }} animationDuration={0} />
+                  <Line type="monotone" dataKey="weight" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ fill: "hsl(var(--primary))", r: 3, stroke: "hsl(var(--background))", strokeWidth: 1.5, cursor: "pointer" }} activeDot={{ r: 5, fill: "hsl(var(--primary))", stroke: "hsl(var(--background))", strokeWidth: 2, cursor: "pointer" }} animationDuration={0} />
                   {aiAnalysis && showProjected && (
                     <Line type="monotone" dataKey="projected" stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} strokeDasharray="6 4" dot={false} connectNulls={false} animationDuration={0} />
                   )}
                 </LineChart>
               </ResponsiveContainer>
-              {aiAnalysis && (
-                <div className="flex justify-end mb-2">
+              <div className="flex items-center justify-between px-1">
+                <div className="flex items-center gap-3">
+                  <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground/60">
+                    <span className="w-3 border-t border-dashed border-primary/50" />Target
+                  </span>
+                  {profile?.fight_week_target_kg && (
+                    <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground/60">
+                      <span className="w-3 border-t border-dashed border-destructive/50" />{isFighter(profile?.goal_type) ? "Fight Night" : "Goal"}
+                    </span>
+                  )}
+                </div>
+                {aiAnalysis && (
                   <Button
                     variant="ghost"
                     size="sm"
-                    className={`h-7 text-[11px] gap-1.5 ${showProjected ? 'text-foreground' : 'text-muted-foreground'}`}
+                    className={`h-6 text-[10px] gap-1 px-2 ${showProjected ? 'text-foreground' : 'text-muted-foreground'}`}
                     onClick={() => {
                       const next = !showProjected;
                       setShowProjected(next);
@@ -353,8 +358,8 @@ export default function WeightTracker() {
                     <TrendingDown className="h-3 w-3" />
                     Projected {showProjected ? 'On' : 'Off'}
                   </Button>
-                </div>
-              )}
+                )}
+              </div>
               <div className="border-t border-border/20 pt-2">
                 <Collapsible open={isHistoryOpen} onOpenChange={setIsHistoryOpen} className="w-full space-y-2">
                   <div className="flex items-center justify-between">
@@ -367,20 +372,20 @@ export default function WeightTracker() {
                     </CollapsibleTrigger>
                   </div>
                   <CollapsibleContent className="space-y-2 pt-2">
-                    <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+                    <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1">
                       {weightLogs.slice().reverse().map((log) => (
-                        <div key={log.id} className="flex items-center justify-between p-2 rounded-xl border border-white/5 bg-background/50 hover:bg-background/80 transition-colors">
-                          <div>
-                            <span className="text-sm font-bold text-primary mr-2">{log.weight_kg} kg</span>
-                            <span className="text-[11px] text-muted-foreground">{format(new Date(log.date), "MMM dd, yyyy")}</span>
+                        <div key={log.id} className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-muted/30 active:bg-muted/50 transition-colors">
+                          <div className="flex flex-col">
+                            <span className="text-[15px] font-bold tabular-nums text-foreground">{log.weight_kg} <span className="text-xs font-medium text-muted-foreground">kg</span></span>
+                            <span className="text-[11px] text-muted-foreground/70">{format(new Date(log.date), "MMM dd, yyyy")}</span>
                           </div>
-                          <div className="flex items-center gap-1">
-                            <Button variant="ghost" size="icon" onClick={() => handleEditLog(log)} className="h-7 w-7 text-muted-foreground hover:text-foreground">
-                              <Edit2 className="h-3.5 w-3.5" />
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => initiateDelete(log)} className="h-7 w-7 text-muted-foreground hover:text-destructive">
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
+                          <div className="flex items-center gap-2">
+                            <button onClick={() => handleEditLog(log)} className="h-10 w-10 flex items-center justify-center rounded-xl text-muted-foreground active:text-foreground active:bg-muted/60 transition-colors">
+                              <Edit2 className="h-4 w-4" />
+                            </button>
+                            <button onClick={() => initiateDelete(log)} className="h-10 w-10 flex items-center justify-center rounded-xl text-muted-foreground active:text-destructive active:bg-destructive/10 transition-colors">
+                              <Trash2 className="h-4 w-4" />
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -396,7 +401,7 @@ export default function WeightTracker() {
                 Log Now
               </Button>
             </div>
-          )}
+          ); })()}
         </div>
 
         {/* Header + Inline Log Form */}

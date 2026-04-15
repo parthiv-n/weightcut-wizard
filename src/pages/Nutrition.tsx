@@ -199,6 +199,25 @@ export default function Nutrition() {
     }
   }, [isQuickAddSheetOpen, quickAddTab, userId]);
 
+  // Warmup food-search edge function so search dialog opens instantly
+  useEffect(() => {
+    if (!userId) return;
+    const t = setTimeout(() => {
+      fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/food-search`, {
+        method: "GET",
+      }).catch(() => {});
+    }, 2000);
+    return () => clearTimeout(t);
+  }, [userId]);
+
+  // Preload FoodSearchDialog chunk so it's ready when user taps search
+  useEffect(() => {
+    const t = setTimeout(() => {
+      import("@/components/nutrition/FoodSearchDialog").catch(() => {});
+    }, 3000);
+    return () => clearTimeout(t);
+  }, []);
+
   // Auto-open from URL params (deferred to avoid race with QuickLog sheet close)
   useEffect(() => {
     let tab: "ai" | "manual" | null = null;
@@ -988,13 +1007,22 @@ export default function Nutrition() {
                         </div>
                       ))}
                     </div>
-                    <div className="flex items-center justify-between px-2 py-1 rounded-md bg-muted/30 text-[13px]">
-                      <span className="font-semibold">Total</span>
-                      <div className="flex gap-2 tabular-nums">
-                        <span className="font-semibold text-primary">{aiMeal.aiLineItems.reduce((s, i) => s + i.calories, 0)} kcal</span>
-                        <span className="text-muted-foreground">{Math.round(aiMeal.aiLineItems.reduce((s, i) => s + i.protein_g, 0))}P</span>
-                        <span className="text-muted-foreground">{Math.round(aiMeal.aiLineItems.reduce((s, i) => s + i.carbs_g, 0))}C</span>
-                        <span className="text-muted-foreground">{Math.round(aiMeal.aiLineItems.reduce((s, i) => s + i.fats_g, 0))}F</span>
+                    <div className="grid grid-cols-4 gap-1.5 pt-1">
+                      <div className="text-center p-2 rounded-lg bg-primary/10 border border-primary/20">
+                        <div className="text-[15px] font-bold tabular-nums text-primary">{aiMeal.aiLineItems.reduce((s, i) => s + i.calories, 0)}</div>
+                        <div className="text-[9px] uppercase tracking-wider text-muted-foreground">kcal</div>
+                      </div>
+                      <div className="text-center p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                        <div className="text-[15px] font-bold tabular-nums text-blue-500">{Math.round(aiMeal.aiLineItems.reduce((s, i) => s + i.protein_g, 0))}g</div>
+                        <div className="text-[9px] uppercase tracking-wider text-muted-foreground">Protein</div>
+                      </div>
+                      <div className="text-center p-2 rounded-lg bg-orange-500/10 border border-orange-500/20">
+                        <div className="text-[15px] font-bold tabular-nums text-orange-500">{Math.round(aiMeal.aiLineItems.reduce((s, i) => s + i.carbs_g, 0))}g</div>
+                        <div className="text-[9px] uppercase tracking-wider text-muted-foreground">Carbs</div>
+                      </div>
+                      <div className="text-center p-2 rounded-lg bg-purple-500/10 border border-purple-500/20">
+                        <div className="text-[15px] font-bold tabular-nums text-purple-500">{Math.round(aiMeal.aiLineItems.reduce((s, i) => s + i.fats_g, 0))}g</div>
+                        <div className="text-[9px] uppercase tracking-wider text-muted-foreground">Fats</div>
                       </div>
                     </div>
                     <Input value={manualMeal.meal_name} onChange={(e) => setManualMeal(prev => ({ ...prev, meal_name: e.target.value }))} placeholder="Meal name" className="text-[13px] h-7 rounded-md border-border/30 bg-muted/20" />
@@ -1038,12 +1066,6 @@ export default function Nutrition() {
                   <Input type="number" inputMode="decimal" step="0.1" placeholder="Fats" value={manualMeal.fats_g} onChange={(e) => setManualMeal({ ...manualMeal, fats_g: e.target.value })} className="text-[13px] h-7 rounded-md border-border/30 bg-muted/20" />
                 </div>
                 <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Ingredients (optional)</p>
-                <div className="flex gap-1">
-                  <Input placeholder="e.g. chicken breast" value={aiMeal.aiIngredientDescription} onChange={(e) => aiMeal.setAiIngredientDescription(e.target.value)} disabled={aiMeal.aiAnalyzingIngredient} className="flex-1 text-[13px] h-7 rounded-md border-border/30 bg-muted/20" />
-                  <Button type="button" size="sm" variant="outline" onClick={aiMeal.handleAiAnalyzeIngredient} disabled={aiMeal.aiAnalyzingIngredient || !aiMeal.aiIngredientDescription.trim()} className="shrink-0 h-7 rounded-md text-[13px] border-border/30 px-2">
-                    <Sparkles className="h-2.5 w-2.5 mr-0.5" />{aiMeal.aiAnalyzingIngredient ? "…" : "AI"}
-                  </Button>
-                </div>
                 <div className="flex gap-1">
                   <Input placeholder="Ingredient" value={aiMeal.newIngredient.name} onChange={(e) => aiMeal.setNewIngredient({ ...aiMeal.newIngredient, name: e.target.value })} className="flex-1 text-[13px] h-7 rounded-md border-border/30 bg-muted/20" />
                   <Input type="number" inputMode="numeric" placeholder="g" value={aiMeal.newIngredient.grams} onChange={(e) => aiMeal.setNewIngredient({ ...aiMeal.newIngredient, grams: e.target.value })} className="w-12 text-[13px] h-7 rounded-md border-border/30 bg-muted/20" />

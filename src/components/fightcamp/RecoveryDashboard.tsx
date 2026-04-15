@@ -571,7 +571,6 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
       {/* 3) 7-Day Strain Chart with forecast */}
       <div className="card-surface rounded-xl p-4 border border-border">
         <div className="flex items-center gap-2 mb-3">
-          <TrendingUp className="h-5 w-5 text-primary" />
           <h2 className="text-lg font-bold">7-Day Strain Trend</h2>
         </div>
         <StrainChart strainHistory={metrics.strainHistory} forecast={metrics.forecast} />

@@ -24,7 +24,7 @@ const FloatingWorkoutIndicator = lazy(() => import("@/components/gym/FloatingWor
 const AIFloatingIndicator = lazy(() => import("@/components/AIFloatingIndicator").then(m => ({ default: m.AIFloatingIndicator })));
 import * as Sentry from "@sentry/react";
 import ErrorBoundary from "@/components/ErrorBoundary";
-import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
+import { DashboardSkeleton, NutritionPageSkeleton, WeightTrackerSkeleton, GoalsSkeleton } from "@/components/ui/skeleton-loader";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { PullToRefresh } from "@/components/PullToRefresh";
 import Index from "./pages/Index";
@@ -188,7 +188,7 @@ const AppLayoutContent = () => {
           <main className="flex-1 overflow-auto overflow-x-hidden relative min-h-0 w-full pt-2 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right animate-app-content-in" style={{ paddingBottom: "calc(4rem + env(safe-area-inset-bottom, 0px))" }}>
             <PullToRefresh />
             <PageTransition>
-              <Suspense fallback={<DashboardSkeleton />}>
+              <Suspense fallback={null}>
                 <Outlet />
               </Suspense>
             </PageTransition>
@@ -255,21 +255,21 @@ const App = () => (
 
                 {/* Shared layout route — AppLayout persists across all child navigations */}
                 <Route element={<ProtectedAppLayout />}>
-                  <Route path="/dashboard" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
-                  <Route path="/goals" element={<ErrorBoundary><Goals /></ErrorBoundary>} />
-                  <Route path="/nutrition" element={<ErrorBoundary><Nutrition /></ErrorBoundary>} />
-                  <Route path="/weight" element={<ErrorBoundary><WeightTracker /></ErrorBoundary>} />
-                  <Route path="/weight-cut" element={<ErrorBoundary><WeightCut /></ErrorBoundary>} />
+                  <Route path="/dashboard" element={<ErrorBoundary><Suspense fallback={<DashboardSkeleton />}><Dashboard /></Suspense></ErrorBoundary>} />
+                  <Route path="/goals" element={<ErrorBoundary><Suspense fallback={<GoalsSkeleton />}><Goals /></Suspense></ErrorBoundary>} />
+                  <Route path="/nutrition" element={<ErrorBoundary><Suspense fallback={<NutritionPageSkeleton />}><Nutrition /></Suspense></ErrorBoundary>} />
+                  <Route path="/weight" element={<ErrorBoundary><Suspense fallback={<WeightTrackerSkeleton />}><WeightTracker /></Suspense></ErrorBoundary>} />
+                  <Route path="/weight-cut" element={<ErrorBoundary><Suspense fallback={null}><WeightCut /></Suspense></ErrorBoundary>} />
                   <Route path="/hydration" element={<Navigate to="/weight-cut?tab=rehydration" replace />} />
                   <Route path="/fight-week" element={<Navigate to="/weight-cut" replace />} />
-                  <Route path="/fight-camps" element={<ErrorBoundary><FightCamps /></ErrorBoundary>} />
-                  <Route path="/fight-camps/:id" element={<ErrorBoundary><FightCampDetail /></ErrorBoundary>} />
-                  <Route path="/training-calendar" element={<ErrorBoundary><TrainingCalendar /></ErrorBoundary>} />
+                  <Route path="/fight-camps" element={<ErrorBoundary><Suspense fallback={null}><FightCamps /></Suspense></ErrorBoundary>} />
+                  <Route path="/fight-camps/:id" element={<ErrorBoundary><Suspense fallback={null}><FightCampDetail /></Suspense></ErrorBoundary>} />
+                  <Route path="/training-calendar" element={<ErrorBoundary><Suspense fallback={null}><TrainingCalendar /></Suspense></ErrorBoundary>} />
                   <Route path="/fight-camp-calendar" element={<Navigate to="/training-calendar" replace />} />
-                  <Route path="/recovery" element={<ErrorBoundary><Recovery /></ErrorBoundary>} />
-                  <Route path="/sleep" element={<ErrorBoundary><Sleep /></ErrorBoundary>} />
+                  <Route path="/recovery" element={<ErrorBoundary><Suspense fallback={null}><Recovery /></Suspense></ErrorBoundary>} />
+                  <Route path="/sleep" element={<ErrorBoundary><Suspense fallback={null}><Sleep /></Suspense></ErrorBoundary>} />
                   {/* Skill Tree temporarily hidden from UI */}
-                  <Route path="/gym" element={<ErrorBoundary><GymTracker /></ErrorBoundary>} />
+                  <Route path="/gym" element={<ErrorBoundary><Suspense fallback={null}><GymTracker /></Suspense></ErrorBoundary>} />
                 </Route>
 
                 <Route path="*" element={<NotFound />} />

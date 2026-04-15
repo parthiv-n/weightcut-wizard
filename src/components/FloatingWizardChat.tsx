@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import { useWizardBackground } from "@/contexts/WizardBackgroundContext";
-import { Sparkles, Send, Trash2, User, Bot, Loader2, X } from "lucide-react";
+import { Sparkles, Send, Trash2, User, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
 import { triggerHapticSelection, triggerHapticSuccess, triggerHaptic } from "@/lib/haptics";
@@ -197,21 +197,11 @@ export function FloatingWizardChat() {
           {/* Header */}
           <div className="shrink-0 px-4 pb-4 border-b border-primary/15 bg-gradient-to-r from-primary/5 via-secondary/5 to-accent/5">
             <div className="flex items-center gap-3">
-              <div className="relative">
-                <div className="w-10 h-10 rounded-full card-surface border-primary/20 p-0.5 overflow-hidden">
-                  <img src={wizardAvatar} alt="Wizard" className="w-full h-full object-cover rounded-full mix-blend-screen" />
-                </div>
-                <Sparkles className="h-3 w-3 text-primary absolute -bottom-1 -right-1 drop-shadow-[0_0_6px_hsl(var(--primary)/0.6)]" />
+              <div className="w-10 h-10 rounded-full card-surface border-primary/20 p-0.5 overflow-hidden">
+                <img src={wizardAvatar} alt="Wizard" className="w-full h-full object-cover rounded-full mix-blend-screen" />
               </div>
               <div>
                 <h2 className="text-lg font-bold leading-tight bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text">FightCamp Wizard</h2>
-                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
-                  </span>
-                  AI Coach Online
-                </p>
               </div>
               <div className="ml-auto flex items-center gap-1">
                 <Button
@@ -243,12 +233,19 @@ export function FloatingWizardChat() {
             {messages.map((msg, idx) => (
               <div
                 key={idx}
-                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} animate-fade-in`}
+                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} ${msg.role === "user" ? "animate-fade-in" : "animate-msg-bounce-in"}`}
+                style={msg.role !== "user" ? { transformOrigin: "bottom left" } : undefined}
               >
                 <div className={`flex gap-2 max-w-[88%] ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
-                  <div className={`shrink-0 h-8 w-8 rounded-full flex items-center justify-center ${msg.role === "user" ? "bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/15" : "card-surface border-secondary/15"}`}>
-                    {msg.role === "user" ? <User className="h-4 w-4 text-primary drop-shadow-[0_0_4px_hsl(var(--primary)/0.5)]" /> : <Bot className="h-4 w-4 text-secondary drop-shadow-[0_0_4px_hsl(var(--primary)/0.4)]" />}
-                  </div>
+                  {msg.role === "user" ? (
+                    <div className="shrink-0 h-8 w-8 rounded-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/15">
+                      <User className="h-4 w-4 text-primary drop-shadow-[0_0_4px_hsl(var(--primary)/0.5)]" />
+                    </div>
+                  ) : (
+                    <div className="shrink-0 h-8 w-8 rounded-full overflow-hidden card-surface border-secondary/15">
+                      <img src={wizardAvatar} alt="Wizard" className="w-full h-full object-cover rounded-full mix-blend-screen" />
+                    </div>
+                  )}
 
                   {msg.role === "user" ? (
                     <div className="px-3.5 py-2.5 rounded-2xl text-sm bg-gradient-to-br from-primary/90 via-primary/80 to-accent/70 text-primary-foreground rounded-tr-sm shadow-lg shadow-primary/25 border border-primary/20">
@@ -269,10 +266,10 @@ export function FloatingWizardChat() {
             ))}
 
             {isLoading && (
-              <div className="flex justify-start animate-fade-in">
+              <div className="flex justify-start animate-msg-bounce-in" style={{ transformOrigin: "bottom left" }}>
                 <div className="flex gap-2 max-w-[88%]">
-                  <div className="shrink-0 h-8 w-8 rounded-full card-surface border-secondary/15 flex items-center justify-center">
-                    <Bot className="h-4 w-4 text-secondary drop-shadow-[0_0_4px_hsl(var(--primary)/0.4)]" />
+                  <div className="shrink-0 h-8 w-8 rounded-full overflow-hidden card-surface border-secondary/15">
+                    <img src={wizardAvatar} alt="Wizard" className="w-full h-full object-cover rounded-full mix-blend-screen" />
                   </div>
                   <div className="relative px-3.5 py-2.5 rounded-xl card-surface rounded-tl-sm border-secondary/15 bg-gradient-to-br from-secondary/5 to-accent/5 flex items-center gap-2">
                     <GlowingEffect spread={40} glow disabled={false} proximity={64} inactiveZone={0.01} borderWidth={1} />

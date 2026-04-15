@@ -117,11 +117,18 @@ export default {
           "0%": { transform: "translateX(0)" },
           "100%": { transform: "translateX(-50%)" },
         },
+        "msg-bounce-in": {
+          "0%": { opacity: "0", transform: "scale(0.85) translateY(8px)" },
+          "50%": { opacity: "1", transform: "scale(1.02) translateY(-2px)" },
+          "70%": { transform: "scale(0.98) translateY(1px)" },
+          "100%": { opacity: "1", transform: "scale(1) translateY(0)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         marquee: "marquee 12s linear infinite",
+        "msg-bounce-in": "msg-bounce-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both",
       },
     },
   },

@@ -33,8 +33,15 @@ interface FightCamp {
 }
 
 export default function FightCamps() {
-  const [camps, setCamps] = useState<FightCamp[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { userId } = useAuth();
+  const [camps, setCamps] = useState<FightCamp[]>(() => {
+    if (!userId) return [];
+    return localCache.get<FightCamp[]>(userId, 'fight_camps', 30 * 60 * 1000) || [];
+  });
+  const [loading, setLoading] = useState(() => {
+    if (!userId) return true;
+    return localCache.get(userId, 'fight_camps', 30 * 60 * 1000) === null;
+  });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [campToDelete, setCampToDelete] = useState<FightCamp | null>(null);
@@ -48,7 +55,6 @@ export default function FightCamps() {
   const [compareDialogOpen, setCompareDialogOpen] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { userId } = useAuth();
 
   useEffect(() => {
     if (userId) {

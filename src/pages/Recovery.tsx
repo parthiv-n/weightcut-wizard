@@ -14,8 +14,14 @@ type TrainingCalendarRow = Tables<"fight_camp_calendar">;
 
 export default function Recovery() {
     const { userId, profile } = useUser();
-    const [sessions28d, setSessions28d] = useState<TrainingCalendarRow[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const [sessions28d, setSessions28d] = useState<TrainingCalendarRow[]>(() => {
+        if (!userId) return [];
+        return localCache.get<TrainingCalendarRow[]>(userId, "recovery_sessions_28d", 24 * 60 * 60 * 1000) || [];
+    });
+    const [isLoading, setIsLoading] = useState(() => {
+        if (!userId) return true;
+        return localCache.get(userId, "recovery_sessions_28d", 24 * 60 * 60 * 1000) === null;
+    });
 
     const athleteProfile = useMemo(() => profile ? {
         trainingFrequency: profile.training_frequency ?? null,
