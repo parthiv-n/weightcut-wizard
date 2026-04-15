@@ -510,6 +510,15 @@ All colors MUST be HSL.
     width: 100%;
   }
 
+  /* Smooth fade-in for app content area after WizardLoader splash */
+  @keyframes app-content-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  .animate-app-content-in {
+    animation: app-content-in 0.4s ease-out both;
+  }
+
   /* Smooth fade-in for page content after skeleton/loading finishes */
   @keyframes page-fade-in {
     from { opacity: 0; }
@@ -534,6 +543,11 @@ All colors MUST be HSL.
       transition: none !important;
       opacity: 1 !important;
       transform: none !important;
+    }
+
+    .animate-app-content-in {
+      animation: none !important;
+      opacity: 1 !important;
     }
 
     .animate-page-in {

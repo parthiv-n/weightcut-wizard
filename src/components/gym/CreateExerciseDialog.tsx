@@ -46,7 +46,7 @@ export function CreateExerciseDialog({ open, onOpenChange, onSubmit }: CreateExe
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-xl border-0 bg-card/95 backdrop-blur-xl p-0">
+      <SheetContent side="bottom" className="rounded-t-xl border-0 bg-card/95 backdrop-blur-xl p-0 pb-[calc(env(safe-area-inset-bottom,0px)+3.5rem)]">
         <div className="px-4 pt-4 pb-3">
           <SheetHeader>
             <SheetTitle className="text-[15px] font-semibold text-center">Create Exercise</SheetTitle>
