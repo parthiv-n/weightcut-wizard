@@ -63,7 +63,7 @@ export const MacroPieChart = memo(function MacroPieChart({
                         <span className="text-muted-foreground/60"> / {Math.round(goal)}g</span>
                     </span>
                 </div>
-                <div className="relative h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: bgColor }}>
+                <div className="relative h-2.5 rounded-full overflow-hidden" style={{ backgroundColor: bgColor }}>
                     <div
                         className="absolute inset-y-0 left-0 rounded-full transition-all duration-700 ease-out"
                         style={{
@@ -140,7 +140,7 @@ export const MacroPieChart = memo(function MacroPieChart({
 
                     {/* Linear calorie progress below stats */}
                     <div>
-                        <div className="relative h-1 rounded-full overflow-hidden bg-border/20">
+                        <div className="relative h-2.5 rounded-full overflow-hidden bg-border/20">
                             <div
                                 className="absolute inset-y-0 left-0 rounded-full transition-all duration-700 ease-out"
                                 style={{
