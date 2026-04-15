@@ -164,7 +164,6 @@ export default function Hydration() {
                       className="flex-1 bg-transparent border-none text-sm font-bold text-foreground focus:outline-none" />
                   </div>
                   <div className="flex items-center gap-2 rounded-xl bg-background/60 border border-border/30 px-3 py-2">
-                    <Droplets className="h-3.5 w-3.5 text-emerald-400/50 shrink-0" />
                     <input type="date" value={weighInDate} onChange={(e) => setWeighInDate(e.target.value)} required
                       className="flex-1 bg-transparent border-none text-sm font-medium text-foreground focus:outline-none" />
                   </div>
@@ -179,7 +178,6 @@ export default function Hydration() {
                       className="flex-1 bg-transparent border-none text-sm font-bold text-foreground focus:outline-none" />
                   </div>
                   <div className="flex items-center gap-2 rounded-xl bg-background/60 border border-border/30 px-3 py-2">
-                    <Zap className="h-3.5 w-3.5 text-amber-500/50 shrink-0" />
                     <input type="date" value={fightDate} onChange={(e) => setFightDate(e.target.value)} required
                       className="flex-1 bg-transparent border-none text-sm font-medium text-foreground focus:outline-none" />
                   </div>
@@ -191,7 +189,7 @@ export default function Hydration() {
             <div className="flex items-center justify-center">
               <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border ${availableHours <= 5 ? "bg-red-500/10 border-red-500/30 text-red-400" : availableHours <= 10 ? "bg-amber-500/10 border-amber-500/30 text-amber-400" : "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"}`}>
                 <Clock className="w-3 h-3" />
-                {awakeHours}h awake{awakeHours < availableHours && <span className="text-[10px] opacity-60 ml-1">· {Math.round(availableHours - awakeHours)}h sleep</span>}
+                {availableHours}h to rehydrate
               </div>
             </div>
 
