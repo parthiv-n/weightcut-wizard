@@ -119,13 +119,13 @@ export function FightCampLogForm({
   };
 
   return (
-    <div className="grid gap-2 py-1">
-      {/* Session Type — Select dropdown + Add button */}
-      <div className="space-y-1">
-        <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Session Type</Label>
+    <div className="grid gap-3 py-1">
+      {/* Session Type */}
+      <div className="space-y-1.5">
+        <Label className="text-[10px] font-medium text-foreground/50 uppercase tracking-widest">Type</Label>
         <div className="flex gap-1.5">
           <Select value={sessionType} onValueChange={setSessionType}>
-            <SelectTrigger className="flex-1 rounded-lg h-8 text-[13px] border-border/30 bg-muted/20">
+            <SelectTrigger className="flex-1 rounded-xl h-10 text-[13px] border-border/20 bg-muted/15">
               <SelectValue placeholder="Select type" />
             </SelectTrigger>
             <SelectContent>
@@ -158,11 +158,11 @@ export function FightCampLogForm({
             </SelectContent>
           </Select>
           <button
-            className="h-8 w-8 rounded-lg bg-muted/30 flex items-center justify-center shrink-0 active:bg-muted/50 transition-colors"
+            className="h-10 w-10 rounded-xl bg-muted/15 flex items-center justify-center shrink-0 active:bg-muted/30 transition-colors border border-border/20"
             onClick={() => setIsAddingNew(!isAddingNew)}
             aria-label="Add custom type"
           >
-            <Plus className="h-3.5 w-3.5" />
+            <Plus className="h-4 w-4 text-foreground/60" />
           </button>
         </div>
 
@@ -188,11 +188,11 @@ export function FightCampLogForm({
         )}
       </div>
 
-      {/* Group 1: Training Metrics */}
-      <div className="rounded-lg bg-muted/20 overflow-hidden">
+      {/* Training Metrics */}
+      <div className="rounded-2xl bg-muted/10 border border-border/15 overflow-hidden">
         {/* Duration */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-border/20">
-          <span className="text-[10px] font-medium tracking-wide uppercase text-muted-foreground">Duration</span>
+        <div className="flex items-center justify-between px-3.5 py-3 border-b border-border/10">
+          <span className="text-[13px] text-foreground/70">Duration</span>
           <div className="flex items-center gap-2">
             <button onClick={() => setDuration(String(Math.max(0, parseInt(duration) - 5)))}
               className="h-5 w-5 rounded-full bg-muted/40 flex items-center justify-center text-[12px] font-medium active:bg-muted/60 transition-colors">
@@ -207,12 +207,10 @@ export function FightCampLogForm({
         </div>
 
         {/* Intensity */}
-        <div className="px-3 py-2 border-b border-border/20">
+        <div className="px-3.5 py-3 border-b border-border/10">
           <div className="flex justify-between items-center">
-            <span className="text-[10px] font-medium tracking-wide uppercase text-muted-foreground flex items-center gap-1">
-              <Ruler className="h-3 w-3 text-primary" /> Intensity
-            </span>
-            <span className="text-[13px] font-semibold">{intensityLevel[0]}</span>
+            <span className="text-[13px] text-foreground/70">Intensity</span>
+            <span className="text-[13px] font-semibold tabular-nums">{intensityLevel[0]}<span className="text-foreground/40">/5</span></span>
           </div>
           <Slider value={intensityLevel} onValueChange={setIntensityLevel} max={5} min={1} step={1} className="py-1" />
           <div className="flex justify-between text-[9px] text-muted-foreground/70">
@@ -223,12 +221,10 @@ export function FightCampLogForm({
         </div>
 
         {/* RPE */}
-        <div className="px-3 py-2">
+        <div className="px-3.5 py-3">
           <div className="flex justify-between items-center">
-            <span className="text-[10px] font-medium tracking-wide uppercase text-muted-foreground flex items-center gap-1">
-              <Activity className="h-3 w-3 text-primary" /> RPE
-            </span>
-            <span className="text-[13px] font-semibold">{rpe[0]}</span>
+            <span className="text-[13px] text-foreground/70">RPE</span>
+            <span className="text-[13px] font-semibold tabular-nums">{rpe[0]}<span className="text-foreground/40">/10</span></span>
           </div>
           <Slider value={rpe} onValueChange={setRpe} max={10} min={1} step={1} className="py-1" />
           <div className="flex justify-between text-[9px] text-muted-foreground/70">
@@ -238,13 +234,11 @@ export function FightCampLogForm({
         </div>
       </div>
 
-      {/* Run Details — only when session type is Run */}
+      {/* Run Details */}
       {sessionType === "Run" && (
-        <div className="rounded-lg bg-muted/20 overflow-hidden">
-          <div className="flex items-center justify-between px-3 py-2 border-b border-border/20">
-            <span className="text-[10px] font-medium tracking-wide uppercase text-muted-foreground flex items-center gap-1">
-              <Route className="h-3 w-3 text-primary" /> Distance
-            </span>
+        <div className="rounded-2xl bg-muted/10 border border-border/15 overflow-hidden">
+          <div className="flex items-center justify-between px-3.5 py-3 border-b border-border/10">
+            <span className="text-[13px] text-foreground/70">Distance</span>
             <div className="flex items-center gap-1.5">
               <Input type="number" inputMode="decimal" step="0.1" min="0" value={runDistance} onChange={(e) => setRunDistance(e.target.value)} placeholder="0"
                 className="w-16 h-7 rounded-md text-right text-[12px] font-semibold bg-transparent border-border/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
@@ -254,28 +248,24 @@ export function FightCampLogForm({
               </button>
             </div>
           </div>
-          <div className="flex items-center justify-between px-3 py-2 border-b border-border/20">
-            <span className="text-[10px] font-medium tracking-wide uppercase text-muted-foreground flex items-center gap-1">
-              <Timer className="h-3 w-3 text-primary" /> Time
-            </span>
+          <div className="flex items-center justify-between px-3.5 py-3 border-b border-border/10">
+            <span className="text-[13px] text-foreground/70">Time</span>
             <Input type="text" inputMode="numeric" value={runTime} onChange={(e) => setRunTime(e.target.value)} placeholder="mm:ss"
               className="w-20 h-7 rounded-md text-right text-[12px] font-semibold bg-transparent border-border/30" />
           </div>
-          <div className="flex items-center justify-between px-3 py-2">
-            <span className="text-[10px] font-medium tracking-wide uppercase text-muted-foreground flex items-center gap-1">
-              <Gauge className="h-3 w-3 text-primary" /> Pace
-            </span>
+          <div className="flex items-center justify-between px-3.5 py-3">
+            <span className="text-[13px] text-foreground/70">Pace</span>
             <span className="text-[12px] font-semibold text-foreground/70">{runPace ? `${runPace} /${runDistanceUnit}` : "—"}</span>
           </div>
         </div>
       )}
 
-      {/* Group 2: Recovery */}
-      <div className="rounded-lg bg-muted/20 overflow-hidden">
+      {/* Recovery */}
+      <div className="rounded-2xl bg-muted/10 border border-border/15 overflow-hidden">
         {/* Soreness */}
-        <div className="px-3 py-2 border-b border-border/20">
+        <div className="px-3.5 py-3">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] font-medium tracking-wide uppercase text-muted-foreground">Soreness</span>
+            <span className="text-[13px] text-foreground/70">Soreness</span>
             <Switch checked={hasSoreness} onCheckedChange={setHasSoreness} />
           </div>
           {hasSoreness && (
@@ -291,10 +281,10 @@ export function FightCampLogForm({
 
       </div>
 
-      {/* Session Notes */}
-      <div className="space-y-1">
+      {/* Notes */}
+      <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <Label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Notes</Label>
+          <Label className="text-[10px] font-medium text-foreground/50 uppercase tracking-widest">Notes</Label>
           {voiceSupported && (
             <button
               type="button"
@@ -314,18 +304,16 @@ export function FightCampLogForm({
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder={isListening ? "Listening..." : "Techniques, drills, notes..."}
-          className={`rounded-lg border-border/30 bg-muted/20 min-h-[50px] resize-none text-[13px] ${isListening ? "border-red-500/30" : ""}`}
+          className={`rounded-xl border-border/15 bg-muted/10 min-h-[50px] resize-none text-[13px] ${isListening ? "border-red-500/30" : ""}`}
         />
         {isListening && interimText && (
           <p className="text-[10px] text-muted-foreground/60 italic px-1">{interimText}</p>
         )}
       </div>
 
-      <div className="border-t border-border/40 mt-1 -mx-4">
-        <button className="w-full py-2.5 text-[14px] font-semibold text-primary active:bg-muted/50 transition-colors" onClick={onSave}>
-          {isEditing ? 'Update Session' : 'Save Session'}
-        </button>
-      </div>
+      <button className="w-full h-11 rounded-2xl bg-primary text-primary-foreground text-[14px] font-semibold active:opacity-80 transition-opacity mt-1" onClick={onSave}>
+        {isEditing ? 'Update Session' : 'Save Session'}
+      </button>
     </div>
   );
 }

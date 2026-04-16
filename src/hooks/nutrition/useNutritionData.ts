@@ -229,8 +229,6 @@ export function useNutritionData(params: UseNutritionDataParams) {
 
     const typedMeals = (data || []).map(meal => ({
       ...meal,
-      meal_name: meal.meal_name || "Untitled",
-      meal_type: meal.meal_type || "snack",
       ingredients: (meal.ingredients as unknown) as Ingredient[] | undefined,
     }));
 
@@ -255,12 +253,12 @@ export function useNutritionData(params: UseNutritionDataParams) {
       const p = op.payload as any;
       mergedMeals.push({
         id: op.recordId,
-        meal_name: p.meal_name || "Untitled",
+        meal_name: p.meal_name || null,
         calories: p.calories,
         protein_g: p.protein_g ?? undefined,
         carbs_g: p.carbs_g ?? undefined,
         fats_g: p.fats_g ?? undefined,
-        meal_type: p.meal_type || "snack",
+        meal_type: p.meal_type || null,
         portion_size: p.portion_size ?? undefined,
         recipe_notes: p.recipe_notes ?? undefined,
         ingredients: p.ingredients ?? undefined,
