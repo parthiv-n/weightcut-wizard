@@ -153,7 +153,7 @@ function PrivacyPolicy() {
         Your data is stored in Supabase's EU (Frankfurt) data centre with encryption at rest and in transit.
       </P>
 
-      <SubTitle>xAI (Grok API)</SubTitle>
+      <SubTitle>Groq (Llama API)</SubTitle>
       <P>
         Powers AI features including meal analysis, diet scoring, fight week protocols, daily coaching,
         training summaries, and the AI chatbot. Meal descriptions and anonymised health context are sent
@@ -292,7 +292,7 @@ function TermsOfService() {
 
       <SectionTitle>5. AI-Generated Content</SectionTitle>
       <P>
-        The app uses artificial intelligence (powered by xAI) to generate meal plans, diet analysis,
+        The app uses artificial intelligence (powered by Groq) to generate meal plans, diet analysis,
         coaching advice, and other content. AI-generated content:
       </P>
       <BulletList items={[
@@ -369,7 +369,7 @@ function TermsOfService() {
         "Health complications resulting from following app-generated protocols",
         "Data loss or service interruptions",
         "Inaccuracies in AI-generated content or nutritional data",
-        "Third-party service outages (Supabase, xAI, etc.)",
+        "Third-party service outages (Supabase, Groq, etc.)",
       ]} />
 
       <SectionTitle>11. Changes to Terms</SectionTitle>

@@ -57,8 +57,8 @@ serve(async (req) => {
     const fatTarget = Math.round((targetCalories * 0.25) / 9);
     const carbTarget = Math.round((targetCalories - (proteinTarget * 4) - (fatTarget * 9)) / 4);
 
-    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
-    if (!GROK_API_KEY) throw new Error("GROK_API_KEY not configured");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+    if (!GROQ_API_KEY) throw new Error("GROQ_API_KEY not configured");
 
     // Fight week macros: near maintenance but <50g carbs, rest high fat + high protein
     const fightWeekProtein = Math.round(fightWeekTarget * 2.3);
@@ -125,26 +125,27 @@ Return ONLY valid JSON:
   "keyPrinciples": ["","",""]
 }`;
 
-    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${GROK_API_KEY}`,
+        Authorization: `Bearer ${GROQ_API_KEY}`,
       },
       body: JSON.stringify({
-        model: "grok-4-1-fast-reasoning",
+        model: "openai/gpt-oss-120b",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: "Generate my personalised weight cut plan." },
         ],
         temperature: 0.4,
-        max_completion_tokens: 4000,
+        max_tokens: 4000,
+        response_format: { type: "json_object" },
       }),
     });
 
     if (!response.ok) {
       const errText = await response.text();
-      edgeLogger.error("Grok API error", undefined, { functionName: "generate-cut-plan", status: response.status, errText });
+      edgeLogger.error("Groq API error", undefined, { functionName: "generate-cut-plan", status: response.status, errText });
       throw new Error(`AI service error: ${response.status}`);
     }
 

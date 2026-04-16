@@ -146,7 +146,7 @@ export default function TrainingCalendar() {
     const preloadMonth = useCallback(async (date: Date) => {
         if (!userId) return;
         const key = monthCacheKey(date);
-        if (localCache.get(userId, key, CACHE_TTL)) return; // already cached
+        if (localCache.get(userId, key, DISPLAY_TTL)) return; // already cached
         try {
             const { data } = await supabase
                 .from('fight_camp_calendar')
@@ -422,8 +422,8 @@ export default function TrainingCalendar() {
                                     <Plus className="h-5 w-5" />
                                 </Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-[340px] rounded-xl p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0 max-h-[calc(100vh-6rem)] overflow-y-auto">
-                                <div className="px-4 pt-4 pb-3">
+                            <DialogContent className="max-w-[340px] rounded-2xl p-0 border border-border/20 bg-background shadow-2xl gap-0 max-h-[calc(100vh-6rem)] overflow-y-auto">
+                                <div className="px-4 pt-5 pb-2">
                                     <DialogHeader>
                                         <DialogTitle className="text-[15px] font-semibold text-center">
                                             {editingSession ? 'Edit Session' : 'Log Session'}

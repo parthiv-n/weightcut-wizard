@@ -64,20 +64,26 @@ serve(async (req) => {
       );
     }
 
-    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
-    if (!GROK_API_KEY) {
-      throw new Error("GROK_API_KEY is not configured");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+    if (!GROQ_API_KEY) {
+      throw new Error("GROQ_API_KEY is not configured");
     }
 
     const hasImage = !!imageBase64;
     edgeLogger.info("Analyzing meal", { hasDescription: !!mealDescription, hasImage });
 
-    const systemPrompt = `Nutrition analysis expert. Return ONLY valid JSON.
+    const systemPrompt = `You are a JSON API. Respond with ONLY the JSON object. No preamble, no explanation, no markdown — just raw JSON.
+Nutrition analysis expert.
 
 Rules:
+- CRITICAL: Parse quantities from the description. "4 chicken breasts" = 4 × one chicken breast. "2 eggs" = 2 eggs. Always multiply per-item nutrition by the stated quantity.
+- If no quantity is stated, assume 1 standard serving.
+- For photos: count visible items (e.g., 3 meatballs on plate = 3 × one meatball).
+- The "quantity" field in each item must reflect the actual count/amount (e.g., "4 breasts", "2 large eggs").
+- Total meal calories/macros must equal the sum of all items WITH their quantities applied.
 - Separate distinct food items (e.g., "bread with banana, eggs, nutella" → 4 items)
 - Do NOT split a single item into raw sub-ingredients (e.g., "tiger bread" stays as one item)
-- Each item: total macros (not per-100g), realistic portions
+- Each item: total macros for the FULL quantity (not per-100g, not per single unit unless quantity is 1)
 - Use USDA/nutrition databases for reference
 - If analyzing a photo, estimate portion sizes from visual cues (plate size, utensils, hand for scale)
 - If both photo and text description are provided, use the description to refine portion estimates
@@ -98,37 +104,38 @@ Rules:
     if (hasImage && mealDescription) {
       userContent = [
         { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}` } },
-        { type: "text", text: `Analyze this meal photo. Additional context from the user: "${mealDescription}". Return nutritional JSON.` },
+        { type: "text", text: `Analyze this meal photo. Additional context: "${mealDescription}". Count all visible items and multiply nutrition accordingly. Return nutritional JSON.` },
       ];
     } else if (hasImage) {
       userContent = [
         { type: "image_url", image_url: { url: `data:image/jpeg;base64,${imageBase64}` } },
-        { type: "text", text: "Analyze this meal photo and estimate the nutritional content. Return JSON." },
+        { type: "text", text: "Analyze this meal photo. Count all visible food items and estimate total nutritional content for everything shown. Return JSON." },
       ];
     } else {
-      userContent = `Analyze this meal and provide nutritional information: "${mealDescription}"`;
+      userContent = `Analyze this meal. Pay attention to quantities — if the user says "4 chicken breasts", calculate nutrition for ALL 4, not just 1. Meal: "${mealDescription}"`;
     }
 
-    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${GROK_API_KEY}`,
+        "Authorization": `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "grok-4-1-fast-reasoning",
+        model: hasImage ? "meta-llama/llama-4-scout-17b-16e-instruct" : "openai/gpt-oss-120b",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userContent }
         ],
-        temperature: 0.2,
-        max_completion_tokens: 800
+        temperature: 0.1,
+        max_tokens: 800,
+        ...(!hasImage && { response_format: { type: "json_object" } })
       })
     });
 
     if (!response.ok) {
       const errorData = await response.json();
-      edgeLogger.error("Grok API error", undefined, { functionName: "analyze-meal", status: response.status, errorData });
+      edgeLogger.error("Groq API error", undefined, { functionName: "analyze-meal", status: response.status, errorData });
 
       if (response.status === 429) {
         return new Response(
@@ -155,12 +162,12 @@ Rules:
     }
 
     const data = await response.json();
-    edgeLogger.info("Grok response received");
+    edgeLogger.info("Groq response received");
 
     const { content, filtered } = extractContent(data);
     if (!content) {
       if (filtered) throw new Error("Content was filtered for safety. Please try a different meal description.");
-      throw new Error("No response from Grok API");
+      throw new Error("No response from Groq API");
     }
 
     const nutritionData = parseJSON(content);

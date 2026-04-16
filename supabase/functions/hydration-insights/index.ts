@@ -37,10 +37,10 @@ serve(async (req) => {
     }
 
     const { hydrationData, profileData, recentLogs } = await req.json();
-    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
 
-    if (!GROK_API_KEY) {
-      throw new Error("GROK_API_KEY is not configured");
+    if (!GROQ_API_KEY) {
+      throw new Error("GROQ_API_KEY is not configured");
     }
 
     const systemPrompt = `You are the FightCamp Wizard, a science-based combat sports hydration coach. Safety first.
@@ -57,20 +57,20 @@ Brief insight + one actionable recommendation.`;
 
     edgeLogger.info("Calling Grok API for hydration insights");
 
-    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${GROK_API_KEY}`,
+        "Authorization": `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "grok-4-1-fast-reasoning",
+        model: "llama-3.1-8b-instant",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
         ],
         temperature: 0.7,
-        max_completion_tokens: 256
+        max_tokens: 256
       })
     });
 
@@ -94,7 +94,7 @@ Brief insight + one actionable recommendation.`;
         );
       }
       const errorData = await response.json();
-      edgeLogger.error("Grok API error", undefined, { functionName: "hydration-insights", status: response.status, errorData });
+      edgeLogger.error("Groq API error", undefined, { functionName: "hydration-insights", status: response.status, errorData });
       return new Response(
         JSON.stringify({ error: "AI service unavailable" }),
         { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
@@ -102,12 +102,12 @@ Brief insight + one actionable recommendation.`;
     }
 
     const data = await response.json();
-    edgeLogger.info("Grok hydration response received");
+    edgeLogger.info("Groq hydration response received");
 
     const { content: insight, filtered } = extractContent(data);
     if (!insight) {
       if (filtered) throw new Error("Content was filtered for safety. Please try a different request.");
-      throw new Error("No response from Grok API");
+      throw new Error("No response from Groq API");
     }
 
     return new Response(JSON.stringify({ insight }), {

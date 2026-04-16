@@ -264,10 +264,10 @@ serve(async (req) => {
     });
 
     const { messages, userName } = await req.json();
-    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
 
-    if (!GROK_API_KEY) {
-      throw new Error("GROK_API_KEY is not configured");
+    if (!GROQ_API_KEY) {
+      throw new Error("GROQ_API_KEY is not configured");
     }
 
     // Cap conversation history to last 20 messages to prevent token explosion
@@ -298,26 +298,26 @@ Example of what TO do: "Eggs are a great choice here. Four to six whole eggs wou
 
     edgeLogger.info("Calling Grok API with full athlete data context");
 
-    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${GROK_API_KEY}`,
+        "Authorization": `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "grok-4-1-fast-reasoning",
+        model: "llama-3.1-8b-instant",
         messages: [
           { role: "system", content: systemPrompt },
           ...cappedMessages
         ],
         temperature: 0.65,
-        max_completion_tokens: 1500
+        max_tokens: 1500
       })
     });
 
     if (!response.ok) {
       const errorData = await response.json();
-      edgeLogger.error("Grok API error", undefined, { functionName: "wizard-chat", status: response.status, errorData });
+      edgeLogger.error("Groq API error", undefined, { functionName: "wizard-chat", status: response.status, errorData });
 
       if (response.status === 429) {
         return new Response(
@@ -341,7 +341,7 @@ Example of what TO do: "Eggs are a great choice here. Four to six whole eggs wou
       }
 
       return new Response(
-        JSON.stringify({ error: `Grok API error: ${errorData.error?.message || 'Unknown error'}` }),
+        JSON.stringify({ error: `Groq API error: ${errorData.error?.message || 'Unknown error'}` }),
         { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     }
@@ -355,7 +355,7 @@ Example of what TO do: "Eggs are a great choice here. Four to six whole eggs wou
       if (filtered) {
         generatedText = "I can't provide that specific advice for safety reasons. Let me help you with a safer approach to your weight cut goals.";
       } else {
-        throw new Error("No response from Grok API");
+        throw new Error("No response from Groq API");
       }
     }
 

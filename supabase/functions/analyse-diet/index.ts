@@ -51,16 +51,17 @@ serve(async (req) => {
       );
     }
 
-    const GROK_API_KEY = Deno.env.get("GROK_API_KEY");
-    if (!GROK_API_KEY) {
-      throw new Error("GROK_API_KEY is not configured");
+    const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
+    if (!GROQ_API_KEY) {
+      throw new Error("GROQ_API_KEY is not configured");
     }
 
     edgeLogger.info("Analysing diet", { date, mealCount: meals.length });
 
-    const systemPrompt = `You are a professional combat sports nutritionist. Analyse the athlete's full day of eating and estimate micronutrient intake based on known food composition profiles.
+    const systemPrompt = `You are a JSON API. Respond with ONLY the JSON object. NEVER use em dashes in any text, use commas, periods, or regular hyphens instead. No preamble, no explanation, no markdown — just raw JSON.
+You are a professional combat sports nutritionist. Analyse the athlete's full day of eating and estimate micronutrient intake based on known food composition profiles.
 
-Return ONLY valid JSON with this exact structure:
+Return this exact JSON structure:
 {
   "summary": "1 punchy sentence: what's good and what's missing. No fluff.",
   "mealBreakdown": [
@@ -108,26 +109,27 @@ Macro targets: ${macroGoals?.calorieTarget || "not set"} kcal, ${macroGoals?.pro
 
 Athlete profile: ${profile?.age || "?"} years, ${profile?.sex || "?"}, ${profile?.current_weight_kg || "?"}kg, training ${profile?.training_frequency || "?"}/week`;
 
-    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${GROK_API_KEY}`,
+        "Authorization": `Bearer ${GROQ_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "grok-4-1-fast-reasoning",
+        model: "openai/gpt-oss-120b",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt }
         ],
-        temperature: 0.3,
-        max_completion_tokens: 2500
+        temperature: 0.1,
+        max_tokens: 2500,
+        response_format: { type: "json_object" }
       })
     });
 
     if (!response.ok) {
       const errorData = await response.json();
-      edgeLogger.error("Grok API error", undefined, { functionName: "analyse-diet", status: response.status, errorData });
+      edgeLogger.error("Groq API error", undefined, { functionName: "analyse-diet", status: response.status, errorData });
 
       if (response.status === 429) {
         return new Response(
@@ -143,21 +145,21 @@ Athlete profile: ${profile?.age || "?"} years, ${profile?.sex || "?"}, ${profile
         );
       }
 
-      throw new Error(`Grok API error: ${errorData.error?.message || 'Unknown error'}`);
+      throw new Error(`Groq API error: ${errorData.error?.message || 'Unknown error'}`);
     }
 
     const data = await response.json();
-    edgeLogger.info("Grok diet analysis response received");
+    edgeLogger.info("Groq diet analysis response received");
 
     const finishReason = data.choices?.[0]?.finish_reason;
     if (finishReason === 'length') {
-      edgeLogger.warn("Grok response truncated", { functionName: "analyse-diet", finishReason });
+      edgeLogger.warn("Groq response truncated", { functionName: "analyse-diet", finishReason });
     }
 
     const { content, filtered } = extractContent(data);
     if (!content) {
       if (filtered) throw new Error("Content was filtered for safety.");
-      throw new Error("No response from Grok API");
+      throw new Error("No response from Groq API");
     }
 
     const analysisData = parseJSON(content);

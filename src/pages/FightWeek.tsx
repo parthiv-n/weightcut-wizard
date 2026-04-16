@@ -294,7 +294,7 @@ export default function FightWeek() {
           isOpen={true}
           isGenerating={true}
           steps={fwAiTask.steps}
-          title={fwAiTask.label}
+            startedAt={fwAiTask.startedAt}          title={fwAiTask.label}
           onCancel={() => aiDismiss(fwAiTask.id)}
         />
       )}

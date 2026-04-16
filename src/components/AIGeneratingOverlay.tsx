@@ -44,6 +44,7 @@ export const AIGeneratingOverlay = memo(function AIGeneratingOverlay({
       steps={steps}
       title={title}
       subtitle={subtitle}
+      startedAt={activeTask?.startedAt}
       onCompletion={onCompletion}
       onCancel={onCancel}
       onMinimize={activeTask ? handleMinimize : undefined}
