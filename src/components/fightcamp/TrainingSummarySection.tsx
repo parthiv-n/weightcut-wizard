@@ -371,8 +371,8 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
                                         : isSaved
                                             ? "bg-accent/40 text-foreground/70 hover:bg-accent/60"
                                             : isCurrent
-                                                ? "border border-dashed border-border text-foreground/50 hover:bg-accent/30"
-                                                : "bg-accent/20 text-foreground/50"
+                                                ? "border border-dashed border-border text-foreground/75 hover:bg-accent/30"
+                                                : "bg-accent/20 text-foreground/75"
                                     }
                                 `}
                             >
@@ -440,89 +440,77 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
             {summaryToDisplay && (
                 <div className="space-y-3">
                     <div className="flex items-center justify-between w-full">
-                        <button
-                            onClick={() => setIsSummaryOpen(!isSummaryOpen)}
-                            className="flex items-center gap-2"
-                        >
-                            <ChevronDown
-                                className={`h-4 w-4 text-muted-foreground transition-transform ${isSummaryOpen ? "" : "-rotate-90"}`}
-                            />
-                            <span className="text-sm font-semibold text-muted-foreground">
-                                Week Summary
-                            </span>
+                        <button onClick={() => setIsSummaryOpen(!isSummaryOpen)} className="flex items-center gap-2">
+                            <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground/70 transition-transform ${isSummaryOpen ? "" : "-rotate-90"}`} />
+                            <span className="text-[13px] font-semibold text-foreground">Week Summary</span>
                         </button>
                         {selectedSummary && (
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                onClick={() => handleDeleteSummary(selectedSummary.id)}
-                            >
-                                <Trash2 className="h-4 w-4" />
-                            </Button>
+                            <button onClick={() => handleDeleteSummary(selectedSummary.id)}
+                                className="h-8 w-8 flex items-center justify-center rounded-xl text-muted-foreground/30 active:text-destructive active:bg-destructive/10 transition-colors">
+                                <Trash2 className="h-3.5 w-3.5" />
+                            </button>
                         )}
                     </div>
 
                     {isSummaryOpen && (
                         <div className="space-y-3">
                             {summaryToDisplay.weekOverview && (
-                                <p className="text-sm text-muted-foreground italic px-1">
-                                    {summaryToDisplay.weekOverview}
+                                <p className="text-[13px] text-foreground/75 leading-relaxed">
+                                    {(summaryToDisplay.weekOverview || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}
                                 </p>
                             )}
 
-                            {summaryToDisplay.sportSections?.map(section => {
-                                return (
-                                    <Card
-                                        key={section.sport}
-                                        className="p-4 rounded-xl shadow-sm card-surface overflow-hidden relative border-border"
-                                    >
-                                        <div className="absolute top-0 left-0 w-2 h-full" style={{ backgroundColor: getSessionColor(section.sport, customColors) }} />
-                                        <div className="ml-2">
-                                            <h4 className="font-bold text-base text-foreground mb-3">
-                                                {section.sport}
-                                                <span className="text-xs text-muted-foreground font-normal ml-2">
-                                                    {section.sessions_count} session{section.sessions_count !== 1 ? "s" : ""}
-                                                </span>
-                                            </h4>
+                            {summaryToDisplay.sportSections?.map(section => (
+                                <div key={section.sport} className="rounded-2xl border-2 border-border/40 overflow-hidden">
+                                    {/* Sport header */}
+                                    <div className="flex items-center gap-2.5 px-3.5 py-2.5 border-b border-border/10">
+                                        <div className="h-3 w-3 rounded-full flex-shrink-0" style={{ backgroundColor: getSessionColor(section.sport, customColors) }} />
+                                        <span className="text-[13px] font-semibold text-foreground">{section.sport}</span>
+                                        <span className="text-[11px] text-muted-foreground/70 ml-auto tabular-nums">{section.sessions_count} session{section.sessions_count !== 1 ? "s" : ""}</span>
+                                    </div>
 
-                                            <div className="space-y-4">
-                                                {section.techniques?.map((tech, i) => (
-                                                    <div key={i}>
-                                                        <h5 className="font-semibold text-sm text-foreground/90 mb-1.5">
-                                                            {tech.name}
-                                                        </h5>
-                                                        <ol className="list-decimal list-inside space-y-0.5 text-xs text-foreground/80 mb-2">
-                                                            {tech.steps?.map((step, j) => (
-                                                                <li key={j}>{step}</li>
-                                                            ))}
-                                                        </ol>
-                                                        <div className="bg-primary/10 border border-primary/20 rounded-xl px-3 py-2 text-xs text-foreground/80">
-                                                            <span className="font-semibold text-primary">
-                                                                Sparring tip:
-                                                            </span>{" "}
-                                                            {tech.sparringTip}
-                                                        </div>
-                                                        {tech.drillFlow && tech.drillFlow.length > 0 && (
-                                                            <div className="mt-2 bg-secondary/10 border border-secondary/20 rounded-xl px-3 py-2.5">
-                                                                <p className="text-[10px] font-bold uppercase tracking-wider text-secondary mb-1.5">Improvement Flow</p>
-                                                                <div className="flex items-center gap-1 flex-wrap">
-                                                                    {tech.drillFlow.map((step, k) => (
-                                                                        <div key={k} className="flex items-center gap-1">
-                                                                            {k > 0 && <span className="text-secondary/50 text-xs">→</span>}
-                                                                            <span className="text-xs text-foreground/80 bg-background/50 rounded-lg px-2 py-0.5">{step}</span>
-                                                                        </div>
-                                                                    ))}
+                                    {/* Techniques */}
+                                    <div className="divide-y divide-border/10">
+                                        {section.techniques?.map((tech, i) => (
+                                            <div key={i} className="px-3.5 py-3">
+                                                <p className="text-[13px] font-medium text-foreground mb-2">{tech.name}</p>
+
+                                                {tech.steps && tech.steps.length > 0 && (
+                                                    <div className="space-y-1 mb-2.5">
+                                                        {tech.steps.map((step, j) => (
+                                                            <div key={j} className="flex items-start gap-2">
+                                                                <div className="h-4 w-4 rounded-full bg-muted/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                                    <span className="text-[9px] font-bold text-muted-foreground tabular-nums">{j + 1}</span>
                                                                 </div>
+                                                                <p className="text-[12px] text-foreground/70 leading-relaxed">{(step || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}</p>
                                                             </div>
-                                                        )}
+                                                        ))}
                                                     </div>
-                                                ))}
+                                                )}
+
+                                                {tech.sparringTip && (
+                                                    <div className="rounded-xl bg-primary/5 px-3 py-2">
+                                                        <p className="text-[12px] text-foreground/75 leading-relaxed">
+                                                            <span className="font-medium text-primary/70">Sparring tip</span> {(tech.sparringTip || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}
+                                                        </p>
+                                                    </div>
+                                                )}
+
+                                                {tech.drillFlow && tech.drillFlow.length > 0 && (
+                                                    <div className="flex items-center gap-1 flex-wrap mt-2">
+                                                        {tech.drillFlow.map((step, k) => (
+                                                            <div key={k} className="flex items-center gap-1">
+                                                                {k > 0 && <span className="text-muted-foreground/30 text-[10px]">→</span>}
+                                                                <span className="text-[11px] text-foreground/75 bg-muted/20 rounded-lg px-2 py-0.5">{step}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
-                                        </div>
-                                    </Card>
-                                );
-                            })}
+                                        ))}
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     )}
                 </div>

@@ -58,7 +58,7 @@ serve(async (req) => {
 
     edgeLogger.info("Analysing diet", { date, mealCount: meals.length });
 
-    const systemPrompt = `You are a JSON API. Respond with ONLY the JSON object. No preamble, no explanation, no markdown — just raw JSON.
+    const systemPrompt = `You are a JSON API. Respond with ONLY the JSON object. NEVER use em dashes in any text, use commas, periods, or regular hyphens instead. No preamble, no explanation, no markdown — just raw JSON.
 You are a professional combat sports nutritionist. Analyse the athlete's full day of eating and estimate micronutrient intake based on known food composition profiles.
 
 Return this exact JSON structure:

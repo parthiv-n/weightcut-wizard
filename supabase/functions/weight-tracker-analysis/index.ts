@@ -134,7 +134,7 @@ serve(async (req) => {
     const requiredWeeklyLoss = weightToLose > 0 ? weightToLose / weeksRemaining : 0;
     const requiredWeeklyGain = weightToGain > 0 ? weightToGain / weeksRemaining : 0;
 
-    const systemPrompt = `You are a JSON API. Respond with ONLY the JSON object.
+    const systemPrompt = `You are a JSON API. Respond with ONLY the JSON object. NEVER use em dashes in any text, use commas, periods, or regular hyphens instead.
 You are the FightCamp Wizard — evidence-based sports nutrition specialist for combat athletes.
 
 RULES:

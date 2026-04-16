@@ -1,4 +1,4 @@
-import { X, RefreshCw, Sparkles } from "lucide-react";
+import { X, RefreshCw } from "lucide-react";
 import type { DietAnalysisResult } from "@/types/dietAnalysis";
 
 const NUTRIENT_COLORS: Record<string, string> = {
@@ -12,75 +12,35 @@ const NUTRIENT_COLORS: Record<string, string> = {
   "Fiber": "#84cc16",
 };
 
-const SEVERITY_STYLES: Record<string, { bg: string; text: string; dot: string }> = {
-  critical: { bg: "bg-red-500/10", text: "text-red-400", dot: "bg-red-500" },
-  moderate: { bg: "bg-orange-500/10", text: "text-orange-400", dot: "bg-orange-500" },
-  low: { bg: "bg-yellow-500/10", text: "text-yellow-400", dot: "bg-yellow-500" },
-};
-
-interface NutrientRingProps {
-  name: string;
-  percentRDA: number;
-  color: string;
-}
-
-function NutrientRing({ name, percentRDA, color }: NutrientRingProps) {
-  const size = 68;
-  const strokeWidth = 6;
+function NutrientRing({ name, percentRDA, color }: { name: string; percentRDA: number; color: string }) {
+  const size = 56;
+  const strokeWidth = 5;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
   const progress = Math.min(percentRDA / 100, 1);
   const offset = circumference * (1 - progress);
-  const filterId = `glow-diet-${name.replace(/\s/g, "")}`;
 
   return (
     <div className="flex flex-col items-center gap-1">
       <div className="relative" style={{ width: size, height: size }}>
         <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-          <defs>
-            <filter id={filterId} x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="2" result="blur" />
-              <feComposite in="SourceGraphic" in2="blur" operator="over" />
-            </filter>
-          </defs>
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={radius}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={strokeWidth}
-            className="text-border/30"
-          />
+          <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="currentColor" strokeWidth={strokeWidth} className="text-border/20" />
           {progress > 0 && (
-            <circle
-              cx={size / 2}
-              cy={size / 2}
-              r={radius}
-              fill="none"
-              stroke={color}
-              strokeWidth={strokeWidth}
-              strokeDasharray={circumference}
-              strokeDashoffset={offset}
-              strokeLinecap="round"
-              transform={`rotate(-90 ${size / 2} ${size / 2})`}
-              filter={`url(#${filterId})`}
-              style={{ transition: "stroke-dashoffset 0.8s ease" }}
-            />
+            <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={color} strokeWidth={strokeWidth}
+              strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round"
+              transform={`rotate(-90 ${size / 2} ${size / 2})`} style={{ transition: "stroke-dashoffset 0.8s ease" }} />
           )}
         </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="display-number text-xs font-bold leading-none" style={{ color }}>
-            {percentRDA}%
-          </span>
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-[11px] font-bold tabular-nums" style={{ color }}>{percentRDA}%</span>
         </div>
       </div>
-      <span className="text-[9px] uppercase tracking-widest text-muted-foreground text-center leading-tight">
-        {name}
-      </span>
+      <span className="text-[9px] text-muted-foreground/60 text-center leading-tight">{name}</span>
     </div>
   );
 }
+
+const clean = (t: string) => t.replace(/\u2014/g, ' - ').replace(/\u2013/g, '-');
 
 interface DietAnalysisCardProps {
   analysis: DietAnalysisResult;
@@ -91,58 +51,53 @@ interface DietAnalysisCardProps {
 
 export function DietAnalysisCard({ analysis, onDismiss, onRefresh, refreshing }: DietAnalysisCardProps) {
   return (
-    <div className="card-surface p-4 space-y-5">
+    <div className="card-surface p-4 space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary" />
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">
-            Diet Analysis
-          </h3>
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={onRefresh}
-            disabled={refreshing}
-            className="p-1.5 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors disabled:opacity-50"
-          >
-            <RefreshCw className={`h-3.5 w-3.5 text-muted-foreground ${refreshing ? "animate-spin" : ""}`} />
+        <p className="text-[13px] font-semibold text-foreground">Diet Analysis</p>
+        <div className="flex items-center gap-0.5">
+          <button onClick={onRefresh} disabled={refreshing}
+            className="h-8 w-8 flex items-center justify-center rounded-xl text-muted-foreground/40 active:text-foreground active:bg-muted/40 transition-colors disabled:opacity-50">
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
           </button>
-          <button
-            onClick={onDismiss}
-            className="p-1.5 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors"
-          >
-            <X className="h-3.5 w-3.5 text-muted-foreground" />
+          <button onClick={onDismiss}
+            className="h-8 w-8 flex items-center justify-center rounded-xl text-muted-foreground/40 active:text-foreground active:bg-muted/40 transition-colors">
+            <X className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
 
       {/* Summary */}
-      <p className="text-sm text-foreground/80 leading-relaxed">{analysis.summary}</p>
+      <p className="text-[13px] text-foreground/60 leading-relaxed">{clean(analysis.summary)}</p>
 
-      {/* Per-Meal Nutrient Breakdown */}
+      {/* Micronutrient Rings */}
+      {analysis.micronutrients?.length > 0 && (
+        <div>
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold text-center mb-3">Micronutrients</p>
+          <div className="grid grid-cols-4 gap-2 justify-items-center">
+            {analysis.micronutrients.map((nutrient) => (
+              <NutrientRing key={nutrient.name} name={nutrient.name} percentRDA={nutrient.percentRDA}
+                color={NUTRIENT_COLORS[nutrient.name] || "#888"} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Per-Meal Breakdown */}
       {analysis.mealBreakdown?.length > 0 && (
         <div>
-          <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2.5">
-            Per Meal
-          </p>
-          <div className="space-y-2">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold mb-2">Per Meal</p>
+          <div className="space-y-0 rounded-2xl overflow-hidden border border-border/20">
             {analysis.mealBreakdown.map((meal, i) => (
-              <div key={i} className="rounded-xl border border-border bg-muted/20 px-3 py-2.5">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="text-[10px] uppercase tracking-wider font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                    {meal.mealType}
-                  </span>
-                  <span className="text-xs font-medium text-foreground truncate">{meal.mealName}</span>
+              <div key={i} className={`px-3.5 py-2.5 ${i > 0 ? 'border-t border-border/10' : ''}`}>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[10px] uppercase tracking-wider font-semibold text-primary/70">{meal.mealType}</span>
+                  <span className="text-[13px] font-medium text-foreground truncate">{meal.mealName}</span>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-1">
                   {meal.keyNutrients.map((n, j) => (
-                    <span
-                      key={j}
-                      className="text-[10px] px-2 py-0.5 rounded-full border border-border text-muted-foreground"
-                    >
-                      <span className="font-semibold text-foreground/80">{n.name}</span>{" "}
-                      {n.amount}
+                    <span key={j} className="text-[10px] text-foreground/40">
+                      <span className="font-medium text-foreground/60">{n.name}</span> {n.amount}
                     </span>
                   ))}
                 </div>
@@ -152,48 +107,21 @@ export function DietAnalysisCard({ analysis, onDismiss, onRefresh, refreshing }:
         </div>
       )}
 
-      {/* Micronutrient Rings */}
-      {analysis.micronutrients?.length > 0 && (
-        <div>
-          <p className="text-xs uppercase tracking-widest text-muted-foreground text-center mb-3">
-            Micronutrients
-          </p>
-          <div className="grid grid-cols-4 gap-3 justify-items-center">
-            {analysis.micronutrients.map((nutrient) => (
-              <NutrientRing
-                key={nutrient.name}
-                name={nutrient.name}
-                percentRDA={nutrient.percentRDA}
-                color={NUTRIENT_COLORS[nutrient.name] || "#888"}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Gaps */}
       {analysis.gaps?.length > 0 && (
         <div>
-          <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
-            What's Lacking
-          </p>
-          <div className="space-y-2">
-            {analysis.gaps.map((gap) => {
-              const style = SEVERITY_STYLES[gap.severity] || SEVERITY_STYLES.low;
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold mb-2">Gaps</p>
+          <div className="space-y-0 rounded-2xl overflow-hidden border border-border/20">
+            {analysis.gaps.map((gap, i) => {
+              const dotColor = { critical: 'bg-red-400', moderate: 'bg-amber-400', low: 'bg-yellow-400' }[gap.severity] ?? 'bg-yellow-400';
               return (
-                <div key={gap.nutrient} className={`rounded-xl px-3 py-2.5 ${style.bg}`}>
-                  <div className="flex items-center gap-2 mb-0.5">
-                    <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} />
-                    <span className={`text-xs font-semibold ${style.text}`}>
-                      {gap.nutrient}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground ml-auto">
-                      {gap.percentRDA}% RDA
-                    </span>
+                <div key={gap.nutrient} className={`px-3.5 py-2.5 ${i > 0 ? 'border-t border-border/10' : ''}`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`h-2 w-2 rounded-full ${dotColor} flex-shrink-0`} />
+                    <span className="text-[13px] font-medium text-foreground flex-1">{gap.nutrient}</span>
+                    <span className="text-[11px] tabular-nums text-muted-foreground/50">{gap.percentRDA}% RDA</span>
                   </div>
-                  <p className="text-[11px] text-muted-foreground leading-snug pl-3.5">
-                    {gap.reason}
-                  </p>
+                  <p className="text-[12px] text-foreground/40 leading-relaxed mt-0.5 ml-4">{clean(gap.reason)}</p>
                 </div>
               );
             })}
@@ -204,24 +132,15 @@ export function DietAnalysisCard({ analysis, onDismiss, onRefresh, refreshing }:
       {/* Suggestions */}
       {analysis.suggestions?.length > 0 && (
         <div>
-          <p className="text-xs uppercase tracking-widest text-muted-foreground mb-2">
-            Suggested Foods
-          </p>
-          <div className="space-y-2">
-            {analysis.suggestions.map((suggestion, i) => (
-              <div key={i} className="rounded-xl border border-border px-3 py-2.5">
-                <p className="text-xs font-semibold text-foreground">{suggestion.food}</p>
-                <p className="text-[11px] text-muted-foreground leading-snug mt-0.5">
-                  {suggestion.reason}
-                </p>
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold mb-2">Add to Your Diet</p>
+          <div className="space-y-1.5">
+            {analysis.suggestions.map((s, i) => (
+              <div key={i} className="rounded-2xl bg-muted/20 px-3.5 py-2.5">
+                <p className="text-[13px] font-semibold text-foreground">{s.food}</p>
+                <p className="text-[12px] text-foreground/40 leading-relaxed mt-0.5">{clean(s.reason)}</p>
                 <div className="flex flex-wrap gap-1 mt-1.5">
-                  {suggestion.nutrients.map((n) => (
-                    <span
-                      key={n}
-                      className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-medium"
-                    >
-                      {n}
-                    </span>
+                  {s.nutrients.map((n) => (
+                    <span key={n} className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/8 text-primary/70 font-medium">{n}</span>
                   ))}
                 </div>
               </div>
