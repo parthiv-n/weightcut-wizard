@@ -13,7 +13,12 @@ export function stripThinkTags(text: string): string {
     .trim();
 }
 
-/** Extract generated text from Groq API response, stripping think tags */
+/** Replace em dashes with regular dashes throughout a string (recursively for JSON) */
+export function stripEmDashes(text: string): string {
+  return text.replace(/\u2014/g, ' - ').replace(/\u2013/g, '-');
+}
+
+/** Extract generated text from Groq API response, stripping think tags and em dashes */
 export function extractContent(data: any): { content: string | null; filtered: boolean } {
   // Some models put content in message.content, others in reasoning_content + content
   let content = data.choices?.[0]?.message?.content;
@@ -25,6 +30,7 @@ export function extractContent(data: any): { content: string | null; filtered: b
 
   if (content) {
     content = stripThinkTags(content);
+    content = stripEmDashes(content);
   }
 
   const filtered = !content && data.choices?.[0]?.finish_reason === 'content_filter';

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, memo } from "react";
-import { Activity, Brain, RefreshCw, AlertTriangle, CheckCircle, Loader2, TrendingUp, TrendingDown, Minus, X, BookOpen, ChevronDown, Heart, Flame, Shield, Moon, Dumbbell, Gauge, Zap, BarChart3, Sparkles } from "lucide-react";
+import { Activity, Brain, RefreshCw, AlertTriangle, CheckCircle, Loader2, TrendingUp, TrendingDown, Minus, X, BookOpen, ChevronDown, Heart, Flame, Shield, Moon, Dumbbell, Gauge, Zap, BarChart3, Sparkles, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { AIPersistence } from "@/lib/aiPersistence";
@@ -919,74 +919,50 @@ function DeterministicReadinessBadge({ label, score }: { label: ReadinessResult[
 // ─── AI Coach Result Card ─────────────────────────────────────
 function CoachResultCard({ coach, onRefresh }: { coach: CoachResponse; onRefresh: () => void }) {
   const hasStructuredSession = !!coach.recommended_session;
+  const clean = (t: string) => t.replace(/\u2014/g, ' - ').replace(/\u2013/g, '-');
 
   return (
-    <div className="space-y-3">
-      {/* Header with refresh */}
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Coach Analysis</span>
-        <Button variant="ghost" size="icon" className="h-7 w-7" aria-label="Refresh coach analysis" onClick={onRefresh}>
-          <RefreshCw className="h-3.5 w-3.5 text-muted-foreground" />
-        </Button>
+    <div className="space-y-4">
+      {/* Summary */}
+      <div>
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-[13px] font-semibold text-foreground">Summary</p>
+          <button onClick={onRefresh} className="h-8 w-8 flex items-center justify-center rounded-xl text-muted-foreground/40 active:text-foreground active:bg-muted/40 transition-colors" aria-label="Refresh">
+            <RefreshCw className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        <p className="text-[13px] text-foreground/70 leading-relaxed">{clean(coach.coaching_summary)}</p>
       </div>
 
-      {/* Summary */}
-      <p className="text-sm text-foreground/90 leading-relaxed">{coach.coaching_summary}</p>
-
-      {/* Metrics Breakdown */}
-      {coach.metrics_breakdown && coach.metrics_breakdown.length > 0 && (
-        <div className="space-y-2">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Your Metrics Explained</div>
-          {coach.metrics_breakdown.map((mb, i) => {
-            const statusConfig = {
-              good: { dot: 'bg-green-400', border: 'border-green-500/20', bg: 'bg-green-500/5' },
-              caution: { dot: 'bg-blue-400', border: 'border-blue-500/20', bg: 'bg-blue-500/5' },
-              warning: { dot: 'bg-amber-400', border: 'border-amber-500/20', bg: 'bg-amber-500/5' },
-              critical: { dot: 'bg-red-400', border: 'border-red-500/20', bg: 'bg-red-500/5' },
-            }[mb.status] ?? { dot: 'bg-muted-foreground', border: 'border-border/50', bg: 'bg-accent/10' };
-
-            return (
-              <div key={i} className={`rounded-xl p-2.5 border ${statusConfig.border} ${statusConfig.bg}`}>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={`h-2 w-2 rounded-full ${statusConfig.dot}`} />
-                  <span className="text-xs font-semibold text-foreground">{mb.metric}</span>
-                  <span className="text-[9px] uppercase tracking-wider text-muted-foreground ml-auto">{mb.status}</span>
-                </div>
-                <p className="text-xs text-foreground/70 leading-relaxed">{mb.explanation}</p>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Rest day override warning */}
+      {/* Rest day override */}
       {coach.rest_day_override && (
-        <div className="bg-amber-500/10 rounded-xl p-3 border border-amber-500/30">
-          <div className="text-xs font-semibold text-amber-400 flex items-center gap-1.5 mb-1">
-            <AlertTriangle className="h-3.5 w-3.5" /> Rest Day Recommended
+        <div className="rounded-2xl bg-amber-500/8 p-3.5">
+          <div className="flex items-center gap-2 mb-1">
+            <Moon className="h-4 w-4 text-amber-400" />
+            <p className="text-[13px] font-semibold text-amber-400">Rest Day Recommended</p>
           </div>
-          <p className="text-xs text-amber-300/80">Your body and mind need recovery. Skip training today — it'll pay off tomorrow.</p>
+          <p className="text-[12px] text-foreground/50 leading-relaxed">Your body needs recovery. Skipping today will improve tomorrow's session.</p>
         </div>
       )}
 
-      {/* Primary recommended session (structured) */}
+      {/* Recommended Session */}
       {hasStructuredSession && !coach.rest_day_override && (
-        <div className="bg-primary/10 rounded-xl p-3 border border-primary/20">
-          <div className="flex items-center justify-between mb-1.5">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Recommended Session</div>
-            <span className="text-[10px] font-bold bg-primary/20 text-primary px-2 py-0.5 rounded-full">
-              {coach.recommended_session!.type}
-            </span>
-          </div>
-          <div className="flex gap-3 mb-1.5">
-            <div className="text-xs text-foreground/70">
-              <span className="font-semibold text-foreground">{coach.recommended_session!.duration_minutes}</span> min
+        <div className="rounded-2xl bg-muted/30 p-3.5">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold mb-2">Today's Session</p>
+          <p className="text-[15px] font-bold text-foreground mb-1">{coach.recommended_session!.type}</p>
+          <div className="flex items-center gap-4 mb-2">
+            <div className="flex items-center gap-1.5">
+              <Clock className="h-3 w-3 text-muted-foreground/40" />
+              <span className="text-[13px] tabular-nums text-foreground/70">{coach.recommended_session!.duration_minutes} min</span>
             </div>
-            <div className="text-xs text-foreground/70">
-              Max RPE <span className="font-semibold text-foreground">{coach.recommended_session!.max_rpe}</span>
+            <div className="flex items-center gap-1.5">
+              <Gauge className="h-3 w-3 text-muted-foreground/40" />
+              <span className="text-[13px] tabular-nums text-foreground/70">RPE {coach.recommended_session!.max_rpe}</span>
             </div>
           </div>
-          <p className="text-xs text-foreground/70">{coach.recommended_session!.notes}</p>
+          {coach.recommended_session!.notes && (
+            <p className="text-[12px] text-foreground/50 leading-relaxed">{clean(coach.recommended_session!.notes)}</p>
+          )}
         </div>
       )}
 
@@ -994,53 +970,76 @@ function CoachResultCard({ coach, onRefresh }: { coach: CoachResponse; onRefresh
       {hasStructuredSession && coach.alternatives && coach.alternatives.length > 0 && (
         <div className="grid grid-cols-2 gap-2">
           {coach.alternatives.map((alt, i) => (
-            <div key={i} className="bg-accent/20 rounded-xl p-2.5">
-              <div className="text-[10px] font-semibold text-muted-foreground mb-1">{alt.condition}</div>
-              <div className="text-xs font-medium text-foreground mb-0.5">{alt.type}</div>
-              <div className="text-[10px] text-foreground/60">{alt.duration_minutes}min · RPE {alt.max_rpe}</div>
-              <p className="text-[10px] text-foreground/50 mt-1">{alt.notes}</p>
+            <div key={i} className="rounded-2xl bg-muted/20 p-3">
+              <p className="text-[10px] text-muted-foreground/50 mb-1">{clean(alt.condition)}</p>
+              <p className="text-[13px] font-semibold text-foreground mb-0.5">{alt.type}</p>
+              <p className="text-[11px] tabular-nums text-foreground/50">{alt.duration_minutes} min, RPE {alt.max_rpe}</p>
             </div>
           ))}
         </div>
       )}
 
-      {/* Next Session Suggestion */}
-      {coach.next_session_suggestion && (
-        <div className="bg-primary/5 rounded-xl p-3 border border-primary/15">
-          <div className="text-[10px] uppercase tracking-wider text-primary/70 mb-1.5 font-semibold">Looking Ahead</div>
-          <p className="text-sm text-foreground/85 leading-relaxed">{coach.next_session_suggestion}</p>
+      {/* Metrics */}
+      {coach.metrics_breakdown && coach.metrics_breakdown.length > 0 && (
+        <div>
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold mb-2">Metrics</p>
+          <div className="space-y-0 rounded-2xl overflow-hidden border border-border/20">
+            {coach.metrics_breakdown.map((mb, i) => {
+              const dotColor = {
+                good: 'bg-green-400', caution: 'bg-blue-400', warning: 'bg-amber-400', critical: 'bg-red-400',
+              }[mb.status] ?? 'bg-muted-foreground';
+
+              return (
+                <div key={i} className={`px-3.5 py-2.5 ${i > 0 ? 'border-t border-border/10' : ''}`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`h-2 w-2 rounded-full ${dotColor} flex-shrink-0`} />
+                    <span className="text-[13px] font-medium text-foreground flex-1">{mb.metric}</span>
+                  </div>
+                  <p className="text-[12px] text-foreground/45 leading-relaxed mt-0.5 ml-4">{clean(mb.explanation)}</p>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
-      {/* Backward compat: old cached data with next_session_advice string */}
+      {/* Next session */}
+      {coach.next_session_suggestion && (
+        <div>
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold mb-1.5">Looking Ahead</p>
+          <p className="text-[13px] text-foreground/60 leading-relaxed">{clean(coach.next_session_suggestion)}</p>
+        </div>
+      )}
+
       {!hasStructuredSession && !coach.next_session_suggestion && coach.next_session_advice && (
-        <div className="bg-accent/20 rounded-xl p-3">
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1 font-semibold">Next Session</div>
-          <p className="text-sm font-medium text-foreground">{coach.next_session_advice}</p>
+        <div>
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold mb-1.5">Next Session</p>
+          <p className="text-[13px] text-foreground/60 leading-relaxed">{clean(coach.next_session_advice)}</p>
         </div>
       )}
 
       {/* Recovery focus */}
       {coach.recovery_focus?.length > 0 && (
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1.5 font-semibold">Recovery Focus</div>
-          <ul className="space-y-1">
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold mb-2">Recovery Focus</p>
+          <div className="space-y-1.5">
             {coach.recovery_focus.map((item, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-foreground/80">
-                <CheckCircle className="h-3.5 w-3.5 text-green-500 mt-0.5 shrink-0" />
-                {item}
-              </li>
+              <div key={i} className="flex items-start gap-2.5">
+                <div className="h-5 w-5 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <CheckCircle className="h-3 w-3 text-green-500" />
+                </div>
+                <p className="text-[13px] text-foreground/60 leading-relaxed">{clean(item)}</p>
+              </div>
             ))}
-          </ul>
+          </div>
         </div>
       )}
 
-      {/* Risk flags from overtraining */}
+      {/* Risk level */}
       {coach.risk_level && coach.risk_level !== 'low' && (
-        <div className="bg-red-500/10 rounded-xl p-3 border border-red-500/20">
-          <div className="text-[10px] uppercase tracking-wider text-red-400 mb-1 font-semibold flex items-center gap-1">
-            <AlertTriangle className="h-3 w-3" /> Risk Level: {coach.risk_level.toUpperCase()}
-          </div>
+        <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-2xl bg-red-500/8">
+          <AlertTriangle className="h-4 w-4 text-red-400 flex-shrink-0" />
+          <p className="text-[13px] font-medium text-red-400">Risk: {coach.risk_level}</p>
         </div>
       )}
     </div>
