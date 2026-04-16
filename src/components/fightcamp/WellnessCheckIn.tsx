@@ -286,7 +286,7 @@ export function WellnessCheckIn({ userId, onSubmit, isSubmitting }: WellnessChec
         variant="outline"
       >
         <Brain className="h-4 w-4" />
-        {isSubmitting ? 'Analyzing...' : 'Submit & Get Coach Advice'}
+        {isSubmitting ? 'Analyzing...' : 'Get Coach Advice'}
       </Button>
     </div>
   );
