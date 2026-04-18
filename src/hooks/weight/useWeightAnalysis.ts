@@ -8,7 +8,7 @@ import { AIPersistence } from "@/lib/aiPersistence";
 import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
 import { nutritionCache } from "@/lib/nutritionCache";
-import { Scale, TrendingDown, Sparkles } from "lucide-react";
+import { Scale, TrendingDown, CheckCircle } from "lucide-react";
 import type { AIAnalysis, Profile, DebugData } from "@/pages/weight/types";
 
 interface UseWeightAnalysisParams {
@@ -98,7 +98,7 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
       steps: [
         { icon: Scale, label: "Loading weight data" },
         { icon: TrendingDown, label: "Analyzing trends" },
-        { icon: Sparkles, label: "Generating insights" },
+        { icon: CheckCircle, label: "Generating insights" },
       ],
       returnPath: "/weight",
     });

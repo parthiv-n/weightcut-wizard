@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Edit2, Trash2, ChevronDown, Sparkles, Star } from "lucide-react";
+import { Edit2, Trash2, ChevronDown, Star } from "lucide-react";
 import { useState, useRef, useEffect, memo } from "react";
 import { motion, useMotionValue, useReducedMotion } from "motion/react";
 import { springs } from "@/lib/motion";
@@ -126,9 +126,6 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete, onFavor
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1">
               <span className="text-[11px] font-semibold leading-tight text-foreground truncate">{meal.meal_name || "Untitled"}</span>
-              {meal.is_ai_generated && (
-                <Sparkles className="h-2.5 w-2.5 text-primary flex-shrink-0 drop-shadow-md" />
-              )}
             </div>
             {(p > 0 || c > 0 || f > 0) && (
               <div className="flex items-center gap-2 mt-0.5">

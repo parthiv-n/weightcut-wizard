@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  Dumbbell, Zap, Flame, Target, Sparkles,
+  Dumbbell, Zap, Flame, Target,
   ChevronRight, ChevronLeft, Save, Loader2, Clock, Calendar,
   Layout, Layers, Rows3, Grid3X3, Brain,
 } from "lucide-react";
@@ -558,7 +558,7 @@ export function RoutineGeneratorSheet({ open, onOpenChange, onGenerate, onSave, 
                     className="w-full h-14 rounded-2xl text-[15px] font-semibold"
                     size="lg"
                   >
-                    <Sparkles className="h-5 w-5 mr-2" />Generate Routine
+                    Generate Routine
                   </Button>
                 )}
               </motion.div>

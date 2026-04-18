@@ -7,7 +7,7 @@ import { useAITask } from "@/contexts/AITaskContext";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
-import { Activity, Utensils, Sparkles } from "lucide-react";
+import { Activity, Utensils, CheckCircle } from "lucide-react";
 import type { Meal } from "@/pages/nutrition/types";
 
 interface UseMealPlanGenerationParams {
@@ -64,7 +64,7 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
       steps: [
         { icon: Activity, label: "Analyzing nutritional needs" },
         { icon: Utensils, label: "Designing meal structure" },
-        { icon: Sparkles, label: "Optimizing recipes" },
+        { icon: CheckCircle, label: "Optimizing recipes" },
       ],
       returnPath: "/nutrition",
     });

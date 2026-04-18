@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { format } from "date-fns";
-import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Sparkles, Activity, Scale, Trash2, RefreshCw, Edit2, ChevronDown, Check, CheckCircle2, Gem, Minus, Plus } from "lucide-react";
+import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Activity, Scale, Trash2, RefreshCw, Edit2, ChevronDown, Check, CheckCircle2, Gem, Minus, Plus, Loader2 } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
@@ -232,7 +232,7 @@ export default function WeightTracker() {
 
       if (weeklyLossPercent > 1.5) return { message: "Warning: Weight loss pace is too aggressive. Reduce deficit to maintain performance and safety.", icon: AlertTriangle, color: "text-danger" };
       if (weeklyLoss > 1.0) return { message: "Caution: Losing weight slightly fast. Monitor energy levels and adjust if needed.", icon: TrendingDown, color: "text-warning" };
-      if (weeklyLoss >= 0.5 && weeklyLoss <= 1.0) return { message: "Excellent pace! You're losing weight safely within the optimal 0.5-1kg per week range.", icon: TrendingDown, color: "text-success" };
+      if (weeklyLoss >= 0.5 && weeklyLoss <= 1.0) return { message: "", icon: TrendingDown, color: "text-success" };
       if (weeklyLoss > 0 && weeklyLoss < 0.5) return { message: "Steady progress. Consider slight calorie reduction if deadline is approaching.", icon: TrendingDown, color: "text-primary" };
       if (weeklyLoss <= 0) return { message: "No weight loss detected. Review calorie intake and increase activity if possible.", icon: TrendingUp, color: "text-warning" };
     }
@@ -249,7 +249,7 @@ export default function WeightTracker() {
     { icon: Activity, label: "Analyzing weight trends", color: "text-blue-400" },
     { icon: TrendingDown, label: "Calculating loss rate", color: "text-green-500" },
     { icon: Target, label: "Projecting goal completion", color: "text-blue-500" },
-    { icon: Sparkles, label: "Formulating strategy", color: "text-yellow-400" },
+    { icon: CheckCircle2, label: "Formulating strategy", color: "text-yellow-400" },
   ];
 
   const { tasks: aiTasks, dismissTask: aiDismiss } = useAITask();
@@ -477,14 +477,14 @@ export default function WeightTracker() {
               <span className="font-medium">{getWeightProgress().toFixed(0)}%</span>
             </div>
             <Progress value={getWeightProgress()} className="h-1" />
-            <p className="text-[11px] text-muted-foreground leading-relaxed">{insight.message}</p>
+            {insight.message && <p className="text-[11px] text-muted-foreground leading-relaxed">{insight.message}</p>}
           </div>
         )}
 
         {/* AI Analysis Loading */}
         {analyzingWeight && (
           <div className="card-surface p-5 flex flex-col items-center gap-3">
-            <Sparkles className="h-6 w-6 text-primary animate-spin" />
+            <Loader2 className="h-6 w-6 text-primary animate-spin" />
             <div className="space-y-2 w-full max-w-xs">
               <Skeleton className="h-3 w-full" />
               <Skeleton className="h-3 w-3/4 mx-auto" />
@@ -507,7 +507,7 @@ export default function WeightTracker() {
                   <p className="text-[13px] font-semibold text-foreground">
                     {displayRiskLevel === 'green' ? 'Safe Pace' : displayRiskLevel === 'yellow' ? 'Moderate Pace' : 'Aggressive Pace'}
                   </p>
-                  <p className="text-[12px] text-foreground/40 mt-0.5">
+                  <p className="text-[12px] text-foreground mt-0.5">
                     {isAtOrBelowTarget ? 'At or below target, maintenance mode' : `${aiAnalysis.requiredWeeklyLoss.toFixed(2)} kg/week required`}
                   </p>
                 </div>
@@ -634,8 +634,8 @@ export default function WeightTracker() {
                 ].map((m) => (
                   <div key={m.label} className="rounded-2xl bg-muted/20 px-2 py-2.5 text-center">
                     <p className={`text-[16px] font-bold tabular-nums ${m.color}`}>{m.value}</p>
-                    <p className="text-[10px] text-muted-foreground/50">{m.unit}</p>
-                    {m.sub && <p className="text-[9px] text-muted-foreground/40 mt-0.5">{m.sub}</p>}
+                    <p className="text-[10px] text-foreground">{m.unit}</p>
+                    {m.sub && <p className="text-[9px] text-foreground mt-0.5">{m.sub}</p>}
                   </div>
                 ))}
               </div>
@@ -653,27 +653,54 @@ export default function WeightTracker() {
 
               {/* Guidance — list style */}
               <div className="space-y-0 rounded-2xl overflow-hidden border border-border/20">
-                {/* Risk */}
+                {/* Why These Targets */}
                 <div className="px-3.5 py-3">
-                  <p className="text-[13px] font-medium text-foreground mb-1">Risk Assessment</p>
-                  <p className="text-[12px] text-foreground/40 leading-relaxed">{(aiAnalysis.riskExplanation || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}</p>
+                  <p className="text-[13px] font-semibold text-primary mb-1">Why These Targets</p>
+                  <p className="text-[12px] text-foreground leading-relaxed">{(aiAnalysis.reasoningExplanation || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}</p>
                 </div>
                 {/* Strategy */}
                 <div className="px-3.5 py-3 border-t border-border/10">
-                  <p className="text-[13px] font-medium text-foreground mb-1">Calorie Strategy</p>
-                  <p className="text-[12px] text-foreground/40 leading-relaxed">{(aiAnalysis.strategicGuidance || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}</p>
+                  <p className="text-[13px] font-semibold text-primary mb-1">Calorie Strategy</p>
+                  <p className="text-[12px] text-foreground leading-relaxed">{(aiAnalysis.strategicGuidance || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}</p>
                 </div>
                 {/* Training */}
                 <div className="px-3.5 py-3 border-t border-border/10">
-                  <p className="text-[13px] font-medium text-foreground mb-1">Training</p>
-                  <p className="text-[12px] text-foreground/40 leading-relaxed">{(aiAnalysis.trainingConsiderations || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}</p>
+                  <p className="text-[13px] font-semibold text-primary mb-1">Training</p>
+                  <p className="text-[12px] text-foreground leading-relaxed">{(aiAnalysis.trainingConsiderations || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}</p>
                 </div>
                 {/* Timeline */}
                 <div className="px-3.5 py-3 border-t border-border/10">
-                  <p className="text-[13px] font-medium text-foreground mb-1">Timeline</p>
-                  <p className="text-[12px] text-foreground/40 leading-relaxed">{(aiAnalysis.timeline || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}</p>
+                  <p className="text-[13px] font-semibold text-primary mb-1">Timeline</p>
+                  <p className="text-[12px] text-foreground leading-relaxed">{(aiAnalysis.timeline || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}</p>
                 </div>
               </div>
+
+              {/* Meal Timing — calorie distribution template */}
+              {aiAnalysis.mealTiming?.distribution && aiAnalysis.mealTiming.distribution.length > 0 && (
+                <div>
+                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold mb-2">Meal Timing</p>
+                  <div className="space-y-1.5">
+                    {aiAnalysis.mealTiming.distribution.map((m, i) => (
+                      <div key={i} className="rounded-2xl bg-muted/20 px-3.5 py-2.5">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <p className="text-[12px] font-semibold text-foreground">{m.name}</p>
+                          <p className="text-[10px] text-muted-foreground">{m.time}</p>
+                        </div>
+                        <div className="flex items-baseline gap-2 mt-0.5">
+                          <p className="text-[14px] font-bold tabular-nums text-primary">{m.calories}</p>
+                          <p className="text-[10px] text-muted-foreground">kcal · {m.proteinGrams}g P · {m.caloriePercent}%</p>
+                        </div>
+                        {m.focus && (
+                          <p className="text-[11px] text-foreground/80 leading-relaxed mt-1">{(m.focus || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}</p>
+                        )}
+                      </div>
+                    ))}
+                    {aiAnalysis.mealTiming.notes && (
+                      <p className="text-[11px] text-muted-foreground/80 leading-relaxed px-1 pt-1">{(aiAnalysis.mealTiming.notes || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}</p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Weekly Check-in */}
               {aiAnalysis.weeklyWorkflow && aiAnalysis.weeklyWorkflow.length > 0 && (
@@ -685,7 +712,7 @@ export default function WeightTracker() {
                         <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
                           <span className="text-[10px] font-bold text-primary tabular-nums">{i + 1}</span>
                         </div>
-                        <p className="text-[12px] text-foreground/40 leading-relaxed">{(step || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}</p>
+                        <p className="text-[12px] text-foreground leading-relaxed">{(step || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}</p>
                       </div>
                     ))}
                   </div>
@@ -704,7 +731,7 @@ export default function WeightTracker() {
                     ].map((w) => w.text ? (
                       <div key={w.label} className="rounded-2xl bg-muted/20 px-3.5 py-2.5">
                         <p className="text-[10px] font-semibold text-primary/60 mb-0.5">{w.label}</p>
-                        <p className="text-[12px] text-foreground/40 leading-relaxed">{(w.text || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}</p>
+                        <p className="text-[12px] text-foreground leading-relaxed">{(w.text || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}</p>
                       </div>
                     ) : null)}
                   </div>
@@ -717,7 +744,6 @@ export default function WeightTracker() {
         {/* Get AI Button */}
         {!aiAnalysis && profile && (
           <Button onClick={getAIAnalysis} disabled={analyzingWeight} variant="outline" className="w-full rounded-xl h-11">
-            <Sparkles className="h-4 w-4 mr-2" />
             {analyzingWeight ? "Analyzing..." : <>Get AI Weight Loss Strategy{!gemsIsPremium && <span className="inline-flex items-center gap-0.5 ml-1.5 text-muted-foreground"><Gem className="h-3 w-3" /><span className="text-[10px] font-medium tabular-nums">{gems}</span></span>}</>}
           </Button>
         )}

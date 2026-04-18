@@ -17,7 +17,7 @@ import { DehydrationRingPanel } from "@/components/fightweek/DehydrationRingPane
 import { ProjectionChart } from "@/components/fightweek/ProjectionChart";
 import { DayTimelineCard } from "@/components/fightweek/DayTimelineCard";
 import { AIAdviceCard, type FightWeekAIAdvice } from "@/components/fightweek/AIAdviceCard";
-import { TrendingDown, Target, Calendar, Activity, Shield, Sparkles } from "lucide-react";
+import { Activity, Shield, CheckCircle } from "lucide-react";
 import { ShareButton } from "@/components/share/ShareButton";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { FightWeekSummaryCard } from "@/components/share/cards/FightWeekSummaryCard";
@@ -191,7 +191,7 @@ export default function FightWeek() {
       steps: [
         { icon: Activity, label: "Analyzing projection data" },
         { icon: Shield, label: "Checking safety thresholds" },
-        { icon: Sparkles, label: "Generating protocol" },
+        { icon: CheckCircle, label: "Generating protocol" },
       ],
       returnPath: "/weight-cut",
     });
@@ -377,14 +377,12 @@ export default function FightWeek() {
             {/* Summary tiles */}
             <div className="grid grid-cols-3 gap-2">
               <div className="card-surface rounded-xl p-2.5 border border-border text-center">
-                <TrendingDown className="h-3.5 w-3.5 mx-auto text-muted-foreground mb-0.5" />
                 <span className="text-lg font-bold block">
                   {projection.totalToCut.toFixed(1)}
                 </span>
                 <span className="text-[9px] text-muted-foreground uppercase">kg to cut</span>
               </div>
               <div className="card-surface rounded-xl p-2.5 border border-border text-center">
-                <Target className="h-3.5 w-3.5 mx-auto text-muted-foreground mb-0.5" />
                 <span className={`text-lg font-bold block ${
                   projection.percentBW <= 5 ? "text-green-400" :
                   projection.percentBW <= 8 ? "text-yellow-400" : "text-red-400"
@@ -394,7 +392,6 @@ export default function FightWeek() {
                 <span className="text-[9px] text-muted-foreground uppercase">% bodyweight</span>
               </div>
               <div className="card-surface rounded-xl p-2.5 border border-border text-center">
-                <Calendar className="h-3.5 w-3.5 mx-auto text-muted-foreground mb-0.5" />
                 <span className="text-lg font-bold block">{daysUntilWeighIn}</span>
                 <span className="text-[9px] text-muted-foreground uppercase">days</span>
               </div>

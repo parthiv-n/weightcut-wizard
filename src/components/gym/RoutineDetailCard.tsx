@@ -3,7 +3,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  ChevronDown, Play, Trash2, Sparkles, Pencil, Check, X,
+  ChevronDown, Play, Trash2, Pencil, Check, X,
 } from "lucide-react";
 import type { SavedRoutine, RoutineExercise } from "@/pages/gym/types";
 
@@ -187,8 +187,7 @@ export function RoutineDetailCard({ routine, onDelete, onRename, onStartWorkout 
                       {routine.goal}
                     </span>
                     {routine.is_ai_generated && (
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-400 font-semibold flex items-center gap-0.5">
-                        <Sparkles className="h-2.5 w-2.5" />
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-400 font-semibold">
                         AI
                       </span>
                     )}

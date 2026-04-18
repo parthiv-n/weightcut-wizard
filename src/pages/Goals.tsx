@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, AlertTriangle, Loader2, Target } from "lucide-react";
+import { AlertTriangle, Loader2, Target } from "lucide-react";
 import { profileSchema } from "@/lib/validation";
 import { useUser } from "@/contexts/UserContext";
 import { celebrateSuccess, triggerHapticSelection } from "@/lib/haptics";
@@ -245,11 +245,11 @@ export default function Goals() {
         </div>
       )}
 
-      <div className="space-y-2.5">
+      <div className="space-y-4">
         {/* Section: Athlete Profile */}
-        <div>
-          <h2 className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1 ml-0.5">Athlete Profile</h2>
-          <div className="rounded-lg bg-muted/10 overflow-hidden divide-y divide-border/20">
+        <div className="card-surface rounded-xl border-2 border-border overflow-hidden">
+          <h2 className="text-[11px] font-bold uppercase tracking-widest text-primary px-3 pt-3 pb-2">Athlete Profile</h2>
+          <div className="divide-y divide-border/40 border-t border-border/40">
             <div className="px-2.5 py-2 space-y-1">
               <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Sport</Label>
               <ChipSelect value={formData.athlete_type} columns={4}
@@ -283,9 +283,9 @@ export default function Goals() {
         </div>
 
         {/* Section: Personal Details */}
-        <div>
-          <h2 className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1 ml-0.5">Personal Details</h2>
-          <div className="rounded-lg bg-muted/10 overflow-hidden divide-y divide-border/20">
+        <div className="card-surface rounded-xl border-2 border-border overflow-hidden">
+          <h2 className="text-[11px] font-bold uppercase tracking-widest text-primary px-3 pt-3 pb-2">Personal Details</h2>
+          <div className="divide-y divide-border/40 border-t border-border/40">
             <div className="flex items-center justify-between px-2.5 py-1.5">
               <Label className="text-[13px] font-medium">Age</Label>
               <Input type="number" value={formData.age} onChange={(e) => setFormData(prev => ({ ...prev, age: e.target.value }))}
@@ -339,9 +339,9 @@ export default function Goals() {
         </div>
 
         {/* Section: Targets */}
-        <div>
-          <h2 className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1 ml-0.5">Targets</h2>
-          <div className="rounded-lg bg-muted/10 overflow-hidden divide-y divide-border/20">
+        <div className="card-surface rounded-xl border-2 border-border overflow-hidden">
+          <h2 className="text-[11px] font-bold uppercase tracking-widest text-primary px-3 pt-3 pb-2">Targets</h2>
+          <div className="divide-y divide-border/40 border-t border-border/40">
             <div className="flex items-center justify-between px-2.5 py-1.5">
               <Label className="text-[13px] font-medium">{isFighter ? 'Weight Class' : 'Goal Weight'}</Label>
               <div className="flex items-center gap-0.5">
@@ -371,7 +371,6 @@ export default function Goals() {
                 </div>
                 {useAutoTarget ? (
                   <div className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
-                    <Sparkles className="h-3 w-3 text-primary shrink-0" />
                     <span>Safe pre-cut weight (5.5% buffer)</span>
                   </div>
                 ) : safetyFeedback && (
@@ -396,9 +395,9 @@ export default function Goals() {
         </div>
 
         {/* Section: Activity & Training */}
-        <div>
-          <h2 className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1 ml-0.5">Activity & Training</h2>
-          <div className="rounded-lg bg-muted/10 overflow-hidden divide-y divide-border/20">
+        <div className="card-surface rounded-xl border-2 border-border overflow-hidden">
+          <h2 className="text-[11px] font-bold uppercase tracking-widest text-primary px-3 pt-3 pb-2">Activity & Training</h2>
+          <div className="divide-y divide-border/40 border-t border-border/40">
             <div className="px-2.5 py-2 space-y-1">
               <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Activity Level</Label>
               <ChipSelect value={formData.activity_level} columns={3}
@@ -431,7 +430,7 @@ export default function Goals() {
         {/* Save */}
         <div className="pt-1 pb-4">
           <button onClick={handleSubmit} disabled={saving}
-            className="w-full py-2.5 text-[13px] font-semibold text-primary active:bg-muted/50 transition-colors border-t border-border/40 disabled:opacity-40">
+            className="w-full py-2.5 text-[13px] font-semibold text-primary-foreground bg-primary rounded-xl active:opacity-90 transition-opacity disabled:opacity-40">
             {saving ? "Saving..." : "Save Updates"}
           </button>
         </div>

@@ -8,7 +8,7 @@ import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
-  Sparkles, AlertTriangle, CheckCircle, Zap, Shield, Activity,
+  AlertTriangle, CheckCircle, Zap, Shield, Activity,
   TrendingDown, ChevronLeft, Swords, Flame, Dumbbell,
   Moon, Brain, Gauge, Utensils, Wallet,
 } from "lucide-react";
@@ -531,7 +531,7 @@ export default function Onboarding() {
     { icon: Zap, label: "Calculating nutrition targets", color: "text-yellow-400" },
     { icon: Shield, label: isFight ? "Building your weight cut strategy" : "Building your weight loss plan", color: "text-blue-400" },
     { icon: TrendingDown, label: isFight ? "Generating your AI fight plan" : "Generating your meal plan", color: "text-primary" },
-    { icon: Sparkles, label: "Finalizing your plan", color: "text-primary" },
+    { icon: Activity, label: "Finalizing your plan", color: "text-primary" },
     { icon: CheckCircle, label: isFight ? "Your fight camp starts now" : "Your plan is ready", color: "text-green-400" },
   ];
 

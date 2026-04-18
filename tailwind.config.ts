@@ -123,6 +123,10 @@ export default {
           "70%": { transform: "scale(0.98) translateY(1px)" },
           "100%": { opacity: "1", transform: "scale(1) translateY(0)" },
         },
+        typing: {
+          "0%, 60%, 100%": { opacity: "0.35", transform: "translateY(0)" },
+          "30%": { opacity: "1", transform: "translateY(-3px)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",

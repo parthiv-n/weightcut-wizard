@@ -146,11 +146,12 @@ RULES:
 - Weekly loss: GREEN ≤1.0 kg/wk, YELLOW 1.0-1.5, RED >1.5
 - Protein: 2.0-2.5 g/kg | Carbs: scale with training | Fats: 20-30% total kcal
 - ALWAYS generate a full plan regardless of how aggressive the goal is
-- If requiredWeeklyLoss > 1.5: set riskLevel="red", include strong medical warning in riskExplanation urging consultation with a doctor/sports nutritionist, but still provide complete calorie/macro recommendations
+- If requiredWeeklyLoss > 1.5: set riskLevel="red" and include a strong medical warning (stop the cut, consult a sports doctor/nutritionist) inside strategicGuidance, but still provide complete calorie/macro recommendations
 
 STYLE — you are a sports nutritionist writing a personalised protocol. Be specific with numbers. No filler.
-- riskExplanation: 3-4 sentences. State the risk level and why. List 2-3 specific warning signs to watch for (e.g., strength dropping >10% on compounds, persistent dizziness during training, mood/sleep disruption, menstrual irregularity for females). State when the athlete should stop the cut and consult a sports doctor.
+- reasoningExplanation: 3-4 sentences. Explain WHY these exact calorie and macro numbers were chosen for THIS athlete. Derive the deficit from their TDEE and the required weekly loss rate (or say "maintenance = TDEE" if at/below target). Justify the protein target in g/kg bodyweight for lean mass preservation. Justify the carb/fat split relative to training demands. End with a direct line connecting these numbers to reaching the goal weight by the target date (e.g., "At this deficit you will reach Xkg in Y weeks, arriving by [target date]").
 - strategicGuidance: 4-5 sentences. Explain the calorie strategy with training-day vs rest-day cycling (e.g., "Eat X kcal on training days, Y kcal on rest days"). Explain how to structure the deficit — front-load or back-load carbs around training, keep protein steady. Mention when to schedule a refeed day (every 7-10 days if deficit >500 kcal) and what that looks like (+300-500 kcal from carbs). Include hydration target (e.g., 40ml/kg bodyweight minimum).
+- mealTiming: distribute recommendedCalories and proteinGrams across 4-5 meal slots. Each slot MUST include name, time (clock time or "30 min pre/post training"), caloriePercent (integer, all slots sum to 100), calories (= round(recommendedCalories * caloriePercent/100), all slots sum to recommendedCalories ±25 kcal), proteinGrams (all slots sum to proteinGrams ±5 g), and focus (ONE sentence, e.g. "Protein-heavy with slow-digesting carbs"). Include a pre-training and post-training slot when training is implied. mealTiming.notes = 1-2 sentences on overall distribution (fasting window, hydration around meals, caffeine timing). DO NOT name specific foods.
 - weeklyWorkflow: 3-4 steps for the weekly check-in process:
   Step 1: When/how to weigh — same day, morning, post-bathroom, pre-food. Take 3-day average to smooth out fluctuations.
   Step 2: Compare 3-day average to target. If ABOVE by >0.3kg, reduce daily intake by 100-200 kcal from carbs. If BELOW target or losing >1% bodyweight/week, increase by 100-150 kcal.
@@ -172,12 +173,21 @@ OUTPUT:
   "proteinGrams": 160,
   "carbsGrams": 200,
   "fatsGrams": 70,
-  "riskExplanation": "string",
+  "reasoningExplanation": "string",
   "strategicGuidance": "string",
   "weeklyWorkflow": ["Step 1: ...", "Step 2: ...", "Step 3: ..."],
   "trainingConsiderations": "string",
   "timeline": "string",
-  "weeklyPlan": { "week1": "string", "week2": "string", "ongoing": "string" }
+  "weeklyPlan": { "week1": "string", "week2": "string", "ongoing": "string" },
+  "mealTiming": {
+    "distribution": [
+      { "name": "Breakfast", "time": "7:30 AM", "caloriePercent": 25, "calories": 550, "proteinGrams": 40, "focus": "string" },
+      { "name": "Pre-Training", "time": "45 min pre-session", "caloriePercent": 15, "calories": 330, "proteinGrams": 25, "focus": "string" },
+      { "name": "Post-Training", "time": "within 30 min", "caloriePercent": 25, "calories": 550, "proteinGrams": 45, "focus": "string" },
+      { "name": "Dinner", "time": "7:30 PM", "caloriePercent": 35, "calories": 770, "proteinGrams": 50, "focus": "string" }
+    ],
+    "notes": "string"
+  }
 }`;
 
     // Build compact user prompt

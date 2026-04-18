@@ -6,7 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Sparkles, Calendar as CalendarIcon, Loader2, Settings, Edit2, X, Activity, Utensils, Database, PieChart as PieChartIcon, Search, CheckCircle, ChevronDown, ChevronUp, ChevronRight, ScanLine, Dumbbell, Sunrise, Salad, UtensilsCrossed, Apple, Mic, MicOff, Gem, Copy, RotateCcw, Star, Camera } from "lucide-react";
+import { Plus, Calendar as CalendarIcon, Loader2, Settings, Edit2, X, Activity, Utensils, Database, PieChart as PieChartIcon, Search, CheckCircle, ChevronDown, ChevronUp, ChevronRight, ScanLine, Dumbbell, UtensilsCrossed, Mic, MicOff, Gem, Copy, RotateCcw, Star, Camera } from "lucide-react";
 import wizardLogo from "@/assets/wizard-logo.webp";
 import { MealCard } from "@/components/nutrition/MealCard";
 import { MealCardSkeleton } from "@/components/ui/skeleton-loader";
@@ -34,6 +34,7 @@ import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useAITask } from "@/contexts/AITaskContext";
 import { useGems } from "@/hooks/useGems";
 import { AICompactOverlay } from "@/components/AICompactOverlay";
+import { MealPhotoScanOverlay } from "@/components/nutrition/MealPhotoScanOverlay";
 
 import type { Ingredient, Meal, ManualMealForm, INITIAL_MANUAL_MEAL } from "@/pages/nutrition/types";
 import {
@@ -324,7 +325,7 @@ export default function Nutrition() {
           { icon: Utensils, label: "Reviewing meals", color: "text-blue-400" },
           { icon: PieChartIcon, label: "Estimating micronutrients", color: "text-green-500" },
           { icon: Search, label: "Identifying gaps", color: "text-yellow-400" },
-          { icon: Sparkles, label: "Generating recommendations", color: "text-blue-400" },
+          { icon: CheckCircle, label: "Generating recommendations", color: "text-blue-400" },
         ],
         title: "Analysing Diet", subtitle: "This usually takes 20\u201340 seconds...",
         retry: () => dietAnalysisHook.handleAnalyseDiet(),
@@ -335,7 +336,7 @@ export default function Nutrition() {
         steps: [
           { icon: Activity, label: "Analyzing nutritional needs", color: "text-blue-400" },
           { icon: Utensils, label: "Designing meal structure", color: "text-green-500" },
-          { icon: Sparkles, label: "Optimizing recipes", color: "text-yellow-400" },
+          { icon: UtensilsCrossed, label: "Optimizing recipes", color: "text-yellow-400" },
         ],
         title: "Generating Meal Plan", subtitle: "This usually takes 30\u201360 seconds...",
         retry: () => mealPlan.handleGenerateMealPlan(),
@@ -491,13 +492,26 @@ export default function Nutrition() {
     <>
       {aiTask && (
         <div className="sticky top-0 z-50 px-3 sm:px-5 md:px-6 pt-2 pb-2 max-w-7xl mx-auto bg-background/95">
-          <AICompactOverlay
-            isOpen={true}
-            isGenerating={true}
-            steps={aiTask.steps}
-            startedAt={aiTask.startedAt}            title={aiTask.label}
-            onCancel={() => { cancelAI(); dismissTask(aiTask.id); }}
-          />
+          {aiMeal.photoAnalyzing && aiMeal.photoBase64 ? (
+            <MealPhotoScanOverlay
+              isOpen={true}
+              isGenerating={true}
+              photoBase64={aiMeal.photoBase64}
+              steps={aiTask.steps}
+              startedAt={aiTask.startedAt}
+              title={aiTask.label}
+              onCancel={() => { cancelAI(); dismissTask(aiTask.id); }}
+            />
+          ) : (
+            <AICompactOverlay
+              isOpen={true}
+              isGenerating={true}
+              steps={aiTask.steps}
+              startedAt={aiTask.startedAt}
+              title={aiTask.label}
+              onCancel={() => { cancelAI(); dismissTask(aiTask.id); }}
+            />
+          )}
         </div>
       )}
       <div className="animate-page-in space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto overflow-x-hidden">
@@ -530,7 +544,6 @@ export default function Nutrition() {
                   </span>
                 ) : wisdom.aiWisdomAdvice ? (
                   <span>
-                    <Sparkles className="inline h-3 w-3 text-primary/40 mr-0.5 -mt-0.5" />
                     {wisdom.aiWisdomAdvice}
                   </span>
                 ) : (
@@ -590,30 +603,31 @@ export default function Nutrition() {
                 <p className="text-[13px] text-muted-foreground mt-0.5 leading-relaxed">
                   Describe what you ate and AI will calculate the macros for you.
                 </p>
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  <Button variant="outline" size="sm" className="h-7 text-[13px] font-semibold"
-                    onClick={() => { setQuickAddTab("ai"); setIsQuickAddSheetOpen(true); }}
-                  >
-                    <Sparkles className="h-3.5 w-3.5 mr-1.5" />Quick Add with AI
-                  </Button>
-                  {quickActions.previousDayMealCount > 0 && (
-                    <Button variant="outline" size="sm" className="h-7 text-[13px] font-semibold"
-                      onClick={quickActions.copyPreviousDay} disabled={quickActions.copyingPreviousDay}
-                    >
-                      {quickActions.copyingPreviousDay ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Copy className="h-3.5 w-3.5 mr-1.5" />}
-                      Copy Yesterday ({quickActions.previousDayMealCount})
-                    </Button>
-                  )}
-                  {quickActions.lastMeal && (
-                    <Button variant="outline" size="sm" className="h-7 text-[13px] font-semibold max-w-[200px]"
-                      onClick={() => quickActions.repeatLastMeal()}
-                    >
-                      <RotateCcw className="h-3.5 w-3.5 mr-1.5 flex-shrink-0" />
-                      <span className="truncate">Repeat: {quickActions.lastMeal.meal_name}</span>
-                    </Button>
-                  )}
-                </div>
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5 mt-2">
+              <Button variant="outline" size="sm"
+                className={`h-6 text-[11px] font-medium px-2 w-full justify-center ${quickActions.previousDayMealCount === 0 ? "col-span-2" : ""}`}
+                onClick={() => { setQuickAddTab("ai"); setIsQuickAddSheetOpen(true); }}
+              >
+                Quick Add
+              </Button>
+              {quickActions.previousDayMealCount > 0 && (
+                <Button variant="outline" size="sm" className="h-6 text-[11px] font-medium px-2 w-full justify-center"
+                  onClick={quickActions.copyPreviousDay} disabled={quickActions.copyingPreviousDay}
+                >
+                  {quickActions.copyingPreviousDay && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+                  Copy Yesterday
+                </Button>
+              )}
+              {quickActions.lastMeal && (
+                <Button variant="outline" size="sm" className="col-span-2 h-6 text-[11px] font-medium px-2 w-full justify-center"
+                  onClick={() => quickActions.repeatLastMeal()}
+                >
+                  <RotateCcw className="h-3 w-3 mr-1 flex-shrink-0" />
+                  <span className="truncate">Repeat: {quickActions.lastMeal.meal_name}</span>
+                </Button>
+              )}
             </div>
           </div>
         )}
@@ -632,8 +646,6 @@ export default function Nutrition() {
             const groupMeals = groupedMeals[mealType];
             const groupCalories = groupMeals.reduce((sum, m) => sum + (m.calories || 0), 0);
             const isActionExpanded = expandedMealActions === mealType;
-            const MealIcon = { breakfast: Sunrise, lunch: Salad, dinner: UtensilsCrossed, snack: Apple }[mealType];
-            const mealIconColor = { breakfast: "text-orange-400", lunch: "text-blue-400", dinner: "text-purple-400", snack: "text-green-400" }[mealType];
             const hasMeals = groupMeals.length > 0;
             const isSectionCollapsed = !hasMeals && !nutritionData.mealsLoading
               ? !collapsedSections.has(`${mealType}_expanded`)
@@ -662,7 +674,6 @@ export default function Nutrition() {
                   className="w-full flex items-center justify-between px-3 py-2 hover:bg-muted/30 active:bg-muted/50 transition-colors"
                 >
                   <div className="flex items-center gap-1.5">
-                    <MealIcon className={`h-3.5 w-3.5 ${mealIconColor}`} />
                     <h3 className="text-[13px] font-semibold capitalize">{mealType}</h3>
                     <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform duration-200 ${isSectionCollapsed ? "-rotate-90" : ""}`} />
                   </div>
@@ -696,13 +707,14 @@ export default function Nutrition() {
                       <button onClick={() => openFoodSearch(mealType)} className="flex flex-col items-center gap-1 py-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors">
                         <Search className="h-4 w-4 text-blue-500" /><span className="text-[13px] text-muted-foreground">Search</span>
                       </button>
-                      <Suspense fallback={<div className="flex flex-col items-center gap-1 py-2"><ScanLine className="h-4 w-4 text-muted-foreground" /><span className="text-[13px] text-muted-foreground">Scan</span></div>}>
+                      <Suspense fallback={<div className="flex flex-col items-center gap-1 py-2"><ScanLine className="h-4 w-4 text-muted-foreground" /><span className="text-[13px] text-muted-foreground">Barcode</span></div>}>
                         <BarcodeScanner onFoodScanned={aiMeal.handleBarcodeScanned} disabled={mealPlan.generatingPlan || mealOps.savingAllMeals}
+                          label="Barcode"
                           className="flex flex-col items-center gap-1 py-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors !h-auto !border-0 !bg-transparent !px-0" />
                       </Suspense>
                       <button onClick={() => { setManualMeal(prev => ({ ...prev, meal_type: mealType })); setQuickAddTab("ai"); setIsQuickAddSheetOpen(true); setExpandedMealActions(null); }}
                         className="flex flex-col items-center gap-1 py-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors">
-                        <Sparkles className="h-4 w-4 text-blue-500" /><span className="text-[13px] text-muted-foreground">Quick</span>
+                        <Plus className="h-4 w-4 text-blue-500" /><span className="text-[13px] text-muted-foreground">Quick</span>
                       </button>
                       <button onClick={() => {
                         setManualMeal(prev => ({ ...prev, meal_type: mealType, meal_name: "", calories: "", protein_g: "", carbs_g: "", fats_g: "", portion_size: "", recipe_notes: "", ingredients: [] }));
@@ -781,7 +793,7 @@ export default function Nutrition() {
           ) : meals.length > 0 && (
             <button onClick={() => dietAnalysisHook.handleAnalyseDiet()} disabled={nutritionData.dietAnalysisLoading}
               className="card-surface w-full p-3.5 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform rounded-xl">
-              <Sparkles className="h-3.5 w-3.5 text-primary" /><span className="text-sm font-medium text-foreground">Analyse Diet{gemBadge}</span>
+              <span className="text-sm font-medium text-foreground">Analyse Diet{gemBadge}</span>
             </button>
           )}
         </div>
@@ -792,14 +804,14 @@ export default function Nutrition() {
             <h2 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Meal Plan Ideas</h2>
             <Button onClick={() => mealPlan.setIsAiDialogOpen(true)} size="sm" variant="ghost"
               className="h-8 text-xs gap-1.5 rounded-lg text-primary font-medium">
-              <Sparkles className="h-3 w-3" />Generate
+              Generate
             </Button>
           </div>
           {mealPlanIdeas.length === 0 ? (
             <div className="card-surface border-dashed py-7 text-center">
               {mealPlan.generatingPlan ? (
                 <>
-                  <Sparkles className="h-5 w-5 text-primary mx-auto mb-1.5 animate-pulse" />
+                  <Loader2 className="h-5 w-5 text-primary mx-auto mb-1.5 animate-spin" />
                   <p className="text-[13px] font-medium text-foreground">Generating meal ideas...</p>
                   <div className="flex justify-center gap-1 mt-2">
                     <div className="h-1.5 w-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }} />
@@ -809,7 +821,7 @@ export default function Nutrition() {
                 </>
               ) : (
                 <>
-                  <Sparkles className="h-5 w-5 text-primary/50 mx-auto mb-1.5 mix-blend-screen" />
+                  <Utensils className="h-5 w-5 text-primary/50 mx-auto mb-1.5" />
                   <p className="text-[13px] font-medium text-foreground">No meal ideas yet</p>
                   <p className="text-[13px] text-foreground/60 mt-0.5">Generate AI meal suggestions above</p>
                 </>
@@ -839,10 +851,10 @@ export default function Nutrition() {
                     const isExpanded = expandedMealIdeas.has(meal.id);
                     const hasDetails = (meal.ingredients && Array.isArray(meal.ingredients) && meal.ingredients.length > 0) || meal.recipe_notes;
                     const mealTypeButtons = [
-                      { type: "breakfast", Icon: Sunrise, color: "text-orange-400", label: "Bkfst" },
-                      { type: "lunch", Icon: Salad, color: "text-blue-400", label: "Lunch" },
-                      { type: "dinner", Icon: UtensilsCrossed, color: "text-purple-400", label: "Dinner" },
-                      { type: "snack", Icon: Apple, color: "text-green-400", label: "Snack" },
+                      { type: "breakfast", label: "Bkfst" },
+                      { type: "lunch", label: "Lunch" },
+                      { type: "dinner", label: "Dinner" },
+                      { type: "snack", label: "Snack" },
                     ];
 
                     return (
@@ -899,7 +911,7 @@ export default function Nutrition() {
                             <button key={btn.type} onClick={() => mealOps.handleLogMealIdea(meal, btn.type)}
                               disabled={mealOps.loggingMeal === meal.id || mealOps.savingAllMeals}
                               className="flex flex-col items-center gap-0.5 py-2 text-[13px] font-medium text-foreground/80 hover:text-primary hover:bg-primary/5 active:bg-primary/10 active:scale-[0.97] transition-all disabled:opacity-40 border-r border-white/5 last:border-r-0">
-                              <btn.Icon className={`h-3.5 w-3.5 ${btn.color}`} /><span>{btn.label}</span>
+                              <Plus className="h-3.5 w-3.5 text-primary" /><span>{btn.label}</span>
                             </button>
                           ))}
                         </div>
@@ -920,23 +932,36 @@ export default function Nutrition() {
 
         {/* Quick Add Bottom Sheet */}
         <Dialog open={isQuickAddSheetOpen} onOpenChange={handleSheetOpenChange}>
-          <DialogContent className="sm:max-w-[300px] max-h-[calc(100vh-6rem)] overflow-y-auto rounded-xl p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0">
+          <DialogContent className={`sm:max-w-[300px] max-h-[calc(100vh-6rem)] overflow-y-auto rounded-xl p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0 ${aiTask ? "[&>button]:hidden" : ""}`}>
             {aiTask && (
-              <AICompactOverlay
-                isOpen={true}
-                isGenerating={true}
-                steps={aiTask.steps}
-            startedAt={aiTask.startedAt}                title={aiTask.label}
-                onCancel={() => { cancelAI(); dismissTask(aiTask.id); }}
-              />
+              aiMeal.photoAnalyzing && aiMeal.photoBase64 ? (
+                <MealPhotoScanOverlay
+                  isOpen={true}
+                  isGenerating={true}
+                  photoBase64={aiMeal.photoBase64}
+                  steps={aiTask.steps}
+                  startedAt={aiTask.startedAt}
+                  title={aiTask.label}
+                  onCancel={() => { cancelAI(); dismissTask(aiTask.id); }}
+                />
+              ) : (
+                <AICompactOverlay
+                  isOpen={true}
+                  isGenerating={true}
+                  steps={aiTask.steps}
+                  startedAt={aiTask.startedAt}
+                  title={aiTask.label}
+                  onCancel={() => { cancelAI(); dismissTask(aiTask.id); }}
+                />
+              )
             )}
             <div className="px-3 pt-3 pb-2">
-              <DialogHeader><DialogTitle className="text-[13px] font-semibold text-center pr-8">Add Meal</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle className="text-[13px] font-semibold text-center">Add Meal</DialogTitle></DialogHeader>
             </div>
             <div className="px-3">
               <div className="flex gap-0.5 p-0.5 rounded-md bg-muted/40 mb-2 mt-0.5">
                 <button onClick={() => setQuickAddTab("ai")} className={`flex-1 py-1 text-[13px] font-semibold rounded transition-all ${quickAddTab === "ai" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}>
-                  <Sparkles className="h-2.5 w-2.5 inline mr-0.5 -mt-0.5" />AI
+                  AI
                 </button>
                 <button onClick={() => setQuickAddTab("manual")} className={`flex-1 py-1 text-[13px] font-semibold rounded transition-all ${quickAddTab === "manual" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}>
                   <Edit2 className="h-2.5 w-2.5 inline mr-0.5 -mt-0.5" />Manual
@@ -990,7 +1015,7 @@ export default function Nutrition() {
                     </button>
                   )}
                   <Button type="button" size="sm" onClick={() => { if (isListening) stopListening(); aiMeal.photoBase64 ? aiMeal.handlePhotoAnalyze() : aiMeal.handleAiAnalyzeMeal(); }} disabled={aiMeal.aiAnalyzing || (!aiMeal.photoBase64 && !aiMeal.aiMealDescription.trim())} className="flex-1 h-7 rounded-md text-[13px]">
-                    <Sparkles className="h-2.5 w-2.5 mr-0.5" />{aiMeal.aiAnalyzing ? "Analyzing…" : <>{aiMeal.photoBase64 ? "Analyze Photo" : "Analyze"}{gemBadge}</>}
+                    {aiMeal.aiAnalyzing ? "Analyzing…" : <>{aiMeal.photoBase64 ? "Analyze Photo" : "Analyze"}{gemBadge}</>}
                   </Button>
                 </div>
                 {aiMeal.aiAnalysisComplete && aiMeal.aiLineItems.length > 0 && (
@@ -1119,7 +1144,7 @@ export default function Nutrition() {
         <Dialog open={mealPlan.isAiDialogOpen} onOpenChange={(open) => mealPlan.setIsAiDialogOpen(open)}>
           <DialogContent className="sm:max-w-[340px] max-h-[85vh] overflow-y-auto rounded-xl p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0">
             <div className="px-4 pt-4 pb-3">
-              <DialogHeader><DialogTitle className="text-[15px] font-semibold text-center"><Sparkles className="h-3.5 w-3.5 inline mr-1 -mt-0.5 text-primary" />Meal ideas · {format(new Date(selectedDate), "MMM d")}</DialogTitle></DialogHeader>
+              <DialogHeader><DialogTitle className="text-[15px] font-semibold text-center">Meal ideas · {format(new Date(selectedDate), "MMM d")}</DialogTitle></DialogHeader>
             </div>
             <div className="px-4 pb-4 space-y-2.5">
               <div className="flex flex-wrap gap-1.5">
@@ -1131,7 +1156,7 @@ export default function Nutrition() {
               <Textarea placeholder="Describe what you'd like to eat..." value={mealPlan.aiPrompt} onChange={(e) => mealPlan.setAiPrompt(e.target.value)} rows={2} className="resize-none text-[13px] rounded-lg border-border/30 bg-muted/20" />
               <button onClick={mealPlan.handleGenerateMealPlan} disabled={mealPlan.generatingPlan}
                 className="w-full py-2.5 text-[14px] font-semibold text-primary active:bg-muted/50 transition-colors border-t border-border/40 mt-1 disabled:opacity-40">
-                <Sparkles className="h-3.5 w-3.5 inline mr-1 -mt-0.5" />{mealPlan.generatingPlan ? "Generating..." : <>Generate Meal Ideas{gemBadge}</>}
+                {mealPlan.generatingPlan ? "Generating..." : <>Generate Meal Ideas{gemBadge}</>}
               </button>
             </div>
           </DialogContent>
@@ -1236,7 +1261,7 @@ export default function Nutrition() {
             <Input placeholder="e.g. easily digestible, high carb, no dairy…" value={wisdom.trainingPreference} onChange={(e) => wisdom.setTrainingPreference(e.target.value)} disabled={wisdom.trainingWisdomLoading} className="text-sm h-9"
               onKeyDown={(e) => { if (e.key === 'Enter' && wisdom.trainingPreference.trim()) wisdom.generateTrainingFoodIdeas(true); }} />
             <Button size="sm" onClick={() => wisdom.generateTrainingFoodIdeas(true)} disabled={wisdom.trainingWisdomLoading || !wisdom.trainingPreference.trim()} className="h-9 px-3 shrink-0">
-              <Sparkles className="h-3.5 w-3.5 mr-1" />Go
+              Go
             </Button>
           </div>
           {wisdom.trainingWisdomLoading ? (
@@ -1257,7 +1282,7 @@ export default function Nutrition() {
           ) : wisdom.trainingWisdom ? (
             <div className="space-y-6">
               <div>
-                <div className="flex items-center gap-2 mb-3"><div className="w-6 h-6 rounded-full bg-orange-500/15 flex items-center justify-center"><Sparkles className="h-3.5 w-3.5 text-orange-500" /></div><h4 className="text-sm font-bold uppercase tracking-wider text-orange-500">Pre-Training</h4></div>
+                <div className="flex items-center gap-2 mb-3"><div className="w-6 h-6 rounded-full bg-orange-500/15 flex items-center justify-center"><Utensils className="h-3.5 w-3.5 text-orange-500" /></div><h4 className="text-sm font-bold uppercase tracking-wider text-orange-500">Pre-Training</h4></div>
                 <div className="space-y-2.5">{wisdom.trainingWisdom.preMeals.map((meal, i) => (
                   <div key={i} className="card-surface p-3.5 space-y-1.5"><div className="flex items-start justify-between gap-2"><h5 className="text-sm font-semibold">{meal.name}</h5><span className="text-[13px] font-medium text-orange-500/70 bg-orange-500/10 px-2 py-0.5 rounded-full flex-shrink-0">{meal.timing}</span></div><p className="text-xs text-muted-foreground leading-relaxed">{meal.description}</p><p className="text-[13px] font-medium text-muted-foreground/60 tabular-nums">{meal.macros}</p></div>
                 ))}</div>
@@ -1270,13 +1295,13 @@ export default function Nutrition() {
               </div>
               {wisdom.trainingWisdom.tip && (
                 <div className="rounded-xl bg-primary/5 border border-primary/10 p-3.5">
-                  <div className="flex items-center gap-2 mb-1.5"><Sparkles className="h-3.5 w-3.5 text-primary" /><span className="text-xs font-semibold text-primary">Wizard's Tip</span></div>
+                  <div className="flex items-center gap-2 mb-1.5"><span className="text-xs font-semibold text-primary">Wizard's Tip</span></div>
                   <p className="text-xs text-muted-foreground leading-relaxed">{wisdom.trainingWisdom.tip}</p>
                 </div>
               )}
             </div>
           ) : (
-            <div className="text-center py-12"><Sparkles className="h-8 w-8 text-muted-foreground/20 mx-auto mb-3" /><p className="text-sm text-muted-foreground">No training ideas available</p><p className="text-xs text-muted-foreground/50 mt-1">Tap the card above to generate ideas</p></div>
+            <div className="text-center py-12"><Utensils className="h-8 w-8 text-muted-foreground/20 mx-auto mb-3" /><p className="text-sm text-muted-foreground">No training ideas available</p><p className="text-xs text-muted-foreground/50 mt-1">Tap the card above to generate ideas</p></div>
           )}
         </SheetContent>
       </Sheet>

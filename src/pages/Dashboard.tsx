@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { ComposedChart, Line, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { TrendingDown, Calendar, Lock, ChevronRight, Flame, Zap, CheckCircle2, Scale, Sparkles } from "lucide-react";
+import { TrendingDown, Calendar, Lock, ChevronRight, Flame, Zap, CheckCircle2, Scale } from "lucide-react";
 import { TrainingWeekWidget } from "@/components/dashboard/TrainingWeekWidget";
 import { WeightProgressRing } from "@/components/dashboard/WeightProgressRing";
 import { StreakBadge } from "@/components/dashboard/StreakBadge";
@@ -450,7 +450,6 @@ export default function Dashboard() {
         <div data-tutorial="daily-wisdom-card">
         {!hasTodayLog ? (
           <button onClick={() => navigate('/weight')} className="w-full rounded-lg bg-muted/20 p-2 flex items-center gap-2 active:bg-muted/30 transition-colors">
-            <Sparkles className="h-4 w-4 text-primary opacity-40 shrink-0" />
             <div className="flex-1 text-left min-w-0">
               <div className="flex items-center gap-1.5">
                 <p className="text-[13px] font-semibold">Daily Insight</p>
@@ -462,7 +461,6 @@ export default function Dashboard() {
           </button>
         ) : wisdomLoading ? (
           <div className="rounded-lg bg-muted/20 p-2 flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary opacity-40 shrink-0 animate-pulse" />
             <div className="flex-1 min-w-0 space-y-1.5 py-0.5">
               <div className="h-2.5 rounded shimmer-skeleton w-1/3" />
               <div className="h-2.5 rounded shimmer-skeleton w-full" />
@@ -470,7 +468,6 @@ export default function Dashboard() {
           </div>
         ) : wisdom ? (
           <button className="w-full text-left rounded-lg bg-muted/20 p-2 flex items-center gap-2 active:bg-muted/30 transition-colors" onClick={handleWisdomClick}>
-            <Sparkles className="h-4 w-4 text-primary shrink-0" />
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-1.5">
                 <p className="text-[13px] font-semibold">Daily Insight</p>
@@ -488,7 +485,6 @@ export default function Dashboard() {
           </button>
         ) : (
           <div className="rounded-lg bg-muted/20 p-2 flex items-center gap-2">
-            <Sparkles className="h-4 w-4 text-primary shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-[13px] font-semibold">Daily Insight</p>
               <p className="text-[13px] text-muted-foreground mt-0.5 leading-snug line-clamp-2">{getWizardWisdom()}</p>
@@ -595,7 +591,6 @@ export default function Dashboard() {
             <div className="px-4 pt-4 pb-2">
               <SheetHeader>
                 <div className="flex items-center gap-2">
-                  <Sparkles className="h-4 w-4 text-primary shrink-0" />
                   <div>
                     <SheetTitle className="text-[13px] font-semibold">Daily Insight</SheetTitle>
                     <p className="text-[13px] text-muted-foreground">

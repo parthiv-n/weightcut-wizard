@@ -8,7 +8,7 @@ import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
-import { Droplets, Activity, Sparkles } from "lucide-react";
+import { Droplets, Activity, CheckCircle } from "lucide-react";
 import type { RehydrationProtocol } from "@/pages/hydration/types";
 
 export function useRehydrationProtocol() {
@@ -115,7 +115,7 @@ export function useRehydrationProtocol() {
       steps: [
         { icon: Droplets, label: "Calculating fluid needs" },
         { icon: Activity, label: "Planning timeline" },
-        { icon: Sparkles, label: "Generating protocol" },
+        { icon: CheckCircle, label: "Generating protocol" },
       ],
       returnPath: "/weight-cut?tab=rehydration",
     });

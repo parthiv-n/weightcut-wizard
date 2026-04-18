@@ -288,6 +288,24 @@ All colors MUST be HSL.
     margin: 0.5em 0;
   }
 
+  /* User bubble variant — everything stays white on the primary-colored bubble */
+  .wizard-prose-user,
+  .wizard-prose-user strong,
+  .wizard-prose-user h3,
+  .wizard-prose-user h4 {
+    color: hsl(var(--primary-foreground));
+  }
+  .wizard-prose-user li::marker {
+    color: hsl(var(--primary-foreground) / 0.7);
+  }
+  .wizard-prose-user code {
+    background: hsl(var(--primary-foreground) / 0.18);
+    color: hsl(var(--primary-foreground));
+  }
+  .wizard-prose-user hr {
+    border-color: hsl(var(--primary-foreground) / 0.3);
+  }
+
   /* Card surfaces - lightweight, solid backgrounds */
   .glass-card,
   .card-surface,
@@ -526,6 +544,16 @@ All colors MUST be HSL.
   }
   .animate-page-in {
     animation: page-fade-in 0.18s ease-out both;
+  }
+
+  /* Camera-style scan line sweep for meal photo analysis */
+  @keyframes scanLine {
+    0%   { top: 4%;  opacity: 0.4; }
+    50%  { top: 92%; opacity: 1;   }
+    100% { top: 4%;  opacity: 0.4; }
+  }
+  .animate-scan-line {
+    animation: scanLine 2.2s ease-in-out infinite;
   }
 
   /* Skip rendering off-screen sections until scrolled into view */

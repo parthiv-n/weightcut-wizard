@@ -1,12 +1,11 @@
 import { useRef, useEffect, useState, useCallback } from "react";
 import { useWizardBackground } from "@/contexts/WizardBackgroundContext";
-import { Sparkles, Send, Trash2, User, Loader2, X } from "lucide-react";
+import { Send, Trash2, User, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import ReactMarkdown from "react-markdown";
 import { triggerHapticSelection, triggerHapticSuccess, triggerHaptic } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import wizardAvatar from "@/assets/wizard-logo.webp";
-import { GlowingEffect } from "@/components/ui/glowing-effect";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/hooks/useSubscription";
 
@@ -125,11 +124,22 @@ export function FloatingWizardChat() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Auto-scroll on new messages
+  // Auto-scroll on new messages. For assistant replies, show the top of the new
+  // message; for user sends / loading, stay at the bottom.
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const container = scrollRef.current;
+    if (!container) return;
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg && lastMsg.role === "assistant" && !isLoading) {
+      const lastEl = container.querySelector<HTMLElement>(
+        `[data-msg-idx="${messages.length - 1}"]`
+      );
+      if (lastEl) {
+        container.scrollTop = Math.max(0, lastEl.offsetTop - container.offsetTop - 8);
+        return;
+      }
     }
+    container.scrollTop = container.scrollHeight;
   }, [messages, isLoading]);
 
   const handleClearChat = () => {
@@ -163,7 +173,7 @@ export function FloatingWizardChat() {
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         data-tutorial="wizard-chat"
-        className={`fixed top-0 left-0 z-[10000] w-12 h-12 rounded-full shadow-lg flex items-center justify-center md:hidden touch-none ${
+        className={`fixed top-0 left-0 z-[10000] w-12 h-12 rounded-full shadow-lg flex items-center justify-center md:hidden touch-none overflow-hidden ${
           hasAccess
             ? "bg-gradient-to-br from-primary to-secondary text-primary-foreground shadow-primary/30"
             : "bg-zinc-800 text-zinc-400 shadow-none border border-white/10"
@@ -172,7 +182,7 @@ export function FloatingWizardChat() {
         aria-label="Open AI Wizard"
         aria-hidden={open}
       >
-        <Sparkles className="h-5 w-5" />
+        <img src={wizardAvatar} alt="Wizard" className="w-full h-full object-cover rounded-full mix-blend-screen" />
       </button>
 
       {/* Backdrop */}
@@ -186,126 +196,137 @@ export function FloatingWizardChat() {
       {/* Chat Panel */}
       {open && (
         <div
-          className="fixed inset-x-0 bottom-0 z-[10002] flex flex-col card-surface bg-background/98 border-t border-border rounded-t-3xl animate-in slide-in-from-bottom duration-300"
+          className="fixed inset-x-0 bottom-0 z-[10002] flex flex-col bg-background border-t border-border/40 rounded-t-[28px] shadow-[0_-20px_60px_-15px_rgba(0,0,0,0.5)] animate-in slide-in-from-bottom duration-300"
           style={{ height: "85dvh" }}
         >
           {/* Drag handle */}
-          <div className="flex justify-center pt-3 pb-1 shrink-0">
-            <div className="w-10 h-1 rounded-full bg-muted-foreground/25" />
+          <div className="flex justify-center pt-2.5 pb-1 shrink-0">
+            <div className="w-9 h-[5px] rounded-full bg-muted-foreground/30" />
           </div>
 
-          {/* Header */}
-          <div className="shrink-0 px-4 pb-4 border-b border-primary/15 bg-gradient-to-r from-primary/5 via-secondary/5 to-accent/5">
+          {/* Header — Apple Health style: clean, bold, status indicator */}
+          <div className="shrink-0 px-5 py-3 border-b border-border/40">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full card-surface border-primary/20 p-0.5 overflow-hidden">
-                <img src={wizardAvatar} alt="Wizard" className="w-full h-full object-cover rounded-full mix-blend-screen" />
+              <div className="relative shrink-0">
+                <div className="w-11 h-11 rounded-full overflow-hidden bg-muted ring-1 ring-border/60">
+                  <img src={wizardAvatar} alt="Coach" className="w-full h-full object-cover mix-blend-screen" />
+                </div>
+                <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-[hsl(var(--success))] ring-2 ring-background" />
               </div>
-              <div>
-                <h2 className="text-lg font-bold leading-tight bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text">FightCamp Wizard</h2>
+              <div className="min-w-0">
+                <h2 className="text-[17px] font-semibold leading-tight tracking-tight text-foreground">FightCamp Coach</h2>
+                <p className="text-[11px] font-medium text-[hsl(var(--success))] mt-0.5 flex items-center gap-1">
+                  <span className="inline-block w-1 h-1 rounded-full bg-[hsl(var(--success))]" />
+                  Active now
+                </p>
               </div>
-              <div className="ml-auto flex items-center gap-1">
+              <div className="ml-auto flex items-center gap-1.5">
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={handleClearChat}
-                  className="h-8 w-8 rounded-xl card-surface border-border text-muted-foreground hover:text-destructive hover:border-destructive/30 transition-all"
+                  className="h-9 w-9 rounded-full bg-muted/60 hover:bg-muted text-muted-foreground hover:text-destructive transition-colors"
                   title="Clear chat history"
                   aria-label="Clear chat"
                 >
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-[15px] w-[15px]" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={() => setOpen(false)}
-                  className="h-8 w-8 rounded-xl card-surface border-border text-muted-foreground hover:text-foreground transition-all"
+                  className="h-9 w-9 rounded-full bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                   title="Close"
                   aria-label="Close chat"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-[16px] w-[16px]" />
                 </Button>
               </div>
             </div>
           </div>
 
           {/* Messages area */}
-          <div className="flex-1 overflow-y-auto min-h-0 p-3 space-y-3" ref={scrollRef}>
-            {messages.map((msg, idx) => (
-              <div
-                key={idx}
-                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} ${msg.role === "user" ? "animate-fade-in" : "animate-msg-bounce-in"}`}
-                style={msg.role !== "user" ? { transformOrigin: "bottom left" } : undefined}
-              >
-                <div className={`flex gap-2 max-w-[88%] ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
-                  {msg.role === "user" ? (
-                    <div className="shrink-0 h-8 w-8 rounded-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-accent/20 border border-primary/15">
-                      <User className="h-4 w-4 text-primary drop-shadow-[0_0_4px_hsl(var(--primary)/0.5)]" />
-                    </div>
-                  ) : (
-                    <div className="shrink-0 h-8 w-8 rounded-full overflow-hidden card-surface border-secondary/15">
-                      <img src={wizardAvatar} alt="Wizard" className="w-full h-full object-cover rounded-full mix-blend-screen" />
-                    </div>
-                  )}
+          <div className="flex-1 overflow-y-auto min-h-0 px-4 py-4 space-y-2.5" ref={scrollRef}>
+            {messages.map((msg, idx) => {
+              const prev = messages[idx - 1];
+              const isGrouped = prev && prev.role === msg.role;
+              return (
+                <div
+                  key={idx}
+                  data-msg-idx={idx}
+                  className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"} ${isGrouped ? "mt-0.5" : "mt-2"} ${msg.role === "user" ? "animate-fade-in" : "animate-msg-bounce-in"}`}
+                  style={msg.role !== "user" ? { transformOrigin: "bottom left" } : undefined}
+                >
+                  <div className={`flex items-end gap-2 max-w-[82%] ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
+                    {/* Avatar — only show on first of a group for AI */}
+                    {msg.role === "assistant" ? (
+                      isGrouped ? (
+                        <div className="shrink-0 w-7" />
+                      ) : (
+                        <div className="shrink-0 h-7 w-7 rounded-full overflow-hidden bg-muted ring-1 ring-border/50">
+                          <img src={wizardAvatar} alt="Coach" className="w-full h-full object-cover mix-blend-screen" />
+                        </div>
+                      )
+                    ) : null}
 
-                  {msg.role === "user" ? (
-                    <div className="px-3.5 py-2.5 rounded-2xl text-sm bg-gradient-to-br from-primary/90 via-primary/80 to-accent/70 text-primary-foreground rounded-tr-sm shadow-lg shadow-primary/25 border border-primary/20">
-                      <div className="wizard-prose max-w-none">
-                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    {msg.role === "user" ? (
+                      <div className="px-4 py-2.5 rounded-[20px] rounded-br-md text-[15px] leading-snug bg-primary text-primary-foreground shadow-sm">
+                        <div className="wizard-prose wizard-prose-user max-w-none">
+                          <ReactMarkdown>{msg.content}</ReactMarkdown>
+                        </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="relative px-3.5 py-2.5 rounded-xl text-sm card-surface text-card-foreground rounded-tl-sm border-secondary/15 bg-gradient-to-br from-secondary/5 to-accent/5">
-                      <GlowingEffect spread={40} glow disabled={false} proximity={64} inactiveZone={0.01} borderWidth={1} />
-                      <div className="relative z-10 wizard-prose max-w-none">
-                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    ) : (
+                      <div className="px-4 py-2.5 rounded-[20px] rounded-bl-md text-[15px] leading-snug bg-muted text-foreground">
+                        <div className="wizard-prose max-w-none">
+                          <ReactMarkdown>{msg.content}</ReactMarkdown>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {isLoading && (
-              <div className="flex justify-start animate-msg-bounce-in" style={{ transformOrigin: "bottom left" }}>
-                <div className="flex gap-2 max-w-[88%]">
-                  <div className="shrink-0 h-8 w-8 rounded-full overflow-hidden card-surface border-secondary/15">
-                    <img src={wizardAvatar} alt="Wizard" className="w-full h-full object-cover rounded-full mix-blend-screen" />
+              <div className="flex justify-start mt-2 animate-msg-bounce-in" style={{ transformOrigin: "bottom left" }}>
+                <div className="flex items-end gap-2 max-w-[82%]">
+                  <div className="shrink-0 h-7 w-7 rounded-full overflow-hidden bg-muted ring-1 ring-border/50">
+                    <img src={wizardAvatar} alt="Coach" className="w-full h-full object-cover mix-blend-screen" />
                   </div>
-                  <div className="relative px-3.5 py-2.5 rounded-xl card-surface rounded-tl-sm border-secondary/15 bg-gradient-to-br from-secondary/5 to-accent/5 flex items-center gap-2">
-                    <GlowingEffect spread={40} glow disabled={false} proximity={64} inactiveZone={0.01} borderWidth={1} />
-                    <Loader2 className="relative z-10 h-4 w-4 text-accent animate-spin drop-shadow-[0_0_6px_hsl(var(--primary)/0.4)]" />
-                    <span className="relative z-10 text-xs text-muted-foreground animate-pulse">Wizard is thinking...</span>
+                  <div className="px-4 py-3 rounded-[20px] rounded-bl-md bg-muted flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/70 animate-[typing_1.2s_ease-in-out_infinite]" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/70 animate-[typing_1.2s_ease-in-out_0.15s_infinite]" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/70 animate-[typing_1.2s_ease-in-out_0.3s_infinite]" />
                   </div>
                 </div>
               </div>
             )}
           </div>
 
-          {/* ========== INPUT BAR ========== */}
+          {/* ========== INPUT BAR — iOS pill style ========== */}
           <div
-            className="shrink-0 border-t border-border/10 bg-background/95 px-4 pt-3"
-            style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)" }}
+            className="shrink-0 border-t border-border/40 bg-background px-4 pt-3"
+            style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 10px)" }}
           >
-            <form onSubmit={handleSend} className="relative flex items-center gap-2">
-              <div className="relative flex-1 rounded-xl card-surface border-primary/15 bg-gradient-to-r from-primary/5 via-secondary/5 to-accent/5 overflow-hidden">
-                <GlowingEffect spread={40} glow disabled={false} proximity={64} inactiveZone={0.01} borderWidth={1} />
+            <form onSubmit={handleSend} className="flex items-center gap-2">
+              <div className="flex-1 flex items-center h-11 rounded-full bg-muted px-5 ring-1 ring-border/40 focus-within:ring-primary/50 transition-[box-shadow,ring]">
                 <input
                   ref={inputRef}
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ask your nutritionist..."
+                  placeholder="Message Coach"
                   disabled={isLoading}
-                  className="relative z-10 w-full h-11 rounded-xl bg-transparent px-4 text-sm text-foreground placeholder:text-muted-foreground/60 outline-none border-none disabled:opacity-50"
+                  className="flex-1 bg-transparent text-[15px] text-foreground placeholder:text-muted-foreground/70 outline-none border-none disabled:opacity-50"
                 />
               </div>
               <button
                 type="submit"
                 disabled={!input.trim() || isLoading}
                 aria-label="Send message"
-                className="h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br from-primary to-accent hover:from-primary/90 hover:to-accent/90 text-primary-foreground flex items-center justify-center shadow-lg shadow-primary/20 disabled:opacity-40 active:scale-95 transition-all duration-200"
+                className="h-11 w-11 shrink-0 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-sm disabled:opacity-40 disabled:scale-90 active:scale-90 transition-all duration-150"
               >
-                <Send className="h-4 w-4" />
+                <Send className="h-[18px] w-[18px] -ml-0.5" />
               </button>
             </form>
           </div>

@@ -25,9 +25,10 @@ interface BarcodeScannerProps {
   }) => void;
   disabled?: boolean;
   className?: string;
+  label?: string;
 }
 
-export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeScannerProps) => {
+export const BarcodeScanner = ({ onFoodScanned, disabled, className, label }: BarcodeScannerProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [cameraError, setCameraError] = useState<string>("");
@@ -212,7 +213,11 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className }: BarcodeSc
         title="Scan Barcode"
       >
         <ScanBarcode className="h-4 w-4" />
-        <span className="sr-only">Scan Barcode</span>
+        {label ? (
+          <span className="text-[13px] text-muted-foreground">{label}</span>
+        ) : (
+          <span className="sr-only">Scan Barcode</span>
+        )}
       </Button>
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>

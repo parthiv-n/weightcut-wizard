@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Quote, CheckCircle2, Sparkles } from "lucide-react";
+import { Quote, CheckCircle2 } from "lucide-react";
 
 interface WeightIncreaseQuestionnaireProps {
     open: boolean;
@@ -41,7 +41,6 @@ export function WeightIncreaseQuestionnaire({ open, onOpenChange, onComplete }: 
                 <div className="px-3 pt-3 pb-1.5 shrink-0">
                     <SheetHeader>
                         <div className="flex items-center gap-2">
-                            <Sparkles className="h-3.5 w-3.5 text-primary shrink-0" />
                             <SheetTitle className="text-[13px] font-semibold text-left">Weight went up — what happened?</SheetTitle>
                         </div>
                     </SheetHeader>

@@ -34,23 +34,17 @@ export function MoreMenuSheet({ open, onOpenChange, menuItems, onItemClick, onSe
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 scrollbar-hide scroll-touch overscroll-contain" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 6rem)" }}>
           {/* Nav links group */}
           <div className="rounded-xl bg-muted/40 dark:bg-muted overflow-hidden border border-border">
-            {menuItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <button
-                  key={item.url}
-                  type="button"
-                  onClick={() => onItemClick(item.url)}
-                  className="w-full flex items-center gap-3 px-4 py-3 touch-manipulation text-left border-b border-border last:border-b-0 active:bg-muted/60 transition-colors duration-100"
-                >
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
-                    <Icon className="h-[18px] w-[18px] text-primary" />
-                  </span>
-                  <span className="flex-1 text-[15px] font-medium text-foreground">{item.title}</span>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60" />
-                </button>
-              );
-            })}
+            {menuItems.map((item) => (
+              <button
+                key={item.url}
+                type="button"
+                onClick={() => onItemClick(item.url)}
+                className="w-full flex items-center gap-3 px-4 py-3 touch-manipulation text-left border-b border-border last:border-b-0 active:bg-muted/60 transition-colors duration-100"
+              >
+                <span className="flex-1 text-[15px] font-medium text-foreground">{item.title}</span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+              </button>
+            ))}
           </div>
 
           {/* Settings & Logout group */}

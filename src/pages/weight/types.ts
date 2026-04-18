@@ -16,6 +16,15 @@ export interface Profile {
   tdee: number;
 }
 
+export interface MealTimingSlot {
+  name: string;
+  time: string;
+  caloriePercent: number;
+  calories: number;
+  proteinGrams: number;
+  focus: string;
+}
+
 export interface AIAnalysis {
   riskLevel: "green" | "yellow" | "red";
   requiredWeeklyLoss: number;
@@ -24,7 +33,7 @@ export interface AIAnalysis {
   proteinGrams: number;
   carbsGrams: number;
   fatsGrams: number;
-  riskExplanation: string;
+  reasoningExplanation: string;
   strategicGuidance: string;
   weeklyWorkflow: string[];
   trainingConsiderations: string;
@@ -33,6 +42,10 @@ export interface AIAnalysis {
     week1: string;
     week2: string;
     ongoing: string;
+  };
+  mealTiming?: {
+    distribution: MealTimingSlot[];
+    notes: string;
   };
 }
 

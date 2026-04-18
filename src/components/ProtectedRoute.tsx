@@ -1,7 +1,7 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/UserContext";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Sparkles } from "lucide-react";
+import { RefreshCw, AlertTriangle } from "lucide-react";
 import { WizardLoader } from "@/components/ui/WizardLoader";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -17,7 +17,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
         <div className="flex flex-col items-center gap-6 text-center">
           <div className="relative flex items-center justify-center w-28 h-28 opacity-50">
             <div className="rounded-xl bg-primary/10 p-4">
-              <Sparkles className="h-10 w-10 text-primary" />
+              <AlertTriangle className="h-10 w-10 text-primary" />
             </div>
           </div>
           <div className="space-y-2">

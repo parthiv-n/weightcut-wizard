@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { format, startOfWeek, endOfWeek, addDays } from "date-fns";
-import { Brain, Loader2, ChevronDown, Trash2, CheckCircle, X, Dumbbell, Activity, Sparkles, Gem } from "lucide-react";
+import { Brain, Loader2, ChevronDown, Trash2, CheckCircle, X, Dumbbell, Activity, Gem } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Card } from "@/components/ui/card";
@@ -236,7 +236,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
             steps: [
                 { icon: Dumbbell, label: "Reviewing sessions" },
                 { icon: Activity, label: "Analyzing performance" },
-                { icon: Sparkles, label: "Writing summary" },
+                { icon: CheckCircle, label: "Writing summary" },
             ],
             returnPath: window.location.pathname,
         });

@@ -8,7 +8,7 @@ import { AIPersistence } from "@/lib/aiPersistence";
 import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 import { triggerHapticSuccess } from "@/lib/haptics";
 import { logger } from "@/lib/logger";
-import { Utensils, PieChart, Search, Sparkles } from "lucide-react";
+import { Utensils, PieChart, Search, CheckCircle } from "lucide-react";
 import type { Meal, MacroGoals } from "@/pages/nutrition/types";
 import type { DietAnalysisResult } from "@/types/dietAnalysis";
 
@@ -66,7 +66,7 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
         { icon: Utensils, label: "Reviewing meals" },
         { icon: PieChart, label: "Estimating micronutrients" },
         { icon: Search, label: "Identifying gaps" },
-        { icon: Sparkles, label: "Generating recommendations" },
+        { icon: CheckCircle, label: "Generating recommendations" },
       ],
       returnPath: "/nutrition",
     });

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion } from "motion/react";
 import { staggerContainer, staggerItem } from "@/lib/motion";
-import { Dumbbell, Sparkles, ArrowUpDown, Plus, Gem } from "lucide-react";
+import { Dumbbell, ArrowUpDown, Plus, Gem } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { RoutineDetailCard } from "./RoutineDetailCard";
@@ -90,7 +90,6 @@ export function RoutineLibrary({ routines, loading, onDelete, onRename, onStartW
             Manual
           </Button>
           <Button onClick={onOpenGenerator} className="h-10 px-3.5 rounded-xl text-xs font-medium">
-            <Sparkles className="!size-3.5" />
             AI Generate
             {!gemsIsPremium && (
               <span className="inline-flex items-center gap-0.5 ml-0.5 text-muted-foreground">
@@ -123,7 +122,6 @@ export function RoutineLibrary({ routines, loading, onDelete, onRename, onStartW
             size="sm"
             className="h-8 px-2.5 rounded-xl text-xs font-medium"
           >
-            <Sparkles className="!size-3.5" />
             AI Generate
             {!gemsIsPremium && (
               <span className="inline-flex items-center gap-0.5 ml-0.5 text-muted-foreground">

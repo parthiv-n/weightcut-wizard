@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, memo } from "react";
-import { Activity, Brain, RefreshCw, AlertTriangle, CheckCircle, Loader2, TrendingUp, TrendingDown, Minus, X, BookOpen, ChevronDown, Heart, Flame, Shield, Moon, Dumbbell, Gauge, Zap, BarChart3, Sparkles, Clock } from "lucide-react";
+import { Activity, Brain, RefreshCw, AlertTriangle, CheckCircle, Loader2, TrendingUp, TrendingDown, Minus, X, BookOpen, ChevronDown, Heart, Flame, Shield, Moon, Dumbbell, Gauge, Zap, BarChart3, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { AIPersistence } from "@/lib/aiPersistence";
@@ -330,7 +330,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
       steps: [
         { icon: Activity, label: "Analyzing training load" },
         { icon: Heart, label: "Assessing recovery" },
-        { icon: Sparkles, label: "Generating advice" },
+        { icon: CheckCircle, label: "Generating advice" },
       ],
       returnPath: "/recovery",
     });

@@ -8,7 +8,7 @@ import { useSubscription } from "@/hooks/useSubscription";
 import { localCache } from "@/lib/localCache";
 import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
-import { Dumbbell, Activity, Sparkles } from "lucide-react";
+import { Dumbbell, Activity, CheckCircle } from "lucide-react";
 import type {
   SavedRoutine,
   RoutineExercise,
@@ -89,7 +89,7 @@ export function useRoutines() {
         steps: [
           { icon: Dumbbell, label: "Planning exercises" },
           { icon: Activity, label: "Optimizing sets & reps" },
-          { icon: Sparkles, label: "Finalizing routine" },
+          { icon: CheckCircle, label: "Finalizing routine" },
         ],
         returnPath: "/gym?tab=routines",
       });

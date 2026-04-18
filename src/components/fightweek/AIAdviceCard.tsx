@@ -1,12 +1,13 @@
 import { useState, memo } from "react";
 import { Button } from "@/components/ui/button";
 import {
-  Sparkles,
   ChevronDown,
   ChevronUp,
   AlertTriangle,
   Shield,
   Activity,
+  CheckCircle,
+  Loader2,
 } from "lucide-react";
 import { AIGeneratingOverlay } from "@/components/AIGeneratingOverlay";
 
@@ -29,7 +30,7 @@ interface AIAdviceCardProps {
 const AI_STEPS = [
   { icon: Activity, label: "Analyzing projection data", color: "text-blue-400" },
   { icon: Shield, label: "Checking safety thresholds", color: "text-green-500" },
-  { icon: Sparkles, label: "Generating protocol advice", color: "text-yellow-400" },
+  { icon: CheckCircle, label: "Generating protocol advice", color: "text-yellow-400" },
 ];
 
 export const AIAdviceCard = memo(function AIAdviceCard({ advice, isGenerating, onGenerate, onCancel, onRetry }: AIAdviceCardProps) {
@@ -42,7 +43,6 @@ export const AIAdviceCard = memo(function AIAdviceCard({ advice, isGenerating, o
         <div className="p-5 space-y-4">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
-              <Sparkles className="h-3.5 w-3.5 text-primary" />
               AI Coach
             </h3>
             {advice && (
@@ -60,7 +60,7 @@ export const AIAdviceCard = memo(function AIAdviceCard({ advice, isGenerating, o
 
           {!advice && isGenerating && (
             <div className="text-center py-6">
-              <Sparkles className="h-5 w-5 text-primary mx-auto mb-1.5 animate-pulse" />
+              <Loader2 className="h-5 w-5 text-primary mx-auto mb-1.5 animate-spin" />
               <p className="text-[13px] font-medium">Generating advice...</p>
               <div className="flex justify-center gap-1 mt-2">
                 <div className="h-1.5 w-1.5 rounded-full bg-primary animate-bounce" style={{ animationDelay: "0ms" }} />
@@ -76,7 +76,6 @@ export const AIAdviceCard = memo(function AIAdviceCard({ advice, isGenerating, o
                 Get AI-generated advice based on your projection
               </p>
               <Button onClick={onGenerate} disabled={isGenerating} className="rounded-xl">
-                <Sparkles className="h-4 w-4 mr-2" />
                 Generate Advice
               </Button>
             </div>

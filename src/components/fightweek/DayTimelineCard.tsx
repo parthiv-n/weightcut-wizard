@@ -1,4 +1,3 @@
-import { Droplets, Wheat, Leaf, Zap } from "lucide-react";
 import type { DayProjection } from "@/utils/fightWeekEngine";
 
 interface DayTimelineCardProps {
@@ -27,30 +26,10 @@ export function DayTimelineCard({ timeline }: DayTimelineCardProps) {
 
             {/* Metric pills */}
             <div className="grid grid-cols-4 gap-2">
-              <MetricPill
-                icon={Wheat}
-                label="Carbs"
-                value={`${day.carbTarget_g}g`}
-                color="text-orange-400"
-              />
-              <MetricPill
-                icon={Droplets}
-                label="Fluid"
-                value={formatFluid(day.fluidTarget_ml)}
-                color="text-blue-400"
-              />
-              <MetricPill
-                icon={Leaf}
-                label="Fibre"
-                value={`${day.fibreTarget_g}g`}
-                color="text-green-400"
-              />
-              <MetricPill
-                icon={Zap}
-                label="Na+"
-                value={formatSodium(day.sodiumTarget_mg)}
-                color="text-cyan-400"
-              />
+              <MetricPill label="Carbs" value={`${day.carbTarget_g}g`} />
+              <MetricPill label="Fluid" value={formatFluid(day.fluidTarget_ml)} />
+              <MetricPill label="Fibre" value={`${day.fibreTarget_g}g`} />
+              <MetricPill label="Na+" value={formatSodium(day.sodiumTarget_mg)} />
             </div>
 
             {/* Action notes */}
@@ -71,20 +50,9 @@ export function DayTimelineCard({ timeline }: DayTimelineCardProps) {
   );
 }
 
-function MetricPill({
-  icon: Icon,
-  label,
-  value,
-  color,
-}: {
-  icon: typeof Droplets;
-  label: string;
-  value: string;
-  color: string;
-}) {
+function MetricPill({ label, value }: { label: string; value: string }) {
   return (
     <div className="bg-muted/40 rounded-lg p-2 text-center space-y-0.5">
-      <Icon className={`h-3 w-3 mx-auto ${color}`} />
       <span className="text-[9px] text-muted-foreground uppercase block">{label}</span>
       <span className="text-xs font-bold block">{value}</span>
     </div>
