@@ -104,13 +104,20 @@ export function useQuickMealActions({ meals, selectedDate, saveMealToDb }: UseQu
   }, [isFavorited, removeFavorite, addFavorite, toast]);
 
   const logFavorite = useCallback(async (template: MealTemplate, mealType?: string) => {
+    const resolvedType = mealType || template.meal_type;
+    if (!resolvedType) {
+      logger.warn("logFavorite: meal_type missing on template, defaulting to snack", {
+        templateName: template.meal_name,
+        savedAt: template.savedAt,
+      });
+    }
     await saveMealToDb({
       meal_name: template.meal_name,
       calories: template.calories,
       protein_g: template.protein_g ?? null,
       carbs_g: template.carbs_g ?? null,
       fats_g: template.fats_g ?? null,
-      meal_type: mealType || template.meal_type || "snack",
+      meal_type: resolvedType || "snack",
       portion_size: template.portion_size ?? null,
       recipe_notes: template.recipe_notes ?? null,
       ingredients: template.ingredients ?? null,
@@ -160,6 +167,9 @@ export function useQuickMealActions({ meals, selectedDate, saveMealToDb }: UseQu
       }
 
       for (const meal of yesterdayMeals) {
+        if (!meal.meal_type) {
+          logger.warn("copyPreviousDay: source meal missing meal_type, defaulting to snack", { mealId: meal.id });
+        }
         await saveMealToDb({
           meal_name: meal.meal_name,
           calories: meal.calories,
@@ -189,13 +199,19 @@ export function useQuickMealActions({ meals, selectedDate, saveMealToDb }: UseQu
 
   const repeatLastMeal = useCallback(async (mealType?: string) => {
     if (!lastMeal) return;
+    const resolvedType = mealType || lastMeal.meal_type;
+    if (!resolvedType) {
+      logger.warn("repeatLastMeal: last meal missing meal_type, defaulting to snack", {
+        mealId: lastMeal.id,
+      });
+    }
     await saveMealToDb({
       meal_name: lastMeal.meal_name,
       calories: lastMeal.calories,
       protein_g: lastMeal.protein_g ?? null,
       carbs_g: lastMeal.carbs_g ?? null,
       fats_g: lastMeal.fats_g ?? null,
-      meal_type: mealType || lastMeal.meal_type || "snack",
+      meal_type: resolvedType || "snack",
       portion_size: lastMeal.portion_size ?? null,
       recipe_notes: lastMeal.recipe_notes ?? null,
       ingredients: lastMeal.ingredients ?? null,
