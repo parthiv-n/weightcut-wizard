@@ -65,6 +65,15 @@ serve(async (req) => {
 
     const cappedMessages = Array.isArray(messages) ? messages.slice(-16) : [];
 
+    // Sanitise user-authored chat turns against prompt injection.
+    const { sanitizeUserText, PROMPT_INJECTION_GUARD_INSTRUCTION } = await import("../_shared/sanitizeUserText.ts");
+    const safeMessages = cappedMessages.map((m: any) => {
+      if (m?.role === "user" && typeof m?.content === "string") {
+        return { ...m, content: sanitizeUserText(m.content, { maxLength: 2000, raw: true }) };
+      }
+      return m;
+    });
+
     const today = new Date().toISOString().split("T")[0];
     const fourteenDaysAgo = new Date(Date.now() - 14 * 86400000).toISOString().split("T")[0];
     const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
@@ -190,7 +199,7 @@ ${TONE_RULE}`;
       },
       body: JSON.stringify({
         model: "llama-3.1-8b-instant",
-        messages: [{ role: "system", content: systemPrompt }, ...cappedMessages],
+        messages: [{ role: "system", content: `${systemPrompt}\n\n${PROMPT_INJECTION_GUARD_INSTRUCTION}` }, ...safeMessages],
         temperature: 0.6,
         max_tokens: 900,
       }),

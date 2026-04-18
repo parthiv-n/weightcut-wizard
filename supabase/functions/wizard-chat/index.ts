@@ -273,8 +273,20 @@ serve(async (req) => {
     // Cap conversation history to last 20 messages to prevent token explosion
     const cappedMessages = Array.isArray(messages) ? messages.slice(-20) : [];
 
-    const athleteName = userName || null;
+    // Defence-in-depth: sanitise every user-authored message before it reaches
+    // the LLM. Only user messages are cleaned; assistant turns pass through.
+    const { sanitizeUserText, PROMPT_INJECTION_GUARD_INSTRUCTION } = await import("../_shared/sanitizeUserText.ts");
+    const safeMessages = cappedMessages.map((m: any) => {
+      if (m?.role === "user" && typeof m?.content === "string") {
+        return { ...m, content: sanitizeUserText(m.content, { maxLength: 2000, raw: true }) };
+      }
+      return m;
+    });
+
+    const athleteName = userName ? sanitizeUserText(userName, { maxLength: 80, raw: true }) : null;
     const systemPrompt = `You are the "FightCamp Wizard" — an elite combat sports nutritionist and performance coach.${athleteName ? ` The athlete's name is "${athleteName}". Use it when greeting them or giving encouragement, but not in every message.` : ''}
+
+${PROMPT_INJECTION_GUARD_INSTRUCTION}
 
 You have full access to this athlete's real data below. Reference their actual numbers when relevant, and never ask for information you already have.
 
@@ -308,7 +320,7 @@ Example of what TO do: "Eggs are a great choice here. Four to six whole eggs wou
         model: "llama-3.1-8b-instant",
         messages: [
           { role: "system", content: systemPrompt },
-          ...cappedMessages
+          ...safeMessages
         ],
         temperature: 0.65,
         max_tokens: 1500

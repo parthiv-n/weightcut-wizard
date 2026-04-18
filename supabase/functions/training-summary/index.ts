@@ -55,11 +55,18 @@ serve(async (req) => {
       throw new Error("GROQ_API_KEY is not configured");
     }
 
+    // Sanitise user-authored notes before they touch the LLM.
+    const { sanitizeUserText, PROMPT_INJECTION_GUARD_INSTRUCTION } = await import("../_shared/sanitizeUserText.ts");
     const sessionsText = sessions
-      .map((s: any) => `${s.date} | ${s.session_type} | ${s.duration_minutes}min | Notes: ${s.notes}`)
+      .map((s: any) => {
+        const cleanNotes = sanitizeUserText(s.notes, { maxLength: 800, raw: true });
+        return `${s.date} | ${s.session_type} | ${s.duration_minutes}min | Notes: <user_input>${cleanNotes}</user_input>`;
+      })
       .join('\n');
 
     const systemPrompt = `You are a combat sports training analyst. Organize weekly session notes by sport.
+
+${PROMPT_INJECTION_GUARD_INSTRUCTION}
 
 For each technique/problem in notes:
 - 3-5 step execution guide

@@ -502,7 +502,7 @@ export default function Dashboard() {
               onClick={() => { setCutPlanOpen(true); triggerHaptic(ImpactStyle.Light); }}
               className="card-surface rounded-2xl border border-border p-2.5 flex items-center justify-center active:scale-[0.98] transition-all text-center"
             >
-              <p className="text-[14px] font-semibold leading-tight">Cut Plan</p>
+              <p className="text-[12px] font-semibold leading-tight">Cut Plan</p>
             </button>
           ) : (
             <div />
@@ -516,7 +516,7 @@ export default function Dashboard() {
           <button onClick={() => navigate('/weight')} className="w-full card-surface rounded-2xl border border-border p-2.5 flex items-center gap-2 active:scale-[0.99] transition-all">
             <div className="flex-1 text-left min-w-0">
               <div className="flex items-center gap-1.5">
-                <p className="text-[14px] font-semibold">Daily Insight</p>
+                <p className="text-[12px] font-semibold">Daily Insight</p>
                 <Lock className="h-3 w-3 text-muted-foreground" />
               </div>
             </div>
@@ -533,15 +533,15 @@ export default function Dashboard() {
           <button className="w-full text-left card-surface rounded-2xl border border-border p-2.5 flex items-center gap-2 active:scale-[0.99] transition-all" onClick={handleWisdomClick}>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-1.5">
-                <p className="text-[13px] font-semibold">Daily Insight</p>
+                <p className="text-[11px] font-semibold">Daily Insight</p>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <span className={`text-[13px] px-1.5 py-0.5 rounded-full font-medium ${riskColors[wisdom.riskLevel]}`}>
+                  <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium ${riskColors[wisdom.riskLevel]}`}>
                     {wisdom.riskLevel.charAt(0).toUpperCase() + wisdom.riskLevel.slice(1)}
                   </span>
                   <ChevronRight className="h-3 w-3 text-muted-foreground" />
                 </div>
               </div>
-              <p className="text-[13px] text-muted-foreground mt-0.5 leading-snug line-clamp-2">
+              <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug line-clamp-2">
                 {wisdom.summary.replace(/[—–]/g, ',').replace(/\s*,\s*/g, ', ').replace(/\s{2,}/g, ' ').split(/\s+/).slice(0, 12).join(' ').replace(/[.,;:]+$/, '')}
               </p>
             </div>
@@ -549,8 +549,8 @@ export default function Dashboard() {
         ) : (
           <div className="card-surface rounded-2xl border border-border p-2.5 flex items-center gap-2">
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-semibold">Daily Insight</p>
-              <p className="text-[13px] text-muted-foreground mt-0.5 leading-snug line-clamp-2">{getWizardWisdom()}</p>
+              <p className="text-[11px] font-semibold">Daily Insight</p>
+              <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug line-clamp-2">{getWizardWisdom()}</p>
             </div>
           </div>
         )}
