@@ -9,6 +9,8 @@ import { Area } from "react-easy-crop";
 interface ProfilePictureUploadProps {
   currentAvatarUrl?: string;
   onUploadSuccess: (url: string) => void;
+  size?: "sm" | "lg";
+  showRemove?: boolean;
 }
 
 const createImage = (url: string): Promise<HTMLImageElement> =>
@@ -54,7 +56,10 @@ async function getCroppedImg(imageSrc: string, pixelCrop: Area): Promise<Blob> {
   });
 }
 
-export function ProfilePictureUpload({ currentAvatarUrl, onUploadSuccess }: ProfilePictureUploadProps) {
+export function ProfilePictureUpload({ currentAvatarUrl, onUploadSuccess, size = "lg", showRemove = true }: ProfilePictureUploadProps) {
+  const avatarClass = size === "sm" ? "h-10 w-10" : "h-20 w-20";
+  const iconClass = size === "sm" ? "h-4 w-4" : "h-6 w-6";
+  const overlayIconClass = size === "sm" ? "h-4 w-4" : "h-5 w-5";
   const [isOpen, setIsOpen] = useState(false);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -191,34 +196,37 @@ export function ProfilePictureUpload({ currentAvatarUrl, onUploadSuccess }: Prof
 
   return (
     <>
-      <div className="flex items-center gap-4">
-        {currentAvatarUrl && (
-          <img
-            src={currentAvatarUrl}
-            alt="Profile"
-            className="h-20 w-20 rounded-full object-cover"
-          />
-        )}
-        <div className="flex gap-2">
-          <Button asChild variant="outline">
-            <label className="cursor-pointer">
-              <Upload className="mr-2 h-4 w-4" />
-              Upload Photo
-              <input
-                type="file"
-                accept="image/*"
-                onChange={onFileChange}
-                className="hidden"
-              />
-            </label>
-          </Button>
-          {currentAvatarUrl && (
-            <Button variant="destructive" onClick={handleRemove}>
-              <X className="mr-2 h-4 w-4" />
-              Remove
-            </Button>
+      <div className="flex items-center gap-3">
+        <label
+          className={`relative ${avatarClass} cursor-pointer group shrink-0`}
+          aria-label="Upload profile photo"
+        >
+          {currentAvatarUrl ? (
+            <img
+              src={currentAvatarUrl}
+              alt="Profile"
+              className={`${avatarClass} rounded-full object-cover`}
+            />
+          ) : (
+            <div className={`${avatarClass} rounded-full bg-muted flex items-center justify-center`}>
+              <Upload className={`${iconClass} text-muted-foreground`} />
+            </div>
           )}
-        </div>
+          <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity flex items-center justify-center">
+            <Upload className={`${overlayIconClass} text-white`} />
+          </div>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={onFileChange}
+            className="hidden"
+          />
+        </label>
+        {showRemove && currentAvatarUrl && (
+          <Button variant="destructive" size="icon" onClick={handleRemove} aria-label="Remove photo">
+            <X className="h-4 w-4" />
+          </Button>
+        )}
       </div>
 
       {isOpen && (

@@ -196,19 +196,15 @@ export function SettingsPanel({
           {/* Profile */}
           <div className="rounded-lg bg-muted/20 p-3">
             <div className="flex items-center gap-3">
-              <div className="shrink-0">
-                {avatarUrl ? (
-                  <img src={avatarUrl} alt="" className="h-10 w-10 rounded-full object-cover" />
-                ) : (
-                  <div className="h-10 w-10 rounded-full bg-muted/40 flex items-center justify-center">
-                    <span className="text-sm font-bold text-muted-foreground">{(userName || "?")[0]?.toUpperCase()}</span>
-                  </div>
-                )}
-              </div>
-              <div className="flex-1 min-w-0 space-y-1.5">
+              <ProfilePictureUpload
+                size="sm"
+                showRemove={false}
+                currentAvatarUrl={avatarUrl || undefined}
+                onUploadSuccess={onAvatarChange}
+              />
+              <div className="flex-1 min-w-0">
                 <Input id="name" value={editedName} onChange={(e) => setEditedName(e.target.value)} placeholder="Your name"
                   className="h-8 text-[13px] rounded-lg border-border/30 bg-muted/20" />
-                <ProfilePictureUpload currentAvatarUrl={avatarUrl || undefined} onUploadSuccess={onAvatarChange} />
               </div>
             </div>
             {userEmail && <p className="text-[13px] text-muted-foreground mt-1.5 pl-[52px] truncate">{userEmail}</p>}

@@ -93,7 +93,7 @@ serve(async (req) => {
     // Fetch user data from database instead of trusting client
     const { data: profile } = await supabaseClient
       .from('profiles')
-      .select('current_weight_kg, goal_weight_kg, tdee, target_date, ai_recommended_calories, ai_recommended_protein_g, ai_recommended_carbs_g, ai_recommended_fats_g, manual_nutrition_override')
+      .select('current_weight_kg, goal_weight_kg, tdee, target_date, ai_recommended_calories, ai_recommended_protein_g, ai_recommended_carbs_g, ai_recommended_fats_g, manual_nutrition_override, sex, age')
       .eq('id', user.id)
       .single();
 
@@ -163,6 +163,7 @@ serve(async (req) => {
 
     const systemPrompt = `Nutrition AI for fighters. Create safe meal plans.
 
+Athlete: ${profile?.sex || 'unspecified'}${profile?.age ? `, ${profile.age}y` : ''}
 Target: ${Math.round(dailyCalorieTarget)} cal/day (${currentWeight}kg→${goalWeight}kg, ${daysToGoal} days)
 Safety: ${safetyIndicator} - ${safetyMessage}
 

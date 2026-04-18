@@ -15,6 +15,8 @@ import { useUser } from "@/contexts/UserContext";
 interface AthleteBaseline {
   trainingFrequency: number | null;
   activityLevel: string | null;
+  sex?: string | null;
+  age?: number | null;
 }
 
 interface RecoveryDashboardProps {

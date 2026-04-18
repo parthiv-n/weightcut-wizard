@@ -26,7 +26,9 @@ export default function Recovery() {
     const athleteProfile = useMemo(() => profile ? {
         trainingFrequency: profile.training_frequency ?? null,
         activityLevel: profile.activity_level ?? null,
-    } : undefined, [profile?.training_frequency, profile?.activity_level]);
+        sex: profile.sex ?? null,
+        age: profile.age ?? null,
+    } : undefined, [profile?.training_frequency, profile?.activity_level, profile?.sex, profile?.age]);
 
     const fetch28DaySessions = useCallback(async () => {
         if (!userId) return;

@@ -158,6 +158,7 @@ serve(async (req) => {
 
     const athleteBaselineText = athleteProfile
       ? `\nAthlete baseline (from onboarding profile):
+- Sex: ${athleteProfile.sex ?? 'unspecified'}${athleteProfile.age ? ` | Age: ${athleteProfile.age}` : ''}
 - Declared training frequency: ${athleteProfile.trainingFrequency ?? 'unknown'} sessions/week
 - Activity level: ${athleteProfile.activityLevel?.replace(/_/g, ' ') ?? 'unknown'}
 - Experience tier: ${getExperienceTier(athleteProfile.trainingFrequency, athleteProfile.activityLevel)}`

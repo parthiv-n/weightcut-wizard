@@ -155,8 +155,9 @@ export default function Onboarding() {
   const [formData, setFormData] = useState({
     // Screen 1 — flow split
     goal_type: "",
-    // Screen 2 (cutting) — athlete type
+    // Screen 2 (cutting) — athlete types (multi)
     athlete_type: "",
+    athlete_types: [] as string[],
     // Screen 2 (losing) — target weeks
     target_weeks: "",
     // Screen 3 (cutting only) — fight status
@@ -223,7 +224,7 @@ export default function Onboarding() {
     triggerHapticSelection();
   }, []);
 
-  const toggleMulti = useCallback((field: "training_types" | "dietary_restrictions", value: string) => {
+  const toggleMulti = useCallback((field: "training_types" | "dietary_restrictions" | "athlete_types", value: string) => {
     triggerHapticSelection();
     setFormData(prev => {
       const arr = prev[field];
@@ -351,7 +352,9 @@ export default function Onboarding() {
         goal_type: formData.goal_type || "losing",
         bmr,
         tdee,
-        athlete_type: formData.athlete_type || null,
+        athlete_type: formData.athlete_types.length > 0
+          ? formData.athlete_types.join(",")
+          : (formData.athlete_type || null),
         experience_level: formData.experience_level || null,
         training_types: formData.training_types.length > 0 ? formData.training_types : null,
         sleep_hours: formData.sleep_hours || null,
@@ -630,8 +633,8 @@ export default function Onboarding() {
 
         {/* ── Screen 2: Branching ── */}
         {step === 2 && formData.goal_type === "cutting" && (
-          <StepLayout step={2} title="What's your discipline?" subtitle="We'll tailor everything to your sport."
-            footer={<Button onClick={goNext} disabled={!formData.athlete_type}
+          <StepLayout step={2} title="What's your discipline?" subtitle="Select all that apply — we'll tailor everything to your sport(s)."
+            footer={<Button onClick={goNext} disabled={formData.athlete_types.length === 0}
               className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
           >
             <div className="space-y-2.5">
@@ -640,10 +643,14 @@ export default function Onboarding() {
                 { value: "boxing", label: "Boxing", icon: <Swords className="h-5 w-5 text-red-400" /> },
                 { value: "mma", label: "MMA", icon: <Swords className="h-5 w-5 text-blue-400" /> },
                 { value: "bjj", label: "BJJ", icon: <Swords className="h-5 w-5 text-purple-400" /> },
+                { value: "wrestling", label: "Wrestling", icon: <Swords className="h-5 w-5 text-green-400" /> },
+                { value: "kickboxing", label: "Kickboxing", icon: <Swords className="h-5 w-5 text-yellow-400" /> },
+                { value: "judo", label: "Judo", icon: <Swords className="h-5 w-5 text-indigo-400" /> },
+                { value: "karate", label: "Karate", icon: <Swords className="h-5 w-5 text-rose-400" /> },
                 { value: "other", label: "Other", icon: <Dumbbell className="h-5 w-5 text-muted-foreground" /> },
               ].map(opt => (
-                <OptionCard key={opt.value} selected={formData.athlete_type === opt.value} icon={opt.icon}
-                  label={opt.label} onClick={() => selectAndAdvance("athlete_type", opt.value)} />
+                <OptionCard key={opt.value} selected={formData.athlete_types.includes(opt.value)} icon={opt.icon}
+                  label={opt.label} onClick={() => toggleMulti("athlete_types", opt.value)} />
               ))}
             </div>
           </StepLayout>
@@ -1145,15 +1152,25 @@ export default function Onboarding() {
                 );
               })()}
               <div className="w-full max-w-xs space-y-3">
-                <Slider
-                  value={[formData.body_fat_pct ? parseFloat(formData.body_fat_pct) : 15]}
-                  onValueChange={([v]) => setFormData(prev => ({ ...prev, body_fat_pct: v.toString() }))}
-                  min={5} max={40} step={1}
-                  className="w-full"
-                />
-                <div className="flex justify-between text-[10px] text-muted-foreground/50">
-                  <span>Lean</span><span>Average</span><span>Higher</span>
-                </div>
+                {(() => {
+                  const isMale = formData.sex !== "female";
+                  const min = isMale ? 5 : 10;
+                  const max = isMale ? 40 : 45;
+                  const defaultBf = isMale ? 15 : 23;
+                  return (
+                    <>
+                      <Slider
+                        value={[formData.body_fat_pct ? parseFloat(formData.body_fat_pct) : defaultBf]}
+                        onValueChange={([v]) => setFormData(prev => ({ ...prev, body_fat_pct: v.toString() }))}
+                        min={min} max={max} step={1}
+                        className="w-full"
+                      />
+                      <div className="flex justify-between text-[10px] text-muted-foreground/50">
+                        <span>Lean</span><span>Average</span><span>Higher</span>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </StepLayout>
