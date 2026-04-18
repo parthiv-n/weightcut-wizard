@@ -183,9 +183,10 @@ export function useNutritionData(params: UseNutritionDataParams) {
       }
     }
 
-    // Only show loading skeleton if we have nothing to display and this isn't a silent/post-mutation refresh
+    // SWR: never show skeleton if we have anything to display
     const hasVisibleMeals = mealsRef.current.length > 0;
-    if (!silent && !servedFromLocal && !hasVisibleMeals) {
+    const hasLocalCache = !!localCache.getForDate(userId, "nutrition_logs", fetchDate);
+    if (!silent && !servedFromLocal && !hasVisibleMeals && !hasLocalCache) {
       safeAsync(setMealsLoading)(true);
     }
 
@@ -279,14 +280,9 @@ export function useNutritionData(params: UseNutritionDataParams) {
     localCache.setForDate(userId, "nutrition_logs", fetchDate, mergedMeals);
   };
 
-  // Load meals on date/user change
   useEffect(() => {
     activeDateRef.current = selectedDate;
-    const hasCachedMeals = userId && (
-      nutritionCache.getMeals(userId, selectedDate) ||
-      localCache.getForDate(userId, "nutrition_logs", selectedDate, LOCAL_CACHE_TTL_MS)
-    );
-    if (!hasCachedMeals) setMealsLoading(true);
+    // SWR: do not flip mealsLoading here; loadMeals decides based on cache availability.
     loadMeals();
     if (userId) setTimeout(() => preloadAdjacentDates(userId, selectedDate), 2000);
     return () => {
