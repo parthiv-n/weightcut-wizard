@@ -12,6 +12,7 @@ import { ArrowLeft, Save, Trophy, Scale, Droplets, TrendingDown, Upload, Camera,
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
+import { logger } from "@/lib/logger";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { FightCampSummaryCard } from "@/components/share/cards/FightCampSummaryCard";
@@ -80,17 +81,20 @@ export default function FightCampDetail() {
       if (!isMounted()) return;
 
       if (error) {
-        if (!cached) {
-          toast({ title: "Error", description: "Failed to load fight camp", variant: "destructive" });
-          navigate("/fight-camps");
-        }
-      } else {
-        setCamp(data as FightCamp);
-        localCache.set("shared", cacheKey, data);
+        throw error;
       }
-    } catch {
-      if (!isMounted()) return;
-      if (!cached) {
+
+      setCamp(data as FightCamp);
+      localCache.set("shared", cacheKey, data);
+    } catch (err) {
+      logger.warn("Error loading fight camp", { err });
+      const staleCached = localCache.get<FightCamp>("shared", cacheKey, 10 * 60 * 1000);
+      if (staleCached && isMounted()) {
+        safeAsync(setCamp)(staleCached);
+        safeAsync(setLoading)(false);
+        return;
+      }
+      if (isMounted()) {
         toast({ title: "Error", description: "Failed to load fight camp", variant: "destructive" });
         navigate("/fight-camps");
       }
@@ -119,6 +123,7 @@ export default function FightCampDetail() {
     if (error) {
       toast({ title: "Error", description: "Failed to update camp", variant: "destructive" });
     } else {
+      localCache.remove("shared", `fight_camp_${camp.id}`);
       localCache.set("shared", `fight_camp_${camp.id}`, camp);
       navigate("/fight-camps");
     }
