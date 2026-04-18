@@ -7,6 +7,9 @@ import { logger } from "@/lib/logger";
 import { localCache } from "@/lib/localCache";
 import { Skeleton } from "@/components/ui/skeleton-loader";
 import { Card } from "@/components/ui/card";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
+import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
+import { useToast } from "@/hooks/use-toast";
 
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -14,6 +17,8 @@ type TrainingCalendarRow = Tables<"fight_camp_calendar">;
 
 export default function Recovery() {
     const { userId, profile } = useUser();
+    const { safeAsync, isMounted } = useSafeAsync();
+    const { toast } = useToast();
     const [sessions28d, setSessions28d] = useState<TrainingCalendarRow[]>(() => {
         if (!userId) return [];
         return localCache.get<TrainingCalendarRow[]>(userId, "recovery_sessions_28d", 24 * 60 * 60 * 1000) || [];
@@ -30,38 +35,56 @@ export default function Recovery() {
         age: profile.age ?? null,
     } : undefined, [profile?.training_frequency, profile?.activity_level, profile?.sex, profile?.age]);
 
-    const fetch28DaySessions = useCallback(async () => {
+    const fetch28DaySessions = useCallback(async (isRetry = false) => {
         if (!userId) return;
 
-        // Cache-first: serve cached data instantly
-        const cached = localCache.get<TrainingCalendarRow[]>(userId, "recovery_sessions_28d", 24 * 60 * 60 * 1000);
-        if (cached) {
-            setSessions28d(cached);
-            setIsLoading(false);
-        } else {
-            setIsLoading(true);
+        // Cache-first: serve cached data instantly (only on first attempt)
+        if (!isRetry) {
+            const cached = localCache.get<TrainingCalendarRow[]>(userId, "recovery_sessions_28d", 24 * 60 * 60 * 1000);
+            if (cached) {
+                safeAsync(setSessions28d)(cached);
+                safeAsync(setIsLoading)(false);
+            } else {
+                safeAsync(setIsLoading)(true);
+            }
         }
 
         try {
             const from = format(subDays(new Date(), 28), "yyyy-MM-dd");
             const to = format(new Date(), "yyyy-MM-dd");
-            const { data, error } = await supabase
-                .from('fight_camp_calendar')
-                .select('*')
-                .eq('user_id', userId)
-                .gte('date', from)
-                .lte('date', to)
-                .limit(100);
+            const { data, error } = await withSupabaseTimeout(
+                supabase
+                    .from('fight_camp_calendar')
+                    .select('*')
+                    .eq('user_id', userId)
+                    .gte('date', from)
+                    .lte('date', to)
+                    .limit(100),
+                undefined,
+                "Load recovery sessions"
+            );
 
+            if (!isMounted()) return;
             if (error) throw error;
-            setSessions28d(data || []);
+
+            safeAsync(setSessions28d)(data || []);
             localCache.set(userId, "recovery_sessions_28d", data || []);
-        } catch (error) {
-            logger.error("Error fetching 28-day sessions", error);
+        } catch (err) {
+            logger.warn("Error loading recovery sessions", { err });
+
+            if (!isRetry) {
+                setTimeout(() => { if (isMounted()) fetch28DaySessions(true); }, 2000);
+                return;
+            }
+
+            const cached = userId ? localCache.get<TrainingCalendarRow[]>(userId, "recovery_sessions_28d", 24 * 60 * 60 * 1000) : null;
+            if (isMounted() && (!cached || cached.length === 0)) {
+                toast({ title: "Couldn't load recovery data", description: "Check your connection and try again.", variant: "destructive" });
+            }
         } finally {
-            setIsLoading(false);
+            if (isMounted()) safeAsync(setIsLoading)(false);
         }
-    }, [userId]);
+    }, [userId, safeAsync, isMounted, toast]);
 
     useEffect(() => { fetch28DaySessions(); }, [fetch28DaySessions]);
 
