@@ -14,6 +14,7 @@ import { useUser } from "@/contexts/UserContext";
 import { localCache } from "@/lib/localCache";
 import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
+import { useToast } from "@/hooks/use-toast";
 
 type Timeframe = "1W" | "1M" | "3M";
 
@@ -47,12 +48,13 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export default function Sleep() {
   const { userId } = useUser();
+  const { toast } = useToast();
 
   const [timeframe, setTimeframe] = useState<Timeframe>("1M");
   const [allData, setAllData] = useState<SleepRow[]>(() => {
     // Hydrate from cache synchronously to avoid skeleton flash
     if (!userId) return [];
-    const cached = localCache.get<any[]>(userId, "sleep_logs");
+    const cached = localCache.get<any[]>(userId, "sleep_logs", 24 * 60 * 60 * 1000);
     return cached ? cached.map(r => ({ date: r.date, hours: Number(r.hours) })) : [];
   });
   const [loading, setLoading] = useState(!allData.length);
@@ -62,7 +64,7 @@ export default function Sleep() {
 
     // Serve cache instantly if not already hydrated from initializer
     if (!allData.length) {
-      const cached = localCache.get<any[]>(userId, "sleep_logs");
+      const cached = localCache.get<any[]>(userId, "sleep_logs", 24 * 60 * 60 * 1000);
       if (cached) {
         setAllData(cached.map(r => ({ date: r.date, hours: Number(r.hours) })));
         setLoading(false);
@@ -92,6 +94,9 @@ export default function Sleep() {
         }
       } catch (err) {
         logger.error("Failed to fetch sleep logs", err);
+        if (!cancelled) {
+          toast({ title: "Couldn't load sleep data", description: "Check your connection.", variant: "destructive" });
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -103,7 +108,7 @@ export default function Sleep() {
   useEffect(() => {
     const handler = () => {
       if (!userId) return;
-      const cached = localCache.get<any[]>(userId, "sleep_logs");
+      const cached = localCache.get<any[]>(userId, "sleep_logs", 24 * 60 * 60 * 1000);
       if (cached) setAllData(cached.map(r => ({ date: r.date, hours: Number(r.hours) })));
     };
     window.addEventListener("sleep-logged", handler);
