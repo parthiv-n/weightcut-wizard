@@ -452,7 +452,7 @@ All colors MUST be HSL.
   }
 
   /* Hide bottom nav when sheets/dialogs need full screen */
-  .hide-bottom-nav nav[class*="fixed"][class*="bottom-0"] {
+  .hide-bottom-nav [data-bottom-nav] {
     display: none !important;
   }
 
