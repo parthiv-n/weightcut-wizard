@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Plus, Calendar as CalendarIcon, Loader2, Settings, Edit2, X, Activity, Utensils, Database, PieChart as PieChartIcon, Search, CheckCircle, ChevronDown, ChevronUp, ChevronRight, ScanLine, Dumbbell, UtensilsCrossed, Mic, MicOff, Gem, Copy, RotateCcw, Star, Camera } from "lucide-react";
 import wizardLogo from "@/assets/wizard-logo.webp";
 import { MealCard } from "@/components/nutrition/MealCard";
+import { PendingSyncPill } from "@/components/nutrition/PendingSyncPill";
 import { MealCardSkeleton } from "@/components/ui/skeleton-loader";
 import { MacroPieChart } from "@/components/nutrition/MacroPieChart";
 const FoodSearchDialog = lazy(() => import("@/components/nutrition/FoodSearchDialog").then(m => ({ default: m.FoodSearchDialog })));
@@ -589,6 +590,10 @@ export default function Nutrition() {
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
           <ShareButton onClick={nutritionData.handleShareOpen} className="absolute right-0" />
+        </div>
+
+        <div className="flex justify-center">
+          <PendingSyncPill />
         </div>
 
         {meals.length === 0 && selectedDate === format(new Date(), "yyyy-MM-dd") && !loading && !nutritionData.mealsLoading && (
