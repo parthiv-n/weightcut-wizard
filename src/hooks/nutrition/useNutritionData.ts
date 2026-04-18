@@ -253,12 +253,12 @@ export function useNutritionData(params: UseNutritionDataParams) {
       const p = op.payload as any;
       mergedMeals.push({
         id: op.recordId,
-        meal_name: p.meal_name || null,
+        meal_name: p.meal_name || "Logged meal",
         calories: p.calories,
         protein_g: p.protein_g ?? undefined,
         carbs_g: p.carbs_g ?? undefined,
         fats_g: p.fats_g ?? undefined,
-        meal_type: p.meal_type || null,
+        meal_type: p.meal_type || "snack",
         portion_size: p.portion_size ?? undefined,
         recipe_notes: p.recipe_notes ?? undefined,
         ingredients: p.ingredients ?? undefined,
