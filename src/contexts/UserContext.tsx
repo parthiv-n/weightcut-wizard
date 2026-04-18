@@ -8,6 +8,7 @@ import { nutritionCache, startCacheCleanup, stopCacheCleanup } from "@/lib/nutri
 import { AIPersistence } from "@/lib/aiPersistence";
 import { logger } from "@/lib/logger";
 import { PROFILE_COLUMNS } from "@/lib/queryColumns";
+import { useMealsRealtime } from "@/hooks/useMealsRealtime";
 
 export interface ProfileData {
   id?: string;
@@ -85,6 +86,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [userName, setUserName] = useState<string>("");
   const [avatarUrl, setAvatarUrl] = useState<string>("");
   const [userId, setUserId] = useState<string | null>(null);
+  useMealsRealtime(userId);
   const [currentWeight, setCurrentWeight] = useState<number | null>(null);
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [isSessionValid, setIsSessionValid] = useState<boolean>(false);
