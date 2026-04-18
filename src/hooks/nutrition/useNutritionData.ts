@@ -335,6 +335,8 @@ export function useNutritionData(params: UseNutritionDataParams) {
       if (document.visibilityState === 'visible' && userId) {
         if (Date.now() - lastFetchRef.current < 2000) return;
         loadMeals(true, 0, /* silent */ true);
+        // Also try to drain any pending meal ops
+        syncQueue.process(userId).catch(() => { });
       }
     };
     document.addEventListener('visibilitychange', handleVis);
