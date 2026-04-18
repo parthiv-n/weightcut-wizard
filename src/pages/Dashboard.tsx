@@ -118,6 +118,46 @@ export default function Dashboard() {
     }
   }, [userId]);
 
+  // Load frequent meals (last 14 days) when the wisdom sheet opens.
+  // Must be declared BEFORE any early return (e.g. the `loading` skeleton) or
+  // React will throw "rendered more hooks than during the previous render".
+  useEffect(() => {
+    if (!userId || !wisdomSheetOpen) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const { data } = await supabase
+          .from('nutrition_logs')
+          .select('meal_name, calories')
+          .eq('user_id', userId)
+          .gte('date', since);
+        if (cancelled || !data) return;
+        const counts = new Map<string, { count: number; totalCal: number }>();
+        for (const m of data as Array<{ meal_name: string | null; calories: number | null }>) {
+          const name = (m.meal_name || '').trim();
+          if (!name) continue;
+          const key = name.toLowerCase();
+          const entry = counts.get(key) || { count: 0, totalCal: 0 };
+          entry.count++;
+          entry.totalCal += m.calories || 0;
+          counts.set(key, entry);
+        }
+        const top = Array.from(counts.entries())
+          .filter(([, v]) => v.count >= 2)
+          .sort((a, b) => b[1].count - a[1].count)
+          .slice(0, 4)
+          .map(([name, v]) => ({
+            name: name.replace(/\b\w/g, (c) => c.toUpperCase()),
+            count: v.count,
+            avgCalories: Math.round(v.totalCal / v.count),
+          }));
+        setFrequentMeals(top);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [userId, wisdomSheetOpen]);
+
   const generateWisdom = async (profileData: any, logs: any[], calories: number, hydration: number) => {
     if (!userId || !profileData) return;
     safeAsync(setWisdomLoading)(true);
@@ -387,44 +427,6 @@ export default function Dashboard() {
     }
   };
 
-  // Load frequent meals (last 14 days) when the wisdom sheet opens
-  useEffect(() => {
-    if (!userId || !wisdomSheetOpen) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-        const { data } = await supabase
-          .from('nutrition_logs')
-          .select('meal_name, calories')
-          .eq('user_id', userId)
-          .gte('date', since);
-        if (cancelled || !data) return;
-        const counts = new Map<string, { count: number; totalCal: number }>();
-        for (const m of data as Array<{ meal_name: string | null; calories: number | null }>) {
-          const name = (m.meal_name || '').trim();
-          if (!name) continue;
-          const key = name.toLowerCase();
-          const entry = counts.get(key) || { count: 0, totalCal: 0 };
-          entry.count++;
-          entry.totalCal += m.calories || 0;
-          counts.set(key, entry);
-        }
-        const top = Array.from(counts.entries())
-          .filter(([, v]) => v.count >= 2)
-          .sort((a, b) => b[1].count - a[1].count)
-          .slice(0, 4)
-          .map(([name, v]) => ({
-            name: name.replace(/\b\w/g, (c) => c.toUpperCase()),
-            count: v.count,
-            avgCalories: Math.round(v.totalCal / v.count),
-          }));
-        setFrequentMeals(top);
-      } catch { /* ignore */ }
-    })();
-    return () => { cancelled = true; };
-  }, [userId, wisdomSheetOpen]);
-
   const getFoodSwap = (name: string): string => {
     const n = name.toLowerCase();
     const swaps: Array<[RegExp, string]> = [
@@ -500,7 +502,7 @@ export default function Dashboard() {
               onClick={() => { setCutPlanOpen(true); triggerHaptic(ImpactStyle.Light); }}
               className="card-surface rounded-2xl border border-border p-2.5 flex items-center justify-center active:scale-[0.98] transition-all text-center"
             >
-              <p className="text-[17px] font-semibold leading-tight">Cut Plan</p>
+              <p className="text-[14px] font-semibold leading-tight">Cut Plan</p>
             </button>
           ) : (
             <div />
@@ -514,7 +516,7 @@ export default function Dashboard() {
           <button onClick={() => navigate('/weight')} className="w-full card-surface rounded-2xl border border-border p-2.5 flex items-center gap-2 active:scale-[0.99] transition-all">
             <div className="flex-1 text-left min-w-0">
               <div className="flex items-center gap-1.5">
-                <p className="text-[17px] font-semibold">Daily Insight</p>
+                <p className="text-[14px] font-semibold">Daily Insight</p>
                 <Lock className="h-3 w-3 text-muted-foreground" />
               </div>
             </div>
@@ -568,7 +570,7 @@ export default function Dashboard() {
         {/* Weight History + Training — side by side */}
         <div className="grid grid-cols-2 gap-2">
           {/* Weight History Chart */}
-          <div className="rounded-2xl bg-muted/20 p-2.5 aspect-square flex flex-col">
+          <div className="card-surface rounded-2xl border border-border p-2.5 aspect-square flex flex-col">
             <div className="flex items-center justify-between mb-1">
               <span className="section-header text-foreground font-bold">Weight</span>
               <div className="flex gap-0.5 bg-muted rounded-full p-0.5">

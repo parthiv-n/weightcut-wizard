@@ -337,7 +337,7 @@ export default function FightCamps() {
 
       {/* New Camp Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-[280px] rounded-2xl p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0">
+        <DialogContent className="w-[calc(100vw-2.5rem)] max-w-[320px] rounded-[28px] p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0">
           <div className="px-4 pt-4 pb-3">
             <DialogHeader>
               <DialogTitle className="text-[15px] font-semibold text-center">New Fight Camp</DialogTitle>

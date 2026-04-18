@@ -101,9 +101,9 @@ export const SleepLogger = memo(function SleepLogger({ userId, compact }: SleepL
           onClick={() => setIsEditing(true)}
         >
           {saved ? (
-            <p className="text-[17px] font-semibold leading-tight"><span className="tabular-nums">{hours}</span><span className="text-muted-foreground">h</span> sleep</p>
+            <p className="text-[14px] font-semibold leading-tight"><span className="tabular-nums">{hours}</span><span className="text-muted-foreground">h</span> sleep</p>
           ) : (
-            <p className="text-[17px] font-semibold leading-tight">Sleep</p>
+            <p className="text-[14px] font-semibold leading-tight">Sleep</p>
           )}
         </button>
       );

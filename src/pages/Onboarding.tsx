@@ -317,15 +317,8 @@ export default function Onboarding() {
     }
 
     setLoading(true);
-    setGeneratingPlan(true);
-    setGenerationStep(0);
 
     const isFighterFlow = formData.goal_type === "cutting";
-    // Staggered UI steps — give each "analysis" step enough time to feel real
-    const stepTimers = [
-      setTimeout(() => setGenerationStep(1), 1800),
-      setTimeout(() => setGenerationStep(2), 4000),
-    ];
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -335,7 +328,7 @@ export default function Onboarding() {
       const tdee = bmr * (ACTIVITY_MULTIPLIERS[activityLevel] || 1.55);
       const trainingFreq = parseInt(formData.training_frequency) || 3;
 
-      // 1. Save profile
+      // 1. Save profile (sync, fast)
       const { error } = await supabase.from("profiles").insert({
         id: user.id,
         age: parseInt(formData.age || "25"),
@@ -349,7 +342,6 @@ export default function Onboarding() {
             const weeks = parseInt(formData.target_weeks) || 12;
             return new Date(Date.now() + weeks * 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
           }
-          // Fallback: estimate target date based on weight difference at 0.5 kg/week
           const diff = Math.abs(parseFloat(formData.current_weight_kg) - parseFloat(formData.goal_weight_kg));
           const weeks = Math.max(4, Math.ceil(diff / 0.5));
           return new Date(Date.now() + weeks * 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -371,7 +363,6 @@ export default function Onboarding() {
 
       if (error) throw error;
 
-      // Save dietary preferences if selected
       if (formData.dietary_restrictions.length > 0) {
         await supabase.from("user_dietary_preferences").insert({
           user_id: user.id,
@@ -379,137 +370,149 @@ export default function Onboarding() {
         });
       }
 
-      stepTimers.forEach(clearTimeout);
-      setGenerationStep(2);
-      // Let "Building your weight cut strategy" breathe before moving on
-      await new Promise(r => setTimeout(r, 2000));
+      // 2. Fire the AI plan in the BACKGROUND while we show the paywall.
+      // We race the paywall dismissal against the plan promise so the user
+      // only sees a generation overlay if the plan hasn't finished by the
+      // time they close the paywall.
+      const planPromise: Promise<boolean> = (async () => {
+        try {
+          if (isFighterFlow) {
+            const { data: planData, error: planError } = await supabase.functions.invoke("generate-cut-plan", {
+              body: {
+                currentWeight: parseFloat(formData.current_weight_kg),
+                goalWeight: parseFloat(formData.goal_weight_kg),
+                fightWeekTarget: parseFloat(formData.fight_week_target_kg),
+                targetDate: formData.target_date,
+                age: parseInt(formData.age || "25"),
+                sex: formData.sex || "male",
+                heightCm: parseFloat(formData.height_cm),
+                activityLevel,
+                trainingFrequency: trainingFreq,
+                bmr,
+                tdee,
+              },
+            });
+            if (planError) logger.warn("Cut plan generation failed", { error: planError });
+            const plan = planData?.plan || planData;
+            if (plan?.weeklyPlan) {
+              localStorage.setItem("wcw_cut_plan", JSON.stringify({
+                ...plan,
+                currentWeight: parseFloat(formData.current_weight_kg),
+                goalWeight: parseFloat(formData.goal_weight_kg),
+                targetDate: formData.target_date,
+              }));
+              const week1 = plan.weeklyPlan[0];
+              if (week1) {
+                await supabase.from("profiles").update({
+                  ai_recommended_calories: week1.calories,
+                  ai_recommended_protein_g: week1.protein_g,
+                  ai_recommended_carbs_g: week1.carbs_g,
+                  ai_recommended_fats_g: week1.fats_g,
+                }).eq("id", user.id);
+              }
+              return true;
+            }
+            return false;
+          } else {
+            logger.info("Generating weight loss plan for non-fighter", { goalType: formData.goal_type, targetWeeks: formData.target_weeks });
+            const targetWeeks = parseInt(formData.target_weeks) || Math.max(4, Math.ceil(Math.abs(parseFloat(formData.current_weight_kg) - parseFloat(formData.goal_weight_kg)) / 0.5));
+            const { data: planData, error: planError } = await supabase.functions.invoke("generate-weight-plan", {
+              body: {
+                currentWeight: parseFloat(formData.current_weight_kg),
+                goalWeight: parseFloat(formData.goal_weight_kg),
+                targetWeeks,
+                age: parseInt(formData.age || "25"),
+                sex: formData.sex || "male",
+                heightCm: parseFloat(formData.height_cm),
+                activityLevel,
+                trainingFrequency: trainingFreq,
+                bmr,
+                tdee,
+                foodBudget: formData.food_budget || "flexible",
+                planAggressiveness: formData.plan_aggressiveness || "balanced",
+              },
+            });
+            if (planError) logger.warn("Weight plan generation failed", { error: planError });
+            const plan = planData?.plan || planData;
+            if (plan?.weeklyPlan) {
+              localStorage.setItem("wcw_cut_plan", JSON.stringify({
+                ...plan,
+                currentWeight: parseFloat(formData.current_weight_kg),
+                goalWeight: parseFloat(formData.goal_weight_kg),
+                targetDate: formData.target_date,
+                planType: "weight_loss",
+              }));
+              const week1 = plan.weeklyPlan[0];
+              if (week1) {
+                await supabase.from("profiles").update({
+                  ai_recommended_calories: week1.calories,
+                  ai_recommended_protein_g: week1.protein_g,
+                  ai_recommended_carbs_g: week1.carbs_g,
+                  ai_recommended_fats_g: week1.fats_g,
+                }).eq("id", user.id);
+              }
+              return true;
+            }
+            return false;
+          }
+        } catch (planErr) {
+          logger.warn("Plan generation error", planErr);
+          return false;
+        }
+      })();
 
-      // 2. AI plan generation
-      let hasPlan = false;
-      if (isFighterFlow) {
-        // Fighter: generate fight camp cut plan
-        setGenerationStep(3);
+      // Track whether the plan promise has already settled when the paywall closes.
+      let planSettled = false;
+      let planResult: boolean = false;
+      planPromise.then((r) => { planSettled = true; planResult = r; }).catch(() => { planSettled = true; planResult = false; });
+
+      // 3. Show the RevenueCat paywall NOW, before any generation overlay.
+      // We only show it once per onboarding — later flows never re-trigger.
+      if (Capacitor.isNativePlatform()) {
         try {
-          const { data: planData, error: planError } = await supabase.functions.invoke("generate-cut-plan", {
-            body: {
-              currentWeight: parseFloat(formData.current_weight_kg),
-              goalWeight: parseFloat(formData.goal_weight_kg),
-              fightWeekTarget: parseFloat(formData.fight_week_target_kg),
-              targetDate: formData.target_date,
-              age: parseInt(formData.age || "25"),
-              sex: formData.sex || "male",
-              heightCm: parseFloat(formData.height_cm),
-              activityLevel,
-              trainingFrequency: trainingFreq,
-              bmr,
-              tdee,
-            },
-          });
-          if (planError) logger.warn("Cut plan generation failed", { error: planError });
-          const plan = planData?.plan || planData;
-          if (plan?.weeklyPlan) {
-            localStorage.setItem("wcw_cut_plan", JSON.stringify({
-              ...plan,
-              currentWeight: parseFloat(formData.current_weight_kg),
-              goalWeight: parseFloat(formData.goal_weight_kg),
-              targetDate: formData.target_date,
-            }));
-            hasPlan = true;
-            const week1 = plan.weeklyPlan[0];
-            if (week1) {
-              await supabase.from("profiles").update({
-                ai_recommended_calories: week1.calories,
-                ai_recommended_protein_g: week1.protein_g,
-                ai_recommended_carbs_g: week1.carbs_g,
-                ai_recommended_fats_g: week1.fats_g,
-              }).eq("id", user.id);
-            }
-          }
-        } catch (planErr) {
-          logger.warn("Cut plan generation error", planErr);
-          toast({ title: "Plan unavailable", description: "We couldn't generate your plan right now. You can generate it later from the dashboard." });
-        }
-      } else {
-        // General user: generate weight loss plan
-        logger.info("Generating weight loss plan for non-fighter", { goalType: formData.goal_type, targetWeeks: formData.target_weeks });
-        setGenerationStep(3);
-        try {
-          const targetWeeks = parseInt(formData.target_weeks) || Math.max(4, Math.ceil(Math.abs(parseFloat(formData.current_weight_kg) - parseFloat(formData.goal_weight_kg)) / 0.5));
-          const { data: planData, error: planError } = await supabase.functions.invoke("generate-weight-plan", {
-            body: {
-              currentWeight: parseFloat(formData.current_weight_kg),
-              goalWeight: parseFloat(formData.goal_weight_kg),
-              targetWeeks,
-              age: parseInt(formData.age || "25"),
-              sex: formData.sex || "male",
-              heightCm: parseFloat(formData.height_cm),
-              activityLevel,
-              trainingFrequency: trainingFreq,
-              bmr,
-              tdee,
-              foodBudget: formData.food_budget || "flexible",
-              planAggressiveness: formData.plan_aggressiveness || "balanced",
-            },
-          });
-          if (planError) logger.warn("Weight plan generation failed", { error: planError });
-          const plan = planData?.plan || planData;
-          if (plan?.weeklyPlan) {
-            localStorage.setItem("wcw_cut_plan", JSON.stringify({
-              ...plan,
-              currentWeight: parseFloat(formData.current_weight_kg),
-              goalWeight: parseFloat(formData.goal_weight_kg),
-              targetDate: formData.target_date,
-              planType: "weight_loss",
-            }));
-            hasPlan = true;
-            const week1 = plan.weeklyPlan[0];
-            if (week1) {
-              await supabase.from("profiles").update({
-                ai_recommended_calories: week1.calories,
-                ai_recommended_protein_g: week1.protein_g,
-                ai_recommended_carbs_g: week1.carbs_g,
-                ai_recommended_fats_g: week1.fats_g,
-              }).eq("id", user.id);
-            }
-          }
-        } catch (planErr) {
-          logger.warn("Weight plan generation error", planErr);
-          toast({ title: "Plan unavailable", description: "We couldn't generate your plan right now. You can use AI tools on the dashboard." });
-        }
+          await presentPaywallIfNeeded();
+          await refreshProfile();
+        } catch (err) { logger.warn("Paywall presentation error", err); }
       }
 
-      // 3. Finalize
-      const finalStep = 4;
-      setGenerationStep(finalStep);
-      // Let "Finalizing your plan" show for a moment
-      await new Promise(r => setTimeout(r, 1500));
+      // 4. If the AI plan finished while the paywall was open, skip straight to the plan.
+      //    Otherwise, show the generating overlay and wait for it.
+      let hasPlan: boolean;
+      if (planSettled) {
+        hasPlan = planResult;
+      } else {
+        setGeneratingPlan(true);
+        setGenerationStep(0);
+        const stepTimers = [
+          setTimeout(() => setGenerationStep(1), 1200),
+          setTimeout(() => setGenerationStep(2), 3000),
+          setTimeout(() => setGenerationStep(3), 5000),
+        ];
+        try {
+          hasPlan = await planPromise;
+        } finally {
+          stepTimers.forEach(clearTimeout);
+        }
+        setGenerationStep(4);
+        await new Promise(r => setTimeout(r, 900));
+      }
+
       await refreshProfile();
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (currentUser) seedDemoData(currentUser.id);
       celebrateSuccess();
 
-      // Signal that onboarding just completed — tutorial should trigger on dashboard
       localStorage.setItem("wcw_onboarding_just_completed", "true");
-
-      // Show RevenueCat paywall on native platforms before proceeding
-      if (Capacitor.isNativePlatform()) {
-        try {
-          await presentPaywallIfNeeded();
-          // Refresh profile in case user purchased
-          await refreshProfile();
-        } catch (err) { logger.warn("Paywall presentation error", err); }
-      }
 
       if (hasPlan) {
         localStorage.removeItem("wcw_cut_plan_seen"); // Force user to see plan first
         navigate("/cut-plan", { replace: true });
       } else {
-        setGenerationStep(finalStep + 1);
-        setTimeout(() => navigate("/dashboard"), 1000);
+        setGenerationStep(5);
+        setTimeout(() => navigate("/dashboard"), 800);
       }
     } catch (error: any) {
       logger.error("Onboarding failed", error);
-      stepTimers.forEach(clearTimeout);
       setGeneratingPlan(false);
       setGenerationStep(0);
       toast({ variant: "destructive", title: "Error", description: error.message });
