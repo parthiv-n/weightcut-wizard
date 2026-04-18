@@ -11,6 +11,7 @@ import { RecoveryCoachChat } from "./RecoveryCoachChat";
 import { computeAllMetrics, type SessionRow, type AllMetrics, type ReadinessResult, type WellnessCheckIn as WellnessCheckInData, type PersonalBaseline } from "@/utils/performanceEngine";
 import { loadOrComputeBaseline, computeAndStoreBaseline, storeReadinessScore } from "@/utils/baselineComputer";
 import { useUser } from "@/contexts/UserContext";
+import { logger } from "@/lib/logger";
 
 interface AthleteBaseline {
   trainingFrequency: number | null;
@@ -90,6 +91,11 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
   const uniqueDays = new Set(sessions28d.map(s => s.date)).size;
   const hasEnoughData = uniqueDays >= 1;
 
+  // Reset baselineLoadedRef when userId changes to prevent cross-account data leak
+  useEffect(() => {
+    baselineLoadedRef.current = false;
+  }, [userId]);
+
   // Load baseline on mount
   useEffect(() => {
     if (baselineLoadedRef.current) return;
@@ -97,7 +103,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
 
     loadOrComputeBaseline(userId, tdee).then(b => {
       if (b) setBaseline(b);
-    }).catch(() => {});
+    }).catch(err => logger.warn("RecoveryDashboard: baseline fetch failed", { err }));
 
     // Check if already checked in today
     const today = new Date().toISOString().split('T')[0];
@@ -112,7 +118,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
           setTodayCheckedIn(true);
           setWellnessCheckIn(data as WellnessCheckInData);
         }
-      }).catch(() => {});
+      }).catch(err => logger.warn("RecoveryDashboard: wellness fetch failed", { err }));
 
     // Count total check-in days for progress banner
     supabase
@@ -121,7 +127,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
       .eq('user_id', userId)
       .then(({ count }) => {
         setCheckInDaysCount(count ?? 0);
-      }).catch(() => {});
+      }).catch(err => logger.warn("RecoveryDashboard: check-in count fetch failed", { err }));
 
     // Fetch sleep logs (28 days) for performance engine
     const from28d = new Date();
@@ -134,7 +140,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
       .order('date', { ascending: true })
       .then(({ data }) => {
         if (data) setSleepLogs(data);
-      }).catch(() => {});
+      }).catch(err => logger.warn("RecoveryDashboard: sleep fetch failed", { err }));
   }, [userId, tdee]);
 
   // Compute metrics whenever sessions or wellness data changes
