@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
-import { Plus, Clock, Dumbbell, Trash2, TrendingUp, Check } from "lucide-react";
+import { Plus, Trash2, Check } from "lucide-react";
 import { motion } from "motion/react";
 import { staggerContainer, staggerItem, springs } from "@/lib/motion";
 import { ExerciseBlock } from "./ExerciseBlock";
@@ -122,17 +122,14 @@ export function ActiveSessionView({
           {/* Stats row */}
           <div className="grid grid-cols-3 gap-2">
             <div className="rounded-2xl bg-muted/30 p-2.5 text-center">
-              <Dumbbell className="h-3.5 w-3.5 text-primary mx-auto mb-1" />
               <div className="display-number text-sm">{workout.exerciseGroups.length}</div>
               <div className="text-[13px] text-muted-foreground">Exercises</div>
             </div>
             <div className="rounded-2xl bg-muted/30 p-2.5 text-center">
-              <TrendingUp className="h-3.5 w-3.5 text-primary mx-auto mb-1" />
               <div className="display-number text-sm">{totalSets}</div>
               <div className="text-[13px] text-muted-foreground">Working Sets</div>
             </div>
             <div className="rounded-2xl bg-muted/30 p-2.5 text-center">
-              <Clock className="h-3.5 w-3.5 text-primary mx-auto mb-1" />
               <div className="display-number text-sm">{formatVolume(totalVolume)}<span className="text-[13px] text-muted-foreground font-normal"> kg</span></div>
               <div className="text-[13px] text-muted-foreground">Volume</div>
             </div>
