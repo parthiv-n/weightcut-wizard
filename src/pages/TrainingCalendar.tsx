@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { localCache } from "@/lib/localCache";
 import { useUser } from "@/contexts/UserContext";
 import { useToast } from "@/hooks/use-toast";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -33,6 +34,7 @@ type TrainingCalendarInsert = TablesInsert<"fight_camp_calendar">;
 export default function TrainingCalendar() {
     const { userId, profile } = useUser();
     const { toast } = useToast();
+    const { safeAsync, isMounted } = useSafeAsync();
     const [searchParams, setSearchParams] = useSearchParams();
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(new Date());
@@ -85,10 +87,10 @@ export default function TrainingCalendar() {
         const cacheKey = monthCacheKey(currentDate);
         const cached = localCache.get<TrainingCalendarRow[]>(userId, cacheKey, DISPLAY_TTL);
         if (cached) {
-            setSessions(cached);
-            setIsLoading(false);
+            safeAsync(setSessions)(cached);
+            safeAsync(setIsLoading)(false);
         } else if (!localCache.get<TrainingCalendarRow[]>(userId, cacheKey)) {
-            setIsLoading(true);
+            safeAsync(setIsLoading)(true);
         }
 
         try {
@@ -101,11 +103,12 @@ export default function TrainingCalendar() {
                 .limit(100);
 
             if (error) throw error;
-            setSessions(data || []);
+            safeAsync(setSessions)(data || []);
             localCache.set(userId, cacheKey, data || []);
         } catch (error) {
             logger.error("Error fetching sessions", error);
             if (!cached) {
+                if (!isMounted()) return;
                 toastRef.current({
                     title: "Error fetching sessions",
                     description: "Could not load your calendar data.",
@@ -113,15 +116,15 @@ export default function TrainingCalendar() {
                 });
             }
         } finally {
-            setIsLoading(false);
+            safeAsync(setIsLoading)(false);
         }
-    }, [userId, currentDate]);
+    }, [userId, currentDate, safeAsync, isMounted]);
 
     const fetch28DaySessions = useCallback(async () => {
         if (!userId) return;
 
         const cached28d = localCache.get<TrainingCalendarRow[]>(userId, "training_sessions_28d", DISPLAY_TTL);
-        if (cached28d) setSessions28d(cached28d);
+        if (cached28d) safeAsync(setSessions28d)(cached28d);
 
         try {
             const from = format(subDays(new Date(), 28), "yyyy-MM-dd");
@@ -135,12 +138,12 @@ export default function TrainingCalendar() {
                 .limit(100);
 
             if (error) throw error;
-            setSessions28d(data || []);
+            safeAsync(setSessions28d)(data || []);
             localCache.set(userId, "training_sessions_28d", data || []);
-        } catch (error) {
-            logger.error("Error fetching 28-day sessions", error);
+        } catch (err) {
+            logger.warn("TrainingCalendar: 28-day fetch failed", { err });
         }
-    }, [userId]);
+    }, [userId, safeAsync]);
 
     // Preload adjacent months in background
     const preloadMonth = useCallback(async (date: Date) => {
@@ -323,8 +326,7 @@ export default function TrainingCalendar() {
                 localCache.remove(userId, monthCacheKey(currentDate));
                 localCache.remove(userId, "training_sessions_28d");
             }
-            fetchSessions();
-            fetch28DaySessions();
+            await Promise.all([fetchSessions(), fetch28DaySessions()]);
             setSessionLoggedTrigger(prev => prev + 1);
             resetForm();
         } catch (error) {
@@ -357,7 +359,7 @@ export default function TrainingCalendar() {
                 localCache.remove(userId, monthCacheKey(currentDate));
                 localCache.remove(userId, "training_sessions_28d");
             }
-            fetch28DaySessions();
+            await Promise.all([fetchSessions(), fetch28DaySessions()]);
         } catch (error) {
             logger.error("Error deleting session", error);
             toast({
