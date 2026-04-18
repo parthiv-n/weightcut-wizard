@@ -12,6 +12,7 @@ export interface SyncOp {
   timestamp: number; // Date.now() — drives last-write-wins
   retries: number; // max 5
   upsertConflict?: string; // e.g. "user_id,log_date" for fight_week_logs
+  persistOnFailure?: boolean;
 }
 
 const QUEUE_KEY_PREFIX = "wcw_syncqueue_";
