@@ -286,6 +286,8 @@ export function useNutritionData(params: UseNutritionDataParams) {
     const keepIds = new Set<string>([
       ...typedMeals.map(m => m.id),
       ...pendingRecordIds,
+      ...mergedMeals.map((m: any) => m.id),
+      ...mealsRef.current.map(m => m.id),
     ]);
     const priorLocal = localCache.getForDate<Meal[]>(userId, "nutrition_logs", fetchDate) ?? [];
     const reconciledLocal = priorLocal.filter(m => keepIds.has(m.id));
