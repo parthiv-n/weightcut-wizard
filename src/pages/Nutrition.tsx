@@ -18,6 +18,7 @@ import { format, subDays, addDays } from "date-fns";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
+import { SyncingIndicator } from "@/components/SyncingIndicator";
 import { nutritionLogSchema } from "@/lib/validation";
 import { useUser } from "@/contexts/UserContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -576,13 +577,16 @@ export default function Nutrition() {
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M10 4L6 8l4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
-          <button
-            onClick={() => { setSelectedDate(format(new Date(), "yyyy-MM-dd")); triggerHapticSelection(); }}
-            className="flex items-center gap-1.5 text-[13px] font-semibold px-3 py-1 rounded-full bg-muted/40 hover:bg-muted/70 active:scale-[0.97] transition-all"
-          >
-            <CalendarIcon className="h-3 w-3 text-primary" />
-            {selectedDate === format(new Date(), "yyyy-MM-dd") ? "Today" : format(new Date(selectedDate), "EEE, MMM d")}
-          </button>
+          <div className="inline-flex items-center gap-1.5">
+            <button
+              onClick={() => { setSelectedDate(format(new Date(), "yyyy-MM-dd")); triggerHapticSelection(); }}
+              className="flex items-center gap-1.5 text-[13px] font-semibold px-3 py-1 rounded-full bg-muted/40 hover:bg-muted/70 active:scale-[0.97] transition-all"
+            >
+              <CalendarIcon className="h-3 w-3 text-primary" />
+              {selectedDate === format(new Date(), "yyyy-MM-dd") ? "Today" : format(new Date(selectedDate), "EEE, MMM d")}
+            </button>
+            <SyncingIndicator active={nutritionData.mealsLoading && meals.length > 0} />
+          </div>
           <button
             onClick={() => { setSelectedDate(format(addDays(new Date(selectedDate), 1), "yyyy-MM-dd")); triggerHapticSelection(); }}
             className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 active:scale-95 transition-all"
