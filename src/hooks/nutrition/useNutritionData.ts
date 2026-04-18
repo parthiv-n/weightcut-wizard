@@ -276,6 +276,23 @@ export function useNutritionData(params: UseNutritionDataParams) {
       setMeals(mergedMeals as Meal[]);
     }
     safeAsync(setMealsLoading)(false);
+    // Reconciliation: drop any localCache rows that aren't in DB and aren't
+    // in the pending queue. Prevents "ghost" meals from re-surfacing forever.
+    const pendingRecordIds = new Set(
+      pendingOps
+        .filter(op => op.table === "nutrition_logs" && op.action === "insert")
+        .map(op => op.recordId)
+    );
+    const keepIds = new Set<string>([
+      ...typedMeals.map(m => m.id),
+      ...pendingRecordIds,
+    ]);
+    const priorLocal = localCache.getForDate<Meal[]>(userId, "nutrition_logs", fetchDate) ?? [];
+    const reconciledLocal = priorLocal.filter(m => keepIds.has(m.id));
+    // Only write back if we actually dropped something (avoids pointless writes)
+    if (reconciledLocal.length !== priorLocal.length) {
+      localCache.setForDate(userId, "nutrition_logs", fetchDate, reconciledLocal);
+    }
     nutritionCache.setMeals(userId, fetchDate, mergedMeals as Meal[]);
     localCache.setForDate(userId, "nutrition_logs", fetchDate, mergedMeals);
   };
