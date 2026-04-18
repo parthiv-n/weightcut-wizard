@@ -15,7 +15,7 @@ class NutritionCache {
   private cache = new Map<string, CacheEntry<any>>();
   private readonly DEFAULT_TTL = 5 * 60 * 1000; // 5 minutes default TTL
   private readonly PROFILE_TTL = 10 * 60 * 1000; // 10 minutes for profile data
-  private readonly MEALS_TTL = 5 * 60 * 1000; // 5 minutes for meals (visibility revalidation handles freshness)
+  private readonly MEALS_TTL = 30 * 60 * 1000; // 30 minutes — realtime keeps it fresh; TTL is just a backstop
 
   // Generate cache key
   private getCacheKey(userId: string, type: string, date?: string): string {
@@ -217,4 +217,60 @@ export const cacheHelpers = {
     nutritionCache.clearUser(userId);
   },
 };
+
+// ── Realtime integration ─────────────────────────────────────────────────
+export type MealChangeEvent =
+  | { type: "insert" | "update"; userId: string; date: string; row: any }
+  | { type: "delete"; userId: string; date: string; rowId: string };
+
+type MealListener = (evt: MealChangeEvent) => void;
+const mealListeners = new Set<MealListener>();
+
+export function onMealsChange(listener: MealListener): () => void {
+  mealListeners.add(listener);
+  return () => { mealListeners.delete(listener); };
+}
+
+function notifyMealsChange(evt: MealChangeEvent): void {
+  for (const l of Array.from(mealListeners)) {
+    try { l(evt); } catch { /* ignore */ }
+  }
+}
+
+/**
+ * Apply a realtime event from Supabase postgres_changes to the in-memory cache
+ * and emit to subscribers. Returns the resolved date key affected.
+ */
+export function applyMealRealtimeChange(
+  userId: string,
+  eventType: "INSERT" | "UPDATE" | "DELETE",
+  newRow: any,
+  oldRow: any
+): string | null {
+  const row = newRow ?? oldRow;
+  if (!row || !row.date) return null;
+  const date: string = row.date;
+
+  const cached = nutritionCache.getMeals(userId, date) ?? [];
+  let next = cached;
+
+  if (eventType === "DELETE") {
+    next = cached.filter((m: any) => m.id !== (oldRow?.id ?? row.id));
+    nutritionCache.setMeals(userId, date, next);
+    notifyMealsChange({ type: "delete", userId, date, rowId: oldRow?.id ?? row.id });
+  } else if (eventType === "INSERT") {
+    if (!cached.some((m: any) => m.id === row.id)) {
+      next = [...cached, row];
+    }
+    nutritionCache.setMeals(userId, date, next);
+    notifyMealsChange({ type: "insert", userId, date, row });
+  } else if (eventType === "UPDATE") {
+    next = cached.map((m: any) => (m.id === row.id ? row : m));
+    if (!cached.some((m: any) => m.id === row.id)) next = [...cached, row];
+    nutritionCache.setMeals(userId, date, next);
+    notifyMealsChange({ type: "update", userId, date, row });
+  }
+
+  return date;
+}
 
