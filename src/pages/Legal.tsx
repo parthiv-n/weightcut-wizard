@@ -26,7 +26,7 @@ export default function Legal() {
 
         {/* Tab switcher */}
         <div className="max-w-2xl mx-auto px-4 pb-3">
-          <div className="flex gap-1 p-1 rounded-xl bg-muted/50">
+          <div className="flex gap-1 p-1 rounded-2xl bg-muted/50">
             <button
               onClick={() => setTab("privacy")}
               className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg transition-all ${

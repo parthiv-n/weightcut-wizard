@@ -232,7 +232,7 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[340px] w-[92vw] max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden rounded-xl border-0 bg-card/95 backdrop-blur-xl shadow-2xl">
+            <DialogContent className="sm:max-w-[340px] w-[92vw] max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden rounded-2xl border-0 bg-card/95 backdrop-blur-xl shadow-2xl">
                 {!selectedFood ? (
                     <>
                         {/* Search header */}

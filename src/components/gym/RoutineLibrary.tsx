@@ -85,11 +85,11 @@ export function RoutineLibrary({ routines, loading, onDelete, onRename, onStartW
         <p className="text-sm font-medium text-muted-foreground">No routines yet</p>
         <p className="text-xs text-muted-foreground/60 mt-1 mb-4">Create your first routine</p>
         <div className="flex gap-2 justify-center">
-          <Button onClick={onOpenManualCreator} variant="outline" className="h-10 px-3.5 rounded-xl text-xs font-medium">
+          <Button onClick={onOpenManualCreator} variant="outline" className="h-10 px-3.5 rounded-2xl text-xs font-medium">
             <Plus className="!size-3.5" />
             Manual
           </Button>
-          <Button onClick={onOpenGenerator} className="h-10 px-3.5 rounded-xl text-xs font-medium">
+          <Button onClick={onOpenGenerator} className="h-10 px-3.5 rounded-2xl text-xs font-medium">
             AI Generate
             {!gemsIsPremium && (
               <span className="inline-flex items-center gap-0.5 ml-0.5 text-muted-foreground">
@@ -111,7 +111,7 @@ export function RoutineLibrary({ routines, loading, onDelete, onRename, onStartW
           <Button
             onClick={onOpenManualCreator}
             size="sm"
-            className="h-8 px-2.5 rounded-xl text-xs font-medium"
+            className="h-8 px-2.5 rounded-2xl text-xs font-medium"
             variant="outline"
           >
             <Plus className="!size-3.5" />
@@ -120,7 +120,7 @@ export function RoutineLibrary({ routines, loading, onDelete, onRename, onStartW
           <Button
             onClick={onOpenGenerator}
             size="sm"
-            className="h-8 px-2.5 rounded-xl text-xs font-medium"
+            className="h-8 px-2.5 rounded-2xl text-xs font-medium"
           >
             AI Generate
             {!gemsIsPremium && (

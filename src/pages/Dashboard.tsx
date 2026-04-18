@@ -66,6 +66,7 @@ export default function Dashboard() {
   const [achievementSheetOpen, setAchievementSheetOpen] = useState(false);
   const [cutPlanOpen, setCutPlanOpen] = useState(false);
   const [expandedInfo, setExpandedInfo] = useState<'risk' | 'pace' | null>(null);
+  const [frequentMeals, setFrequentMeals] = useState<Array<{ name: string; count: number; avgCalories: number }>>([]);
   const navigate = useNavigate();
   const { safeAsync, isMounted } = useSafeAsync();
   const { streak, streakIncludesToday, weeklyConsistency, badges, badgesLoading, allAchievements } = useGamification(userId, weightLogs, todayCalories, profile);
@@ -386,6 +387,69 @@ export default function Dashboard() {
     }
   };
 
+  // Load frequent meals (last 14 days) when the wisdom sheet opens
+  useEffect(() => {
+    if (!userId || !wisdomSheetOpen) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        const { data } = await supabase
+          .from('nutrition_logs')
+          .select('meal_name, calories')
+          .eq('user_id', userId)
+          .gte('date', since);
+        if (cancelled || !data) return;
+        const counts = new Map<string, { count: number; totalCal: number }>();
+        for (const m of data as Array<{ meal_name: string | null; calories: number | null }>) {
+          const name = (m.meal_name || '').trim();
+          if (!name) continue;
+          const key = name.toLowerCase();
+          const entry = counts.get(key) || { count: 0, totalCal: 0 };
+          entry.count++;
+          entry.totalCal += m.calories || 0;
+          counts.set(key, entry);
+        }
+        const top = Array.from(counts.entries())
+          .filter(([, v]) => v.count >= 2)
+          .sort((a, b) => b[1].count - a[1].count)
+          .slice(0, 4)
+          .map(([name, v]) => ({
+            name: name.replace(/\b\w/g, (c) => c.toUpperCase()),
+            count: v.count,
+            avgCalories: Math.round(v.totalCal / v.count),
+          }));
+        setFrequentMeals(top);
+      } catch { /* ignore */ }
+    })();
+    return () => { cancelled = true; };
+  }, [userId, wisdomSheetOpen]);
+
+  const getFoodSwap = (name: string): string => {
+    const n = name.toLowerCase();
+    const swaps: Array<[RegExp, string]> = [
+      [/\brice\b(?! cake)/, 'Try cauliflower rice or cut portion by ¼'],
+      [/pasta|spaghetti|noodle|linguine|penne|ramen/, 'Swap for zucchini noodles or shirataki'],
+      [/bread|toast|bagel|bun|wrap/, 'Use thin-sliced bread or a lettuce wrap'],
+      [/chicken thigh|fried chicken|wings/, 'Switch to grilled chicken breast'],
+      [/beef|burger|steak|mince/, 'Use 95% lean mince or turkey'],
+      [/cheese|brie|mozzarella|cheddar/, 'Try cottage cheese or reduced-fat versions'],
+      [/fries|fried/, 'Bake or air-fry instead'],
+      [/mayo|mayonnaise/, 'Swap for Greek yogurt or mustard'],
+      [/butter|cream|ghee|oil/, 'Use spray oil or measure 1 tsp'],
+      [/peanut butter|nutella|spread/, 'Use PB2 powdered or a thinner layer'],
+      [/chips|crisps|pretzel/, 'Switch to popcorn or roasted chickpeas'],
+      [/pizza/, 'Try cauliflower crust or thin base'],
+      [/soda|cola|coke|sprite|fanta|pepsi/, 'Switch to sparkling water or diet'],
+      [/juice|smoothie|shake/, 'Eat whole fruit or make it protein-first'],
+      [/chocolate|candy|cake|cookie|dessert|ice cream/, 'Portion to one square or swap for fruit'],
+      [/avocado/, 'Halve the portion'],
+      [/sugar|syrup|honey|jam/, 'Swap for a zero-calorie sweetener'],
+    ];
+    for (const [re, advice] of swaps) if (re.test(n)) return advice;
+    return 'Reduce portion by ¼ or add extra veg';
+  };
+
   const paceLabels: Record<string, string> = {
     on_track: "On Track",
     ahead: "Ahead",
@@ -402,7 +466,7 @@ export default function Dashboard() {
 
   return (
     <ErrorBoundary>
-      <div className="animate-page-in space-y-2 p-3 sm:p-4 w-full max-w-7xl mx-auto">
+      <div className="dashboard-zoom animate-page-in space-y-3 px-5 py-3 sm:p-5 md:p-6 w-full max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-3">
           {daysUntilTarget > 0 && (
@@ -414,7 +478,7 @@ export default function Dashboard() {
         </div>
 
         {weightLogs.length === 0 && (
-          <button onClick={() => navigate('/weight')} className="w-full rounded-lg bg-muted/20 p-2.5 flex items-center gap-2 active:bg-muted/30 transition-colors">
+          <button onClick={() => navigate('/weight')} className="w-full rounded-2xl bg-muted/20 p-2.5 flex items-center gap-2 active:bg-muted/30 transition-colors">
             <Scale className="h-4 w-4 text-primary shrink-0" />
             <div className="flex-1 text-left min-w-0">
               <p className="text-[13px] font-semibold">Welcome{userName ? `, ${userName}` : ''}</p>
@@ -434,11 +498,9 @@ export default function Dashboard() {
           {isFighter(profile?.goal_type) && localStorage.getItem('wcw_cut_plan') ? (
             <button
               onClick={() => { setCutPlanOpen(true); triggerHaptic(ImpactStyle.Light); }}
-              className="rounded-lg bg-muted/20 p-2.5 flex flex-col items-start gap-1.5 active:bg-muted/30 transition-colors text-left"
+              className="card-surface rounded-2xl border border-border p-2.5 flex items-center justify-center active:scale-[0.98] transition-all text-center"
             >
-              <TrendingDown className="h-4 w-4 text-primary" />
-              <p className="text-[13px] font-semibold leading-tight">Cut Plan</p>
-              <p className="text-[11px] text-muted-foreground leading-tight">View your plan</p>
+              <p className="text-[17px] font-semibold leading-tight">Cut Plan</p>
             </button>
           ) : (
             <div />
@@ -449,25 +511,24 @@ export default function Dashboard() {
         {/* Wizard's Daily Wisdom card — conditional states */}
         <div data-tutorial="daily-wisdom-card">
         {!hasTodayLog ? (
-          <button onClick={() => navigate('/weight')} className="w-full rounded-lg bg-muted/20 p-2 flex items-center gap-2 active:bg-muted/30 transition-colors">
+          <button onClick={() => navigate('/weight')} className="w-full card-surface rounded-2xl border border-border p-2.5 flex items-center gap-2 active:scale-[0.99] transition-all">
             <div className="flex-1 text-left min-w-0">
               <div className="flex items-center gap-1.5">
-                <p className="text-[13px] font-semibold">Daily Insight</p>
+                <p className="text-[17px] font-semibold">Daily Insight</p>
                 <Lock className="h-3 w-3 text-muted-foreground" />
               </div>
-              <p className="text-[13px] text-muted-foreground">Log weight to unlock</p>
             </div>
             <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
           </button>
         ) : wisdomLoading ? (
-          <div className="rounded-lg bg-muted/20 p-2 flex items-center gap-2">
+          <div className="card-surface rounded-2xl border border-border p-2.5 flex items-center gap-2">
             <div className="flex-1 min-w-0 space-y-1.5 py-0.5">
               <div className="h-2.5 rounded shimmer-skeleton w-1/3" />
               <div className="h-2.5 rounded shimmer-skeleton w-full" />
             </div>
           </div>
         ) : wisdom ? (
-          <button className="w-full text-left rounded-lg bg-muted/20 p-2 flex items-center gap-2 active:bg-muted/30 transition-colors" onClick={handleWisdomClick}>
+          <button className="w-full text-left card-surface rounded-2xl border border-border p-2.5 flex items-center gap-2 active:scale-[0.99] transition-all" onClick={handleWisdomClick}>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-1.5">
                 <p className="text-[13px] font-semibold">Daily Insight</p>
@@ -479,12 +540,12 @@ export default function Dashboard() {
                 </div>
               </div>
               <p className="text-[13px] text-muted-foreground mt-0.5 leading-snug line-clamp-2">
-                {wisdom.summary}
+                {wisdom.summary.replace(/[—–]/g, ',').replace(/\s*,\s*/g, ', ').replace(/\s{2,}/g, ' ').split(/\s+/).slice(0, 12).join(' ').replace(/[.,;:]+$/, '')}
               </p>
             </div>
           </button>
         ) : (
-          <div className="rounded-lg bg-muted/20 p-2 flex items-center gap-2">
+          <div className="card-surface rounded-2xl border border-border p-2.5 flex items-center gap-2">
             <div className="flex-1 min-w-0">
               <p className="text-[13px] font-semibold">Daily Insight</p>
               <p className="text-[13px] text-muted-foreground mt-0.5 leading-snug line-clamp-2">{getWizardWisdom()}</p>
@@ -507,9 +568,9 @@ export default function Dashboard() {
         {/* Weight History + Training — side by side */}
         <div className="grid grid-cols-2 gap-2">
           {/* Weight History Chart */}
-          <div className="rounded-lg bg-muted/20 p-2 aspect-square flex flex-col">
+          <div className="rounded-2xl bg-muted/20 p-2.5 aspect-square flex flex-col">
             <div className="flex items-center justify-between mb-1">
-              <span className="section-header">Weight</span>
+              <span className="section-header text-foreground font-bold">Weight</span>
               <div className="flex gap-0.5 bg-muted rounded-full p-0.5">
                 <Button
                   variant={weightUnit === 'kg' ? 'default' : 'ghost'}
@@ -641,58 +702,124 @@ export default function Dashboard() {
               )}
 
               {/* Weight Pace */}
-              <div className="rounded-lg bg-muted/20 p-2.5">
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <TrendingDown className="h-3.5 w-3.5 text-primary" />
-                  <h4 className="text-[13px] font-semibold">Weight Pace</h4>
-                </div>
-                <div className="grid grid-cols-2 gap-2 mb-1.5">
+              <div className="rounded-2xl bg-muted/20 p-3">
+                <h4 className="text-[14px] font-semibold mb-2">Weight Pace</h4>
+                <div className="grid grid-cols-2 gap-3 mb-2">
                   <div>
-                    <p className="text-[13px] text-muted-foreground">Actual/wk</p>
-                    <p className="text-[15px] font-bold tabular-nums">{wisdom.weeklyPaceKg.toFixed(2)} kg</p>
+                    <p className="text-[13px] text-muted-foreground">Actual / week</p>
+                    <p className="text-[17px] font-bold tabular-nums">{wisdom.weeklyPaceKg.toFixed(2)} kg</p>
                   </div>
                   <div>
-                    <p className="text-[13px] text-muted-foreground">Needed/wk</p>
-                    <p className="text-[15px] font-bold tabular-nums">{wisdom.requiredWeeklyKg.toFixed(2)} kg</p>
+                    <p className="text-[13px] text-muted-foreground">Needed / week</p>
+                    <p className="text-[17px] font-bold tabular-nums">{wisdom.requiredWeeklyKg.toFixed(2)} kg</p>
                   </div>
                 </div>
-                <p className="text-[13px] text-muted-foreground">{wisdom.riskReason}</p>
+                <p className="text-[14px] text-muted-foreground leading-relaxed">{wisdom.riskReason}</p>
               </div>
 
-              {/* Guidance */}
-              <div className="rounded-lg bg-muted/20 p-2.5">
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <Zap className="h-3.5 w-3.5 text-primary" />
-                  <h4 className="text-[13px] font-semibold">Guidance</h4>
-                </div>
-                <p className="text-[13px] text-muted-foreground leading-snug">{wisdom.adviceParagraph}</p>
-              </div>
+              {/* Guidance — current/goal weight + calories + macros */}
+              {(() => {
+                const cur = profile?.current_weight_kg ?? 0;
+                const goal = profile?.goal_weight_kg ?? 0;
+                const calorieTarget = profile ? calculateCalorieTarget(profile) : 0;
+                const proteinG = profile?.ai_recommended_protein_g ?? Math.round((calorieTarget * 0.30) / 4);
+                const carbsG = profile?.ai_recommended_carbs_g ?? Math.round((calorieTarget * 0.40) / 4);
+                const fatsG = profile?.ai_recommended_fats_g ?? Math.round((calorieTarget * 0.30) / 9);
+                const proteinCal = proteinG * 4;
+                const carbsCal = carbsG * 4;
+                const fatsCal = fatsG * 9;
+                const mTotal = proteinCal + carbsCal + fatsCal || 1;
+                const raw = [proteinCal, carbsCal, fatsCal].map((c) => (c / mTotal) * 100);
+                const floors = raw.map((v) => Math.floor(v));
+                let rem = 100 - floors.reduce((s, v) => s + v, 0);
+                const order = raw.map((v, i) => ({ i, f: v - Math.floor(v) })).sort((a, b) => b.f - a.f);
+                const pcts = [...floors];
+                for (let k = 0; k < order.length && rem > 0; k++, rem--) pcts[order[k].i] += 1;
+                return (
+                  <div className="rounded-2xl bg-muted/20 p-3 space-y-3">
+                    <h4 className="text-[14px] font-semibold">Guidance</h4>
 
-              {/* Action Items */}
-              <div className="rounded-lg bg-muted/20 p-2.5">
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
-                  <h4 className="text-[13px] font-semibold">Action Items</h4>
-                </div>
-                <ol className="space-y-1.5">
-                  {wisdom.actionItems.map((item, i) => (
-                    <li key={i} className="flex items-start gap-2 text-[13px] text-muted-foreground">
-                      <span className="shrink-0 w-4 h-4 rounded-full bg-primary/10 text-primary text-[13px] font-bold flex items-center justify-center mt-0.5">
-                        {i + 1}
-                      </span>
-                      <span className="leading-snug">{item}</span>
-                    </li>
-                  ))}
-                </ol>
-              </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="rounded-lg bg-background/40 p-2 text-center">
+                        <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Current</p>
+                        <p className="text-[17px] font-bold tabular-nums">{cur.toFixed(1)}<span className="text-[11px] text-muted-foreground font-normal"> kg</span></p>
+                      </div>
+                      <div className="rounded-lg bg-background/40 p-2 text-center">
+                        <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Goal</p>
+                        <p className="text-[17px] font-bold tabular-nums">{goal.toFixed(1)}<span className="text-[11px] text-muted-foreground font-normal"> kg</span></p>
+                      </div>
+                      <div className="rounded-lg bg-primary/10 p-2 text-center">
+                        <p className="text-[11px] uppercase tracking-wider text-primary/80">Daily</p>
+                        <p className="text-[17px] font-bold tabular-nums text-primary">{calorieTarget}<span className="text-[11px] font-normal"> kcal</span></p>
+                      </div>
+                    </div>
 
-              {/* Nutrition */}
-              <div className="rounded-lg bg-muted/20 p-2.5">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <Flame className="h-3.5 w-3.5 text-orange-400" />
-                  <h4 className="text-[13px] font-semibold">Nutrition</h4>
-                </div>
-                <p className="text-[13px] text-muted-foreground leading-snug">{wisdom.nutritionStatus}</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { label: 'Protein', g: proteinG, pct: pcts[0], color: 'text-blue-500' },
+                        { label: 'Carbs', g: carbsG, pct: pcts[1], color: 'text-orange-500' },
+                        { label: 'Fats', g: fatsG, pct: pcts[2], color: 'text-purple-500' },
+                      ].map((m) => (
+                        <div key={m.label} className="rounded-lg bg-background/40 p-2 text-center">
+                          <p className={`text-[15px] font-bold tabular-nums ${m.color}`}>{m.g}g</p>
+                          <p className="text-[11px] text-muted-foreground">{m.label} · {m.pct}%</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <p className="text-[14px] text-muted-foreground leading-relaxed">{wisdom.adviceParagraph}</p>
+                  </div>
+                );
+              })()}
+
+              {/* Action Items — includes concrete numeric target */}
+              {(() => {
+                const calorieTarget = profile ? calculateCalorieTarget(profile) : 0;
+                const proteinG = profile?.ai_recommended_protein_g ?? Math.round((calorieTarget * 0.30) / 4);
+                const carbsG = profile?.ai_recommended_carbs_g ?? Math.round((calorieTarget * 0.40) / 4);
+                const fatsG = profile?.ai_recommended_fats_g ?? Math.round((calorieTarget * 0.30) / 9);
+                const numericAction = `Hit ${calorieTarget} kcal today · ${proteinG}P / ${carbsG}C / ${fatsG}F`;
+                const items = [numericAction, ...wisdom.actionItems];
+                return (
+                  <div className="rounded-2xl bg-muted/20 p-3">
+                    <h4 className="text-[14px] font-semibold mb-2">Action Items</h4>
+                    <ol className="space-y-2">
+                      {items.map((item, i) => (
+                        <li key={i} className="flex items-start gap-2.5 text-[14px]">
+                          <span className="shrink-0 w-5 h-5 rounded-full bg-primary/15 text-primary text-[12px] font-bold flex items-center justify-center mt-0.5">
+                            {i + 1}
+                          </span>
+                          <span className="leading-relaxed text-foreground/90">{item}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                );
+              })()}
+
+              {/* Nutrition — foods you eat often + swap ideas */}
+              <div className="rounded-2xl bg-muted/20 p-3 space-y-2.5">
+                <h4 className="text-[14px] font-semibold">Nutrition</h4>
+                <p className="text-[14px] text-muted-foreground leading-relaxed">{wisdom.nutritionStatus}</p>
+                {frequentMeals.length > 0 && (
+                  <div className="space-y-1.5 pt-1">
+                    <p className="text-[11px] uppercase tracking-wider text-muted-foreground/80">Foods you eat often</p>
+                    <ul className="divide-y divide-border/20 rounded-lg bg-background/40 overflow-hidden">
+                      {frequentMeals.map((m) => (
+                        <li key={m.name} className="flex items-start gap-3 px-3 py-2.5">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[14px] font-medium truncate">{m.name}</p>
+                            <p className="text-[12px] text-muted-foreground/80 mt-0.5 leading-snug">{getFoodSwap(m.name)}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-[13px] font-semibold tabular-nums text-foreground/80">{m.avgCalories}<span className="text-[10px] text-muted-foreground font-normal"> kcal</span></p>
+                            <p className="text-[10px] text-muted-foreground">×{m.count}</p>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             </div>
           </SheetContent>

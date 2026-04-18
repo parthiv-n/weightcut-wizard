@@ -125,7 +125,7 @@ export function FightCampLogForm({
         <Label className="text-[10px] font-medium text-foreground/50 uppercase tracking-widest">Type</Label>
         <div className="flex gap-1.5">
           <Select value={sessionType} onValueChange={setSessionType}>
-            <SelectTrigger className="flex-1 rounded-xl h-10 text-[13px] border-border/20 bg-muted/15">
+            <SelectTrigger className="flex-1 rounded-2xl h-10 text-[13px] border-border/20 bg-muted/15">
               <SelectValue placeholder="Select type" />
             </SelectTrigger>
             <SelectContent>
@@ -158,7 +158,7 @@ export function FightCampLogForm({
             </SelectContent>
           </Select>
           <button
-            className="h-10 w-10 rounded-xl bg-muted/15 flex items-center justify-center shrink-0 active:bg-muted/30 transition-colors border border-border/20"
+            className="h-10 w-10 rounded-2xl bg-muted/15 flex items-center justify-center shrink-0 active:bg-muted/30 transition-colors border border-border/20"
             onClick={() => setIsAddingNew(!isAddingNew)}
             aria-label="Add custom type"
           >
@@ -304,7 +304,7 @@ export function FightCampLogForm({
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder={isListening ? "Listening..." : "Techniques, drills, notes..."}
-          className={`rounded-xl border-border/15 bg-muted/10 min-h-[50px] resize-none text-[13px] ${isListening ? "border-red-500/30" : ""}`}
+          className={`rounded-2xl border-border/15 bg-muted/10 min-h-[50px] resize-none text-[13px] ${isListening ? "border-red-500/30" : ""}`}
         />
         {isListening && interimText && (
           <p className="text-[10px] text-muted-foreground/60 italic px-1">{interimText}</p>

@@ -26,7 +26,7 @@ function isVideo(url: string): boolean {
 
 function MetricChip({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <div className="flex flex-col items-center gap-0.5 rounded-xl bg-muted/30 dark:bg-white/[0.03] border border-border/20 px-3 py-2 min-w-0">
+    <div className="flex flex-col items-center gap-0.5 rounded-2xl bg-muted/30 dark:bg-white/[0.03] border border-border/20 px-3 py-2 min-w-0">
       <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">{label}</span>
       <span className="text-base font-bold tabular-nums" style={color ? { color } : undefined}>{value}</span>
     </div>

@@ -456,6 +456,25 @@ All colors MUST be HSL.
     display: none !important;
   }
 
+  /* Dashboard — bump all text sizes by ~3px for better readability */
+  .dashboard-zoom .text-\[9px\] { font-size: 12px !important; }
+  .dashboard-zoom .text-\[10px\] { font-size: 13px !important; }
+  .dashboard-zoom .text-\[11px\] { font-size: 14px !important; }
+  .dashboard-zoom .text-\[12px\] { font-size: 15px !important; }
+  .dashboard-zoom .text-\[13px\] { font-size: 16px !important; }
+  .dashboard-zoom .text-\[14px\] { font-size: 17px !important; }
+  .dashboard-zoom .text-\[15px\] { font-size: 18px !important; }
+  .dashboard-zoom .text-\[17px\] { font-size: 20px !important; }
+  .dashboard-zoom .text-\[19px\] { font-size: 22px !important; }
+  .dashboard-zoom .text-\[22px\] { font-size: 25px !important; }
+  .dashboard-zoom .text-\[40px\] { font-size: 43px !important; }
+  .dashboard-zoom .text-xs { font-size: 15px !important; }
+  .dashboard-zoom .text-sm { font-size: 17px !important; }
+  .dashboard-zoom .text-base { font-size: 19px !important; }
+  .dashboard-zoom .text-lg { font-size: 21px !important; }
+  .dashboard-zoom .text-xl { font-size: 23px !important; }
+  .dashboard-zoom .text-2xl { font-size: 27px !important; }
+
   .safe-area-inset-left {
     padding-left: env(safe-area-inset-left);
   }

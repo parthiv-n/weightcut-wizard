@@ -20,7 +20,7 @@ export const ConsistencyRing = memo(function ConsistencyRing({
   const progressDeg = (percentage / 100) * 360;
 
   return (
-    <div className="card-surface rounded-xl border border-border p-3">
+    <div className="card-surface rounded-2xl border border-border p-3.5">
       <div className="flex items-center gap-3">
         {/* Ring — CSS conic-gradient */}
         <div className="relative w-16 h-16 flex-shrink-0">
@@ -43,16 +43,13 @@ export const ConsistencyRing = memo(function ConsistencyRing({
 
         {/* Stats */}
         <div className="flex-1 min-w-0">
-          <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-            Weekly Consistency
-          </div>
-          <div className="text-2xl font-bold display-number mt-0.5">
+          <div className="text-[40px] leading-none font-bold display-number">
             <AnimatedNumber value={daysComplete} />
-            <span className="text-sm font-normal text-muted-foreground">
+            <span className="text-lg font-normal text-muted-foreground">
               /{totalDays}
             </span>
           </div>
-          <p className="text-xs text-muted-foreground">days complete</p>
+          <p className="text-xs text-muted-foreground mt-1">days complete</p>
         </div>
       </div>
 

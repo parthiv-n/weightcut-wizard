@@ -204,7 +204,7 @@ export function HydrationSkeleton() {
       <Skeleton className="h-14 w-full rounded-2xl" />
 
       {/* Safety banner */}
-      <Skeleton className="h-10 w-full rounded-xl" />
+      <Skeleton className="h-10 w-full rounded-2xl" />
 
       {/* Input form card */}
       <div className="rounded-3xl border border-white/[0.06] p-6 space-y-6 bg-white/[0.02]">
@@ -234,7 +234,7 @@ export function HydrationSkeleton() {
         </div>
 
         {/* Generate button */}
-        <Skeleton className="h-11 w-full rounded-xl" />
+        <Skeleton className="h-11 w-full rounded-2xl" />
       </div>
     </div>
   );
@@ -253,7 +253,7 @@ export function GoalsSkeleton() {
         {/* Personal Details */}
         <div className="space-y-2">
           <Skeleton className="h-3 w-28 ml-1" />
-          <div className="card-surface rounded-xl border border-border/50 overflow-hidden divide-y divide-border/50">
+          <div className="card-surface rounded-2xl border border-border/50 overflow-hidden divide-y divide-border/50">
             {[1, 2, 3, 4].map((i) => (
               <div key={i} className="flex items-center justify-between p-3 sm:p-4">
                 <Skeleton className="h-4 w-24" />
@@ -266,7 +266,7 @@ export function GoalsSkeleton() {
         {/* Targets */}
         <div className="space-y-2">
           <Skeleton className="h-3 w-20 ml-1" />
-          <div className="card-surface rounded-xl border border-border/50 overflow-hidden divide-y divide-border/50">
+          <div className="card-surface rounded-2xl border border-border/50 overflow-hidden divide-y divide-border/50">
             {[1, 2, 3].map((i) => (
               <div key={i} className="flex items-center justify-between p-3 sm:p-4">
                 <Skeleton className="h-4 w-28" />
@@ -279,7 +279,7 @@ export function GoalsSkeleton() {
         {/* Activity */}
         <div className="space-y-2">
           <Skeleton className="h-3 w-20 ml-1" />
-          <div className="card-surface rounded-xl border border-border/50 overflow-hidden divide-y divide-border/50">
+          <div className="card-surface rounded-2xl border border-border/50 overflow-hidden divide-y divide-border/50">
             {[1, 2].map((i) => (
               <div key={i} className="flex items-center justify-between p-3 sm:p-4">
                 <Skeleton className="h-4 w-32" />
@@ -291,7 +291,7 @@ export function GoalsSkeleton() {
 
         {/* Save button */}
         <div className="pt-4 pb-8">
-          <Skeleton className="h-12 w-full rounded-xl" />
+          <Skeleton className="h-12 w-full rounded-2xl" />
         </div>
       </div>
     </div>

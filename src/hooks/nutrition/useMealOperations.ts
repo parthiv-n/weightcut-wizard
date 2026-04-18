@@ -339,7 +339,7 @@ export function useMealOperations(params: UseMealOperationsParams) {
 
       if (error) throw error;
 
-      confirmDelete();
+      // Haptic + sound already fired by DeleteConfirmDialog on tap; don't double-fire here
       await loadMeals(true);
       syncQueue.dequeueByRecordId(userId, deletedId);
     } catch (error) {

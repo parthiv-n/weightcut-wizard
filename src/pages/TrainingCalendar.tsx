@@ -385,9 +385,9 @@ export default function TrainingCalendar() {
     const sessionsForSelectedDate = sessions.filter(s => s.date === format(selectedDate, 'yyyy-MM-dd'));
 
     return (
-        <div className="animate-page-in space-y-3 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
+        <div className="animate-page-in space-y-3 px-5 py-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
                 {/* Calendar View */}
-                <Card className="p-4 rounded-xl shadow-sm card-surface mb-6">
+                <Card className="p-4 rounded-2xl shadow-sm card-surface mb-6">
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-xl font-bold">{format(currentDate, "MMMM yyyy")}</h2>
                         <div className="flex items-center gap-1">
@@ -467,7 +467,7 @@ export default function TrainingCalendar() {
                         {isLoading ? (
                             <div className="flex flex-col gap-3">
                                 {[1, 2].map(i => (
-                                    <div key={i} className="card-surface rounded-xl p-5 overflow-hidden relative border border-border">
+                                    <div key={i} className="card-surface rounded-2xl p-5 overflow-hidden relative border border-border">
                                         <div className="absolute top-0 left-0 right-0 h-[2px]">
                                             <Skeleton className="w-1/3 h-full" />
                                         </div>
@@ -487,7 +487,7 @@ export default function TrainingCalendar() {
                                 ))}
                             </div>
                         ) : sessionsForSelectedDate.length === 0 ? (
-                            <div className="card-surface rounded-xl border-dashed border-border p-10 flex flex-col items-center justify-center text-center">
+                            <div className="card-surface rounded-2xl border-dashed border-border p-10 flex flex-col items-center justify-center text-center">
                                 <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center mb-3">
                                     <Activity className="w-5 h-5 text-foreground/30" />
                                 </div>

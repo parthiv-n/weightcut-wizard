@@ -230,7 +230,7 @@ export default function Goals() {
     : null;
 
   return (
-    <div className="animate-page-in space-y-2 p-3 sm:p-4 max-w-7xl mx-auto pb-16 md:pb-6">
+    <div className="animate-page-in space-y-2 px-5 py-3 sm:p-5 max-w-7xl mx-auto pb-16 md:pb-6">
       <div className="flex items-center justify-between">
         <h1 className="text-[15px] font-bold tracking-tight">Goals</h1>
         <p className="text-muted-foreground text-[13px]">Profile & targets</p>
@@ -247,7 +247,7 @@ export default function Goals() {
 
       <div className="space-y-4">
         {/* Section: Athlete Profile */}
-        <div className="card-surface rounded-xl border-2 border-border overflow-hidden">
+        <div className="card-surface rounded-2xl border-2 border-border overflow-hidden">
           <h2 className="text-[11px] font-bold uppercase tracking-widest text-primary px-3 pt-3 pb-2">Athlete Profile</h2>
           <div className="divide-y divide-border/40 border-t border-border/40">
             <div className="px-2.5 py-2 space-y-1">
@@ -283,7 +283,7 @@ export default function Goals() {
         </div>
 
         {/* Section: Personal Details */}
-        <div className="card-surface rounded-xl border-2 border-border overflow-hidden">
+        <div className="card-surface rounded-2xl border-2 border-border overflow-hidden">
           <h2 className="text-[11px] font-bold uppercase tracking-widest text-primary px-3 pt-3 pb-2">Personal Details</h2>
           <div className="divide-y divide-border/40 border-t border-border/40">
             <div className="flex items-center justify-between px-2.5 py-1.5">
@@ -339,7 +339,7 @@ export default function Goals() {
         </div>
 
         {/* Section: Targets */}
-        <div className="card-surface rounded-xl border-2 border-border overflow-hidden">
+        <div className="card-surface rounded-2xl border-2 border-border overflow-hidden">
           <h2 className="text-[11px] font-bold uppercase tracking-widest text-primary px-3 pt-3 pb-2">Targets</h2>
           <div className="divide-y divide-border/40 border-t border-border/40">
             <div className="flex items-center justify-between px-2.5 py-1.5">
@@ -395,7 +395,7 @@ export default function Goals() {
         </div>
 
         {/* Section: Activity & Training */}
-        <div className="card-surface rounded-xl border-2 border-border overflow-hidden">
+        <div className="card-surface rounded-2xl border-2 border-border overflow-hidden">
           <h2 className="text-[11px] font-bold uppercase tracking-widest text-primary px-3 pt-3 pb-2">Activity & Training</h2>
           <div className="divide-y divide-border/40 border-t border-border/40">
             <div className="px-2.5 py-2 space-y-1">
@@ -430,7 +430,7 @@ export default function Goals() {
         {/* Save */}
         <div className="pt-1 pb-4">
           <button onClick={handleSubmit} disabled={saving}
-            className="w-full py-2.5 text-[13px] font-semibold text-primary-foreground bg-primary rounded-xl active:opacity-90 transition-opacity disabled:opacity-40">
+            className="w-full py-2.5 text-[13px] font-semibold text-primary-foreground bg-primary rounded-2xl active:opacity-90 transition-opacity disabled:opacity-40">
             {saving ? "Saving..." : "Save Updates"}
           </button>
         </div>

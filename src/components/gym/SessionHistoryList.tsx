@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { motion } from "motion/react";
 import { staggerContainer, staggerItem } from "@/lib/motion";
-import { Calendar, Clock, Dumbbell, TrendingUp } from "lucide-react";
+import { Calendar, Dumbbell } from "lucide-react";
 import { formatVolume } from "@/lib/gymCalculations";
 import type { SessionWithSets } from "@/pages/gym/types";
 
@@ -75,18 +75,15 @@ export const SessionHistoryList = memo(function SessionHistoryList({ sessions, l
             <div className="flex items-center gap-4 text-xs text-muted-foreground">
               {session.duration_minutes && (
                 <span className="flex items-center gap-1.5">
-                  <Clock className="h-3 w-3 text-primary/60" />
                   <span className="tabular-nums font-medium text-foreground/80">{session.duration_minutes}m</span>
                 </span>
               )}
               <span className="flex items-center gap-1.5">
-                <Dumbbell className="h-3 w-3 text-primary/60" />
                 <span className="tabular-nums font-medium text-foreground/80">{session.exerciseCount}</span>
                 <span>exercises</span>
               </span>
               {session.totalVolume > 0 && (
                 <span className="flex items-center gap-1.5">
-                  <TrendingUp className="h-3 w-3 text-primary/60" />
                   <span className="tabular-nums font-medium text-foreground/80">{formatVolume(session.totalVolume)} kg</span>
                 </span>
               )}

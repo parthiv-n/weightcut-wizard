@@ -97,20 +97,13 @@ export const SleepLogger = memo(function SleepLogger({ userId, compact }: SleepL
       return (
         <button
           type="button"
-          className="rounded-lg bg-muted/20 p-2.5 flex flex-col items-start gap-1.5 active:bg-muted/30 transition-colors text-left w-full"
+          className="card-surface rounded-2xl border border-border p-2.5 flex items-center justify-center active:scale-[0.98] transition-all text-center w-full"
           onClick={() => setIsEditing(true)}
         >
-          <Moon className="w-4 h-4 text-primary" />
           {saved ? (
-            <>
-              <p className="text-[13px] font-semibold leading-tight"><span className="tabular-nums">{hours}</span><span className="text-muted-foreground">h</span> sleep</p>
-              <p className="text-[11px] text-emerald-400 leading-tight">Logged</p>
-            </>
+            <p className="text-[17px] font-semibold leading-tight"><span className="tabular-nums">{hours}</span><span className="text-muted-foreground">h</span> sleep</p>
           ) : (
-            <>
-              <p className="text-[13px] font-semibold leading-tight">Sleep</p>
-              <p className="text-[11px] text-muted-foreground leading-tight">Tap to log</p>
-            </>
+            <p className="text-[17px] font-semibold leading-tight">Sleep</p>
           )}
         </button>
       );
@@ -118,7 +111,7 @@ export const SleepLogger = memo(function SleepLogger({ userId, compact }: SleepL
     return (
       <button
         type="button"
-        className="card-surface rounded-xl p-3 sm:p-4 w-full flex items-center gap-3 active:scale-[0.98] transition-all duration-200 text-left"
+        className="card-surface rounded-2xl p-3 sm:p-4 w-full flex items-center gap-3 active:scale-[0.98] transition-all duration-200 text-left"
         onClick={() => setIsEditing(true)}
       >
         <Moon className="w-5 h-5 text-primary flex-shrink-0" />
@@ -142,7 +135,7 @@ export const SleepLogger = memo(function SleepLogger({ userId, compact }: SleepL
 
   // Expanded stepper
   return (
-    <div className="card-surface rounded-xl p-3 sm:p-4 space-y-3">
+    <div className="card-surface rounded-2xl p-3 sm:p-4 space-y-3">
       <div className="flex items-center gap-2">
         <Moon className="w-5 h-5 text-primary flex-shrink-0" />
         <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Sleep</span>

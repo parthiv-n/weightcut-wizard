@@ -217,17 +217,11 @@ export default function Onboarding() {
     });
   }, [formData.goal_type]);
 
-  // Auto-advance helper for single-select screens
+  // Single-select helper — sets field value, user taps Continue to advance.
   const selectAndAdvance = useCallback((field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     triggerHapticSelection();
-    setDirection(1);
-    setTimeout(() => setStep(s => {
-      let next = s + 1;
-      // When selecting goal_type on screen 1, both flows go to screen 2
-      return Math.min(next, TOTAL_STEPS);
-    }), 250);
-  }, [formData.goal_type]);
+  }, []);
 
   const toggleMulti = useCallback((field: "training_types" | "dietary_restrictions", value: string) => {
     triggerHapticSelection();
@@ -615,7 +609,10 @@ export default function Onboarding() {
 
         {/* ── Screen 1: Flow Split — "What brings you here?" ── */}
         {step === 1 && (
-          <StepLayout step={1} title="What brings you here?" subtitle="We'll build your plan around this.">
+          <StepLayout step={1} title="What brings you here?" subtitle="We'll build your plan around this."
+            footer={<Button onClick={goNext} disabled={!formData.goal_type}
+              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+          >
             <div className="space-y-2.5">
               {[
                 { value: "cutting", label: "I have a fight coming up", description: "Structured weight cut with a deadline", icon: <Swords className="h-5 w-5 text-red-400" /> },
@@ -630,7 +627,10 @@ export default function Onboarding() {
 
         {/* ── Screen 2: Branching ── */}
         {step === 2 && formData.goal_type === "cutting" && (
-          <StepLayout step={2} title="What's your discipline?" subtitle="We'll tailor everything to your sport.">
+          <StepLayout step={2} title="What's your discipline?" subtitle="We'll tailor everything to your sport."
+            footer={<Button onClick={goNext} disabled={!formData.athlete_type}
+              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+          >
             <div className="space-y-2.5">
               {[
                 { value: "muay_thai", label: "Muay Thai", icon: <Swords className="h-5 w-5 text-orange-400" /> },
@@ -1158,7 +1158,10 @@ export default function Onboarding() {
 
         {/* ── Screen 8: Experience Level ── */}
         {step === 8 && (
-          <StepLayout step={8} title="What's your experience level?" subtitle="No judgment. We just need to know where you're at.">
+          <StepLayout step={8} title="What's your experience level?" subtitle="No judgment. We just need to know where you're at."
+            footer={<Button onClick={goNext} disabled={!formData.experience_level}
+              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+          >
             <div className="space-y-2.5">
               {[
                 { value: "beginner", label: "Beginner", description: "Less than 1 year training" },
@@ -1174,7 +1177,10 @@ export default function Onboarding() {
 
         {/* ── Screen 9: Training Frequency ── */}
         {step === 9 && (
-          <StepLayout step={9} title="How often do you train?" subtitle="All sessions — pads, sparring, gym, running.">
+          <StepLayout step={9} title="How often do you train?" subtitle="All sessions — pads, sparring, gym, running."
+            footer={<Button onClick={goNext} disabled={!formData.training_frequency}
+              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+          >
             <div className="space-y-2.5">
               {[
                 { value: "2", label: "1-2 times per week", description: "Just getting started" },
@@ -1206,7 +1212,10 @@ export default function Onboarding() {
 
         {/* ── Screen 11: Sleep ── */}
         {step === 11 && (
-          <StepLayout step={11} title="How many hours do you sleep?" subtitle="Recovery is half the game.">
+          <StepLayout step={11} title="How many hours do you sleep?" subtitle="Recovery is half the game."
+            footer={<Button onClick={goNext} disabled={!formData.sleep_hours}
+              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+          >
             <div className="space-y-2.5">
               {[
                 { value: "less_than_6", label: "Less than 6 hours", icon: <Moon className="h-5 w-5 text-red-400" /> },
@@ -1223,7 +1232,10 @@ export default function Onboarding() {
 
         {/* ── Screen 12: Struggles ── */}
         {step === 12 && (
-          <StepLayout step={12} title="What do you struggle with most?" subtitle="Be real. We'll build around your weak spots.">
+          <StepLayout step={12} title="What do you struggle with most?" subtitle="Be real. We'll build around your weak spots."
+            footer={<Button onClick={goNext} disabled={!formData.primary_struggle}
+              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+          >
             <div className="space-y-2.5">
               {[
                 { value: "making_weight", label: "Making weight", icon: <TrendingDown className="h-5 w-5 text-red-400" /> },
@@ -1240,7 +1252,10 @@ export default function Onboarding() {
 
         {/* ── Screen 13: Aggressiveness ── */}
         {step === 13 && (
-          <StepLayout step={13} title="How aggressive do you want to go?" subtitle="This controls how fast we push your weight cut and plan intensity.">
+          <StepLayout step={13} title="How aggressive do you want to go?" subtitle="This controls how fast we push your weight cut and plan intensity."
+            footer={<Button onClick={goNext} disabled={!formData.plan_aggressiveness}
+              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+          >
             <div className="space-y-2.5">
               {[
                 { value: "safe", label: "Safe & Steady", description: "Slow, sustainable. Best if you have 8+ weeks.", icon: <Shield className="h-5 w-5 text-green-400" /> },

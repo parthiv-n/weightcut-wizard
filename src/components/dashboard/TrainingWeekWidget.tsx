@@ -100,7 +100,7 @@ export const TrainingWeekWidget = memo(function TrainingWeekWidget({ userId, com
 
   if (loading) {
     return (
-      <div className={`card-surface rounded-xl border border-border ${compact ? "p-3 aspect-square flex flex-col" : "p-5"}`}>
+      <div className={`card-surface rounded-2xl border border-border ${compact ? "p-3 aspect-square flex flex-col" : "p-5"}`}>
         <div className="flex items-center gap-3">
           <Skeleton className={`${compact ? "w-12 h-12" : "w-20 h-20"} rounded-full flex-shrink-0`} />
           <div className="flex-1 space-y-2">
@@ -120,7 +120,7 @@ export const TrainingWeekWidget = memo(function TrainingWeekWidget({ userId, com
   if (compact) {
     return (
       <div
-        className="card-surface p-3 rounded-xl border border-border cursor-pointer active:scale-[0.98] transition-all duration-200 aspect-square flex flex-col"
+        className="card-surface p-3 rounded-2xl border border-border cursor-pointer active:scale-[0.98] transition-all duration-200 aspect-square flex flex-col"
         onClick={() => { triggerHapticSelection(); navigate("/training-calendar?openLogSession=true"); }}
       >
         {/* Header: ring + stats */}
@@ -138,7 +138,7 @@ export const TrainingWeekWidget = memo(function TrainingWeekWidget({ userId, com
             </div>
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Training</div>
+            <div className="text-[10px] font-bold uppercase tracking-widest text-foreground">Training</div>
             <div className="flex items-baseline gap-1 mt-0.5">
               <span className="display-number text-lg font-bold">
                 {totalMinutes >= 60 ? Math.round(totalMinutes / 60) : totalMinutes}
@@ -215,7 +215,7 @@ export const TrainingWeekWidget = memo(function TrainingWeekWidget({ userId, com
   // Full-size (non-compact) layout
   return (
     <div
-      className="card-surface p-5 rounded-xl border border-border cursor-pointer active:scale-[0.98] transition-all duration-200"
+      className="card-surface p-5 rounded-2xl border border-border cursor-pointer active:scale-[0.98] transition-all duration-200"
       onClick={() => { triggerHapticSelection(); navigate("/training-calendar?openLogSession=true"); }}
     >
       {/* Top row: ring + stats + chevron */}

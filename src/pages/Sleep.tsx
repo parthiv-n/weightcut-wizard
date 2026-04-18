@@ -133,12 +133,12 @@ export default function Sleep() {
 
   if (loading && !allData.length) {
     return (
-      <div className="animate-page-in space-y-3 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
+      <div className="animate-page-in space-y-3 px-5 py-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
         <div className="h-6 w-24 rounded bg-muted/30 animate-pulse" />
-        <div className="card-surface rounded-xl h-[220px] animate-pulse" />
+        <div className="card-surface rounded-2xl h-[220px] animate-pulse" />
         <div className="grid grid-cols-3 gap-3">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="card-surface rounded-xl h-16 animate-pulse" />
+            <div key={i} className="card-surface rounded-2xl h-16 animate-pulse" />
           ))}
         </div>
       </div>
@@ -146,7 +146,7 @@ export default function Sleep() {
   }
 
   return (
-    <div className="animate-page-in space-y-3 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
+    <div className="animate-page-in space-y-3 px-5 py-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -171,7 +171,7 @@ export default function Sleep() {
       </div>
 
       {/* Chart */}
-      <div className="card-surface rounded-xl p-3">
+      <div className="card-surface rounded-2xl p-3">
         <ResponsiveContainer width="100%" height={220}>
           <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
             <ReferenceArea
@@ -213,7 +213,7 @@ export default function Sleep() {
           { label: "Best", value: stats.best },
           { label: "Worst", value: stats.worst },
         ] as const).map((s) => (
-          <div key={s.label} className="card-surface rounded-xl p-3 text-center">
+          <div key={s.label} className="card-surface rounded-2xl p-3 text-center">
             <p className="text-lg font-bold display-number">{s.value.toFixed(1)}h</p>
             <p className="text-xs text-muted-foreground">{s.label}</p>
           </div>

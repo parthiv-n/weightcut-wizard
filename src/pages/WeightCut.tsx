@@ -21,7 +21,7 @@ export default function WeightCut() {
   };
 
   return (
-    <div className="animate-page-in p-3 sm:p-5 md:p-6 max-w-7xl mx-auto space-y-3 pb-20 md:pb-6">
+    <div className="animate-page-in px-5 py-3 sm:p-5 md:p-6 max-w-7xl mx-auto space-y-3 pb-20 md:pb-6">
       {/* Segmented control */}
       <div className="flex rounded-full bg-muted p-0.5">
         {tabs.map((t) => (

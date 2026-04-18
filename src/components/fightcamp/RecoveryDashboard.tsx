@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback, useRef, memo } from "react";
-import { Activity, Brain, RefreshCw, AlertTriangle, CheckCircle, Loader2, TrendingUp, TrendingDown, Minus, X, BookOpen, ChevronDown, Heart, Flame, Shield, Moon, Dumbbell, Gauge, Zap, BarChart3, Clock } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Activity, Brain, AlertTriangle, TrendingUp, TrendingDown, Minus, BookOpen, ChevronDown, Heart, Flame, Shield, Moon, Dumbbell, Gauge, Zap, BarChart3 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { RecoveryRing } from "./RecoveryRing";
@@ -8,50 +7,10 @@ import { StrainChart } from "./StrainChart";
 import { ReadinessBreakdownCard } from "./ReadinessBreakdownCard";
 import { BalanceMetricsCard } from "./BalanceMetricsCard";
 import { WellnessCheckIn } from "./WellnessCheckIn";
+import { RecoveryCoachChat } from "./RecoveryCoachChat";
 import { computeAllMetrics, type SessionRow, type AllMetrics, type ReadinessResult, type WellnessCheckIn as WellnessCheckInData, type PersonalBaseline } from "@/utils/performanceEngine";
 import { loadOrComputeBaseline, computeAndStoreBaseline, storeReadinessScore } from "@/utils/baselineComputer";
-import { logger } from "@/lib/logger";
-import { extractEdgeFunctionError } from "@/lib/timeoutWrapper";
-import { useSubscription } from "@/hooks/useSubscription";
-import { useAITask } from "@/contexts/AITaskContext";
-import { AICompactOverlay } from "@/components/AICompactOverlay";
-
-interface FeelCheckIn {
-  energy: 'high' | 'moderate' | 'low' | 'empty';
-  soreness: 'none' | 'mild' | 'moderate' | 'severe';
-  sleep: 'great' | 'ok' | 'poor' | 'terrible';
-  mental: 'motivated' | 'neutral' | 'stressed' | 'burnt_out';
-}
-
-interface RecommendedSession {
-  type: string;
-  duration_minutes: number;
-  max_rpe: number;
-  notes: string;
-}
-
-interface SessionAlternative extends RecommendedSession {
-  condition: string;
-}
-
-interface MetricBreakdown {
-  metric: string;
-  status: 'good' | 'caution' | 'warning' | 'critical';
-  explanation: string;
-}
-
-interface CoachResponse {
-  readiness_state: 'push' | 'maintain' | 'reduce' | 'recover';
-  coaching_summary: string;
-  metrics_breakdown?: MetricBreakdown[];
-  recommended_session?: RecommendedSession;
-  next_session_suggestion?: string;
-  alternatives?: SessionAlternative[];
-  rest_day_override?: boolean;
-  next_session_advice?: string; // backward compat for old cached data
-  recovery_focus: string[];
-  risk_level: 'low' | 'moderate' | 'high' | 'critical';
-}
+import { useUser } from "@/contexts/UserContext";
 
 interface AthleteBaseline {
   trainingFrequency: number | null;
@@ -101,19 +60,6 @@ function getReadinessColor(label: ReadinessResult['label']) {
   return { color: "#ef4444", glow: "#ef4444" }; // strained
 }
 
-function getReadinessBadge(state: CoachResponse['readiness_state']) {
-  switch (state) {
-    case 'push':
-      return { label: "PUSH", className: "bg-green-500/20 text-green-400 border-green-500/30", icon: TrendingUp };
-    case 'maintain':
-      return { label: "MAINTAIN", className: "bg-blue-500/20 text-blue-400 border-blue-500/30", icon: Minus };
-    case 'reduce':
-      return { label: "REDUCE", className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30", icon: TrendingDown };
-    case 'recover':
-      return { label: "RECOVER", className: "bg-red-500/20 text-red-400 border-red-500/30", icon: TrendingDown };
-  }
-}
-
 function getDeterministicReadinessBadge(label: ReadinessResult['label']) {
   switch (label) {
     case 'peaked':
@@ -127,41 +73,9 @@ function getDeterministicReadinessBadge(label: ReadinessResult['label']) {
   }
 }
 
-// ─── Check-In Scoring ─────────────────────────────────────────
-const CHECKIN_SCORES: Record<string, Record<string, number>> = {
-  energy:   { high: 3, moderate: 2, low: 1, empty: 0 },
-  soreness: { none: 3, mild: 2, moderate: 1, severe: 0 },
-  sleep:    { great: 3, ok: 2, poor: 1, terrible: 0 },
-  mental:   { motivated: 3, neutral: 2, stressed: 1, burnt_out: 0 },
-};
-
-function computeCheckInSignal(ci: FeelCheckIn): { score: number; signal: 'green' | 'yellow' | 'red' } {
-  const score =
-    (CHECKIN_SCORES.energy[ci.energy] ?? 0) +
-    (CHECKIN_SCORES.soreness[ci.soreness] ?? 0) +
-    (CHECKIN_SCORES.sleep[ci.sleep] ?? 0) +
-    (CHECKIN_SCORES.mental[ci.mental] ?? 0);
-
-  const signal = score >= 9 ? 'green' : score >= 5 ? 'yellow' : 'red';
-  return { score, signal };
-}
-
-const today = new Date().toISOString().split('T')[0];
-const CACHE_KEY = `fight_camp_coach_${today}`;
-
-export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, userId, sessionLoggedAt = 0, athleteProfile, tdee }: RecoveryDashboardProps) {
+export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, userId, athleteProfile, tdee }: RecoveryDashboardProps) {
+  const { profile } = useUser();
   const [metrics, setMetrics] = useState<AllMetrics | null>(null);
-  const [coachData, setCoachData] = useState<CoachResponse | null>(null);
-  const [isCoachLoading, setIsCoachLoading] = useState(false);
-  const [coachError, setCoachError] = useState<string | null>(null);
-  const coachAbortRef = useRef<AbortController | null>(null);
-  const { tasks, addTask, completeTask, failTask, dismissTask } = useAITask();
-  const aiCoachTask = tasks.find(t => t.type === "fight-camp-coach" && t.status === "running");
-  const isCoachGenerating = isCoachLoading || !!aiCoachTask;
-  const [rateLimitUntil, setRateLimitUntil] = useState<number>(0);
-  const [cooldownLeft, setCooldownLeft] = useState(0);
-  const [checkIn, setCheckIn] = useState<Partial<FeelCheckIn>>({});
-  const { checkAIAccess, openNoGemsDialog, handleAILimitError, onAICallSuccess } = useSubscription();
 
   // Enhanced wellness state
   const [wellnessCheckIn, setWellnessCheckIn] = useState<WellnessCheckInData | null>(null);
@@ -266,195 +180,6 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
     }
   }, [metrics?.readiness.score, userId, todayCheckedIn]);
 
-  // Load cached coach data on mount
-  useEffect(() => {
-    const cached = AIPersistence.load(userId, CACHE_KEY);
-    if (cached) setCoachData(cached);
-  }, [userId]);
-
-  // Edge function warmup
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      supabase.functions.invoke('fight-camp-coach', { method: 'GET' }).catch(() => {});
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Countdown timer for rate limit cooldown
-  useEffect(() => {
-    if (rateLimitUntil <= Date.now()) {
-      setCooldownLeft(0);
-      return;
-    }
-    const tick = () => {
-      const remaining = Math.ceil((rateLimitUntil - Date.now()) / 1000);
-      if (remaining <= 0) {
-        setCooldownLeft(0);
-      } else {
-        setCooldownLeft(remaining);
-      }
-    };
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [rateLimitUntil]);
-
-  const checkInComplete = checkIn.energy && checkIn.soreness && checkIn.sleep && checkIn.mental;
-
-  const askCoach = useCallback(async () => {
-    if (!metrics || !hasEnoughData) return;
-
-    const checkInHash = Object.values(checkIn).sort().join('-');
-    const cacheKey = checkInHash ? `${CACHE_KEY}_${checkInHash}` : CACHE_KEY;
-
-    const cached = AIPersistence.load(userId, cacheKey);
-    if (cached) {
-      setCoachData(cached);
-      return;
-    }
-
-    if (!checkAIAccess()) {
-      openNoGemsDialog();
-      return;
-    }
-
-    coachAbortRef.current?.abort();
-    const controller = new AbortController();
-    coachAbortRef.current = controller;
-    setIsCoachLoading(true);
-    setCoachError(null);
-    const taskId = addTask({
-      id: `fight-camp-coach-${Date.now()}`,
-      type: "fight-camp-coach",
-      label: "Recovery Coach",
-      steps: [
-        { icon: Activity, label: "Analyzing training load" },
-        { icon: Heart, label: "Assessing recovery" },
-        { icon: CheckCircle, label: "Generating advice" },
-      ],
-      returnPath: "/recovery",
-    });
-
-    try {
-      // Map wellness check-in to legacy FeelCheckIn format for backward compatibility
-      const legacyCheckIn = wellnessCheckIn ? (() => {
-        const sq = wellnessCheckIn.sleep_quality;
-        const sl = wellnessCheckIn.soreness_level;
-        const fl = wellnessCheckIn.fatigue_level;
-        const el = wellnessCheckIn.energy_level ?? (8 - fl); // derive energy from fatigue if not set
-        const ml = wellnessCheckIn.motivation_level ?? (8 - wellnessCheckIn.stress_level);
-        const ci: FeelCheckIn = {
-          energy: el <= 2 ? 'high' : el <= 4 ? 'moderate' : el <= 6 ? 'low' : 'empty',
-          soreness: sl <= 2 ? 'none' : sl <= 4 ? 'mild' : sl <= 6 ? 'moderate' : 'severe',
-          sleep: sq <= 2 ? 'great' : sq <= 4 ? 'ok' : sq <= 6 ? 'poor' : 'terrible',
-          mental: ml <= 2 ? 'motivated' : ml <= 4 ? 'neutral' : ml <= 6 ? 'stressed' : 'burnt_out',
-        };
-        const { score, signal } = computeCheckInSignal(ci);
-        return { checkIn: ci, checkInScore: score, checkInSignal: signal };
-      })() : (checkInComplete ? (() => {
-        const ci = checkIn as FeelCheckIn;
-        const { score, signal } = computeCheckInSignal(ci);
-        return { checkIn: ci, checkInScore: score, checkInSignal: signal };
-      })() : {});
-
-      const payload = {
-        strain: metrics.strain,
-        dailyLoad: metrics.dailyLoad,
-        acuteLoad: metrics.acuteLoad,
-        chronicLoad: metrics.chronicLoad,
-        loadRatio: metrics.loadRatio,
-        overtrainingScore: metrics.overtrainingRisk.score,
-        overtrainingZone: metrics.overtrainingRisk.zone,
-        avgRPE7d: metrics.avgRPE7d,
-        avgSoreness7d: metrics.avgSoreness7d,
-        sessionsLast7d: metrics.sessionsLast7d,
-        consecutiveHighDays: metrics.consecutiveHighDays,
-        weeklySessionCount: metrics.weeklySessionCount,
-        avgSleep: metrics.avgSleep,
-        latestSleep: metrics.latestSleep,
-        latestSoreness: metrics.latestSoreness,
-        recentSessions: metrics.recentSessions.map(s => ({
-          date: s.date,
-          session_type: s.session_type,
-          duration_minutes: s.duration_minutes,
-          rpe: s.rpe,
-          intensity: s.intensity,
-          intensity_level: s.intensity_level,
-          soreness_level: s.soreness_level,
-          sleep_hours: s.sleep_hours,
-        })),
-        // Enhanced payload fields
-        readinessScore: metrics.readiness.score,
-        readinessLabel: metrics.readiness.label,
-        readinessBreakdown: metrics.readiness.breakdown,
-        trendAlerts: metrics.trends.alerts,
-        athleteTier: metrics.calibration.tier,
-        personalRpeCeiling: metrics.calibration.rpeCeiling,
-        personalNormalSessions: metrics.calibration.normalSessionsPerWeek,
-        sleepScore: metrics.sleepScore,
-        avgSleepLast3: metrics.avgSleepLast3,
-        // Enhanced wellness fields
-        ...(metrics.hooperIndex != null ? {
-          hooperIndex: metrics.hooperIndex,
-          hooperComponents: metrics.hooperComponents,
-        } : {}),
-        ...(metrics.deficitImpactScore != null ? {
-          deficitImpactScore: metrics.deficitImpactScore,
-          avgDeficit7d: baseline?.avg_deficit_7d,
-        } : {}),
-        ...(metrics.balanceMetrics ? { balanceMetrics: metrics.balanceMetrics } : {}),
-        enhancedReadinessScore: metrics.readiness.score,
-        ...legacyCheckIn,
-        ...(athleteProfile ? { athleteProfile } : {}),
-      };
-
-      const { data, error } = await supabase.functions.invoke('fight-camp-coach', {
-        body: payload,
-        signal: controller.signal,
-      });
-      if (controller.signal.aborted) return;
-
-      if (error) throw error;
-      if (data?.coach) {
-        onAICallSuccess();
-        setCoachData(data.coach);
-        AIPersistence.save(userId, cacheKey, data.coach, 24);
-        completeTask(taskId, data.coach);
-      } else {
-        throw new Error("Invalid response from coach");
-      }
-    } catch (err: any) {
-      if (err?.name === 'AbortError' || controller.signal.aborted) return;
-      logger.error("Coach error", err);
-      if (await handleAILimitError(err)) {
-        failTask(taskId, "Limit reached");
-        return;
-      }
-      const msg = await extractEdgeFunctionError(err, "Coach unavailable");
-      setCoachError(`Coach error: ${msg}`);
-      failTask(taskId, msg);
-    } finally {
-      setIsCoachLoading(false);
-    }
-  }, [metrics, userId, hasEnoughData, checkIn, checkInComplete, athleteProfile, wellnessCheckIn, baseline]);
-
-  // Reset questionnaire when session is logged so user re-checks in
-  useEffect(() => {
-    if (sessionLoggedAt > 0 && metrics && hasEnoughData) {
-      AIPersistence.remove(userId, CACHE_KEY);
-      setCoachData(null);
-      setCheckIn({});
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionLoggedAt]);
-
-  const refreshCoach = useCallback(() => {
-    AIPersistence.remove(userId, CACHE_KEY);
-    setCoachData(null);
-    setCheckIn({});
-    // Don't reset wellness check-in — it persists for the day
-  }, [userId]);
-
   // Handle wellness check-in submission
   const handleWellnessSubmit = useCallback(async (data: WellnessCheckInData) => {
     setWellnessCheckIn(data);
@@ -465,10 +190,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
     computeAndStoreBaseline(userId, tdee).then(b => {
       if (b) setBaseline(b);
     }).catch(() => {});
-
-    // Trigger coach advice after a small delay to let metrics recompute
-    setTimeout(() => askCoach(), 300);
-  }, [userId, tdee, askCoach]);
+  }, [userId, tdee]);
 
   if (!metrics) return null;
 
@@ -478,15 +200,11 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
 
   return (
     <div className="space-y-4 mb-6">
-      {/* 1) Readiness Badge — deterministic first, AI overrides */}
-      {coachData ? (
-        <ReadinessBadgeUI state={coachData.readiness_state} />
-      ) : (
-        <DeterministicReadinessBadge label={metrics.readiness.label} score={metrics.readiness.score} />
-      )}
+      {/* 1) Readiness Badge */}
+      <DeterministicReadinessBadge label={metrics.readiness.label} score={metrics.readiness.score} />
 
       {/* 2) Readiness Ring (hero) + Strain Ring + OT Ring */}
-      <div className="card-surface rounded-xl p-4 border border-border">
+      <div className="card-surface rounded-2xl p-4 border border-border">
         <div className="flex items-center gap-2 mb-4">
           <Activity className="h-5 w-5 text-primary" />
           <h2 className="text-lg font-bold">Performance</h2>
@@ -536,19 +254,19 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
 
         {/* Stats bar — 4 columns */}
         <div className="grid grid-cols-4 gap-1.5 mt-4">
-          <div className="text-center p-1.5 rounded-xl bg-accent/20">
+          <div className="text-center p-1.5 rounded-2xl bg-accent/20">
             <div className="text-sm font-bold display-number text-foreground">{metrics.weeklySessionCount}</div>
             <div className="text-[8px] text-muted-foreground uppercase tracking-wider leading-tight">Sessions/wk</div>
           </div>
-          <div className={`text-center p-1.5 rounded-xl overflow-hidden ${getLoadZoneStyle(metrics.loadZone.zone).bg}`}>
+          <div className={`text-center p-1.5 rounded-2xl overflow-hidden ${getLoadZoneStyle(metrics.loadZone.zone).bg}`}>
             <div className={`text-sm font-bold display-number truncate ${getLoadZoneStyle(metrics.loadZone.zone).color}`}>{metrics.loadZone.label}</div>
             <div className="text-[8px] text-muted-foreground uppercase tracking-wider leading-tight">Training Load</div>
           </div>
-          <div className="text-center p-1.5 rounded-xl bg-accent/20">
+          <div className="text-center p-1.5 rounded-2xl bg-accent/20">
             <div className="text-sm font-bold display-number text-foreground">{metrics.sleepScore}</div>
             <div className="text-[8px] text-muted-foreground uppercase tracking-wider leading-tight">Sleep Score</div>
           </div>
-          <div className="text-center p-1.5 rounded-xl bg-accent/20">
+          <div className="text-center p-1.5 rounded-2xl bg-accent/20">
             <div className="text-sm font-bold display-number text-foreground">
               {metrics.avgSleepLast3 > 0 ? `${metrics.avgSleepLast3.toFixed(1)}h` : "—"}
             </div>
@@ -563,13 +281,31 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
         totalCheckInDays={checkInDaysCount}
       />
 
-      {/* 2.6) Balance Metrics Card (only when baseline has 14+ days) */}
-      {metrics.balanceMetrics && metrics.balanceMetrics.length > 0 && (
-        <BalanceMetricsCard balanceMetrics={metrics.balanceMetrics} />
+      {/* 2.6) Recovery Coach Chat */}
+      {!hasEnoughData ? (
+        <div className="card-surface rounded-2xl p-4 border border-border">
+          <div className="flex items-center gap-2 mb-3">
+            <Brain className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-bold">Recovery Coach</h2>
+          </div>
+          <div className="text-center py-6 text-sm text-muted-foreground">
+            Log a session to unlock the coach.
+          </div>
+        </div>
+      ) : !todayCheckedIn ? (
+        <div className="card-surface rounded-2xl p-4 border border-border">
+          <div className="flex items-center gap-2 mb-3">
+            <Brain className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-bold">Recovery Coach</h2>
+          </div>
+          <WellnessCheckIn userId={userId} onSubmit={handleWellnessSubmit} isSubmitting={false} />
+        </div>
+      ) : (
+        <RecoveryCoachChat userId={userId} userName={profile?.full_name ?? null} />
       )}
 
       {/* 3) 7-Day Strain Chart with forecast */}
-      <div className="card-surface rounded-xl p-4 border border-border">
+      <div className="card-surface rounded-2xl p-4 border border-border">
         <div className="flex items-center gap-2 mb-3">
           <h2 className="text-lg font-bold">7-Day Strain Trend</h2>
         </div>
@@ -578,7 +314,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
 
       {/* 3.5) Trend Alerts — only when alerts exist */}
       {metrics.trends.alerts.length > 0 && (
-        <div className="card-surface rounded-xl p-4 border border-amber-500/30 bg-amber-500/5">
+        <div className="card-surface rounded-2xl p-4 border border-amber-500/30 bg-amber-500/5">
           <div className="flex items-center gap-2 mb-3">
             <AlertTriangle className="h-5 w-5 text-amber-400" />
             <h2 className="text-lg font-bold text-amber-400">Trend Alerts</h2>
@@ -595,7 +331,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
       )}
 
       {/* 4) Forecast Summary Card */}
-      <div className="card-surface rounded-xl p-4 border border-border">
+      <div className="card-surface rounded-2xl p-4 border border-border">
         <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 font-semibold">Projected Tomorrow</div>
         <div className="grid grid-cols-3 gap-3">
           <div className="text-center">
@@ -615,7 +351,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
 
       {/* 4.5) Caloric Deficit Banner — when deficit significantly impacts recovery */}
       {metrics.deficitImpactScore != null && metrics.deficitImpactScore < 60 && baseline?.avg_deficit_7d != null && (
-        <div className="card-surface rounded-xl p-3 border border-amber-500/30 bg-amber-500/5">
+        <div className="card-surface rounded-2xl p-3 border border-amber-500/30 bg-amber-500/5">
           <div className="flex items-center gap-2">
             <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
             <div>
@@ -630,88 +366,10 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
         </div>
       )}
 
-      {/* 5) AI Coach Section */}
-      <div className="card-surface rounded-xl p-4 border border-border">
-        <div className="flex items-center gap-2 mb-3">
-          <Brain className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-bold">AI Recovery Coach</h2>
-        </div>
-
-        {!coachData && !isCoachGenerating && (
-          hasEnoughData ? (
-            !todayCheckedIn ? (
-              <WellnessCheckIn
-                userId={userId}
-                onSubmit={handleWellnessSubmit}
-                isSubmitting={isCoachGenerating}
-              />
-            ) : (
-              <Button
-                onClick={askCoach}
-                className="w-full rounded-2xl h-12 font-semibold gap-2"
-                variant="outline"
-                disabled={cooldownLeft > 0}
-              >
-                <Brain className="h-4 w-4" />
-                {cooldownLeft > 0 ? `Try again in ${cooldownLeft}s` : "Get Coach Advice"}
-              </Button>
-            )
-          ) : (
-            <Button
-              disabled
-              className="w-full rounded-2xl h-12 font-semibold gap-2"
-              variant="outline"
-            >
-              <Brain className="h-4 w-4" />
-              Log a session to unlock
-            </Button>
-          )
-        )}
-
-        {aiCoachTask && (
-          <AICompactOverlay
-            isOpen={true}
-            isGenerating={true}
-            steps={aiCoachTask.steps}
-            startedAt={aiCoachTask.startedAt}            title={aiCoachTask.label}
-            onCancel={() => { coachAbortRef.current?.abort(); dismissTask(aiCoachTask.id); setIsCoachLoading(false); }}
-          />
-        )}
-
-        {isCoachGenerating && !aiCoachTask && (
-          <div className="flex items-center justify-center gap-2 py-6 text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span className="text-sm">Analyzing your training data...</span>
-            <button
-              onClick={() => { coachAbortRef.current?.abort(); setIsCoachLoading(false); }}
-              className="flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-lg hover:bg-accent/30"
-            >
-              <X className="h-3.5 w-3.5" />
-              Cancel
-            </button>
-          </div>
-        )}
-
-        {coachError && (
-          <div className="text-center py-2 space-y-2">
-            <div className="text-sm text-red-400">{coachError}</div>
-            {!isCoachGenerating && !coachData && (
-              <Button
-                onClick={askCoach}
-                className="rounded-2xl h-10 font-semibold gap-2"
-                variant="outline"
-                size="sm"
-                disabled={cooldownLeft > 0}
-              >
-                <RefreshCw className="h-3.5 w-3.5" />
-                {cooldownLeft > 0 ? `Try again in ${cooldownLeft}s` : "Retry"}
-              </Button>
-            )}
-          </div>
-        )}
-
-        {coachData && <CoachResultCard coach={coachData} onRefresh={refreshCoach} />}
-      </div>
+      {/* 5) Balance Metrics Card (only when baseline has 14+ days) */}
+      {metrics.balanceMetrics && metrics.balanceMetrics.length > 0 && (
+        <BalanceMetricsCard balanceMetrics={metrics.balanceMetrics} />
+      )}
 
       {/* Metrics Guide */}
       <MetricsGuide />
@@ -813,6 +471,15 @@ const GUIDE_SECTIONS = [
     zones: null,
     description: "Predicts tomorrow's strain, load zone, and overtraining risk based on your current trajectory. Use it to decide whether to push hard, go moderate, or take a recovery day. The forecast adapts as you log more sessions.",
   },
+  {
+    icon: Brain,
+    color: "text-primary",
+    bg: "bg-primary/10",
+    title: "Recovery Coach Chat",
+    range: "1 gem per message",
+    zones: null,
+    description: "A conversational AI coach you can text or talk to. Tell it where you're sore, how you feel, or what session you're considering — it factors in your readiness, training load, recent sessions and a peer-reviewed combat-sports recovery library to suggest a session, flag red flags, or talk you out of overreaching. Tap the mic to dictate when supported. Free accounts get 1 message per day; Pro is unlimited.",
+  },
 ];
 
 function MetricsGuide() {
@@ -820,7 +487,7 @@ function MetricsGuide() {
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
 
   return (
-    <div className="card-surface rounded-xl border border-border overflow-hidden">
+    <div className="card-surface rounded-2xl border border-border overflow-hidden">
       <button
         type="button"
         onClick={() => { setOpen(prev => !prev); if (open) setExpandedIdx(null); }}
@@ -889,19 +556,6 @@ function MetricsGuide() {
   );
 }
 
-// ─── Readiness Hero Badge (AI-driven) ────────────────────────
-function ReadinessBadgeUI({ state }: { state: CoachResponse['readiness_state'] }) {
-  const badge = getReadinessBadge(state);
-  const Icon = badge.icon;
-
-  return (
-    <div className={`flex items-center justify-center gap-2 py-3 px-6 rounded-2xl border text-lg font-bold tracking-wide ${badge.className}`}>
-      <Icon className="h-5 w-5" />
-      {badge.label}
-    </div>
-  );
-}
-
 // ─── Deterministic Readiness Badge ───────────────────────────
 function DeterministicReadinessBadge({ label, score }: { label: ReadinessResult['label']; score: number }) {
   const badge = getDeterministicReadinessBadge(label);
@@ -912,136 +566,6 @@ function DeterministicReadinessBadge({ label, score }: { label: ReadinessResult[
       <Icon className="h-5 w-5" />
       {badge.label}
       <span className="text-sm font-normal opacity-70">{score}/100</span>
-    </div>
-  );
-}
-
-// ─── AI Coach Result Card ─────────────────────────────────────
-function CoachResultCard({ coach, onRefresh }: { coach: CoachResponse; onRefresh: () => void }) {
-  const hasStructuredSession = !!coach.recommended_session;
-  const clean = (t: string) => t.replace(/\u2014/g, ' - ').replace(/\u2013/g, '-');
-
-  return (
-    <div className="space-y-4">
-      {/* Summary */}
-      <div>
-        <div className="flex items-center justify-between mb-2">
-          <p className="text-[13px] font-semibold text-foreground">Summary</p>
-          <button onClick={onRefresh} className="h-8 w-8 flex items-center justify-center rounded-xl text-muted-foreground/40 active:text-foreground active:bg-muted/40 transition-colors" aria-label="Refresh">
-            <RefreshCw className="h-3.5 w-3.5" />
-          </button>
-        </div>
-        <p className="text-[13px] text-foreground/70 leading-relaxed">{clean(coach.coaching_summary)}</p>
-      </div>
-
-      {/* Rest day override */}
-      {coach.rest_day_override && (
-        <div className="rounded-2xl bg-amber-500/8 p-3.5">
-          <div className="flex items-center gap-2 mb-1">
-            <Moon className="h-4 w-4 text-amber-400" />
-            <p className="text-[13px] font-semibold text-amber-400">Rest Day Recommended</p>
-          </div>
-          <p className="text-[12px] text-foreground/50 leading-relaxed">Your body needs recovery. Skipping today will improve tomorrow's session.</p>
-        </div>
-      )}
-
-      {/* Recommended Session */}
-      {hasStructuredSession && !coach.rest_day_override && (
-        <div className="rounded-2xl bg-muted/30 p-3.5">
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold mb-2">Today's Session</p>
-          <p className="text-[15px] font-bold text-foreground mb-1">{coach.recommended_session!.type}</p>
-          <div className="flex items-center gap-4 mb-2">
-            <div className="flex items-center gap-1.5">
-              <Clock className="h-3 w-3 text-muted-foreground/40" />
-              <span className="text-[13px] tabular-nums text-foreground/70">{coach.recommended_session!.duration_minutes} min</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Gauge className="h-3 w-3 text-muted-foreground/40" />
-              <span className="text-[13px] tabular-nums text-foreground/70">RPE {coach.recommended_session!.max_rpe}</span>
-            </div>
-          </div>
-          {coach.recommended_session!.notes && (
-            <p className="text-[12px] text-foreground/50 leading-relaxed">{clean(coach.recommended_session!.notes)}</p>
-          )}
-        </div>
-      )}
-
-      {/* Alternatives */}
-      {hasStructuredSession && coach.alternatives && coach.alternatives.length > 0 && (
-        <div className="grid grid-cols-2 gap-2">
-          {coach.alternatives.map((alt, i) => (
-            <div key={i} className="rounded-2xl bg-muted/20 p-3">
-              <p className="text-[10px] text-muted-foreground/50 mb-1">{clean(alt.condition)}</p>
-              <p className="text-[13px] font-semibold text-foreground mb-0.5">{alt.type}</p>
-              <p className="text-[11px] tabular-nums text-foreground/50">{alt.duration_minutes} min, RPE {alt.max_rpe}</p>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Metrics */}
-      {coach.metrics_breakdown && coach.metrics_breakdown.length > 0 && (
-        <div>
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold mb-2">Metrics</p>
-          <div className="space-y-0 rounded-2xl overflow-hidden border border-border/20">
-            {coach.metrics_breakdown.map((mb, i) => {
-              const dotColor = {
-                good: 'bg-green-400', caution: 'bg-blue-400', warning: 'bg-amber-400', critical: 'bg-red-400',
-              }[mb.status] ?? 'bg-muted-foreground';
-
-              return (
-                <div key={i} className={`px-3.5 py-2.5 ${i > 0 ? 'border-t border-border/10' : ''}`}>
-                  <div className="flex items-center gap-2">
-                    <span className={`h-2 w-2 rounded-full ${dotColor} flex-shrink-0`} />
-                    <span className="text-[13px] font-medium text-foreground flex-1">{mb.metric}</span>
-                  </div>
-                  <p className="text-[12px] text-foreground/45 leading-relaxed mt-0.5 ml-4">{clean(mb.explanation)}</p>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Next session */}
-      {coach.next_session_suggestion && (
-        <div>
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold mb-1.5">Looking Ahead</p>
-          <p className="text-[13px] text-foreground/60 leading-relaxed">{clean(coach.next_session_suggestion)}</p>
-        </div>
-      )}
-
-      {!hasStructuredSession && !coach.next_session_suggestion && coach.next_session_advice && (
-        <div>
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold mb-1.5">Next Session</p>
-          <p className="text-[13px] text-foreground/60 leading-relaxed">{clean(coach.next_session_advice)}</p>
-        </div>
-      )}
-
-      {/* Recovery focus */}
-      {coach.recovery_focus?.length > 0 && (
-        <div>
-          <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold mb-2">Recovery Focus</p>
-          <div className="space-y-1.5">
-            {coach.recovery_focus.map((item, i) => (
-              <div key={i} className="flex items-start gap-2.5">
-                <div className="h-5 w-5 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <CheckCircle className="h-3 w-3 text-green-500" />
-                </div>
-                <p className="text-[13px] text-foreground/60 leading-relaxed">{clean(item)}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Risk level */}
-      {coach.risk_level && coach.risk_level !== 'low' && (
-        <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-2xl bg-red-500/8">
-          <AlertTriangle className="h-4 w-4 text-red-400 flex-shrink-0" />
-          <p className="text-[13px] font-medium text-red-400">Risk: {coach.risk_level}</p>
-        </div>
-      )}
     </div>
   );
 }

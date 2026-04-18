@@ -26,6 +26,7 @@ export interface ProfileData {
   ai_recommended_protein_g?: number;
   ai_recommended_carbs_g?: number;
   ai_recommended_fats_g?: number;
+  normal_daily_carbs_g?: number;
   manual_nutrition_override?: boolean;
   avatar_url?: string;
   goal_type?: 'cutting' | 'losing';

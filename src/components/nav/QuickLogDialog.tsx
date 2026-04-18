@@ -25,7 +25,7 @@ export function QuickLogDialog({ open, onOpenChange, onLogFood, onLogWeight, onL
         <div className="grid grid-cols-4 gap-3 px-1">
           <button
             onClick={() => { triggerHaptic(ImpactStyle.Light); onLogFood(); }}
-            className="flex flex-col items-center gap-2 py-4 rounded-xl bg-muted/50 active:scale-95 transition-transform duration-100"
+            className="flex flex-col items-center gap-2 py-4 rounded-2xl bg-muted/50 active:scale-95 transition-transform duration-100"
           >
             <div className="h-12 w-12 rounded-full bg-health/15 flex items-center justify-center">
               <Utensils className="h-6 w-6 text-health" />
@@ -34,7 +34,7 @@ export function QuickLogDialog({ open, onOpenChange, onLogFood, onLogWeight, onL
           </button>
           <button
             onClick={() => { triggerHaptic(ImpactStyle.Light); onLogWeight(); }}
-            className="flex flex-col items-center gap-2 py-4 rounded-xl bg-muted/50 active:scale-95 transition-transform duration-100"
+            className="flex flex-col items-center gap-2 py-4 rounded-2xl bg-muted/50 active:scale-95 transition-transform duration-100"
           >
             <div className="h-12 w-12 rounded-full bg-hydration/15 flex items-center justify-center">
               <Weight className="h-6 w-6 text-hydration" />
@@ -43,7 +43,7 @@ export function QuickLogDialog({ open, onOpenChange, onLogFood, onLogWeight, onL
           </button>
           <button
             onClick={() => { triggerHaptic(ImpactStyle.Light); onLogTraining(); }}
-            className="flex flex-col items-center gap-2 py-4 rounded-xl bg-muted/50 active:scale-95 transition-transform duration-100"
+            className="flex flex-col items-center gap-2 py-4 rounded-2xl bg-muted/50 active:scale-95 transition-transform duration-100"
           >
             <div className="h-12 w-12 rounded-full bg-energy/15 flex items-center justify-center">
               <Dumbbell className="h-6 w-6 text-energy" />
@@ -52,7 +52,7 @@ export function QuickLogDialog({ open, onOpenChange, onLogFood, onLogWeight, onL
           </button>
           <button
             onClick={() => { triggerHaptic(ImpactStyle.Light); onLogGym(); }}
-            className="flex flex-col items-center gap-2 py-4 rounded-xl bg-muted/50 active:scale-95 transition-transform duration-100"
+            className="flex flex-col items-center gap-2 py-4 rounded-2xl bg-muted/50 active:scale-95 transition-transform duration-100"
           >
             <div className="h-12 w-12 rounded-full bg-primary/15 flex items-center justify-center">
               <Dumbbell className="h-6 w-6 text-primary" />

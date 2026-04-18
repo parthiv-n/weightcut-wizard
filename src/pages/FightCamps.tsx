@@ -172,7 +172,7 @@ export default function FightCamps() {
 
   if (loading) {
     return (
-      <div className="space-y-3 p-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
+      <div className="space-y-3 px-5 py-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
         <Skeleton className="h-7 w-32" />
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
@@ -184,7 +184,7 @@ export default function FightCamps() {
                   <Skeleton className="h-3 w-24" />
                 </div>
               </div>
-              <Skeleton className="h-12 w-full rounded-xl" />
+              <Skeleton className="h-12 w-full rounded-2xl" />
             </div>
           ))}
         </div>
@@ -193,7 +193,7 @@ export default function FightCamps() {
   }
 
   return (
-    <div className="animate-page-in space-y-3 p-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
+    <div className="animate-page-in space-y-3 px-5 py-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
 
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -240,7 +240,7 @@ export default function FightCamps() {
               <h3 className="text-sm font-bold">No Camps Yet</h3>
               <p className="text-muted-foreground text-xs mt-0.5">Start tracking your first preparation.</p>
             </div>
-            <Button onClick={() => setDialogOpen(true)} variant="outline" className="rounded-xl mt-2 border-border hover:bg-muted">
+            <Button onClick={() => setDialogOpen(true)} variant="outline" className="rounded-2xl mt-2 border-border hover:bg-muted">
               Create First Camp
             </Button>
           </div>
@@ -289,7 +289,7 @@ export default function FightCamps() {
 
                   {/* Metrics Strip */}
                   {(camp.starting_weight_kg || camp.total_weight_cut) ? (
-                    <div className="mt-3 bg-muted/50 rounded-xl p-2.5 flex items-center justify-around border border-border">
+                    <div className="mt-3 bg-muted/50 rounded-2xl p-2.5 flex items-center justify-around border border-border">
                       <div className="text-center">
                         <p className="text-[13px] uppercase tracking-widest text-muted-foreground mb-0.5">Start</p>
                         <p className="text-sm font-bold">{camp.starting_weight_kg ? `${camp.starting_weight_kg}kg` : '-'}</p>
@@ -337,7 +337,7 @@ export default function FightCamps() {
 
       {/* New Camp Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-[280px] rounded-xl p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0">
+        <DialogContent className="sm:max-w-[280px] rounded-2xl p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0">
           <div className="px-4 pt-4 pb-3">
             <DialogHeader>
               <DialogTitle className="text-[15px] font-semibold text-center">New Fight Camp</DialogTitle>

@@ -491,7 +491,7 @@ export default function Nutrition() {
   return (
     <>
       {aiTask && (
-        <div className="sticky top-0 z-50 px-3 sm:px-5 md:px-6 pt-2 pb-2 max-w-7xl mx-auto bg-background/95">
+        <div className="sticky top-0 z-50 px-5 sm:px-6 pt-2 pb-2 max-w-7xl mx-auto bg-background/95">
           {aiMeal.photoAnalyzing && aiMeal.photoBase64 ? (
             <MealPhotoScanOverlay
               isOpen={true}
@@ -514,11 +514,11 @@ export default function Nutrition() {
           )}
         </div>
       )}
-      <div className="animate-page-in space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto overflow-x-hidden">
+      <div className="animate-page-in space-y-2.5 px-5 py-3 sm:p-5 md:p-6 max-w-7xl mx-auto overflow-x-hidden">
 
         {/* Wizard's Nutrition Wisdom */}
         <button
-          className="w-full text-left rounded-xl card-surface p-3 border border-border hover:border-primary/30 active:scale-[0.99] transition-all group"
+          className="w-full text-left rounded-2xl card-surface p-3 border border-border hover:border-primary/30 active:scale-[0.99] transition-all group"
           onClick={() => wisdom.generateTrainingFoodIdeas()}
         >
           <div className="flex items-center gap-3">
@@ -529,7 +529,6 @@ export default function Nutrition() {
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5">
                   <h3 className="font-semibold text-sm">Wizard's Daily Wisdom</h3>
-                  <Dumbbell className="h-3.5 w-3.5 text-primary/60" />
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
                   {wisdom.trainingWisdomLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />}
@@ -593,7 +592,7 @@ export default function Nutrition() {
         </div>
 
         {meals.length === 0 && selectedDate === format(new Date(), "yyyy-MM-dd") && !loading && !nutritionData.mealsLoading && (
-          <div className="card-surface rounded-xl border border-border p-3">
+          <div className="card-surface rounded-2xl border border-border p-3">
             <div className="flex items-start gap-2.5">
               <div className="rounded-full bg-primary/15 p-2 flex-shrink-0">
                 <Utensils className="h-4 w-4 text-primary" />
@@ -605,15 +604,15 @@ export default function Nutrition() {
                 </p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-1.5 mt-2">
+            <div className="flex flex-wrap items-center justify-center gap-1.5 mt-2">
               <Button variant="outline" size="sm"
-                className={`h-6 text-[11px] font-medium px-2 w-full justify-center ${quickActions.previousDayMealCount === 0 ? "col-span-2" : ""}`}
+                className="h-7 text-[11px] font-medium px-3 rounded-full justify-center"
                 onClick={() => { setQuickAddTab("ai"); setIsQuickAddSheetOpen(true); }}
               >
                 Quick Add
               </Button>
               {quickActions.previousDayMealCount > 0 && (
-                <Button variant="outline" size="sm" className="h-6 text-[11px] font-medium px-2 w-full justify-center"
+                <Button variant="outline" size="sm" className="h-7 text-[11px] font-medium px-3 rounded-full justify-center"
                   onClick={quickActions.copyPreviousDay} disabled={quickActions.copyingPreviousDay}
                 >
                   {quickActions.copyingPreviousDay && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
@@ -621,7 +620,7 @@ export default function Nutrition() {
                 </Button>
               )}
               {quickActions.lastMeal && (
-                <Button variant="outline" size="sm" className="col-span-2 h-6 text-[11px] font-medium px-2 w-full justify-center"
+                <Button variant="outline" size="sm" className="h-7 text-[11px] font-medium px-3 rounded-full justify-center max-w-full"
                   onClick={() => quickActions.repeatLastMeal()}
                 >
                   <RotateCcw className="h-3 w-3 mr-1 flex-shrink-0" />
@@ -674,7 +673,7 @@ export default function Nutrition() {
                   className="w-full flex items-center justify-between px-3 py-2 hover:bg-muted/30 active:bg-muted/50 transition-colors"
                 >
                   <div className="flex items-center gap-1.5">
-                    <h3 className="text-[13px] font-semibold capitalize">{mealType}</h3>
+                    <h3 className="text-[15px] font-semibold capitalize">{mealType}</h3>
                     <ChevronDown className={`h-3 w-3 text-muted-foreground transition-transform duration-200 ${isSectionCollapsed ? "-rotate-90" : ""}`} />
                   </div>
                   <span className="text-xs font-medium text-muted-foreground tabular-nums">
@@ -762,7 +761,7 @@ export default function Nutrition() {
               <div className="px-2 pb-2 space-y-0.5">
                 {quickActions.favorites.slice(0, 10).map((fav, i) => (
                   <button key={`${fav.meal_name}-${i}`} onClick={() => quickActions.logFavorite(fav)}
-                    className="w-full flex items-center justify-between px-2.5 py-2 rounded-xl hover:bg-muted/30 active:bg-muted/50 transition-colors group"
+                    className="w-full flex items-center justify-between px-2.5 py-2 rounded-2xl hover:bg-muted/30 active:bg-muted/50 transition-colors group"
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <Star className="h-3 w-3 fill-amber-400 text-amber-400 flex-shrink-0" />
@@ -792,7 +791,7 @@ export default function Nutrition() {
             </Suspense>
           ) : meals.length > 0 && (
             <button onClick={() => dietAnalysisHook.handleAnalyseDiet()} disabled={nutritionData.dietAnalysisLoading}
-              className="card-surface w-full p-3.5 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform rounded-xl">
+              className="card-surface w-full p-3.5 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform rounded-2xl">
               <span className="text-sm font-medium text-foreground">Analyse Diet{gemBadge}</span>
             </button>
           )}
@@ -832,10 +831,10 @@ export default function Nutrition() {
               <div className="space-y-2">
                 <div className="flex gap-2">
                   <Button onClick={() => mealOps.saveMealIdeasToDatabase(mealPlanIdeas)} disabled={mealOps.savingAllMeals || mealOps.loggingMeal !== null}
-                    size="sm" className="flex-1 h-8 text-xs rounded-xl">
+                    size="sm" className="flex-1 h-8 text-xs rounded-2xl">
                     <Plus className="mr-1 h-3 w-3" />Save All ({mealPlanIdeas.length})
                   </Button>
-                  <Button onClick={mealOps.clearMealIdeas} variant="outline" size="sm" className="h-8 text-xs rounded-xl">
+                  <Button onClick={mealOps.clearMealIdeas} variant="outline" size="sm" className="h-8 text-xs rounded-2xl">
                     <X className="mr-1 h-3 w-3" />Clear
                   </Button>
                 </div>
@@ -932,7 +931,7 @@ export default function Nutrition() {
 
         {/* Quick Add Bottom Sheet */}
         <Dialog open={isQuickAddSheetOpen} onOpenChange={handleSheetOpenChange}>
-          <DialogContent className={`sm:max-w-[300px] max-h-[calc(100vh-6rem)] overflow-y-auto rounded-xl p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0 ${aiTask ? "[&>button]:hidden" : ""}`}>
+          <DialogContent className={`sm:max-w-[300px] max-h-[calc(100vh-6rem)] overflow-y-auto rounded-2xl p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0 ${aiTask ? "[&>button]:hidden" : ""}`}>
             {aiTask && (
               aiMeal.photoAnalyzing && aiMeal.photoBase64 ? (
                 <MealPhotoScanOverlay
@@ -1032,24 +1031,55 @@ export default function Nutrition() {
                         </div>
                       ))}
                     </div>
-                    <div className="grid grid-cols-4 gap-1.5 pt-1">
-                      <div className="text-center p-2 rounded-lg bg-primary/10 border border-primary/20">
-                        <div className="text-[15px] font-bold tabular-nums text-primary">{aiMeal.aiLineItems.reduce((s, i) => s + i.calories, 0)}</div>
-                        <div className="text-[9px] uppercase tracking-wider text-muted-foreground">kcal</div>
-                      </div>
-                      <div className="text-center p-2 rounded-lg bg-blue-500/10 border border-blue-500/20">
-                        <div className="text-[15px] font-bold tabular-nums text-blue-500">{Math.round(aiMeal.aiLineItems.reduce((s, i) => s + i.protein_g, 0))}g</div>
-                        <div className="text-[9px] uppercase tracking-wider text-muted-foreground">Protein</div>
-                      </div>
-                      <div className="text-center p-2 rounded-lg bg-orange-500/10 border border-orange-500/20">
-                        <div className="text-[15px] font-bold tabular-nums text-orange-500">{Math.round(aiMeal.aiLineItems.reduce((s, i) => s + i.carbs_g, 0))}g</div>
-                        <div className="text-[9px] uppercase tracking-wider text-muted-foreground">Carbs</div>
-                      </div>
-                      <div className="text-center p-2 rounded-lg bg-purple-500/10 border border-purple-500/20">
-                        <div className="text-[15px] font-bold tabular-nums text-purple-500">{Math.round(aiMeal.aiLineItems.reduce((s, i) => s + i.fats_g, 0))}g</div>
-                        <div className="text-[9px] uppercase tracking-wider text-muted-foreground">Fats</div>
-                      </div>
-                    </div>
+                    {(() => {
+                      const totalCalories = aiMeal.aiLineItems.reduce((s, i) => s + i.calories, 0);
+                      const proteinG = aiMeal.aiLineItems.reduce((s, i) => s + i.protein_g, 0);
+                      const carbsG = aiMeal.aiLineItems.reduce((s, i) => s + i.carbs_g, 0);
+                      const fatsG = aiMeal.aiLineItems.reduce((s, i) => s + i.fats_g, 0);
+                      const macroCals = [proteinG * 4, carbsG * 4, fatsG * 9];
+                      const macroTotal = macroCals.reduce((s, v) => s + v, 0) || 1;
+                      const raw = macroCals.map((c) => (c / macroTotal) * 100);
+                      const floors = raw.map((v) => Math.floor(v));
+                      let remainder = 100 - floors.reduce((s, v) => s + v, 0);
+                      const order = raw
+                        .map((v, i) => ({ i, frac: v - Math.floor(v) }))
+                        .sort((a, b) => b.frac - a.frac);
+                      const pcts = [...floors];
+                      for (let k = 0; k < order.length && remainder > 0; k++, remainder--) pcts[order[k].i] += 1;
+                      const [proteinPct, carbsPct, fatsPct] = pcts;
+                      const wheelMask = "radial-gradient(farthest-side, transparent calc(100% - 7px), #fff calc(100% - 7px))";
+                      const wheel = (pct: number, cssColor: string) => ({
+                        background: `conic-gradient(${cssColor} ${pct * 3.6}deg, hsl(var(--muted) / 0.3) ${pct * 3.6}deg)`,
+                        mask: wheelMask,
+                        WebkitMask: wheelMask,
+                      });
+                      return (
+                        <div className="space-y-1.5 pt-1">
+                          <div className="text-center p-2 rounded-lg bg-primary/10 border border-primary/20">
+                            <div className="text-[22px] font-black tabular-nums text-primary display-number leading-none tracking-tight">{totalCalories}</div>
+                            <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mt-1">kcal</div>
+                          </div>
+                          <div className="grid grid-cols-3 gap-1.5">
+                            {[
+                              { label: "Protein", grams: proteinG, pct: proteinPct, color: "rgb(59 130 246)", bg: "bg-blue-500/10 border-blue-500/20", text: "text-blue-500" },
+                              { label: "Carbs", grams: carbsG, pct: carbsPct, color: "rgb(249 115 22)", bg: "bg-orange-500/10 border-orange-500/20", text: "text-orange-500" },
+                              { label: "Fats", grams: fatsG, pct: fatsPct, color: "rgb(168 85 247)", bg: "bg-purple-500/10 border-purple-500/20", text: "text-purple-500" },
+                            ].map((m) => (
+                              <div key={m.label} className="flex flex-col items-center gap-1.5 p-2">
+                                <div className="relative w-20 h-20">
+                                  <div className="w-full h-full rounded-full" style={wheel(m.pct, m.color)} />
+                                  <div className="absolute inset-0 flex flex-col items-center justify-center leading-none">
+                                    <span className={`text-[17px] font-black tabular-nums tracking-tight ${m.text}`}>{Math.round(m.grams)}g</span>
+                                    <span className="text-[11px] font-semibold tabular-nums text-muted-foreground mt-1">{m.pct}%</span>
+                                  </div>
+                                </div>
+                                <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{m.label}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
                     <Input value={manualMeal.meal_name} onChange={(e) => setManualMeal(prev => ({ ...prev, meal_name: e.target.value }))} placeholder="Meal name" className="text-[13px] h-7 rounded-md border-border/30 bg-muted/20" />
                     <button onClick={aiMeal.handleSaveAiMeal} disabled={aiMeal.aiLineItems.length === 0} className="w-full py-2 text-[13px] font-semibold text-primary active:bg-muted/50 transition-colors border-t border-border/40 disabled:opacity-40">Add Meal</button>
                   </div>
@@ -1142,7 +1172,7 @@ export default function Nutrition() {
 
         {/* AI Meal Plan Dialog */}
         <Dialog open={mealPlan.isAiDialogOpen} onOpenChange={(open) => mealPlan.setIsAiDialogOpen(open)}>
-          <DialogContent className="sm:max-w-[340px] max-h-[85vh] overflow-y-auto rounded-xl p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0">
+          <DialogContent className="sm:max-w-[340px] max-h-[85vh] overflow-y-auto rounded-2xl p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0">
             <div className="px-4 pt-4 pb-3">
               <DialogHeader><DialogTitle className="text-[15px] font-semibold text-center">Meal ideas · {format(new Date(selectedDate), "MMM d")}</DialogTitle></DialogHeader>
             </div>
@@ -1166,7 +1196,7 @@ export default function Nutrition() {
         <Dialog open={aiMeal.manualNutritionDialog.open} onOpenChange={(open) => {
           if (!open) { aiMeal.setManualNutritionDialog({ open: false, ingredientName: "", grams: 0, calories_per_100g: "", protein_per_100g: "", carbs_per_100g: "", fats_per_100g: "" }); aiMeal.setIngredientLookupError(null); }
         }}>
-          <DialogContent className="sm:max-w-[300px] rounded-xl p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0">
+          <DialogContent className="sm:max-w-[300px] rounded-2xl p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0">
             <div className="px-4 pt-4 pb-2">
               <DialogHeader><DialogTitle className="text-[15px] font-semibold text-center">Enter Nutrition</DialogTitle></DialogHeader>
               <p className="text-[13px] text-muted-foreground text-center mt-0.5">Per 100g for "{aiMeal.manualNutritionDialog.ingredientName}"</p>
@@ -1197,7 +1227,7 @@ export default function Nutrition() {
 
         {/* Edit Nutrition Targets Dialog */}
         <Dialog open={isEditTargetsDialogOpen} onOpenChange={setIsEditTargetsDialogOpen}>
-          <DialogContent className="sm:max-w-[300px] rounded-xl p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0">
+          <DialogContent className="sm:max-w-[300px] rounded-2xl p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0">
             <div className="px-4 pt-4 pb-2">
               <DialogHeader><DialogTitle className="text-[15px] font-semibold text-center">Edit Targets</DialogTitle></DialogHeader>
               <p className="text-[13px] text-muted-foreground text-center mt-0.5">Override AI recommendations</p>
@@ -1271,7 +1301,7 @@ export default function Nutrition() {
               <style>{`@keyframes trainingProgressGrow { 0% { width: 5%; } 30% { width: 35%; } 60% { width: 60%; } 80% { width: 80%; } 100% { width: 95%; } } @keyframes trainingStepFadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }`}</style>
               <div className="space-y-3">
                 {[{ icon: "🎯", label: "Analyzing your macro targets", delay: "0s" }, { icon: "⚡", label: "Designing pre-training fuel", delay: "2s" }, { icon: "💪", label: "Crafting post-training recovery meals", delay: "4s" }, { icon: "✨", label: "Finalizing recommendations", delay: "6s" }].map((step, i) => (
-                  <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-500" style={{ animation: `trainingStepFadeIn 0.5s ease-out ${step.delay} both` }}>
+                  <div key={i} className="flex items-center gap-3 px-3 py-2.5 rounded-2xl transition-all duration-500" style={{ animation: `trainingStepFadeIn 0.5s ease-out ${step.delay} both` }}>
                     <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm flex-shrink-0">{step.icon}</div>
                     <span className="text-sm text-muted-foreground">{step.label}</span>
                     <Loader2 className="h-3.5 w-3.5 text-primary/40 animate-spin ml-auto flex-shrink-0" style={{ animationDelay: step.delay }} />
@@ -1294,7 +1324,7 @@ export default function Nutrition() {
                 ))}</div>
               </div>
               {wisdom.trainingWisdom.tip && (
-                <div className="rounded-xl bg-primary/5 border border-primary/10 p-3.5">
+                <div className="rounded-2xl bg-primary/5 border border-primary/10 p-3.5">
                   <div className="flex items-center gap-2 mb-1.5"><span className="text-xs font-semibold text-primary">Wizard's Tip</span></div>
                   <p className="text-xs text-muted-foreground leading-relaxed">{wisdom.trainingWisdom.tip}</p>
                 </div>

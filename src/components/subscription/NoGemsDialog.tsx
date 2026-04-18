@@ -18,7 +18,7 @@ export function NoGemsDialog({ open, onOpenChange, onWatchAd, onGoPro, adsRemain
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[240px] rounded-xl p-0 border-0 bg-card/90 backdrop-blur-xl overflow-hidden gap-0 shadow-2xl">
+      <DialogContent className="sm:max-w-[240px] rounded-2xl p-0 border-0 bg-card/90 backdrop-blur-xl overflow-hidden gap-0 shadow-2xl">
         <VisuallyHidden><DialogTitle>No gems remaining</DialogTitle></VisuallyHidden>
 
         <div className="pt-4 pb-3 px-4 text-center">

@@ -1,5 +1,4 @@
 import { memo } from "react";
-import { TrendingDown } from "lucide-react";
 import { AnimatedNumber } from "@/components/motion";
 
 interface WeightProgressRingProps {
@@ -16,11 +15,10 @@ export const WeightProgressRing = memo(function WeightProgressRing({ currentWeig
   const displayProgress = Math.min(Math.max(progressPercentage, 0), 100);
 
   return (
-    <div className="card-surface rounded-xl border border-border p-3.5">
+    <div className="card-surface rounded-2xl border border-border p-3.5">
       {/* Header */}
-      <div className="flex items-center justify-between mb-2.5">
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Weight Progress</span>
-        <TrendingDown className="h-3.5 w-3.5 text-muted-foreground" />
+      <div className="mb-2.5">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-foreground">Weight Progress</span>
       </div>
 
       {/* Progress bar */}

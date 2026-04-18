@@ -75,7 +75,7 @@ export function WeightCutBreakdownCard({
           return (
             <div
               key={comp.key}
-              className="bg-muted/50 p-3 rounded-xl border border-border/50"
+              className="bg-muted/50 p-3 rounded-2xl border border-border/50"
             >
               <div className="flex items-center gap-2 mb-1">
                 <div

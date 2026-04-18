@@ -106,7 +106,7 @@ export function ActiveSessionView({
             </div>
             <button
               onClick={() => setDiscardDialogOpen(true)}
-              className="p-2 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+              className="p-2 rounded-2xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
               aria-label="Discard workout"
             >
               <Trash2 className="h-4 w-4" />
@@ -121,17 +121,17 @@ export function ActiveSessionView({
 
           {/* Stats row */}
           <div className="grid grid-cols-3 gap-2">
-            <div className="rounded-xl bg-muted/30 p-2.5 text-center">
+            <div className="rounded-2xl bg-muted/30 p-2.5 text-center">
               <Dumbbell className="h-3.5 w-3.5 text-primary mx-auto mb-1" />
               <div className="display-number text-sm">{workout.exerciseGroups.length}</div>
               <div className="text-[13px] text-muted-foreground">Exercises</div>
             </div>
-            <div className="rounded-xl bg-muted/30 p-2.5 text-center">
+            <div className="rounded-2xl bg-muted/30 p-2.5 text-center">
               <TrendingUp className="h-3.5 w-3.5 text-primary mx-auto mb-1" />
               <div className="display-number text-sm">{totalSets}</div>
               <div className="text-[13px] text-muted-foreground">Working Sets</div>
             </div>
-            <div className="rounded-xl bg-muted/30 p-2.5 text-center">
+            <div className="rounded-2xl bg-muted/30 p-2.5 text-center">
               <Clock className="h-3.5 w-3.5 text-primary mx-auto mb-1" />
               <div className="display-number text-sm">{formatVolume(totalVolume)}<span className="text-[13px] text-muted-foreground font-normal"> kg</span></div>
               <div className="text-[13px] text-muted-foreground">Volume</div>
@@ -189,7 +189,7 @@ export function ActiveSessionView({
         >
           <button
             onClick={() => setFinishSheetOpen(true)}
-            className="w-full py-3.5 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-lg shadow-primary/25"
+            className="w-full py-3.5 rounded-2xl text-sm font-semibold text-white flex items-center justify-center gap-2 active:scale-[0.98] transition-transform shadow-lg shadow-primary/25"
             style={{ background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))" }}
           >
             <Check className="h-4.5 w-4.5" />
@@ -203,7 +203,7 @@ export function ActiveSessionView({
 
       {/* Finish workout dialog */}
       <Dialog open={finishSheetOpen} onOpenChange={setFinishSheetOpen}>
-        <DialogContent className="sm:max-w-[320px] rounded-xl p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0 max-h-[calc(100vh-6rem)] overflow-y-auto">
+        <DialogContent className="sm:max-w-[320px] rounded-2xl p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0 max-h-[calc(100vh-6rem)] overflow-y-auto">
           <div className="px-4 pt-4 pb-3">
             <DialogHeader>
               <DialogTitle className="text-[15px] font-semibold text-center">Finish Workout</DialogTitle>

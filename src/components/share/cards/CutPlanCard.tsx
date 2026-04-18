@@ -66,9 +66,9 @@ export const CutPlanCard = forwardRef<HTMLDivElement, CutPlanCardProps>(
           {/* Calorie info */}
           {plan.maintenanceCalories && (
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: s ? 12 : 8 }}>
-              <StatBlock label="Maintain" value={`${plan.maintenanceCalories}`} unit="kcal" size="default" />
-              <StatBlock label="Deficit" value={`-${plan.deficit || 0}`} unit="kcal" color="#ef4444" size="default" />
-              <StatBlock label="Target" value={`${plan.targetCalories || 0}`} unit="kcal" color="hsl(var(--primary))" size="default" />
+              <StatBlock label="Maintain" value={`${Math.round(plan.maintenanceCalories / 100) * 100}`} unit="kcal" size="default" />
+              <StatBlock label="Deficit" value={`-${Math.round((plan.deficit || 0) / 100) * 100}`} unit="kcal" color="#ef4444" size="default" />
+              <StatBlock label="Target" value={`${Math.round((plan.targetCalories || 0) / 100) * 100}`} unit="kcal" color="hsl(var(--primary))" size="default" />
             </div>
           )}
 
@@ -104,7 +104,7 @@ export const CutPlanCard = forwardRef<HTMLDivElement, CutPlanCardProps>(
               }}>
                 <span style={{ color: "rgba(255,255,255,0.6)" }}>{w.week}</span>
                 <span style={{ textAlign: "right" }}>{w.targetWeight.toFixed(1)}</span>
-                <span style={{ textAlign: "right" }}>{w.calories}</span>
+                <span style={{ textAlign: "right" }}>{Math.round(w.calories / 100) * 100}</span>
                 <span style={{ textAlign: "right" }}>{w.protein_g}</span>
                 <span style={{ textAlign: "right" }}>{w.carbs_g}</span>
                 <span style={{ textAlign: "right" }}>{w.fats_g}</span>

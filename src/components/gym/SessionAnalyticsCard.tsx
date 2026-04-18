@@ -1,7 +1,7 @@
 import { memo } from "react";
 import { motion } from "motion/react";
 import { staggerItem } from "@/lib/motion";
-import { BarChart3, Calendar, Dumbbell, Clock, Target } from "lucide-react";
+import { BarChart3 } from "lucide-react";
 import { formatVolume } from "@/lib/gymCalculations";
 
 interface SessionAnalyticsCardProps {
@@ -72,33 +72,21 @@ export const SessionAnalyticsCard = memo(function SessionAnalyticsCard({
 
         {/* Stats grid */}
         <div className="grid grid-cols-2 gap-2 mt-3">
-          <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-muted/30">
-            <Calendar className="h-4 w-4 text-primary shrink-0" />
-            <div>
-              <div className="display-number text-base">{sessionsThisWeek}</div>
-              <div className="text-[10px] text-muted-foreground">This week</div>
-            </div>
+          <div className="p-2.5 rounded-2xl bg-muted/30">
+            <div className="display-number text-base">{sessionsThisWeek}</div>
+            <div className="text-[10px] text-muted-foreground">This week</div>
           </div>
-          <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-muted/30">
-            <Clock className="h-4 w-4 text-primary shrink-0" />
-            <div>
-              <div className="display-number text-base">{avgDuration}<span className="text-xs text-muted-foreground font-normal">m</span></div>
-              <div className="text-[10px] text-muted-foreground">Avg duration</div>
-            </div>
+          <div className="p-2.5 rounded-2xl bg-muted/30">
+            <div className="display-number text-base">{avgDuration}<span className="text-xs text-muted-foreground font-normal">m</span></div>
+            <div className="text-[10px] text-muted-foreground">Avg duration</div>
           </div>
-          <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-muted/30">
-            <Dumbbell className="h-4 w-4 text-primary shrink-0" />
-            <div>
-              <div className="display-number text-base">{totalSessions}</div>
-              <div className="text-[10px] text-muted-foreground">Total sessions</div>
-            </div>
+          <div className="p-2.5 rounded-2xl bg-muted/30">
+            <div className="display-number text-base">{totalSessions}</div>
+            <div className="text-[10px] text-muted-foreground">Total sessions</div>
           </div>
-          <div className="flex items-center gap-2.5 p-2.5 rounded-xl bg-muted/30">
-            <Target className="h-4 w-4 text-primary shrink-0" />
-            <div>
-              <div className="display-number text-base capitalize">{mostTrainedMuscle.replace("_", " ")}</div>
-              <div className="text-[10px] text-muted-foreground">Top muscle</div>
-            </div>
+          <div className="p-2.5 rounded-2xl bg-muted/30">
+            <div className="display-number text-base capitalize">{mostTrainedMuscle.replace("_", " ")}</div>
+            <div className="text-[10px] text-muted-foreground">Top muscle</div>
           </div>
         </div>
       </div>
