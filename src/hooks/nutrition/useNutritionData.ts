@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { AIPersistence } from "@/lib/aiPersistence";
-import { nutritionCache } from "@/lib/nutritionCache";
+import { nutritionCache, onMealsChange } from "@/lib/nutritionCache";
 import { localCache } from "@/lib/localCache";
 import { syncQueue } from "@/lib/syncQueue";
 import { preloadAdjacentDates } from "@/lib/backgroundSync";
@@ -344,47 +344,41 @@ export function useNutritionData(params: UseNutritionDataParams) {
       contextProfile?.ai_recommended_fats_g, contextProfile?.ai_recommended_calories,
       contextProfile?.manual_nutrition_override]);
 
-  // Real-time subscription to profiles table (deferred 3s — not needed for initial render)
+  // Subscribe to in-process cache change events (fed by useMealsRealtime at app level).
+  // On any insert/update/delete for the selected date, reflect into local state.
+  useEffect(() => {
+    if (!userId) return;
+    const unsubscribe = onMealsChange((evt) => {
+      if (evt.userId !== userId) return;
+      if (evt.date !== activeDateRef.current) return;
+      const cached = nutritionCache.getMeals(userId, evt.date);
+      if (cached) setMeals(cached as Meal[]);
+    });
+    return unsubscribe;
+  }, [userId, setMeals]);
+
+  // Profile realtime — kept for profile changes only (unchanged behavior, simplified)
   useEffect(() => {
     if (!userId) return;
 
     let channel: ReturnType<typeof supabase.channel> | null = null;
     const subscribeTimer = setTimeout(() => {
       channel = supabase
-        .channel('profile-nutrition-updates')
-        .on('postgres_changes', {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'profiles',
-          filter: `id=eq.${userId}`
-        }, () => {
-          refreshProfile();
-        })
-        .subscribe((status) => {
-          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-            setTimeout(() => {
-              if (channel) supabase.removeChannel(channel);
-              channel = supabase
-                .channel('profile-nutrition-updates-retry')
-                .on('postgres_changes', {
-                  event: 'UPDATE',
-                  schema: 'public',
-                  table: 'profiles',
-                  filter: `id=eq.${userId}`
-                }, () => {
-                  refreshProfile();
-                })
-                .subscribe();
-            }, 2000);
-          }
-        });
+        .channel("profile-nutrition-updates")
+        .on("postgres_changes", {
+          event: "UPDATE",
+          schema: "public",
+          table: "profiles",
+          filter: `id=eq.${userId}`,
+        }, () => { refreshProfile(); })
+        .subscribe();
     }, 3000);
 
     return () => {
       clearTimeout(subscribeTimer);
       if (channel) supabase.removeChannel(channel);
     };
-  }, [userId]);
+  }, [userId, refreshProfile]);
 
   // Fetch share stats
   const fetchShareStats = useCallback(async () => {
