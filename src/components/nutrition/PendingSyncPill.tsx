@@ -56,7 +56,10 @@ export function PendingSyncPill() {
       </button>
 
       <Sheet open={open} onOpenChange={setOpen}>
-        <SheetContent side="bottom" className="rounded-t-2xl">
+        <SheetContent
+          side="bottom"
+          className="rounded-t-2xl pb-[calc(env(safe-area-inset-bottom,0px)+5.5rem)]"
+        >
           <SheetHeader>
             <SheetTitle>Pending meals</SheetTitle>
           </SheetHeader>
