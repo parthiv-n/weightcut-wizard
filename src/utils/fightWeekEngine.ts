@@ -19,6 +19,7 @@ export interface DayProjection {
   fibreTarget_g: number;    // taper: 15g → <10g → <5g
   sodiumTarget_mg: number;  // taper: 2500 → <2300 → <1500
   fluidTarget_ml: number;   // water load 100ml/kg → restrict 15ml/kg
+  calorieTarget?: number;   // AI-provided; optional for backward compat with the engine
   actions: string[];        // protocol notes for this day
 }
 
@@ -170,18 +171,17 @@ function buildTimeline(input: FightWeekInput, projection: {
     else if (daysOut === 1) label = "1 Day Out";
     else label = `${daysOut} Days Out`;
 
-    // Carb targets — taper schedule (ISSN: <50g for full depletion)
+    // Carb targets — aggressive depletion per ISSN 2025 / Reale SSE 183 / Sawyer 2013.
+    // Transition for at most the first 2 days of fight week at 2 g/kg, then hard-drop
+    // to <50 g/day from day -5 onward. No soft taper.
     let carbTarget_g: number;
-    if (days <= 2) {
-      carbTarget_g = i === 0 ? Math.round(currentWeight * 1) : 30;
-    } else if (daysOut >= days - 1) {
-      carbTarget_g = Math.round(currentWeight * 2); // 2g/kg start
-    } else if (daysOut >= Math.floor(days / 2)) {
-      carbTarget_g = Math.round(currentWeight * 1); // 1g/kg mid
+    if (isWeighIn) {
+      carbTarget_g = 30; // low-fibre carbs only on weigh-in day
+    } else if (daysOut >= days - 2 && days >= 4) {
+      carbTarget_g = Math.round(currentWeight * 2); // 2 g/kg transition, only for first 1-2 days of a 4+ day window
     } else {
-      carbTarget_g = 50; // <50g final days
+      carbTarget_g = 50; // <50g hold from day -5 (or earlier if window is short) until weigh-in
     }
-    if (isWeighIn) carbTarget_g = 0;
 
     // Fibre targets — taper (ISSN §5.4.2)
     let fibreTarget_g: number;

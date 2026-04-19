@@ -44,7 +44,7 @@ export function AILimitTimer() {
     <div
       className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+5rem)] left-1/2 -translate-x-1/2 z-[9999] md:hidden animate-in slide-in-from-bottom duration-300"
     >
-      <div className="flex items-center gap-2.5 rounded-xl card-surface border border-primary/20 bg-background/95 px-3.5 py-2.5 shadow-lg shadow-black/20">
+      <div className="flex items-center gap-2.5 rounded-2xl card-surface border border-primary/20 bg-background/95 px-3.5 py-2.5 shadow-lg shadow-black/20">
         <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
           <Gem className="h-4 w-4 text-primary" />
         </div>
@@ -56,7 +56,7 @@ export function AILimitTimer() {
         </div>
         <button
           onClick={openPaywall}
-          className="ml-1 flex items-center gap-1 rounded-xl bg-gradient-to-r from-primary to-secondary px-2.5 py-1.5 text-[11px] font-bold text-primary-foreground active:scale-95 transition-transform"
+          className="ml-1 flex items-center gap-1 rounded-2xl bg-gradient-to-r from-primary to-secondary px-2.5 py-1.5 text-[11px] font-bold text-primary-foreground active:scale-95 transition-transform"
         >
           <Zap className="h-3 w-3" />
           Pro

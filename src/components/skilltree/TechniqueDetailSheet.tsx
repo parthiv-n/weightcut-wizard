@@ -69,7 +69,7 @@ export function TechniqueDetailSheet({
                     triggerHapticSelection();
                     onUpdateLevel(node.id, level);
                   }}
-                  className={`flex-1 min-h-[44px] rounded-xl text-xs font-medium transition-colors ${
+                  className={`flex-1 min-h-[44px] rounded-2xl text-xs font-medium transition-colors ${
                     node.level === level
                       ? LEVEL_STYLES[level] + " ring-1 ring-current"
                       : "bg-muted/30 text-muted-foreground hover:bg-muted/50"
@@ -90,7 +90,7 @@ export function TechniqueDetailSheet({
                 {connectedNodes.map((cn) => (
                   <div
                     key={cn.id}
-                    className="flex items-center justify-between px-3 py-2 rounded-xl bg-muted/30 text-sm"
+                    className="flex items-center justify-between px-3 py-2 rounded-2xl bg-muted/30 text-sm"
                   >
                     <span>{cn.label}</span>
                     <span className={`text-xs px-2 py-0.5 rounded-lg ${LEVEL_STYLES[cn.level]}`}>

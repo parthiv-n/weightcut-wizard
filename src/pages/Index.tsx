@@ -112,7 +112,7 @@ const Index = () => {
           <button
             onClick={() => navigateWithTransition("/auth?mode=signup")}
             disabled={exiting}
-            className="w-full h-[54px] rounded-xl bg-primary text-primary-foreground font-bold text-[16px] flex items-center justify-center gap-2 active:scale-[0.97] transition-transform disabled:opacity-70"
+            className="w-full h-[54px] rounded-2xl bg-primary text-primary-foreground font-bold text-[16px] flex items-center justify-center gap-2 active:scale-[0.97] transition-transform disabled:opacity-70"
           >
             Get Started
             <ChevronRight className="h-4 w-4" />
@@ -120,7 +120,7 @@ const Index = () => {
           <button
             onClick={() => navigateWithTransition("/auth")}
             disabled={exiting}
-            className="w-full h-[54px] rounded-xl border border-border text-foreground font-semibold text-[15px] flex items-center justify-center active:scale-[0.97] transition-transform hover:bg-muted/30 disabled:opacity-70"
+            className="w-full h-[54px] rounded-2xl border border-border text-foreground font-semibold text-[15px] flex items-center justify-center active:scale-[0.97] transition-transform hover:bg-muted/30 disabled:opacity-70"
           >
             I already have an account
           </button>

@@ -234,7 +234,7 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className, label }: Ba
           <div>
             {/* Camera error */}
             {cameraError ? (
-              <div className="mx-4 mt-4 rounded-xl border border-destructive/50 bg-destructive/10 p-4">
+              <div className="mx-4 mt-4 rounded-2xl border border-destructive/50 bg-destructive/10 p-4">
                 <div className="flex items-start gap-3">
                   <AlertCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
                   <div className="space-y-1.5">
@@ -328,7 +328,7 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className, label }: Ba
                 </div>
 
                 {/* Nutrition breakdown — matches FoodSearchDialog pattern */}
-                <div className="rounded-xl border border-border/50 bg-muted/20 p-4 space-y-3">
+                <div className="rounded-2xl border border-border/50 bg-muted/20 p-4 space-y-3">
                   <div className="text-center">
                     <p className="text-3xl font-bold text-primary tabular-nums">{scannedProduct.calories}</p>
                     <p className="text-xs text-muted-foreground uppercase tracking-wider">calories</p>

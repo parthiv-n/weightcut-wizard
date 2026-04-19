@@ -100,7 +100,7 @@ export function TutorialTooltip({
           )}
           <button
             onClick={onNext}
-            className="min-h-[44px] px-7 rounded-xl text-sm font-bold text-primary-foreground
+            className="min-h-[44px] px-7 rounded-2xl text-sm font-bold text-primary-foreground
               bg-gradient-to-r from-primary to-secondary
               shadow-lg shadow-primary/20
               active:scale-95 transition-transform touch-manipulation"

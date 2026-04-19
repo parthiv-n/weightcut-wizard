@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { AIPersistence } from "@/lib/aiPersistence";
-import { nutritionCache } from "@/lib/nutritionCache";
+import { nutritionCache, onMealsChange } from "@/lib/nutritionCache";
 import { localCache } from "@/lib/localCache";
 import { syncQueue } from "@/lib/syncQueue";
 import { preloadAdjacentDates } from "@/lib/backgroundSync";
@@ -183,9 +183,10 @@ export function useNutritionData(params: UseNutritionDataParams) {
       }
     }
 
-    // Only show loading skeleton if we have nothing to display and this isn't a silent/post-mutation refresh
+    // SWR: never show skeleton if we have anything to display
     const hasVisibleMeals = mealsRef.current.length > 0;
-    if (!silent && !servedFromLocal && !hasVisibleMeals) {
+    const hasLocalCache = !!localCache.getForDate(userId, "nutrition_logs", fetchDate);
+    if (!silent && !servedFromLocal && !hasVisibleMeals && !hasLocalCache) {
       safeAsync(setMealsLoading)(true);
     }
 
@@ -253,12 +254,12 @@ export function useNutritionData(params: UseNutritionDataParams) {
       const p = op.payload as any;
       mergedMeals.push({
         id: op.recordId,
-        meal_name: p.meal_name || null,
+        meal_name: p.meal_name || "Logged meal",
         calories: p.calories,
         protein_g: p.protein_g ?? undefined,
         carbs_g: p.carbs_g ?? undefined,
         fats_g: p.fats_g ?? undefined,
-        meal_type: p.meal_type || null,
+        meal_type: p.meal_type || "snack",
         portion_size: p.portion_size ?? undefined,
         recipe_notes: p.recipe_notes ?? undefined,
         ingredients: p.ingredients ?? undefined,
@@ -275,18 +276,32 @@ export function useNutritionData(params: UseNutritionDataParams) {
       setMeals(mergedMeals as Meal[]);
     }
     safeAsync(setMealsLoading)(false);
+    // Reconciliation: drop any localCache rows that aren't in DB and aren't
+    // in the pending queue. Prevents "ghost" meals from re-surfacing forever.
+    const pendingRecordIds = new Set(
+      pendingOps
+        .filter(op => op.table === "nutrition_logs" && op.action === "insert")
+        .map(op => op.recordId)
+    );
+    const keepIds = new Set<string>([
+      ...typedMeals.map(m => m.id),
+      ...pendingRecordIds,
+      ...mergedMeals.map((m: any) => m.id),
+      ...mealsRef.current.map(m => m.id),
+    ]);
+    const priorLocal = localCache.getForDate<Meal[]>(userId, "nutrition_logs", fetchDate) ?? [];
+    const reconciledLocal = priorLocal.filter(m => keepIds.has(m.id));
+    // Only write back if we actually dropped something (avoids pointless writes)
+    if (reconciledLocal.length !== priorLocal.length) {
+      localCache.setForDate(userId, "nutrition_logs", fetchDate, reconciledLocal);
+    }
     nutritionCache.setMeals(userId, fetchDate, mergedMeals as Meal[]);
     localCache.setForDate(userId, "nutrition_logs", fetchDate, mergedMeals);
   };
 
-  // Load meals on date/user change
   useEffect(() => {
     activeDateRef.current = selectedDate;
-    const hasCachedMeals = userId && (
-      nutritionCache.getMeals(userId, selectedDate) ||
-      localCache.getForDate(userId, "nutrition_logs", selectedDate, LOCAL_CACHE_TTL_MS)
-    );
-    if (!hasCachedMeals) setMealsLoading(true);
+    // SWR: do not flip mealsLoading here; loadMeals decides based on cache availability.
     loadMeals();
     if (userId) setTimeout(() => preloadAdjacentDates(userId, selectedDate), 2000);
     return () => {
@@ -322,6 +337,8 @@ export function useNutritionData(params: UseNutritionDataParams) {
       if (document.visibilityState === 'visible' && userId) {
         if (Date.now() - lastFetchRef.current < 2000) return;
         loadMeals(true, 0, /* silent */ true);
+        // Also try to drain any pending meal ops
+        syncQueue.process(userId).catch(() => { });
       }
     };
     document.addEventListener('visibilitychange', handleVis);
@@ -344,47 +361,41 @@ export function useNutritionData(params: UseNutritionDataParams) {
       contextProfile?.ai_recommended_fats_g, contextProfile?.ai_recommended_calories,
       contextProfile?.manual_nutrition_override]);
 
-  // Real-time subscription to profiles table (deferred 3s — not needed for initial render)
+  // Subscribe to in-process cache change events (fed by useMealsRealtime at app level).
+  // On any insert/update/delete for the selected date, reflect into local state.
+  useEffect(() => {
+    if (!userId) return;
+    const unsubscribe = onMealsChange((evt) => {
+      if (evt.userId !== userId) return;
+      if (evt.date !== activeDateRef.current) return;
+      const cached = nutritionCache.getMeals(userId, evt.date);
+      if (cached) setMeals(cached as Meal[]);
+    });
+    return unsubscribe;
+  }, [userId, setMeals]);
+
+  // Profile realtime — kept for profile changes only (unchanged behavior, simplified)
   useEffect(() => {
     if (!userId) return;
 
     let channel: ReturnType<typeof supabase.channel> | null = null;
     const subscribeTimer = setTimeout(() => {
       channel = supabase
-        .channel('profile-nutrition-updates')
-        .on('postgres_changes', {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'profiles',
-          filter: `id=eq.${userId}`
-        }, () => {
-          refreshProfile();
-        })
-        .subscribe((status) => {
-          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-            setTimeout(() => {
-              if (channel) supabase.removeChannel(channel);
-              channel = supabase
-                .channel('profile-nutrition-updates-retry')
-                .on('postgres_changes', {
-                  event: 'UPDATE',
-                  schema: 'public',
-                  table: 'profiles',
-                  filter: `id=eq.${userId}`
-                }, () => {
-                  refreshProfile();
-                })
-                .subscribe();
-            }, 2000);
-          }
-        });
+        .channel("profile-nutrition-updates")
+        .on("postgres_changes", {
+          event: "UPDATE",
+          schema: "public",
+          table: "profiles",
+          filter: `id=eq.${userId}`,
+        }, () => { refreshProfile(); })
+        .subscribe();
     }, 3000);
 
     return () => {
       clearTimeout(subscribeTimer);
       if (channel) supabase.removeChannel(channel);
     };
-  }, [userId]);
+  }, [userId, refreshProfile]);
 
   // Fetch share stats
   const fetchShareStats = useCallback(async () => {

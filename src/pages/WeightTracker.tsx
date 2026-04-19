@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
 import { format } from "date-fns";
-import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Activity, Scale, Trash2, RefreshCw, Edit2, ChevronDown, Check, CheckCircle2, Gem, Minus, Plus, Loader2 } from "lucide-react";
+import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Activity, Scale, Trash2, RefreshCw, ChevronDown, Check, CheckCircle2, Gem, Minus, Plus, Loader2 } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
@@ -269,7 +269,7 @@ export default function WeightTracker() {
   return (
     <>
       {aiTask && (
-        <div className="px-3 sm:px-5 md:px-6 pt-3 max-w-2xl mx-auto">
+        <div className="px-5 sm:px-6 pt-3 max-w-2xl mx-auto">
           <AICompactOverlay
             isOpen={true}
             isGenerating={true}
@@ -279,7 +279,7 @@ export default function WeightTracker() {
           />
         </div>
       )}
-      <div className="animate-page-in space-y-2.5 p-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
+      <div className="animate-page-in space-y-2.5 px-5 py-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
         {/* Chart + History */}
         <div className="card-surface p-3 space-y-3">
           <div className="flex items-center justify-between">
@@ -313,7 +313,7 @@ export default function WeightTracker() {
                         const projectedWeight = entry.projected;
                         const isProjectedOnly = !actualWeight && projectedWeight;
                         return (
-                          <div className="bg-card border border-border/50 rounded-xl px-3 py-2 shadow-lg">
+                          <div className="bg-card border border-border/50 rounded-2xl px-3 py-2 shadow-lg">
                             <p className="text-[10px] text-muted-foreground">{entry.fullDate}</p>
                             {actualWeight && <p className="text-base font-bold text-primary">{actualWeight}kg</p>}
                             {isProjectedOnly && <p className="text-base font-bold text-muted-foreground">{projectedWeight.toFixed(1)}kg <span className="text-[10px] font-normal">projected</span></p>}
@@ -371,23 +371,27 @@ export default function WeightTracker() {
                       </Button>
                     </CollapsibleTrigger>
                   </div>
-                  <CollapsibleContent className="space-y-2 pt-2">
-                    <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1">
+                  <CollapsibleContent className="pt-2">
+                    <div
+                      className="flex gap-2 overflow-x-auto pb-2 pr-1 snap-x snap-mandatory scroll-smooth [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                    >
                       {weightLogs.slice().reverse().map((log) => (
-                        <div key={log.id} className="flex items-center justify-between px-3 py-2.5 rounded-xl bg-muted/30 active:bg-muted/50 transition-colors">
-                          <div className="flex flex-col">
-                            <span className="text-[15px] font-bold tabular-nums text-foreground">{log.weight_kg} <span className="text-xs font-medium text-muted-foreground">kg</span></span>
-                            <span className="text-[11px] text-muted-foreground/70">{format(new Date(log.date), "MMM dd, yyyy")}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => handleEditLog(log)} className="h-10 w-10 flex items-center justify-center rounded-xl text-muted-foreground active:text-foreground active:bg-muted/60 transition-colors">
-                              <Edit2 className="h-4 w-4" />
-                            </button>
-                            <button onClick={() => initiateDelete(log)} className="h-10 w-10 flex items-center justify-center rounded-xl text-muted-foreground active:text-destructive active:bg-destructive/10 transition-colors">
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </div>
+                        <button
+                          key={log.id}
+                          onClick={() => initiateDelete(log)}
+                          className="snap-start shrink-0 aspect-square w-24 flex flex-col items-center justify-center rounded-2xl bg-muted/30 border border-border/40 active:scale-95 active:bg-muted/50 transition-all"
+                        >
+                          <span className="text-[17px] font-bold tabular-nums text-foreground leading-none">
+                            {parseFloat(log.weight_kg).toFixed(1)}
+                          </span>
+                          <span className="text-[10px] font-medium text-muted-foreground mt-0.5">kg</span>
+                          <span className="text-[10px] text-muted-foreground/70 mt-2 tabular-nums">
+                            {format(new Date(log.date), "MMM dd")}
+                          </span>
+                          <span className="text-[9px] text-muted-foreground/50 tabular-nums">
+                            {format(new Date(log.date), "yyyy")}
+                          </span>
+                        </button>
                       ))}
                     </div>
                   </CollapsibleContent>
@@ -512,8 +516,8 @@ export default function WeightTracker() {
                   </p>
                 </div>
                 <div className="flex items-center gap-0.5">
-                  <button onClick={getAIAnalysis} disabled={analyzingWeight} className="h-8 w-8 flex items-center justify-center rounded-xl text-muted-foreground/40 active:text-foreground active:bg-muted/40 transition-colors" title="Refresh"><RefreshCw className="h-3.5 w-3.5" /></button>
-                  <button onClick={clearAnalysis} className="h-8 w-8 flex items-center justify-center rounded-xl text-muted-foreground/40 active:text-destructive active:bg-destructive/10 transition-colors" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button>
+                  <button onClick={getAIAnalysis} disabled={analyzingWeight} className="h-8 w-8 flex items-center justify-center rounded-2xl text-muted-foreground/40 active:text-foreground active:bg-muted/40 transition-colors" title="Refresh"><RefreshCw className="h-3.5 w-3.5" /></button>
+                  <button onClick={clearAnalysis} className="h-8 w-8 flex items-center justify-center rounded-2xl text-muted-foreground/40 active:text-destructive active:bg-destructive/10 transition-colors" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button>
                 </div>
               </div>
 
@@ -570,29 +574,39 @@ export default function WeightTracker() {
                     }
                   }
 
-                  const milestones: Array<{ week: number; expectedWeight: number; position: number }> = [];
+                  const milestones: Array<{ week: number; expectedWeight: number; position: number; date: Date }> = [];
 
                   if (isLosing && aiAnalysis.requiredWeeklyLoss > 0) {
                     const totalToLose = startWeight - targetWeight;
-                    for (let week = 1; week <= Math.min(weeksRemaining, 8); week++) {
-                      const expectedWeight = Math.max(targetWeight, startWeight - (week * aiAnalysis.requiredWeeklyLoss));
+                    const weeksToTarget = Math.max(1, Math.ceil(totalToLose / aiAnalysis.requiredWeeklyLoss));
+                    const weekCount = Math.min(weeksRemaining, weeksToTarget);
+                    for (let week = 1; week <= weekCount; week++) {
+                      const isLast = week === weekCount;
+                      const expectedWeight = isLast ? targetWeight : startWeight - (week * aiAnalysis.requiredWeeklyLoss);
                       const weightLost = startWeight - expectedWeight;
-                      const position = Math.min(100, Math.max(0, (weightLost / totalToLose) * 100));
-                      milestones.push({ week, expectedWeight, position });
+                      const position = totalToLose > 0 ? Math.min(100, Math.max(0, (weightLost / totalToLose) * 100)) : 0;
+                      const date = new Date(today);
+                      date.setDate(date.getDate() + week * 7);
+                      milestones.push({ week, expectedWeight, position, date });
                     }
                   } else if (!isLosing) {
                     const totalToGain = targetWeight - startWeight;
                     const weeklyGain = Math.abs(aiAnalysis.requiredWeeklyLoss) || 0.2;
-                    for (let week = 1; week <= Math.min(weeksRemaining, 8); week++) {
-                      const expectedWeight = Math.min(targetWeight, startWeight + (week * weeklyGain));
+                    const weeksToTarget = totalToGain > 0 ? Math.max(1, Math.ceil(totalToGain / weeklyGain)) : 1;
+                    const weekCount = Math.min(weeksRemaining, weeksToTarget);
+                    for (let week = 1; week <= weekCount; week++) {
+                      const isLast = week === weekCount;
+                      const expectedWeight = isLast ? targetWeight : startWeight + (week * weeklyGain);
                       const weightGained = expectedWeight - startWeight;
                       const position = totalToGain > 0 ? Math.min(100, Math.max(0, (weightGained / totalToGain) * 100)) : 0;
-                      milestones.push({ week, expectedWeight, position });
+                      const date = new Date(today);
+                      date.setDate(date.getDate() + week * 7);
+                      milestones.push({ week, expectedWeight, position, date });
                     }
                   }
 
                   return (
-                    <div className="py-2">
+                    <div className="py-2 space-y-2">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-[10px] font-semibold text-muted-foreground">{startWeight.toFixed(1)} kg</span>
                         <span className="text-[9px] text-muted-foreground">
@@ -603,22 +617,32 @@ export default function WeightTracker() {
                         </span>
                         <span className="text-[10px] font-semibold text-primary">{targetWeight.toFixed(1)} kg</span>
                       </div>
-                      <div className="relative">
-                        <div className="relative h-4 mb-1">
-                          {milestones.map(({ week, expectedWeight, position }) => (
-                            <div key={`label-${week}`} className="absolute -translate-x-1/2" style={{ left: `${position}%` }}>
-                              <span className="text-[9px] text-muted-foreground whitespace-nowrap">{expectedWeight.toFixed(1)}</span>
+                      <div className="relative h-3 bg-muted rounded-full overflow-visible">
+                        <div className="h-full bg-gradient-to-r from-primary to-primary/80 rounded-full transition-all duration-500" style={{ width: `${progressPercent}%` }} />
+                        {milestones.slice(0, -1).map(({ week, expectedWeight, position }) => (
+                          <div key={week} className="absolute top-0 bottom-0 w-0.5 bg-foreground/30" style={{ left: `${position}%` }} title={`Week ${week}: ${expectedWeight.toFixed(1)} kg`} />
+                        ))}
+                        <div className="absolute top-1/2 -translate-y-1/2 w-2 h-2 bg-primary rounded-full border-2 border-background shadow-sm z-10" style={{ left: `${progressPercent}%`, marginLeft: '-4px' }} />
+                      </div>
+                      {milestones.length > 0 && (
+                        <div className="flex gap-1.5 overflow-x-auto pb-1 pt-1 snap-x scroll-smooth [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                          {milestones.map(({ week, expectedWeight, date }) => (
+                            <div
+                              key={`card-${week}`}
+                              className="snap-start shrink-0 w-16 flex flex-col items-center justify-center rounded-2xl bg-muted/30 border border-border/40 px-2 py-1.5"
+                            >
+                              <span className="text-[9px] uppercase tracking-wider text-muted-foreground/70 leading-none">W{week}</span>
+                              <span className="text-[13px] font-bold tabular-nums text-foreground leading-tight mt-1">
+                                {expectedWeight.toFixed(1)}
+                              </span>
+                              <span className="text-[8px] text-muted-foreground/60 mt-0.5">kg</span>
+                              <span className="text-[8px] text-muted-foreground/70 tabular-nums mt-0.5">
+                                {format(date, "MMM dd")}
+                              </span>
                             </div>
                           ))}
                         </div>
-                        <div className="relative h-3 bg-muted rounded-full overflow-visible">
-                          <div className="h-full bg-gradient-to-r from-primary to-primary/80 rounded-full transition-all duration-500" style={{ width: `${progressPercent}%` }} />
-                          {milestones.map(({ week, expectedWeight, position }) => (
-                            <div key={week} className="absolute top-0 bottom-0 w-0.5 bg-foreground/30" style={{ left: `${position}%` }} title={`Week ${week}: ${expectedWeight.toFixed(1)} kg`} />
-                          ))}
-                          <div className="absolute top-1/2 -translate-y-1/2 w-2 h-2 bg-primary rounded-full border-2 border-background shadow-sm z-10" style={{ left: `${progressPercent}%`, marginLeft: '-4px' }} />
-                        </div>
-                      </div>
+                      )}
                     </div>
                   );
                 })()
@@ -644,7 +668,7 @@ export default function WeightTracker() {
               <Button
                 variant={targetsApplied ? "ghost" : "outline"}
                 size="sm"
-                className="w-full rounded-xl text-xs h-9"
+                className="w-full rounded-2xl text-xs h-9"
                 disabled={applyingTargets || targetsApplied}
                 onClick={applyNutritionTargets}
               >
@@ -674,33 +698,6 @@ export default function WeightTracker() {
                   <p className="text-[12px] text-foreground leading-relaxed">{(aiAnalysis.timeline || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}</p>
                 </div>
               </div>
-
-              {/* Meal Timing — calorie distribution template */}
-              {aiAnalysis.mealTiming?.distribution && aiAnalysis.mealTiming.distribution.length > 0 && (
-                <div>
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold mb-2">Meal Timing</p>
-                  <div className="space-y-1.5">
-                    {aiAnalysis.mealTiming.distribution.map((m, i) => (
-                      <div key={i} className="rounded-2xl bg-muted/20 px-3.5 py-2.5">
-                        <div className="flex items-baseline justify-between gap-2">
-                          <p className="text-[12px] font-semibold text-foreground">{m.name}</p>
-                          <p className="text-[10px] text-muted-foreground">{m.time}</p>
-                        </div>
-                        <div className="flex items-baseline gap-2 mt-0.5">
-                          <p className="text-[14px] font-bold tabular-nums text-primary">{m.calories}</p>
-                          <p className="text-[10px] text-muted-foreground">kcal · {m.proteinGrams}g P · {m.caloriePercent}%</p>
-                        </div>
-                        {m.focus && (
-                          <p className="text-[11px] text-foreground/80 leading-relaxed mt-1">{(m.focus || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}</p>
-                        )}
-                      </div>
-                    ))}
-                    {aiAnalysis.mealTiming.notes && (
-                      <p className="text-[11px] text-muted-foreground/80 leading-relaxed px-1 pt-1">{(aiAnalysis.mealTiming.notes || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}</p>
-                    )}
-                  </div>
-                </div>
-              )}
 
               {/* Weekly Check-in */}
               {aiAnalysis.weeklyWorkflow && aiAnalysis.weeklyWorkflow.length > 0 && (
@@ -743,7 +740,7 @@ export default function WeightTracker() {
 
         {/* Get AI Button */}
         {!aiAnalysis && profile && (
-          <Button onClick={getAIAnalysis} disabled={analyzingWeight} variant="outline" className="w-full rounded-xl h-11">
+          <Button onClick={getAIAnalysis} disabled={analyzingWeight} variant="outline" className="w-full rounded-2xl h-11">
             {analyzingWeight ? "Analyzing..." : <>Get AI Weight Loss Strategy{!gemsIsPremium && <span className="inline-flex items-center gap-0.5 ml-1.5 text-muted-foreground"><Gem className="h-3 w-3" /><span className="text-[10px] font-medium tabular-nums">{gems}</span></span>}</>}
           </Button>
         )}

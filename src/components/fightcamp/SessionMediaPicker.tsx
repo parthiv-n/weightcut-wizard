@@ -100,11 +100,11 @@ export function SessionMediaPicker({
       />
 
       {displayUrl ? (
-        <div className="relative rounded-xl overflow-hidden border border-border">
+        <div className="relative rounded-2xl overflow-hidden border border-border">
           {isVideo(displayUrl) ? (
             <video
               src={displayUrl}
-              className="w-full max-h-48 object-cover rounded-xl"
+              className="w-full max-h-48 object-cover rounded-2xl"
               controls={false}
               muted
               playsInline
@@ -113,7 +113,7 @@ export function SessionMediaPicker({
             <img
               src={displayUrl}
               alt="Session media"
-              className="w-full max-h-48 object-cover rounded-xl"
+              className="w-full max-h-48 object-cover rounded-2xl"
             />
           )}
           <button

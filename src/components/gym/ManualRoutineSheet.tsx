@@ -154,7 +154,7 @@ export function ManualRoutineSheet({
             {step === 2 && (
               <button
                 onClick={() => { setStep(1); setShowPicker(false); }}
-                className="h-8 w-8 rounded-xl bg-muted/30 flex items-center justify-center"
+                className="h-8 w-8 rounded-2xl bg-muted/30 flex items-center justify-center"
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
@@ -162,7 +162,7 @@ export function ManualRoutineSheet({
             <SheetTitle className="flex-1">{step === 1 ? "New Routine" : "Add Exercises"}</SheetTitle>
             <button
               onClick={() => onOpenChange(false)}
-              className="h-8 w-8 rounded-xl bg-muted/30 flex items-center justify-center shrink-0"
+              className="h-8 w-8 rounded-2xl bg-muted/30 flex items-center justify-center shrink-0"
             >
               <X className="h-4 w-4" />
             </button>
@@ -179,7 +179,7 @@ export function ManualRoutineSheet({
                   placeholder="My Routine"
                   value={routineName}
                   onChange={(e) => setRoutineName(e.target.value)}
-                  className="bg-muted/30 border-border/50 rounded-xl"
+                  className="bg-muted/30 border-border/50 rounded-2xl"
                 />
               </div>
 
@@ -198,7 +198,7 @@ export function ManualRoutineSheet({
                             : "border-border/50 hover:border-border"
                         }`}
                       >
-                        <div className={`h-9 w-9 rounded-xl flex items-center justify-center mb-2 ${
+                        <div className={`h-9 w-9 rounded-2xl flex items-center justify-center mb-2 ${
                           selected ? "bg-primary/20" : "bg-muted/40"
                         }`}>
                           <g.icon className={`h-4 w-4 ${selected ? "text-primary" : "text-muted-foreground"}`} />
@@ -215,7 +215,7 @@ export function ManualRoutineSheet({
               <Button
                 onClick={() => setStep(2)}
                 disabled={!routineName.trim()}
-                className="w-full rounded-xl h-12"
+                className="w-full rounded-2xl h-12"
               >
                 Next
               </Button>
@@ -234,11 +234,11 @@ export function ManualRoutineSheet({
                       placeholder="Search exercises..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="pl-9 bg-muted/30 border-border/50 rounded-xl"
+                      className="pl-9 bg-muted/30 border-border/50 rounded-2xl"
                       autoFocus
                     />
                   </div>
-                  <div className="max-h-[45vh] overflow-y-auto space-y-1 rounded-xl border border-border/50 bg-muted/10 p-2">
+                  <div className="max-h-[45vh] overflow-y-auto space-y-1 rounded-2xl border border-border/50 bg-muted/10 p-2">
                     {filteredExercises.length === 0 && (
                       <p className="text-sm text-muted-foreground text-center py-6">No exercises found</p>
                     )}
@@ -249,7 +249,7 @@ export function ManualRoutineSheet({
                           key={ex.id}
                           onClick={() => !alreadyAdded && handleAddExercise(ex)}
                           disabled={alreadyAdded}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors ${
+                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-2xl text-left transition-colors ${
                             alreadyAdded
                               ? "opacity-40 cursor-not-allowed"
                               : "hover:bg-muted/30 active:scale-[0.99]"
@@ -271,7 +271,7 @@ export function ManualRoutineSheet({
                   <Button
                     variant="ghost"
                     onClick={() => { setShowPicker(false); setSearchQuery(""); }}
-                    className="w-full rounded-xl text-muted-foreground"
+                    className="w-full rounded-2xl text-muted-foreground"
                   >
                     Cancel
                   </Button>
@@ -281,7 +281,7 @@ export function ManualRoutineSheet({
                   <Button
                     variant="outline"
                     onClick={() => setShowPicker(true)}
-                    className="w-full rounded-xl border-dashed border-border/50 bg-muted/10 h-11"
+                    className="w-full rounded-2xl border-dashed border-border/50 bg-muted/10 h-11"
                   >
                     <Plus className="h-4 w-4 mr-2" />
                     Add Exercise
@@ -354,7 +354,7 @@ export function ManualRoutineSheet({
                     <Button
                       onClick={handleSave}
                       disabled={saving}
-                      className="w-full rounded-xl h-12 mt-2"
+                      className="w-full rounded-2xl h-12 mt-2"
                     >
                       {saving ? "Saving..." : "Save Routine"}
                     </Button>

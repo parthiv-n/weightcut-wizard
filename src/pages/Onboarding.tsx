@@ -155,8 +155,9 @@ export default function Onboarding() {
   const [formData, setFormData] = useState({
     // Screen 1 — flow split
     goal_type: "",
-    // Screen 2 (cutting) — athlete type
+    // Screen 2 (cutting) — athlete types (multi)
     athlete_type: "",
+    athlete_types: [] as string[],
     // Screen 2 (losing) — target weeks
     target_weeks: "",
     // Screen 3 (cutting only) — fight status
@@ -217,19 +218,13 @@ export default function Onboarding() {
     });
   }, [formData.goal_type]);
 
-  // Auto-advance helper for single-select screens
+  // Single-select helper — sets field value, user taps Continue to advance.
   const selectAndAdvance = useCallback((field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     triggerHapticSelection();
-    setDirection(1);
-    setTimeout(() => setStep(s => {
-      let next = s + 1;
-      // When selecting goal_type on screen 1, both flows go to screen 2
-      return Math.min(next, TOTAL_STEPS);
-    }), 250);
-  }, [formData.goal_type]);
+  }, []);
 
-  const toggleMulti = useCallback((field: "training_types" | "dietary_restrictions", value: string) => {
+  const toggleMulti = useCallback((field: "training_types" | "dietary_restrictions" | "athlete_types", value: string) => {
     triggerHapticSelection();
     setFormData(prev => {
       const arr = prev[field];
@@ -323,15 +318,8 @@ export default function Onboarding() {
     }
 
     setLoading(true);
-    setGeneratingPlan(true);
-    setGenerationStep(0);
 
     const isFighterFlow = formData.goal_type === "cutting";
-    // Staggered UI steps — give each "analysis" step enough time to feel real
-    const stepTimers = [
-      setTimeout(() => setGenerationStep(1), 1800),
-      setTimeout(() => setGenerationStep(2), 4000),
-    ];
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -341,7 +329,7 @@ export default function Onboarding() {
       const tdee = bmr * (ACTIVITY_MULTIPLIERS[activityLevel] || 1.55);
       const trainingFreq = parseInt(formData.training_frequency) || 3;
 
-      // 1. Save profile
+      // 1. Save profile (sync, fast)
       const { error } = await supabase.from("profiles").insert({
         id: user.id,
         age: parseInt(formData.age || "25"),
@@ -355,7 +343,6 @@ export default function Onboarding() {
             const weeks = parseInt(formData.target_weeks) || 12;
             return new Date(Date.now() + weeks * 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
           }
-          // Fallback: estimate target date based on weight difference at 0.5 kg/week
           const diff = Math.abs(parseFloat(formData.current_weight_kg) - parseFloat(formData.goal_weight_kg));
           const weeks = Math.max(4, Math.ceil(diff / 0.5));
           return new Date(Date.now() + weeks * 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -365,7 +352,9 @@ export default function Onboarding() {
         goal_type: formData.goal_type || "losing",
         bmr,
         tdee,
-        athlete_type: formData.athlete_type || null,
+        athlete_type: formData.athlete_types.length > 0
+          ? formData.athlete_types.join(",")
+          : (formData.athlete_type || null),
         experience_level: formData.experience_level || null,
         training_types: formData.training_types.length > 0 ? formData.training_types : null,
         sleep_hours: formData.sleep_hours || null,
@@ -377,7 +366,6 @@ export default function Onboarding() {
 
       if (error) throw error;
 
-      // Save dietary preferences if selected
       if (formData.dietary_restrictions.length > 0) {
         await supabase.from("user_dietary_preferences").insert({
           user_id: user.id,
@@ -385,137 +373,149 @@ export default function Onboarding() {
         });
       }
 
-      stepTimers.forEach(clearTimeout);
-      setGenerationStep(2);
-      // Let "Building your weight cut strategy" breathe before moving on
-      await new Promise(r => setTimeout(r, 2000));
+      // 2. Fire the AI plan in the BACKGROUND while we show the paywall.
+      // We race the paywall dismissal against the plan promise so the user
+      // only sees a generation overlay if the plan hasn't finished by the
+      // time they close the paywall.
+      const planPromise: Promise<boolean> = (async () => {
+        try {
+          if (isFighterFlow) {
+            const { data: planData, error: planError } = await supabase.functions.invoke("generate-cut-plan", {
+              body: {
+                currentWeight: parseFloat(formData.current_weight_kg),
+                goalWeight: parseFloat(formData.goal_weight_kg),
+                fightWeekTarget: parseFloat(formData.fight_week_target_kg),
+                targetDate: formData.target_date,
+                age: parseInt(formData.age || "25"),
+                sex: formData.sex || "male",
+                heightCm: parseFloat(formData.height_cm),
+                activityLevel,
+                trainingFrequency: trainingFreq,
+                bmr,
+                tdee,
+              },
+            });
+            if (planError) logger.warn("Cut plan generation failed", { error: planError });
+            const plan = planData?.plan || planData;
+            if (plan?.weeklyPlan) {
+              localStorage.setItem("wcw_cut_plan", JSON.stringify({
+                ...plan,
+                currentWeight: parseFloat(formData.current_weight_kg),
+                goalWeight: parseFloat(formData.goal_weight_kg),
+                targetDate: formData.target_date,
+              }));
+              const week1 = plan.weeklyPlan[0];
+              if (week1) {
+                await supabase.from("profiles").update({
+                  ai_recommended_calories: week1.calories,
+                  ai_recommended_protein_g: week1.protein_g,
+                  ai_recommended_carbs_g: week1.carbs_g,
+                  ai_recommended_fats_g: week1.fats_g,
+                }).eq("id", user.id);
+              }
+              return true;
+            }
+            return false;
+          } else {
+            logger.info("Generating weight loss plan for non-fighter", { goalType: formData.goal_type, targetWeeks: formData.target_weeks });
+            const targetWeeks = parseInt(formData.target_weeks) || Math.max(4, Math.ceil(Math.abs(parseFloat(formData.current_weight_kg) - parseFloat(formData.goal_weight_kg)) / 0.5));
+            const { data: planData, error: planError } = await supabase.functions.invoke("generate-weight-plan", {
+              body: {
+                currentWeight: parseFloat(formData.current_weight_kg),
+                goalWeight: parseFloat(formData.goal_weight_kg),
+                targetWeeks,
+                age: parseInt(formData.age || "25"),
+                sex: formData.sex || "male",
+                heightCm: parseFloat(formData.height_cm),
+                activityLevel,
+                trainingFrequency: trainingFreq,
+                bmr,
+                tdee,
+                foodBudget: formData.food_budget || "flexible",
+                planAggressiveness: formData.plan_aggressiveness || "balanced",
+              },
+            });
+            if (planError) logger.warn("Weight plan generation failed", { error: planError });
+            const plan = planData?.plan || planData;
+            if (plan?.weeklyPlan) {
+              localStorage.setItem("wcw_cut_plan", JSON.stringify({
+                ...plan,
+                currentWeight: parseFloat(formData.current_weight_kg),
+                goalWeight: parseFloat(formData.goal_weight_kg),
+                targetDate: formData.target_date,
+                planType: "weight_loss",
+              }));
+              const week1 = plan.weeklyPlan[0];
+              if (week1) {
+                await supabase.from("profiles").update({
+                  ai_recommended_calories: week1.calories,
+                  ai_recommended_protein_g: week1.protein_g,
+                  ai_recommended_carbs_g: week1.carbs_g,
+                  ai_recommended_fats_g: week1.fats_g,
+                }).eq("id", user.id);
+              }
+              return true;
+            }
+            return false;
+          }
+        } catch (planErr) {
+          logger.warn("Plan generation error", planErr);
+          return false;
+        }
+      })();
 
-      // 2. AI plan generation
-      let hasPlan = false;
-      if (isFighterFlow) {
-        // Fighter: generate fight camp cut plan
-        setGenerationStep(3);
+      // Track whether the plan promise has already settled when the paywall closes.
+      let planSettled = false;
+      let planResult: boolean = false;
+      planPromise.then((r) => { planSettled = true; planResult = r; }).catch(() => { planSettled = true; planResult = false; });
+
+      // 3. Show the RevenueCat paywall NOW, before any generation overlay.
+      // We only show it once per onboarding — later flows never re-trigger.
+      if (Capacitor.isNativePlatform()) {
         try {
-          const { data: planData, error: planError } = await supabase.functions.invoke("generate-cut-plan", {
-            body: {
-              currentWeight: parseFloat(formData.current_weight_kg),
-              goalWeight: parseFloat(formData.goal_weight_kg),
-              fightWeekTarget: parseFloat(formData.fight_week_target_kg),
-              targetDate: formData.target_date,
-              age: parseInt(formData.age || "25"),
-              sex: formData.sex || "male",
-              heightCm: parseFloat(formData.height_cm),
-              activityLevel,
-              trainingFrequency: trainingFreq,
-              bmr,
-              tdee,
-            },
-          });
-          if (planError) logger.warn("Cut plan generation failed", { error: planError });
-          const plan = planData?.plan || planData;
-          if (plan?.weeklyPlan) {
-            localStorage.setItem("wcw_cut_plan", JSON.stringify({
-              ...plan,
-              currentWeight: parseFloat(formData.current_weight_kg),
-              goalWeight: parseFloat(formData.goal_weight_kg),
-              targetDate: formData.target_date,
-            }));
-            hasPlan = true;
-            const week1 = plan.weeklyPlan[0];
-            if (week1) {
-              await supabase.from("profiles").update({
-                ai_recommended_calories: week1.calories,
-                ai_recommended_protein_g: week1.protein_g,
-                ai_recommended_carbs_g: week1.carbs_g,
-                ai_recommended_fats_g: week1.fats_g,
-              }).eq("id", user.id);
-            }
-          }
-        } catch (planErr) {
-          logger.warn("Cut plan generation error", planErr);
-          toast({ title: "Plan unavailable", description: "We couldn't generate your plan right now. You can generate it later from the dashboard." });
-        }
-      } else {
-        // General user: generate weight loss plan
-        logger.info("Generating weight loss plan for non-fighter", { goalType: formData.goal_type, targetWeeks: formData.target_weeks });
-        setGenerationStep(3);
-        try {
-          const targetWeeks = parseInt(formData.target_weeks) || Math.max(4, Math.ceil(Math.abs(parseFloat(formData.current_weight_kg) - parseFloat(formData.goal_weight_kg)) / 0.5));
-          const { data: planData, error: planError } = await supabase.functions.invoke("generate-weight-plan", {
-            body: {
-              currentWeight: parseFloat(formData.current_weight_kg),
-              goalWeight: parseFloat(formData.goal_weight_kg),
-              targetWeeks,
-              age: parseInt(formData.age || "25"),
-              sex: formData.sex || "male",
-              heightCm: parseFloat(formData.height_cm),
-              activityLevel,
-              trainingFrequency: trainingFreq,
-              bmr,
-              tdee,
-              foodBudget: formData.food_budget || "flexible",
-              planAggressiveness: formData.plan_aggressiveness || "balanced",
-            },
-          });
-          if (planError) logger.warn("Weight plan generation failed", { error: planError });
-          const plan = planData?.plan || planData;
-          if (plan?.weeklyPlan) {
-            localStorage.setItem("wcw_cut_plan", JSON.stringify({
-              ...plan,
-              currentWeight: parseFloat(formData.current_weight_kg),
-              goalWeight: parseFloat(formData.goal_weight_kg),
-              targetDate: formData.target_date,
-              planType: "weight_loss",
-            }));
-            hasPlan = true;
-            const week1 = plan.weeklyPlan[0];
-            if (week1) {
-              await supabase.from("profiles").update({
-                ai_recommended_calories: week1.calories,
-                ai_recommended_protein_g: week1.protein_g,
-                ai_recommended_carbs_g: week1.carbs_g,
-                ai_recommended_fats_g: week1.fats_g,
-              }).eq("id", user.id);
-            }
-          }
-        } catch (planErr) {
-          logger.warn("Weight plan generation error", planErr);
-          toast({ title: "Plan unavailable", description: "We couldn't generate your plan right now. You can use AI tools on the dashboard." });
-        }
+          await presentPaywallIfNeeded();
+          await refreshProfile();
+        } catch (err) { logger.warn("Paywall presentation error", err); }
       }
 
-      // 3. Finalize
-      const finalStep = 4;
-      setGenerationStep(finalStep);
-      // Let "Finalizing your plan" show for a moment
-      await new Promise(r => setTimeout(r, 1500));
+      // 4. If the AI plan finished while the paywall was open, skip straight to the plan.
+      //    Otherwise, show the generating overlay and wait for it.
+      let hasPlan: boolean;
+      if (planSettled) {
+        hasPlan = planResult;
+      } else {
+        setGeneratingPlan(true);
+        setGenerationStep(0);
+        const stepTimers = [
+          setTimeout(() => setGenerationStep(1), 1200),
+          setTimeout(() => setGenerationStep(2), 3000),
+          setTimeout(() => setGenerationStep(3), 5000),
+        ];
+        try {
+          hasPlan = await planPromise;
+        } finally {
+          stepTimers.forEach(clearTimeout);
+        }
+        setGenerationStep(4);
+        await new Promise(r => setTimeout(r, 900));
+      }
+
       await refreshProfile();
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       if (currentUser) seedDemoData(currentUser.id);
       celebrateSuccess();
 
-      // Signal that onboarding just completed — tutorial should trigger on dashboard
       localStorage.setItem("wcw_onboarding_just_completed", "true");
-
-      // Show RevenueCat paywall on native platforms before proceeding
-      if (Capacitor.isNativePlatform()) {
-        try {
-          await presentPaywallIfNeeded();
-          // Refresh profile in case user purchased
-          await refreshProfile();
-        } catch (err) { logger.warn("Paywall presentation error", err); }
-      }
 
       if (hasPlan) {
         localStorage.removeItem("wcw_cut_plan_seen"); // Force user to see plan first
         navigate("/cut-plan", { replace: true });
       } else {
-        setGenerationStep(finalStep + 1);
-        setTimeout(() => navigate("/dashboard"), 1000);
+        setGenerationStep(5);
+        setTimeout(() => navigate("/dashboard"), 800);
       }
     } catch (error: any) {
       logger.error("Onboarding failed", error);
-      stepTimers.forEach(clearTimeout);
       setGeneratingPlan(false);
       setGenerationStep(0);
       toast({ variant: "destructive", title: "Error", description: error.message });
@@ -615,7 +615,10 @@ export default function Onboarding() {
 
         {/* ── Screen 1: Flow Split — "What brings you here?" ── */}
         {step === 1 && (
-          <StepLayout step={1} title="What brings you here?" subtitle="We'll build your plan around this.">
+          <StepLayout step={1} title="What brings you here?" subtitle="We'll build your plan around this."
+            footer={<Button onClick={goNext} disabled={!formData.goal_type}
+              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+          >
             <div className="space-y-2.5">
               {[
                 { value: "cutting", label: "I have a fight coming up", description: "Structured weight cut with a deadline", icon: <Swords className="h-5 w-5 text-red-400" /> },
@@ -630,17 +633,24 @@ export default function Onboarding() {
 
         {/* ── Screen 2: Branching ── */}
         {step === 2 && formData.goal_type === "cutting" && (
-          <StepLayout step={2} title="What's your discipline?" subtitle="We'll tailor everything to your sport.">
+          <StepLayout step={2} title="What's your discipline?" subtitle="Select all that apply — we'll tailor everything to your sport(s)."
+            footer={<Button onClick={goNext} disabled={formData.athlete_types.length === 0}
+              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+          >
             <div className="space-y-2.5">
               {[
                 { value: "muay_thai", label: "Muay Thai", icon: <Swords className="h-5 w-5 text-orange-400" /> },
                 { value: "boxing", label: "Boxing", icon: <Swords className="h-5 w-5 text-red-400" /> },
                 { value: "mma", label: "MMA", icon: <Swords className="h-5 w-5 text-blue-400" /> },
                 { value: "bjj", label: "BJJ", icon: <Swords className="h-5 w-5 text-purple-400" /> },
+                { value: "wrestling", label: "Wrestling", icon: <Swords className="h-5 w-5 text-green-400" /> },
+                { value: "kickboxing", label: "Kickboxing", icon: <Swords className="h-5 w-5 text-yellow-400" /> },
+                { value: "judo", label: "Judo", icon: <Swords className="h-5 w-5 text-indigo-400" /> },
+                { value: "karate", label: "Karate", icon: <Swords className="h-5 w-5 text-rose-400" /> },
                 { value: "other", label: "Other", icon: <Dumbbell className="h-5 w-5 text-muted-foreground" /> },
               ].map(opt => (
-                <OptionCard key={opt.value} selected={formData.athlete_type === opt.value} icon={opt.icon}
-                  label={opt.label} onClick={() => selectAndAdvance("athlete_type", opt.value)} />
+                <OptionCard key={opt.value} selected={formData.athlete_types.includes(opt.value)} icon={opt.icon}
+                  label={opt.label} onClick={() => toggleMulti("athlete_types", opt.value)} />
               ))}
             </div>
           </StepLayout>
@@ -1142,15 +1152,25 @@ export default function Onboarding() {
                 );
               })()}
               <div className="w-full max-w-xs space-y-3">
-                <Slider
-                  value={[formData.body_fat_pct ? parseFloat(formData.body_fat_pct) : 15]}
-                  onValueChange={([v]) => setFormData(prev => ({ ...prev, body_fat_pct: v.toString() }))}
-                  min={5} max={40} step={1}
-                  className="w-full"
-                />
-                <div className="flex justify-between text-[10px] text-muted-foreground/50">
-                  <span>Lean</span><span>Average</span><span>Higher</span>
-                </div>
+                {(() => {
+                  const isMale = formData.sex !== "female";
+                  const min = isMale ? 5 : 10;
+                  const max = isMale ? 40 : 45;
+                  const defaultBf = isMale ? 15 : 23;
+                  return (
+                    <>
+                      <Slider
+                        value={[formData.body_fat_pct ? parseFloat(formData.body_fat_pct) : defaultBf]}
+                        onValueChange={([v]) => setFormData(prev => ({ ...prev, body_fat_pct: v.toString() }))}
+                        min={min} max={max} step={1}
+                        className="w-full"
+                      />
+                      <div className="flex justify-between text-[10px] text-muted-foreground/50">
+                        <span>Lean</span><span>Average</span><span>Higher</span>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           </StepLayout>
@@ -1158,7 +1178,10 @@ export default function Onboarding() {
 
         {/* ── Screen 8: Experience Level ── */}
         {step === 8 && (
-          <StepLayout step={8} title="What's your experience level?" subtitle="No judgment. We just need to know where you're at.">
+          <StepLayout step={8} title="What's your experience level?" subtitle="No judgment. We just need to know where you're at."
+            footer={<Button onClick={goNext} disabled={!formData.experience_level}
+              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+          >
             <div className="space-y-2.5">
               {[
                 { value: "beginner", label: "Beginner", description: "Less than 1 year training" },
@@ -1174,7 +1197,10 @@ export default function Onboarding() {
 
         {/* ── Screen 9: Training Frequency ── */}
         {step === 9 && (
-          <StepLayout step={9} title="How often do you train?" subtitle="All sessions — pads, sparring, gym, running.">
+          <StepLayout step={9} title="How often do you train?" subtitle="All sessions — pads, sparring, gym, running."
+            footer={<Button onClick={goNext} disabled={!formData.training_frequency}
+              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+          >
             <div className="space-y-2.5">
               {[
                 { value: "2", label: "1-2 times per week", description: "Just getting started" },
@@ -1206,7 +1232,10 @@ export default function Onboarding() {
 
         {/* ── Screen 11: Sleep ── */}
         {step === 11 && (
-          <StepLayout step={11} title="How many hours do you sleep?" subtitle="Recovery is half the game.">
+          <StepLayout step={11} title="How many hours do you sleep?" subtitle="Recovery is half the game."
+            footer={<Button onClick={goNext} disabled={!formData.sleep_hours}
+              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+          >
             <div className="space-y-2.5">
               {[
                 { value: "less_than_6", label: "Less than 6 hours", icon: <Moon className="h-5 w-5 text-red-400" /> },
@@ -1223,7 +1252,10 @@ export default function Onboarding() {
 
         {/* ── Screen 12: Struggles ── */}
         {step === 12 && (
-          <StepLayout step={12} title="What do you struggle with most?" subtitle="Be real. We'll build around your weak spots.">
+          <StepLayout step={12} title="What do you struggle with most?" subtitle="Be real. We'll build around your weak spots."
+            footer={<Button onClick={goNext} disabled={!formData.primary_struggle}
+              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+          >
             <div className="space-y-2.5">
               {[
                 { value: "making_weight", label: "Making weight", icon: <TrendingDown className="h-5 w-5 text-red-400" /> },
@@ -1240,7 +1272,10 @@ export default function Onboarding() {
 
         {/* ── Screen 13: Aggressiveness ── */}
         {step === 13 && (
-          <StepLayout step={13} title="How aggressive do you want to go?" subtitle="This controls how fast we push your weight cut and plan intensity.">
+          <StepLayout step={13} title="How aggressive do you want to go?" subtitle="This controls how fast we push your weight cut and plan intensity."
+            footer={<Button onClick={goNext} disabled={!formData.plan_aggressiveness}
+              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+          >
             <div className="space-y-2.5">
               {[
                 { value: "safe", label: "Safe & Steady", description: "Slow, sustainable. Best if you have 8+ weeks.", icon: <Shield className="h-5 w-5 text-green-400" /> },

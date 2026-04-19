@@ -18,12 +18,12 @@ export function NoGemsDialog({ open, onOpenChange, onWatchAd, onGoPro, adsRemain
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[240px] rounded-xl p-0 border-0 bg-card/90 backdrop-blur-xl overflow-hidden gap-0 shadow-2xl">
+      <DialogContent className="max-w-[220px] rounded-[28px] p-0 border-0 bg-card/90 backdrop-blur-xl overflow-hidden gap-0 shadow-2xl [&>button:last-of-type]:hidden">
         <VisuallyHidden><DialogTitle>No gems remaining</DialogTitle></VisuallyHidden>
 
-        <div className="pt-4 pb-3 px-4 text-center">
-          <p className="text-[15px] font-semibold text-foreground">Out of Gems</p>
-          <p className="text-[13px] text-muted-foreground mt-0.5 leading-snug">
+        <div className="pt-3.5 pb-2.5 px-4 text-center">
+          <p className="text-[14px] font-semibold text-foreground">Out of Gems</p>
+          <p className="text-[12px] text-muted-foreground mt-0.5 leading-snug">
             {countdown
               ? <>Free gem in <span className="font-medium tabular-nums text-foreground">{countdown}</span></>
               : "Watch an ad or upgrade."
@@ -35,7 +35,7 @@ export function NoGemsDialog({ open, onOpenChange, onWatchAd, onGoPro, adsRemain
           <button
             onClick={async () => { await onWatchAd(); }}
             disabled={!canWatchAd || loading}
-            className="w-full py-2.5 text-[14px] font-normal text-primary active:bg-muted/50 transition-colors disabled:opacity-35"
+            className="w-full py-2.5 text-[13px] font-normal text-primary active:bg-muted/50 transition-colors disabled:opacity-35"
           >
             {loading ? (
               <span className="inline-flex items-center gap-1.5">
@@ -47,13 +47,13 @@ export function NoGemsDialog({ open, onOpenChange, onWatchAd, onGoPro, adsRemain
 
           <div className="border-t border-border/40" />
 
-          <button onClick={onGoPro} className="w-full py-2.5 text-[14px] font-semibold text-primary active:bg-muted/50 transition-colors">
+          <button onClick={onGoPro} className="w-full py-2.5 text-[13px] font-semibold text-primary active:bg-muted/50 transition-colors">
             Go Pro
           </button>
 
           <div className="border-t border-border/40" />
 
-          <button onClick={() => onOpenChange(false)} className="w-full py-2.5 text-[14px] font-normal text-muted-foreground active:bg-muted/50 transition-colors">
+          <button onClick={() => onOpenChange(false)} className="w-full py-2.5 text-[13px] font-normal text-muted-foreground active:bg-muted/50 transition-colors">
             Not Now
           </button>
         </div>

@@ -10,6 +10,7 @@ import { syncQueue } from "@/lib/syncQueue";
 import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { celebrateSuccess, confirmDelete } from "@/lib/haptics";
 import { logger } from "@/lib/logger";
+import { buildMealPayload, resolveMealType } from "@/lib/buildMealPayload";
 import type { Meal, Ingredient } from "@/pages/nutrition/types";
 
 
@@ -46,20 +47,35 @@ export function useMealOperations(params: UseMealOperationsParams) {
   }) => {
     if (!userId) throw new Error("Not authenticated");
 
-    const mealId = crypto.randomUUID();
+    const dbPayload = buildMealPayload({
+      userId,
+      date: selectedDate,
+      input: {
+        meal_name: mealData.meal_name,
+        meal_type: resolveMealType(mealData.meal_type),
+        calories: mealData.calories,
+        protein_g: mealData.protein_g,
+        carbs_g: mealData.carbs_g,
+        fats_g: mealData.fats_g,
+        portion_size: mealData.portion_size,
+        recipe_notes: mealData.recipe_notes,
+        ingredients: mealData.ingredients,
+        is_ai_generated: mealData.is_ai_generated,
+      },
+    });
 
     const optimisticMeal: Meal = {
-      id: mealId,
-      meal_name: mealData.meal_name,
-      calories: mealData.calories,
-      protein_g: mealData.protein_g ?? undefined,
-      carbs_g: mealData.carbs_g ?? undefined,
-      fats_g: mealData.fats_g ?? undefined,
-      meal_type: mealData.meal_type,
-      portion_size: mealData.portion_size ?? undefined,
-      recipe_notes: mealData.recipe_notes ?? undefined,
-      ingredients: mealData.ingredients ?? undefined,
-      is_ai_generated: mealData.is_ai_generated,
+      id: dbPayload.id,
+      meal_name: dbPayload.meal_name,
+      calories: dbPayload.calories,
+      protein_g: dbPayload.protein_g ?? undefined,
+      carbs_g: dbPayload.carbs_g ?? undefined,
+      fats_g: dbPayload.fats_g ?? undefined,
+      meal_type: dbPayload.meal_type,
+      portion_size: dbPayload.portion_size ?? undefined,
+      recipe_notes: dbPayload.recipe_notes ?? undefined,
+      ingredients: dbPayload.ingredients ?? undefined,
+      is_ai_generated: dbPayload.is_ai_generated,
       date: selectedDate,
     };
 
@@ -71,18 +87,13 @@ export function useMealOperations(params: UseMealOperationsParams) {
       return updatedMeals;
     });
 
-    const dbPayload = {
-      id: mealId,
-      user_id: userId,
-      date: selectedDate,
-      ...mealData,
-    };
     syncQueue.enqueue(userId, {
       table: "nutrition_logs",
       action: "insert",
       payload: dbPayload,
-      recordId: mealId,
+      recordId: dbPayload.id,
       timestamp: Date.now(),
+      persistOnFailure: true,
     });
 
     try {
@@ -95,7 +106,7 @@ export function useMealOperations(params: UseMealOperationsParams) {
       if (error) throw error;
 
       celebrateSuccess();
-      syncQueue.dequeueByRecordId(userId, mealId);
+      syncQueue.dequeueByRecordId(userId, dbPayload.id);
     } catch (error) {
       logger.error("Error adding meal (queued for sync)", error);
       celebrateSuccess();
@@ -108,20 +119,37 @@ export function useMealOperations(params: UseMealOperationsParams) {
     try {
       if (!userId) throw new Error("Not authenticated");
 
-      const mealId = crypto.randomUUID();
-      const consistentCalories = (mealIdea.protein_g || 0) * 4 + (mealIdea.carbs_g || 0) * 4 + (mealIdea.fats_g || 0) * 9;
+      const consistentCalories =
+        (mealIdea.protein_g || 0) * 4 + (mealIdea.carbs_g || 0) * 4 + (mealIdea.fats_g || 0) * 9;
+
+      const dbPayload = buildMealPayload({
+        userId,
+        date: selectedDate,
+        input: {
+          meal_name: mealIdea.meal_name,
+          meal_type: resolveMealType(mealTypeOverride ?? mealIdea.meal_type),
+          calories: consistentCalories || mealIdea.calories,
+          protein_g: mealIdea.protein_g ?? null,
+          carbs_g: mealIdea.carbs_g ?? null,
+          fats_g: mealIdea.fats_g ?? null,
+          portion_size: mealIdea.portion_size ?? null,
+          recipe_notes: mealIdea.recipe_notes ?? null,
+          ingredients: mealIdea.ingredients ?? null,
+          is_ai_generated: true,
+        },
+      });
 
       const optimisticMeal: Meal = {
-        id: mealId,
-        meal_name: mealIdea.meal_name,
-        calories: consistentCalories || mealIdea.calories,
-        protein_g: mealIdea.protein_g,
-        carbs_g: mealIdea.carbs_g,
-        fats_g: mealIdea.fats_g,
-        meal_type: mealTypeOverride || mealIdea.meal_type,
-        portion_size: mealIdea.portion_size,
-        recipe_notes: mealIdea.recipe_notes,
-        ingredients: mealIdea.ingredients,
+        id: dbPayload.id,
+        meal_name: dbPayload.meal_name,
+        calories: dbPayload.calories,
+        protein_g: dbPayload.protein_g ?? undefined,
+        carbs_g: dbPayload.carbs_g ?? undefined,
+        fats_g: dbPayload.fats_g ?? undefined,
+        meal_type: dbPayload.meal_type,
+        portion_size: dbPayload.portion_size ?? undefined,
+        recipe_notes: dbPayload.recipe_notes ?? undefined,
+        ingredients: dbPayload.ingredients ?? undefined,
         is_ai_generated: true,
         date: selectedDate,
       };
@@ -134,32 +162,18 @@ export function useMealOperations(params: UseMealOperationsParams) {
         return updatedMeals;
       });
 
-      const dbPayload = {
-        id: mealId,
-        user_id: userId,
-        date: selectedDate,
-        meal_name: mealIdea.meal_name,
-        calories: consistentCalories || mealIdea.calories,
-        protein_g: mealIdea.protein_g,
-        carbs_g: mealIdea.carbs_g,
-        fats_g: mealIdea.fats_g,
-        meal_type: mealTypeOverride || mealIdea.meal_type,
-        portion_size: mealIdea.portion_size,
-        recipe_notes: mealIdea.recipe_notes,
-        ingredients: mealIdea.ingredients,
-        is_ai_generated: true,
-      };
       syncQueue.enqueue(userId, {
         table: "nutrition_logs",
         action: "insert",
         payload: dbPayload,
-        recordId: mealId,
+        recordId: dbPayload.id,
         timestamp: Date.now(),
+        persistOnFailure: true,
       });
 
       try {
         const { error } = await withSupabaseTimeout(
-          supabase.from("nutrition_logs").insert({ ...dbPayload } as any),
+          supabase.from("nutrition_logs").insert(dbPayload as any),
           undefined,
           "Log meal"
         );
@@ -171,12 +185,12 @@ export function useMealOperations(params: UseMealOperationsParams) {
           title: "Meal logged!",
           description: `${mealIdea.meal_name} added to your day`,
         });
-        syncQueue.dequeueByRecordId(userId, mealId);
-        } catch (error) {
+        syncQueue.dequeueByRecordId(userId, dbPayload.id);
+      } catch (error) {
         logger.error("Error logging meal (queued for sync)", error);
         celebrateSuccess();
         toast({ title: "Saved offline", description: "Will sync when connected." });
-        }
+      }
     } catch (error) {
       logger.error("Error logging meal", error);
       toast({
@@ -201,49 +215,49 @@ export function useMealOperations(params: UseMealOperationsParams) {
       const dbPayloads: Record<string, unknown>[] = [];
 
       for (const meal of mealIdeas) {
-        const mealId = crypto.randomUUID();
-        mealIds.push(mealId);
-
         const recalcCal = (meal.protein_g || 0) * 4 + (meal.carbs_g || 0) * 4 + (meal.fats_g || 0) * 9;
 
+        const dbPayload = buildMealPayload({
+          userId,
+          date: selectedDate,
+          input: {
+            meal_name: meal.meal_name,
+            meal_type: resolveMealType(meal.meal_type),
+            calories: recalcCal || meal.calories,
+            protein_g: meal.protein_g ?? null,
+            carbs_g: meal.carbs_g ?? null,
+            fats_g: meal.fats_g ?? null,
+            portion_size: meal.portion_size ?? null,
+            recipe_notes: meal.recipe_notes ?? null,
+            ingredients: (meal.ingredients as Ingredient[] | null) ?? null,
+            is_ai_generated: true,
+          },
+        });
+
+        mealIds.push(dbPayload.id);
         optimisticMeals.push({
-          id: mealId,
-          meal_name: meal.meal_name,
-          calories: recalcCal || meal.calories,
-          protein_g: meal.protein_g,
-          carbs_g: meal.carbs_g,
-          fats_g: meal.fats_g,
-          meal_type: meal.meal_type,
-          portion_size: meal.portion_size,
-          recipe_notes: meal.recipe_notes,
-          ingredients: meal.ingredients,
+          id: dbPayload.id,
+          meal_name: dbPayload.meal_name,
+          calories: dbPayload.calories,
+          protein_g: dbPayload.protein_g ?? undefined,
+          carbs_g: dbPayload.carbs_g ?? undefined,
+          fats_g: dbPayload.fats_g ?? undefined,
+          meal_type: dbPayload.meal_type,
+          portion_size: dbPayload.portion_size ?? undefined,
+          recipe_notes: dbPayload.recipe_notes ?? undefined,
+          ingredients: dbPayload.ingredients ?? undefined,
           is_ai_generated: true,
           date: selectedDate,
         });
-
-        const dbPayload = {
-          id: mealId,
-          user_id: userId,
-          date: selectedDate,
-          meal_name: meal.meal_name,
-          calories: recalcCal || meal.calories,
-          protein_g: meal.protein_g,
-          carbs_g: meal.carbs_g,
-          fats_g: meal.fats_g,
-          meal_type: meal.meal_type,
-          portion_size: meal.portion_size,
-          recipe_notes: meal.recipe_notes,
-          ingredients: meal.ingredients as any,
-          is_ai_generated: true,
-        };
         dbPayloads.push(dbPayload);
 
         syncQueue.enqueue(userId, {
           table: "nutrition_logs",
           action: "insert",
           payload: dbPayload,
-          recordId: mealId,
+          recordId: dbPayload.id,
           timestamp: Date.now(),
+          persistOnFailure: true,
         });
       }
 
@@ -325,6 +339,7 @@ export function useMealOperations(params: UseMealOperationsParams) {
       payload: {},
       recordId: deletedId,
       timestamp: Date.now(),
+      persistOnFailure: true,
     });
 
     try {
@@ -339,7 +354,7 @@ export function useMealOperations(params: UseMealOperationsParams) {
 
       if (error) throw error;
 
-      confirmDelete();
+      // Haptic + sound already fired by DeleteConfirmDialog on tap; don't double-fire here
       await loadMeals(true);
       syncQueue.dequeueByRecordId(userId, deletedId);
     } catch (error) {
@@ -359,17 +374,32 @@ export function useMealOperations(params: UseMealOperationsParams) {
   }, foodSearchMealType: string) => {
     if (!userId) return;
 
-    const mealId = crypto.randomUUID();
+    const dbPayload = buildMealPayload({
+      userId,
+      date: selectedDate,
+      input: {
+        meal_name: food.meal_name,
+        meal_type: resolveMealType(foodSearchMealType),
+        calories: food.calories,
+        protein_g: food.protein_g,
+        carbs_g: food.carbs_g,
+        fats_g: food.fats_g,
+        portion_size: food.portion_size,
+        recipe_notes: null,
+        ingredients: null,
+        is_ai_generated: false,
+      },
+    });
 
     const optimisticMeal: Meal = {
-      id: mealId,
-      meal_name: food.meal_name,
-      calories: food.calories,
-      protein_g: food.protein_g,
-      carbs_g: food.carbs_g,
-      fats_g: food.fats_g,
-      meal_type: foodSearchMealType,
-      portion_size: food.portion_size,
+      id: dbPayload.id,
+      meal_name: dbPayload.meal_name,
+      calories: dbPayload.calories,
+      protein_g: dbPayload.protein_g ?? undefined,
+      carbs_g: dbPayload.carbs_g ?? undefined,
+      fats_g: dbPayload.fats_g ?? undefined,
+      meal_type: dbPayload.meal_type,
+      portion_size: dbPayload.portion_size ?? undefined,
       date: selectedDate,
       is_ai_generated: false,
     };
@@ -381,27 +411,13 @@ export function useMealOperations(params: UseMealOperationsParams) {
       return updatedMeals;
     });
 
-    const dbPayload = {
-      id: mealId,
-      user_id: userId,
-      date: selectedDate,
-      meal_name: food.meal_name,
-      calories: food.calories,
-      protein_g: food.protein_g,
-      carbs_g: food.carbs_g,
-      fats_g: food.fats_g,
-      meal_type: foodSearchMealType,
-      portion_size: food.portion_size,
-      recipe_notes: null,
-      ingredients: null,
-      is_ai_generated: false,
-    };
     syncQueue.enqueue(userId, {
       table: "nutrition_logs",
       action: "insert",
       payload: dbPayload,
-      recordId: mealId,
+      recordId: dbPayload.id,
       timestamp: Date.now(),
+      persistOnFailure: true,
     });
 
     try {
@@ -415,7 +431,7 @@ export function useMealOperations(params: UseMealOperationsParams) {
 
       celebrateSuccess();
       toast({ title: "Food logged!", description: `${food.meal_name} · ${food.calories} kcal` });
-      syncQueue.dequeueByRecordId(userId, mealId);
+      syncQueue.dequeueByRecordId(userId, dbPayload.id);
     } catch (error) {
       logger.error("Error logging food (queued for sync)", error);
       celebrateSuccess();

@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Dumbbell, Plus, Calendar, Clock, Flame, ChevronRight } from "lucide-react";
+import { Plus, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useGymSessions } from "@/hooks/gym/useGymSessions";
@@ -197,7 +197,7 @@ export default function GymTracker() {
   const formatVol = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : `${v}`;
 
   return (
-    <div className="animate-page-in space-y-2.5 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto md:pb-6" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 5rem)" }}>
+    <div className="animate-page-in space-y-2.5 px-5 py-3 sm:p-5 md:p-6 max-w-7xl mx-auto md:pb-6" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 5rem)" }}>
       {gymAiTask && (
         <AICompactOverlay
           isOpen={true}
@@ -217,7 +217,7 @@ export default function GymTracker() {
         </div>
 
         {/* Tab switcher — always visible */}
-        <div className="flex gap-1 p-1 rounded-xl bg-muted/30 border border-border">
+        <div className="flex gap-1 p-1 rounded-2xl bg-muted/30 border border-border">
           <button
             onClick={() => { setTab("workouts"); triggerHaptic(ImpactStyle.Light); }}
             className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all relative ${
@@ -279,18 +279,15 @@ export default function GymTracker() {
               {/* Quick stats row */}
               {analytics.totalSessions > 0 && (
                 <div className="grid grid-cols-3 gap-2.5">
-                  <div className="card-surface rounded-xl border border-border p-3 text-center">
-                    <Calendar className="h-3.5 w-3.5 text-primary mx-auto mb-1.5" />
+                  <div className="card-surface rounded-2xl border border-border p-3 text-center">
                     <div className="display-number text-lg">{analytics.sessionsThisWeek}</div>
                     <div className="text-[13px] text-muted-foreground mt-0.5">This Week</div>
                   </div>
-                  <div className="card-surface rounded-xl border border-border p-3 text-center">
-                    <Clock className="h-3.5 w-3.5 text-primary mx-auto mb-1.5" />
+                  <div className="card-surface rounded-2xl border border-border p-3 text-center">
                     <div className="display-number text-lg">{analytics.avgDuration}<span className="text-xs text-muted-foreground font-normal">m</span></div>
                     <div className="text-[13px] text-muted-foreground mt-0.5">Avg Duration</div>
                   </div>
-                  <div className="card-surface rounded-xl border border-border p-3 text-center">
-                    <Flame className="h-3.5 w-3.5 text-orange-400 mx-auto mb-1.5" />
+                  <div className="card-surface rounded-2xl border border-border p-3 text-center">
                     <div className="display-number text-lg">{formatVol(weeklyVolume)}<span className="text-xs text-muted-foreground font-normal">kg</span></div>
                     <div className="text-[13px] text-muted-foreground mt-0.5">Week Volume</div>
                   </div>
@@ -298,7 +295,7 @@ export default function GymTracker() {
               )}
 
               {/* Start workout card */}
-              <div className="card-surface rounded-xl border border-border p-3 space-y-2.5">
+              <div className="card-surface rounded-2xl border border-border p-3 space-y-2.5">
                 <h2 className="font-semibold text-sm">Start Workout</h2>
                 <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1 snap-x snap-mandatory" style={{ WebkitOverflowScrolling: "touch" } as any}>
                   {SESSION_TYPES.map(t => (
@@ -320,7 +317,7 @@ export default function GymTracker() {
                 </div>
                 <button
                   onClick={handleStartWorkout}
-                  className="w-full h-12 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+                  className="w-full h-12 rounded-2xl text-sm font-semibold text-white flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
                   style={{ background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))" }}
                 >
                   <Plus className="h-4.5 w-4.5" />

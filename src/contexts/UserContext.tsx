@@ -8,6 +8,7 @@ import { nutritionCache, startCacheCleanup, stopCacheCleanup } from "@/lib/nutri
 import { AIPersistence } from "@/lib/aiPersistence";
 import { logger } from "@/lib/logger";
 import { PROFILE_COLUMNS } from "@/lib/queryColumns";
+import { useMealsRealtime } from "@/hooks/useMealsRealtime";
 
 export interface ProfileData {
   id?: string;
@@ -26,6 +27,7 @@ export interface ProfileData {
   ai_recommended_protein_g?: number;
   ai_recommended_carbs_g?: number;
   ai_recommended_fats_g?: number;
+  normal_daily_carbs_g?: number;
   manual_nutrition_override?: boolean;
   avatar_url?: string;
   goal_type?: 'cutting' | 'losing';
@@ -73,6 +75,7 @@ interface ProfileContextType {
   setAvatarUrl: (url: string) => void;
   refreshProfile: () => Promise<boolean>;
   updateCurrentWeight: (weight: number) => Promise<void>;
+  syncDailyGem: () => Promise<void>;
 }
 
 type UserContextType = AuthContextType & ProfileContextType;
@@ -84,6 +87,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [userName, setUserName] = useState<string>("");
   const [avatarUrl, setAvatarUrl] = useState<string>("");
   const [userId, setUserId] = useState<string | null>(null);
+  useMealsRealtime(userId);
   const [currentWeight, setCurrentWeight] = useState<number | null>(null);
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [isSessionValid, setIsSessionValid] = useState<boolean>(false);
@@ -148,6 +152,26 @@ export function UserProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const refreshProfileRef = useRef<(() => Promise<boolean>) | null>(null);
+
+  // Grant the daily free gem (idempotent RPC — caps at 2) and then pull
+  // the fresh profile so `profile.gems` reflects the grant. Called on
+  // login, app foreground, visibility change, and midnight rollover.
+  const syncDailyGem = useCallback(async (): Promise<void> => {
+    const uid = userIdRef.current;
+    if (!uid) return;
+    try {
+      await (supabase.rpc as any)('grant_daily_free_gem', { p_user_id: uid });
+    } catch (e) {
+      logger.warn('syncDailyGem: grant_daily_free_gem failed', { error: String(e) });
+    }
+    try {
+      await refreshProfileRef.current?.();
+    } catch (e) {
+      logger.warn('syncDailyGem: refreshProfile failed', { error: String(e) });
+    }
+  }, []);
+
   const refreshProfile = useCallback(async (): Promise<boolean> => {
     const uid = userIdRef.current;
     if (!uid) {
@@ -201,6 +225,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
     }
   }, []);
+
+  // Keep a ref to refreshProfile so syncDailyGem (declared earlier) can invoke it.
+  refreshProfileRef.current = refreshProfile;
 
   // Internal: performs one load attempt. Returns 'success' | 'no_session' | 'error'.
   // Does NOT touch isLoading, authError, or isUserLoadedRef.
@@ -337,6 +364,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
         if (result === 'success' || result === 'no_session') {
           isUserLoadedRef.current = true;
           setIsLoading(false);
+          if (result === 'success') {
+            // Fire-and-forget: grant daily free gem + refresh profile so gems
+            // count is correct on cold start / login / resume.
+            syncDailyGem().catch(() => {});
+          }
           return;
         }
 
@@ -468,7 +500,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
       } else if (event === 'TOKEN_REFRESHED' && session) {
         setIsSessionValid(true);
         if (isUserLoadedRef.current && userIdRef.current) {
-          refreshProfile();
+          syncDailyGem();
         }
       } else if (event === 'PASSWORD_RECOVERY' && session) {
         setIsSessionValid(true);
@@ -499,9 +531,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
       if (!userIdRef.current || !profileRef.current) {
         loadUserData();
       } else {
-        // Verify session is still valid, then refresh profile data from DB
+        // Verify session is still valid, then grant-if-eligible + refresh profile.
         checkSessionValidity().then(valid => {
-          if (valid) refreshProfile();
+          if (valid) syncDailyGem();
         });
       }
       // Flush any offline writes queued while the app was backgrounded
@@ -586,8 +618,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
     setAvatarUrl: updateAvatarUrl,
     refreshProfile,
     updateCurrentWeight,
+    syncDailyGem,
   }), [profile, userName, avatarUrl, currentWeight,
-       updateUserName, updateAvatarUrl, refreshProfile, updateCurrentWeight]);
+       updateUserName, updateAvatarUrl, refreshProfile, updateCurrentWeight, syncDailyGem]);
 
   return (
     <AuthContext.Provider value={authValue}>
@@ -613,10 +646,15 @@ const AUTH_FALLBACK: AuthContextType = {
 };
 
 const PROFILE_FALLBACK: ProfileContextType = {
+  profile: null,
   userName: "",
-  avatarUrl: null,
+  avatarUrl: null as any,
+  currentWeight: null,
   setUserName: () => {},
   setAvatarUrl: () => {},
+  refreshProfile: async () => false,
+  updateCurrentWeight: async () => {},
+  syncDailyGem: async () => {},
 };
 
 export function useAuth() {

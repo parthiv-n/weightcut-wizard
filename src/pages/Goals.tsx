@@ -45,7 +45,8 @@ const ACTIVITY_MULTIPLIERS = {
 
 const ATHLETE_TYPES: Record<string, string> = {
   mma: "MMA", boxing: "Boxing", muay_thai: "Muay Thai", bjj: "BJJ",
-  wrestling: "Wrestling", kickboxing: "Kickboxing", judo: "Judo", other: "Other",
+  wrestling: "Wrestling", kickboxing: "Kickboxing", judo: "Judo",
+  karate: "Karate", other: "Other",
 };
 
 const EXPERIENCE_LABELS: Record<string, string> = {
@@ -230,7 +231,7 @@ export default function Goals() {
     : null;
 
   return (
-    <div className="animate-page-in space-y-2 p-3 sm:p-4 max-w-7xl mx-auto pb-16 md:pb-6">
+    <div className="animate-page-in space-y-2 px-5 py-3 sm:p-5 max-w-7xl mx-auto pb-16 md:pb-6">
       <div className="flex items-center justify-between">
         <h1 className="text-[15px] font-bold tracking-tight">Goals</h1>
         <p className="text-muted-foreground text-[13px]">Profile & targets</p>
@@ -247,14 +248,39 @@ export default function Goals() {
 
       <div className="space-y-4">
         {/* Section: Athlete Profile */}
-        <div className="card-surface rounded-xl border-2 border-border overflow-hidden">
+        <div className="card-surface rounded-2xl border-2 border-border overflow-hidden">
           <h2 className="text-[11px] font-bold uppercase tracking-widest text-primary px-3 pt-3 pb-2">Athlete Profile</h2>
           <div className="divide-y divide-border/40 border-t border-border/40">
             <div className="px-2.5 py-2 space-y-1">
-              <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Sport</Label>
-              <ChipSelect value={formData.athlete_type} columns={4}
-                options={Object.entries(ATHLETE_TYPES).map(([k, v]) => ({ value: k, label: v }))}
-                onChange={(v) => setFormData(prev => ({ ...prev, athlete_type: v }))} />
+              <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Sports</Label>
+              {(() => {
+                const selected = formData.athlete_type
+                  ? formData.athlete_type.split(",").map(s => s.trim()).filter(Boolean)
+                  : [];
+                const toggle = (v: string) => {
+                  const next = selected.includes(v)
+                    ? selected.filter(x => x !== v)
+                    : [...selected, v];
+                  setFormData(prev => ({ ...prev, athlete_type: next.join(",") }));
+                };
+                return (
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {Object.entries(ATHLETE_TYPES).map(([k, v]) => {
+                      const isSelected = selected.includes(k);
+                      return (
+                        <button key={k} type="button" onClick={() => toggle(k)}
+                          className={`h-9 rounded-xl text-[12px] font-medium border transition-all active:scale-[0.97] ${
+                            isSelected
+                              ? "border-primary bg-primary/15 text-foreground ring-1 ring-primary/30"
+                              : "border-border/50 bg-card text-muted-foreground hover:bg-muted/30"
+                          }`}>
+                          {v}
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
             <div className="px-2.5 py-2 space-y-1">
               <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Goal</Label>
@@ -283,7 +309,7 @@ export default function Goals() {
         </div>
 
         {/* Section: Personal Details */}
-        <div className="card-surface rounded-xl border-2 border-border overflow-hidden">
+        <div className="card-surface rounded-2xl border-2 border-border overflow-hidden">
           <h2 className="text-[11px] font-bold uppercase tracking-widest text-primary px-3 pt-3 pb-2">Personal Details</h2>
           <div className="divide-y divide-border/40 border-t border-border/40">
             <div className="flex items-center justify-between px-2.5 py-1.5">
@@ -339,7 +365,7 @@ export default function Goals() {
         </div>
 
         {/* Section: Targets */}
-        <div className="card-surface rounded-xl border-2 border-border overflow-hidden">
+        <div className="card-surface rounded-2xl border-2 border-border overflow-hidden">
           <h2 className="text-[11px] font-bold uppercase tracking-widest text-primary px-3 pt-3 pb-2">Targets</h2>
           <div className="divide-y divide-border/40 border-t border-border/40">
             <div className="flex items-center justify-between px-2.5 py-1.5">
@@ -395,7 +421,7 @@ export default function Goals() {
         </div>
 
         {/* Section: Activity & Training */}
-        <div className="card-surface rounded-xl border-2 border-border overflow-hidden">
+        <div className="card-surface rounded-2xl border-2 border-border overflow-hidden">
           <h2 className="text-[11px] font-bold uppercase tracking-widest text-primary px-3 pt-3 pb-2">Activity & Training</h2>
           <div className="divide-y divide-border/40 border-t border-border/40">
             <div className="px-2.5 py-2 space-y-1">
@@ -430,7 +456,7 @@ export default function Goals() {
         {/* Save */}
         <div className="pt-1 pb-4">
           <button onClick={handleSubmit} disabled={saving}
-            className="w-full py-2.5 text-[13px] font-semibold text-primary-foreground bg-primary rounded-xl active:opacity-90 transition-opacity disabled:opacity-40">
+            className="w-full py-2.5 text-[13px] font-semibold text-primary-foreground bg-primary rounded-2xl active:opacity-90 transition-opacity disabled:opacity-40">
             {saving ? "Saving..." : "Save Updates"}
           </button>
         </div>

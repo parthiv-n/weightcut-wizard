@@ -14,6 +14,7 @@ import { useUser } from "@/contexts/UserContext";
 import { localCache } from "@/lib/localCache";
 import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
+import { useToast } from "@/hooks/use-toast";
 
 type Timeframe = "1W" | "1M" | "3M";
 
@@ -47,12 +48,13 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export default function Sleep() {
   const { userId } = useUser();
+  const { toast } = useToast();
 
   const [timeframe, setTimeframe] = useState<Timeframe>("1M");
   const [allData, setAllData] = useState<SleepRow[]>(() => {
     // Hydrate from cache synchronously to avoid skeleton flash
     if (!userId) return [];
-    const cached = localCache.get<any[]>(userId, "sleep_logs");
+    const cached = localCache.get<any[]>(userId, "sleep_logs", 24 * 60 * 60 * 1000);
     return cached ? cached.map(r => ({ date: r.date, hours: Number(r.hours) })) : [];
   });
   const [loading, setLoading] = useState(!allData.length);
@@ -62,7 +64,7 @@ export default function Sleep() {
 
     // Serve cache instantly if not already hydrated from initializer
     if (!allData.length) {
-      const cached = localCache.get<any[]>(userId, "sleep_logs");
+      const cached = localCache.get<any[]>(userId, "sleep_logs", 24 * 60 * 60 * 1000);
       if (cached) {
         setAllData(cached.map(r => ({ date: r.date, hours: Number(r.hours) })));
         setLoading(false);
@@ -92,6 +94,9 @@ export default function Sleep() {
         }
       } catch (err) {
         logger.error("Failed to fetch sleep logs", err);
+        if (!cancelled) {
+          toast({ title: "Couldn't load sleep data", description: "Check your connection.", variant: "destructive" });
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -103,7 +108,7 @@ export default function Sleep() {
   useEffect(() => {
     const handler = () => {
       if (!userId) return;
-      const cached = localCache.get<any[]>(userId, "sleep_logs");
+      const cached = localCache.get<any[]>(userId, "sleep_logs", 24 * 60 * 60 * 1000);
       if (cached) setAllData(cached.map(r => ({ date: r.date, hours: Number(r.hours) })));
     };
     window.addEventListener("sleep-logged", handler);
@@ -133,12 +138,12 @@ export default function Sleep() {
 
   if (loading && !allData.length) {
     return (
-      <div className="animate-page-in space-y-3 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
+      <div className="animate-page-in space-y-3 px-5 py-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
         <div className="h-6 w-24 rounded bg-muted/30 animate-pulse" />
-        <div className="card-surface rounded-xl h-[220px] animate-pulse" />
+        <div className="card-surface rounded-2xl h-[220px] animate-pulse" />
         <div className="grid grid-cols-3 gap-3">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="card-surface rounded-xl h-16 animate-pulse" />
+            <div key={i} className="card-surface rounded-2xl h-16 animate-pulse" />
           ))}
         </div>
       </div>
@@ -146,7 +151,7 @@ export default function Sleep() {
   }
 
   return (
-    <div className="animate-page-in space-y-3 p-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
+    <div className="animate-page-in space-y-3 px-5 py-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -171,7 +176,7 @@ export default function Sleep() {
       </div>
 
       {/* Chart */}
-      <div className="card-surface rounded-xl p-3">
+      <div className="card-surface rounded-2xl p-3">
         <ResponsiveContainer width="100%" height={220}>
           <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
             <ReferenceArea
@@ -213,7 +218,7 @@ export default function Sleep() {
           { label: "Best", value: stats.best },
           { label: "Worst", value: stats.worst },
         ] as const).map((s) => (
-          <div key={s.label} className="card-surface rounded-xl p-3 text-center">
+          <div key={s.label} className="card-surface rounded-2xl p-3 text-center">
             <p className="text-lg font-bold display-number">{s.value.toFixed(1)}h</p>
             <p className="text-xs text-muted-foreground">{s.label}</p>
           </div>

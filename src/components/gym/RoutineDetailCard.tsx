@@ -84,7 +84,7 @@ function GroupedExerciseList({ exercises }: { exercises: RoutineExercise[] }) {
   return (
     <div className="px-3 pb-2 space-y-2.5 pt-1">
       {groups.map((group, gi) => (
-        <div key={group.day || gi} className={`rounded-xl border border-border/30 overflow-hidden border-l-[3px] ${DAY_COLORS[gi % DAY_COLORS.length]}`}>
+        <div key={group.day || gi} className={`rounded-2xl border border-border/30 overflow-hidden border-l-[3px] ${DAY_COLORS[gi % DAY_COLORS.length]}`}>
           <div className="px-3 py-2 bg-muted/15 flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wide text-foreground/80">{group.day}</span>
             <span className="text-[10px] text-muted-foreground">{group.exercises.length} exercises</span>
@@ -223,7 +223,7 @@ export function RoutineDetailCard({ routine, onDelete, onRename, onStartWorkout 
                     <div className="flex items-center gap-2">
                       <Button
                         onClick={() => onStartWorkout(routine)}
-                        className="flex-1 h-10 rounded-xl text-xs font-semibold bg-gradient-to-r from-primary to-primary/80"
+                        className="flex-1 h-10 rounded-2xl text-xs font-semibold bg-gradient-to-r from-primary to-primary/80"
                         size="sm"
                       >
                         <Play className="h-3.5 w-3.5 mr-1.5" />
@@ -231,7 +231,7 @@ export function RoutineDetailCard({ routine, onDelete, onRename, onStartWorkout 
                       </Button>
                       <button
                         onClick={() => onDelete(routine.id)}
-                        className="h-10 w-10 rounded-xl flex items-center justify-center border border-border/50 hover:bg-destructive/10 hover:border-destructive/30 transition-colors"
+                        className="h-10 w-10 rounded-2xl flex items-center justify-center border border-border/50 hover:bg-destructive/10 hover:border-destructive/30 transition-colors"
                       >
                         <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive transition-colors" />
                       </button>
@@ -252,7 +252,7 @@ export function RoutineDetailCard({ routine, onDelete, onRename, onStartWorkout 
                           key={day}
                           onClick={() => onStartWorkout(routine, day)}
                           variant="outline"
-                          className="h-9 rounded-xl text-[11px] font-semibold gap-1.5"
+                          className="h-9 rounded-2xl text-[11px] font-semibold gap-1.5"
                           size="sm"
                         >
                           <Play className="h-3 w-3" />
@@ -263,7 +263,7 @@ export function RoutineDetailCard({ routine, onDelete, onRename, onStartWorkout 
                     <div className="flex items-center gap-2">
                       <Button
                         onClick={() => onStartWorkout(routine)}
-                        className="flex-1 h-10 rounded-xl text-xs font-semibold bg-gradient-to-r from-primary to-primary/80"
+                        className="flex-1 h-10 rounded-2xl text-xs font-semibold bg-gradient-to-r from-primary to-primary/80"
                         size="sm"
                       >
                         <Play className="h-3.5 w-3.5 mr-1.5" />
@@ -271,7 +271,7 @@ export function RoutineDetailCard({ routine, onDelete, onRename, onStartWorkout 
                       </Button>
                       <button
                         onClick={() => onDelete(routine.id)}
-                        className="h-10 w-10 rounded-xl flex items-center justify-center border border-border/50 hover:bg-destructive/10 hover:border-destructive/30 transition-colors"
+                        className="h-10 w-10 rounded-2xl flex items-center justify-center border border-border/50 hover:bg-destructive/10 hover:border-destructive/30 transition-colors"
                       >
                         <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive transition-colors" />
                       </button>

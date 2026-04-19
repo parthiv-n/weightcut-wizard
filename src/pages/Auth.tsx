@@ -164,7 +164,7 @@ export default function Auth() {
     return () => { if (passwordTimerRef.current) clearTimeout(passwordTimerRef.current); };
   }, [password, confirmPassword, isLogin, isPasswordReset]);
 
-  const inputClass = "h-[50px] rounded-xl bg-muted/40 dark:bg-white/[0.06] border-border/40 text-foreground placeholder:text-muted-foreground/50 px-4 text-[16px] focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition-all";
+  const inputClass = "h-[50px] rounded-2xl bg-muted/40 dark:bg-white/[0.06] border-border/40 text-foreground placeholder:text-muted-foreground/50 px-4 text-[16px] focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition-all";
   const errorInputClass = "border-red-500/50 focus:ring-red-500/40";
 
   return (
@@ -211,14 +211,14 @@ export default function Auth() {
                 <Input type="password" placeholder="New password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} className={`${inputClass} ${passwordError ? errorInputClass : ""}`} />
                 <Input type="password" placeholder="Confirm password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={6} className={`${inputClass} ${passwordError ? errorInputClass : ""}`} />
                 {passwordError && <p className="text-xs text-red-500 text-center">{passwordError}</p>}
-                <Button type="submit" disabled={loading} className="w-full h-[50px] rounded-xl text-[16px] font-semibold bg-primary text-primary-foreground active:scale-[0.98] transition-transform">
+                <Button type="submit" disabled={loading} className="w-full h-[50px] rounded-2xl text-[16px] font-semibold bg-primary text-primary-foreground active:scale-[0.98] transition-transform">
                   {loading ? "Updating..." : "Update Password"}
                 </Button>
               </form>
             ) : showForgotPassword ? (
               <form onSubmit={handleForgotPassword} className="space-y-3">
                 <Input type="email" placeholder="Email address" value={email} onChange={(e) => setEmail(e.target.value)} required className={inputClass} autoFocus />
-                <Button type="submit" disabled={loading} className="w-full h-[50px] rounded-xl text-[16px] font-semibold bg-primary text-primary-foreground active:scale-[0.98] transition-transform">
+                <Button type="submit" disabled={loading} className="w-full h-[50px] rounded-2xl text-[16px] font-semibold bg-primary text-primary-foreground active:scale-[0.98] transition-transform">
                   {loading ? "Sending..." : "Send Reset Link"}
                 </Button>
                 <button type="button" onClick={() => setShowForgotPassword(false)} className="w-full text-center text-sm text-muted-foreground py-2">Back to Sign In</button>
@@ -231,7 +231,7 @@ export default function Auth() {
                   <Input type="password" placeholder="Confirm password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={6} className={`${inputClass} ${passwordError ? errorInputClass : ""}`} />
                 )}
                 {passwordError && <p className="text-xs text-red-500 text-center">{passwordError}</p>}
-                <Button type="submit" disabled={loading} className="w-full h-[50px] rounded-xl text-[16px] font-semibold bg-primary text-primary-foreground active:scale-[0.98] transition-transform">
+                <Button type="submit" disabled={loading} className="w-full h-[50px] rounded-2xl text-[16px] font-semibold bg-primary text-primary-foreground active:scale-[0.98] transition-transform">
                   {loading ? "Please wait..." : isLogin ? "Sign In" : "Create Account"}
                 </Button>
               </form>
@@ -251,7 +251,7 @@ export default function Auth() {
                   type="button"
                   onClick={handleAppleSignIn}
                   disabled={loading}
-                  className="w-full h-[50px] rounded-xl bg-foreground text-background font-semibold text-[16px] flex items-center justify-center gap-2 active:scale-[0.98] transition-transform touch-manipulation disabled:opacity-50"
+                  className="w-full h-[50px] rounded-2xl bg-foreground text-background font-semibold text-[16px] flex items-center justify-center gap-2 active:scale-[0.98] transition-transform touch-manipulation disabled:opacity-50"
                 >
                   <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.52-3.23 0-1.44.62-2.2.44-3.06-.4C3.79 16.17 4.36 9.51 8.82 9.28c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.3 4.11zM12.03 9.2C11.88 7.16 13.5 5.5 15.42 5.35c.28 2.35-2.14 4.1-3.39 3.85z" />

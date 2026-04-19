@@ -10,6 +10,7 @@ import { triggerHaptic, celebrateSuccess, confirmDelete } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import { calculateVolume } from "@/lib/gymCalculations";
 import { logger } from "@/lib/logger";
+import { invalidateGymAnalytics } from "./useGymAnalytics";
 import type {
   GymSession, GymSet, Exercise, SessionType,
   ExerciseGroup, SessionWithSets, ActiveWorkout,
@@ -107,7 +108,7 @@ export function useGymSessions() {
   const fetchHistory = useCallback(async (limit = 20) => {
     if (!userId) return;
 
-    const cached = localCache.get<SessionWithSets[]>(userId, HISTORY_CACHE_KEY);
+    const cached = localCache.get<SessionWithSets[]>(userId, HISTORY_CACHE_KEY, 24 * 60 * 60 * 1000);
     if (cached) {
       safeAsync(setHistory)(cached);
       safeAsync(setHistoryLoading)(false);
@@ -295,6 +296,8 @@ export function useGymSessions() {
 
       if (error) throw error;
 
+      invalidateGymAnalytics(userId);
+
       // Also log to training calendar
       const durationMin = opts.durationMinutes ?? elapsed;
       supabase
@@ -356,6 +359,8 @@ export function useGymSessions() {
       );
 
       if (error) throw error;
+
+      invalidateGymAnalytics(userId);
 
       setHistory(prev => {
         const updated = prev.filter(s => s.id !== sessionId);

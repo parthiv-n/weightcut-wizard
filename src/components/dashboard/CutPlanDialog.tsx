@@ -83,41 +83,41 @@ export function CutPlanDialog({ open, onOpenChange }: CutPlanDialogProps) {
             style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 6rem)" }}
           >
             {/* Summary */}
-            <div className="card-surface rounded-xl p-4 mb-3">
+            <div className="card-surface rounded-2xl p-4 mb-3">
               <p className="text-sm text-muted-foreground leading-relaxed">{plan.summary}</p>
             </div>
 
             {/* Your Numbers */}
             <div className="grid grid-cols-3 gap-2 mb-3">
               {plan.maintenanceCalories && (
-                <div className="card-surface rounded-xl p-3 text-center">
+                <div className="card-surface rounded-2xl p-3 text-center">
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Maintenance</p>
-                  <p className="text-lg font-bold display-number">{plan.maintenanceCalories}</p>
+                  <p className="text-lg font-bold display-number">{Math.round(plan.maintenanceCalories / 100) * 100}</p>
                   <p className="text-[10px] text-muted-foreground">kcal/day</p>
                 </div>
               )}
               {plan.deficit && (
-                <div className="card-surface rounded-xl p-3 text-center">
+                <div className="card-surface rounded-2xl p-3 text-center">
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Deficit</p>
-                  <p className="text-lg font-bold display-number text-destructive">-{plan.deficit}</p>
+                  <p className="text-lg font-bold display-number text-destructive">-{Math.round(plan.deficit / 100) * 100}</p>
                   <p className="text-[10px] text-muted-foreground">kcal/day</p>
                 </div>
               )}
               {plan.targetCalories && (
-                <div className="card-surface rounded-xl p-3 text-center">
+                <div className="card-surface rounded-2xl p-3 text-center">
                   <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Target</p>
-                  <p className="text-lg font-bold display-number text-primary">{plan.targetCalories}</p>
+                  <p className="text-lg font-bold display-number text-primary">{Math.round(plan.targetCalories / 100) * 100}</p>
                   <p className="text-[10px] text-muted-foreground">kcal/day</p>
                 </div>
               )}
             </div>
 
             <div className="flex items-center gap-3 mb-3">
-              <div className="card-surface rounded-xl p-3 flex-1 text-center">
+              <div className="card-surface rounded-2xl p-3 flex-1 text-center">
                 <p className="text-[10px] text-muted-foreground">Weekly Loss</p>
                 <p className="text-sm font-bold display-number">{plan.weeklyLossTarget}</p>
               </div>
-              <div className="card-surface rounded-xl p-3 flex-1 text-center">
+              <div className="card-surface rounded-2xl p-3 flex-1 text-center">
                 <p className="text-[10px] text-muted-foreground">Duration</p>
                 <p className="text-sm font-bold display-number">{plan.totalWeeks} weeks</p>
               </div>
@@ -127,7 +127,7 @@ export function CutPlanDialog({ open, onOpenChange }: CutPlanDialogProps) {
             <p className="section-header mb-2">Week-by-Week Plan</p>
             <div className="space-y-2 mb-4">
               {plan.weeklyPlan.map((week) => (
-                <div key={week.week} className="card-surface rounded-xl p-3">
+                <div key={week.week} className="card-surface rounded-2xl p-3">
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-xs font-bold text-foreground">Week {week.week}</span>
                     <span className="text-xs font-bold display-number text-primary">{week.targetWeight.toFixed(1)} kg</span>
@@ -135,7 +135,7 @@ export function CutPlanDialog({ open, onOpenChange }: CutPlanDialogProps) {
                   <div className="grid grid-cols-4 gap-2 mb-2">
                     <div className="text-center">
                       <p className="text-[10px] text-muted-foreground">Cal</p>
-                      <p className="text-xs font-semibold display-number">{week.calories}</p>
+                      <p className="text-xs font-semibold display-number">{Math.round(week.calories / 100) * 100}</p>
                     </div>
                     <div className="text-center">
                       <p className="text-[10px] text-muted-foreground">Protein</p>
@@ -157,7 +157,7 @@ export function CutPlanDialog({ open, onOpenChange }: CutPlanDialogProps) {
 
             {/* Key Principles */}
             <p className="section-header mb-2">Key Principles</p>
-            <div className="card-surface rounded-xl p-4 mb-3 space-y-2">
+            <div className="card-surface rounded-2xl p-4 mb-3 space-y-2">
               {plan.keyPrinciples.map((p, i) => (
                 <div key={i} className="flex items-start gap-2">
                   <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
@@ -170,28 +170,28 @@ export function CutPlanDialog({ open, onOpenChange }: CutPlanDialogProps) {
             <p className="section-header mb-2">Fight Week — Final Week</p>
             {plan.fightWeek ? (
               <div className="space-y-2 mb-3">
-                <div className="card-surface rounded-xl p-4">
+                <div className="card-surface rounded-2xl p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <Wheat className="h-4 w-4 text-amber-400" />
                     <span className="text-sm font-semibold">Low Carb</span>
                   </div>
                   <p className="text-sm text-muted-foreground leading-relaxed">{plan.fightWeek.lowCarb}</p>
                 </div>
-                <div className="card-surface rounded-xl p-4">
+                <div className="card-surface rounded-2xl p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <Flame className="h-4 w-4 text-orange-400" />
                     <span className="text-sm font-semibold">Sodium</span>
                   </div>
                   <p className="text-sm text-muted-foreground leading-relaxed">{plan.fightWeek.sodium}</p>
                 </div>
-                <div className="card-surface rounded-xl p-4">
+                <div className="card-surface rounded-2xl p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <Droplets className="h-4 w-4 text-cyan-400" />
                     <span className="text-sm font-semibold">Water Loading</span>
                   </div>
                   <p className="text-sm text-muted-foreground leading-relaxed">{plan.fightWeek.waterLoading}</p>
                 </div>
-                <div className="card-surface rounded-xl p-4">
+                <div className="card-surface rounded-2xl p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <Utensils className="h-4 w-4 text-green-400" />
                     <span className="text-sm font-semibold">What to Eat</span>
@@ -200,7 +200,7 @@ export function CutPlanDialog({ open, onOpenChange }: CutPlanDialogProps) {
                 </div>
               </div>
             ) : plan.fightWeekStrategy ? (
-              <div className="card-surface rounded-xl p-4 mb-3 border-l-2 border-l-warning">
+              <div className="card-surface rounded-2xl p-4 mb-3 border-l-2 border-l-warning">
                 <div className="flex items-center gap-2 mb-1.5">
                   <Zap className="h-4 w-4 text-warning" />
                   <span className="text-sm font-semibold">Final Week</span>
@@ -210,7 +210,7 @@ export function CutPlanDialog({ open, onOpenChange }: CutPlanDialogProps) {
             ) : null}
 
             {/* Safety */}
-            <div className="card-surface rounded-xl p-4 mb-3">
+            <div className="card-surface rounded-2xl p-4 mb-3">
               <div className="flex items-center gap-2 mb-1.5">
                 <Shield className="h-4 w-4 text-success" />
                 <span className="text-sm font-semibold">Safety</span>
@@ -219,7 +219,7 @@ export function CutPlanDialog({ open, onOpenChange }: CutPlanDialogProps) {
             </div>
 
             {/* Disclaimer */}
-            <div className="rounded-xl bg-muted/50 p-4 mb-4">
+            <div className="rounded-2xl bg-muted/50 p-4 mb-4">
               <p className="text-xs text-muted-foreground leading-relaxed">
                 This is a rough plan to help you feel on track. Use the tools in the app to recalculate if you're slightly ahead or behind schedule. <span className="font-semibold text-foreground">FightCamp Wizard adapts alongside you</span> — not a cookie-cutter plan.
               </p>

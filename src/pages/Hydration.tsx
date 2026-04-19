@@ -101,7 +101,7 @@ export default function Hydration() {
   return (
     <>
       {aiTask && (
-        <div className="px-3 sm:px-5 md:px-6 pt-3 max-w-7xl mx-auto">
+        <div className="px-5 sm:px-6 pt-3 max-w-7xl mx-auto">
           <AICompactOverlay
             isOpen={true}
             isGenerating={true}
@@ -119,7 +119,7 @@ export default function Hydration() {
         </div>
 
         {/* Input Form */}
-        <div className="rounded-xl border border-border p-4 mb-4 relative overflow-hidden bg-card">
+        <div className="rounded-2xl border border-border p-4 mb-4 relative overflow-hidden bg-card">
           <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
           </div>
 
@@ -130,7 +130,7 @@ export default function Hydration() {
             </div>
 
             {!currentWeight && (
-              <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-red-500/10 border border-red-500/20">
+              <div className="flex items-center gap-2 px-3 py-2 rounded-2xl bg-red-500/10 border border-red-500/20">
                 <AlertTriangle className="h-3.5 w-3.5 text-red-400 shrink-0" />
                 <p className="text-[11px] text-red-400">Set your current weight in your profile to generate a protocol.</p>
               </div>
@@ -158,12 +158,12 @@ export default function Hydration() {
               <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.03] p-3 space-y-2">
                 <p className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider text-center">Weigh-In</p>
                 <div className="space-y-1.5">
-                  <div className="flex items-center gap-2 rounded-xl bg-background/60 border border-border/30 px-3 py-2">
+                  <div className="flex items-center gap-2 rounded-2xl bg-background/60 border border-border/30 px-3 py-2">
                     <Clock className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
                     <input type="time" value={weighInTime} onChange={(e) => setWeighInTime(e.target.value)} required
                       className="flex-1 bg-transparent border-none text-sm font-bold text-foreground focus:outline-none" />
                   </div>
-                  <div className="flex items-center gap-2 rounded-xl bg-background/60 border border-border/30 px-3 py-2">
+                  <div className="flex items-center gap-2 rounded-2xl bg-background/60 border border-border/30 px-3 py-2">
                     <input type="date" value={weighInDate} onChange={(e) => setWeighInDate(e.target.value)} required
                       className="flex-1 bg-transparent border-none text-sm font-medium text-foreground focus:outline-none" />
                   </div>
@@ -172,12 +172,12 @@ export default function Hydration() {
               <div className="rounded-2xl border border-amber-500/20 bg-amber-500/[0.03] p-3 space-y-2">
                 <p className="text-[10px] text-amber-500 font-bold uppercase tracking-wider text-center">Fight</p>
                 <div className="space-y-1.5">
-                  <div className="flex items-center gap-2 rounded-xl bg-background/60 border border-border/30 px-3 py-2">
+                  <div className="flex items-center gap-2 rounded-2xl bg-background/60 border border-border/30 px-3 py-2">
                     <Clock className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                     <input type="time" value={fightTime} onChange={(e) => setFightTime(e.target.value)} required
                       className="flex-1 bg-transparent border-none text-sm font-bold text-foreground focus:outline-none" />
                   </div>
-                  <div className="flex items-center gap-2 rounded-xl bg-background/60 border border-border/30 px-3 py-2">
+                  <div className="flex items-center gap-2 rounded-2xl bg-background/60 border border-border/30 px-3 py-2">
                     <input type="date" value={fightDate} onChange={(e) => setFightDate(e.target.value)} required
                       className="flex-1 bg-transparent border-none text-sm font-medium text-foreground focus:outline-none" />
                   </div>
@@ -194,7 +194,7 @@ export default function Hydration() {
             </div>
 
             {/* Advanced: Glycogen Depletion */}
-            <div className="rounded-xl border border-border/30 overflow-hidden">
+            <div className="rounded-2xl border border-border/30 overflow-hidden">
               <button type="button" className="w-full px-3 py-2.5 flex items-center gap-2 text-left" onClick={() => setAdvancedOpen(o => !o)}>
                 <Beaker className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="text-[11px] font-medium text-muted-foreground">Advanced: Glycogen Depletion</span>
@@ -251,7 +251,7 @@ export default function Hydration() {
             </div>
 
             {/* Safety & Disclaimer */}
-            <div className="rounded-xl border border-border/30 overflow-hidden">
+            <div className="rounded-2xl border border-border/30 overflow-hidden">
               <button type="button" className="w-full px-3 py-2.5 flex items-center gap-2 text-left" onClick={() => setDisclaimerOpen(o => !o)}>
                 <Shield className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="text-[11px] font-medium text-muted-foreground">Safety & Disclaimer</span>
@@ -280,7 +280,7 @@ export default function Hydration() {
         {protocol && (
           <div className="space-y-2.5">
             {/* Summary */}
-            <div className="rounded-xl bg-muted/50 border border-border p-3">
+            <div className="rounded-2xl bg-muted/50 border border-border p-3">
               <div className="flex items-start justify-between gap-3">
                 <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-line">{protocol.summary}</p>
                 <button onClick={() => handleGenerateProtocol(new Event("submit") as any)} disabled={loading} className="shrink-0 p-1.5 rounded-lg hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors" aria-label="Regenerate">
@@ -291,30 +291,30 @@ export default function Hydration() {
 
             {/* Totals Dashboard */}
             {totals && (
-              <div className="rounded-xl bg-card border border-border p-3">
+              <div className="rounded-2xl bg-card border border-border p-3">
                 <p className="text-[9px] text-muted-foreground uppercase tracking-wider mb-2 text-center font-bold">Rehydration Totals</p>
                 <div className="grid grid-cols-3 gap-1.5">
-                  <div className="rounded-xl bg-blue-500/5 border border-blue-500/20 p-2 text-center">
+                  <div className="rounded-2xl bg-blue-500/5 border border-blue-500/20 p-2 text-center">
                     <p className="text-base font-bold tabular-nums text-blue-400">{totals.totalFluidLitres}L</p>
                     <p className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">Total Fluid</p>
                   </div>
-                  <div className="rounded-xl bg-amber-500/5 border border-amber-500/20 p-2 text-center">
+                  <div className="rounded-2xl bg-amber-500/5 border border-amber-500/20 p-2 text-center">
                     <p className="text-base font-bold tabular-nums text-amber-400">{(totals.totalSodiumMg / 1000).toFixed(1)}g</p>
                     <p className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">Sodium</p>
                   </div>
-                  <div className="rounded-xl bg-emerald-500/5 border border-emerald-500/20 p-2 text-center">
+                  <div className="rounded-2xl bg-emerald-500/5 border border-emerald-500/20 p-2 text-center">
                     <p className="text-base font-bold tabular-nums text-emerald-400">{totals.totalCarbsG}g</p>
                     <p className="text-[9px] text-muted-foreground uppercase tracking-wider mt-0.5">Carbs</p>
                   </div>
-                  <div className="rounded-xl bg-muted border border-border p-2.5 text-center">
+                  <div className="rounded-2xl bg-muted border border-border p-2.5 text-center">
                     <p className="text-sm font-bold tabular-nums text-foreground/80">{totals.rehydrationWindowHours}h</p>
                     <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Window</p>
                   </div>
-                  <div className="rounded-xl bg-muted border border-border p-2.5 text-center">
+                  <div className="rounded-2xl bg-muted border border-border p-2.5 text-center">
                     <p className="text-sm font-bold tabular-nums text-foreground/80">{totals.totalPotassiumMg}mg</p>
                     <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Potassium</p>
                   </div>
-                  <div className="rounded-xl bg-muted border border-border p-2.5 text-center">
+                  <div className="rounded-2xl bg-muted border border-border p-2.5 text-center">
                     <p className="text-sm font-bold tabular-nums text-foreground/80">{totals.totalMagnesiumMg}mg</p>
                     <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Magnesium</p>
                   </div>
@@ -323,7 +323,7 @@ export default function Hydration() {
             )}
 
             {/* Warnings Section */}
-            <div className="rounded-xl bg-amber-500/5 border border-amber-500/20 overflow-hidden">
+            <div className="rounded-2xl bg-amber-500/5 border border-amber-500/20 overflow-hidden">
               <button className="w-full px-4 py-3 flex items-center gap-2 text-left hover:bg-amber-500/10 transition-colors" onClick={() => setWarningsOpen((o) => !o)}>
                 <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
                 <span className="text-sm font-medium text-amber-400">Safety Warnings ({allWarnings.length})</span>
@@ -342,7 +342,7 @@ export default function Hydration() {
             </div>
 
             {/* Learn More */}
-            <div className="rounded-xl bg-muted/50 border border-border overflow-hidden">
+            <div className="rounded-2xl bg-muted/50 border border-border overflow-hidden">
               <button className="w-full px-4 py-3 flex items-center gap-2 text-left hover:bg-muted/30 transition-colors" onClick={() => setScienceOpen((o) => !o)}>
                 <BookOpen className="h-3.5 w-3.5 text-blue-400 shrink-0" />
                 <span className="text-sm font-medium">Learn More</span>
@@ -397,7 +397,7 @@ export default function Hydration() {
             </div>
 
             {/* Segmented Tab Control (Fluid / Carbs) */}
-            <div className="rounded-xl bg-muted/50 border border-border overflow-hidden">
+            <div className="rounded-2xl bg-muted/50 border border-border overflow-hidden">
               <div className="p-2">
                 <div className="flex bg-muted rounded-full p-0.5">
                   <button onClick={() => setActiveTab("fluid")} className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-full text-xs font-medium transition-all ${activeTab === "fluid" ? "bg-blue-500 text-white shadow-sm" : "text-muted-foreground"}`}>
@@ -420,7 +420,7 @@ export default function Hydration() {
                       </div>
                     </div>
                   )}
-                  <div className="mx-4 mb-2 flex items-start gap-2 px-3 py-2 rounded-xl bg-blue-500/5 border border-blue-500/20">
+                  <div className="mx-4 mb-2 flex items-start gap-2 px-3 py-2 rounded-2xl bg-blue-500/5 border border-blue-500/20">
                     <Droplets className="h-3.5 w-3.5 text-blue-400 shrink-0 mt-0.5" />
                     <p className="text-[11px] text-blue-300 leading-snug">
                       <span className="font-semibold">Sip, don't chug.</span> Spread each hour's fluids into small sips over the full 60 minutes for better absorption and less GI distress.

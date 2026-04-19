@@ -62,7 +62,7 @@ export function DehydrationRingPanel({
         />
 
         <div className="flex-1 space-y-3">
-          <div className="bg-muted/50 p-3 rounded-xl border border-border/50">
+          <div className="bg-muted/50 p-3 rounded-2xl border border-border/50">
             <span className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1">
               Water Weight to Lose
             </span>
@@ -73,7 +73,7 @@ export function DehydrationRingPanel({
           </div>
 
           {saunaSessions > 0 && (
-            <div className="bg-muted/50 p-3 rounded-xl border border-border/50">
+            <div className="bg-muted/50 p-3 rounded-2xl border border-border/50">
               <span className="text-[10px] text-muted-foreground uppercase tracking-wider block mb-1">
                 Est. Sauna Sessions
               </span>
@@ -89,7 +89,7 @@ export function DehydrationRingPanel({
       </div>
 
       {dehydrationSafety === "red" && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3">
+        <div className="bg-red-500/10 border border-red-500/20 rounded-2xl p-3">
           <p className="text-sm text-red-400 font-medium">
             Dehydration exceeds 4% BW — significant performance risk.
             Consider moving up a weight class or extending timeline.

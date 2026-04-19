@@ -80,7 +80,7 @@ export function ExerciseStatsSheet({ exercise, pr, open, onOpenChange, fetchHist
                 <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Personal Records</h4>
                 <div className="grid grid-cols-2 gap-2">
                   {maxWeight > 0 && (
-                    <div className="card-surface rounded-xl border border-border p-3 space-y-1.5">
+                    <div className="card-surface rounded-2xl border border-border p-3 space-y-1.5">
                       <div className="flex items-center gap-1.5">
                         <div className="h-5 w-5 rounded-md bg-yellow-500/15 flex items-center justify-center">
                           <Trophy className="h-3 w-3 text-yellow-500" />
@@ -91,7 +91,7 @@ export function ExerciseStatsSheet({ exercise, pr, open, onOpenChange, fetchHist
                     </div>
                   )}
                   {bestSet && maxWeight > 0 && (
-                    <div className="card-surface rounded-xl border border-border p-3 space-y-1.5">
+                    <div className="card-surface rounded-2xl border border-border p-3 space-y-1.5">
                       <div className="flex items-center gap-1.5">
                         <div className="h-5 w-5 rounded-md bg-yellow-500/15 flex items-center justify-center">
                           <Zap className="h-3 w-3 text-yellow-500" />
@@ -102,7 +102,7 @@ export function ExerciseStatsSheet({ exercise, pr, open, onOpenChange, fetchHist
                     </div>
                   )}
                   {maxReps > 0 && (
-                    <div className="card-surface rounded-xl border border-border p-3 space-y-1.5">
+                    <div className="card-surface rounded-2xl border border-border p-3 space-y-1.5">
                       <div className="flex items-center gap-1.5">
                         <div className="h-5 w-5 rounded-md bg-yellow-500/15 flex items-center justify-center">
                           <Hash className="h-3 w-3 text-yellow-500" />
@@ -113,7 +113,7 @@ export function ExerciseStatsSheet({ exercise, pr, open, onOpenChange, fetchHist
                     </div>
                   )}
                   {maxVolume > 0 && (
-                    <div className="card-surface rounded-xl border border-border p-3 space-y-1.5">
+                    <div className="card-surface rounded-2xl border border-border p-3 space-y-1.5">
                       <div className="flex items-center gap-1.5">
                         <div className="h-5 w-5 rounded-md bg-yellow-500/15 flex items-center justify-center">
                           <TrendingUp className="h-3 w-3 text-yellow-500" />
@@ -131,7 +131,7 @@ export function ExerciseStatsSheet({ exercise, pr, open, onOpenChange, fetchHist
           {/* Strength Progression Chart */}
           <motion.div variants={staggerItem} className="space-y-2.5">
             <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Strength Progression</h4>
-            <div className="card-surface rounded-xl border border-border p-3">
+            <div className="card-surface rounded-2xl border border-border p-3">
               <ExercisePerformanceChart sets={sets} loading={loading} />
             </div>
           </motion.div>
@@ -140,7 +140,7 @@ export function ExerciseStatsSheet({ exercise, pr, open, onOpenChange, fetchHist
           {sets.length > 0 && (
             <motion.div variants={staggerItem} className="space-y-2.5">
               <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">Recent Sets</h4>
-              <div className="card-surface rounded-xl border border-border overflow-hidden divide-y divide-border/20">
+              <div className="card-surface rounded-2xl border border-border overflow-hidden divide-y divide-border/20">
                 {sets.slice(0, 10).map(set => (
                   <div key={set.id} className="flex items-center gap-3 text-xs px-3 py-2.5">
                     <span className="text-muted-foreground w-16 shrink-0">

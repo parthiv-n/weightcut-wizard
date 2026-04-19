@@ -1,6 +1,7 @@
 import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Calendar, HeartPulse, Dumbbell, TrendingDown, Moon } from "lucide-react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, memo } from "react";
+import { motion, LayoutGroup } from "motion/react";
 import { triggerHaptic, triggerHapticSelection } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -196,83 +197,62 @@ export const BottomNav = memo(function BottomNav() {
 
   return (
     <>
-      <nav className="fixed bottom-0 left-0 right-0 z-[9999] md:hidden bg-background/98 backdrop-blur-lg border-t border-border/30" style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}>
-        <div className="flex items-center justify-around h-[44px] px-2">
-          {/* Dashboard */}
-          <NavLink
-            to={mainNavItems[0].url}
-            data-tutorial="nav-dashboard"
-            onClick={() => triggerHaptic(ImpactStyle.Light)}
-            className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center py-0.5 transition-colors duration-100 ${isActive ? "text-primary" : "text-muted-foreground/70"}`
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <DashboardIcon className="h-5 w-5" strokeWidth={isActive ? 2.5 : 1.8} />
-                <span className={`text-[10px] leading-none mt-0.5 ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[0].title}</span>
-              </>
-            )}
-          </NavLink>
+      <motion.nav
+        data-bottom-nav
+        initial={{ y: 24, x: "-50%", opacity: 0 }}
+        animate={{ y: 0, x: "-50%", opacity: 1 }}
+        transition={{ type: "spring", damping: 22, stiffness: 260, mass: 0.6 }}
+        className="fixed left-1/2 z-[9999] md:hidden"
+        style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 0.5rem)" }}
+      >
+        <LayoutGroup id="bottom-nav">
+          <div className="flex items-center gap-1 p-1.5 rounded-full bg-card/70 backdrop-blur-2xl border border-white/10 shadow-[0_12px_30px_-8px_rgba(0,0,0,0.55),0_2px_0_rgba(255,255,255,0.04)_inset,0_-1px_0_rgba(0,0,0,0.35)_inset]">
+            <NavItem
+              to={mainNavItems[0].url}
+              icon={DashboardIcon}
+              label={mainNavItems[0].title}
+              isActive={location.pathname === mainNavItems[0].url}
+              tutorial="nav-dashboard"
+            />
+            <NavItem
+              to={mainNavItems[1].url}
+              icon={NutritionIcon}
+              label={mainNavItems[1].title}
+              isActive={location.pathname === mainNavItems[1].url}
+              tutorial="nav-nutrition"
+            />
 
-          {/* Nutrition */}
-          <NavLink
-            to={mainNavItems[1].url}
-            data-tutorial="nav-nutrition"
-            onClick={() => triggerHaptic(ImpactStyle.Light)}
-            className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center py-0.5 transition-colors duration-100 ${isActive ? "text-primary" : "text-muted-foreground/70"}`
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <NutritionIcon className="h-5 w-5" strokeWidth={isActive ? 2.5 : 1.8} />
-                <span className={`text-[10px] leading-none mt-0.5 ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[1].title}</span>
-              </>
-            )}
-          </NavLink>
+            {/* Log button — raised primary circle */}
+            <motion.button
+              whileTap={{ scale: 0.88 }}
+              transition={{ type: "spring", damping: 18, stiffness: 420 }}
+              onClick={() => { triggerHaptic(ImpactStyle.Medium); setQuickLogOpen(true); }}
+              data-tutorial="nav-quick-log"
+              className="relative mx-0.5 h-11 w-11 rounded-full bg-primary flex items-center justify-center shadow-[0_6px_16px_-4px_hsl(var(--primary)/0.55),0_1px_0_rgba(255,255,255,0.2)_inset]"
+              aria-label="Quick Log"
+            >
+              <Plus className="h-5 w-5 text-primary-foreground" strokeWidth={2.75} />
+            </motion.button>
 
-          {/* Log button */}
-          <button
-            onClick={() => { triggerHaptic(ImpactStyle.Medium); setQuickLogOpen(true); }}
-            data-tutorial="nav-quick-log"
-            className="flex flex-col items-center justify-center px-3 py-0.5 active:scale-90 transition-transform duration-100"
-            aria-label="Quick Log"
-          >
-            <div className="h-7 w-7 rounded-full bg-primary flex items-center justify-center">
-              <Plus className="h-4 w-4 text-primary-foreground" strokeWidth={2.5} />
-            </div>
-          </button>
+            <NavItem
+              to={mainNavItems[2].url}
+              icon={WeightIcon}
+              label={mainNavItems[2].title}
+              isActive={location.pathname === mainNavItems[2].url}
+              tutorial="nav-weight"
+            />
 
-          {/* Weight */}
-          <NavLink
-            to={mainNavItems[2].url}
-            data-tutorial="nav-weight"
-            onClick={() => triggerHaptic(ImpactStyle.Light)}
-            className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center py-0.5 transition-colors duration-100 ${isActive ? "text-primary" : "text-muted-foreground/70"}`
-            }
-          >
-            {({ isActive }) => (
-              <>
-                <WeightIcon className="h-5 w-5" strokeWidth={isActive ? 2.5 : 1.8} />
-                <span className={`text-[10px] leading-none mt-0.5 ${isActive ? "font-semibold" : "font-medium"}`}>{mainNavItems[2].title}</span>
-              </>
-            )}
-          </NavLink>
-
-          {/* More */}
-          <button
-            onClick={() => { setMoreMenuOpen(true); triggerHapticSelection(); }}
-            data-tutorial="nav-more"
-            className="flex-1 flex flex-col items-center justify-center py-0.5 transition-colors duration-100 text-muted-foreground/70"
-            aria-label="More"
-          >
-            <MoreHorizontal className="h-5 w-5" strokeWidth={1.8} />
-            <span className="text-[13px] font-medium leading-none mt-0.5">More</span>
-          </button>
-        </div>
-      </nav>
+            {/* More */}
+            <NavButton
+              onClick={() => { setMoreMenuOpen(true); triggerHapticSelection(); }}
+              icon={MoreHorizontal}
+              label="More"
+              isActive={filteredMoreMenuItems.some(i => i.url === location.pathname)}
+              tutorial="nav-more"
+            />
+          </div>
+        </LayoutGroup>
+      </motion.nav>
 
       <QuickLogDialog
         open={quickLogOpen}
@@ -314,7 +294,7 @@ export const BottomNav = memo(function BottomNav() {
 
       {/* Logout Confirmation Dialog */}
       <AlertDialog open={logoutDialogOpen} onOpenChange={setLogoutDialogOpen}>
-        <AlertDialogContent className="max-w-[240px] rounded-xl p-0 border-0 bg-card/90 backdrop-blur-xl overflow-hidden gap-0 shadow-2xl">
+        <AlertDialogContent className="max-w-[240px] rounded-2xl p-0 border-0 bg-card/90 backdrop-blur-xl overflow-hidden gap-0 shadow-2xl">
           <VisuallyHidden><AlertDialogTitle>Sign Out</AlertDialogTitle></VisuallyHidden>
           <AlertDialogDescription asChild>
             <div className="pt-4 pb-3 px-4 text-center">
@@ -338,7 +318,7 @@ export const BottomNav = memo(function BottomNav() {
 
       {/* Delete Account Confirmation Dialog */}
       <AlertDialog open={deleteAccountDialogOpen} onOpenChange={(open) => { if (!deleteLoading) setDeleteAccountDialogOpen(open); }}>
-        <AlertDialogContent className="max-w-[240px] rounded-xl p-0 border-0 bg-card/90 backdrop-blur-xl overflow-hidden gap-0 shadow-2xl">
+        <AlertDialogContent className="max-w-[240px] rounded-2xl p-0 border-0 bg-card/90 backdrop-blur-xl overflow-hidden gap-0 shadow-2xl">
           <VisuallyHidden><AlertDialogTitle>Delete Account</AlertDialogTitle></VisuallyHidden>
           <AlertDialogDescription asChild>
             <div className="pt-4 pb-3 px-4 text-center">
@@ -370,3 +350,66 @@ export const BottomNav = memo(function BottomNav() {
     </>
   );
 });
+
+interface NavItemProps {
+  to: string;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  label: string;
+  isActive: boolean;
+  tutorial?: string;
+}
+
+function NavItem({ to, icon: Icon, label, isActive, tutorial }: NavItemProps) {
+  return (
+    <NavLink
+      to={to}
+      data-tutorial={tutorial}
+      onClick={() => triggerHaptic(ImpactStyle.Light)}
+      aria-label={label}
+      className="relative flex h-11 w-11 items-center justify-center rounded-full"
+    >
+      {isActive && (
+        <motion.div
+          layoutId="nav-active-pill"
+          className="absolute inset-0 rounded-full bg-primary/15"
+          transition={{ type: "spring", damping: 26, stiffness: 320 }}
+        />
+      )}
+      <Icon
+        className={`relative h-[22px] w-[22px] transition-colors duration-150 ${isActive ? "text-primary" : "text-muted-foreground/75"}`}
+        strokeWidth={isActive ? 2.4 : 1.9}
+      />
+    </NavLink>
+  );
+}
+
+interface NavButtonProps {
+  onClick: () => void;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  label: string;
+  isActive: boolean;
+  tutorial?: string;
+}
+
+function NavButton({ onClick, icon: Icon, label, isActive, tutorial }: NavButtonProps) {
+  return (
+    <button
+      onClick={onClick}
+      data-tutorial={tutorial}
+      aria-label={label}
+      className="relative flex h-11 w-11 items-center justify-center rounded-full"
+    >
+      {isActive && (
+        <motion.div
+          layoutId="nav-active-pill"
+          className="absolute inset-0 rounded-full bg-primary/15"
+          transition={{ type: "spring", damping: 26, stiffness: 320 }}
+        />
+      )}
+      <Icon
+        className={`relative h-[22px] w-[22px] transition-colors duration-150 ${isActive ? "text-primary" : "text-muted-foreground/75"}`}
+        strokeWidth={isActive ? 2.4 : 1.9}
+      />
+    </button>
+  );
+}

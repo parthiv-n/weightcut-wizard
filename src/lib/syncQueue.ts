@@ -12,10 +12,30 @@ export interface SyncOp {
   timestamp: number; // Date.now() — drives last-write-wins
   retries: number; // max 5
   upsertConflict?: string; // e.g. "user_id,log_date" for fight_week_logs
+  /** If true, op is never discarded after maxRetries — instead marked failed. */
+  persistOnFailure?: boolean;
+  /** Set when retries >= MAX_RETRIES and persistOnFailure === true. */
+  failed?: boolean;
+  /** When the most recent retry attempt completed (ms since epoch). */
+  lastAttemptAt?: number;
 }
 
 const QUEUE_KEY_PREFIX = "wcw_syncqueue_";
 const MAX_RETRIES = 5;
+
+type QueueListener = (userId: string) => void;
+const listeners = new Set<QueueListener>();
+
+export function onSyncQueueChange(listener: QueueListener): () => void {
+  listeners.add(listener);
+  return () => { listeners.delete(listener); };
+}
+
+function notifySyncQueueChange(userId: string): void {
+  for (const l of Array.from(listeners)) {
+    try { l(userId); } catch { /* ignore listener errors */ }
+  }
+}
 
 // Per-userId in-memory concurrency guard (JS is single-threaded, boolean suffices)
 const processing: Record<string, boolean> = {};
@@ -42,21 +62,24 @@ class SyncQueue {
     }
   }
 
-  enqueue(userId: string, op: Omit<SyncOp, "id" | "retries">): void {
+  enqueue(userId: string, op: Omit<SyncOp, "id" | "retries" | "failed" | "lastAttemptAt">): void {
     const ops = this.readOps(userId);
     const newOp: SyncOp = { ...op, id: crypto.randomUUID(), retries: 0 };
     ops.push(newOp);
     this.writeOps(userId, ops);
+    notifySyncQueueChange(userId);
   }
 
   dequeue(userId: string, opId: string): void {
     const ops = this.readOps(userId).filter((o) => o.id !== opId);
     this.writeOps(userId, ops);
+    notifySyncQueueChange(userId);
   }
 
   dequeueByRecordId(userId: string, recordId: string): void {
     const ops = this.readOps(userId).filter((o) => o.recordId !== recordId);
     this.writeOps(userId, ops);
+    notifySyncQueueChange(userId);
   }
 
   peek(userId: string): SyncOp[] {
@@ -65,6 +88,7 @@ class SyncQueue {
 
   clear(userId: string): void {
     localStorage.removeItem(this.queueKey(userId));
+    notifySyncQueueChange(userId);
   }
 
   size(userId: string): number {
@@ -83,7 +107,9 @@ class SyncQueue {
       const { withSupabaseTimeout } = await import("@/lib/timeoutWrapper");
 
       // Sort by timestamp ascending (oldest first = first-in-first-out)
-      const ops = this.readOps(userId).sort((a, b) => a.timestamp - b.timestamp);
+      const ops = this.readOps(userId)
+        .filter(o => !o.failed)
+        .sort((a, b) => a.timestamp - b.timestamp);
 
       for (const op of ops) {
         try {
@@ -172,7 +198,34 @@ class SyncQueue {
       processing[userId] = false;
     }
 
+    notifySyncQueueChange(userId);
     return flushed;
+  }
+
+  listFailed(userId: string): SyncOp[] {
+    return this.readOps(userId).filter((o) => o.failed);
+  }
+
+  retry(userId: string, opId: string): void {
+    const ops = this.readOps(userId);
+    const idx = ops.findIndex((o) => o.id === opId);
+    if (idx === -1) return;
+    ops[idx].failed = false;
+    ops[idx].retries = 0;
+    this.writeOps(userId, ops);
+    notifySyncQueueChange(userId);
+  }
+
+  retryAll(userId: string): void {
+    const ops = this.readOps(userId);
+    for (const op of ops) {
+      if (op.failed) {
+        op.failed = false;
+        op.retries = 0;
+      }
+    }
+    this.writeOps(userId, ops);
+    notifySyncQueueChange(userId);
   }
 
   private _incrementRetry(userId: string, op: SyncOp): void {
@@ -181,11 +234,19 @@ class SyncQueue {
     if (idx === -1) return;
 
     ops[idx].retries++;
+    ops[idx].lastAttemptAt = Date.now();
+
     if (ops[idx].retries >= MAX_RETRIES) {
-      logger.warn(`SyncQueue: discarding op ${op.id} after ${MAX_RETRIES} retries`, { op });
-      ops.splice(idx, 1);
+      if (ops[idx].persistOnFailure) {
+        ops[idx].failed = true;
+        logger.warn(`SyncQueue: op ${op.id} marked failed after ${MAX_RETRIES} retries`, { op: ops[idx] });
+      } else {
+        logger.warn(`SyncQueue: discarding op ${op.id} after ${MAX_RETRIES} retries`, { op });
+        ops.splice(idx, 1);
+      }
     }
     this.writeOps(userId, ops);
+    notifySyncQueueChange(userId);
   }
 }
 

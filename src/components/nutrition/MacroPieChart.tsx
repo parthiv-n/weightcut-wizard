@@ -117,7 +117,7 @@ export const MacroPieChart = memo(function MacroPieChart({
                         <span className="text-xl font-bold tabular-nums leading-none tracking-tight">
                             {Math.round(calories)}
                         </span>
-                        <span className="text-[8px] uppercase tracking-[0.15em] text-muted-foreground/60 mt-0.5 font-medium">
+                        <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground/60 mt-0.5 font-medium">
                             kcal
                         </span>
                     </div>
@@ -132,8 +132,8 @@ export const MacroPieChart = memo(function MacroPieChart({
                             { label: isOver ? "Over" : "Left", value: isOver ? Math.round(calories - calorieTarget) : Math.round(remaining), color: isOver ? "text-destructive" : "text-emerald-500" },
                         ].map((stat) => (
                             <div key={stat.label} className="text-center">
-                                <p className="text-[8px] uppercase tracking-[0.12em] text-muted-foreground/60 font-medium">{stat.label}</p>
-                                <p className={`text-sm font-bold tabular-nums leading-snug ${stat.color}`}>{stat.value}</p>
+                                <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground/60 font-medium">{stat.label}</p>
+                                <p className={`text-[19px] font-bold tabular-nums leading-snug ${stat.color}`}>{stat.value}</p>
                             </div>
                         ))}
                     </div>
@@ -152,7 +152,7 @@ export const MacroPieChart = memo(function MacroPieChart({
                                 }}
                             />
                         </div>
-                        <p className="text-[8px] text-muted-foreground/40 tabular-nums text-right mt-0.5">
+                        <p className="text-[11px] text-muted-foreground/40 tabular-nums text-right mt-0.5">
                             {Math.round(calPct)}% of daily goal
                         </p>
                     </div>

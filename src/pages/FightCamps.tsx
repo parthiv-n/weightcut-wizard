@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/UserContext";
+import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,6 +56,7 @@ export default function FightCamps() {
   const [compareDialogOpen, setCompareDialogOpen] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { safeAsync, isMounted } = useSafeAsync();
 
   useEffect(() => {
     if (userId) {
@@ -64,19 +66,16 @@ export default function FightCamps() {
     }
   }, [userId]);
 
-  const fetchCamps = async (retryCount = 0) => {
+  const fetchCamps = async (isRetry = false) => {
     if (!userId) return;
 
-    // Cache-first: show cached data instantly
     const cached = localCache.get<FightCamp[]>(userId, 'fight_camps', 30 * 60 * 1000);
     if (cached) {
-      setCamps(cached);
-      setLoading(false);
+      safeAsync(setCamps)(cached);
+      safeAsync(setLoading)(false);
     }
 
     try {
-      if (!cached) setLoading(true);
-
       const { data, error } = await withSupabaseTimeout(
         supabase
           .from("fight_camps")
@@ -88,29 +87,27 @@ export default function FightCamps() {
         "Load fight camps"
       );
 
-      if (error) {
-        logger.error("Error loading fight camps", error);
-        if (!cached) {
-          toast({ title: "Error", description: "Failed to load fight camps", variant: "destructive" });
-          setCamps([]);
-        }
-      } else {
-        setCamps((data || []) as FightCamp[]);
-        localCache.set(userId, 'fight_camps', data || []);
-      }
+      if (!isMounted()) return;
+
+      if (error) throw error;
+
+      safeAsync(setCamps)((data || []) as FightCamp[]);
+      localCache.set(userId, 'fight_camps', data || []);
     } catch (error) {
-      logger.error("Unexpected error loading fight camps", error);
-      // Retry up to 2 times with backoff before showing error
-      if (retryCount < 2) {
-        setTimeout(() => fetchCamps(retryCount + 1), 1000 * (retryCount + 1));
+      logger.warn("Error loading fight camps", { error });
+
+      if (!isRetry) {
+        setTimeout(() => { if (isMounted()) fetchCamps(true); }, 2000);
         return;
       }
+
       if (!cached) {
-        toast({ title: "Error", description: "Couldn't load fight camps. Check your connection and try again.", variant: "destructive" });
-        setCamps([]);
+        if (isMounted()) {
+          toast({ title: "Couldn't load fight camps", description: "Check your connection and try again.", variant: "destructive" });
+        }
       }
     } finally {
-      setLoading(false);
+      safeAsync(setLoading)(false);
     }
   };
 
@@ -140,6 +137,7 @@ export default function FightCamps() {
     } else {
       setDialogOpen(false);
       setNewCamp({ name: "", event_name: "", fight_date: "" });
+      localCache.remove(userId, 'fight_camps');
       fetchCamps();
     }
   };
@@ -159,6 +157,7 @@ export default function FightCamps() {
     if (error) {
       toast({ title: "Error", description: "Failed to delete fight camp", variant: "destructive" });
     } else {
+      if (userId) localCache.remove(userId, 'fight_camps');
       fetchCamps();
     }
     setDeleteDialogOpen(false);
@@ -172,7 +171,7 @@ export default function FightCamps() {
 
   if (loading) {
     return (
-      <div className="space-y-3 p-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
+      <div className="space-y-3 px-5 py-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
         <Skeleton className="h-7 w-32" />
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
@@ -184,7 +183,7 @@ export default function FightCamps() {
                   <Skeleton className="h-3 w-24" />
                 </div>
               </div>
-              <Skeleton className="h-12 w-full rounded-xl" />
+              <Skeleton className="h-12 w-full rounded-2xl" />
             </div>
           ))}
         </div>
@@ -193,7 +192,7 @@ export default function FightCamps() {
   }
 
   return (
-    <div className="animate-page-in space-y-3 p-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
+    <div className="animate-page-in space-y-3 px-5 py-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
 
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -240,7 +239,7 @@ export default function FightCamps() {
               <h3 className="text-sm font-bold">No Camps Yet</h3>
               <p className="text-muted-foreground text-xs mt-0.5">Start tracking your first preparation.</p>
             </div>
-            <Button onClick={() => setDialogOpen(true)} variant="outline" className="rounded-xl mt-2 border-border hover:bg-muted">
+            <Button onClick={() => setDialogOpen(true)} variant="outline" className="rounded-2xl mt-2 border-border hover:bg-muted">
               Create First Camp
             </Button>
           </div>
@@ -289,7 +288,7 @@ export default function FightCamps() {
 
                   {/* Metrics Strip */}
                   {(camp.starting_weight_kg || camp.total_weight_cut) ? (
-                    <div className="mt-3 bg-muted/50 rounded-xl p-2.5 flex items-center justify-around border border-border">
+                    <div className="mt-3 bg-muted/50 rounded-2xl p-2.5 flex items-center justify-around border border-border">
                       <div className="text-center">
                         <p className="text-[13px] uppercase tracking-widest text-muted-foreground mb-0.5">Start</p>
                         <p className="text-sm font-bold">{camp.starting_weight_kg ? `${camp.starting_weight_kg}kg` : '-'}</p>
@@ -337,7 +336,7 @@ export default function FightCamps() {
 
       {/* New Camp Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-[280px] rounded-xl p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0">
+        <DialogContent className="w-[calc(100vw-2.5rem)] max-w-[320px] rounded-[28px] p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0">
           <div className="px-4 pt-4 pb-3">
             <DialogHeader>
               <DialogTitle className="text-[15px] font-semibold text-center">New Fight Camp</DialogTitle>

@@ -25,8 +25,11 @@ export function DayTimelineCard({ timeline }: DayTimelineCardProps) {
             </div>
 
             {/* Metric pills */}
-            <div className="grid grid-cols-4 gap-2">
+            <div className={`grid gap-2 ${day.calorieTarget ? "grid-cols-5" : "grid-cols-4"}`}>
               <MetricPill label="Carbs" value={`${day.carbTarget_g}g`} />
+              {day.calorieTarget !== undefined && (
+                <MetricPill label="Cals" value={`${day.calorieTarget}`} />
+              )}
               <MetricPill label="Fluid" value={formatFluid(day.fluidTarget_ml)} />
               <MetricPill label="Fibre" value={`${day.fibreTarget_g}g`} />
               <MetricPill label="Na+" value={formatSodium(day.sodiumTarget_mg)} />

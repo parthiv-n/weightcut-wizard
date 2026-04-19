@@ -12,6 +12,7 @@ import { ArrowLeft, Save, Trophy, Scale, Droplets, TrendingDown, Upload, Camera,
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
+import { logger } from "@/lib/logger";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { FightCampSummaryCard } from "@/components/share/cards/FightCampSummaryCard";
@@ -80,17 +81,20 @@ export default function FightCampDetail() {
       if (!isMounted()) return;
 
       if (error) {
-        if (!cached) {
-          toast({ title: "Error", description: "Failed to load fight camp", variant: "destructive" });
-          navigate("/fight-camps");
-        }
-      } else {
-        setCamp(data as FightCamp);
-        localCache.set("shared", cacheKey, data);
+        throw error;
       }
-    } catch {
-      if (!isMounted()) return;
-      if (!cached) {
+
+      setCamp(data as FightCamp);
+      localCache.set("shared", cacheKey, data);
+    } catch (err) {
+      logger.warn("Error loading fight camp", { err });
+      const staleCached = localCache.get<FightCamp>("shared", cacheKey, 10 * 60 * 1000);
+      if (staleCached && isMounted()) {
+        safeAsync(setCamp)(staleCached);
+        safeAsync(setLoading)(false);
+        return;
+      }
+      if (isMounted()) {
         toast({ title: "Error", description: "Failed to load fight camp", variant: "destructive" });
         navigate("/fight-camps");
       }
@@ -119,6 +123,7 @@ export default function FightCampDetail() {
     if (error) {
       toast({ title: "Error", description: "Failed to update camp", variant: "destructive" });
     } else {
+      localCache.remove("shared", `fight_camp_${camp.id}`);
       localCache.set("shared", `fight_camp_${camp.id}`, camp);
       navigate("/fight-camps");
     }
@@ -167,7 +172,7 @@ export default function FightCampDetail() {
 
   if (loading) {
     return (
-      <div className="space-y-3 p-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
+      <div className="space-y-3 px-5 py-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-40 w-full rounded-2xl" />
         <Skeleton className="h-64 w-full rounded-2xl" />
@@ -183,7 +188,7 @@ export default function FightCampDetail() {
     : null;
 
   return (
-    <div className="animate-page-in space-y-3 p-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
+    <div className="animate-page-in space-y-3 px-5 py-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
 
       {/* Header */}
       <div className="flex items-center gap-3">
@@ -232,15 +237,15 @@ export default function FightCampDetail() {
 
           {/* Quick Stats */}
           <div className="flex-1 grid grid-cols-3 gap-2">
-            <div className="text-center rounded-xl bg-muted border border-border py-2.5 px-1">
+            <div className="text-center rounded-2xl bg-muted border border-border py-2.5 px-1">
               <p className="text-[10px] uppercase tracking-widest text-muted-foreground">Start</p>
               <p className="text-base font-bold display-number mt-0.5">{camp.starting_weight_kg ? `${camp.starting_weight_kg}` : '—'}<span className="text-xs font-normal text-muted-foreground">kg</span></p>
             </div>
-            <div className="text-center rounded-xl bg-primary/10 border border-primary/20 py-2.5 px-1">
+            <div className="text-center rounded-2xl bg-primary/10 border border-primary/20 py-2.5 px-1">
               <p className="text-[10px] uppercase tracking-widest text-primary/70">Cut</p>
               <p className="text-base font-bold display-number text-primary mt-0.5">{weightCut ? `-${weightCut}` : '—'}<span className="text-xs font-normal text-primary/60">kg</span></p>
             </div>
-            <div className="text-center rounded-xl bg-muted border border-border py-2.5 px-1">
+            <div className="text-center rounded-2xl bg-muted border border-border py-2.5 px-1">
               <p className="text-[10px] uppercase tracking-widest text-muted-foreground">End</p>
               <p className="text-base font-bold display-number mt-0.5">{camp.end_weight_kg ? `${camp.end_weight_kg}` : '—'}<span className="text-xs font-normal text-muted-foreground">kg</span></p>
             </div>
@@ -249,7 +254,7 @@ export default function FightCampDetail() {
 
         {/* Completion Badge */}
         {camp.is_completed && (
-          <div className="flex items-center gap-2 rounded-xl bg-green-500/10 border border-green-500/20 px-3 py-2">
+          <div className="flex items-center gap-2 rounded-2xl bg-green-500/10 border border-green-500/20 px-3 py-2">
             <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
             <span className="text-xs font-medium text-green-600 dark:text-green-400">Camp Completed</span>
           </div>

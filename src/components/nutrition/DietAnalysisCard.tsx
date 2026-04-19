@@ -57,11 +57,11 @@ export function DietAnalysisCard({ analysis, onDismiss, onRefresh, refreshing }:
         <p className="text-[13px] font-semibold text-foreground">Diet Analysis</p>
         <div className="flex items-center gap-0.5">
           <button onClick={onRefresh} disabled={refreshing}
-            className="h-8 w-8 flex items-center justify-center rounded-xl text-muted-foreground/40 active:text-foreground active:bg-muted/40 transition-colors disabled:opacity-50">
+            className="h-8 w-8 flex items-center justify-center rounded-2xl text-muted-foreground/40 active:text-foreground active:bg-muted/40 transition-colors disabled:opacity-50">
             <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`} />
           </button>
           <button onClick={onDismiss}
-            className="h-8 w-8 flex items-center justify-center rounded-xl text-muted-foreground/40 active:text-foreground active:bg-muted/40 transition-colors">
+            className="h-8 w-8 flex items-center justify-center rounded-2xl text-muted-foreground/40 active:text-foreground active:bg-muted/40 transition-colors">
             <X className="h-3.5 w-3.5" />
           </button>
         </div>

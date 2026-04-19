@@ -16,7 +16,7 @@ interface MilestoneBadgesProps {
 
 function BadgeSkeleton() {
   return (
-    <div className="w-28 flex-shrink-0 rounded-xl border border-border p-3 text-center card-surface">
+    <div className="w-28 flex-shrink-0 rounded-2xl border border-border p-3 text-center card-surface">
       <div className="w-10 h-10 rounded-full mx-auto shimmer-skeleton" />
       <div className="h-3 w-16 mx-auto mt-2 rounded shimmer-skeleton" />
       <div className="h-1 w-full mt-2 rounded-full shimmer-skeleton" />
@@ -59,7 +59,7 @@ export const MilestoneBadges = memo(function MilestoneBadges({ badges, loading, 
           return (
             <div
               key={badge.id}
-              className="w-28 flex-shrink-0 rounded-xl border border-border p-3 text-center card-surface"
+              className="w-28 flex-shrink-0 rounded-2xl border border-border p-3 text-center card-surface"
             >
               {/* Icon circle */}
               <div

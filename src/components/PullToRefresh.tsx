@@ -4,17 +4,53 @@ import { triggerHaptic } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 
 const THRESHOLD = 80;
+const HOLD_DURATION = 200;
 
 export function PullToRefresh() {
   const [pullDistance, setPullDistance] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  const [holdProgress, setHoldProgress] = useState(0);
   const startY = useRef(0);
   const pulling = useRef(false);
+  const holdStart = useRef<number | null>(null);
+  const holdRaf = useRef<number | null>(null);
+  const holdTimer = useRef<number | null>(null);
   const getMain = useCallback(() => document.querySelector("main"), []);
 
   useEffect(() => {
     const main = getMain();
     if (!main) return;
+
+    const clearHold = () => {
+      holdStart.current = null;
+      if (holdRaf.current !== null) {
+        cancelAnimationFrame(holdRaf.current);
+        holdRaf.current = null;
+      }
+      if (holdTimer.current !== null) {
+        window.clearTimeout(holdTimer.current);
+        holdTimer.current = null;
+      }
+      setHoldProgress(0);
+    };
+
+    const tickHold = () => {
+      if (holdStart.current === null) return;
+      const elapsed = Date.now() - holdStart.current;
+      setHoldProgress(Math.min(elapsed / HOLD_DURATION, 1));
+      if (elapsed < HOLD_DURATION) {
+        holdRaf.current = requestAnimationFrame(tickHold);
+      }
+    };
+
+    const triggerRefresh = () => {
+      pulling.current = false;
+      clearHold();
+      setRefreshing(true);
+      setPullDistance(THRESHOLD * 0.6);
+      triggerHaptic(ImpactStyle.Medium);
+      setTimeout(() => window.location.reload(), 300);
+    };
 
     const onTouchStart = (e: TouchEvent) => {
       if (refreshing) return;
@@ -28,43 +64,51 @@ export function PullToRefresh() {
       if (main.scrollTop > 0) {
         pulling.current = false;
         setPullDistance(0);
+        clearHold();
         return;
       }
       const dy = e.touches[0].clientY - startY.current;
       if (dy > 0) {
         const dampened = Math.min(dy * 0.4, THRESHOLD * 1.5);
         setPullDistance(dampened);
+        if (dampened >= THRESHOLD) {
+          if (holdStart.current === null) {
+            holdStart.current = Date.now();
+            triggerHaptic(ImpactStyle.Light);
+            holdRaf.current = requestAnimationFrame(tickHold);
+            holdTimer.current = window.setTimeout(triggerRefresh, HOLD_DURATION);
+          }
+        } else if (holdStart.current !== null) {
+          clearHold();
+        }
       }
     };
 
     const onTouchEnd = () => {
       if (!pulling.current) return;
       pulling.current = false;
-
-      if (pullDistance >= THRESHOLD) {
-        setRefreshing(true);
-        setPullDistance(THRESHOLD * 0.6);
-        triggerHaptic(ImpactStyle.Medium);
-        // Hard refresh — reload the page like pressing the browser refresh button
-        setTimeout(() => window.location.reload(), 300);
-      } else {
-        setPullDistance(0);
-      }
+      clearHold();
+      setPullDistance(0);
     };
 
     main.addEventListener("touchstart", onTouchStart, { passive: true });
     main.addEventListener("touchmove", onTouchMove, { passive: true });
     main.addEventListener("touchend", onTouchEnd, { passive: true });
+    main.addEventListener("touchcancel", onTouchEnd, { passive: true });
     return () => {
       main.removeEventListener("touchstart", onTouchStart);
       main.removeEventListener("touchmove", onTouchMove);
       main.removeEventListener("touchend", onTouchEnd);
+      main.removeEventListener("touchcancel", onTouchEnd);
+      clearHold();
     };
-  }, [pullDistance, refreshing, getMain]);
+  }, [refreshing, getMain]);
 
   if (pullDistance <= 0 && !refreshing) return null;
 
   const progress = Math.min(pullDistance / THRESHOLD, 1);
+  const atThreshold = progress >= 1;
+  const spinnerProgress = atThreshold ? holdProgress : progress;
 
   return (
     <div
@@ -85,11 +129,13 @@ export function PullToRefresh() {
       >
         <RefreshCw
           className={`h-4 w-4 text-muted-foreground ${refreshing ? "animate-spin" : ""}`}
-          style={{ transform: refreshing ? undefined : `rotate(${progress * 360}deg)` }}
+          style={{ transform: refreshing ? undefined : `rotate(${spinnerProgress * 360}deg)` }}
         />
       </div>
-      {progress >= 1 && !refreshing && (
-        <span className="text-[10px] text-muted-foreground/60 mt-1">Release to refresh</span>
+      {atThreshold && !refreshing && (
+        <span className="text-[10px] text-muted-foreground/60 mt-1">
+          {holdProgress >= 1 ? "Refreshing…" : "Hold to refresh"}
+        </span>
       )}
     </div>
   );

@@ -360,7 +360,7 @@ export function RoutineGeneratorSheet({ open, onOpenChange, onGenerate, onSave, 
                             : "border-border/50 hover:border-border"
                         }`}
                       >
-                        <div className={`h-10 w-10 rounded-xl flex items-center justify-center mb-3 mx-auto ${
+                        <div className={`h-10 w-10 rounded-2xl flex items-center justify-center mb-3 mx-auto ${
                           selected ? "bg-primary/20" : "bg-muted/40"
                         }`}>
                           <Icon className={`h-5 w-5 ${selected ? "text-primary" : "text-muted-foreground"}`} />
@@ -443,7 +443,7 @@ export function RoutineGeneratorSheet({ open, onOpenChange, onGenerate, onSave, 
                         <button
                           key={s.value}
                           onClick={() => setPreferredSplit(s.value)}
-                          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all active:scale-[0.98] ${
+                          className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-left transition-all active:scale-[0.98] ${
                             selected
                               ? "bg-primary/10 border border-primary/30"
                               : "card-surface border border-border/30 hover:border-border/50"
@@ -571,7 +571,7 @@ export function RoutineGeneratorSheet({ open, onOpenChange, onGenerate, onSave, 
                   placeholder="Routine name..."
                   value={routineName}
                   onChange={(e) => setRoutineName(e.target.value)}
-                  className="h-12 text-base font-semibold bg-muted/30 border-border/30 rounded-xl focus-visible:ring-2 focus-visible:ring-primary/30"
+                  className="h-12 text-base font-semibold bg-muted/30 border-border/30 rounded-2xl focus-visible:ring-2 focus-visible:ring-primary/30"
                 />
 
                 {/* AI Recommendations */}
@@ -595,7 +595,7 @@ export function RoutineGeneratorSheet({ open, onOpenChange, onGenerate, onSave, 
                 <ExerciseListGrouped exercises={generatedExercises} />
 
                 {routineNotes && (
-                  <div className="card-surface rounded-xl border border-border/30 p-3">
+                  <div className="card-surface rounded-2xl border border-border/30 p-3">
                     <p className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-wide mb-1">Coach Notes</p>
                     <p className="text-xs text-muted-foreground leading-relaxed">{routineNotes}</p>
                   </div>

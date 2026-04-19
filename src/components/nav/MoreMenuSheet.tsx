@@ -33,7 +33,7 @@ export function MoreMenuSheet({ open, onOpenChange, menuItems, onItemClick, onSe
         </SheetHeader>
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 scrollbar-hide scroll-touch overscroll-contain" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 6rem)" }}>
           {/* Nav links group */}
-          <div className="rounded-xl bg-muted/40 dark:bg-muted overflow-hidden border border-border">
+          <div className="rounded-2xl bg-muted/40 dark:bg-muted overflow-hidden border border-border">
             {menuItems.map((item) => (
               <button
                 key={item.url}
@@ -48,7 +48,7 @@ export function MoreMenuSheet({ open, onOpenChange, menuItems, onItemClick, onSe
           </div>
 
           {/* Settings & Logout group */}
-          <div className="mt-3 rounded-xl bg-muted/40 dark:bg-muted overflow-hidden border border-border">
+          <div className="mt-3 rounded-2xl bg-muted/40 dark:bg-muted overflow-hidden border border-border">
             <button
               type="button"
               onClick={onSettings}

@@ -90,9 +90,9 @@ export const MealPhotoScanOverlay = memo(function MealPhotoScanOverlay({
           transition={springs.gentle}
           className="w-full"
         >
-          <div className="bg-background/95 border border-border rounded-xl shadow-2xl p-3 space-y-3">
+          <div className="bg-background/95 border border-border rounded-2xl shadow-2xl p-3 space-y-3">
             {/* Viewfinder frame */}
-            <div className="relative w-full aspect-[4/3] rounded-xl overflow-hidden bg-black">
+            <div className="relative w-full aspect-[4/3] rounded-2xl overflow-hidden bg-black">
               <img
                 src={`data:image/jpeg;base64,${photoBase64}`}
                 alt="Meal"
