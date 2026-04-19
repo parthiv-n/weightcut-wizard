@@ -97,7 +97,7 @@ export default {
         recovery: "hsl(var(--recovery))",
       },
       fontFamily: {
-        sans: ["SF Pro Display", "SF Pro Text", "SF Pro", "-apple-system", "BlinkMacSystemFont", "system-ui", "sans-serif"],
+        sans: ["Satoshi", "SF Pro Display", "SF Pro Text", "SF Pro", "-apple-system", "BlinkMacSystemFont", "system-ui", "sans-serif"],
       },
       borderRadius: {
         lg: "var(--radius)",

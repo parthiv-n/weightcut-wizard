@@ -135,7 +135,7 @@ function CampWaterfall({
     return (
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
         {/* Start weight label */}
-        <text x={width / 2} y={padTop - (large ? 16 : 12)} textAnchor="middle" fill="#ffffff" fontSize={kgFs} fontWeight={800} fontFamily="system-ui, sans-serif" style={{ fontVariantNumeric: "tabular-nums" } as any}>
+        <text x={width / 2} y={padTop - (large ? 16 : 12)} textAnchor="middle" fill="#ffffff" fontSize={kgFs} fontWeight={800} fontFamily="Satoshi, system-ui, sans-serif" style={{ fontVariantNumeric: "tabular-nums" } as any}>
           {start.toFixed(1)}
           <tspan fill="rgba(255,255,255,0.4)" fontSize={labelFs} fontWeight={600}> kg</tspan>
         </text>
@@ -148,7 +148,7 @@ function CampWaterfall({
             {(carbY2 - carbY1) > (large ? 40 : 30) && (
               <g>
                 <rect x={width / 2 - (large ? 52 : 40)} y={(carbY1 + carbY2) / 2 - tagH / 2} width={large ? 104 : 80} height={tagH} rx={tagR} fill="rgba(0,0,0,0.5)" />
-                <text x={width / 2} y={(carbY1 + carbY2) / 2 + tagFs / 3} textAnchor="middle" fill={GREEN} fontSize={tagFs} fontWeight={700} fontFamily="system-ui, sans-serif">
+                <text x={width / 2} y={(carbY1 + carbY2) / 2 + tagFs / 3} textAnchor="middle" fill={GREEN} fontSize={tagFs} fontWeight={700} fontFamily="Satoshi, system-ui, sans-serif">
                   -{carbNorm.toFixed(1)} diet
                 </text>
               </g>
@@ -163,7 +163,7 @@ function CampWaterfall({
             {(dehydY2 - dehydY1) > (large ? 40 : 30) && (
               <g>
                 <rect x={width / 2 - (large ? 56 : 44)} y={(dehydY1 + dehydY2) / 2 - tagH / 2} width={large ? 112 : 88} height={tagH} rx={tagR} fill="rgba(0,0,0,0.5)" />
-                <text x={width / 2} y={(dehydY1 + dehydY2) / 2 + tagFs / 3} textAnchor="middle" fill={ORANGE} fontSize={tagFs} fontWeight={700} fontFamily="system-ui, sans-serif">
+                <text x={width / 2} y={(dehydY1 + dehydY2) / 2 + tagFs / 3} textAnchor="middle" fill={ORANGE} fontSize={tagFs} fontWeight={700} fontFamily="Satoshi, system-ui, sans-serif">
                   -{dehydNorm.toFixed(1)} sweat
                 </text>
               </g>
@@ -172,7 +172,7 @@ function CampWaterfall({
         )}
 
         {/* End weight label */}
-        <text x={width / 2} y={toY(end) + (large ? 32 : 24)} textAnchor="middle" fill="#ffffff" fontSize={kgFs} fontWeight={800} fontFamily="system-ui, sans-serif" style={{ fontVariantNumeric: "tabular-nums" } as any}>
+        <text x={width / 2} y={toY(end) + (large ? 32 : 24)} textAnchor="middle" fill="#ffffff" fontSize={kgFs} fontWeight={800} fontFamily="Satoshi, system-ui, sans-serif" style={{ fontVariantNumeric: "tabular-nums" } as any}>
           {end.toFixed(1)}
           <tspan fill="rgba(255,255,255,0.4)" fontSize={labelFs} fontWeight={600}> kg</tspan>
         </text>
@@ -183,18 +183,18 @@ function CampWaterfall({
   // No breakdown — single bar showing total cut
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
-      <text x={width / 2} y={padTop - (large ? 16 : 12)} textAnchor="middle" fill="#ffffff" fontSize={kgFs} fontWeight={800} fontFamily="system-ui, sans-serif" style={{ fontVariantNumeric: "tabular-nums" } as any}>
+      <text x={width / 2} y={padTop - (large ? 16 : 12)} textAnchor="middle" fill="#ffffff" fontSize={kgFs} fontWeight={800} fontFamily="Satoshi, system-ui, sans-serif" style={{ fontVariantNumeric: "tabular-nums" } as any}>
         {start.toFixed(1)}
         <tspan fill="rgba(255,255,255,0.4)" fontSize={labelFs} fontWeight={600}> kg</tspan>
       </text>
       <rect x={barX} y={toY(start)} width={barW} height={barAreaH} rx={tagR} fill={GREEN} />
       <g>
         <rect x={width / 2 - (large ? 44 : 34)} y={padTop + barAreaH / 2 - tagH / 2} width={large ? 88 : 68} height={tagH} rx={tagR} fill="rgba(0,0,0,0.5)" />
-        <text x={width / 2} y={padTop + barAreaH / 2 + tagFs / 3} textAnchor="middle" fill="#ffffff" fontSize={tagFs} fontWeight={700} fontFamily="system-ui, sans-serif">
+        <text x={width / 2} y={padTop + barAreaH / 2 + tagFs / 3} textAnchor="middle" fill="#ffffff" fontSize={tagFs} fontWeight={700} fontFamily="Satoshi, system-ui, sans-serif">
           -{totalCut.toFixed(1)} kg
         </text>
       </g>
-      <text x={width / 2} y={toY(end) + (large ? 32 : 24)} textAnchor="middle" fill="#ffffff" fontSize={kgFs} fontWeight={800} fontFamily="system-ui, sans-serif" style={{ fontVariantNumeric: "tabular-nums" } as any}>
+      <text x={width / 2} y={toY(end) + (large ? 32 : 24)} textAnchor="middle" fill="#ffffff" fontSize={kgFs} fontWeight={800} fontFamily="Satoshi, system-ui, sans-serif" style={{ fontVariantNumeric: "tabular-nums" } as any}>
         {end.toFixed(1)}
         <tspan fill="rgba(255,255,255,0.4)" fontSize={labelFs} fontWeight={600}> kg</tspan>
       </text>

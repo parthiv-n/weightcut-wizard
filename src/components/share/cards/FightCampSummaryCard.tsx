@@ -203,7 +203,7 @@ export const FightCampSummaryCard = forwardRef<HTMLDivElement, FightCampSummaryC
                       fill="rgba(255,255,255,0.3)"
                       fontSize={s ? 22 : 18}
                       fontWeight={600}
-                      fontFamily="system-ui, sans-serif"
+                      fontFamily="Satoshi, system-ui, sans-serif"
                     >
                       {v.toFixed(1)}
                     </text>
@@ -258,7 +258,7 @@ export const FightCampSummaryCard = forwardRef<HTMLDivElement, FightCampSummaryC
                       fill="#ffffff"
                       fontSize={s ? 26 : 20}
                       fontWeight={700}
-                      fontFamily="system-ui, sans-serif"
+                      fontFamily="Satoshi, system-ui, sans-serif"
                     >
                       {p.kg.toFixed(1)}
                     </text>
@@ -270,7 +270,7 @@ export const FightCampSummaryCard = forwardRef<HTMLDivElement, FightCampSummaryC
                       fill="rgba(255,255,255,0.4)"
                       fontSize={s ? 20 : 16}
                       fontWeight={600}
-                      fontFamily="system-ui, sans-serif"
+                      fontFamily="Satoshi, system-ui, sans-serif"
                     >
                       {p.label}
                     </text>

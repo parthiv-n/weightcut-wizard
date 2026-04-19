@@ -30,7 +30,7 @@ export const CardShell = forwardRef<HTMLDivElement, CardShellProps>(
           position: "relative",
           overflow: "hidden",
           fontFamily:
-            '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            'Satoshi, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
           color: "#ffffff",
           ...(transparent && { textShadow: "0 2px 8px rgba(0,0,0,1), 0 0 24px rgba(0,0,0,0.7)" }),
           background: transparent
