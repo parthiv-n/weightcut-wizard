@@ -512,6 +512,24 @@ export function UserProvider({ children }: { children: ReactNode }) {
           setIsLoading(true);
         }
         await loadUserData(session);
+        // One-shot heal of queued nutrition_logs INSERTs whose payloads came
+        // from pre-migration code (null meal_type / empty meal_name). Without
+        // this they fail forever against NOT NULL constraints and pollute
+        // the UI as "Logged meal / snack" ghosts.
+        try {
+          const uid = session.user?.id;
+          if (uid) {
+            const { healBrokenPendingMeals } = await import('@/lib/pendingMeals');
+            const healed = healBrokenPendingMeals(uid);
+            if (healed > 0) {
+              const { syncQueue } = await import('@/lib/syncQueue');
+              syncQueue.process(uid).catch(() => { });
+              logger.info(`Healed ${healed} stuck pending meal op(s)`);
+            }
+          }
+        } catch (err) {
+          logger.warn('healBrokenPendingMeals failed', { err });
+        }
       }
     });
 

@@ -95,6 +95,19 @@ class SyncQueue {
     return this.readOps(userId).length;
   }
 
+  /**
+   * Update a single op in place. Useful for heal / recovery flows that need
+   * to patch broken payloads and reset retry state.
+   */
+  updateOp(userId: string, opId: string, patch: Partial<Omit<SyncOp, "id">>): void {
+    const ops = this.readOps(userId);
+    const idx = ops.findIndex((o) => o.id === opId);
+    if (idx === -1) return;
+    ops[idx] = { ...ops[idx], ...patch, id: ops[idx].id };
+    this.writeOps(userId, ops);
+    notifySyncQueueChange(userId);
+  }
+
   async process(userId: string): Promise<number> {
     if (processing[userId]) return 0;
     processing[userId] = true;

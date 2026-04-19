@@ -243,10 +243,15 @@ export function useNutritionData(params: UseNutritionDataParams) {
     );
     let mergedMeals: Meal[] = typedMeals.filter(m => !pendingDeleteIds.has(m.id)) as Meal[];
 
+    // Only merge ops that haven't permanently failed. `failed: true` ops are
+    // stuck garbage (usually from pre-migration null meal_type payloads);
+    // surfacing them pollutes the UI with "Logged meal / snack / 0 cal" ghosts
+    // and corrupts daily macro totals.
     const pendingInserts = pendingOps.filter(
       op =>
         op.table === "nutrition_logs" &&
         op.action === "insert" &&
+        !op.failed &&
         (op.payload as any).date === fetchDate &&
         !dbIds.has(op.recordId)
     );
@@ -280,7 +285,7 @@ export function useNutritionData(params: UseNutritionDataParams) {
     // in the pending queue. Prevents "ghost" meals from re-surfacing forever.
     const pendingRecordIds = new Set(
       pendingOps
-        .filter(op => op.table === "nutrition_logs" && op.action === "insert")
+        .filter(op => op.table === "nutrition_logs" && op.action === "insert" && !op.failed)
         .map(op => op.recordId)
     );
     const keepIds = new Set<string>([
