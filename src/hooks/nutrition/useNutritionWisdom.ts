@@ -262,19 +262,15 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
     }
   };
 
-  // Trigger AI wisdom after meals change (debounced)
+  // Clear AI wisdom when nutrition resets; never auto-fire the 120b meal-planner
+  // (old auto-trigger caused rate limits + json_validate_failed because the prompt
+  // asks for plain text but meal-planner forces response_format=json_object).
+  // UI falls back to the deterministic getNutritionWisdom() when aiWisdomAdvice is null.
   useEffect(() => {
     if (totalCalories === 0 || !userId) {
       setAiWisdomAdvice(null);
-      return;
     }
-    // Only auto-generate wisdom if user has AI access — don't waste a call that will 429
-    if (!checkAIAccess()) return;
-    const timer = setTimeout(() => {
-      generateWisdomAdvice();
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, [mealsLength, totalCalories]);
+  }, [totalCalories, userId]);
 
   return {
     trainingWisdom,

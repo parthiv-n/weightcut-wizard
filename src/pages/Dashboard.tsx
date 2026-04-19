@@ -519,6 +519,9 @@ export default function Dashboard() {
                 <p className="text-[12px] font-semibold">Daily Insight</p>
                 <Lock className="h-3 w-3 text-muted-foreground" />
               </div>
+              <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                Log today's weight to unlock your insight
+              </p>
             </div>
             <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
           </button>
