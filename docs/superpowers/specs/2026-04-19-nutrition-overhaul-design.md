@@ -254,6 +254,135 @@ On app boot, if localStorage syncQueue contains any entry with `table === 'nutri
 
 ---
 
+---
+
+## Phase 4 — Cross-feature compatibility (critical)
+
+**Problem:** 17 client files + 1 edge function (`wizard-chat`) + generated DB types all read from `nutrition_logs` today. Renaming the table breaks them all.
+
+**Strategy:** After archival, create a **read-only compatibility view** named `public.nutrition_logs` that projects one flat row per `meal_item`, preserving the legacy shape. Every read consumer continues to work untouched. Writers are migrated explicitly.
+
+### 4.1 Compat view
+
+```sql
+-- Migration: 20260419040000_nutrition_logs_compat_view.sql
+BEGIN;
+
+CREATE VIEW public.nutrition_logs AS
+SELECT
+  mi.id,
+  m.user_id,
+  m.date,
+  m.meal_type,
+  m.meal_name,                                         -- header name for ad-hoc rows
+  mi.calories::INT,
+  mi.protein_g,
+  mi.carbs_g,
+  mi.fats_g,
+  mi.grams AS portion_size_g,
+  mi.name AS item_name,                                -- line item name
+  NULL::TEXT AS portion_size,                          -- legacy text field
+  NULL::TEXT AS recipe_notes,
+  m.is_ai_generated,
+  jsonb_build_array(                                   -- legacy ingredients shape
+    jsonb_build_object('name', mi.name, 'grams', mi.grams)
+  ) AS ingredients,
+  m.created_at
+FROM public.meals m
+JOIN public.meal_items mi ON mi.meal_id = m.id;
+
+-- Block writes with clear error; app must use new tables
+CREATE RULE nutrition_logs_no_insert AS ON INSERT TO public.nutrition_logs
+  DO INSTEAD NOTHING;   -- writers updated below; INSERT on view silently no-ops so stale code does no harm
+CREATE RULE nutrition_logs_no_update AS ON UPDATE TO public.nutrition_logs DO INSTEAD NOTHING;
+CREATE RULE nutrition_logs_no_delete AS ON DELETE TO public.nutrition_logs DO INSTEAD NOTHING;
+
+COMMIT;
+```
+
+**Important:** View inherits RLS from `meals` (security-invoker by default in PG ≥ 15). Verify with policy test in Phase 4.3.
+
+### 4.2 Read consumers (keep working via compat view, no changes required)
+
+These 12 files read `nutrition_logs` and will continue to work unchanged through the compat view. They are updated opportunistically later to query `meals_with_totals` directly for perf:
+
+- `src/pages/Dashboard.tsx` (reads today's totals)
+- `src/hooks/useGamification.ts` (streak)
+- `src/utils/baselineComputer.ts` (7-day rolling baselines)
+- `src/lib/backgroundSync.ts` (adjacent-date preload)
+- `src/hooks/nutrition/useQuickMealActions.ts` (yesterday's meals for repeat)
+- `src/components/nutrition/FoodSearchDialog.tsx:108` (recents list)
+- `src/components/DataResetDialog.tsx` (export CSV)
+- Any other SELECT-only consumer
+
+Verification test (tester agent): run each flow, confirm data renders identically.
+
+### 4.3 Write consumers (must be migrated)
+
+These 5 files WRITE to `nutrition_logs` and **must** be updated — INSERT on the view silently no-ops:
+
+| File | Change |
+|---|---|
+| `src/hooks/nutrition/useMealOperations.ts` (5 insert paths + 1 update + 1 delete) | Replace `supabase.from("nutrition_logs").insert(...)` with RPC `create_meal_with_items({meal, items})`. Replace update/delete with direct ops on `meals` / `meal_items`. |
+| `src/lib/batchOperations.ts` | Batch writer rewritten to create one `meals` row per batch + many `meal_items`. |
+| `src/components/DataResetDialog.tsx:255` | Delete from `meals` (cascade wipes `meal_items`). |
+| `src/lib/demoData.ts` | Demo seeder writes into new tables. |
+| `supabase/functions/analyze-meal/*`, `scan-barcode/*`, `lookup-ingredient/*` | Covered in Phase 3.1. Use `create_meal_with_items` RPC. |
+
+### 4.4 Realtime subscribers
+
+| File | Change |
+|---|---|
+| `src/hooks/useMealsRealtime.ts` | Subscribe to BOTH `meals` and `meal_items`. Emit cache-invalidation event keyed by `meal.user_id + meal.date`. Item-level events look up parent via cached mapping to derive date. |
+| `src/lib/pendingMeals.ts` | Heal logic updated: any syncQueue entry with `table === 'nutrition_logs'` is dropped at boot with a log (can't be replayed against archived table). New queue entries use `table === 'meals'` and `table === 'meal_items'`. |
+
+### 4.5 Wizard chat (edge)
+
+**File:** `supabase/functions/wizard-chat/index.ts:238`
+
+```ts
+// BEFORE
+supabaseClient.from('nutrition_logs')
+  .select('date, calories, protein_g, carbs_g, fats_g, meal_type, meal_name')
+  .eq('user_id', user.id).gte('date', sevenDaysAgo)...
+
+// AFTER — same shape, via compat view OR directly:
+supabaseClient.from('meals_with_totals')
+  .select('date, total_calories as calories, total_protein_g as protein_g, ' +
+          'total_carbs_g as carbs_g, total_fats_g as fats_g, meal_type, meal_name')
+  .eq('user_id', user.id).gte('date', sevenDaysAgo)...
+```
+
+Prefer `meals_with_totals` (one row per meal with aggregated macros) over the compat view (one row per meal_item) — the wizard prompt expects meal-level granularity.
+
+Audit other edge functions for `nutrition_logs` reads: `analyse-diet`, `fight-week-analysis`, `meal-planner`, `daily-wisdom`, `rehydration-protocol`, `weight-tracker-analysis`. Any that reads nutrition data gets the same treatment — switch to `meals_with_totals`.
+
+### 4.6 Generated types
+
+**File:** `src/integrations/supabase/types.ts`
+
+Regenerate after migrations via `npx supabase gen types typescript --local > src/integrations/supabase/types.ts`. New types for `meals`, `meal_items`, `foods`, `meals_with_totals`, plus the legacy `nutrition_logs` view. Replace all hand-cast `as any` on insert payloads with the new typed shape in `useMealOperations.ts`.
+
+### 4.7 localCache keys
+
+`localCache.setForDate(userId, "nutrition_logs", …)` uses `"nutrition_logs"` as a string key, not a table name. This stays — it's just a cache namespace. Migration code at boot (`src/lib/pendingMeals.ts` heal path) drops stuck queue entries; cache entries auto-refresh from DB on first load.
+
+### 4.8 Acceptance test matrix (cross-feature)
+
+| Feature | Test |
+|---|---|
+| Dashboard | Today's calorie summary matches Nutrition page exactly |
+| Wizard chat | Ask coach "what did I eat yesterday?" — returns accurate meals |
+| Gamification | Streak counter matches manual count of days with ≥1 meal |
+| Diet analysis | "Analyze my diet" returns same data as pre-migration |
+| Fight-week analysis | Weekly macro averages match |
+| Meal planner | AI suggestions reference current-week eating patterns |
+| Daily wisdom | "Today's tip" references current macros |
+| CSV export (DataReset) | Exports all meals with correct totals |
+| Demo data | Fresh demo user sees seeded meals on Nutrition + Dashboard |
+
+---
+
 ## Testing Plan
 
 **Frontend (tester agent):**
