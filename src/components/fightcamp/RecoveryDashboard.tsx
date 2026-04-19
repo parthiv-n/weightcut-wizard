@@ -320,24 +320,6 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
         <StrainChart strainHistory={metrics.strainHistory} forecast={metrics.forecast} />
       </div>
 
-      {/* 3.5) Trend Alerts — only when alerts exist */}
-      {metrics.trends.alerts.length > 0 && (
-        <div className="card-surface rounded-2xl p-4 border border-amber-500/30 bg-amber-500/5">
-          <div className="flex items-center gap-2 mb-3">
-            <AlertTriangle className="h-5 w-5 text-amber-400" />
-            <h2 className="text-lg font-bold text-amber-400">Trend Alerts</h2>
-          </div>
-          <ul className="space-y-1.5">
-            {metrics.trends.alerts.map((alert, i) => (
-              <li key={i} className="flex items-start gap-2 text-sm text-amber-300/90">
-                <AlertTriangle className="h-3.5 w-3.5 text-amber-400 mt-0.5 shrink-0" />
-                {alert}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
       {/* 4) Forecast Summary Card */}
       <div className="card-surface rounded-2xl p-4 border border-border">
         <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2 font-semibold">Projected Tomorrow</div>
