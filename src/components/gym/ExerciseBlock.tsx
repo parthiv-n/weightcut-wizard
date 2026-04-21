@@ -1,15 +1,17 @@
 import { useCallback, useMemo } from "react";
-import { Plus, Copy, X, ChevronRight } from "lucide-react";
+import { Plus, Copy, X, ChevronRight, Trophy } from "lucide-react";
 import { motion } from "motion/react";
 import { staggerItem } from "@/lib/motion";
 import { SetRow } from "./SetRow";
-import type { ExerciseGroup, PRType } from "@/pages/gym/types";
+import { formatWeight } from "@/lib/gymCalculations";
+import type { ExerciseGroup, PRType, GymSet } from "@/pages/gym/types";
 import type { ExercisePR } from "@/pages/gym/types";
 
 interface ExerciseBlockProps {
   group: ExerciseGroup;
   pr?: ExercisePR | null;
   newPRSetIds?: Set<string>;
+  previousSets?: GymSet[];
   onAddSet: (exerciseOrder: number, data: { weight_kg?: number | null; reps: number; rpe?: number | null; is_warmup?: boolean; is_bodyweight?: boolean }) => void;
   onUpdateSet: (setId: string, exerciseOrder: number, updates: Partial<{ weight_kg: number | null; reps: number; rpe: number | null; is_warmup: boolean }>) => void;
   onDeleteSet: (setId: string, exerciseOrder: number) => void;
@@ -53,7 +55,7 @@ const MUSCLE_COLORS: Record<string, string> = {
 };
 
 export function ExerciseBlock({
-  group, pr, newPRSetIds, onAddSet, onUpdateSet, onDeleteSet,
+  group, pr, newPRSetIds, previousSets, onAddSet, onUpdateSet, onDeleteSet,
   onDuplicateLastSet, onRemoveExercise, onExerciseTap,
 }: ExerciseBlockProps) {
   const workingSets = useMemo(
@@ -63,12 +65,15 @@ export function ExerciseBlock({
 
   const handleAddSet = useCallback(() => {
     const lastSet = group.sets[group.sets.length - 1];
+    // Seed from previous workout's top set when the current group is empty —
+    // gives user an explicit number to beat (progressive overload).
+    const seedSet = lastSet ?? previousSets?.[0] ?? null;
     onAddSet(group.exerciseOrder, {
-      weight_kg: lastSet?.weight_kg ?? null,
-      reps: lastSet?.reps ?? 10,
+      weight_kg: seedSet?.weight_kg ?? null,
+      reps: seedSet?.reps ?? 10,
       is_bodyweight: group.exercise.is_bodyweight,
     });
-  }, [group, onAddSet]);
+  }, [group, previousSets, onAddSet]);
 
   const handleUpdate = useCallback((setId: string, updates: any) => {
     onUpdateSet(setId, group.exerciseOrder, updates);
@@ -106,6 +111,24 @@ export function ExerciseBlock({
           <X className="h-4 w-4" />
         </button>
       </div>
+
+      {/* Last workout hint — beat this */}
+      {previousSets && previousSets.length > 0 && (
+        <div className="px-3 pb-2 flex items-center gap-1.5 flex-wrap">
+          <Trophy className="h-3 w-3 text-yellow-500/70 shrink-0" />
+          <span className="text-[10px] uppercase tracking-widest text-muted-foreground/70 shrink-0">Last time</span>
+          <div className="flex items-center gap-1 flex-wrap">
+            {previousSets.map((s, i) => (
+              <span key={s.id} className="text-[11px] tabular-nums text-muted-foreground/90">
+                {s.is_bodyweight ? "BW" : `${formatWeight(s.weight_kg)}kg`}
+                <span className="text-muted-foreground/40"> × </span>
+                {s.reps}
+                {i < previousSets.length - 1 && <span className="text-muted-foreground/30 ml-1">·</span>}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Column headers */}
       {group.sets.length > 0 && (

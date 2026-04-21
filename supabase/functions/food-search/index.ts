@@ -65,7 +65,9 @@ serve(async (req) => {
 
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
-    return json({ error: "Unauthorized" }, 401);
+    // Phase 1.2: client distinguishes retryable auth errors from real errors
+    // via this flag — signals "refresh session + try again", not "give up".
+    return json({ error: "Unauthorized", retryable: true }, 401);
   }
 
   const supabaseClient = createClient(
@@ -76,7 +78,7 @@ serve(async (req) => {
 
   const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
   if (userError || !user) {
-    return json({ error: "Invalid token" }, 401);
+    return json({ error: "Invalid token", retryable: true }, 401);
   }
 
   // Food search is a free USDA database lookup — no AI usage limits
@@ -117,9 +119,57 @@ serve(async (req) => {
     const usdaData = await usdaResponse.json();
     const foods = (usdaData.foods || []) as USDAFood[];
 
-    const results = foods
+    const normalised = foods
       .map(normalizeFood)
       .filter((f) => f.calories_per_100g > 0 && f.name.trim().length > 0);
+
+    // Phase 3.1: lazy-populate the `foods` catalog so repeat searches for the
+    // same USDA item hit our DB instead of the USDA API, and so meal_items can
+    // FK to a stable `foods.id` instead of re-inserting the same row N times.
+    let results = normalised;
+    if (normalised.length > 0) {
+      const rows = normalised.map((f) => ({
+        name: f.name,
+        brand: f.brand || null,
+        calories_per_100g: f.calories_per_100g,
+        protein_per_100g: f.protein_per_100g,
+        carbs_per_100g: f.carbs_per_100g,
+        fats_per_100g: f.fats_per_100g,
+        source: "usda",
+        source_ref: f.id, // USDA fdcId
+        verified: true,
+        created_by: user.id,
+      }));
+
+      const { data: upserted, error: upsertError } = await supabaseClient
+        .from("foods")
+        .upsert(rows, { onConflict: "source,source_ref", ignoreDuplicates: false })
+        .select("id, name, brand, calories_per_100g, protein_per_100g, carbs_per_100g, fats_per_100g, source, source_ref");
+
+      if (upsertError) {
+        edgeLogger.warn("foods upsert failed; returning USDA results without catalog ids", {
+          functionName: "food-search",
+          message: upsertError.message,
+        });
+      } else if (upserted) {
+        // Merge catalog ids back onto the normalised payload by source_ref (fdcId).
+        const byFdcId = new Map<string, typeof upserted[number]>();
+        for (const row of upserted) {
+          if (row.source_ref) byFdcId.set(row.source_ref, row);
+        }
+        results = normalised.map((f) => {
+          const cat = byFdcId.get(f.id);
+          return cat
+            ? {
+                ...f,
+                id: cat.id, // swap USDA fdcId for catalog UUID
+                name: cat.name,
+                brand: cat.brand ?? f.brand,
+              }
+            : f;
+        });
+      }
+    }
 
     // Cache for subsequent requests
     searchCache.set(cacheKey, { results, ts: Date.now() });

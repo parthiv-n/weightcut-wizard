@@ -1,9 +1,10 @@
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, startOfWeek, endOfWeek } from "date-fns";
 import { ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { localCache } from "@/lib/localCache";
+import { withSupabaseTimeout, withRetry } from "@/lib/timeoutWrapper";
 import { getSessionColor, getUserColors } from "@/lib/sessionColors";
 import { AnimatedRing } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton-loader";
@@ -18,6 +19,60 @@ interface WeekSession {
 }
 
 const DAY_LABELS = ["M", "T", "W", "T", "F", "S", "S"];
+const CACHE_KEY = "training_week_sessions";
+
+// Module-level in-memory cache — avoids JSON.parse on every mount,
+// survives component unmount/remount within a session
+const memCache = new Map<string, { data: WeekSession[]; fetchedAt: number }>();
+const inflightRequests = new Map<string, Promise<WeekSession[]>>();
+const FRESH_WINDOW_MS = 30 * 1000; // dedupe refetches within 30s
+
+async function fetchWeekFromServer(userId: string): Promise<WeekSession[]> {
+  const inflight = inflightRequests.get(userId);
+  if (inflight) return inflight;
+
+  const promise = (async () => {
+    const now = new Date();
+    const ws = startOfWeek(now, { weekStartsOn: 1 });
+    const we = endOfWeek(now, { weekStartsOn: 1 });
+    const { data, error } = await withRetry(
+      () => withSupabaseTimeout(
+        supabase
+          .from("fight_camp_calendar")
+          .select("id, date, session_type, duration_minutes, rpe")
+          .eq("user_id", userId)
+          .gte("date", format(ws, "yyyy-MM-dd"))
+          .lte("date", format(we, "yyyy-MM-dd"))
+          .neq("session_type", "Rest")
+          .limit(30),
+        6000,
+        "Fetch training week",
+      ),
+      1,
+      500,
+    );
+    if (error) throw error;
+    const result = ((data ?? []) as WeekSession[]);
+    memCache.set(userId, { data: result, fetchedAt: Date.now() });
+    localCache.set(userId, CACHE_KEY, result);
+    return result;
+  })();
+
+  inflightRequests.set(userId, promise);
+  try {
+    return await promise;
+  } finally {
+    inflightRequests.delete(userId);
+  }
+}
+
+// Exported preload — callable from Dashboard/UserContext before mount
+export function preloadTrainingWeek(userId: string): void {
+  if (!userId) return;
+  const mem = memCache.get(userId);
+  if (mem && Date.now() - mem.fetchedAt < FRESH_WINDOW_MS) return;
+  fetchWeekFromServer(userId).catch(() => { /* non-critical */ });
+}
 
 interface TrainingWeekWidgetProps {
   userId: string;
@@ -26,42 +81,43 @@ interface TrainingWeekWidgetProps {
 
 export const TrainingWeekWidget = memo(function TrainingWeekWidget({ userId, compact }: TrainingWeekWidgetProps) {
   const navigate = useNavigate();
-  const CACHE_KEY = "training_week_sessions";
   const [sessions, setSessions] = useState<WeekSession[]>(() => {
-    // Serve from cache instantly
-    return localCache.get<WeekSession[]>(userId, CACHE_KEY, 10 * 60 * 1000) || [];
+    const mem = memCache.get(userId);
+    if (mem) return mem.data;
+    // Fall back to localStorage regardless of age — stale-while-revalidate
+    const cached = localCache.get<WeekSession[]>(userId, CACHE_KEY);
+    if (cached) {
+      memCache.set(userId, { data: cached, fetchedAt: 0 });
+      return cached;
+    }
+    return [];
   });
-  const [loading, setLoading] = useState(() => {
-    return !localCache.get<WeekSession[]>(userId, CACHE_KEY, 10 * 60 * 1000);
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (memCache.has(userId)) return false;
+    return !localCache.get<WeekSession[]>(userId, CACHE_KEY);
   });
   const [customColors] = useState(() => getUserColors(userId));
 
-  const fetchWeekSessions = useCallback(async () => {
-    try {
-      const now = new Date();
-      const ws = startOfWeek(now, { weekStartsOn: 1 });
-      const we = endOfWeek(now, { weekStartsOn: 1 });
-      const { data, error } = await supabase
-        .from("fight_camp_calendar")
-        .select("id, date, session_type, duration_minutes, rpe")
-        .eq("user_id", userId)
-        .gte("date", format(ws, "yyyy-MM-dd"))
-        .lte("date", format(we, "yyyy-MM-dd"))
-        .neq("session_type", "Rest")
-        .limit(30);
-
-      if (error) throw error;
-      const result = (data as WeekSession[]) || [];
-      setSessions(result);
-      localCache.set(userId, CACHE_KEY, result);
-    } catch {
-      // Fail silently — widget is non-critical
-    } finally {
+  useEffect(() => {
+    let cancelled = false;
+    const mem = memCache.get(userId);
+    // Skip network if we fetched within the dedupe window
+    if (mem && Date.now() - mem.fetchedAt < FRESH_WINDOW_MS) {
       setLoading(false);
+      return;
     }
+    (async () => {
+      try {
+        const result = await fetchWeekFromServer(userId);
+        if (!cancelled) setSessions(result);
+      } catch {
+        // keep stale — widget is non-critical
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [userId]);
-
-  useEffect(() => { fetchWeekSessions(); }, [fetchWeekSessions]);
 
   // Build day-of-week map (Mon=0..Sun=6)
   const dayMap = new Map<number, WeekSession[]>();
@@ -98,19 +154,40 @@ export const TrainingWeekWidget = memo(function TrainingWeekWidget({ userId, com
   const dominantType = typeEntries[0]?.[0] ?? "Other";
   const ringColor = getSessionColor(dominantType, customColors);
 
-  if (loading) {
-    return (
-      <div className={`card-surface rounded-2xl border border-border ${compact ? "p-3 aspect-square flex flex-col" : "p-5"}`}>
-        <div className="flex items-center gap-3">
-          <Skeleton className={`${compact ? "w-12 h-12" : "w-20 h-20"} rounded-full flex-shrink-0`} />
-          <div className="flex-1 space-y-2">
-            <Skeleton className="h-3 w-20" />
-            <Skeleton className="h-5 w-8" />
+  if (loading && sessions.length === 0) {
+    // Compact skeleton: mimics exact final layout, clipped by overflow-hidden
+    if (compact) {
+      return (
+        <div className="card-surface rounded-2xl border border-border overflow-hidden p-3 aspect-square flex flex-col">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Skeleton className="w-11 h-11 rounded-full shrink-0" />
+            <div className="flex-1 min-w-0 space-y-1.5">
+              <Skeleton className="h-2.5 w-16 max-w-full rounded" />
+              <Skeleton className="h-4 w-10 max-w-full rounded" />
+            </div>
+          </div>
+          <div className="flex items-end justify-between mt-auto gap-1 px-0.5">
+            {DAY_LABELS.map((_, i) => (
+              <Skeleton key={i} className="h-5 flex-1 max-w-[20px] rounded-sm" />
+            ))}
           </div>
         </div>
-        <div className={`flex justify-between ${compact ? "mt-auto" : "mt-4"} px-1`}>
+      );
+    }
+    // Full skeleton
+    return (
+      <div className="card-surface rounded-2xl border border-border overflow-hidden p-5">
+        <div className="flex items-center gap-4 min-w-0">
+          <Skeleton className="w-20 h-20 rounded-full shrink-0" />
+          <div className="flex-1 min-w-0 space-y-2">
+            <Skeleton className="h-3 w-28 max-w-full rounded" />
+            <Skeleton className="h-6 w-14 max-w-full rounded" />
+            <Skeleton className="h-3 w-20 max-w-full rounded" />
+          </div>
+        </div>
+        <div className="flex items-end justify-between mt-4 gap-1.5 px-1">
           {DAY_LABELS.map((_, i) => (
-            <Skeleton key={i} className="w-5 h-7 rounded-md" />
+            <Skeleton key={i} className="h-8 flex-1 max-w-[28px] rounded-md" />
           ))}
         </div>
       </div>
@@ -120,7 +197,7 @@ export const TrainingWeekWidget = memo(function TrainingWeekWidget({ userId, com
   if (compact) {
     return (
       <div
-        className="card-surface p-3 rounded-2xl border border-border cursor-pointer active:scale-[0.98] transition-all duration-200 aspect-square flex flex-col"
+        className="card-surface p-3 rounded-2xl border border-border overflow-hidden cursor-pointer active:scale-[0.98] transition-all duration-200 aspect-square flex flex-col"
         onClick={() => { triggerHapticSelection(); navigate("/training-calendar?openLogSession=true"); }}
       >
         {/* Header: ring + stats */}
@@ -215,7 +292,7 @@ export const TrainingWeekWidget = memo(function TrainingWeekWidget({ userId, com
   // Full-size (non-compact) layout
   return (
     <div
-      className="card-surface p-5 rounded-2xl border border-border cursor-pointer active:scale-[0.98] transition-all duration-200"
+      className="card-surface p-5 rounded-2xl border border-border overflow-hidden cursor-pointer active:scale-[0.98] transition-all duration-200"
       onClick={() => { triggerHapticSelection(); navigate("/training-calendar?openLogSession=true"); }}
     >
       {/* Top row: ring + stats + chevron */}

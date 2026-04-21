@@ -1,0 +1,67 @@
+{
+  "namespace": "nutrition-overhaul-v2",
+  "spec": "docs/superpowers/specs/2026-04-19-nutrition-overhaul-design.md",
+  "spec_commit": "bc835e6",
+  "branch": "main",
+  "baseline_clean": true,
+  "coordinator": "hierarchical-coordinator",
+  "last_updated": "2026-04-19T00:00:00Z",
+  "state": {
+    "phase1_frontend_done": false,
+    "phase1_auth_done": false,
+    "schema_migrations_written": false,
+    "schema_migrations_applied": false,
+    "edge_functions_updated": false,
+    "client_writers_migrated": false,
+    "tests_green": false,
+    "review_complete": false
+  },
+  "baseline_measurements": {
+    "src/pages/Nutrition.tsx": 1358,
+    "src/lib/timeoutWrapper.ts": 84,
+    "src/contexts/UserContext.tsx": 694,
+    "src/hooks/nutrition/useNutritionData.ts": 475,
+    "src/hooks/nutrition/useMealOperations.ts": 458,
+    "src/components/nutrition/FoodSearchDialog.tsx": 500,
+    "src/components/nutrition/MealCard.tsx": 281,
+    "src/lib/syncQueue.ts": 266,
+    "latest_migration": "20260419000000_add_fight_camp_calendar_bodyweight.sql"
+  },
+  "dependencies": {
+    "phase2_depends_on": ["phase1_frontend_done", "phase1_auth_done"],
+    "phase3_depends_on": ["schema_migrations_applied"],
+    "phase4_compat_view_depends_on": ["schema_migrations_applied"],
+    "tests_green_depends_on": ["client_writers_migrated", "edge_functions_updated"],
+    "review_complete_depends_on": ["tests_green"]
+  },
+  "spec_contract_checklist": {
+    "phase1_1_auth_timeout_raised_to_15s": "pending",
+    "phase1_1_retry_once_on_first_timeout": "pending",
+    "phase1_2_foodsearch_warmup_auth_fixed": "pending",
+    "phase1_2_session_refresh_helper": "pending",
+    "phase1_3_coerceMealName_helper_created": "pending",
+    "phase1_3_all_write_paths_use_helper": "pending",
+    "phase1_3_untitled_literal_removed": "pending",
+    "phase1_4_stable_react_keys": "pending",
+    "phase1_4_syncqueue_uuid_generation": "pending",
+    "phase1_5_nutrition_page_split_under_500_lines": "pending",
+    "phase2_1_nutrition_logs_archived": "pending",
+    "phase2_2_foods_meals_meal_items_created": "pending",
+    "phase2_2_rls_policies_applied": "pending",
+    "phase2_3_meals_with_totals_view": "pending",
+    "phase3_1_edge_fns_use_create_meal_with_items_rpc": "pending",
+    "phase3_2_client_hooks_use_meals_with_totals": "pending",
+    "phase3_3_syncqueue_drops_nutrition_logs_entries": "pending",
+    "phase4_1_compat_view_created": "pending",
+    "phase4_5_wizard_chat_switched_to_meals_with_totals": "pending",
+    "phase4_6_types_regenerated": "pending"
+  },
+  "blockers": [],
+  "resolutions": [],
+  "notes": [
+    "No worker agents dispatched in this coordination session; workers must be spawned by the user / parent agent via Claude Code Task tool per CLAUDE.md rule: Claude Code's Task tool handles ALL execution.",
+    "Coordinator role is orchestration only — no implementation performed this session.",
+    "All flags default to false until a worker reports completion back to this coordinator.",
+    "Existing src/pages/nutrition/types.ts is pre-spec legacy; Phase 3.2 will replace its shape with Food/Meal/MealItem/MealWithTotals types."
+  ]
+}

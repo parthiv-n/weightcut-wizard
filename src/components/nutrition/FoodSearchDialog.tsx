@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Search, Loader2, ChevronRight, Minus, Plus, X, Clock, PlusCircle, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
+import { useToast } from "@/hooks/use-toast";
 
 interface FoodSearchResult {
     id: string;
@@ -98,18 +99,25 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
     const [recentMeals, setRecentMeals] = useState<(FoodSearchResult & { lastPortionGrams: number })[]>([]);
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const abortRef = useRef<AbortController | null>(null);
+    const { toast } = useToast();
 
-    // Load recent meals when dialog opens
+    // Load recent meals when dialog opens. Uses v2 `meals_with_totals` view
+    // (the legacy `nutrition_logs` table was archived and queries against it
+    // hang in web, stalling the dialog open). Wrapped in a 5s timeout so a
+    // wedged Supabase client can't freeze the UI — we just show no recents.
     useEffect(() => {
         if (!open) return;
+        let cancelled = false;
+        const timer = setTimeout(() => { cancelled = true; }, 5000);
         (async () => {
             try {
                 const { data } = await supabase
-                    .from("nutrition_logs")
-                    .select("meal_name, calories, protein_g, carbs_g, fats_g, portion_size")
+                    .from("meals_with_totals")
+                    .select("meal_name, total_calories, total_protein_g, total_carbs_g, total_fats_g, is_ai_generated, created_at")
                     .eq("is_ai_generated", false)
                     .order("created_at", { ascending: false })
                     .limit(50);
+                if (cancelled) return;
                 if (!data?.length) { setRecentMeals([]); return; }
 
                 // Deduplicate by meal_name, keep most recent, skip hidden
@@ -117,42 +125,36 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                 const seen = new Set<string>();
                 const unique: typeof data = [];
                 for (const row of data) {
-                    const key = row.meal_name.toLowerCase();
-                    if (seen.has(key) || hidden.has(key)) continue;
+                    const key = (row.meal_name ?? "").toLowerCase();
+                    if (!key || seen.has(key) || hidden.has(key)) continue;
                     seen.add(key);
                     unique.push(row);
                     if (unique.length >= 10) break;
                 }
 
-                setRecentMeals(unique.map((row) => {
-                    const portionMatch = row.portion_size?.match(/(\d+(?:\.\d+)?)\s*g/i);
-                    const portionGrams = portionMatch ? parseFloat(portionMatch[1]) : 100;
-                    const scale = portionGrams > 0 ? 100 / portionGrams : 1;
-                    return {
-                        id: `recent-${row.meal_name}`,
-                        name: row.meal_name,
-                        brand: "",
-                        calories_per_100g: Math.round((row.calories ?? 0) * scale),
-                        protein_per_100g: Math.round((row.protein_g ?? 0) * scale * 10) / 10,
-                        carbs_per_100g: Math.round((row.carbs_g ?? 0) * scale * 10) / 10,
-                        fats_per_100g: Math.round((row.fats_g ?? 0) * scale * 10) / 10,
-                        lastPortionGrams: Math.round(portionGrams),
-                    };
-                }));
+                // No portion_size on meals_with_totals — treat recent totals as
+                // a single 100g serving so per-100g and lastPortionGrams=100.
+                setRecentMeals(unique.map((row) => ({
+                    id: `recent-${row.meal_name}`,
+                    name: row.meal_name as string,
+                    brand: "",
+                    calories_per_100g: Math.round(Number(row.total_calories ?? 0)),
+                    protein_per_100g: Math.round(Number(row.total_protein_g ?? 0) * 10) / 10,
+                    carbs_per_100g: Math.round(Number(row.total_carbs_g ?? 0) * 10) / 10,
+                    fats_per_100g: Math.round(Number(row.total_fats_g ?? 0) * 10) / 10,
+                    lastPortionGrams: 100,
+                })));
             } catch (err) {
-                logger.error("Failed to load recent meals", err);
+                if (!cancelled) logger.error("Failed to load recent meals", err);
+            } finally {
+                clearTimeout(timer);
             }
         })();
+        return () => { cancelled = true; clearTimeout(timer); };
     }, [open]);
 
-    // Warmup edge function on dialog open
-    useEffect(() => {
-        if (open) {
-            fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/food-search`, {
-                method: "GET",
-            }).catch(() => {});
-        }
-    }, [open]);
+    // Phase 1.2: removed unauthenticated warmup ping — it was emitting 401s on
+    // every dialog open and the real search request already warms the isolate.
 
     // Debounced search
     const searchFoods = useCallback(async (searchQuery: string) => {
@@ -166,31 +168,125 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
         const controller = new AbortController();
         abortRef.current = controller;
 
+        // Hard wall-clock timeout so a wedged Supabase client / dead edge
+        // fn can't leave the user waiting indefinitely. 8s is well beyond
+        // typical p95 (~800ms) but short enough to retry or show an error.
+        const timeoutTimer = setTimeout(() => controller.abort(), 8000);
+
         setSearching(true);
         try {
-            const { data: { session } } = await supabase.auth.getSession();
+            // Read the JWT straight from localStorage — synchronous, never
+            // contends with Supabase's internal auth mutex (which can be
+            // wedged and make `supabase.auth.getSession()` hang). The token
+            // is what the edge function validates; we only need to involve
+            // Supabase auth if the token is actually missing or expired.
+            const readStoredToken = (): { access_token: string; expires_at: number } | null => {
+                try {
+                    const raw = localStorage.getItem("weightcut-wizard-auth");
+                    if (!raw) return null;
+                    const parsed = JSON.parse(raw);
+                    const access = parsed?.access_token ?? parsed?.currentSession?.access_token;
+                    const exp = parsed?.expires_at ?? parsed?.currentSession?.expires_at ?? 0;
+                    return access ? { access_token: access, expires_at: Number(exp) || 0 } : null;
+                } catch {
+                    return null;
+                }
+            };
+
+            const nowSec = Math.floor(Date.now() / 1000);
+            let token = readStoredToken();
+            const needsRefresh =
+                !token?.access_token || (token.expires_at > 0 && token.expires_at - nowSec < 60);
+
+            if (needsRefresh) {
+                const refreshRace = await Promise.race([
+                    supabase.auth.refreshSession(),
+                    new Promise<never>((_, reject) =>
+                        setTimeout(() => reject(new Error("refreshSession timed out")), 4000)
+                    ),
+                ]).catch((e) => {
+                    logger.warn("Food search: session refresh failed", { error: String(e) });
+                    return null;
+                });
+                const refreshed = refreshRace?.data?.session;
+                if (refreshed?.access_token) {
+                    token = {
+                        access_token: refreshed.access_token,
+                        expires_at: refreshed.expires_at ?? 0,
+                    };
+                } else {
+                    // Re-read storage — autoRefreshToken may have just written
+                    // a new token even though our race lost to the timer.
+                    const fresh = readStoredToken();
+                    if (fresh?.access_token) {
+                        token = fresh;
+                    }
+                }
+            }
+
+            if (!token?.access_token) {
+                toast({
+                    title: "Sign-in expired",
+                    description: "Please reopen the app to sign in again.",
+                    variant: "destructive",
+                });
+                return;
+            }
+
             const response = await fetch(
                 `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/food-search`,
                 {
                     method: "POST",
                     headers: {
                         "Content-Type": "application/json",
-                        Authorization: `Bearer ${session?.access_token}`,
+                        Authorization: `Bearer ${token.access_token}`,
                     },
                     body: JSON.stringify({ query: searchQuery }),
                     signal: controller.signal,
                 }
             );
+
+            if (response.status === 401) {
+                // Edge function returns { error, retryable: true } — surface as auth error.
+                let retryable = false;
+                try {
+                    const body = await response.json();
+                    retryable = !!body?.retryable;
+                } catch {
+                    // non-JSON body — fall through
+                }
+                logger.warn("Food search: 401 from edge function", { retryable });
+                toast({
+                    title: "Sign-in expired",
+                    description: "Please reopen the app to sign in again.",
+                    variant: "destructive",
+                });
+                return;
+            }
+
             const data = await response.json();
             setResults(data.results || []);
         } catch (err: any) {
             if (err.name !== "AbortError") {
                 logger.error("Food search error", err);
+                // Timeout / abort means the Supabase client is likely wedged.
+                // Trigger recovery (debounced) and let the user try again —
+                // the next keystroke will land on a fresh client.
+                if (controller.signal.aborted) {
+                    const { recoverSupabaseConnection } = await import("@/lib/connectionRecovery");
+                    recoverSupabaseConnection("food-search-timeout").catch(() => {});
+                    toast({
+                        title: "Search timed out",
+                        description: "Reconnecting — try again in a moment.",
+                        variant: "destructive",
+                    });
+                }
             }
         } finally {
+            clearTimeout(timeoutTimer);
             setSearching(false);
         }
-    }, []);
+    }, [toast]);
 
     useEffect(() => {
         if (debounceRef.current) clearTimeout(debounceRef.current);

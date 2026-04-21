@@ -235,7 +235,7 @@ serve(async (req) => {
     ] = await Promise.allSettled([
       supabaseClient.from('profiles').select('*').eq('id', user.id).single(),
       supabaseClient.from('weight_logs').select('date, weight_kg').eq('user_id', user.id).gte('date', thirtyDaysAgo).order('date', { ascending: false }).limit(15),
-      supabaseClient.from('nutrition_logs').select('date, calories, protein_g, carbs_g, fats_g, meal_type, meal_name').eq('user_id', user.id).gte('date', sevenDaysAgo).order('date', { ascending: false }).limit(50),
+      supabaseClient.from('meals_with_totals').select('date, calories:total_calories, protein_g:total_protein_g, carbs_g:total_carbs_g, fats_g:total_fats_g, meal_type, meal_name').eq('user_id', user.id).gte('date', sevenDaysAgo).order('date', { ascending: false }).limit(50),
       supabaseClient.from('hydration_logs').select('date, amount_ml, sodium_mg').eq('user_id', user.id).gte('date', sevenDaysAgo).order('date', { ascending: false }).limit(30),
       supabaseClient.from('fight_camp_calendar').select('date, session_type, duration_minutes, rpe, soreness_level, sleep_hours').eq('user_id', user.id).gte('date', sevenDaysAgo).order('date', { ascending: false }).limit(20),
       supabaseClient.from('fight_week_plans').select('fight_date, starting_weight_kg, target_weight_kg').eq('user_id', user.id).gte('fight_date', today).order('fight_date', { ascending: true }).limit(1).maybeSingle(),

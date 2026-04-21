@@ -250,9 +250,10 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
 
       // Delete all user data in order (respecting foreign keys)
       // NOTE: Fight camps are preserved - only tracking data is reset
+      // Deleting from `meals` cascades to `meal_items` via FK ON DELETE CASCADE.
       await Promise.all([
         supabase.from("fight_week_logs").delete().eq("user_id", user.id),
-        supabase.from("nutrition_logs").delete().eq("user_id", user.id),
+        supabase.from("meals").delete().eq("user_id", user.id),
         supabase.from("hydration_logs").delete().eq("user_id", user.id),
         supabase.from("weight_logs").delete().eq("user_id", user.id),
         supabase.from("chat_messages").delete().eq("user_id", user.id),

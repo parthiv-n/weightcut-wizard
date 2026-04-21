@@ -30,6 +30,14 @@ function generateDemoWeightLogs(userId: string) {
 }
 
 // ── Nutrition logs (meals for a given date) ──
+//
+// Demo data is localStorage-only: the seeder does NOT hit the Supabase DB,
+// so the write path does not need to call `create_meal_with_items`. The
+// client reads this cache under the `"nutrition_logs"` namespace key (a
+// legacy string; see spec §4.7) and consumes rows via the same `Meal`
+// shape used for DB rows. Each row therefore includes `date`, pre-computed
+// macro totals, and `item_count` so `MealSections` / `NutritionHero` render
+// identical to a DB-backed day.
 
 const MEAL_TEMPLATES = [
   { meal_name: "Oatmeal with banana and protein powder", calories: 420, protein_g: 35, carbs_g: 55, fats_g: 8, meal_type: "breakfast" },
@@ -61,6 +69,8 @@ function generateDemoMeals(userId: string, date: string) {
       ...template,
       date,
       is_ai_generated: false,
+      notes: null,
+      item_count: 1,
       created_at: `${date}T${8 + i * 4}:00:00Z`,
     };
   });

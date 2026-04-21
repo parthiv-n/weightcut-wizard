@@ -398,21 +398,22 @@ export default function Onboarding() {
             if (planError) logger.warn("Cut plan generation failed", { error: planError });
             const plan = planData?.plan || planData;
             if (plan?.weeklyPlan) {
-              localStorage.setItem("wcw_cut_plan", JSON.stringify({
+              const planPayload = {
                 ...plan,
                 currentWeight: parseFloat(formData.current_weight_kg),
                 goalWeight: parseFloat(formData.goal_weight_kg),
                 targetDate: formData.target_date,
-              }));
+              };
+              localStorage.setItem("wcw_cut_plan", JSON.stringify(planPayload));
               const week1 = plan.weeklyPlan[0];
+              const profileUpdate: Record<string, any> = { cut_plan_json: planPayload };
               if (week1) {
-                await supabase.from("profiles").update({
-                  ai_recommended_calories: week1.calories,
-                  ai_recommended_protein_g: week1.protein_g,
-                  ai_recommended_carbs_g: week1.carbs_g,
-                  ai_recommended_fats_g: week1.fats_g,
-                }).eq("id", user.id);
+                profileUpdate.ai_recommended_calories = week1.calories;
+                profileUpdate.ai_recommended_protein_g = week1.protein_g;
+                profileUpdate.ai_recommended_carbs_g = week1.carbs_g;
+                profileUpdate.ai_recommended_fats_g = week1.fats_g;
               }
+              await supabase.from("profiles").update(profileUpdate).eq("id", user.id);
               return true;
             }
             return false;
@@ -438,22 +439,23 @@ export default function Onboarding() {
             if (planError) logger.warn("Weight plan generation failed", { error: planError });
             const plan = planData?.plan || planData;
             if (plan?.weeklyPlan) {
-              localStorage.setItem("wcw_cut_plan", JSON.stringify({
+              const planPayload = {
                 ...plan,
                 currentWeight: parseFloat(formData.current_weight_kg),
                 goalWeight: parseFloat(formData.goal_weight_kg),
                 targetDate: formData.target_date,
                 planType: "weight_loss",
-              }));
+              };
+              localStorage.setItem("wcw_cut_plan", JSON.stringify(planPayload));
               const week1 = plan.weeklyPlan[0];
+              const profileUpdate: Record<string, any> = { cut_plan_json: planPayload };
               if (week1) {
-                await supabase.from("profiles").update({
-                  ai_recommended_calories: week1.calories,
-                  ai_recommended_protein_g: week1.protein_g,
-                  ai_recommended_carbs_g: week1.carbs_g,
-                  ai_recommended_fats_g: week1.fats_g,
-                }).eq("id", user.id);
+                profileUpdate.ai_recommended_calories = week1.calories;
+                profileUpdate.ai_recommended_protein_g = week1.protein_g;
+                profileUpdate.ai_recommended_carbs_g = week1.carbs_g;
+                profileUpdate.ai_recommended_fats_g = week1.fats_g;
               }
+              await supabase.from("profiles").update(profileUpdate).eq("id", user.id);
               return true;
             }
             return false;

@@ -54,6 +54,7 @@ export default function FightCamps() {
   const [compareMode, setCompareMode] = useState(false);
   const [selectedCamps, setSelectedCamps] = useState<string[]>([]);
   const [compareDialogOpen, setCompareDialogOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
   const { safeAsync, isMounted } = useSafeAsync();
@@ -112,33 +113,58 @@ export default function FightCamps() {
   };
 
   const handleCreateCamp = async () => {
-    if (!newCamp.name || !newCamp.fight_date) {
+    // Re-entry guard: ignore double-clicks while an insert is in-flight
+    if (creating) return;
+
+    if (!newCamp.name.trim() || !newCamp.fight_date) {
       toast({ title: "Error", description: "Name and fight date are required", variant: "destructive" });
       return;
     }
 
     if (!userId) return;
 
-    const { error } = await withSupabaseTimeout(
-      supabase
-        .from("fight_camps")
-        .insert([{
-          user_id: userId,
-          name: newCamp.name,
-          event_name: newCamp.event_name || null,
-          fight_date: newCamp.fight_date,
-        }]),
-      undefined,
-      "Create fight camp"
-    );
+    setCreating(true);
+    try {
+      const { data, error } = await withSupabaseTimeout(
+        supabase
+          .from("fight_camps")
+          .insert([{
+            user_id: userId,
+            name: newCamp.name.trim(),
+            event_name: newCamp.event_name.trim() || null,
+            fight_date: newCamp.fight_date,
+          }])
+          .select("id, name, event_name, fight_date, profile_pic_url, is_completed, starting_weight_kg, end_weight_kg, total_weight_cut, weight_via_dehydration, weight_via_carb_reduction, weigh_in_timing")
+          .single(),
+        undefined,
+        "Create fight camp"
+      );
 
-    if (error) {
-      toast({ title: "Error", description: "Failed to create fight camp", variant: "destructive" });
-    } else {
+      if (error) {
+        // 23505 = unique_violation → duplicate camp from a prior double-click
+        if ((error as any).code === "23505") {
+          toast({ title: "Already exists", description: "A camp with this name and date already exists.", variant: "destructive" });
+          localCache.remove(userId, 'fight_camps');
+          fetchCamps();
+        } else {
+          logger.warn("Create fight camp failed", { error });
+          toast({ title: "Error", description: "Failed to create fight camp. Please try again.", variant: "destructive" });
+        }
+        return;
+      }
+
+      // Optimistically prepend new camp, no need to refetch
+      if (data) {
+        setCamps(prev => [data as FightCamp, ...prev.filter(c => c.id !== (data as FightCamp).id)]);
+      }
+      localCache.remove(userId, 'fight_camps');
       setDialogOpen(false);
       setNewCamp({ name: "", event_name: "", fight_date: "" });
-      localCache.remove(userId, 'fight_camps');
-      fetchCamps();
+    } catch (err) {
+      logger.warn("Create fight camp threw", { error: err });
+      toast({ title: "Error", description: "Couldn't create camp. Check your connection.", variant: "destructive" });
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -335,7 +361,7 @@ export default function FightCamps() {
       />
 
       {/* New Camp Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { if (!creating) setDialogOpen(open); }}>
         <DialogContent className="w-[calc(100vw-2.5rem)] max-w-[320px] rounded-[28px] p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0">
           <div className="px-4 pt-4 pb-3">
             <DialogHeader>
@@ -375,8 +401,12 @@ export default function FightCamps() {
             </div>
           </div>
           <div className="border-t border-border/40 mt-3">
-            <button onClick={handleCreateCamp} className="w-full py-2.5 text-[14px] font-semibold text-primary active:bg-muted/50 transition-colors">
-              Create Camp
+            <button
+              onClick={handleCreateCamp}
+              disabled={creating}
+              className="w-full py-2.5 text-[14px] font-semibold text-primary active:bg-muted/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:active:bg-transparent"
+            >
+              {creating ? "Creating…" : "Create Camp"}
             </button>
           </div>
         </DialogContent>

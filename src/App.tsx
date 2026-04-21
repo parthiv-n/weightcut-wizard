@@ -33,7 +33,7 @@ import Onboarding from "./pages/Onboarding";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Goals = lazy(() => import("./pages/Goals"));
-const Nutrition = lazy(() => import("./pages/Nutrition"));
+const Nutrition = lazy(() => import("./pages/nutrition/NutritionPage"));
 const WeightTracker = lazy(() => import("./pages/WeightTracker"));
 const WeightCut = lazy(() => import("./pages/WeightCut"));
 const FightCamps = lazy(() => import("./pages/FightCamps"));
@@ -52,7 +52,7 @@ const _idle = window.requestIdleCallback || ((cb: IdleRequestCallback) => setTim
 _idle(() => {
   // Primary routes — likely first navigation
   import("./pages/Dashboard").catch(() => {});
-  import("./pages/Nutrition").catch(() => {});
+  import("./pages/nutrition/NutritionPage").catch(() => {});
   import("./pages/WeightTracker").catch(() => {});
   // Secondary routes — defer to avoid network contention
   setTimeout(() => {

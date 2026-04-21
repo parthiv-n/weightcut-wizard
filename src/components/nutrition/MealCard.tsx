@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Edit2, Trash2, Star } from "lucide-react";
 import { useState, useRef, useEffect, memo } from "react";
+import { coerceMealName } from "@/lib/mealName";
 import { motion, useMotionValue, useReducedMotion } from "motion/react";
 import { springs } from "@/lib/motion";
 import { MacroDonut } from "./MacroDonut";
@@ -135,7 +136,7 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete, onFavor
           className="flex items-center gap-2.5 px-2.5 py-2 cursor-pointer"
           onClick={handleOpenDetails}
           role="button"
-          aria-label={`Open details for ${meal.meal_name || "meal"}`}
+          aria-label={`Open details for ${coerceMealName(meal.meal_name, meal.meal_type)}`}
         >
           {/* Mini donut */}
           <MacroDonut protein={p} carbs={c} fat={f} calories={meal.calories} size={30} />
@@ -143,7 +144,7 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete, onFavor
           {/* Name + colored macro labels */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1">
-              <span className="text-[11px] font-semibold leading-tight text-foreground truncate">{meal.meal_name || "Untitled"}</span>
+              <span className="text-[11px] font-semibold leading-tight text-foreground truncate">{coerceMealName(meal.meal_name, meal.meal_type)}</span>
             </div>
             {(p > 0 || c > 0 || f > 0) && (
               <div className="flex items-center gap-2 mt-0.5">
@@ -174,10 +175,10 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete, onFavor
       {/* Details dialog */}
       <Dialog open={detailsOpen} onOpenChange={setDetailsOpen}>
         <DialogContent className="max-w-[340px] p-0 overflow-hidden rounded-2xl">
-          <VisuallyHidden><DialogTitle>{meal.meal_name || "Meal details"}</DialogTitle></VisuallyHidden>
+          <VisuallyHidden><DialogTitle>{coerceMealName(meal.meal_name, meal.meal_type)}</DialogTitle></VisuallyHidden>
           <div className="px-4 pt-4 pb-3 space-y-3">
             <div className="pr-8">
-              <p className="text-[15px] font-semibold leading-tight text-foreground break-words">{meal.meal_name || "Untitled"}</p>
+              <p className="text-[15px] font-semibold leading-tight text-foreground break-words">{coerceMealName(meal.meal_name, meal.meal_type)}</p>
               {meal.meal_type && (
                 <p className="text-[11px] uppercase tracking-wider text-muted-foreground/70 mt-0.5 font-semibold">{meal.meal_type}</p>
               )}

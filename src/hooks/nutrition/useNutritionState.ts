@@ -5,6 +5,11 @@ import { localCache } from "@/lib/localCache";
 import { useUser } from "@/contexts/UserContext";
 import type { Meal, MacroGoals, ManualMealForm, ManualNutritionDialogState, EditingTargets, BarcodeBaseMacros, AiLineItem, INITIAL_MANUAL_MEAL, INITIAL_MANUAL_NUTRITION_DIALOG } from "@/pages/nutrition/types";
 
+interface PersistedMacroGoals {
+  macroGoals?: MacroGoals;
+  dailyCalorieTarget?: number;
+}
+
 export function useNutritionState() {
   const { userId } = useUser();
   const today = format(new Date(), "yyyy-MM-dd");
@@ -17,8 +22,21 @@ export function useNutritionState() {
   });
   const [mealPlanIdeas, setMealPlanIdeas] = useState<Meal[]>([]);
   const [selectedDate, setSelectedDate] = useState(today);
-  const [dailyCalorieTarget, setDailyCalorieTarget] = useState(2000);
-  const [aiMacroGoals, setAiMacroGoals] = useState<MacroGoals | null>(null);
+  // Seed from last-known-good macro goals cached in localStorage so the ring
+  // always has a non-zero target on cold-start and survives mid-session state
+  // resets (e.g. a profile refetch returning briefly empty).
+  const [dailyCalorieTarget, setDailyCalorieTarget] = useState<number>(() => {
+    if (!userId) return 2000;
+    const persisted = localCache.get<PersistedMacroGoals>(userId, "macro_goals");
+    return persisted?.dailyCalorieTarget && persisted.dailyCalorieTarget > 0
+      ? persisted.dailyCalorieTarget
+      : 2000;
+  });
+  const [aiMacroGoals, setAiMacroGoals] = useState<MacroGoals | null>(() => {
+    if (!userId) return null;
+    const persisted = localCache.get<PersistedMacroGoals>(userId, "macro_goals");
+    return persisted?.macroGoals ?? null;
+  });
   const [safetyStatus, setSafetyStatus] = useState<"green" | "yellow" | "red">("green");
   const [safetyMessage, setSafetyMessage] = useState("");
 

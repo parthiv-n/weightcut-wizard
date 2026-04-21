@@ -13,8 +13,14 @@ import { preloadAdjacentDates } from "@/lib/backgroundSync";
 import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { calculateCalorieTarget as calculateCalorieTargetUtil } from "@/lib/calorieCalculation";
 import { logger } from "@/lib/logger";
-import type { Meal, MacroGoals, Ingredient } from "@/pages/nutrition/types";
+import { coerceMealName } from "@/lib/mealName";
+import { mapMealsWithTotalsToMeal } from "./mealsMapper";
+import type { Meal, MacroGoals, MealWithTotals } from "@/pages/nutrition/types";
 import type { DietAnalysisResult } from "@/types/dietAnalysis";
+
+// Re-export so NutritionPage / MealCard can import the lazy item fetcher
+// from the same entry point they already use for the data hook.
+export { fetchMealItems } from "./mealsMapper";
 
 const LOCAL_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours — stale-while-revalidate handles freshness
 
@@ -63,7 +69,13 @@ export function useNutritionData(params: UseNutritionDataParams) {
 
   const calculateCalorieTarget = (profileData: any) => {
     const target = calculateCalorieTargetUtil(profileData);
-    setDailyCalorieTarget(target);
+    // Never reset the ring's calorie target to 0/falsy mid-session — a
+    // transient profile refetch with incomplete data would otherwise blank
+    // the progress arc. Keep the last-known-good value when the new target
+    // isn't a positive number.
+    if (Number.isFinite(target) && target > 0) {
+      setDailyCalorieTarget(target);
+    }
     setSafetyStatus("green");
     setSafetyMessage("");
   };
@@ -71,16 +83,12 @@ export function useNutritionData(params: UseNutritionDataParams) {
   const fetchMacroGoals = async () => {
     if (!profile) return;
 
-    const fightWeekTarget = profile.fight_week_target_kg;
-    if (!fightWeekTarget) {
-      safeAsync(setAiMacroGoals)(null);
-      return;
-    }
-
+    // Resilience: do NOT null out aiMacroGoals on transient misses — that
+    // blanks the progress ring mid-session. Only OVERWRITE with fresh good
+    // values; leave last-known-good values in place otherwise.
     safeAsync(setFetchingMacroGoals)(true);
     try {
       if (!userId) {
-        safeAsync(setAiMacroGoals)(null);
         safeAsync(setFetchingMacroGoals)(false);
         return;
       }
@@ -89,7 +97,7 @@ export function useNutritionData(params: UseNutritionDataParams) {
       const persistedMacros = localCache.get<any>(userId, 'macro_goals', 60 * 60 * 1000);
       if (persistedMacros?.macroGoals) {
         safeAsync(setAiMacroGoals)(persistedMacros.macroGoals);
-        if (persistedMacros.dailyCalorieTarget) {
+        if (persistedMacros.dailyCalorieTarget && persistedMacros.dailyCalorieTarget > 0) {
           safeAsync(setDailyCalorieTarget)(persistedMacros.dailyCalorieTarget);
         }
         safeAsync(setFetchingMacroGoals)(false);
@@ -97,8 +105,10 @@ export function useNutritionData(params: UseNutritionDataParams) {
 
       const cachedMacroGoals = nutritionCache.getMacroGoals(userId);
       if (cachedMacroGoals) {
-        safeAsync(setAiMacroGoals)(cachedMacroGoals.macroGoals);
-        if (cachedMacroGoals.dailyCalorieTarget) {
+        if (cachedMacroGoals.macroGoals) {
+          safeAsync(setAiMacroGoals)(cachedMacroGoals.macroGoals);
+        }
+        if (cachedMacroGoals.dailyCalorieTarget && cachedMacroGoals.dailyCalorieTarget > 0) {
           safeAsync(setDailyCalorieTarget)(cachedMacroGoals.dailyCalorieTarget);
         }
         if (cachedMacroGoals.profileUpdate && profile && profile.manual_nutrition_override !== cachedMacroGoals.profileUpdate.manual_nutrition_override) {
@@ -110,9 +120,7 @@ export function useNutritionData(params: UseNutritionDataParams) {
 
       const profileData = contextProfile;
 
-      if (!profileData) {
-        setAiMacroGoals(null);
-      } else if (profileData?.ai_recommended_calories) {
+      if (profileData?.ai_recommended_calories) {
         const macroGoals: MacroGoals = {
           proteinGrams: profileData.ai_recommended_protein_g || 0,
           carbsGrams: profileData.ai_recommended_carbs_g || 0,
@@ -133,11 +141,13 @@ export function useNutritionData(params: UseNutritionDataParams) {
         };
         nutritionCache.setMacroGoals(userId, macroData);
         localCache.set(userId, 'macro_goals', macroData);
-      } else {
-        setAiMacroGoals(null);
       }
+      // else: profile has no AI recommendation yet — leave last-known-good
+      // aiMacroGoals alone. The effectiveMacroGoals memo in NutritionPage
+      // falls back to a derived split of dailyCalorieTarget when aiMacroGoals
+      // is null, so the ring still renders.
     } catch (error) {
-      safeAsync(setAiMacroGoals)(null);
+      logger.warn("fetchMacroGoals failed, keeping last-known-good values", { error: String(error) });
     } finally {
       safeAsync(setFetchingMacroGoals)(false);
     }
@@ -174,7 +184,7 @@ export function useNutritionData(params: UseNutritionDataParams) {
       const localMeals = localCache.getForDate<Meal[]>(userId, "nutrition_logs", fetchDate, LOCAL_CACHE_TTL_MS);
       if (localMeals && localMeals.length > 0) {
         // Normalize meal_name to prevent "Untitled" display from stale cache
-        const normalized = localMeals.map(m => ({ ...m, meal_name: m.meal_name || "Meal" }));
+        const normalized = localMeals.map(m => ({ ...m, meal_name: coerceMealName(m.meal_name, m.meal_type) }));
         setMeals(normalized);
         nutritionCache.setMeals(userId, fetchDate, localMeals);
         safeAsync(setMealsLoading)(false);
@@ -190,24 +200,37 @@ export function useNutritionData(params: UseNutritionDataParams) {
       safeAsync(setMealsLoading)(true);
     }
 
-    let data: any[] | null = null;
+    let data: MealWithTotals[] | null = null;
     try {
+      // 12s timeout — covers cold-start latency and contention with concurrent
+      // auth refreshes (e.g. Food Search dialog calls supabase.auth.refreshSession
+      // which can briefly queue other supabase-js requests). 6s was too aggressive
+      // and caused spurious "Load meals timed out" errors while searching food.
       const result = await withSupabaseTimeout(
         supabase
-          .from("nutrition_logs")
-          .select("id, meal_name, calories, protein_g, carbs_g, fats_g, meal_type, portion_size, recipe_notes, is_ai_generated, ingredients, date, created_at")
+          .from("meals_with_totals")
+          .select("id, user_id, date, meal_type, meal_name, notes, is_ai_generated, total_calories, total_protein_g, total_carbs_g, total_fats_g, item_count, created_at")
           .eq("user_id", userId)
           .eq("date", fetchDate)
           .order("created_at", { ascending: true })
           .limit(100),
-        undefined,
+        12000,
         "Load meals"
       );
       if (result.error) throw result.error;
-      data = result.data;
+      data = (result.data ?? []) as MealWithTotals[];
     } catch (err) {
       if (!isMounted()) return;
       logger.error("Error loading meals", err);
+      // A timeout here means the Supabase client is wedged — cycle the
+      // realtime socket + force a bounded token refresh so downstream
+      // consumers (food-search, weight logs, macro fetch) don't inherit
+      // the stuck auth mutex. Debounced inside recoverSupabaseConnection.
+      const msg = (err as { message?: string })?.message ?? "";
+      if (msg.includes("timed out")) {
+        const { recoverSupabaseConnection } = await import("@/lib/connectionRecovery");
+        recoverSupabaseConnection("load-meals-timeout").catch(() => {});
+      }
       {
         // Last-resort: try localStorage without TTL for offline fallback
         const fallback = localCache.getForDate<Meal[]>(userId, "nutrition_logs", fetchDate);
@@ -228,48 +251,75 @@ export function useNutritionData(params: UseNutritionDataParams) {
     // Stale response guard — user may have navigated to a different date
     if (activeDateRef.current !== fetchDate) return;
 
-    const typedMeals = (data || []).map(meal => ({
-      ...meal,
-      ingredients: (meal.ingredients as unknown) as Ingredient[] | undefined,
-    }));
+    const typedMeals: Meal[] = (data || []).map(mapMealsWithTotalsToMeal);
 
     const pendingOps = syncQueue.peek(userId);
     const dbIds = new Set(typedMeals.map(m => m.id));
 
+    // Accept queue entries targeting the new `meals` table as well as any
+    // legacy `nutrition_logs` entries that may still be in localStorage
+    // (they'll be dropped on the next boot-drain).
+    const isMealsQueueEntry = (t: string) => t === "meals" || t === "nutrition_logs";
+
     const pendingDeleteIds = new Set(
       pendingOps
-        .filter(op => op.table === "nutrition_logs" && op.action === "delete")
+        .filter(op => isMealsQueueEntry(op.table) && op.action === "delete")
         .map(op => op.recordId)
     );
-    let mergedMeals: Meal[] = typedMeals.filter(m => !pendingDeleteIds.has(m.id)) as Meal[];
+    const mergedMeals: Meal[] = typedMeals.filter(m => !pendingDeleteIds.has(m.id));
 
-    // Only merge ops that haven't permanently failed. `failed: true` ops are
-    // stuck garbage (usually from pre-migration null meal_type payloads);
-    // surfacing them pollutes the UI with "Logged meal / snack / 0 cal" ghosts
-    // and corrupts daily macro totals.
+    // Only merge ops that haven't permanently failed.
+    interface QueuedRpcPayload {
+      p_date?: string;
+      p_meal_name?: string;
+      p_meal_type?: string;
+      p_notes?: string | null;
+      p_is_ai_generated?: boolean;
+      p_items?: Array<{ calories?: number; protein_g?: number; carbs_g?: number; fats_g?: number }>;
+    }
     const pendingInserts = pendingOps.filter(
       op =>
-        op.table === "nutrition_logs" &&
+        isMealsQueueEntry(op.table) &&
         op.action === "insert" &&
         !op.failed &&
-        (op.payload as any).date === fetchDate &&
+        (op.payload as QueuedRpcPayload).p_date === fetchDate &&
         !dbIds.has(op.recordId)
     );
     for (const op of pendingInserts) {
-      const p = op.payload as any;
+      const p = op.payload as QueuedRpcPayload;
+      const items = Array.isArray(p.p_items) ? p.p_items : [];
+      const totals = items.reduce((acc, it) => ({
+        calories: acc.calories + (Number(it.calories) || 0),
+        protein_g: acc.protein_g + (Number(it.protein_g) || 0),
+        carbs_g: acc.carbs_g + (Number(it.carbs_g) || 0),
+        fats_g: acc.fats_g + (Number(it.fats_g) || 0),
+      }), { calories: 0, protein_g: 0, carbs_g: 0, fats_g: 0 });
+
+      // Ghost guard: require BOTH a valid meal_type AND real calorie content.
+      // An items array full of zero-calorie rows doesn't count — those surface
+      // as phantom "snack · 0 kcal" entries when p_meal_type is missing and
+      // the items were a fallback catch-all with no macros. The queue retry
+      // will still run; if the payload is real, it'll appear on server ack.
+      const hasValidType = typeof p.p_meal_type === "string" &&
+        ["breakfast", "lunch", "dinner", "snack"].includes(p.p_meal_type);
+      const hasRealContent = totals.calories > 0 ||
+        items.some(it => Number(it.calories) > 0);
+      if (!hasValidType || !hasRealContent) {
+        continue;
+      }
+
       mergedMeals.push({
         id: op.recordId,
-        meal_name: p.meal_name || "Logged meal",
-        calories: p.calories,
-        protein_g: p.protein_g ?? undefined,
-        carbs_g: p.carbs_g ?? undefined,
-        fats_g: p.fats_g ?? undefined,
-        meal_type: p.meal_type || "snack",
-        portion_size: p.portion_size ?? undefined,
-        recipe_notes: p.recipe_notes ?? undefined,
-        ingredients: p.ingredients ?? undefined,
-        is_ai_generated: p.is_ai_generated,
-        date: p.date ?? fetchDate,
+        meal_name: coerceMealName(p.p_meal_name, p.p_meal_type),
+        meal_type: p.p_meal_type || "snack",
+        calories: Math.round(totals.calories),
+        protein_g: totals.protein_g,
+        carbs_g: totals.carbs_g,
+        fats_g: totals.fats_g,
+        is_ai_generated: !!p.p_is_ai_generated,
+        notes: p.p_notes ?? null,
+        item_count: items.length,
+        date: p.p_date ?? fetchDate,
       });
     }
 
@@ -285,14 +335,17 @@ export function useNutritionData(params: UseNutritionDataParams) {
     // in the pending queue. Prevents "ghost" meals from re-surfacing forever.
     const pendingRecordIds = new Set(
       pendingOps
-        .filter(op => op.table === "nutrition_logs" && op.action === "insert" && !op.failed)
+        .filter(op => isMealsQueueEntry(op.table) && op.action === "insert" && !op.failed)
         .map(op => op.recordId)
     );
+    // Scoped to fetchDate only — never pull IDs from the live `mealsRef`
+    // because that may still hold a different date's meals when the user
+    // navigates rapidly. Mixing them would write cross-date rows into the
+    // per-date localCache.
     const keepIds = new Set<string>([
       ...typedMeals.map(m => m.id),
       ...pendingRecordIds,
-      ...mergedMeals.map((m: any) => m.id),
-      ...mealsRef.current.map(m => m.id),
+      ...mergedMeals.map(m => m.id),
     ]);
     const priorLocal = localCache.getForDate<Meal[]>(userId, "nutrition_logs", fetchDate) ?? [];
     const reconciledLocal = priorLocal.filter(m => keepIds.has(m.id));
@@ -306,6 +359,20 @@ export function useNutritionData(params: UseNutritionDataParams) {
 
   useEffect(() => {
     activeDateRef.current = selectedDate;
+
+    // Immediately switch the view to this date's cached meals (or empty) so
+    // the previous date's meals never linger in the UI while the DB fetch is
+    // in flight. Without this, today's meals remain visible when navigating
+    // to a historical date because SWR keeps the stale list displayed.
+    if (userId) {
+      const cached =
+        nutritionCache.getMeals(userId, selectedDate)
+        ?? localCache.getForDate<Meal[]>(userId, "nutrition_logs", selectedDate, LOCAL_CACHE_TTL_MS);
+      setMeals(Array.isArray(cached) ? (cached as Meal[]) : []);
+    } else {
+      setMeals([]);
+    }
+
     // SWR: do not flip mealsLoading here; loadMeals decides based on cache availability.
     loadMeals();
     if (userId) setTimeout(() => preloadAdjacentDates(userId, selectedDate), 2000);
@@ -415,8 +482,8 @@ export function useNutritionData(params: UseNutritionDataParams) {
 
     try {
       const [countResult, datesResult] = await Promise.allSettled([
-        supabase.from("nutrition_logs").select("*", { count: "exact", head: true }).eq("user_id", userId),
-        supabase.from("nutrition_logs").select("date").eq("user_id", userId)
+        supabase.from("meals").select("*", { count: "exact", head: true }).eq("user_id", userId),
+        supabase.from("meals").select("date").eq("user_id", userId)
           .gte("date", format(subDays(new Date(), 90), "yyyy-MM-dd"))
           .order("date", { ascending: false })
           .limit(90),

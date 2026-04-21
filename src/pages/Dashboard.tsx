@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { ComposedChart, Line, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { TrendingDown, Calendar, Lock, ChevronRight, Flame, Zap, CheckCircle2, Scale } from "lucide-react";
-import { TrainingWeekWidget } from "@/components/dashboard/TrainingWeekWidget";
+import { TrainingWeekWidget, preloadTrainingWeek } from "@/components/dashboard/TrainingWeekWidget";
 import { WeightProgressRing } from "@/components/dashboard/WeightProgressRing";
 import { StreakBadge } from "@/components/dashboard/StreakBadge";
 import { ConsistencyRing } from "@/components/dashboard/ConsistencyRing";
@@ -65,6 +65,7 @@ export default function Dashboard() {
   const [questionnaireOpen, setQuestionnaireOpen] = useState(false);
   const [achievementSheetOpen, setAchievementSheetOpen] = useState(false);
   const [cutPlanOpen, setCutPlanOpen] = useState(false);
+  const [hasCutPlan, setHasCutPlan] = useState<boolean>(() => !!localStorage.getItem("wcw_cut_plan"));
   const [expandedInfo, setExpandedInfo] = useState<'risk' | 'pace' | null>(null);
   const [frequentMeals, setFrequentMeals] = useState<Array<{ name: string; count: number; avgCalories: number }>>([]);
   const navigate = useNavigate();
@@ -81,6 +82,22 @@ export default function Dashboard() {
       navigate("/cut-plan", { replace: true });
     }
   }, [navigate]);
+
+  // Rehydrate cut plan from DB if localStorage is empty (iOS WebView can wipe it).
+  // Once generated, the plan lives on profile.cut_plan_json permanently.
+  useEffect(() => {
+    if (localStorage.getItem("wcw_cut_plan")) {
+      if (!hasCutPlan) setHasCutPlan(true);
+      return;
+    }
+    const dbPlan = profile?.cut_plan_json;
+    if (dbPlan && typeof dbPlan === "object" && dbPlan.weeklyPlan) {
+      localStorage.setItem("wcw_cut_plan", JSON.stringify(dbPlan));
+      setHasCutPlan(true);
+    } else if (hasCutPlan) {
+      setHasCutPlan(false);
+    }
+  }, [profile?.cut_plan_json, hasCutPlan]);
 
   useEffect(() => { trackInstallDate(); }, []);
 
@@ -331,6 +348,9 @@ export default function Dashboard() {
         if (userId) preloadNutritionData(userId, [today]);
       }, 2000);
 
+      // Warm training-week cache so widget paints instantly on mount / next visit
+      if (userId) preloadTrainingWeek(userId);
+
       // Prefetch macro goals from profile so Nutrition page skips loading
       if (profile?.ai_recommended_calories) {
         const macroData = {
@@ -497,7 +517,7 @@ export default function Dashboard() {
 
         {/* Cut Plan + Sleep — side by side */}
         <div className="grid grid-cols-2 gap-2">
-          {isFighter(profile?.goal_type) && localStorage.getItem('wcw_cut_plan') ? (
+          {isFighter(profile?.goal_type) && hasCutPlan ? (
             <button
               onClick={() => { setCutPlanOpen(true); triggerHaptic(ImpactStyle.Light); }}
               className="card-surface rounded-2xl border border-border p-2.5 flex items-center justify-center active:scale-[0.98] transition-all text-center"

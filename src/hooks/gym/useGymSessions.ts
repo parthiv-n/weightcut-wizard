@@ -378,6 +378,55 @@ export function useGymSessions() {
     setActiveSession(prev => prev ? updater(prev) : prev);
   }, []);
 
+  // Note: editing a PR set downward does not auto-rebuild exercise_prs.
+  // The next new set on that exercise re-runs checkAndUpdatePR. Acceptable for v1.
+  const updateCompletedSet = useCallback(async (
+    setId: string,
+    updates: Partial<{ weight_kg: number | null; reps: number; is_warmup: boolean }>,
+  ) => {
+    if (!userId) return;
+    try {
+      const { error } = await withSupabaseTimeout(
+        supabase.from("gym_sets" as any).update(updates as any).eq("id", setId),
+        undefined,
+        "Update completed set",
+      );
+      if (error) throw error;
+      invalidateGymAnalytics(userId);
+      await fetchHistory();
+    } catch {
+      syncQueue.enqueue(userId, {
+        table: "gym_sets",
+        action: "update",
+        payload: updates,
+        recordId: setId,
+        timestamp: Date.now(),
+      });
+    }
+  }, [userId, fetchHistory]);
+
+  const deleteCompletedSet = useCallback(async (setId: string) => {
+    if (!userId) return;
+    try {
+      const { error } = await withSupabaseTimeout(
+        supabase.from("gym_sets" as any).delete().eq("id", setId),
+        undefined,
+        "Delete completed set",
+      );
+      if (error) throw error;
+      invalidateGymAnalytics(userId);
+      await fetchHistory();
+    } catch {
+      syncQueue.enqueue(userId, {
+        table: "gym_sets",
+        action: "delete",
+        payload: {},
+        recordId: setId,
+        timestamp: Date.now(),
+      });
+    }
+  }, [userId, fetchHistory]);
+
   return {
     history,
     historyLoading,
@@ -387,6 +436,8 @@ export function useGymSessions() {
     discardSession,
     deleteSession,
     updateActiveSession,
+    updateCompletedSet,
+    deleteCompletedSet,
     refetchHistory: fetchHistory,
   };
 }

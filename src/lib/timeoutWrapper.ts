@@ -14,6 +14,30 @@ export function withTimeout<T>(
   ]);
 }
 
+/**
+ * Create an AbortSignal that auto-aborts after `timeoutMs` AND a paired
+ * promise that rejects with the timeout error. Use this for `fetch` calls so
+ * the underlying network request is actually cancelled on timeout instead of
+ * leaving the Supabase client holding a long-running promise (which would
+ * wedge every subsequent query behind the same in-flight token refresh).
+ */
+export function abortableFetch<T>(
+  run: (signal: AbortSignal) => Promise<T>,
+  timeoutMs: number,
+  operation = "Network request"
+): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return run(controller.signal)
+    .catch((err) => {
+      if (err?.name === "AbortError" || controller.signal.aborted) {
+        throw new Error(`${operation} timed out after ${timeoutMs}ms`);
+      }
+      throw err;
+    })
+    .finally(() => clearTimeout(timer));
+}
+
 // Specific wrapper for Supabase queries
 export function withSupabaseTimeout<T>(
   supabaseQuery: PromiseLike<T>,
@@ -71,9 +95,11 @@ export async function extractEdgeFunctionError(error: any, fallback = "Something
 }
 
 // Wrapper for authentication operations
+// Raised from 6s/10s → 15s (Phase 1.1). Cold iOS Capacitor launch can legitimately
+// take 10s to restore the persisted session from secure storage + network round-trip.
 export function withAuthTimeout<T>(
   authOperation: Promise<T>,
-  timeoutMs: number = 10000 // 10 second timeout for auth operations (mobile can be slow)
+  timeoutMs: number = 15000
 ): Promise<T> {
   return withTimeout(
     authOperation,

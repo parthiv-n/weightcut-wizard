@@ -122,22 +122,24 @@ export const ExercisePerformanceChart = memo(function ExercisePerformanceChart({
       )}
 
       {/* Filter + chart type pills */}
-      <div className="flex items-center gap-1">
-        {filters.map(f => (
-          <button
-            key={f}
-            onClick={() => setTimeFilter(f)}
-            className={`px-3 py-1.5 rounded-full text-[11px] font-semibold transition-all duration-200 ${
-              timeFilter === f
-                ? "bg-primary text-primary-foreground shadow-sm"
-                : "text-muted-foreground hover:bg-muted/50"
-            }`}
-          >
-            {f}
-          </button>
-        ))}
-        <div className="flex-1" />
-        <div className="flex bg-muted/30 rounded-full p-0.5">
+      <div className="flex flex-wrap items-center gap-x-1 gap-y-2">
+        <div className="flex items-center gap-1 flex-wrap">
+          {filters.map(f => (
+            <button
+              key={f}
+              onClick={() => setTimeFilter(f)}
+              className={`px-2.5 py-1.5 rounded-full text-[11px] font-semibold transition-all duration-200 ${
+                timeFilter === f
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-muted/50"
+              }`}
+            >
+              {f}
+            </button>
+          ))}
+        </div>
+        <div className="flex-1 min-w-0" />
+        <div className="flex bg-muted/30 rounded-full p-0.5 shrink-0">
           {chartTypes.map(ct => (
             <button
               key={ct.key}
