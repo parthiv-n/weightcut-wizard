@@ -77,6 +77,9 @@ serve(async (req) => {
     const body = await req.json();
     const rawSessionType = typeof body?.session_type === "string" ? body.session_type : "";
     const rawSessions: SessionInput[] = Array.isArray(body?.sessions) ? body.sessions : [];
+    const rawFingerprint = typeof body?.fingerprint === "string" ? body.fingerprint : "";
+    const rawSessionId = typeof body?.session_id === "string" ? body.session_id : null;
+    const rawSessionDate = typeof body?.session_date === "string" ? body.session_date.slice(0, 10) : null;
 
     const sessionType = sanitizeUserText(rawSessionType, { maxLength: 60, raw: true });
     if (!sessionType) {
@@ -234,7 +237,38 @@ Return ONLY the JSON object described in the schema. First character must be "{"
     const insight = parseJSON(result.content);
     edgeLogger.info("Training insight generated", { sessionType });
 
-    return new Response(JSON.stringify({ insight }), {
+    // Persist into the user's coaching library. Best-effort — never fail the
+    // request if the write errors. The unique (user_id, session_type, fingerprint)
+    // constraint dedupes regenerations of the exact same input.
+    let library_entry_id: string | null = null;
+    if (rawFingerprint) {
+      try {
+        const { data: inserted, error: insertErr } = await supabaseClient
+          .from("coaching_library")
+          .upsert(
+            {
+              user_id: user.id,
+              session_type: rawSessionType,
+              session_id: rawSessionId,
+              session_date: rawSessionDate,
+              fingerprint: rawFingerprint,
+              insight_data: insight,
+            },
+            { onConflict: "user_id,session_type,fingerprint" }
+          )
+          .select("id")
+          .maybeSingle();
+        if (insertErr) {
+          edgeLogger.warn("coaching_library upsert failed", { error: insertErr.message });
+        } else {
+          library_entry_id = inserted?.id ?? null;
+        }
+      } catch (e) {
+        edgeLogger.warn("coaching_library upsert threw", { error: (e as Error).message });
+      }
+    }
+
+    return new Response(JSON.stringify({ insight, library_entry_id }), {
       headers: { ...corsHeaders(req), "Content-Type": "application/json" },
     });
   } catch (error) {

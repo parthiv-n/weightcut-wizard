@@ -98,6 +98,7 @@ async function callTrainingInsights(
   if (!session?.access_token) return { status: 401 };
 
   const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/training-insights`;
+  const latest = sessions[0];
   const resp = await fetch(url, {
     method: "POST",
     headers: {
@@ -106,6 +107,9 @@ async function callTrainingInsights(
     },
     body: JSON.stringify({
       session_type: sessionType,
+      fingerprint: latest?.id ?? "",
+      session_id: latest?.id ?? null,
+      session_date: latest?.date ?? null,
       sessions: sessions.map((s) => ({
         date: s.date,
         notes: s.notes,

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, subMonths, addMonths, subDays } from "date-fns";
-import { ChevronLeft, ChevronRight, Plus, Activity } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Activity, BookOpen } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { localCache } from "@/lib/localCache";
 import { useUser } from "@/contexts/UserContext";
@@ -21,6 +21,7 @@ import { triggerHapticSelection, confirmDelete } from "@/lib/haptics";
 import { ShareButton } from "@/components/share/ShareButton";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { TrainingCalendarCard } from "@/components/share/cards/TrainingCalendarCard";
+import { CoachingLibrarySheet } from "@/components/fightcamp/CoachingLibrarySheet";
 import { logger } from "@/lib/logger";
 import { getUserColors, setUserColor } from "@/lib/sessionColors";
 import { encodeRunMeta, decodeRunMeta, formatPace } from "@/lib/runMeta";
@@ -90,6 +91,8 @@ export default function TrainingCalendar() {
     // Detail drawer state
     const [viewingSession, setViewingSession] = useState<TrainingCalendarRow | null>(null);
     const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
+    // Coaching library state
+    const [libraryOpen, setLibraryOpen] = useState(false);
 
     const DISPLAY_TTL = 24 * 60 * 60 * 1000; // 24h — show stale cache instantly, refresh in background
     const fetchingRef = useRef(false);
@@ -117,7 +120,7 @@ export default function TrainingCalendar() {
                         .gte('date', format(startOfMonth(date), "yyyy-MM-dd"))
                         .lte('date', format(endOfMonth(date), "yyyy-MM-dd"))
                         .limit(100),
-                    8000,
+                    12000,
                     "Fetch training month",
                 ),
                 1,
@@ -128,7 +131,14 @@ export default function TrainingCalendar() {
             monthMemCache.set(memKey, { data: rows, fetchedAt: Date.now() });
             localCache.set(uid, monthCacheKey(date), rows);
             return rows;
-        })();
+        })().catch((err) => {
+            // Kick connection recovery so a wedged auth mutex doesn't poison
+            // every subsequent call. Re-throw so callers still see the error.
+            void import('@/lib/connectionRecovery').then(({ recoverSupabaseConnection }) =>
+                recoverSupabaseConnection('training-month-fetch-timeout')
+            ).catch(() => {});
+            throw err;
+        });
 
         monthInflight.set(memKey, promise);
         try {
@@ -158,12 +168,14 @@ export default function TrainingCalendar() {
             const rows = await queryMonth(userId, currentDate);
             safeAsync(setSessions)(rows);
         } catch (error) {
-            logger.error("Error fetching sessions", error);
+            logger.warn("Error fetching sessions", error);
+            // Only surface a destructive toast when we have nothing cached to
+            // show the user; otherwise the cache covers it and we silently
+            // retry next time UserContext flushes the queue.
             if (!cached && isMounted()) {
                 toastRef.current({
-                    title: "Error fetching sessions",
-                    description: "Could not load your calendar data.",
-                    variant: "destructive"
+                    title: "Couldn't refresh calendar",
+                    description: "Showing offline data — we'll retry when you're reconnected.",
                 });
             }
         } finally {
@@ -200,7 +212,7 @@ export default function TrainingCalendar() {
                         .gte('date', from)
                         .lte('date', to)
                         .limit(100),
-                    8000,
+                    12000,
                     "Fetch training 28d",
                 ),
                 1,
@@ -396,11 +408,13 @@ export default function TrainingCalendar() {
         setIsAddModalOpen(false);
         setSessionLoggedTrigger(prev => prev + 1);
 
+        // Hoisted so the catch block can enqueue the failed write
+        let payload: TrainingCalendarInsert | null = null;
+        let resolvedMediaUrl: string | null = existingMediaUrl ?? null;
+        let mediaUploadFailed = false;
+
         try {
             // Upload media in background (with timeout fence so it can't hang forever)
-            let resolvedMediaUrl: string | null = existingMediaUrl ?? null;
-            let mediaUploadFailed = false;
-
             if (mediaFile) {
                 try {
                     resolvedMediaUrl = await Promise.race([
@@ -419,7 +433,7 @@ export default function TrainingCalendar() {
                 resolvedMediaUrl = null;
             }
 
-            const payload: TrainingCalendarInsert = {
+            payload = {
                 id: sessionId,
                 user_id: uid,
                 date: dateStr,
@@ -439,8 +453,8 @@ export default function TrainingCalendar() {
             if (editingSession) {
                 const { error } = await withRetry(
                     () => withSupabaseTimeout(
-                        supabase.from('fight_camp_calendar').update(payload).eq('id', editingSession.id),
-                        8000,
+                        supabase.from('fight_camp_calendar').update(payload!).eq('id', editingSession.id),
+                        12000,
                         "Update training session",
                     ),
                     1,
@@ -450,8 +464,8 @@ export default function TrainingCalendar() {
             } else {
                 const { error } = await withRetry(
                     () => withSupabaseTimeout(
-                        supabase.from('fight_camp_calendar').insert([payload]),
-                        8000,
+                        supabase.from('fight_camp_calendar').insert([payload!]),
+                        12000,
                         "Insert training session",
                     ),
                     1,
@@ -492,6 +506,16 @@ export default function TrainingCalendar() {
             // Background revalidate (non-blocking)
             void fetch28DaySessions();
 
+            // Invalidate the TrainingSummarySection's week cache and bump the
+            // trigger again now that the DB row is persisted. The first bump
+            // happened optimistically (before the insert), which queried the DB
+            // too early — without this second bump the "Generate Summary"
+            // button would stay hidden until a manual refresh.
+            const weekStartIso = format(startOfWeek(selectedDate, { weekStartsOn: 1 }), "yyyy-MM-dd");
+            localCache.remove(uid, `training_week_${weekStartIso}`);
+            localCache.remove(uid, "training_summaries");
+            setSessionLoggedTrigger(prev => prev + 1);
+
             if (mediaUploadFailed) {
                 toast({
                     title: "Session saved, media failed",
@@ -508,24 +532,50 @@ export default function TrainingCalendar() {
             }
             resetForm();
         } catch (error) {
-            // ROLLBACK: restore previous sessions list and caches (only if we
-            // actually applied an optimistic update — skip otherwise to avoid
-            // clobbering an unrelated state change).
-            logger.error("Error saving session", error);
-            if (optimisticApplied) {
-                setSessions(previousMonthSessions);
-                if (previousMem) {
-                    monthMemCache.set(memMonthKey, previousMem);
-                } else {
-                    monthMemCache.delete(memMonthKey);
+            // QUEUE for background sync instead of rolling back. The optimistic
+            // row stays visible; UserContext replays syncQueue on `online` /
+            // visibility-change / app-resume. Also kick connection recovery in
+            // case auth wedged (Promise.race timeouts don't cancel the
+            // underlying request, so the auth mutex can stay stuck — recovery
+            // cycles realtime + force-refreshes the session).
+            logger.warn("Save timed out, queueing for background sync", { error });
+            void import('@/lib/connectionRecovery').then(({ recoverSupabaseConnection }) =>
+                recoverSupabaseConnection('training-save-timeout')
+            ).catch(() => {});
+
+            if (payload) {
+                const { syncQueue } = await import('@/lib/syncQueue');
+                syncQueue.enqueue(uid, {
+                    table: 'fight_camp_calendar',
+                    action: editingSession ? 'update' : 'insert',
+                    payload: payload as unknown as Record<string, unknown>,
+                    recordId: sessionId,
+                    timestamp: Date.now(),
+                    persistOnFailure: true,
+                });
+                toast({
+                    title: editingSession ? "Update queued" : "Saved offline",
+                    description: "We'll sync to the cloud when you're back online.",
+                });
+                resetForm();
+            } else {
+                // Failed before the payload was built (very early error) — roll
+                // back the optimistic state so the UI matches reality.
+                if (optimisticApplied) {
+                    setSessions(previousMonthSessions);
+                    if (previousMem) {
+                        monthMemCache.set(memMonthKey, previousMem);
+                    } else {
+                        monthMemCache.delete(memMonthKey);
+                    }
+                    localCache.set(uid, monthKey, previousMonthSessions);
                 }
-                localCache.set(uid, monthKey, previousMonthSessions);
+                toast({
+                    title: "Couldn't save session",
+                    description: "Check your connection and try again.",
+                    variant: "destructive"
+                });
             }
-            toast({
-                title: "Couldn't save session",
-                description: "Check your connection and try again.",
-                variant: "destructive"
-            });
         } finally {
             setIsSaving(false);
         }
@@ -553,7 +603,7 @@ export default function TrainingCalendar() {
             const { error } = await withRetry(
                 () => withSupabaseTimeout(
                     supabase.from('fight_camp_calendar').delete().eq('id', id),
-                    8000,
+                    12000,
                     "Delete training session",
                 ),
                 1,
@@ -565,19 +615,26 @@ export default function TrainingCalendar() {
             localCache.remove(uid, "training_sessions_28d");
             void fetch28DaySessions();
         } catch (error) {
-            // Rollback
-            logger.error("Error deleting session", error);
-            setSessions(previousSessions);
-            if (previousMem) {
-                monthMemCache.set(memMonthKey, previousMem);
-            } else {
-                monthMemCache.delete(memMonthKey);
-            }
-            localCache.set(uid, monthCacheKey(currentDate), previousSessions);
+            // Queue the delete for background sync. Keep the local removal so
+            // the user sees their action; replay will reconcile when network
+            // recovers. Also kick connection recovery in case auth wedged.
+            logger.warn("Delete timed out, queueing for background sync", { error });
+            void import('@/lib/connectionRecovery').then(({ recoverSupabaseConnection }) =>
+                recoverSupabaseConnection('training-delete-timeout')
+            ).catch(() => {});
+
+            const { syncQueue } = await import('@/lib/syncQueue');
+            syncQueue.enqueue(uid, {
+                table: 'fight_camp_calendar',
+                action: 'delete',
+                payload: { id },
+                recordId: id,
+                timestamp: Date.now(),
+                persistOnFailure: true,
+            });
             toast({
-                title: "Couldn't delete session",
-                description: "Check your connection and try again.",
-                variant: "destructive"
+                title: "Delete queued",
+                description: "We'll finish syncing when you're back online.",
             });
         }
     };
@@ -605,6 +662,15 @@ export default function TrainingCalendar() {
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-xl font-bold">{format(currentDate, "MMMM yyyy")}</h2>
                         <div className="flex items-center gap-1">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => { triggerHapticSelection(); setLibraryOpen(true); }}
+                                aria-label="Open coaching library"
+                                className="rounded-full h-8 w-8"
+                            >
+                                <BookOpen className="h-4 w-4" />
+                            </Button>
                             {sessions.length > 0 && <ShareButton onClick={() => setShareOpen(true)} />}
                             <Button variant="ghost" size="icon" onClick={prevMonth} aria-label="Previous month" className="rounded-full h-8 w-8">
                                 <ChevronLeft className="h-5 w-5" />
@@ -734,6 +800,13 @@ export default function TrainingCalendar() {
                         />
                     )}
                 </div>
+
+            {/* Coaching Library Sheet */}
+            <CoachingLibrarySheet
+                userId={userId}
+                open={libraryOpen}
+                onOpenChange={setLibraryOpen}
+            />
 
             {/* Session Detail Drawer */}
             <SessionDetailDrawer

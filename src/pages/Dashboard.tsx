@@ -32,6 +32,13 @@ import { SleepLogger } from "@/components/dashboard/SleepLogger";
 import { TrainingInsightsWidget } from "@/components/dashboard/TrainingInsightsWidget";
 import { isFighter } from "@/lib/goalType";
 
+// Module-level dedupe so re-mounts within the session don't re-fire identical
+// queries while one is still in flight. Mirrors the pattern in
+// TrainingWeekWidget / TrainingCalendar.
+const dashboardInflight = new Map<string, Promise<unknown>>();
+const DASHBOARD_FRESH_WINDOW_MS = 30 * 1000;
+const dashboardLastFetchedAt = new Map<string, number>();
+
 interface DailyWisdom {
   summary: string;
   riskLevel: "green" | "orange";
@@ -266,40 +273,62 @@ export default function Dashboard() {
       if (cachedWeightLogs) checkAndGenerateWisdom(profile, cachedWeightLogs, cachedCalories, cachedHydrationTotal);
     }
 
+    // --- Skip refetch if a previous run completed within the freshness window ---
+    const lastDone = dashboardLastFetchedAt.get(userId);
+    if (hasCachedData && lastDone && Date.now() - lastDone < DASHBOARD_FRESH_WINDOW_MS) {
+      safeAsync(setLoading)(false);
+      return;
+    }
+
+    // --- Inflight dedupe: if a Dashboard fetch is already in flight for this
+    // user, await its result instead of firing a parallel set of queries. ---
+    const inflightKey = userId;
+    const existing = dashboardInflight.get(inflightKey);
+    if (existing) {
+      try { await existing; } catch { /* error handled by original caller */ }
+      return;
+    }
+
     // --- Fetch fresh data from Supabase (3 core queries — gamification handled by useGamification) ---
+    // 12s timeout aligns with auth wrapper's 15s ceiling — gives iOS Capacitor
+    // cold start (secure-storage session restore + slow network) breathing room.
+    const fetchPromise = Promise.allSettled([
+      withRetry(() => withSupabaseTimeout(
+        supabase
+          .from("weight_logs")
+          .select("date, weight_kg")
+          .eq("user_id", userId)
+          .order("date", { ascending: true })
+          .limit(30),
+        12000,
+        "Weight logs query"
+      )),
+
+      withRetry(() => withSupabaseTimeout(
+        supabase
+          .from("nutrition_logs")
+          .select("calories")
+          .eq("user_id", userId)
+          .eq("date", today),
+        12000,
+        "Nutrition logs query"
+      )),
+
+      withRetry(() => withSupabaseTimeout(
+        supabase
+          .from("hydration_logs")
+          .select("amount_ml")
+          .eq("user_id", userId)
+          .eq("date", today),
+        12000,
+        "Hydration logs query"
+      )),
+    ]);
+    dashboardInflight.set(inflightKey, fetchPromise);
+
     try {
-      const results = await Promise.allSettled([
-        withRetry(() => withSupabaseTimeout(
-          supabase
-            .from("weight_logs")
-            .select("date, weight_kg")
-            .eq("user_id", userId)
-            .order("date", { ascending: true })
-            .limit(30),
-          undefined,
-          "Weight logs query"
-        )),
-
-        withRetry(() => withSupabaseTimeout(
-          supabase
-            .from("nutrition_logs")
-            .select("calories")
-            .eq("user_id", userId)
-            .eq("date", today),
-          undefined,
-          "Nutrition logs query"
-        )),
-
-        withRetry(() => withSupabaseTimeout(
-          supabase
-            .from("hydration_logs")
-            .select("amount_ml")
-            .eq("user_id", userId)
-            .eq("date", today),
-          undefined,
-          "Hydration logs query"
-        )),
-      ]);
+      const results = await fetchPromise;
+      dashboardLastFetchedAt.set(inflightKey, Date.now());
 
       if (!isMounted()) return;
 
@@ -308,11 +337,28 @@ export default function Dashboard() {
       const nutritionOk = results[1].status === 'fulfilled';
       const hydrationOk = results[2].status === 'fulfilled';
 
+      let anyRejected = false;
       results.forEach((result, index) => {
         if (result.status === 'rejected') {
-          logger.error(`Dashboard query ${index} failed`, result.reason);
+          anyRejected = true;
+          // Demote to warn when cache covered the user — they don't see broken
+          // numbers, so this is operational noise, not a user-facing failure.
+          if (hasCachedData) {
+            logger.warn(`Dashboard query ${index} timed out (cache served)`, { reason: result.reason });
+          } else {
+            logger.error(`Dashboard query ${index} failed`, result.reason);
+          }
         }
       });
+
+      // If any query failed, the supabase client may be wedged behind a stale
+      // auth mutex. Kick the recovery flow (cycle realtime + refresh session)
+      // so the next visit / next visibility-change has a clean client.
+      if (anyRejected) {
+        void import('@/lib/connectionRecovery').then(({ recoverSupabaseConnection }) =>
+          recoverSupabaseConnection('dashboard-fetch-timeout')
+        ).catch(() => {});
+      }
 
       if (logsOk) {
         const logsData = (results[0] as PromiseFulfilledResult<any>).value.data || [];
@@ -367,13 +413,22 @@ export default function Dashboard() {
         localCache.set(userId, 'macro_goals', macroData);
       }
     } catch (error) {
-      logger.error("Error loading dashboard data", error);
-      if (!hasCachedData) {
+      // Only escalate to error when we have nothing cached to show — otherwise
+      // the user sees their numbers and this is just network flake.
+      if (hasCachedData) {
+        logger.warn("Dashboard refresh failed (cache served)", { error });
+      } else {
+        logger.error("Error loading dashboard data", error);
         safeAsync(setWeightLogs)([]);
         safeAsync(setTodayCalories)(0);
         safeAsync(setTodayHydration)(0);
       }
+      // Same recovery kick as per-query failure — defends against wedged auth.
+      void import('@/lib/connectionRecovery').then(({ recoverSupabaseConnection }) =>
+        recoverSupabaseConnection('dashboard-load-error')
+      ).catch(() => {});
     } finally {
+      dashboardInflight.delete(inflightKey);
       safeAsync(setLoading)(false);
       maybeRequestReview();
     }
