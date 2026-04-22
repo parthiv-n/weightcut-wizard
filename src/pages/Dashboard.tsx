@@ -29,6 +29,7 @@ import { logger } from "@/lib/logger";
 import { trackInstallDate, maybeRequestReview } from "@/lib/appReview";
 import { CutPlanDialog } from "@/components/dashboard/CutPlanDialog";
 import { SleepLogger } from "@/components/dashboard/SleepLogger";
+import { TrainingInsightsWidget } from "@/components/dashboard/TrainingInsightsWidget";
 import { isFighter } from "@/lib/goalType";
 
 interface DailyWisdom {
@@ -578,6 +579,9 @@ export default function Dashboard() {
           </div>
         )}
         </div>
+
+        {/* Training Coach (premium) */}
+        {userId && <TrainingInsightsWidget userId={userId} />}
 
         {/* Weight Progress Bar — full width */}
         {profile && (

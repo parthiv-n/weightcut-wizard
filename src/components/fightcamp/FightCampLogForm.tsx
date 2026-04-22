@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Activity, Ruler, Plus, X, Check, Route, Timer, Gauge, Mic, MicOff } from "lucide-react";
+import { Activity, Ruler, Plus, X, Check, Route, Timer, Gauge, Mic, MicOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -52,6 +52,8 @@ interface FightCampLogFormProps {
   onMediaSelected: (file: File, previewUrl: string) => void;
   onMediaRemoved: () => void;
   onSave: () => void;
+  saving?: boolean;
+  canSave?: boolean;
 }
 
 export function FightCampLogForm({
@@ -69,6 +71,8 @@ export function FightCampLogForm({
   runDistanceUnit, setRunDistanceUnit,
   runPace,
   onSave,
+  saving = false,
+  canSave = true,
 }: FightCampLogFormProps) {
   const [customTypes, setCustomTypes] = useState<string[]>([]);
   const [isAddingNew, setIsAddingNew] = useState(false);
@@ -311,8 +315,17 @@ export function FightCampLogForm({
         )}
       </div>
 
-      <button className="w-full h-11 rounded-2xl bg-primary text-primary-foreground text-[14px] font-semibold active:opacity-80 transition-opacity mt-1" onClick={onSave}>
-        {isEditing ? 'Update Session' : 'Save Session'}
+      <button
+        className="w-full h-11 rounded-2xl bg-primary text-primary-foreground text-[14px] font-semibold active:opacity-80 transition-opacity mt-1 flex items-center justify-center gap-2 disabled:opacity-60 disabled:active:opacity-60"
+        onClick={onSave}
+        disabled={saving || !canSave}
+      >
+        {saving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+        {saving
+          ? (isEditing ? 'Updating…' : 'Saving…')
+          : !canSave
+            ? 'Loading account…'
+            : (isEditing ? 'Update Session' : 'Save Session')}
       </button>
     </div>
   );
