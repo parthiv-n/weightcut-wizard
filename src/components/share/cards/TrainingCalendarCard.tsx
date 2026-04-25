@@ -1,6 +1,6 @@
 import { forwardRef, useMemo } from "react";
 import { CardShell, type AspectRatio } from "../templates/CardShell";
-import { StatBlock } from "../templates/StatBlock";
+import { StravaStat, StravaPeriodLabel } from "../templates/StravaStat";
 import { usePremium } from "@/hooks/usePremium";
 import { getSessionColor } from "@/lib/sessionColors";
 
@@ -141,105 +141,57 @@ export const TrainingCalendarCard = forwardRef<HTMLDivElement, TrainingCalendarC
       return { days: daysList, maxDayMinutes: maxMin || 60 };
     }, [sessions, timeRange]);
 
+    const topDiscipline = stats.typeBreakdown[0]?.type ?? "—";
+    const durationDisplay = stats.totalDuration >= 60
+      ? `${Math.round(stats.totalDuration / 60)}h ${stats.totalDuration % 60}m`
+      : `${stats.totalDuration}m`;
+
     return (
       <CardShell ref={ref} aspect={aspect} isPremium={isPremium} transparent={transparent}>
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: s ? 40 : 12 }}>
-          <div>
-            <div
-              style={{
-                fontSize: s ? 28 : 15,
-                fontWeight: 800,
-                letterSpacing: "0.15em",
-                textTransform: "uppercase",
-                color: "#2563eb",
-                marginBottom: s ? 10 : 2,
-              }}
-            >
-              TRAINING LOG
-            </div>
-            <div style={{ fontSize: s ? 24 : 15, color: transparent ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.7)", fontWeight: 700 }}>
-              {TIME_LABELS[timeRange] ?? timeRange}
-            </div>
-          </div>
-        </div>
+        {/* Strava-style layout: stats on top (vertical, bold white), chart on bottom. */}
+        <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+          <StravaPeriodLabel text={TIME_LABELS[timeRange] ?? timeRange} s={s} transparent={transparent} />
 
-        {/* Hero stat */}
-        <div style={{ textAlign: "center", marginBottom: s ? 48 : 14 }}>
+          {/* Top vertical stats — bold white, Strava-style, horizontally centred */}
           <div
             style={{
-              fontSize: s ? 128 : 72,
-              fontWeight: 800,
-              letterSpacing: "-0.03em",
-              lineHeight: 1,
-              fontVariantNumeric: "tabular-nums",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: s ? 28 : 12,
+              marginBottom: s ? 48 : 18,
             }}
           >
-            {stats.total}
+            <StravaStat
+              label="Sessions"
+              value={String(stats.total)}
+              s={s}
+              transparent={transparent}
+            />
+            <StravaStat
+              label="Duration"
+              value={durationDisplay}
+              s={s}
+              transparent={transparent}
+            />
+            <StravaStat
+              label="Most trained"
+              value={topDiscipline}
+              s={s}
+              transparent={transparent}
+              accentColor={topDiscipline !== "—" ? getSessionColor(topDiscipline, customColors) : undefined}
+            />
           </div>
-          <div style={{ fontSize: s ? 20 : 14, color: transparent ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.6)", marginTop: s ? 14 : 6, fontWeight: 700, letterSpacing: "0.1em" }}>
-            SESSIONS
+
+          {/* Spacer pushes the graph to the bottom of the card */}
+          <div style={{ flex: 1, minHeight: s ? 24 : 8 }} />
+
+          {/* Bottom: graph showing all training sessions for the period */}
+          <div>
+            {timeRange === "day" && <DayView days={days} s={s} customColors={customColors} />}
+            {timeRange === "week" && <WeekView days={days} maxDayMinutes={maxDayMinutes} s={s} customColors={customColors} transparent={transparent} />}
+            {timeRange === "month" && <MonthView days={days} s={s} customColors={customColors} transparent={transparent} />}
           </div>
-        </div>
-
-        {/* Session type pills */}
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: s ? 14 : 8,
-            justifyContent: "center",
-            marginBottom: s ? 48 : 14,
-          }}
-        >
-          {stats.typeBreakdown.map(({ type, count }) => (
-            <div
-              key={type}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: s ? 12 : 8,
-                padding: s ? "12px 24px" : "6px 14px",
-                borderRadius: 999,
-                background: `${getSessionColor(type, customColors)}30`,
-                border: `1px solid ${getSessionColor(type, customColors)}60`,
-              }}
-            >
-              <div
-                style={{
-                  width: s ? 12 : 8,
-                  height: s ? 12 : 8,
-                  borderRadius: s ? 6 : 4,
-                  backgroundColor: getSessionColor(type, customColors),
-                }}
-              />
-              <span style={{ fontSize: s ? 20 : 13, fontWeight: 700, color: "#ffffff" }}>
-                {type}
-              </span>
-              <span style={{ fontSize: s ? 20 : 13, fontWeight: 800, color: transparent ? "rgba(255,255,255,0.85)" : "rgba(255,255,255,0.8)" }}>
-                {count}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        {/* Timeline visual */}
-        {timeRange === "day" && <DayView days={days} s={s} customColors={customColors} />}
-        {timeRange === "week" && <WeekView days={days} maxDayMinutes={maxDayMinutes} s={s} customColors={customColors} transparent={transparent} />}
-        {timeRange === "month" && <MonthView days={days} s={s} customColors={customColors} transparent={transparent} />}
-
-        {/* Stat blocks */}
-        <div style={{ display: "grid", gridTemplateColumns: s ? "1fr 1fr 1fr 1fr" : "1fr 1fr", gap: s ? 12 : 8 }}>
-          <StatBlock
-            label="Duration"
-            value={stats.totalDuration >= 60 ? `${Math.round(stats.totalDuration / 60)}` : `${stats.totalDuration}`}
-            unit={stats.totalDuration >= 60 ? "hrs" : "min"}
-            size={s ? "medium" : "default"}
-            transparent={transparent}
-          />
-          <StatBlock label="Avg RPE" value={stats.avgRpe.toFixed(1)} unit="/10" size={s ? "medium" : "default"} transparent={transparent} />
-          <StatBlock label="Intensity" value={stats.avgIntensity.toFixed(1)} unit="/5" size={s ? "medium" : "default"} transparent={transparent} />
-          <StatBlock label="Per Week" value={stats.sessionsPerWeek.toFixed(1)} size={s ? "medium" : "default"} transparent={transparent} />
         </div>
       </CardShell>
     );

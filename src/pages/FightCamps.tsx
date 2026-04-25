@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Trophy, Trash2, GitCompareArrows, X } from "lucide-react";
+import { Plus, Trophy, Trash2, GitCompareArrows, X, CheckSquare, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
@@ -54,6 +54,10 @@ export default function FightCamps() {
   const [compareMode, setCompareMode] = useState(false);
   const [selectedCamps, setSelectedCamps] = useState<string[]>([]);
   const [compareDialogOpen, setCompareDialogOpen] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedForDelete, setSelectedForDelete] = useState<string[]>([]);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [creating, setCreating] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -195,6 +199,50 @@ export default function FightCamps() {
     setDeleteDialogOpen(true);
   };
 
+  const handleBulkDelete = async () => {
+    if (!userId || selectedForDelete.length === 0 || bulkDeleting) return;
+    setBulkDeleting(true);
+    try {
+      const { error } = await withSupabaseTimeout(
+        supabase
+          .from("fight_camps")
+          .delete()
+          .in("id", selectedForDelete)
+          .eq("user_id", userId),
+        undefined,
+        "Bulk delete fight camps"
+      );
+      if (error) {
+        toast({ title: "Error", description: "Failed to delete fight camps", variant: "destructive" });
+        return;
+      }
+      setCamps((prev) => prev.filter((c) => !selectedForDelete.includes(c.id)));
+      localCache.remove(userId, 'fight_camps');
+      toast({ title: "Deleted", description: `${selectedForDelete.length} camp${selectedForDelete.length === 1 ? '' : 's'} removed.` });
+      setSelectedForDelete([]);
+      setSelectMode(false);
+    } finally {
+      setBulkDeleting(false);
+      setBulkDeleteOpen(false);
+    }
+  };
+
+  const toggleSelectMode = () => {
+    const next = !selectMode;
+    setSelectMode(next);
+    setSelectedForDelete([]);
+    if (next) {
+      setCompareMode(false);
+      setSelectedCamps([]);
+    }
+  };
+
+  const allSelected = camps.length > 0 && selectedForDelete.length === camps.length;
+  const toggleSelectAll = () => {
+    if (allSelected) setSelectedForDelete([]);
+    else setSelectedForDelete(camps.map((c) => c.id));
+  };
+
   if (loading) {
     return (
       <div className="space-y-3 px-5 py-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
@@ -218,33 +266,77 @@ export default function FightCamps() {
   }
 
   return (
-    <div className="animate-page-in space-y-3 px-5 py-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
+    <div
+      className="animate-page-in space-y-3 px-5 py-3 sm:p-5 md:p-6 max-w-2xl mx-auto"
+      style={
+        selectMode && selectedForDelete.length > 0
+          ? { paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 9rem)" }
+          : undefined
+      }
+    >
 
         {/* Header */}
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold">{compareMode ? "Compare Camps" : "Fight Camps"}</h1>
+          <h1 className="text-xl font-bold">
+            {selectMode ? "Select Camps" : compareMode ? "Compare Camps" : "Fight Camps"}
+          </h1>
           <div className="flex items-center gap-1.5">
-            {camps.length >= 2 && (
-              <Button
-                size="icon"
-                variant={compareMode ? "default" : "ghost"}
-                aria-label={compareMode ? "Exit compare mode" : "Compare camps"}
-                onClick={() => {
-                  setCompareMode(!compareMode);
-                  setSelectedCamps([]);
-                }}
-                className="rounded-full h-8 w-8"
-              >
-                {compareMode ? <X className="h-4 w-4" /> : <GitCompareArrows className="h-4 w-4" />}
-              </Button>
+            {selectMode ? (
+              <>
+                {camps.length > 0 && (
+                  <button
+                    onClick={toggleSelectAll}
+                    className="h-8 px-3 rounded-full text-[12px] font-medium text-muted-foreground hover:text-foreground hover:bg-muted/60 active:scale-95 transition-all"
+                  >
+                    {allSelected ? "Clear" : "All"}
+                  </button>
+                )}
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  aria-label="Exit select mode"
+                  onClick={toggleSelectMode}
+                  className="rounded-full h-8 w-8"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </>
+            ) : (
+              <>
+                {camps.length > 0 && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    aria-label="Select camps"
+                    onClick={toggleSelectMode}
+                    className="rounded-full h-8 w-8"
+                  >
+                    <CheckSquare className="h-4 w-4" />
+                  </Button>
+                )}
+                {camps.length >= 2 && (
+                  <Button
+                    size="icon"
+                    variant={compareMode ? "default" : "ghost"}
+                    aria-label={compareMode ? "Exit compare mode" : "Compare camps"}
+                    onClick={() => {
+                      setCompareMode(!compareMode);
+                      setSelectedCamps([]);
+                    }}
+                    className="rounded-full h-8 w-8"
+                  >
+                    {compareMode ? <X className="h-4 w-4" /> : <GitCompareArrows className="h-4 w-4" />}
+                  </Button>
+                )}
+                <button
+                  onClick={() => setDialogOpen(true)}
+                  className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 active:scale-95 transition-all"
+                  aria-label="New fight camp"
+                >
+                  <Plus className="h-4 w-4" />
+                </button>
+              </>
             )}
-            <button
-              onClick={() => setDialogOpen(true)}
-              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 active:scale-95 transition-all"
-              aria-label="New fight camp"
-            >
-              <Plus className="h-4 w-4" />
-            </button>
           </div>
         </div>
 
@@ -252,6 +344,15 @@ export default function FightCamps() {
         {compareMode && (
           <p className="text-sm text-muted-foreground">
             Select 2 camps to compare ({selectedCamps.length}/2)
+          </p>
+        )}
+
+        {/* Select mode hint */}
+        {selectMode && (
+          <p className="text-sm text-muted-foreground">
+            {selectedForDelete.length === 0
+              ? "Tap camps to select"
+              : `${selectedForDelete.length} selected`}
           </p>
         )}
 
@@ -276,9 +377,17 @@ export default function FightCamps() {
                 key={camp.id}
                 className={`group relative card-surface p-4 active:scale-[0.98] transition-all duration-200 overflow-hidden ${
                   compareMode && selectedCamps.includes(camp.id) ? "ring-2 ring-primary" : ""
+                } ${
+                  selectMode && selectedForDelete.includes(camp.id) ? "ring-2 ring-destructive" : ""
                 }`}
               >
                 <div onClick={() => {
+                  if (selectMode) {
+                    setSelectedForDelete((prev) =>
+                      prev.includes(camp.id) ? prev.filter((id) => id !== camp.id) : [...prev, camp.id]
+                    );
+                    return;
+                  }
                   if (compareMode) {
                     setSelectedCamps((prev) => {
                       if (prev.includes(camp.id)) return prev.filter((id) => id !== camp.id);
@@ -291,6 +400,15 @@ export default function FightCamps() {
                     navigate(`/fight-camps/${camp.id}`);
                   }
                 }} className="cursor-pointer">
+                {selectMode && (
+                  <div className={`absolute top-3 right-3 h-5 w-5 rounded-full border-2 flex items-center justify-center ${
+                    selectedForDelete.includes(camp.id)
+                      ? "bg-destructive border-destructive"
+                      : "border-muted-foreground/40 bg-background/40"
+                  }`}>
+                    {selectedForDelete.includes(camp.id) && <Check className="h-3 w-3 text-destructive-foreground" />}
+                  </div>
+                )}
                   <div className="flex items-start gap-3">
                     {camp.profile_pic_url ? (
                       <img
@@ -335,18 +453,20 @@ export default function FightCamps() {
                   )}
                 </div>
 
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    initiateDelete(camp);
-                  }}
-                  aria-label="Delete camp"
-                  className="absolute top-3 right-3 h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-muted/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
+                {!selectMode && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      initiateDelete(camp);
+                    }}
+                    aria-label="Delete camp"
+                    className="absolute top-3 right-3 h-7 w-7 text-muted-foreground hover:text-destructive hover:bg-muted/50 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
               </div>
             ))}
           </div>
@@ -359,6 +479,34 @@ export default function FightCamps() {
         title="Delete Fight Camp"
         itemName={campToDelete?.name}
       />
+
+      <DeleteConfirmDialog
+        open={bulkDeleteOpen}
+        onOpenChange={setBulkDeleteOpen}
+        onConfirm={handleBulkDelete}
+        title={`Delete ${selectedForDelete.length} Camp${selectedForDelete.length === 1 ? "" : "s"}`}
+        itemName={selectedForDelete.length === 1 ? camps.find((c) => c.id === selectedForDelete[0])?.name : `${selectedForDelete.length} fight camps`}
+      />
+
+      {/* Floating bulk delete bar */}
+      {selectMode && selectedForDelete.length > 0 && (
+        <div
+          className="fixed left-0 right-0 z-40 px-5 pointer-events-none"
+          style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 5rem)" }}
+        >
+          <div className="mx-auto max-w-2xl pointer-events-auto">
+            <Button
+              onClick={() => setBulkDeleteOpen(true)}
+              disabled={bulkDeleting}
+              variant="destructive"
+              className="w-full h-11 rounded-2xl shadow-lg flex items-center justify-center gap-2"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span>Delete {selectedForDelete.length} camp{selectedForDelete.length === 1 ? "" : "s"}</span>
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* New Camp Dialog */}
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!creating) setDialogOpen(open); }}>

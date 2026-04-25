@@ -823,6 +823,7 @@ export default function TrainingCalendar() {
                 open={shareOpen}
                 onOpenChange={(v) => { setShareOpen(v); if (v) setCardVariant("dark"); }}
                 transparent={cardVariant === "transparent"}
+                showSwipeHint
                 title="Share Training Log"
                 shareTitle="Training Log"
                 shareText="Check out my training log on FightCamp Wizard"
@@ -852,6 +853,13 @@ export default function TrainingCalendar() {
                     }
 
                     let touchStartX = 0;
+                    const flashCardWrapper = (el: HTMLElement | null) => {
+                        if (!el) return;
+                        el.classList.remove("share-variant-flash");
+                        // Force reflow so the animation re-triggers on rapid swipes.
+                        void el.offsetWidth;
+                        el.classList.add("share-variant-flash");
+                    };
 
                     return (
                         <div
@@ -860,6 +868,7 @@ export default function TrainingCalendar() {
                                 const delta = e.changedTouches[0].clientX - touchStartX;
                                 if (Math.abs(delta) > 40) {
                                     setCardVariant((v) => v === "dark" ? "transparent" : "dark");
+                                    flashCardWrapper(e.currentTarget as HTMLElement);
                                 }
                             }}
                         >

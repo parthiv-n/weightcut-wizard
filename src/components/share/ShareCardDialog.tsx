@@ -1,7 +1,6 @@
 import { ReactNode, useState, useRef, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Download, Share2, Loader2 } from "lucide-react";
+import { Share2, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { useShareCard } from "@/hooks/useShareCard";
 import type { AspectRatio } from "./templates/CardShell";
 
@@ -12,6 +11,8 @@ interface ShareCardDialogProps {
   shareTitle?: string;
   shareText?: string;
   transparent?: boolean;
+  /** When true, render a small "Swipe to switch style" hint with an animated chevron pulse. */
+  showSwipeHint?: boolean;
   children: (props: {
     cardRef: React.RefObject<HTMLDivElement>;
     aspect: AspectRatio;
@@ -33,10 +34,11 @@ export function ShareCardDialog({
   shareTitle,
   shareText,
   transparent,
+  showSwipeHint,
   children,
 }: ShareCardDialogProps) {
   const [aspect, setAspect] = useState<AspectRatio>("square");
-  const { cardRef, isCapturing, captureAndDownload, captureAndShare } = useShareCard();
+  const { cardRef, isCapturing, captureAndShare } = useShareCard();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [dims, setDims] = useState({ w: 300, h: MAX_PREVIEW_H, scale: 0.28 });
 
@@ -124,33 +126,33 @@ export function ShareCardDialog({
           </div>
         </div>
 
-        {/* Action buttons — always visible */}
-        <div className="flex gap-3 shrink-0">
-          <Button
-            variant="outline"
-            className="flex-1 h-12 rounded-2xl text-sm font-bold"
-            onClick={() => captureAndDownload(undefined, transparent)}
-            disabled={isCapturing}
+        {/* Swipe hint — animated chevrons + helper text. Only shown when the
+         * caller has wired up swipe handling (e.g. dark ↔ transparent). */}
+        {showSwipeHint && (
+          <div
+            className="flex items-center justify-center gap-2 shrink-0 text-[11px] text-muted-foreground/80 select-none"
+            aria-hidden
           >
-            {isCapturing ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            ) : (
-              <Download className="h-4 w-4 mr-2" />
-            )}
-            Download
-          </Button>
-          <Button
-            className="flex-1 h-12 rounded-2xl text-sm font-bold"
+            <ChevronLeft className="h-3.5 w-3.5 swipe-hint-pulse" />
+            <span className="font-medium tracking-wide">Swipe to switch style</span>
+            <ChevronRight className="h-3.5 w-3.5 swipe-hint-pulse" />
+          </div>
+        )}
+
+        {/* Single slim Share pill — Download removed per design request */}
+        <div className="flex justify-center shrink-0">
+          <button
             onClick={() => captureAndShare(shareTitle, shareText, transparent)}
             disabled={isCapturing}
+            className="inline-flex items-center justify-center gap-2 h-9 px-6 rounded-full bg-primary text-primary-foreground text-[13px] font-semibold shadow-sm transition-opacity active:opacity-80 disabled:opacity-60"
           >
             {isCapturing ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
             ) : (
-              <Share2 className="h-4 w-4 mr-2" />
+              <Share2 className="h-3.5 w-3.5" />
             )}
             Share
-          </Button>
+          </button>
         </div>
       </DialogContent>
     </Dialog>

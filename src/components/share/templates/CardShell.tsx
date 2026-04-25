@@ -1,6 +1,5 @@
 import { ReactNode, forwardRef } from "react";
 import { CardWatermark } from "./CardWatermark";
-import wizardLogo from "@/assets/wizard-logo.webp";
 
 export type AspectRatio = "square" | "story";
 
@@ -42,30 +41,20 @@ export const CardShell = forwardRef<HTMLDivElement, CardShellProps>(
           flexDirection: "column",
         }}
       >
-        {/* Top bar: logo + branding */}
+        {/* Top bar: text-only brand watermark — logo removed, text enlarged */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            gap: s ? 16 : 12,
             padding: s ? "64px 56px 0" : "40px 40px 0",
           }}
         >
-          <img
-            src={wizardLogo}
-            alt=""
-            style={{
-              width: s ? 64 : 40,
-              height: s ? 64 : 40,
-              borderRadius: s ? 16 : 10,
-            }}
-          />
           <span
             style={{
-              fontSize: s ? 32 : 20,
-              fontWeight: 700,
-              letterSpacing: "-0.01em",
-              color: transparent ? "rgba(255,255,255,0.9)" : "rgba(255,255,255,0.75)",
+              fontSize: s ? 56 : 34,
+              fontWeight: 800,
+              letterSpacing: "-0.02em",
+              color: transparent ? "rgba(255,255,255,0.95)" : "rgba(255,255,255,0.85)",
             }}
           >
             FightCamp Wizard
