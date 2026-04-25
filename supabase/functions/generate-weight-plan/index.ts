@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
 import { edgeLogger } from "../_shared/errorReporter.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { normaliseWeeklyPlan } from "../_shared/normalizeWeeklyPlan.ts";
 
 // FREE for all users — generated during onboarding, no gem cost
 
@@ -131,10 +132,29 @@ Return ONLY valid JSON:
 
     const plan = parseJSON(content);
 
+    if (!plan || !plan.weeklyPlan) {
+      throw new Error("Invalid plan response from AI");
+    }
+
+    // Enforce week count + final-week target weight = goal weight. Linear
+    // projection backfills any missing weeks so the user always sees a clean
+    // week-by-week loss curve ending exactly at goalWeight.
+    const weightWeekCount = Math.min(weeks, 12);
+    plan.weeklyPlan = normaliseWeeklyPlan({
+      weeklyPlan: plan.weeklyPlan,
+      weekCount: weightWeekCount,
+      startWeight: currentWeight,
+      finalTarget: goalWeight,
+      defaultCalories: targetCalories,
+      defaultProtein: proteinTarget,
+      defaultCarbs: carbTarget,
+      defaultFats: fatTarget,
+    });
+
     // Ensure deterministic values override LLM
     plan.maintenanceCalories = tdee;
     plan.deficit = dailyDeficit;
-    plan.totalWeeks = Math.min(weeks, 12);
+    plan.totalWeeks = weightWeekCount;
     plan.weeklyLossTarget = `${weeklyLossRate.toFixed(1)} kg/week`;
 
     return new Response(JSON.stringify({ plan }), {

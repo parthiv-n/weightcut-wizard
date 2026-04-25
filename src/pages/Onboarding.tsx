@@ -200,23 +200,30 @@ export default function Onboarding() {
     if (!authLoading && hasProfile) navigate("/dashboard", { replace: true });
   }, [authLoading, hasProfile, navigate]);
 
+  // Step 13 (plan_aggressiveness — "how aggressive / how fast") only applies
+  // to non-fighters. Fighters' pace is determined by the fight date alone, so
+  // we skip the screen for them in both directions.
+  const isFighterFlow = formData.goal_type === "cutting";
+
   const goNext = useCallback(() => {
     triggerHapticSelection();
     setDirection(1);
     setStep(prev => {
       let next = prev + 1;
+      if (next === 13 && isFighterFlow) next = 14;
       return Math.min(next, TOTAL_STEPS);
     });
-  }, [formData.goal_type]);
+  }, [isFighterFlow]);
 
   const goBack = useCallback(() => {
     triggerHapticSelection();
     setDirection(-1);
     setStep(prev => {
       let next = prev - 1;
+      if (next === 13 && isFighterFlow) next = 12;
       return Math.max(next, 1);
     });
-  }, [formData.goal_type]);
+  }, [isFighterFlow]);
 
   // Single-select helper — sets field value, user taps Continue to advance.
   const selectAndAdvance = useCallback((field: string, value: string) => {
@@ -398,21 +405,22 @@ export default function Onboarding() {
             if (planError) logger.warn("Cut plan generation failed", { error: planError });
             const plan = planData?.plan || planData;
             if (plan?.weeklyPlan) {
-              localStorage.setItem("wcw_cut_plan", JSON.stringify({
+              const planPayload = {
                 ...plan,
                 currentWeight: parseFloat(formData.current_weight_kg),
                 goalWeight: parseFloat(formData.goal_weight_kg),
                 targetDate: formData.target_date,
-              }));
+              };
+              localStorage.setItem("wcw_cut_plan", JSON.stringify(planPayload));
               const week1 = plan.weeklyPlan[0];
+              const profileUpdate: Record<string, any> = { cut_plan_json: planPayload };
               if (week1) {
-                await supabase.from("profiles").update({
-                  ai_recommended_calories: week1.calories,
-                  ai_recommended_protein_g: week1.protein_g,
-                  ai_recommended_carbs_g: week1.carbs_g,
-                  ai_recommended_fats_g: week1.fats_g,
-                }).eq("id", user.id);
+                profileUpdate.ai_recommended_calories = week1.calories;
+                profileUpdate.ai_recommended_protein_g = week1.protein_g;
+                profileUpdate.ai_recommended_carbs_g = week1.carbs_g;
+                profileUpdate.ai_recommended_fats_g = week1.fats_g;
               }
+              await supabase.from("profiles").update(profileUpdate).eq("id", user.id);
               return true;
             }
             return false;
@@ -438,22 +446,23 @@ export default function Onboarding() {
             if (planError) logger.warn("Weight plan generation failed", { error: planError });
             const plan = planData?.plan || planData;
             if (plan?.weeklyPlan) {
-              localStorage.setItem("wcw_cut_plan", JSON.stringify({
+              const planPayload = {
                 ...plan,
                 currentWeight: parseFloat(formData.current_weight_kg),
                 goalWeight: parseFloat(formData.goal_weight_kg),
                 targetDate: formData.target_date,
                 planType: "weight_loss",
-              }));
+              };
+              localStorage.setItem("wcw_cut_plan", JSON.stringify(planPayload));
               const week1 = plan.weeklyPlan[0];
+              const profileUpdate: Record<string, any> = { cut_plan_json: planPayload };
               if (week1) {
-                await supabase.from("profiles").update({
-                  ai_recommended_calories: week1.calories,
-                  ai_recommended_protein_g: week1.protein_g,
-                  ai_recommended_carbs_g: week1.carbs_g,
-                  ai_recommended_fats_g: week1.fats_g,
-                }).eq("id", user.id);
+                profileUpdate.ai_recommended_calories = week1.calories;
+                profileUpdate.ai_recommended_protein_g = week1.protein_g;
+                profileUpdate.ai_recommended_carbs_g = week1.carbs_g;
+                profileUpdate.ai_recommended_fats_g = week1.fats_g;
               }
+              await supabase.from("profiles").update(profileUpdate).eq("id", user.id);
               return true;
             }
             return false;
@@ -478,13 +487,19 @@ export default function Onboarding() {
         } catch (err) { logger.warn("Paywall presentation error", err); }
       }
 
-      // 4. If the AI plan finished while the paywall was open, skip straight to the plan.
-      //    Otherwise, show the generating overlay and wait for it.
+      // 4. ALWAYS show the AI overlay after the paywall closes — this covers
+      //    every race between "user dismisses paywall fast" and "plan finishes
+      //    fast", so the user never sees the dashboard mid-flight while their
+      //    plan is being prepared. If the plan is already done we just skip
+      //    to the "ready" step for a smooth handoff; otherwise we wait.
+      setGeneratingPlan(true);
       let hasPlan: boolean;
       if (planSettled) {
+        // Plan finished while paywall was open — short "ready" beat, then transition
+        setGenerationStep(GENERATION_STEPS.length - 1);
+        await new Promise(r => setTimeout(r, 600));
         hasPlan = planResult;
       } else {
-        setGeneratingPlan(true);
         setGenerationStep(0);
         const stepTimers = [
           setTimeout(() => setGenerationStep(1), 1200),
@@ -507,7 +522,16 @@ export default function Onboarding() {
 
       localStorage.setItem("wcw_onboarding_just_completed", "true");
 
+      // Safety net: even if hasPlan came back false (e.g. response shape edge
+      // case) but a plan was actually written to localStorage by the promise
+      // body, treat it as success. Prevents the "land on dashboard, then the
+      // Dashboard auto-redirects to /cut-plan a few seconds later" flicker.
+      if (!hasPlan && localStorage.getItem("wcw_cut_plan")) {
+        hasPlan = true;
+      }
+
       if (hasPlan) {
+        setGenerationStep(GENERATION_STEPS.length - 1);
         localStorage.removeItem("wcw_cut_plan_seen"); // Force user to see plan first
         navigate("/cut-plan", { replace: true });
       } else {

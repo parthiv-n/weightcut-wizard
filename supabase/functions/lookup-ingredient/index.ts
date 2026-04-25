@@ -156,10 +156,47 @@ ${PROMPT_INJECTION_GUARD_INSTRUCTION}
         source: nutritionData.data_source || "Nutrition Database",
       };
 
+      // Phase 3.1: cache AI-discovered foods in the catalog so subsequent
+      // lookups hit the DB and meal_items can FK to a stable id.
+      let foodId: string | null = null;
+      if (result.calories_per_100g > 0) {
+        const sourceRef = (result.ingredient_specification || ingredientName)
+          .toLowerCase()
+          .trim()
+          .slice(0, 200);
+        const { data: upserted, error: upsertError } = await supabaseClient
+          .from("foods")
+          .upsert(
+            {
+              name: result.ingredient_specification,
+              calories_per_100g: result.calories_per_100g,
+              protein_per_100g: result.protein_per_100g,
+              carbs_per_100g: result.carbs_per_100g,
+              fats_per_100g: result.fats_per_100g,
+              source: "ai",
+              source_ref: sourceRef,
+              verified: false,
+              created_by: user.id,
+            },
+            { onConflict: "source,source_ref", ignoreDuplicates: false }
+          )
+          .select("id")
+          .maybeSingle();
+
+        if (upsertError) {
+          edgeLogger.warn("foods upsert (ai) failed", {
+            functionName: "lookup-ingredient",
+            message: upsertError.message,
+          });
+        } else if (upserted) {
+          foodId = upserted.id;
+        }
+      }
+
       edgeLogger.info("Returning nutrition data");
 
       return new Response(
-        JSON.stringify({ nutritionData: result }),
+        JSON.stringify({ nutritionData: result, food_id: foodId }),
         { headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
     } catch (parseError) {

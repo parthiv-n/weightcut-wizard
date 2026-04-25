@@ -38,6 +38,7 @@ export interface ProfileData {
   last_free_gem_date?: string;
   ads_watched_today?: number;
   ads_watched_date?: string;
+  cut_plan_json?: any;
   [key: string]: any;
 }
 
@@ -215,7 +216,17 @@ export function UserProvider({ children }: { children: ReactNode }) {
       return await attempt();
     } catch (error) {
       logger.warn("refreshProfile: first attempt failed, retrying...", { error: String(error) });
-      // Single retry after short delay
+      // A timeout here means the Supabase client's internal auth mutex is
+      // wedged (stale realtime socket). Cycle realtime + force-refresh the
+      // token before the retry so we don't just queue behind the same stuck
+      // mutex for another 5s.
+      const msg = (error as { message?: string })?.message ?? "";
+      if (msg.includes("timed out")) {
+        try {
+          const { recoverSupabaseConnection } = await import("@/lib/connectionRecovery");
+          await recoverSupabaseConnection("refresh-profile-timeout");
+        } catch { /* recovery itself is best-effort */ }
+      }
       try {
         await new Promise(r => setTimeout(r, 500));
         return await attempt();
@@ -236,14 +247,41 @@ export function UserProvider({ children }: { children: ReactNode }) {
     try {
       let session = providedSession;
       if (!session) {
-        const { data, error } = await withAuthTimeout(
-          supabase.auth.getSession()
-        );
+        // Phase 1.1: retry once after 2s on auth timeout before surfacing authError.
+        // Cold iOS Capacitor launches can legitimately take >6s (secure-storage read +
+        // token refresh round-trip); a single retry covers the long tail without
+        // bouncing users to the error screen.
+        let data: Awaited<ReturnType<typeof supabase.auth.getSession>>['data'] | null = null;
+        let error: Awaited<ReturnType<typeof supabase.auth.getSession>>['error'] | null = null;
+        try {
+          logger.warn("UserContext._performLoad: auth attempt 1/2");
+          const res = await withAuthTimeout(supabase.auth.getSession());
+          data = res.data;
+          error = res.error;
+        } catch (timeoutErr) {
+          logger.warn("UserContext._performLoad: auth attempt 1 timed out, cycling realtime + retrying in 2s", { error: String(timeoutErr) });
+          // Recovery before the retry — otherwise attempt 2 queues behind
+          // the same wedged mutex and also hits its 15s timeout.
+          try {
+            const { recoverSupabaseConnection } = await import("@/lib/connectionRecovery");
+            await recoverSupabaseConnection("auth-session-timeout");
+          } catch { /* best-effort */ }
+          await new Promise((r) => setTimeout(r, 2000));
+          try {
+            logger.warn("UserContext._performLoad: auth attempt 2/2");
+            const res = await withAuthTimeout(supabase.auth.getSession());
+            data = res.data;
+            error = res.error;
+          } catch (retryErr) {
+            logger.error("UserContext._performLoad: auth attempt 2 also timed out", retryErr);
+            return 'error';
+          }
+        }
         if (error) {
           logger.error("Auth session error", error);
           return 'error';
         }
-        session = data.session;
+        session = data?.session ?? null;
       }
 
       if (!session?.user) {
@@ -473,6 +511,28 @@ export function UserProvider({ children }: { children: ReactNode }) {
         if (session?.user) {
           startCacheCleanup();
           await loadUserData(session);
+          // Drop any stale `nutrition_logs` queue entries left over from the
+          // pre-v2 schema on cold start too.
+          try {
+            const uid = session.user?.id;
+            if (uid) {
+              const {
+                dropLegacyNutritionLogsQueueEntries,
+                wipeLegacyNutritionLocalCache,
+                purgeGhostMealQueueEntries,
+              } = await import('@/lib/pendingMeals');
+              const { syncQueue } = await import('@/lib/syncQueue');
+              const dropped = dropLegacyNutritionLogsQueueEntries(uid);
+              wipeLegacyNutritionLocalCache(uid);
+              purgeGhostMealQueueEntries(uid);
+              syncQueue.pruneStaleFailed(uid);
+              if (dropped > 0) {
+                logger.warn(`dropped ${dropped} legacy queue entries`);
+              }
+            }
+          } catch (err) {
+            logger.warn('nutrition queue boot-drain failed (initial)', { err });
+          }
         } else {
           setIsLoading(false);
         }
@@ -506,29 +566,41 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setIsSessionValid(true);
         await loadUserData(session);
       } else if (event === 'SIGNED_IN' && session) {
+        // Distinguish a real login (different userId) from a token refresh (same userId).
+        // Fresh logins MUST show the splash through the full profile fetch so the
+        // ProfileCompletionGuard never briefly sees hasProfile=false and bounces the
+        // user to /onboarding. Token refresh with same user keeps the UI stable.
+        const incomingUserId = session.user.id;
+        const isFreshLogin = userIdRef.current !== incomingUserId;
         startCacheCleanup();
         setIsSessionValid(true);
-        if (!isUserLoadedRef.current) {
+        if (isFreshLogin || !isUserLoadedRef.current) {
+          if (isFreshLogin) isUserLoadedRef.current = false;
           setIsLoading(true);
         }
         await loadUserData(session);
-        // One-shot heal of queued nutrition_logs INSERTs whose payloads came
-        // from pre-migration code (null meal_type / empty meal_name). Without
-        // this they fail forever against NOT NULL constraints and pollute
-        // the UI as "Logged meal / snack" ghosts.
+        // Nutrition overhaul v2: the old `nutrition_logs` table is archived.
+        // Any queued inserts against it would fail forever — drop them.
+        // `syncQueue.process` below will then replay any queued `meals` RPC
+        // payloads via create_meal_with_items.
         try {
           const uid = session.user?.id;
           if (uid) {
-            const { healBrokenPendingMeals } = await import('@/lib/pendingMeals');
-            const healed = healBrokenPendingMeals(uid);
-            if (healed > 0) {
-              const { syncQueue } = await import('@/lib/syncQueue');
-              syncQueue.process(uid).catch(() => { });
-              logger.info(`Healed ${healed} stuck pending meal op(s)`);
+            const {
+              dropLegacyNutritionLogsQueueEntries,
+              purgeGhostMealQueueEntries,
+            } = await import('@/lib/pendingMeals');
+            const dropped = dropLegacyNutritionLogsQueueEntries(uid);
+            purgeGhostMealQueueEntries(uid);
+            if (dropped > 0) {
+              logger.warn(`dropped ${dropped} legacy queue entries`);
             }
+            const { syncQueue } = await import('@/lib/syncQueue');
+            syncQueue.pruneStaleFailed(uid);
+            syncQueue.process(uid).catch(() => { });
           }
         } catch (err) {
-          logger.warn('healBrokenPendingMeals failed', { err });
+          logger.warn('nutrition queue boot-drain failed', { err });
         }
       }
     });
@@ -553,6 +625,18 @@ export function UserProvider({ children }: { children: ReactNode }) {
         checkSessionValidity().then(valid => {
           if (valid) syncDailyGem();
         });
+      }
+      // Force-cycle the realtime websocket. When the tab has been idle for a
+      // while the websocket silently dies; the REST client then queues every
+      // query behind an internal auth-refresh mutex waiting on the dead
+      // socket, which manifests as "Weight logs query timed out" and a
+      // frozen nutrition ring. Disconnecting + reconnecting unsticks the
+      // mutex so subsequent requests land instantly.
+      try {
+        supabase.realtime.disconnect();
+        supabase.realtime.connect();
+      } catch (err) {
+        logger.warn('realtime reconnect on resume failed', { err: String(err) });
       }
       // Flush any offline writes queued while the app was backgrounded
       if (userIdRef.current) {
@@ -601,6 +685,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
           syncQueue.process(userIdRef.current!).catch(() => { });
         });
       }
+      // Proactively unstick the Supabase client — going offline then back
+      // online almost always leaves the realtime socket dead, which wedges
+      // REST queries behind a stale auth mutex.
+      import('@/lib/connectionRecovery').then(({ recoverSupabaseConnection }) => {
+        recoverSupabaseConnection('network-online').catch(() => {});
+      });
     };
     const handleOffline = () => setIsOffline(true);
 
@@ -611,6 +701,29 @@ export function UserProvider({ children }: { children: ReactNode }) {
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  // Proactive realtime health watcher. When the websocket is idle for too
+  // long without a heartbeat, the REST client starts queuing every request
+  // behind a stuck auth mutex, which manifests as "Profile refresh query
+  // timed out" and "Load meals timed out". Polling every 30s and calling
+  // recovery when we see a disconnected socket catches the wedge before
+  // any user-visible timeout hits.
+  useEffect(() => {
+    if (!userId) return;
+    const interval = setInterval(() => {
+      try {
+        const isConnected = supabase.realtime.isConnected?.();
+        if (isConnected === false) {
+          import('@/lib/connectionRecovery').then(({ recoverSupabaseConnection }) => {
+            recoverSupabaseConnection('realtime-heartbeat').catch(() => {});
+          });
+        }
+      } catch {
+        /* older supabase-js versions may not expose isConnected — ignore */
+      }
+    }, 30_000);
+    return () => clearInterval(interval);
+  }, [userId]);
 
   const authValue = useMemo(() => ({
     userId,

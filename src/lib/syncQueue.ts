@@ -22,6 +22,7 @@ export interface SyncOp {
 
 const QUEUE_KEY_PREFIX = "wcw_syncqueue_";
 const MAX_RETRIES = 5;
+const STALE_FAILED_MS = 7 * 24 * 60 * 60 * 1000;
 
 type QueueListener = (userId: string) => void;
 const listeners = new Set<QueueListener>();
@@ -127,11 +128,21 @@ class SyncQueue {
       for (const op of ops) {
         try {
           if (op.action === "insert") {
-            const { error } = await withSupabaseTimeout(
-              supabase.from(op.table as any).insert(op.payload as any),
-              10000,
-              `SyncQueue insert ${op.table}`
-            );
+            // `meals` inserts go through the RPC — the queued payload IS the
+            // RPC args object (see useMealOperations.runInsertFlow). Other
+            // tables keep the legacy direct-insert path.
+            const isMealsRpc = op.table === "meals";
+            const { error } = isMealsRpc
+              ? await withSupabaseTimeout(
+                  supabase.rpc("create_meal_with_items", op.payload as any),
+                  10000,
+                  "SyncQueue insert meals (rpc)"
+                )
+              : await withSupabaseTimeout(
+                  supabase.from(op.table as any).insert(op.payload as any),
+                  10000,
+                  `SyncQueue insert ${op.table}`
+                );
 
             if (error) {
               // Duplicate primary key → treat as already synced (idempotent)
@@ -217,6 +228,30 @@ class SyncQueue {
 
   listFailed(userId: string): SyncOp[] {
     return this.readOps(userId).filter((o) => o.failed);
+  }
+
+  /**
+   * Drop ops whose most recent retry attempt is older than STALE_FAILED_MS
+   * and that are currently marked `failed: true`. Prevents permanently-stuck
+   * ops from lingering in localStorage indefinitely (they'd otherwise keep
+   * surfacing in the PendingSyncPill as "N failed · tap to retry" forever).
+   * Returns the number of ops pruned. Safe to call at boot.
+   */
+  pruneStaleFailed(userId: string): number {
+    const cutoff = Date.now() - STALE_FAILED_MS;
+    const ops = this.readOps(userId);
+    const kept = ops.filter(o => !(
+      o.failed === true &&
+      typeof o.lastAttemptAt === "number" &&
+      o.lastAttemptAt < cutoff
+    ));
+    const pruned = ops.length - kept.length;
+    if (pruned > 0) {
+      this.writeOps(userId, kept);
+      logger.warn(`SyncQueue: pruned ${pruned} stale failed ops`, { userId });
+      notifySyncQueueChange(userId);
+    }
+    return pruned;
   }
 
   retry(userId: string, opId: string): void {

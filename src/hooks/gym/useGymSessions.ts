@@ -209,6 +209,25 @@ export function useGymSessions() {
       return null;
     }
 
+    // Reuse existing in-progress session — prevents orphan rows from double-tap or
+    // recovery flows where activeSession was already restored from localStorage.
+    if (activeSession) {
+      return activeSession.sessionId;
+    }
+
+    // Proactively refresh auth if the JWT is near expiry. iOS Capacitor backgrounding
+    // commonly leaves a stale token; without this, the RLS check fails and withRetry
+    // wastes its budget on the same expired token. Mirrors finishSession's approach.
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const expiresAt = session?.expires_at ? session.expires_at * 1000 : 0;
+      if (!session || expiresAt - Date.now() < 5 * 60 * 1000) {
+        await supabase.auth.refreshSession();
+      }
+    } catch {
+      // Best-effort — fall through to insert; if auth is truly broken the insert will surface it
+    }
+
     try {
       const { data, error } = await withRetry(
         () => withSupabaseTimeout(
@@ -222,7 +241,7 @@ export function useGymSessions() {
             } as any)
             .select()
             .single(),
-          undefined,
+          15000,
           "Start gym session"
         ),
         2,
@@ -244,10 +263,11 @@ export function useGymSessions() {
       return session.id;
     } catch (err) {
       logger.error("startSession failed", err);
-      toast({ description: "Failed to start workout", variant: "destructive" });
+      const msg = (err as any)?.message || "Failed to start workout";
+      toast({ description: msg, variant: "destructive" });
       return null;
     }
-  }, [userId, toast]);
+  }, [userId, activeSession, toast]);
 
   const finishSession = useCallback(async (opts: {
     durationMinutes?: number;
@@ -378,6 +398,55 @@ export function useGymSessions() {
     setActiveSession(prev => prev ? updater(prev) : prev);
   }, []);
 
+  // Note: editing a PR set downward does not auto-rebuild exercise_prs.
+  // The next new set on that exercise re-runs checkAndUpdatePR. Acceptable for v1.
+  const updateCompletedSet = useCallback(async (
+    setId: string,
+    updates: Partial<{ weight_kg: number | null; reps: number; is_warmup: boolean }>,
+  ) => {
+    if (!userId) return;
+    try {
+      const { error } = await withSupabaseTimeout(
+        supabase.from("gym_sets" as any).update(updates as any).eq("id", setId),
+        undefined,
+        "Update completed set",
+      );
+      if (error) throw error;
+      invalidateGymAnalytics(userId);
+      await fetchHistory();
+    } catch {
+      syncQueue.enqueue(userId, {
+        table: "gym_sets",
+        action: "update",
+        payload: updates,
+        recordId: setId,
+        timestamp: Date.now(),
+      });
+    }
+  }, [userId, fetchHistory]);
+
+  const deleteCompletedSet = useCallback(async (setId: string) => {
+    if (!userId) return;
+    try {
+      const { error } = await withSupabaseTimeout(
+        supabase.from("gym_sets" as any).delete().eq("id", setId),
+        undefined,
+        "Delete completed set",
+      );
+      if (error) throw error;
+      invalidateGymAnalytics(userId);
+      await fetchHistory();
+    } catch {
+      syncQueue.enqueue(userId, {
+        table: "gym_sets",
+        action: "delete",
+        payload: {},
+        recordId: setId,
+        timestamp: Date.now(),
+      });
+    }
+  }, [userId, fetchHistory]);
+
   return {
     history,
     historyLoading,
@@ -387,6 +456,8 @@ export function useGymSessions() {
     discardSession,
     deleteSession,
     updateActiveSession,
+    updateCompletedSet,
+    deleteCompletedSet,
     refetchHistory: fetchHistory,
   };
 }

@@ -25,11 +25,10 @@ export function CreateExerciseDialog({ open, onOpenChange, onSubmit }: CreateExe
   const [muscleGroup, setMuscleGroup] = useState<MuscleGroup>("chest");
   const [equipment, setEquipment] = useState<Equipment | "none">("barbell");
   const [isBodyweight, setIsBodyweight] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
 
+  // Resolves immediately thanks to the optimistic addCustomExercise — close instantly, no spinner.
   const handleSubmit = async () => {
     if (!name.trim()) return;
-    setSubmitting(true);
     const result = await onSubmit({
       name: name.trim(),
       category,
@@ -37,7 +36,6 @@ export function CreateExerciseDialog({ open, onOpenChange, onSubmit }: CreateExe
       equipment: equipment === "none" ? null : equipment,
       is_bodyweight: isBodyweight,
     });
-    setSubmitting(false);
     if (result) {
       setName("");
       onOpenChange(false);
@@ -118,10 +116,10 @@ export function CreateExerciseDialog({ open, onOpenChange, onSubmit }: CreateExe
         <div className="border-t border-border/40 mt-3">
           <button
             onClick={handleSubmit}
-            disabled={!name.trim() || submitting}
+            disabled={!name.trim()}
             className="w-full py-2.5 text-[14px] font-semibold text-primary active:bg-muted/50 transition-colors disabled:opacity-40"
           >
-            {submitting ? "Creating..." : "Create Exercise"}
+            Create Exercise
           </button>
         </div>
       </SheetContent>

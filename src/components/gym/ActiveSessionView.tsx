@@ -16,6 +16,7 @@ interface ActiveSessionViewProps {
   exercises: Exercise[];
   prs: Map<string, ExercisePR>;
   newPRSetIds: Set<string>;
+  previousSetsMap?: Map<string, GymSet[]>;
   onOpenExercisePicker: () => void;
   onAddSet: (exerciseOrder: number, data: { weight_kg?: number | null; reps: number; rpe?: number | null; is_warmup?: boolean; is_bodyweight?: boolean }) => void;
   onUpdateSet: (setId: string, exerciseOrder: number, updates: Partial<{ weight_kg: number | null; reps: number; rpe: number | null; is_warmup: boolean }>) => void;
@@ -49,7 +50,7 @@ function ElapsedTimer({ startedAt }: { startedAt: number }) {
 }
 
 export function ActiveSessionView({
-  workout, exercises, prs, newPRSetIds,
+  workout, exercises, prs, newPRSetIds, previousSetsMap,
   onOpenExercisePicker, onAddSet, onUpdateSet, onDeleteSet,
   onDuplicateLastSet, onRemoveExercise, onFinish, onDiscard, onExerciseTap,
 }: ActiveSessionViewProps) {
@@ -150,6 +151,7 @@ export function ActiveSessionView({
             group={group}
             pr={prs.get(group.exercise.id)}
             newPRSetIds={newPRSetIds}
+            previousSets={previousSetsMap?.get(group.exercise.id)}
             onAddSet={onAddSet}
             onUpdateSet={onUpdateSet}
             onDeleteSet={onDeleteSet}

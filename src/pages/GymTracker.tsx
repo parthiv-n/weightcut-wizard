@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Plus, ChevronRight } from "lucide-react";
+import { Plus, ChevronRight, List, CalendarDays } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useGymSessions } from "@/hooks/gym/useGymSessions";
@@ -8,9 +8,11 @@ import { useGymSets } from "@/hooks/gym/useGymSets";
 import { useExerciseLibrary } from "@/hooks/gym/useExerciseLibrary";
 import { useExercisePRs } from "@/hooks/gym/useExercisePRs";
 import { useGymAnalytics } from "@/hooks/gym/useGymAnalytics";
+import { usePreviousSets } from "@/hooks/gym/usePreviousSets";
 import { useRoutines } from "@/hooks/gym/useRoutines";
 import { ActiveSessionView } from "@/components/gym/ActiveSessionView";
 import { SessionHistoryList } from "@/components/gym/SessionHistoryList";
+import { SessionHistoryCalendar } from "@/components/gym/SessionHistoryCalendar";
 import { SessionDetailSheet } from "@/components/gym/SessionDetailSheet";
 import { SessionAnalyticsCard } from "@/components/gym/SessionAnalyticsCard";
 import { ExercisePickerSheet } from "@/components/gym/ExercisePickerSheet";
@@ -27,6 +29,8 @@ import { ImpactStyle } from "@capacitor/haptics";
 import type { SessionType, SessionWithSets, Exercise, SavedRoutine } from "@/pages/gym/types";
 
 type GymTab = "workouts" | "routines" | "progress";
+type HistoryView = "list" | "calendar";
+const HISTORY_VIEW_KEY = "wcw_gym_history_view";
 
 export default function GymTracker() {
   const { toast } = useToast();
@@ -34,6 +38,7 @@ export default function GymTracker() {
     history, historyLoading, activeSession,
     startSession, finishSession, discardSession,
     deleteSession, updateActiveSession,
+    updateCompletedSet, deleteCompletedSet,
   } = useGymSessions();
 
   const {
@@ -44,6 +49,7 @@ export default function GymTracker() {
   const { exercises, filteredExercises, loading: exercisesLoading, addCustomExercise } = useExerciseLibrary();
   const { prs, checkAndUpdatePR, getPRForExercise } = useExercisePRs();
   const { analytics, fetchExerciseHistory } = useGymAnalytics(history);
+  const previousSetsMap = usePreviousSets(activeSession, history);
   const {
     routines, routinesLoading, generatingRoutine,
     generateRoutine, saveRoutine, deleteRoutine, renameRoutine,
@@ -60,14 +66,30 @@ export default function GymTracker() {
   const [sessionType, setSessionType] = useState<SessionType>("Strength");
   const [generatorOpen, setGeneratorOpen] = useState(false);
   const [manualRoutineOpen, setManualRoutineOpen] = useState(false);
+  const [historyView, setHistoryView] = useState<HistoryView>(() => {
+    try {
+      return (localStorage.getItem(HISTORY_VIEW_KEY) as HistoryView) === "calendar" ? "calendar" : "list";
+    } catch {
+      return "list";
+    }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(HISTORY_VIEW_KEY, historyView); } catch { /* ignore */ }
+  }, [historyView]);
   const newPRSetIdsRef = useRef(new Set<string>());
 
+  const [startingWorkout, setStartingWorkout] = useState(false);
   const handleStartWorkout = useCallback(async () => {
-    const sessionId = await startSession(sessionType);
-    if (!sessionId) {
-      toast({ description: "Failed to start workout", variant: "destructive" });
+    if (startingWorkout) return; // Debounce double-tap
+    setStartingWorkout(true);
+    try {
+      await startSession(sessionType);
+      // startSession surfaces its own error toast with the underlying message;
+      // no need for a second generic toast here.
+    } finally {
+      setStartingWorkout(false);
     }
-  }, [startSession, sessionType, toast]);
+  }, [startSession, sessionType, startingWorkout]);
 
   const handleStartFromRoutine = useCallback(async (routine: SavedRoutine, dayFilter?: string) => {
     if (exercisesLoading) {
@@ -169,6 +191,14 @@ export default function GymTracker() {
     }
   }, [exercises]);
 
+  // When history refreshes (after edits), re-sync the open detail session by id
+  // so inline weight/reps edits become visible without re-opening the sheet.
+  useEffect(() => {
+    if (!detailOpen || !detailSession) return;
+    const fresh = history.find(s => s.id === detailSession.id);
+    if (fresh && fresh !== detailSession) setDetailSession(fresh);
+  }, [history, detailOpen, detailSession]);
+
   const { tasks: aiTasks, dismissTask: aiDismiss } = useAITask();
   const gymAiTask = aiTasks.find(t => t.status === "running" && t.type === "gym-routine");
 
@@ -264,6 +294,7 @@ export default function GymTracker() {
               exercises={exercises}
               prs={prs}
               newPRSetIds={newPRSetIdsRef.current}
+              previousSetsMap={previousSetsMap}
               onOpenExercisePicker={() => setExercisePickerOpen(true)}
               onAddSet={handleAddSet}
               onUpdateSet={updateSet}
@@ -317,11 +348,12 @@ export default function GymTracker() {
                 </div>
                 <button
                   onClick={handleStartWorkout}
-                  className="w-full h-12 rounded-2xl text-sm font-semibold text-white flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+                  disabled={startingWorkout}
+                  className="w-full h-12 rounded-2xl text-sm font-semibold text-white flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-60"
                   style={{ background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))" }}
                 >
                   <Plus className="h-4.5 w-4.5" />
-                  Start Workout
+                  {startingWorkout ? "Starting..." : "Start Workout"}
                 </button>
               </div>
 
@@ -336,12 +368,48 @@ export default function GymTracker() {
 
               {/* Session history */}
               <div>
-                <h2 className="font-semibold text-sm mb-3">Workout History</h2>
-                <SessionHistoryList
-                  sessions={history}
-                  loading={historyLoading}
-                  onSessionTap={handleSessionTap}
-                />
+                <div className="flex items-center justify-between mb-3">
+                  <h2 className="font-semibold text-sm">Workout History</h2>
+                  <div className="flex items-center gap-0.5 p-0.5 rounded-full bg-muted/40 border border-border/30">
+                    <button
+                      onClick={() => { setHistoryView("list"); triggerHaptic(ImpactStyle.Light); }}
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1 transition-all ${
+                        historyView === "list"
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground"
+                      }`}
+                      aria-label="List view"
+                    >
+                      <List className="h-3 w-3" />
+                      List
+                    </button>
+                    <button
+                      onClick={() => { setHistoryView("calendar"); triggerHaptic(ImpactStyle.Light); }}
+                      className={`px-2.5 py-1 rounded-full text-[11px] font-semibold flex items-center gap-1 transition-all ${
+                        historyView === "calendar"
+                          ? "bg-background text-foreground shadow-sm"
+                          : "text-muted-foreground"
+                      }`}
+                      aria-label="Calendar view"
+                    >
+                      <CalendarDays className="h-3 w-3" />
+                      Calendar
+                    </button>
+                  </div>
+                </div>
+                {historyView === "list" ? (
+                  <SessionHistoryList
+                    sessions={history}
+                    loading={historyLoading}
+                    onSessionTap={handleSessionTap}
+                  />
+                ) : (
+                  <SessionHistoryCalendar
+                    sessions={history}
+                    loading={historyLoading}
+                    onSessionTap={handleSessionTap}
+                  />
+                )}
               </div>
             </>
           )
@@ -443,6 +511,8 @@ export default function GymTracker() {
         open={detailOpen}
         onOpenChange={setDetailOpen}
         onDelete={deleteSession}
+        onUpdateSet={updateCompletedSet}
+        onDeleteSet={deleteCompletedSet}
       />
 
       <ExerciseStatsSheet

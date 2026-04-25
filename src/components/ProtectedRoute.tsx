@@ -1,4 +1,5 @@
 import { Navigate } from "react-router-dom";
+import { AnimatePresence, motion } from "motion/react";
 import { useAuth } from "@/contexts/UserContext";
 import { Button } from "@/components/ui/button";
 import { RefreshCw, AlertTriangle } from "lucide-react";
@@ -6,10 +7,6 @@ import { WizardLoader } from "@/components/ui/WizardLoader";
 
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { userId, isLoading, authError, retryAuth } = useAuth();
-
-  if (isLoading) {
-    return <WizardLoader message="Loading your profile..." />;
-  }
 
   if (authError) {
     return (
@@ -33,9 +30,26 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!userId) {
+  if (!isLoading && !userId) {
     return <Navigate to="/auth" replace />;
   }
 
-  return <>{children}</>;
+  // Crossfade between splash and real content so auth resolution is seamless.
+  return (
+    <>
+      <AnimatePresence mode="sync">
+        {isLoading && <WizardLoader key="wizard-loader" />}
+      </AnimatePresence>
+      {!isLoading && userId && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.32, ease: [0.32, 0.72, 0, 1], delay: 0.08 }}
+          style={{ willChange: "opacity" }}
+        >
+          {children}
+        </motion.div>
+      )}
+    </>
+  );
 }

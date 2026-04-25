@@ -41,7 +41,13 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { mealDescription: rawMealDescription, imageBase64 } = body;
+    const {
+      mealDescription: rawMealDescription,
+      imageBase64,
+      date: rawDate,
+      mealType: rawMealType,
+      persist: rawPersist,
+    } = body;
     // Defence-in-depth: strip control chars / bidi / injection tokens before
     // the text touches the LLM. The system prompt tells the model that any
     // <user_input> tag is data, not instructions.
@@ -290,8 +296,77 @@ Rules:
 
     edgeLogger.info("Parsed nutrition data");
 
+    // Phase 3.1: atomically persist meal + meal_items via RPC when the client
+    // requests it. The client can still opt out (persist=false) and save via
+    // its own RPC call for an edit-before-save flow.
+    let savedMealId: string | null = null;
+    const shouldPersist = rawPersist !== false; // default true
+    if (shouldPersist && nutritionData) {
+      const defaultNameFor = (t?: string) => {
+        const key = (t || "").toLowerCase();
+        if (key === "breakfast") return "Breakfast";
+        if (key === "lunch") return "Lunch";
+        if (key === "dinner") return "Dinner";
+        if (key === "snack") return "Snack";
+        return "Logged meal";
+      };
+      const mealType =
+        typeof rawMealType === "string" && ["breakfast", "lunch", "dinner", "snack"].includes(rawMealType.toLowerCase())
+          ? rawMealType.toLowerCase()
+          : "snack";
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const pDate =
+        typeof rawDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : todayIso;
+      const mealName =
+        (typeof nutritionData.meal_name === "string" && nutritionData.meal_name.trim()) ||
+        defaultNameFor(mealType);
+
+      const items = Array.isArray(nutritionData.items)
+        ? nutritionData.items.map((it: any) => ({
+            food_id: null,
+            name: (typeof it?.name === "string" && it.name.trim()) || "Item",
+            grams: Number.isFinite(Number(it?.grams)) ? Number(it.grams) : 100,
+            calories: Number.isFinite(Number(it?.calories)) ? Number(it.calories) : 0,
+            protein_g: Number.isFinite(Number(it?.protein_g)) ? Number(it.protein_g) : 0,
+            carbs_g: Number.isFinite(Number(it?.carbs_g)) ? Number(it.carbs_g) : 0,
+            fats_g: Number.isFinite(Number(it?.fats_g)) ? Number(it.fats_g) : 0,
+          }))
+        : [
+            {
+              food_id: null,
+              name: mealName,
+              grams: 100,
+              calories: Number(nutritionData.calories) || 0,
+              protein_g: Number(nutritionData.protein_g) || 0,
+              carbs_g: Number(nutritionData.carbs_g) || 0,
+              fats_g: Number(nutritionData.fats_g) || 0,
+            },
+          ];
+
+      const { data: rpcData, error: rpcError } = await supabaseClient.rpc(
+        "create_meal_with_items",
+        {
+          p_date: pDate,
+          p_meal_type: mealType,
+          p_meal_name: mealName,
+          p_notes: null,
+          p_is_ai_generated: true,
+          p_items: items,
+        }
+      );
+
+      if (rpcError) {
+        edgeLogger.error("create_meal_with_items RPC failed", rpcError, {
+          functionName: "analyze-meal",
+        });
+      } else if (Array.isArray(rpcData) && rpcData[0]?.meal_id) {
+        savedMealId = rpcData[0].meal_id as string;
+        edgeLogger.info("Meal persisted atomically", { mealId: savedMealId });
+      }
+    }
+
     return new Response(
-      JSON.stringify({ nutritionData }),
+      JSON.stringify({ nutritionData, meal_id: savedMealId }),
       { headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
     );
 

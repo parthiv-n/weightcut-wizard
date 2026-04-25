@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { format, startOfWeek, endOfWeek, addDays } from "date-fns";
+import { format, startOfWeek, endOfWeek } from "date-fns";
 import { Brain, Loader2, ChevronDown, Trash2, CheckCircle, X, Dumbbell, Activity, Gem } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -79,15 +79,6 @@ function mergeSummaries(existing: TrainingSummary, incoming: TrainingSummary): T
     };
 }
 
-function weekLabel(weekStartStr: string): string {
-    const start = new Date(weekStartStr + "T00:00:00");
-    const end = addDays(start, 6);
-    const sameMonth = start.getMonth() === end.getMonth();
-    if (sameMonth) {
-        return `${format(start, "MMM d")}-${format(end, "d")}`;
-    }
-    return `${format(start, "MMM d")}-${format(end, "MMM d")}`;
-}
 
 export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrigger, customColors }: TrainingSummarySectionProps) {
     const { toast } = useToast();
@@ -183,14 +174,6 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
     useEffect(() => {
         if (sessionLoggedTrigger > 0) fetchWeekSessions(true);
     }, [sessionLoggedTrigger]);
-
-    // Build gallery chips — all saved weeks + current calendar week (deduped)
-    const galleryWeeks = useMemo(() => {
-        const weekSet = new Set<string>();
-        weekSet.add(calendarWeekStart);
-        savedSummaries.forEach(s => weekSet.add(s.week_start));
-        return Array.from(weekSet).sort((a, b) => b.localeCompare(a));
-    }, [calendarWeekStart, savedSummaries]);
 
     // Currently selected summary
     const selectedSummary = useMemo(
@@ -340,8 +323,8 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
         }
     };
 
-    // Nothing to show if no saved summaries and no sessions with notes
-    if (galleryWeeks.length <= 1 && sessionsWithNotes.length === 0 && !selectedSummary) {
+    // Nothing to show if there's no summary for this week and no notes to summarise
+    if (sessionsWithNotes.length === 0 && !selectedSummary) {
         return null;
     }
 
@@ -349,40 +332,6 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
 
     return (
         <div className="mt-6 space-y-4">
-            {/* Gallery — horizontal week chips */}
-            {galleryWeeks.length > 1 && (
-                <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-hide">
-                    {galleryWeeks.map(ws => {
-                        const isSelected = ws === selectedWeekStart;
-                        const isSaved = savedSummaries.some(s => s.week_start === ws);
-                        const isCurrent = ws === calendarWeekStart;
-
-                        return (
-                            <button
-                                key={ws}
-                                onClick={() => {
-                                    setSelectedWeekStart(ws);
-                                    setIsSummaryOpen(true);
-                                }}
-                                className={`
-                                    flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-all
-                                    ${isSelected
-                                        ? "bg-primary text-primary-foreground shadow-sm"
-                                        : isSaved
-                                            ? "bg-accent/40 text-foreground/70 hover:bg-accent/60"
-                                            : isCurrent
-                                                ? "border border-dashed border-border text-foreground/75 hover:bg-accent/30"
-                                                : "bg-accent/20 text-foreground/75"
-                                    }
-                                `}
-                            >
-                                {weekLabel(ws)}
-                            </button>
-                        );
-                    })}
-                </div>
-            )}
-
             {aiTrainingTask && (
                 <AICompactOverlay
                     isOpen={true}

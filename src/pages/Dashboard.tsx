@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { ComposedChart, Line, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { TrendingDown, Calendar, Lock, ChevronRight, Flame, Zap, CheckCircle2, Scale } from "lucide-react";
-import { TrainingWeekWidget } from "@/components/dashboard/TrainingWeekWidget";
+import { TrainingWeekWidget, preloadTrainingWeek } from "@/components/dashboard/TrainingWeekWidget";
 import { WeightProgressRing } from "@/components/dashboard/WeightProgressRing";
 import { StreakBadge } from "@/components/dashboard/StreakBadge";
 import { ConsistencyRing } from "@/components/dashboard/ConsistencyRing";
@@ -29,7 +29,15 @@ import { logger } from "@/lib/logger";
 import { trackInstallDate, maybeRequestReview } from "@/lib/appReview";
 import { CutPlanDialog } from "@/components/dashboard/CutPlanDialog";
 import { SleepLogger } from "@/components/dashboard/SleepLogger";
+import { TrainingInsightsWidget } from "@/components/dashboard/TrainingInsightsWidget";
 import { isFighter } from "@/lib/goalType";
+
+// Module-level dedupe so re-mounts within the session don't re-fire identical
+// queries while one is still in flight. Mirrors the pattern in
+// TrainingWeekWidget / TrainingCalendar.
+const dashboardInflight = new Map<string, Promise<unknown>>();
+const DASHBOARD_FRESH_WINDOW_MS = 30 * 1000;
+const dashboardLastFetchedAt = new Map<string, number>();
 
 interface DailyWisdom {
   summary: string;
@@ -65,6 +73,7 @@ export default function Dashboard() {
   const [questionnaireOpen, setQuestionnaireOpen] = useState(false);
   const [achievementSheetOpen, setAchievementSheetOpen] = useState(false);
   const [cutPlanOpen, setCutPlanOpen] = useState(false);
+  const [hasCutPlan, setHasCutPlan] = useState<boolean>(() => !!localStorage.getItem("wcw_cut_plan"));
   const [expandedInfo, setExpandedInfo] = useState<'risk' | 'pace' | null>(null);
   const [frequentMeals, setFrequentMeals] = useState<Array<{ name: string; count: number; avgCalories: number }>>([]);
   const navigate = useNavigate();
@@ -82,7 +91,35 @@ export default function Dashboard() {
     }
   }, [navigate]);
 
+  // Rehydrate cut plan from DB if localStorage is empty (iOS WebView can wipe it).
+  // Once generated, the plan lives on profile.cut_plan_json permanently.
+  useEffect(() => {
+    if (localStorage.getItem("wcw_cut_plan")) {
+      if (!hasCutPlan) setHasCutPlan(true);
+      return;
+    }
+    const dbPlan = profile?.cut_plan_json;
+    if (dbPlan && typeof dbPlan === "object" && dbPlan.weeklyPlan) {
+      localStorage.setItem("wcw_cut_plan", JSON.stringify(dbPlan));
+      setHasCutPlan(true);
+    } else if (hasCutPlan) {
+      setHasCutPlan(false);
+    }
+  }, [profile?.cut_plan_json, hasCutPlan]);
+
   useEffect(() => { trackInstallDate(); }, []);
+
+  // Persist weight-unit preference asynchronously — synchronous localStorage
+  // writes in click handlers block the main thread 20-50ms on iOS WebView.
+  useEffect(() => {
+    const id = (window as any).requestIdleCallback
+      ? (window as any).requestIdleCallback(() => localStorage.setItem('wcw_weight_unit', weightUnit))
+      : setTimeout(() => localStorage.setItem('wcw_weight_unit', weightUnit), 0);
+    return () => {
+      if ((window as any).cancelIdleCallback) (window as any).cancelIdleCallback(id);
+      else clearTimeout(id as number);
+    };
+  }, [weightUnit]);
 
   const getGreeting = () => {
     const hour = new Date().getHours();
@@ -97,13 +134,16 @@ export default function Dashboard() {
     }
   }, [userId]);
 
-  // Refetch when user navigates back to this page (throttled to avoid duplicate requests)
+  // Refetch when user navigates back to this page — but respect the same 30s
+  // freshness window as cache-first loads. The previous 2s throttle re-fired
+  // 3 queries on every tab-back, causing 3-6s hangs on iOS Capacitor.
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible' && userId) {
-        if (Date.now() - lastFetchRef.current < 2000) return;
-        loadDashboardData();
-      }
+      if (document.visibilityState !== 'visible' || !userId) return;
+      const lastDone = dashboardLastFetchedAt.get(userId);
+      if (lastDone && Date.now() - lastDone < DASHBOARD_FRESH_WINDOW_MS) return;
+      if (Date.now() - lastFetchRef.current < 2000) return;
+      loadDashboardData();
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
@@ -248,40 +288,62 @@ export default function Dashboard() {
       if (cachedWeightLogs) checkAndGenerateWisdom(profile, cachedWeightLogs, cachedCalories, cachedHydrationTotal);
     }
 
+    // --- Skip refetch if a previous run completed within the freshness window ---
+    const lastDone = dashboardLastFetchedAt.get(userId);
+    if (hasCachedData && lastDone && Date.now() - lastDone < DASHBOARD_FRESH_WINDOW_MS) {
+      safeAsync(setLoading)(false);
+      return;
+    }
+
+    // --- Inflight dedupe: if a Dashboard fetch is already in flight for this
+    // user, await its result instead of firing a parallel set of queries. ---
+    const inflightKey = userId;
+    const existing = dashboardInflight.get(inflightKey);
+    if (existing) {
+      try { await existing; } catch { /* error handled by original caller */ }
+      return;
+    }
+
     // --- Fetch fresh data from Supabase (3 core queries — gamification handled by useGamification) ---
+    // 12s timeout aligns with auth wrapper's 15s ceiling — gives iOS Capacitor
+    // cold start (secure-storage session restore + slow network) breathing room.
+    const fetchPromise = Promise.allSettled([
+      withRetry(() => withSupabaseTimeout(
+        supabase
+          .from("weight_logs")
+          .select("date, weight_kg")
+          .eq("user_id", userId)
+          .order("date", { ascending: true })
+          .limit(30),
+        12000,
+        "Weight logs query"
+      )),
+
+      withRetry(() => withSupabaseTimeout(
+        supabase
+          .from("nutrition_logs")
+          .select("calories")
+          .eq("user_id", userId)
+          .eq("date", today),
+        12000,
+        "Nutrition logs query"
+      )),
+
+      withRetry(() => withSupabaseTimeout(
+        supabase
+          .from("hydration_logs")
+          .select("amount_ml")
+          .eq("user_id", userId)
+          .eq("date", today),
+        12000,
+        "Hydration logs query"
+      )),
+    ]);
+    dashboardInflight.set(inflightKey, fetchPromise);
+
     try {
-      const results = await Promise.allSettled([
-        withRetry(() => withSupabaseTimeout(
-          supabase
-            .from("weight_logs")
-            .select("date, weight_kg")
-            .eq("user_id", userId)
-            .order("date", { ascending: true })
-            .limit(30),
-          undefined,
-          "Weight logs query"
-        )),
-
-        withRetry(() => withSupabaseTimeout(
-          supabase
-            .from("nutrition_logs")
-            .select("calories")
-            .eq("user_id", userId)
-            .eq("date", today),
-          undefined,
-          "Nutrition logs query"
-        )),
-
-        withRetry(() => withSupabaseTimeout(
-          supabase
-            .from("hydration_logs")
-            .select("amount_ml")
-            .eq("user_id", userId)
-            .eq("date", today),
-          undefined,
-          "Hydration logs query"
-        )),
-      ]);
+      const results = await fetchPromise;
+      dashboardLastFetchedAt.set(inflightKey, Date.now());
 
       if (!isMounted()) return;
 
@@ -290,11 +352,28 @@ export default function Dashboard() {
       const nutritionOk = results[1].status === 'fulfilled';
       const hydrationOk = results[2].status === 'fulfilled';
 
+      let anyRejected = false;
       results.forEach((result, index) => {
         if (result.status === 'rejected') {
-          logger.error(`Dashboard query ${index} failed`, result.reason);
+          anyRejected = true;
+          // Demote to warn when cache covered the user — they don't see broken
+          // numbers, so this is operational noise, not a user-facing failure.
+          if (hasCachedData) {
+            logger.warn(`Dashboard query ${index} timed out (cache served)`, { reason: result.reason });
+          } else {
+            logger.error(`Dashboard query ${index} failed`, result.reason);
+          }
         }
       });
+
+      // If any query failed, the supabase client may be wedged behind a stale
+      // auth mutex. Kick the recovery flow (cycle realtime + refresh session)
+      // so the next visit / next visibility-change has a clean client.
+      if (anyRejected) {
+        void import('@/lib/connectionRecovery').then(({ recoverSupabaseConnection }) =>
+          recoverSupabaseConnection('dashboard-fetch-timeout')
+        ).catch(() => {});
+      }
 
       if (logsOk) {
         const logsData = (results[0] as PromiseFulfilledResult<any>).value.data || [];
@@ -331,6 +410,9 @@ export default function Dashboard() {
         if (userId) preloadNutritionData(userId, [today]);
       }, 2000);
 
+      // Warm training-week cache so widget paints instantly on mount / next visit
+      if (userId) preloadTrainingWeek(userId);
+
       // Prefetch macro goals from profile so Nutrition page skips loading
       if (profile?.ai_recommended_calories) {
         const macroData = {
@@ -346,13 +428,22 @@ export default function Dashboard() {
         localCache.set(userId, 'macro_goals', macroData);
       }
     } catch (error) {
-      logger.error("Error loading dashboard data", error);
-      if (!hasCachedData) {
+      // Only escalate to error when we have nothing cached to show — otherwise
+      // the user sees their numbers and this is just network flake.
+      if (hasCachedData) {
+        logger.warn("Dashboard refresh failed (cache served)", { error });
+      } else {
+        logger.error("Error loading dashboard data", error);
         safeAsync(setWeightLogs)([]);
         safeAsync(setTodayCalories)(0);
         safeAsync(setTodayHydration)(0);
       }
+      // Same recovery kick as per-query failure — defends against wedged auth.
+      void import('@/lib/connectionRecovery').then(({ recoverSupabaseConnection }) =>
+        recoverSupabaseConnection('dashboard-load-error')
+      ).catch(() => {});
     } finally {
+      dashboardInflight.delete(inflightKey);
       safeAsync(setLoading)(false);
       maybeRequestReview();
     }
@@ -490,26 +581,6 @@ export default function Dashboard() {
           </button>
         )}
 
-        {/* Weekly Consistency Ring */}
-        <div>
-          <ConsistencyRing {...weeklyConsistency} />
-        </div>
-
-        {/* Cut Plan + Sleep — side by side */}
-        <div className="grid grid-cols-2 gap-2">
-          {isFighter(profile?.goal_type) && localStorage.getItem('wcw_cut_plan') ? (
-            <button
-              onClick={() => { setCutPlanOpen(true); triggerHaptic(ImpactStyle.Light); }}
-              className="card-surface rounded-2xl border border-border p-2.5 flex items-center justify-center active:scale-[0.98] transition-all text-center"
-            >
-              <p className="text-[12px] font-semibold leading-tight">Cut Plan</p>
-            </button>
-          ) : (
-            <div />
-          )}
-          {userId && <SleepLogger userId={userId} compact />}
-        </div>
-
         {/* Wizard's Daily Wisdom card — conditional states */}
         <div data-tutorial="daily-wisdom-card">
         {!hasTodayLog ? (
@@ -559,6 +630,29 @@ export default function Dashboard() {
         )}
         </div>
 
+        {/* Weekly Consistency Ring */}
+        <div>
+          <ConsistencyRing {...weeklyConsistency} />
+        </div>
+
+        {/* Cut Plan + Sleep — side by side */}
+        <div className="grid grid-cols-2 gap-2">
+          {isFighter(profile?.goal_type) && hasCutPlan ? (
+            <button
+              onClick={() => { setCutPlanOpen(true); triggerHaptic(ImpactStyle.Light); }}
+              className="card-surface rounded-2xl border border-border p-2.5 flex items-center justify-center active:scale-[0.98] transition-all text-center"
+            >
+              <p className="text-[12px] font-semibold leading-tight">Cut Plan</p>
+            </button>
+          ) : (
+            <div />
+          )}
+          {userId && <SleepLogger userId={userId} compact />}
+        </div>
+
+        {/* Training Coach (premium) */}
+        {userId && <TrainingInsightsWidget userId={userId} />}
+
         {/* Weight Progress Bar — full width */}
         {profile && (
           <div data-tutorial="weight-progress-ring">
@@ -580,7 +674,7 @@ export default function Dashboard() {
                 <Button
                   variant={weightUnit === 'kg' ? 'default' : 'ghost'}
                   size="sm"
-                  onClick={() => { setWeightUnit('kg'); localStorage.setItem('wcw_weight_unit', 'kg'); triggerHapticSelection(); }}
+                  onClick={() => { setWeightUnit('kg'); triggerHapticSelection(); }}
                   className="h-5 min-h-0 text-[13px] px-1.5 rounded-full"
                 >
                   kg
@@ -588,7 +682,7 @@ export default function Dashboard() {
                 <Button
                   variant={weightUnit === 'lb' ? 'default' : 'ghost'}
                   size="sm"
-                  onClick={() => { setWeightUnit('lb'); localStorage.setItem('wcw_weight_unit', 'lb'); triggerHapticSelection(); }}
+                  onClick={() => { setWeightUnit('lb'); triggerHapticSelection(); }}
                   className="h-5 min-h-0 text-[13px] px-1.5 rounded-full"
                 >
                   lb

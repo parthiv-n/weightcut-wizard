@@ -146,16 +146,41 @@ export const batchProfileQuery = (userId: string, priority = 5) => {
   });
 };
 
-// Batch nutrition queries
+// Batch nutrition queries — reads from the aggregated `meals_with_totals`
+// view so each row is one meal with summed macros. Totals are mapped to the
+// same flat fields legacy consumers expect (calories, protein_g, ...).
 export const batchNutritionQuery = (userId: string, date: string, priority = 3) => {
   return databaseBatcher.addOperation({
     id: `nutrition-${userId}-${date}`,
     operation: () => supabase
-      .from("nutrition_logs")
-      .select("id, user_id, date, meal_name, meal_type, calories, protein_g, carbs_g, fats_g, portion_size, is_ai_generated, recipe_notes, ingredients, created_at")
+      .from("meals_with_totals")
+      .select("id, user_id, date, meal_name, meal_type, notes, is_ai_generated, total_calories, total_protein_g, total_carbs_g, total_fats_g, item_count, created_at")
       .eq("user_id", userId)
       .eq("date", date)
       .order("created_at", { ascending: true }),
+    priority,
+  });
+};
+
+/**
+ * Create one `meals` row with N items via the atomic `create_meal_with_items`
+ * RPC. Replaces the old bulk `nutrition_logs.insert` path — one meal header,
+ * many items, single round trip.
+ */
+export const batchCreateMealWithItems = (
+  args: {
+    p_date: string;
+    p_meal_type: string;
+    p_meal_name: string;
+    p_notes?: string | null;
+    p_is_ai_generated?: boolean;
+    p_items: unknown[];
+  },
+  priority = 3,
+) => {
+  return databaseBatcher.addOperation({
+    id: `meal-write-${args.p_date}-${crypto.randomUUID()}`,
+    operation: () => supabase.rpc("create_meal_with_items", args as any),
     priority,
   });
 };

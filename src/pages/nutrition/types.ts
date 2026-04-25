@@ -1,3 +1,5 @@
+import type { Database } from "@/integrations/supabase/types";
+
 export interface Ingredient {
   name: string;
   grams: number;
@@ -22,6 +24,33 @@ export interface AiLineItem {
   fats_g: number;
 }
 
+// ── DB-backed type aliases from the regenerated supabase types ──
+export type FoodRow = Database["public"]["Tables"]["foods"]["Row"];
+export type MealRow = Database["public"]["Tables"]["meals"]["Row"];
+export type MealItemRow = Database["public"]["Tables"]["meal_items"]["Row"];
+export type MealWithTotalsRow = Database["public"]["Views"]["meals_with_totals"]["Row"];
+
+/** Foods catalog row (USDA / OFF / user / AI sourced). */
+export type Food = FoodRow;
+
+/** Single line-item within a meal — references a catalog food or is ad-hoc. */
+export type MealItem = MealItemRow;
+
+/** Aggregated meal header as returned by the `meals_with_totals` view. */
+export type MealWithTotals = MealWithTotalsRow;
+
+/**
+ * Client-side Meal shape. Aligned with `meals_with_totals` view so the
+ * existing `NutritionHero` + `MealSections` components keep rendering
+ * without changes. Totals from the view are mapped to the flat
+ * {calories, protein_g, ...} fields via `mapMealsWithTotalsToMeal`
+ * (see `useNutritionData.ts`).
+ *
+ * Legacy fields (`portion_size`, `recipe_notes`, `ingredients`) are
+ * retained as optional for backwards compatibility with optimistic
+ * rows, cached rows, and the share card. Once all writers have been
+ * migrated these become derivable from `meal_items` on demand.
+ */
 export interface Meal {
   id: string;
   meal_name: string;
@@ -35,6 +64,10 @@ export interface Meal {
   is_ai_generated?: boolean;
   ingredients?: Ingredient[];
   date: string;
+  // New fields exposed by the aggregated view — present on DB-sourced rows,
+  // absent on older optimistic payloads. Treat as optional.
+  notes?: string | null;
+  item_count?: number | null;
 }
 
 export interface TrainingFoodTip {

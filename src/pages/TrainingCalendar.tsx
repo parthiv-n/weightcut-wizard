@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, subMonths, addMonths, subDays } from "date-fns";
-import { ChevronLeft, ChevronRight, Plus, Activity } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Activity, BookOpen } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { localCache } from "@/lib/localCache";
 import { useUser } from "@/contexts/UserContext";
@@ -21,15 +21,26 @@ import { triggerHapticSelection, confirmDelete } from "@/lib/haptics";
 import { ShareButton } from "@/components/share/ShareButton";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { TrainingCalendarCard } from "@/components/share/cards/TrainingCalendarCard";
+import { CoachingLibrarySheet } from "@/components/fightcamp/CoachingLibrarySheet";
 import { logger } from "@/lib/logger";
 import { getUserColors, setUserColor } from "@/lib/sessionColors";
 import { encodeRunMeta, decodeRunMeta, formatPace } from "@/lib/runMeta";
 import { Skeleton } from "@/components/ui/skeleton-loader";
+import { withSupabaseTimeout, withRetry } from "@/lib/timeoutWrapper";
 
 import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 
 type TrainingCalendarRow = Tables<"fight_camp_calendar">;
 type TrainingCalendarInsert = TablesInsert<"fight_camp_calendar">;
+
+// Module-level in-memory cache survives component remounts within a session,
+// so re-entering the page paints instantly without a JSON.parse from localStorage.
+type SessionsCacheEntry = { data: TrainingCalendarRow[]; fetchedAt: number };
+const monthMemCache = new Map<string, SessionsCacheEntry>();
+const monthInflight = new Map<string, Promise<TrainingCalendarRow[]>>();
+const recent28dMemCache = new Map<string, SessionsCacheEntry>();
+const recent28dInflight = new Map<string, Promise<TrainingCalendarRow[]>>();
+const FRESH_WINDOW_MS = 30 * 1000; // dedupe identical requests inside 30s
 
 export default function TrainingCalendar() {
     const { userId, profile } = useUser();
@@ -38,10 +49,18 @@ export default function TrainingCalendar() {
     const [searchParams, setSearchParams] = useSearchParams();
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(new Date());
-    const [sessions, setSessions] = useState<TrainingCalendarRow[]>([]);
+    const [sessions, setSessions] = useState<TrainingCalendarRow[]>(() => {
+        // Hydrate from in-memory cache synchronously so first paint has data
+        const ws = userId ? monthMemCache.get(`${userId}:${format(new Date(), "yyyy-MM")}`) : null;
+        return ws?.data ?? [];
+    });
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
-    const [sessions28d, setSessions28d] = useState<TrainingCalendarRow[]>([]);
+    const [isSaving, setIsSaving] = useState(false);
+    const [sessions28d, setSessions28d] = useState<TrainingCalendarRow[]>(() => {
+        const ws = userId ? recent28dMemCache.get(userId) : null;
+        return ws?.data ?? [];
+    });
     const [sessionLoggedTrigger, setSessionLoggedTrigger] = useState(0);
 
     // Form State
@@ -72,95 +91,161 @@ export default function TrainingCalendar() {
     // Detail drawer state
     const [viewingSession, setViewingSession] = useState<TrainingCalendarRow | null>(null);
     const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
+    // Coaching library state
+    const [libraryOpen, setLibraryOpen] = useState(false);
 
     const DISPLAY_TTL = 24 * 60 * 60 * 1000; // 24h — show stale cache instantly, refresh in background
     const fetchingRef = useRef(false);
     const toastRef = useRef(toast);
     toastRef.current = toast;
+    // Keep a ref in sync with userId so async handlers (e.g. handleSaveSession's
+    // wait-for-auth poll) observe live values, not the captured render closure.
+    const userIdRef = useRef(userId);
+    useEffect(() => { userIdRef.current = userId; }, [userId]);
 
     const monthCacheKey = (d: Date) => `training_sessions_${format(d, "yyyy-MM")}`;
+
+    const queryMonth = useCallback(async (uid: string, date: Date): Promise<TrainingCalendarRow[]> => {
+        const memKey = `${uid}:${format(date, "yyyy-MM")}`;
+        const inflight = monthInflight.get(memKey);
+        if (inflight) return inflight;
+
+        const promise = (async () => {
+            const { data, error } = await withRetry(
+                () => withSupabaseTimeout(
+                    supabase
+                        .from('fight_camp_calendar')
+                        .select('*')
+                        .eq('user_id', uid)
+                        .gte('date', format(startOfMonth(date), "yyyy-MM-dd"))
+                        .lte('date', format(endOfMonth(date), "yyyy-MM-dd"))
+                        .limit(100),
+                    12000,
+                    "Fetch training month",
+                ),
+                1,
+                500,
+            );
+            if (error) throw error;
+            const rows = (data ?? []) as TrainingCalendarRow[];
+            monthMemCache.set(memKey, { data: rows, fetchedAt: Date.now() });
+            localCache.set(uid, monthCacheKey(date), rows);
+            return rows;
+        })().catch((err) => {
+            // Kick connection recovery so a wedged auth mutex doesn't poison
+            // every subsequent call. Re-throw so callers still see the error.
+            void import('@/lib/connectionRecovery').then(({ recoverSupabaseConnection }) =>
+                recoverSupabaseConnection('training-month-fetch-timeout')
+            ).catch(() => {});
+            throw err;
+        });
+
+        monthInflight.set(memKey, promise);
+        try {
+            return await promise;
+        } finally {
+            monthInflight.delete(memKey);
+        }
+    }, []);
 
     const fetchSessions = useCallback(async () => {
         if (!userId) return;
 
-        // Cache-first: serve cached data instantly, then refresh in background
-        const cacheKey = monthCacheKey(currentDate);
-        const cached = localCache.get<TrainingCalendarRow[]>(userId, cacheKey, DISPLAY_TTL);
+        // Cache-first: serve memCache → localCache → network. Skeleton only on cold miss.
+        const memKey = `${userId}:${format(currentDate, "yyyy-MM")}`;
+        const mem = monthMemCache.get(memKey);
+        const cached = mem?.data ?? localCache.get<TrainingCalendarRow[]>(userId, monthCacheKey(currentDate), DISPLAY_TTL);
         if (cached) {
             safeAsync(setSessions)(cached);
             safeAsync(setIsLoading)(false);
-        } else if (!localCache.get<TrainingCalendarRow[]>(userId, cacheKey)) {
+            // Skip refetch if memCache is hot
+            if (mem && Date.now() - mem.fetchedAt < FRESH_WINDOW_MS) return;
+        } else {
             safeAsync(setIsLoading)(true);
         }
 
         try {
-            const { data, error } = await supabase
-                .from('fight_camp_calendar')
-                .select('*')
-                .eq('user_id', userId)
-                .gte('date', format(startOfMonth(currentDate), "yyyy-MM-dd"))
-                .lte('date', format(endOfMonth(currentDate), "yyyy-MM-dd"))
-                .limit(100);
-
-            if (error) throw error;
-            safeAsync(setSessions)(data || []);
-            localCache.set(userId, cacheKey, data || []);
+            const rows = await queryMonth(userId, currentDate);
+            safeAsync(setSessions)(rows);
         } catch (error) {
-            logger.error("Error fetching sessions", error);
-            if (!cached) {
-                if (!isMounted()) return;
+            logger.warn("Error fetching sessions", error);
+            // Only surface a destructive toast when we have nothing cached to
+            // show the user; otherwise the cache covers it and we silently
+            // retry next time UserContext flushes the queue.
+            if (!cached && isMounted()) {
                 toastRef.current({
-                    title: "Error fetching sessions",
-                    description: "Could not load your calendar data.",
-                    variant: "destructive"
+                    title: "Couldn't refresh calendar",
+                    description: "Showing offline data — we'll retry when you're reconnected.",
                 });
             }
         } finally {
             safeAsync(setIsLoading)(false);
         }
-    }, [userId, currentDate, safeAsync, isMounted]);
+    }, [userId, currentDate, safeAsync, isMounted, queryMonth]);
 
     const fetch28DaySessions = useCallback(async () => {
         if (!userId) return;
 
-        const cached28d = localCache.get<TrainingCalendarRow[]>(userId, "training_sessions_28d", DISPLAY_TTL);
+        const mem = recent28dMemCache.get(userId);
+        const cached28d = mem?.data ?? localCache.get<TrainingCalendarRow[]>(userId, "training_sessions_28d", DISPLAY_TTL);
         if (cached28d) safeAsync(setSessions28d)(cached28d);
+        if (mem && Date.now() - mem.fetchedAt < FRESH_WINDOW_MS) return;
 
-        try {
+        const inflight = recent28dInflight.get(userId);
+        if (inflight) {
+            try {
+                const rows = await inflight;
+                safeAsync(setSessions28d)(rows);
+            } catch { /* already logged */ }
+            return;
+        }
+
+        const promise = (async () => {
             const from = format(subDays(new Date(), 28), "yyyy-MM-dd");
             const to = format(new Date(), "yyyy-MM-dd");
-            const { data, error } = await supabase
-                .from('fight_camp_calendar')
-                .select('*')
-                .eq('user_id', userId)
-                .gte('date', from)
-                .lte('date', to)
-                .limit(100);
-
+            const { data, error } = await withRetry(
+                () => withSupabaseTimeout(
+                    supabase
+                        .from('fight_camp_calendar')
+                        .select('*')
+                        .eq('user_id', userId)
+                        .gte('date', from)
+                        .lte('date', to)
+                        .limit(100),
+                    12000,
+                    "Fetch training 28d",
+                ),
+                1,
+                500,
+            );
             if (error) throw error;
-            safeAsync(setSessions28d)(data || []);
-            localCache.set(userId, "training_sessions_28d", data || []);
+            const rows = (data ?? []) as TrainingCalendarRow[];
+            recent28dMemCache.set(userId, { data: rows, fetchedAt: Date.now() });
+            localCache.set(userId, "training_sessions_28d", rows);
+            return rows;
+        })();
+
+        recent28dInflight.set(userId, promise);
+        try {
+            const rows = await promise;
+            safeAsync(setSessions28d)(rows);
         } catch (err) {
             logger.warn("TrainingCalendar: 28-day fetch failed", { err });
+        } finally {
+            recent28dInflight.delete(userId);
         }
     }, [userId, safeAsync]);
 
     // Preload adjacent months in background
     const preloadMonth = useCallback(async (date: Date) => {
         if (!userId) return;
-        const key = monthCacheKey(date);
-        if (localCache.get(userId, key, DISPLAY_TTL)) return; // already cached
+        const memKey = `${userId}:${format(date, "yyyy-MM")}`;
+        if (monthMemCache.get(memKey)) return;
+        if (localCache.get(userId, monthCacheKey(date), DISPLAY_TTL)) return;
         try {
-            const { data } = await supabase
-                .from('fight_camp_calendar')
-                .select('*')
-                .eq('user_id', userId)
-                .gte('date', format(startOfMonth(date), "yyyy-MM-dd"))
-                .lte('date', format(endOfMonth(date), "yyyy-MM-dd"))
-                .limit(100);
-            if (data) localCache.set(userId, key, data);
+            await queryMonth(userId, date);
         } catch { /* silent preload */ }
-    }, [userId]);
+    }, [userId, queryMonth]);
 
     useEffect(() => {
         if (fetchingRef.current) return;
@@ -245,47 +330,120 @@ export default function TrainingCalendar() {
     };
 
     const handleSaveSession = async () => {
-        if (!userId) return;
+        // Wait briefly for userId on cold-start. Read from a ref so the loop
+        // sees live updates from React re-renders rather than the captured
+        // closure value of `userId`.
+        let resolvedUserId = userIdRef.current;
+        if (!resolvedUserId) {
+            const start = Date.now();
+            while (!resolvedUserId && Date.now() - start < 2000) {
+                await new Promise((r) => setTimeout(r, 100));
+                resolvedUserId = userIdRef.current;
+            }
+            if (!resolvedUserId) {
+                toast({
+                    title: "Still loading your account",
+                    description: "Please wait a moment and try again.",
+                    variant: "destructive",
+                });
+                return;
+            }
+        }
+
+        if (isSaving) return; // guard against double-press
+        setIsSaving(true);
+
+        const uid = resolvedUserId;
+        const sessionId = editingSession ? editingSession.id : crypto.randomUUID();
+        const intensityMap: Record<number, string> = { 1: 'low', 2: 'low', 3: 'moderate', 4: 'high', 5: 'high' };
+        const dateStr = format(selectedDate, "yyyy-MM-dd");
+        const monthKey = monthCacheKey(currentDate);
+        const memMonthKey = `${uid}:${format(currentDate, "yyyy-MM")}`;
+        const previousMonthSessions = sessions;
+        const previousMem = monthMemCache.get(memMonthKey);
+
+        // Build optimistic row using existing media url (we'll replace with the
+        // uploaded URL once it lands; UI shows the preview meanwhile)
+        const baseNotes = sessionType === "Run"
+            ? encodeRunMeta(
+                { distance: runDistance, unit: runDistanceUnit, time: runTime, pace: runPace },
+                notes.trim()
+              ) || null
+            : notes.trim() || null;
+
+        const optimisticRow: TrainingCalendarRow = {
+            // Spread editingSession to preserve any DB-managed fields (created_at, etc.)
+            ...(editingSession ?? ({} as TrainingCalendarRow)),
+            id: sessionId,
+            user_id: uid,
+            date: dateStr,
+            session_type: sessionType,
+            duration_minutes: parseInt(duration) || 0,
+            rpe: rpe[0],
+            intensity: intensityMap[intensityLevel[0]] || 'moderate',
+            intensity_level: intensityLevel[0],
+            soreness_level: hasSoreness ? sorenessLevel[0] : 0,
+            notes: baseNotes,
+            fatigue_level: null,
+            sleep_quality: null,
+            mobility_done: null,
+            media_url: mediaPreviewUrl ?? existingMediaUrl ?? null,
+        };
+
+        // OPTIMISTIC: update state + caches + close dialog immediately.
+        // Skip the optimistic state mutation when editing a row that isn't in
+        // the visible month — preserves the row instead of silently dropping it.
+        const editingRowIsVisible = !editingSession || sessions.some(s => s.id === sessionId);
+        const optimisticApplied = editingRowIsVisible;
+        const nextSessions = !optimisticApplied
+            ? sessions
+            : editingSession
+                ? sessions.map(s => s.id === sessionId ? optimisticRow : s)
+                : [...sessions, optimisticRow];
+        if (optimisticApplied) {
+            setSessions(nextSessions);
+            monthMemCache.set(memMonthKey, { data: nextSessions, fetchedAt: Date.now() });
+            localCache.set(uid, monthKey, nextSessions);
+        }
+        setIsAddModalOpen(false);
+        setSessionLoggedTrigger(prev => prev + 1);
+
+        // Hoisted so the catch block can enqueue the failed write
+        let payload: TrainingCalendarInsert | null = null;
+        let resolvedMediaUrl: string | null = existingMediaUrl ?? null;
+        let mediaUploadFailed = false;
 
         try {
-            // Determine session ID upfront (existing or new UUID)
-            const sessionId = editingSession ? editingSession.id : crypto.randomUUID();
-
-            // Resolve media_url before the DB write
-            let resolvedMediaUrl: string | null = existingMediaUrl ?? null;
-            let mediaUploadFailed = false;
-
+            // Upload media in background (with timeout fence so it can't hang forever)
             if (mediaFile) {
                 try {
-                    resolvedMediaUrl = await uploadSessionMedia(userId, sessionId, mediaFile, existingMediaUrl);
+                    resolvedMediaUrl = await Promise.race([
+                        uploadSessionMedia(uid, sessionId, mediaFile, existingMediaUrl),
+                        new Promise<string>((_, reject) =>
+                            setTimeout(() => reject(new Error("Media upload timed out")), 30000)
+                        ),
+                    ]);
                 } catch (mediaError) {
                     logger.error("Failed to upload session media", mediaError);
                     mediaUploadFailed = true;
-                    resolvedMediaUrl = existingMediaUrl ?? null; // keep existing if replacing failed
+                    resolvedMediaUrl = existingMediaUrl ?? null;
                 }
             } else if (!mediaPreviewUrl && !mediaFile && existingMediaUrl) {
-                // Media was removed
-                await deleteSessionMedia(existingMediaUrl).catch(() => {});
+                deleteSessionMedia(existingMediaUrl).catch(() => {});
                 resolvedMediaUrl = null;
             }
 
-            const intensityMap: Record<number, string> = { 1: 'low', 2: 'low', 3: 'moderate', 4: 'high', 5: 'high' };
-            const payload: TrainingCalendarInsert = {
+            payload = {
                 id: sessionId,
-                user_id: userId,
-                date: format(selectedDate, "yyyy-MM-dd"),
+                user_id: uid,
+                date: dateStr,
                 session_type: sessionType,
                 duration_minutes: parseInt(duration) || 0,
                 rpe: rpe[0],
                 intensity: intensityMap[intensityLevel[0]] || 'moderate',
                 intensity_level: intensityLevel[0],
                 soreness_level: hasSoreness ? sorenessLevel[0] : 0,
-                notes: sessionType === "Run"
-                    ? encodeRunMeta(
-                        { distance: runDistance, unit: runDistanceUnit, time: runTime, pace: runPace },
-                        notes.trim()
-                      ) || null
-                    : notes.trim() || null,
+                notes: baseNotes,
                 fatigue_level: null,
                 sleep_quality: null,
                 mobility_done: null,
@@ -293,22 +451,75 @@ export default function TrainingCalendar() {
             };
 
             if (editingSession) {
-                const { error } = await supabase
-                    .from('fight_camp_calendar')
-                    .update(payload)
-                    .eq('id', editingSession.id);
+                const { error } = await withRetry(
+                    () => withSupabaseTimeout(
+                        supabase.from('fight_camp_calendar').update(payload!).eq('id', editingSession.id),
+                        12000,
+                        "Update training session",
+                    ),
+                    1,
+                    500,
+                );
                 if (error) throw error;
             } else {
-                const { error } = await supabase
-                    .from('fight_camp_calendar')
-                    .insert([payload]);
+                const { error } = await withRetry(
+                    () => withSupabaseTimeout(
+                        supabase.from('fight_camp_calendar').insert([payload!]),
+                        12000,
+                        "Insert training session",
+                    ),
+                    1,
+                    500,
+                );
                 if (error) throw error;
             }
+
+            // Patch the optimistic row with the resolved media URL using a
+            // functional update; mirror to caches via the live cache snapshot
+            // so a concurrent month-nav refetch doesn't get overwritten.
+            if (optimisticApplied && resolvedMediaUrl !== optimisticRow.media_url) {
+                const patch = (rows: TrainingCalendarRow[]) =>
+                    rows.map(s => s.id === sessionId ? { ...s, media_url: resolvedMediaUrl } : s);
+                setSessions(prev => patch(prev));
+                const liveMem = monthMemCache.get(memMonthKey);
+                if (liveMem) {
+                    monthMemCache.set(memMonthKey, { data: patch(liveMem.data), fetchedAt: liveMem.fetchedAt });
+                }
+                const liveLocal = localCache.get<TrainingCalendarRow[]>(uid, monthKey);
+                if (liveLocal) {
+                    localCache.set(uid, monthKey, patch(liveLocal));
+                }
+            }
+
+            // If we skipped the optimistic update (edit-from-different-month),
+            // invalidate the affected month so the next visit refetches fresh.
+            if (!optimisticApplied && editingSession) {
+                const editedMonthKey = `training_sessions_${editingSession.date.slice(0, 7)}`;
+                const editedMemKey = `${uid}:${editingSession.date.slice(0, 7)}`;
+                monthMemCache.delete(editedMemKey);
+                localCache.remove(uid, editedMonthKey);
+            }
+
+            // Invalidate the 28d cache so the rolling window picks up the new row
+            recent28dMemCache.delete(uid);
+            localCache.remove(uid, "training_sessions_28d");
+            // Background revalidate (non-blocking)
+            void fetch28DaySessions();
+
+            // Invalidate the TrainingSummarySection's week cache and bump the
+            // trigger again now that the DB row is persisted. The first bump
+            // happened optimistically (before the insert), which queried the DB
+            // too early — without this second bump the "Generate Summary"
+            // button would stay hidden until a manual refresh.
+            const weekStartIso = format(startOfWeek(selectedDate, { weekStartsOn: 1 }), "yyyy-MM-dd");
+            localCache.remove(uid, `training_week_${weekStartIso}`);
+            localCache.remove(uid, "training_summaries");
+            setSessionLoggedTrigger(prev => prev + 1);
 
             if (mediaUploadFailed) {
                 toast({
                     title: "Session saved, media failed",
-                    description: "Your session was saved but the photo/video could not be uploaded. Try editing the session to add it again.",
+                    description: "Saved without the photo/video. Edit the session to retry.",
                     variant: "destructive",
                 });
             } else {
@@ -319,53 +530,111 @@ export default function TrainingCalendar() {
                         : "Your training session has been logged successfully.",
                 });
             }
-
-            setIsAddModalOpen(false);
-            // Invalidate cache so re-fetch writes fresh data
-            if (userId) {
-                localCache.remove(userId, monthCacheKey(currentDate));
-                localCache.remove(userId, "training_sessions_28d");
-            }
-            await Promise.all([fetchSessions(), fetch28DaySessions()]);
-            setSessionLoggedTrigger(prev => prev + 1);
             resetForm();
         } catch (error) {
-            logger.error("Error saving session", error);
-            toast({
-                title: "Error saving session",
-                description: "Could not save your session. Please try again.",
-                variant: "destructive"
-            });
+            // QUEUE for background sync instead of rolling back. The optimistic
+            // row stays visible; UserContext replays syncQueue on `online` /
+            // visibility-change / app-resume. Also kick connection recovery in
+            // case auth wedged (Promise.race timeouts don't cancel the
+            // underlying request, so the auth mutex can stay stuck — recovery
+            // cycles realtime + force-refreshes the session).
+            logger.warn("Save timed out, queueing for background sync", { error });
+            void import('@/lib/connectionRecovery').then(({ recoverSupabaseConnection }) =>
+                recoverSupabaseConnection('training-save-timeout')
+            ).catch(() => {});
+
+            if (payload) {
+                const { syncQueue } = await import('@/lib/syncQueue');
+                syncQueue.enqueue(uid, {
+                    table: 'fight_camp_calendar',
+                    action: editingSession ? 'update' : 'insert',
+                    payload: payload as unknown as Record<string, unknown>,
+                    recordId: sessionId,
+                    timestamp: Date.now(),
+                    persistOnFailure: true,
+                });
+                toast({
+                    title: editingSession ? "Update queued" : "Saved offline",
+                    description: "We'll sync to the cloud when you're back online.",
+                });
+                resetForm();
+            } else {
+                // Failed before the payload was built (very early error) — roll
+                // back the optimistic state so the UI matches reality.
+                if (optimisticApplied) {
+                    setSessions(previousMonthSessions);
+                    if (previousMem) {
+                        monthMemCache.set(memMonthKey, previousMem);
+                    } else {
+                        monthMemCache.delete(memMonthKey);
+                    }
+                    localCache.set(uid, monthKey, previousMonthSessions);
+                }
+                toast({
+                    title: "Couldn't save session",
+                    description: "Check your connection and try again.",
+                    variant: "destructive"
+                });
+            }
+        } finally {
+            setIsSaving(false);
         }
     };
 
     const handleDeleteSession = async (id: string) => {
-        try {
-            // Delete associated media from storage
-            const session = sessions.find(s => s.id === id);
-            if (session?.media_url) {
-                await deleteSessionMedia(session.media_url).catch(() => {});
-            }
+        if (!userId) return;
+        const uid = userId;
+        const session = sessions.find(s => s.id === id);
+        const previousSessions = sessions;
+        const memMonthKey = `${uid}:${format(currentDate, "yyyy-MM")}`;
+        const previousMem = monthMemCache.get(memMonthKey);
 
-            const { error } = await supabase
-                .from('fight_camp_calendar')
-                .delete()
-                .eq('id', id);
+        // Optimistic remove
+        const next = sessions.filter(s => s.id !== id);
+        setSessions(next);
+        monthMemCache.set(memMonthKey, { data: next, fetchedAt: Date.now() });
+        localCache.set(uid, monthCacheKey(currentDate), next);
+        confirmDelete();
+
+        try {
+            if (session?.media_url) {
+                deleteSessionMedia(session.media_url).catch(() => {});
+            }
+            const { error } = await withRetry(
+                () => withSupabaseTimeout(
+                    supabase.from('fight_camp_calendar').delete().eq('id', id),
+                    12000,
+                    "Delete training session",
+                ),
+                1,
+                500,
+            );
             if (error) throw error;
 
-            confirmDelete();
-            setSessions(sessions.filter(s => s.id !== id));
-            if (userId) {
-                localCache.remove(userId, monthCacheKey(currentDate));
-                localCache.remove(userId, "training_sessions_28d");
-            }
-            await Promise.all([fetchSessions(), fetch28DaySessions()]);
+            recent28dMemCache.delete(uid);
+            localCache.remove(uid, "training_sessions_28d");
+            void fetch28DaySessions();
         } catch (error) {
-            logger.error("Error deleting session", error);
+            // Queue the delete for background sync. Keep the local removal so
+            // the user sees their action; replay will reconcile when network
+            // recovers. Also kick connection recovery in case auth wedged.
+            logger.warn("Delete timed out, queueing for background sync", { error });
+            void import('@/lib/connectionRecovery').then(({ recoverSupabaseConnection }) =>
+                recoverSupabaseConnection('training-delete-timeout')
+            ).catch(() => {});
+
+            const { syncQueue } = await import('@/lib/syncQueue');
+            syncQueue.enqueue(uid, {
+                table: 'fight_camp_calendar',
+                action: 'delete',
+                payload: { id },
+                recordId: id,
+                timestamp: Date.now(),
+                persistOnFailure: true,
+            });
             toast({
-                title: "Error deleting session",
-                description: "Could not remove the session. Please try again.",
-                variant: "destructive"
+                title: "Delete queued",
+                description: "We'll finish syncing when you're back online.",
             });
         }
     };
@@ -393,6 +662,15 @@ export default function TrainingCalendar() {
                     <div className="flex items-center justify-between mb-4">
                         <h2 className="text-xl font-bold">{format(currentDate, "MMMM yyyy")}</h2>
                         <div className="flex items-center gap-1">
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => { triggerHapticSelection(); setLibraryOpen(true); }}
+                                aria-label="Open coaching library"
+                                className="rounded-full h-8 w-8"
+                            >
+                                <BookOpen className="h-4 w-4" />
+                            </Button>
                             {sessions.length > 0 && <ShareButton onClick={() => setShareOpen(true)} />}
                             <Button variant="ghost" size="icon" onClick={prevMonth} aria-label="Previous month" className="rounded-full h-8 w-8">
                                 <ChevronLeft className="h-5 w-5" />
@@ -459,6 +737,8 @@ export default function TrainingCalendar() {
                                         setExistingMediaUrl(null);
                                     }}
                                     onSave={handleSaveSession}
+                                    saving={isSaving}
+                                    canSave={!!userId}
                                 />
                                 </div>
                             </DialogContent>
@@ -520,6 +800,13 @@ export default function TrainingCalendar() {
                         />
                     )}
                 </div>
+
+            {/* Coaching Library Sheet */}
+            <CoachingLibrarySheet
+                userId={userId}
+                open={libraryOpen}
+                onOpenChange={setLibraryOpen}
+            />
 
             {/* Session Detail Drawer */}
             <SessionDetailDrawer

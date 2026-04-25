@@ -151,36 +151,36 @@ export const syncNutritionInBackground = (userId: string, nutritionData: any) =>
   });
 };
 
-// Preload data for next/previous days
+// Preload meals for a set of dates via the v2 `meals_with_totals` view. Writes
+// into both the in-memory nutritionCache and localStorage so date navigation
+// is O(1) when the user scrubs back and forth — MyFitnessPal-style.
 export const preloadNutritionData = (userId: string, dates: string[]) => {
-  dates.forEach((date, index) => {
+  dates.forEach((date) => {
     backgroundSync.addTask({
       id: `preload-nutrition-${userId}-${date}`,
       operation: async () => {
         const { supabase } = await import('@/integrations/supabase/client');
         const { nutritionCache } = await import('@/lib/nutritionCache');
-        
-        // Check if already cached
-        if (nutritionCache.has(userId, 'meals', date)) {
-          return null; // Already cached
-        }
-        
-        const { data } = await supabase
-          .from('nutrition_logs')
-          .select('*')
+        const { localCache } = await import('@/lib/localCache');
+        const { mapMealsWithTotalsToMeal } = await import('@/hooks/nutrition/mealsMapper');
+
+        // Skip if we already have a fresh in-memory slot for this date.
+        if (nutritionCache.has(userId, 'meals', date)) return null;
+
+        const { data, error } = await supabase
+          .from('meals_with_totals')
+          .select('id, user_id, date, meal_type, meal_name, notes, is_ai_generated, total_calories, total_protein_g, total_carbs_g, total_fats_g, item_count, created_at')
           .eq('user_id', userId)
           .eq('date', date)
-          .order('created_at', { ascending: true });
-        
-        // Cache the preloaded data — normalize meal_name to prevent "Untitled" display
-        if (data) {
-          const normalized = data.map((m: any) => ({ ...m, meal_name: m.meal_name || "Meal" }));
-          nutritionCache.setMeals(userId, date, normalized);
-          const { localCache } = await import('@/lib/localCache');
-          localCache.setForDate(userId, 'nutrition_logs', date, normalized);
-        }
-        
-        return data;
+          .order('created_at', { ascending: true })
+          .limit(100);
+
+        if (error) return null;
+
+        const meals = (data ?? []).map(mapMealsWithTotalsToMeal);
+        nutritionCache.setMeals(userId, date, meals);
+        localCache.setForDate(userId, 'nutrition_logs', date, meals);
+        return meals;
       },
       maxRetries: 1,
       priority: 1, // Low priority for preloading
@@ -188,19 +188,17 @@ export const preloadNutritionData = (userId: string, dates: string[]) => {
   });
 };
 
-// Utility to preload adjacent dates
+// Preload a ±3-day window around the active date. Covers both forward and
+// backward scrubbing which is the dominant nav pattern on diary apps, and
+// keeps the localStorage footprint small (7 days × per-date rows).
 export const preloadAdjacentDates = (userId: string, currentDate: string) => {
-  const current = new Date(currentDate);
-  const yesterday = new Date(current);
-  yesterday.setDate(current.getDate() - 1);
-  const tomorrow = new Date(current);
-  tomorrow.setDate(current.getDate() + 1);
-  
-  const dates = [
-    yesterday.toISOString().split('T')[0],
-    tomorrow.toISOString().split('T')[0],
-  ];
-  
+  const anchor = new Date(currentDate);
+  const offsets = [-3, -2, -1, 1, 2, 3];
+  const dates = offsets.map((d) => {
+    const day = new Date(anchor);
+    day.setDate(anchor.getDate() + d);
+    return day.toISOString().split('T')[0];
+  });
   preloadNutritionData(userId, dates);
 };
 

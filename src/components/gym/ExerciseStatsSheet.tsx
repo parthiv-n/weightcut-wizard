@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { Trophy, TrendingUp, Hash, Zap } from "lucide-react";
+import { Trophy } from "lucide-react";
 import { motion } from "motion/react";
 import { staggerContainer, staggerItem } from "@/lib/motion";
 import { ExercisePerformanceChart } from "./ExercisePerformanceChart";
@@ -21,26 +21,30 @@ export function ExerciseStatsSheet({ exercise, pr, open, onOpenChange, fetchHist
   const { userId } = useUser();
   const [sets, setSets] = useState<GymSet[]>([]);
   const [loading, setLoading] = useState(false);
-  const lastExerciseId = useRef<string | null>(null);
 
+  // Stale-while-revalidate: show cached data instantly (if any), always refetch in background.
+  // Cancellation flag prevents the late response of a previous exercise from clobbering current state.
   useEffect(() => {
-    if (open && exercise) {
-      // Serve cached data instantly for the chart (stale-while-revalidate)
-      if (userId) {
-        const cached = localCache.get<GymSet[]>(userId, `gym_exercise_history_${exercise.id}`);
-        if (cached) {
-          setSets(cached);
-          // If same exercise, skip refetch
-          if (lastExerciseId.current === exercise.id) return;
-        }
-      }
-      lastExerciseId.current = exercise.id;
+    if (!open || !exercise || !userId) return;
+
+    let cancelled = false;
+
+    const cached = localCache.get<GymSet[]>(userId, `gym_exercise_history_${exercise.id}`);
+    if (cached && cached.length > 0) {
+      setSets(cached);
+      setLoading(false);
+    } else {
+      setSets([]);
       setLoading(true);
-      fetchHistory(exercise.id).then(data => {
-        setSets(data);
-        setLoading(false);
-      });
     }
+
+    fetchHistory(exercise.id).then(data => {
+      if (cancelled) return;
+      setSets(data);
+      setLoading(false);
+    });
+
+    return () => { cancelled = true; };
   }, [open, exercise, fetchHistory, userId]);
 
   if (!exercise) return null;
@@ -94,7 +98,7 @@ export function ExerciseStatsSheet({ exercise, pr, open, onOpenChange, fetchHist
                     <div className="card-surface rounded-2xl border border-border p-3 space-y-1.5">
                       <div className="flex items-center gap-1.5">
                         <div className="h-5 w-5 rounded-md bg-yellow-500/15 flex items-center justify-center">
-                          <Zap className="h-3 w-3 text-yellow-500" />
+                          <Trophy className="h-3 w-3 text-yellow-500" />
                         </div>
                         <span className="text-[10px] text-muted-foreground font-medium">Best Set</span>
                       </div>
@@ -105,7 +109,7 @@ export function ExerciseStatsSheet({ exercise, pr, open, onOpenChange, fetchHist
                     <div className="card-surface rounded-2xl border border-border p-3 space-y-1.5">
                       <div className="flex items-center gap-1.5">
                         <div className="h-5 w-5 rounded-md bg-yellow-500/15 flex items-center justify-center">
-                          <Hash className="h-3 w-3 text-yellow-500" />
+                          <Trophy className="h-3 w-3 text-yellow-500" />
                         </div>
                         <span className="text-[10px] text-muted-foreground font-medium">Max Reps</span>
                       </div>
@@ -116,7 +120,7 @@ export function ExerciseStatsSheet({ exercise, pr, open, onOpenChange, fetchHist
                     <div className="card-surface rounded-2xl border border-border p-3 space-y-1.5">
                       <div className="flex items-center gap-1.5">
                         <div className="h-5 w-5 rounded-md bg-yellow-500/15 flex items-center justify-center">
-                          <TrendingUp className="h-3 w-3 text-yellow-500" />
+                          <Trophy className="h-3 w-3 text-yellow-500" />
                         </div>
                         <span className="text-[10px] text-muted-foreground font-medium">Best Volume</span>
                       </div>

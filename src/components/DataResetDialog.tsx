@@ -43,14 +43,46 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
         { data: fightWeekPlans },
         { data: fightWeekLogs }
       ] = await Promise.all([
-        // select("*") intentional — full data export for CSV backup
-        supabase.from("profiles").select("*").eq("id", user.id).single(),
-        supabase.from("weight_logs").select("*").eq("user_id", user.id).order("date", { ascending: true }),
-        supabase.from("nutrition_logs").select("*").eq("user_id", user.id).order("date", { ascending: true }),
-        supabase.from("hydration_logs").select("*").eq("user_id", user.id).order("date", { ascending: true }),
-        supabase.from("fight_camps").select("*").eq("user_id", user.id).order("fight_date", { ascending: true }),
-        supabase.from("fight_week_plans").select("*").eq("user_id", user.id),
-        supabase.from("fight_week_logs").select("*").eq("user_id", user.id).order("log_date", { ascending: true })
+        supabase
+          .from("profiles")
+          .select("age, sex, height_cm, current_weight_kg, goal_weight_kg, activity_level, bmr, tdee, target_date")
+          .eq("id", user.id)
+          .single(),
+        supabase
+          .from("weight_logs")
+          .select("date, weight_kg")
+          .eq("user_id", user.id)
+          .order("date", { ascending: true })
+          .limit(10000),
+        supabase
+          .from("nutrition_logs")
+          .select("date, meal_name, meal_type, calories, protein_g, carbs_g, fats_g, portion_size")
+          .eq("user_id", user.id)
+          .order("date", { ascending: true })
+          .limit(20000),
+        supabase
+          .from("hydration_logs")
+          .select("date, amount_ml, training_weight_pre, training_weight_post, sweat_loss_percent, sodium_mg, notes")
+          .eq("user_id", user.id)
+          .order("date", { ascending: true })
+          .limit(10000),
+        supabase
+          .from("fight_camps")
+          .select("name, event_name, fight_date, starting_weight_kg, end_weight_kg, total_weight_cut, weight_via_dehydration, weight_via_carb_reduction, weigh_in_timing, is_completed, rehydration_notes, performance_feeling")
+          .eq("user_id", user.id)
+          .order("fight_date", { ascending: true })
+          .limit(1000),
+        supabase
+          .from("fight_week_plans")
+          .select("id")
+          .eq("user_id", user.id)
+          .limit(1000),
+        supabase
+          .from("fight_week_logs")
+          .select("log_date, weight_kg, carbs_g, fluid_intake_ml, sweat_session_min, notes")
+          .eq("user_id", user.id)
+          .order("log_date", { ascending: true })
+          .limit(5000)
       ]);
 
       // CSV helper: escape cells containing commas, quotes, or newlines
@@ -250,9 +282,10 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
 
       // Delete all user data in order (respecting foreign keys)
       // NOTE: Fight camps are preserved - only tracking data is reset
+      // Deleting from `meals` cascades to `meal_items` via FK ON DELETE CASCADE.
       await Promise.all([
         supabase.from("fight_week_logs").delete().eq("user_id", user.id),
-        supabase.from("nutrition_logs").delete().eq("user_id", user.id),
+        supabase.from("meals").delete().eq("user_id", user.id),
         supabase.from("hydration_logs").delete().eq("user_id", user.id),
         supabase.from("weight_logs").delete().eq("user_id", user.id),
         supabase.from("chat_messages").delete().eq("user_id", user.id),

@@ -4,6 +4,7 @@ import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
 import { edgeLogger } from "../_shared/errorReporter.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { RESEARCH_SUMMARY } from "../_shared/researchSummary.ts";
+import { normaliseWeeklyPlan } from "../_shared/normalizeWeeklyPlan.ts";
 
 // FREE for all users — generated during onboarding, no gem cost
 
@@ -160,8 +161,23 @@ Return ONLY valid JSON:
       throw new Error("Invalid plan response from AI");
     }
 
+    // Enforce week count + final-week target weight = fight-week target.
+    // The LLM occasionally drifts on either; normalise deterministically so
+    // every user sees a row per week ending exactly at fight_week_target_kg.
+    const cutWeekCount = Math.min(weeksRemaining, 12);
+    plan.weeklyPlan = normaliseWeeklyPlan({
+      weeklyPlan: plan.weeklyPlan,
+      weekCount: cutWeekCount,
+      startWeight: currentWeight,
+      finalTarget: fightWeekTarget,
+      defaultCalories: targetCalories,
+      defaultProtein: proteinTarget,
+      defaultCarbs: carbTarget,
+      defaultFats: fatTarget,
+    });
+
     // Override deterministic values
-    plan.totalWeeks = Math.min(weeksRemaining, 12);
+    plan.totalWeeks = cutWeekCount;
     plan.weeklyLossTarget = `${weeklyLossRate.toFixed(1)} kg/week`;
     plan.maintenanceCalories = tdee;
     plan.deficit = dailyDeficit;

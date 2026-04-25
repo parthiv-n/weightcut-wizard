@@ -1,28 +1,102 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Clock, Dumbbell, TrendingUp, Brain, Trash2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Clock, Dumbbell, TrendingUp, Brain, Trash2, Pencil, Check } from "lucide-react";
 import { motion } from "motion/react";
 import { staggerContainer, staggerItem } from "@/lib/motion";
 import { formatWeight, formatVolume } from "@/lib/gymCalculations";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
-import type { SessionWithSets } from "@/pages/gym/types";
+import type { GymSet, SessionWithSets } from "@/pages/gym/types";
 
 interface SessionDetailSheetProps {
   session: SessionWithSets | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDelete: (sessionId: string) => void;
+  onUpdateSet?: (setId: string, updates: Partial<{ weight_kg: number | null; reps: number; is_warmup: boolean }>) => Promise<void>;
+  onDeleteSet?: (setId: string) => Promise<void>;
 }
 
-export function SessionDetailSheet({ session, open, onOpenChange, onDelete }: SessionDetailSheetProps) {
+interface EditableSetRowProps {
+  set: GymSet;
+  label: string;
+  onUpdateSet: (setId: string, updates: Partial<{ weight_kg: number | null; reps: number }>) => Promise<void>;
+  onDeleteSet: (setId: string) => Promise<void>;
+}
+
+function EditableSetRow({ set, label, onUpdateSet, onDeleteSet }: EditableSetRowProps) {
+  const [weightStr, setWeightStr] = useState(set.weight_kg?.toString() ?? "");
+  const [repsStr, setRepsStr] = useState(set.reps.toString());
+
+  const handleWeightBlur = useCallback(() => {
+    const val = weightStr === "" ? null : parseFloat(weightStr);
+    if (val !== set.weight_kg) {
+      onUpdateSet(set.id, { weight_kg: val !== null && !isNaN(val) ? val : null });
+    }
+  }, [weightStr, set.id, set.weight_kg, onUpdateSet]);
+
+  const handleRepsBlur = useCallback(() => {
+    const val = parseInt(repsStr, 10);
+    if (!isNaN(val) && val > 0 && val !== set.reps) {
+      onUpdateSet(set.id, { reps: val });
+    }
+  }, [repsStr, set.id, set.reps, onUpdateSet]);
+
+  return (
+    <div className={`flex items-center gap-2 px-3 py-2 ${set.is_warmup ? "opacity-60" : ""}`}>
+      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+        set.is_warmup ? "bg-muted text-muted-foreground" : "bg-primary/12 text-primary"
+      }`}>
+        {label}
+      </span>
+      <Input
+        type="number"
+        inputMode="decimal"
+        placeholder={set.is_bodyweight ? "BW" : "kg"}
+        value={weightStr}
+        onChange={(e) => setWeightStr(e.target.value)}
+        onBlur={handleWeightBlur}
+        disabled={set.is_bodyweight}
+        className="h-9 w-[72px] text-center text-sm font-medium tabular-nums bg-background/50 border-border/40"
+      />
+      <span className="text-muted-foreground text-xs">×</span>
+      <Input
+        type="number"
+        inputMode="numeric"
+        placeholder="reps"
+        value={repsStr}
+        onChange={(e) => setRepsStr(e.target.value)}
+        onBlur={handleRepsBlur}
+        className="h-9 w-[72px] text-center text-sm font-medium tabular-nums bg-background/50 border-border/40"
+      />
+      <button
+        onClick={() => onDeleteSet(set.id)}
+        className="ml-auto shrink-0 w-8 h-8 rounded-full flex items-center justify-center text-muted-foreground/40 active:text-destructive active:bg-destructive/10 transition-all"
+        aria-label="Delete set"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  );
+}
+
+export function SessionDetailSheet({ session, open, onOpenChange, onDelete, onUpdateSet, onDeleteSet }: SessionDetailSheetProps) {
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const canEdit = Boolean(onUpdateSet && onDeleteSet);
 
   if (!session) return null;
 
+  // Reset edit mode when sheet closes
+  const handleOpenChange = (next: boolean) => {
+    if (!next) setEditMode(false);
+    onOpenChange(next);
+  };
+
   return (
     <>
-      <Sheet open={open} onOpenChange={onOpenChange}>
+      <Sheet open={open} onOpenChange={handleOpenChange}>
         <SheetContent side="bottom" className="h-[80vh] rounded-t-3xl overflow-y-auto" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 5rem)" }}>
           <SheetHeader className="pb-1">
             <SheetTitle className="flex items-center gap-2.5">
@@ -93,31 +167,68 @@ export function SessionDetailSheet({ session, open, onOpenChange, onDelete }: Se
                 >
                   <h4 className="font-bold text-sm tracking-tight">{group.exercise.name}</h4>
                   <div className="card-surface rounded-2xl border border-border overflow-hidden divide-y divide-border/15">
-                    {group.sets.map((set, i) => (
-                      <div key={set.id} className={`flex items-center gap-3 text-xs px-3 py-2.5 ${set.is_warmup ? "opacity-40" : ""}`}>
-                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                          set.is_warmup ? "bg-muted text-muted-foreground" : "bg-primary/12 text-primary"
-                        }`}>
-                          {set.is_warmup ? "W" : group.sets.filter((s, j) => j <= i && !s.is_warmup).length}
-                        </span>
-                        <span className="tabular-nums font-semibold text-sm">
-                          {set.is_bodyweight ? "BW" : `${formatWeight(set.weight_kg)} kg`}
-                        </span>
-                        <span className="text-muted-foreground">x</span>
-                        <span className="tabular-nums font-semibold text-sm">{set.reps}</span>
-                      </div>
-                    ))}
+                    {group.sets.map((set, i) => {
+                      const label = set.is_warmup
+                        ? "W"
+                        : String(group.sets.filter((s, j) => j <= i && !s.is_warmup).length);
+
+                      if (editMode && onUpdateSet && onDeleteSet) {
+                        return (
+                          <EditableSetRow
+                            key={set.id}
+                            set={set}
+                            label={label}
+                            onUpdateSet={onUpdateSet}
+                            onDeleteSet={onDeleteSet}
+                          />
+                        );
+                      }
+
+                      return (
+                        <div key={set.id} className={`flex items-center gap-3 text-xs px-3 py-2.5 ${set.is_warmup ? "opacity-40" : ""}`}>
+                          <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                            set.is_warmup ? "bg-muted text-muted-foreground" : "bg-primary/12 text-primary"
+                          }`}>
+                            {label}
+                          </span>
+                          <span className="tabular-nums font-semibold text-sm">
+                            {set.is_bodyweight ? "BW" : `${formatWeight(set.weight_kg)} kg`}
+                          </span>
+                          <span className="text-muted-foreground">x</span>
+                          <span className="tabular-nums font-semibold text-sm">{set.reps}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </motion.div>
               ))}
             </div>
           </motion.div>
 
-          <SheetFooter className="mt-6 pb-4">
+          <SheetFooter className="mt-6 pb-4 flex-row gap-2 sm:flex-row sm:space-x-0">
+            {canEdit && (
+              <Button
+                variant="outline"
+                onClick={() => setEditMode(v => !v)}
+                className="flex-1 gap-2"
+              >
+                {editMode ? (
+                  <>
+                    <Check className="h-4 w-4" />
+                    Done
+                  </>
+                ) : (
+                  <>
+                    <Pencil className="h-4 w-4" />
+                    Edit
+                  </>
+                )}
+              </Button>
+            )}
             <Button
               variant="outline"
               onClick={() => setDeleteOpen(true)}
-              className="w-full text-destructive hover:text-destructive hover:bg-destructive/10 gap-2 border-destructive/20"
+              className="flex-1 text-destructive hover:text-destructive hover:bg-destructive/10 gap-2 border-destructive/20"
             >
               <Trash2 className="h-4 w-4" />
               Delete Session

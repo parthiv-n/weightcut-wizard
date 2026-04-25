@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef, ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 
 export interface AIStep {
@@ -31,9 +31,12 @@ interface AITaskInternal extends AITask {
   failedAt?: number;
 }
 
-interface AITaskContextType {
+interface AITaskState {
   tasks: AITask[];
   activeTask: AITask | null;
+}
+
+interface AITaskActions {
   addTask: (task: { id: string; type: AITaskType; label: string; steps: AIStep[]; returnPath: string }) => string;
   updateStep: (id: string, step: number) => void;
   completeTask: (id: string, result?: any) => void;
@@ -42,10 +45,21 @@ interface AITaskContextType {
   getTask: (id: string) => AITask | undefined;
 }
 
-const AITaskContext = createContext<AITaskContextType | undefined>(undefined);
+interface AITaskContextType extends AITaskState, AITaskActions {}
+
+// Split context: state vs. actions. Action consumers (e.g. components that only
+// call addTask/dismissTask but never read the live task list) get a stable
+// reference and don't rerender when tasks change.
+const AITaskStateContext = createContext<AITaskState | undefined>(undefined);
+const AITaskActionsContext = createContext<AITaskActions | undefined>(undefined);
 
 export function AITaskProvider({ children }: { children: ReactNode }) {
   const [tasks, setTasks] = useState<AITaskInternal[]>([]);
+
+  // Mirror tasks in a ref so getTask can read live state without depending on
+  // `tasks` (which would re-create the callback on every task update).
+  const tasksRef = useRef(tasks);
+  useEffect(() => { tasksRef.current = tasks; }, [tasks]);
 
   const addTask = useCallback(
     (task: { id: string; type: AITaskType; label: string; steps: AIStep[]; returnPath: string }): string => {
@@ -89,11 +103,13 @@ export function AITaskProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const getTask = useCallback((id: string): AITask | undefined => {
-    return tasks.find((t) => t.id === id);
-  }, [tasks]);
+    return tasksRef.current.find((t) => t.id === id);
+  }, []);
 
-  const activeTask: AITask | null =
-    [...tasks].reverse().find((t) => t.status === "running") ?? null;
+  const activeTask: AITask | null = useMemo(
+    () => [...tasks].reverse().find((t) => t.status === "running") ?? null,
+    [tasks]
+  );
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -107,19 +123,48 @@ export function AITaskProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval);
   }, []);
 
+  const stateValue = useMemo<AITaskState>(() => ({ tasks, activeTask }), [tasks, activeTask]);
+  const actionsValue = useMemo<AITaskActions>(
+    () => ({ addTask, updateStep, completeTask, failTask, dismissTask, getTask }),
+    [addTask, updateStep, completeTask, failTask, dismissTask, getTask]
+  );
+
   return (
-    <AITaskContext.Provider
-      value={{ tasks, activeTask, addTask, updateStep, completeTask, failTask, dismissTask, getTask }}
-    >
-      {children}
-    </AITaskContext.Provider>
+    <AITaskActionsContext.Provider value={actionsValue}>
+      <AITaskStateContext.Provider value={stateValue}>
+        {children}
+      </AITaskStateContext.Provider>
+    </AITaskActionsContext.Provider>
   );
 }
 
-export function useAITask() {
-  const context = useContext(AITaskContext);
-  if (!context) {
-    throw new Error("useAITask must be used within AITaskProvider");
-  }
+/**
+ * Returns the live AI-task list + active task. Subscribers rerender on task
+ * updates — use only where you need the current state.
+ */
+export function useAITaskState(): AITaskState {
+  const context = useContext(AITaskStateContext);
+  if (!context) throw new Error("useAITaskState must be used within AITaskProvider");
   return context;
+}
+
+/**
+ * Returns the AI-task action methods. Subscribers DO NOT rerender on task
+ * updates — prefer this in components that only dispatch (addTask, dismissTask).
+ */
+export function useAITaskActions(): AITaskActions {
+  const context = useContext(AITaskActionsContext);
+  if (!context) throw new Error("useAITaskActions must be used within AITaskProvider");
+  return context;
+}
+
+/**
+ * Combined accessor — subscribes to both state and actions. Existing call
+ * sites continue to work unchanged. New code should prefer the split hooks
+ * to avoid unnecessary rerenders.
+ */
+export function useAITask(): AITaskContextType {
+  const state = useAITaskState();
+  const actions = useAITaskActions();
+  return useMemo(() => ({ ...state, ...actions }), [state, actions]);
 }

@@ -1,8 +1,11 @@
 import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
+import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 
 const BUCKET = "training-media";
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
+const UPLOAD_TIMEOUT_MS = 25000; // user-perceptible cap on storage I/O
+const DELETE_TIMEOUT_MS = 8000;
 
 function getExtFromFile(file: File): string {
   const name = file.name;
@@ -31,11 +34,15 @@ export async function uploadSessionMedia(
     throw new Error("File is too large. Maximum size is 50MB.");
   }
 
-  // Delete old media if replacing
+  // Delete old media if replacing (best-effort, fenced to avoid wedging save)
   if (existingMediaUrl) {
     const oldPath = extractStoragePath(existingMediaUrl);
     if (oldPath) {
-      await supabase.storage.from(BUCKET).remove([oldPath]).catch((e) => {
+      await withSupabaseTimeout(
+        supabase.storage.from(BUCKET).remove([oldPath]),
+        DELETE_TIMEOUT_MS,
+        "Delete old session media",
+      ).catch((e) => {
         logger.error("Failed to delete old session media", e);
       });
     }
@@ -47,12 +54,14 @@ export async function uploadSessionMedia(
 
   logger.info(`Uploading session media: bucket=${BUCKET}, path=${fileName}, size=${file.size}, type=${contentType}`);
 
-  const { error: uploadError } = await supabase.storage
-    .from(BUCKET)
-    .upload(fileName, file, {
+  const { error: uploadError } = await withSupabaseTimeout(
+    supabase.storage.from(BUCKET).upload(fileName, file, {
       contentType,
       upsert: true,
-    });
+    }),
+    UPLOAD_TIMEOUT_MS,
+    "Upload session media",
+  );
 
   if (uploadError) {
     logger.error("Storage upload failed", { bucket: BUCKET, path: fileName, error: uploadError });
@@ -69,7 +78,11 @@ export async function uploadSessionMedia(
 export async function deleteSessionMedia(mediaUrl: string): Promise<void> {
   const path = extractStoragePath(mediaUrl);
   if (!path) return;
-  const { error } = await supabase.storage.from(BUCKET).remove([path]);
+  const { error } = await withSupabaseTimeout(
+    supabase.storage.from(BUCKET).remove([path]),
+    DELETE_TIMEOUT_MS,
+    "Delete session media",
+  );
   if (error) {
     logger.error("Failed to delete session media", error);
   }

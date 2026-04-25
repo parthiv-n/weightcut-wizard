@@ -65,17 +65,59 @@ serve(async (req) => {
     const fats_g = parseFloat(nutriments['fat_100g'] || nutriments['fat'] || 0);
 
     const productName = product.product_name || product.product_name_en || "Unknown Product";
+    const brandName = (product.brands || "").split(",")[0]?.trim() || null;
 
     edgeLogger.info("Product found", { productName });
+
+    const proteinRounded = Math.round(protein_g * 10) / 10;
+    const carbsRounded = Math.round(carbs_g * 10) / 10;
+    const fatsRounded = Math.round(fats_g * 10) / 10;
+
+    // Phase 3.1: upsert into `foods` catalog by barcode so repeat scans and
+    // meal_items.food_id references both work.
+    let foodId: string | null = null;
+    if (calories > 0 && productName.trim().length > 0) {
+      const { data: upserted, error: upsertError } = await supabaseClient
+        .from("foods")
+        .upsert(
+          {
+            name: productName,
+            brand: brandName,
+            barcode,
+            calories_per_100g: calories,
+            protein_per_100g: proteinRounded,
+            carbs_per_100g: carbsRounded,
+            fats_per_100g: fatsRounded,
+            source: "openfoodfacts",
+            source_ref: barcode,
+            verified: true,
+            created_by: user.id,
+          },
+          { onConflict: "barcode", ignoreDuplicates: false }
+        )
+        .select("id")
+        .maybeSingle();
+
+      if (upsertError) {
+        edgeLogger.warn("foods upsert by barcode failed", {
+          functionName: "scan-barcode",
+          message: upsertError.message,
+        });
+      } else if (upserted) {
+        foodId = upserted.id;
+      }
+    }
 
     return new Response(
       JSON.stringify({
         found: true,
+        food_id: foodId,
         productName,
+        brand: brandName,
         calories,
-        protein_g: Math.round(protein_g * 10) / 10,
-        carbs_g: Math.round(carbs_g * 10) / 10,
-        fats_g: Math.round(fats_g * 10) / 10,
+        protein_g: proteinRounded,
+        carbs_g: carbsRounded,
+        fats_g: fatsRounded,
         serving_size: product.serving_size || "100g",
       }),
       { headers: { ...corsHeaders(req), "Content-Type": "application/json" } }

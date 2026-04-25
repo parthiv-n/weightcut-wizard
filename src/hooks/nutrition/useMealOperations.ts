@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
@@ -8,11 +8,19 @@ import { localCache } from "@/lib/localCache";
 import { nutritionCache } from "@/lib/nutritionCache";
 import { syncQueue } from "@/lib/syncQueue";
 import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
-import { celebrateSuccess, confirmDelete } from "@/lib/haptics";
+import { celebrateSuccess } from "@/lib/haptics";
 import { logger } from "@/lib/logger";
-import { buildMealPayload, resolveMealType } from "@/lib/buildMealPayload";
+import { resolveMealType } from "@/lib/buildMealPayload";
+import { coerceMealName } from "@/lib/mealName";
+import {
+  buildCreateMealRpcArgs,
+  ingredientsToRpcItems,
+  type CreateMealRpcArgs,
+} from "@/lib/buildMealRpcArgs";
 import type { Meal, Ingredient } from "@/pages/nutrition/types";
 
+// Re-export the helper so the tester's gate can pull it from this module.
+export { buildCreateMealRpcArgs } from "@/lib/buildMealRpcArgs";
 
 interface UseMealOperationsParams {
   meals: Meal[];
@@ -23,16 +31,135 @@ interface UseMealOperationsParams {
   loadMeals: (skipCache?: boolean) => Promise<void>;
 }
 
+/** Internal: build the full optimistic Meal row that matches meals_with_totals shape. */
+function buildOptimisticMeal(args: {
+  id: string;
+  date: string;
+  args: CreateMealRpcArgs;
+  ingredients?: Ingredient[] | null;
+  portion_size?: string | null;
+  recipe_notes?: string | null;
+}): Meal {
+  const { id, date, args: rpcArgs, ingredients, portion_size, recipe_notes } = args;
+  const totals = rpcArgs.p_items.reduce(
+    (acc, it) => ({
+      calories: acc.calories + it.calories,
+      protein_g: acc.protein_g + it.protein_g,
+      carbs_g: acc.carbs_g + it.carbs_g,
+      fats_g: acc.fats_g + it.fats_g,
+    }),
+    { calories: 0, protein_g: 0, carbs_g: 0, fats_g: 0 }
+  );
+  return {
+    id,
+    meal_name: rpcArgs.p_meal_name,
+    meal_type: rpcArgs.p_meal_type,
+    calories: Math.round(totals.calories),
+    protein_g: totals.protein_g,
+    carbs_g: totals.carbs_g,
+    fats_g: totals.fats_g,
+    portion_size: portion_size ?? undefined,
+    recipe_notes: recipe_notes ?? undefined,
+    ingredients: ingredients ?? undefined,
+    is_ai_generated: rpcArgs.p_is_ai_generated,
+    notes: rpcArgs.p_notes,
+    item_count: rpcArgs.p_items.length,
+    date,
+  };
+}
+
 export function useMealOperations(params: UseMealOperationsParams) {
-  const { meals, setMeals, mealPlanIdeas, setMealPlanIdeas, selectedDate, loadMeals } = params;
+  const { setMeals, setMealPlanIdeas, selectedDate, loadMeals } = params;
   const { userId } = useUser();
   const { toast } = useToast();
-  const { isMounted } = useSafeAsync();
+  const { isMounted: _isMounted } = useSafeAsync();
   const [loggingMeal, setLoggingMeal] = useState<string | null>(null);
   const [savingAllMeals, setSavingAllMeals] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mealToDelete, setMealToDelete] = useState<Meal | null>(null);
 
+  /**
+   * Single point-of-truth for every insert path. Builds RPC args, fires an
+   * optimistic cache row, queues the op for offline replay, then calls
+   * `create_meal_with_items`. The pre-generated UUID is written to the meal
+   * row on success via an update so optimistic keys stay stable.
+   *
+   * Note: the RPC generates its own meal/item UUIDs server-side. We only use
+   * the `optimisticId` for local React keys + sync queue dedupe until the
+   * realtime subscription surfaces the canonical row (at which point the
+   * cache merges the real `id` by `date`).
+   */
+  const runInsertFlow = useCallback(async (opts: {
+    args: CreateMealRpcArgs;
+    ingredients?: Ingredient[] | null;
+    portion_size?: string | null;
+    recipe_notes?: string | null;
+    successToast?: { title: string; description?: string };
+  }) => {
+    if (!userId) throw new Error("Not authenticated");
+    const optimisticId = crypto.randomUUID();
+
+    const optimisticMeal = buildOptimisticMeal({
+      id: optimisticId,
+      date: selectedDate,
+      args: opts.args,
+      ingredients: opts.ingredients,
+      portion_size: opts.portion_size,
+      recipe_notes: opts.recipe_notes,
+    });
+
+    setMeals((prev) => {
+      const updated = [...prev, optimisticMeal];
+      localCache.setForDate(userId, "nutrition_logs", selectedDate, updated);
+      nutritionCache.setMeals(userId, selectedDate, updated);
+      localCache.remove(userId, "gamification_data");
+      return updated;
+    });
+
+    // Queue for offline replay — replay path calls RPC with the same payload.
+    syncQueue.enqueue(userId, {
+      table: "meals",
+      action: "insert",
+      payload: opts.args as unknown as Record<string, unknown>,
+      recordId: optimisticId,
+      timestamp: Date.now(),
+      persistOnFailure: true,
+    });
+
+    try {
+      const { data, error } = await withSupabaseTimeout(
+        supabase.rpc("create_meal_with_items", opts.args),
+        undefined,
+        "create_meal_with_items"
+      );
+      if (error) throw error;
+
+      // Swap the optimistic id for the canonical one returned by the RPC so
+      // realtime INSERT events don't produce duplicate rows in cache.
+      const canonical = Array.isArray(data) && data.length > 0 ? data[0] : null;
+      const canonicalId = canonical?.meal_id ?? optimisticId;
+      if (canonicalId && canonicalId !== optimisticId) {
+        setMeals((prev) => {
+          const updated = prev.map((m) => (m.id === optimisticId ? { ...m, id: canonicalId } : m));
+          localCache.setForDate(userId, "nutrition_logs", selectedDate, updated);
+          nutritionCache.setMeals(userId, selectedDate, updated);
+          return updated;
+        });
+      }
+
+      celebrateSuccess();
+      if (opts.successToast) toast(opts.successToast);
+      syncQueue.dequeueByRecordId(userId, optimisticId);
+      return canonicalId;
+    } catch (err) {
+      logger.error("create_meal_with_items failed (queued for sync)", err);
+      celebrateSuccess();
+      toast({ title: "Saved offline", description: "Will sync when connected." });
+      return optimisticId;
+    }
+  }, [userId, selectedDate, setMeals, toast]);
+
+  // ── Insert path 1: manual submit ──
   const saveMealToDb = useCallback(async (mealData: {
     meal_name: string;
     calories: number;
@@ -47,259 +174,119 @@ export function useMealOperations(params: UseMealOperationsParams) {
   }) => {
     if (!userId) throw new Error("Not authenticated");
 
-    const dbPayload = buildMealPayload({
-      userId,
-      date: selectedDate,
-      input: {
+    const items = ingredientsToRpcItems(mealData.ingredients);
+    const args = buildCreateMealRpcArgs({
+      header: {
         meal_name: mealData.meal_name,
-        meal_type: resolveMealType(mealData.meal_type),
+        meal_type: mealData.meal_type,
+        date: selectedDate,
+        notes: mealData.recipe_notes,
+        is_ai_generated: mealData.is_ai_generated,
+      },
+      items,
+      fallbackTotals: {
         calories: mealData.calories,
         protein_g: mealData.protein_g,
         carbs_g: mealData.carbs_g,
         fats_g: mealData.fats_g,
-        portion_size: mealData.portion_size,
-        recipe_notes: mealData.recipe_notes,
-        ingredients: mealData.ingredients,
-        is_ai_generated: mealData.is_ai_generated,
+        name: coerceMealName(mealData.meal_name, mealData.meal_type),
       },
     });
 
-    const optimisticMeal: Meal = {
-      id: dbPayload.id,
-      meal_name: dbPayload.meal_name,
-      calories: dbPayload.calories,
-      protein_g: dbPayload.protein_g ?? undefined,
-      carbs_g: dbPayload.carbs_g ?? undefined,
-      fats_g: dbPayload.fats_g ?? undefined,
-      meal_type: dbPayload.meal_type,
-      portion_size: dbPayload.portion_size ?? undefined,
-      recipe_notes: dbPayload.recipe_notes ?? undefined,
-      ingredients: dbPayload.ingredients ?? undefined,
-      is_ai_generated: dbPayload.is_ai_generated,
-      date: selectedDate,
-    };
-
-    setMeals(prev => {
-      const updatedMeals = [...prev, optimisticMeal];
-      localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
-      nutritionCache.setMeals(userId, selectedDate, updatedMeals);
-      localCache.remove(userId, 'gamification_data');
-      return updatedMeals;
+    await runInsertFlow({
+      args,
+      ingredients: mealData.ingredients,
+      portion_size: mealData.portion_size,
+      recipe_notes: mealData.recipe_notes,
     });
+  }, [userId, selectedDate, runInsertFlow]);
 
-    syncQueue.enqueue(userId, {
-      table: "nutrition_logs",
-      action: "insert",
-      payload: dbPayload,
-      recordId: dbPayload.id,
-      timestamp: Date.now(),
-      persistOnFailure: true,
-    });
-
-    try {
-      const { error } = await withSupabaseTimeout(
-        supabase.from("nutrition_logs").insert(dbPayload as any),
-        undefined,
-        "Add manual meal"
-      );
-
-      if (error) throw error;
-
-      celebrateSuccess();
-      syncQueue.dequeueByRecordId(userId, dbPayload.id);
-    } catch (error) {
-      logger.error("Error adding meal (queued for sync)", error);
-      celebrateSuccess();
-      toast({ title: "Saved offline", description: "Will sync when connected." });
-    }
-  }, [userId, selectedDate, setMeals, loadMeals, toast]);
-
+  // ── Insert path 2: log a meal-plan idea ──
   const handleLogMealIdea = useCallback(async (mealIdea: Meal, mealTypeOverride?: string) => {
     setLoggingMeal(mealIdea.id);
     try {
       if (!userId) throw new Error("Not authenticated");
 
+      const mealType = resolveMealType(mealTypeOverride ?? mealIdea.meal_type);
       const consistentCalories =
         (mealIdea.protein_g || 0) * 4 + (mealIdea.carbs_g || 0) * 4 + (mealIdea.fats_g || 0) * 9;
 
-      const dbPayload = buildMealPayload({
-        userId,
-        date: selectedDate,
-        input: {
+      const items = ingredientsToRpcItems(mealIdea.ingredients);
+      const args = buildCreateMealRpcArgs({
+        header: {
           meal_name: mealIdea.meal_name,
-          meal_type: resolveMealType(mealTypeOverride ?? mealIdea.meal_type),
+          meal_type: mealType,
+          date: selectedDate,
+          notes: mealIdea.recipe_notes ?? null,
+          is_ai_generated: true,
+        },
+        items,
+        fallbackTotals: {
           calories: consistentCalories || mealIdea.calories,
           protein_g: mealIdea.protein_g ?? null,
           carbs_g: mealIdea.carbs_g ?? null,
           fats_g: mealIdea.fats_g ?? null,
-          portion_size: mealIdea.portion_size ?? null,
-          recipe_notes: mealIdea.recipe_notes ?? null,
-          ingredients: mealIdea.ingredients ?? null,
-          is_ai_generated: true,
+          name: coerceMealName(mealIdea.meal_name, mealType),
         },
       });
 
-      const optimisticMeal: Meal = {
-        id: dbPayload.id,
-        meal_name: dbPayload.meal_name,
-        calories: dbPayload.calories,
-        protein_g: dbPayload.protein_g ?? undefined,
-        carbs_g: dbPayload.carbs_g ?? undefined,
-        fats_g: dbPayload.fats_g ?? undefined,
-        meal_type: dbPayload.meal_type,
-        portion_size: dbPayload.portion_size ?? undefined,
-        recipe_notes: dbPayload.recipe_notes ?? undefined,
-        ingredients: dbPayload.ingredients ?? undefined,
-        is_ai_generated: true,
-        date: selectedDate,
-      };
-
-      setMeals(prev => {
-        const updatedMeals = [...prev, optimisticMeal];
-        localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
-        nutritionCache.setMeals(userId, selectedDate, updatedMeals);
-        localCache.remove(userId, 'gamification_data');
-        return updatedMeals;
+      await runInsertFlow({
+        args,
+        ingredients: mealIdea.ingredients,
+        portion_size: mealIdea.portion_size,
+        recipe_notes: mealIdea.recipe_notes,
+        successToast: { title: "Meal logged!", description: `${mealIdea.meal_name} added to your day` },
       });
-
-      syncQueue.enqueue(userId, {
-        table: "nutrition_logs",
-        action: "insert",
-        payload: dbPayload,
-        recordId: dbPayload.id,
-        timestamp: Date.now(),
-        persistOnFailure: true,
-      });
-
-      try {
-        const { error } = await withSupabaseTimeout(
-          supabase.from("nutrition_logs").insert(dbPayload as any),
-          undefined,
-          "Log meal"
-        );
-
-        if (error) throw error;
-
-        celebrateSuccess();
-        toast({
-          title: "Meal logged!",
-          description: `${mealIdea.meal_name} added to your day`,
-        });
-        syncQueue.dequeueByRecordId(userId, dbPayload.id);
-      } catch (error) {
-        logger.error("Error logging meal (queued for sync)", error);
-        celebrateSuccess();
-        toast({ title: "Saved offline", description: "Will sync when connected." });
-      }
     } catch (error) {
       logger.error("Error logging meal", error);
-      toast({
-        title: "Error",
-        description: "Failed to log meal",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "Failed to log meal", variant: "destructive" });
     } finally {
       setLoggingMeal(null);
     }
-  }, [userId, selectedDate, setMeals, loadMeals, toast]);
+  }, [userId, selectedDate, runInsertFlow, toast]);
 
+  // ── Insert path 3: save all meal-plan ideas as real meals ──
   const saveMealIdeasToDatabase = async (mealIdeas: Meal[]) => {
     if (mealIdeas.length === 0 || savingAllMeals) return;
-
     setSavingAllMeals(true);
     try {
       if (!userId) throw new Error("Not authenticated");
 
-      const mealIds: string[] = [];
-      const optimisticMeals: Meal[] = [];
-      const dbPayloads: Record<string, unknown>[] = [];
-
       for (const meal of mealIdeas) {
         const recalcCal = (meal.protein_g || 0) * 4 + (meal.carbs_g || 0) * 4 + (meal.fats_g || 0) * 9;
-
-        const dbPayload = buildMealPayload({
-          userId,
-          date: selectedDate,
-          input: {
+        const mealType = resolveMealType(meal.meal_type);
+        const items = ingredientsToRpcItems((meal.ingredients as Ingredient[] | null | undefined));
+        const args = buildCreateMealRpcArgs({
+          header: {
             meal_name: meal.meal_name,
-            meal_type: resolveMealType(meal.meal_type),
+            meal_type: mealType,
+            date: selectedDate,
+            notes: meal.recipe_notes ?? null,
+            is_ai_generated: true,
+          },
+          items,
+          fallbackTotals: {
             calories: recalcCal || meal.calories,
             protein_g: meal.protein_g ?? null,
             carbs_g: meal.carbs_g ?? null,
             fats_g: meal.fats_g ?? null,
-            portion_size: meal.portion_size ?? null,
-            recipe_notes: meal.recipe_notes ?? null,
-            ingredients: (meal.ingredients as Ingredient[] | null) ?? null,
-            is_ai_generated: true,
+            name: coerceMealName(meal.meal_name, mealType),
           },
         });
-
-        mealIds.push(dbPayload.id);
-        optimisticMeals.push({
-          id: dbPayload.id,
-          meal_name: dbPayload.meal_name,
-          calories: dbPayload.calories,
-          protein_g: dbPayload.protein_g ?? undefined,
-          carbs_g: dbPayload.carbs_g ?? undefined,
-          fats_g: dbPayload.fats_g ?? undefined,
-          meal_type: dbPayload.meal_type,
-          portion_size: dbPayload.portion_size ?? undefined,
-          recipe_notes: dbPayload.recipe_notes ?? undefined,
-          ingredients: dbPayload.ingredients ?? undefined,
-          is_ai_generated: true,
-          date: selectedDate,
-        });
-        dbPayloads.push(dbPayload);
-
-        syncQueue.enqueue(userId, {
-          table: "nutrition_logs",
-          action: "insert",
-          payload: dbPayload,
-          recordId: dbPayload.id,
-          timestamp: Date.now(),
-          persistOnFailure: true,
+        await runInsertFlow({
+          args,
+          ingredients: meal.ingredients,
+          portion_size: meal.portion_size,
+          recipe_notes: meal.recipe_notes,
         });
       }
 
-      setMeals(prev => {
-        const updatedMeals = [...prev, ...optimisticMeals];
-        localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
-        nutritionCache.setMeals(userId, selectedDate, updatedMeals);
-        localCache.remove(userId, 'gamification_data');
-        return updatedMeals;
-      });
       setMealPlanIdeas([]);
-      AIPersistence.remove(userId, 'meal_plans');
-
-      try {
-        const { error } = await withSupabaseTimeout(
-          supabase.from("nutrition_logs").insert(dbPayloads as any),
-          undefined,
-          "Bulk log meals"
-        );
-
-        if (error) throw error;
-
-        celebrateSuccess();
-        toast({
-          title: "All meals saved!",
-          description: `${mealIdeas.length} meals added to your day`,
-        });
-        for (const mealId of mealIds) {
-          syncQueue.dequeueByRecordId(userId, mealId);
-        }
-        } catch (error) {
-        logger.error("Error saving meals (queued for sync)", error);
-        celebrateSuccess();
-        toast({ title: "Saved offline", description: "Will sync when connected." });
-        }
+      AIPersistence.remove(userId, "meal_plans");
+      toast({ title: "All meals saved!", description: `${mealIdeas.length} meals added to your day` });
     } catch (error: any) {
       logger.error("Error saving meal ideas", error);
-      toast({
-        title: "Error saving meals",
-        description: error.message || "Failed to save meals",
-        variant: "destructive",
-      });
+      toast({ title: "Error saving meals", description: error.message || "Failed to save meals", variant: "destructive" });
     } finally {
       setSavingAllMeals(false);
     }
@@ -308,12 +295,13 @@ export function useMealOperations(params: UseMealOperationsParams) {
   const clearMealIdeas = async () => {
     setMealPlanIdeas([]);
     try {
-      if (userId) AIPersistence.remove(userId, 'meal_plans');
+      if (userId) AIPersistence.remove(userId, "meal_plans");
     } catch (e) {
       logger.warn("Failed to clear persisted meal plans", { error: String(e) });
     }
   };
 
+  // ── Delete: cascade removes items. ──
   const initiateDeleteMeal = useCallback((meal: Meal) => {
     setMealToDelete(meal);
     setDeleteDialogOpen(true);
@@ -321,20 +309,19 @@ export function useMealOperations(params: UseMealOperationsParams) {
 
   const handleDeleteMeal = useCallback(async () => {
     if (!mealToDelete || !userId) return;
-
     const deletedId = mealToDelete.id;
 
-    setMeals(prev => {
-      const updatedMeals = prev.filter(m => m.id !== deletedId);
-      localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
-      nutritionCache.setMeals(userId, selectedDate, updatedMeals);
-      return updatedMeals;
+    setMeals((prev) => {
+      const updated = prev.filter((m) => m.id !== deletedId);
+      localCache.setForDate(userId, "nutrition_logs", selectedDate, updated);
+      nutritionCache.setMeals(userId, selectedDate, updated);
+      return updated;
     });
     setDeleteDialogOpen(false);
     setMealToDelete(null);
 
     syncQueue.enqueue(userId, {
-      table: "nutrition_logs",
+      table: "meals",
       action: "delete",
       payload: {},
       recordId: deletedId,
@@ -344,17 +331,11 @@ export function useMealOperations(params: UseMealOperationsParams) {
 
     try {
       const { error } = await withSupabaseTimeout(
-        supabase
-          .from("nutrition_logs")
-          .delete()
-          .eq("id", deletedId),
+        supabase.from("meals").delete().eq("id", deletedId),
         undefined,
         "Delete meal"
       );
-
       if (error) throw error;
-
-      // Haptic + sound already fired by DeleteConfirmDialog on tap; don't double-fire here
       await loadMeals(true);
       syncQueue.dequeueByRecordId(userId, deletedId);
     } catch (error) {
@@ -363,6 +344,7 @@ export function useMealOperations(params: UseMealOperationsParams) {
     }
   }, [mealToDelete, userId, setMeals, selectedDate, loadMeals, toast]);
 
+  // ── Insert path 4: food-search select ──
   const handleFoodSearchSelected = useCallback(async (food: {
     meal_name: string;
     calories: number;
@@ -371,76 +353,36 @@ export function useMealOperations(params: UseMealOperationsParams) {
     fats_g: number;
     serving_size: string;
     portion_size: string;
+    food_id?: string | null;
+    grams?: number | null;
   }, foodSearchMealType: string) => {
     if (!userId) return;
-
-    const dbPayload = buildMealPayload({
-      userId,
-      date: selectedDate,
-      input: {
+    const mealType = resolveMealType(foodSearchMealType);
+    const args = buildCreateMealRpcArgs({
+      header: {
         meal_name: food.meal_name,
-        meal_type: resolveMealType(foodSearchMealType),
+        meal_type: mealType,
+        date: selectedDate,
+        notes: null,
+        is_ai_generated: false,
+      },
+      items: [{
+        name: food.meal_name,
+        grams: food.grams ?? null,
         calories: food.calories,
         protein_g: food.protein_g,
         carbs_g: food.carbs_g,
         fats_g: food.fats_g,
-        portion_size: food.portion_size,
-        recipe_notes: null,
-        ingredients: null,
-        is_ai_generated: false,
-      },
+        food_id: food.food_id ?? null,
+      }],
     });
 
-    const optimisticMeal: Meal = {
-      id: dbPayload.id,
-      meal_name: dbPayload.meal_name,
-      calories: dbPayload.calories,
-      protein_g: dbPayload.protein_g ?? undefined,
-      carbs_g: dbPayload.carbs_g ?? undefined,
-      fats_g: dbPayload.fats_g ?? undefined,
-      meal_type: dbPayload.meal_type,
-      portion_size: dbPayload.portion_size ?? undefined,
-      date: selectedDate,
-      is_ai_generated: false,
-    };
-
-    setMeals(prev => {
-      const updatedMeals = [...prev, optimisticMeal];
-      localCache.setForDate(userId, "nutrition_logs", selectedDate, updatedMeals);
-      nutritionCache.setMeals(userId, selectedDate, updatedMeals);
-      return updatedMeals;
+    await runInsertFlow({
+      args,
+      portion_size: food.portion_size,
+      successToast: { title: "Food logged!", description: `${food.meal_name} · ${food.calories} kcal` },
     });
-
-    syncQueue.enqueue(userId, {
-      table: "nutrition_logs",
-      action: "insert",
-      payload: dbPayload,
-      recordId: dbPayload.id,
-      timestamp: Date.now(),
-      persistOnFailure: true,
-    });
-
-    try {
-      const { error } = await withSupabaseTimeout(
-        supabase.from("nutrition_logs").insert(dbPayload as any),
-        undefined,
-        "Log food"
-      );
-
-      if (error) throw error;
-
-      celebrateSuccess();
-      toast({ title: "Food logged!", description: `${food.meal_name} · ${food.calories} kcal` });
-      syncQueue.dequeueByRecordId(userId, dbPayload.id);
-    } catch (error) {
-      logger.error("Error logging food (queued for sync)", error);
-      celebrateSuccess();
-      toast({ title: "Saved offline", description: "Will sync when connected." });
-    }
-  }, [userId, selectedDate, setMeals, loadMeals, toast]);
-
-  // handleSaveAllMeals is just saveMealIdeasToDatabase — not wrapped separately
-  // since it captures mealPlanIdeas which changes frequently
+  }, [userId, selectedDate, runInsertFlow]);
 
   return {
     loggingMeal,

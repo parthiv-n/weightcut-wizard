@@ -439,6 +439,23 @@ All colors MUST be HSL.
     }
   }
 
+  /* iOS WebView: stacked backdrop-filter is documented to cause jank and
+   * occasional crashes (capacitor#7450). The BottomNav stays on screen during
+   * scroll, so its blur is especially expensive. Drop the heavy blurs on
+   * native and compensate with higher card opacity so surfaces remain legible.
+   * Lighter `backdrop-blur` and `backdrop-blur-sm` are kept — they're cheap. */
+  .native-app .backdrop-blur-xl,
+  .native-app .backdrop-blur-2xl {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  /* When we strip the blur, the translucent fill is no longer "frosted" — bump
+   * card opacity to ~95% so the surface still reads as opaque. */
+  .native-app .bg-card\/70 { background-color: hsl(var(--card) / 0.95); }
+  .native-app .bg-card\/80 { background-color: hsl(var(--card) / 0.97); }
+  .native-app .bg-card\/90 { background-color: hsl(var(--card)); }
+
 
   /* Toast spring entrance — overshoot bounce */
   @keyframes toast-spring-in {

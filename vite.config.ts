@@ -36,6 +36,7 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
+    target: 'es2017',
     sourcemap: 'hidden',
     rollupOptions: {
       output: {
@@ -46,6 +47,7 @@ export default defineConfig(({ mode }) => ({
           'vendor-ui': ['@radix-ui/react-dialog', '@radix-ui/react-select'],
           'vendor-motion': ['motion'],
           'vendor-barcode': ['react-zxing'],
+          'vendor-queries': ['@tanstack/react-query'],
         }
       }
     }
