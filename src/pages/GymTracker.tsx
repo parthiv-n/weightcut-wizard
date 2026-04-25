@@ -78,12 +78,18 @@ export default function GymTracker() {
   }, [historyView]);
   const newPRSetIdsRef = useRef(new Set<string>());
 
+  const [startingWorkout, setStartingWorkout] = useState(false);
   const handleStartWorkout = useCallback(async () => {
-    const sessionId = await startSession(sessionType);
-    if (!sessionId) {
-      toast({ description: "Failed to start workout", variant: "destructive" });
+    if (startingWorkout) return; // Debounce double-tap
+    setStartingWorkout(true);
+    try {
+      await startSession(sessionType);
+      // startSession surfaces its own error toast with the underlying message;
+      // no need for a second generic toast here.
+    } finally {
+      setStartingWorkout(false);
     }
-  }, [startSession, sessionType, toast]);
+  }, [startSession, sessionType, startingWorkout]);
 
   const handleStartFromRoutine = useCallback(async (routine: SavedRoutine, dayFilter?: string) => {
     if (exercisesLoading) {
@@ -342,11 +348,12 @@ export default function GymTracker() {
                 </div>
                 <button
                   onClick={handleStartWorkout}
-                  className="w-full h-12 rounded-2xl text-sm font-semibold text-white flex items-center justify-center gap-2 active:scale-[0.98] transition-transform"
+                  disabled={startingWorkout}
+                  className="w-full h-12 rounded-2xl text-sm font-semibold text-white flex items-center justify-center gap-2 active:scale-[0.98] transition-transform disabled:opacity-60"
                   style={{ background: "linear-gradient(135deg, hsl(var(--primary)), hsl(var(--secondary)))" }}
                 >
                   <Plus className="h-4.5 w-4.5" />
-                  Start Workout
+                  {startingWorkout ? "Starting..." : "Start Workout"}
                 </button>
               </div>
 

@@ -5,6 +5,7 @@ import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { localCache } from "@/lib/localCache";
 import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { calculateVolume } from "@/lib/gymCalculations";
+import { logger } from "@/lib/logger";
 import type { GymSession, GymSet, SessionWithSets } from "@/pages/gym/types";
 
 const ANALYTICS_CACHE_KEY = "gym_analytics";
@@ -17,6 +18,12 @@ export function invalidateGymAnalytics(userId: string) {
     const key = localStorage.key(i);
     if (key && key.startsWith(prefix)) localStorage.removeItem(key);
   }
+}
+
+/** Invalidate cached history for a single exercise — cheap, called per-set during active workouts. */
+export function invalidateExerciseHistory(userId: string, exerciseId: string) {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(`wcw_${userId}_gym_exercise_history_${exerciseId}`);
 }
 
 interface WeeklyVolume {
@@ -131,28 +138,35 @@ export function useGymAnalytics(history: SessionWithSets[]) {
 
     const cacheKey = `gym_exercise_history_${exerciseId}`;
     const cached = localCache.get<GymSet[]>(userId, cacheKey, CACHE_TTL);
-    if (cached) return cached;
+    // Empty arrays are NOT a valid cache hit — they'd suppress refetch for a full hour
+    // even after the user has logged new sets. Only return populated caches.
+    if (cached && cached.length > 0) return cached;
 
     try {
+      // NOTE: do NOT add `.eq("user_id", userId)` here — RLS already scopes by auth.uid()
+      // and adding the explicit filter excludes legacy rows where user_id was NULL,
+      // making the chart show "No data yet" even when sets exist for the exercise.
       const { data, error } = await withSupabaseTimeout(
         supabase
           .from("gym_sets" as any)
           .select("*")
           .eq("exercise_id", exerciseId)
-          .eq("user_id", userId)
           .eq("is_warmup", false)
           .order("created_at", { ascending: false })
           .limit(limit),
-        undefined,
+        15000,
         "Fetch exercise history"
       );
 
       if (error) throw error;
 
       const sets = (data as any[] || []) as GymSet[];
-      localCache.set(userId, cacheKey, sets);
+      // Only cache populated results — caching [] would mask transient failures
+      // and prevent the next fetch from finding newly-logged sets.
+      if (sets.length > 0) localCache.set(userId, cacheKey, sets);
       return sets;
-    } catch {
+    } catch (err) {
+      logger.warn("fetchExerciseHistory failed", { exerciseId, error: String(err) });
       return [];
     }
   }, [userId]);

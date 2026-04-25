@@ -101,46 +101,46 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
     if (baselineLoadedRef.current) return;
     baselineLoadedRef.current = true;
 
-    loadOrComputeBaseline(userId, tdee).then(b => {
-      if (b) setBaseline(b);
-    }).catch(err => logger.warn("RecoveryDashboard: baseline fetch failed", { err }));
-
-    // Check if already checked in today
     const today = new Date().toISOString().split('T')[0];
-    supabase
-      .from('daily_wellness_checkins')
-      .select('sleep_quality, stress_level, fatigue_level, soreness_level, energy_level, motivation_level, sleep_hours, hydration_feeling, appetite_level, hooper_index')
-      .eq('user_id', userId)
-      .eq('date', today)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data) {
-          setTodayCheckedIn(true);
-          setWellnessCheckIn(data as WellnessCheckInData);
-        }
-      }).catch(err => logger.warn("RecoveryDashboard: wellness fetch failed", { err }));
-
-    // Count total check-in days for progress banner
-    supabase
-      .from('daily_wellness_checkins')
-      .select('date', { count: 'exact', head: true })
-      .eq('user_id', userId)
-      .then(({ count }) => {
-        setCheckInDaysCount(count ?? 0);
-      }).catch(err => logger.warn("RecoveryDashboard: check-in count fetch failed", { err }));
-
-    // Fetch sleep logs (28 days) for performance engine
     const from28d = new Date();
     from28d.setDate(from28d.getDate() - 28);
-    supabase
-      .from('sleep_logs')
-      .select('date, hours')
-      .eq('user_id', userId)
-      .gte('date', from28d.toISOString().split('T')[0])
-      .order('date', { ascending: true })
-      .then(({ data }) => {
-        if (data) setSleepLogs(data);
-      }).catch(err => logger.warn("RecoveryDashboard: sleep fetch failed", { err }));
+    const fromDate = from28d.toISOString().split('T')[0];
+
+    Promise.allSettled([
+      loadOrComputeBaseline(userId, tdee),
+      supabase
+        .from('daily_wellness_checkins')
+        .select('sleep_quality, stress_level, fatigue_level, soreness_level, energy_level, motivation_level, sleep_hours, hydration_feeling, appetite_level, hooper_index')
+        .eq('user_id', userId)
+        .eq('date', today)
+        .maybeSingle(),
+      supabase
+        .from('daily_wellness_checkins')
+        .select('date', { count: 'exact', head: true })
+        .eq('user_id', userId),
+      supabase
+        .from('sleep_logs')
+        .select('date, hours')
+        .eq('user_id', userId)
+        .gte('date', fromDate)
+        .order('date', { ascending: true }),
+    ]).then(([baselineRes, wellnessRes, countRes, sleepRes]) => {
+      if (baselineRes.status === 'fulfilled' && baselineRes.value) setBaseline(baselineRes.value);
+      else if (baselineRes.status === 'rejected') logger.warn("RecoveryDashboard: baseline fetch failed", { err: baselineRes.reason });
+
+      if (wellnessRes.status === 'fulfilled' && wellnessRes.value.data) {
+        setTodayCheckedIn(true);
+        setWellnessCheckIn(wellnessRes.value.data as WellnessCheckInData);
+      } else if (wellnessRes.status === 'rejected') {
+        logger.warn("RecoveryDashboard: wellness fetch failed", { err: wellnessRes.reason });
+      }
+
+      if (countRes.status === 'fulfilled') setCheckInDaysCount(countRes.value.count ?? 0);
+      else logger.warn("RecoveryDashboard: check-in count fetch failed", { err: countRes.reason });
+
+      if (sleepRes.status === 'fulfilled' && sleepRes.value.data) setSleepLogs(sleepRes.value.data);
+      else if (sleepRes.status === 'rejected') logger.warn("RecoveryDashboard: sleep fetch failed", { err: sleepRes.reason });
+    });
   }, [userId, tdee]);
 
   // Compute metrics whenever sessions or wellness data changes

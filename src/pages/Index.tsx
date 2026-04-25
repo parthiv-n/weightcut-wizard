@@ -129,7 +129,7 @@ const Index = () => {
         {/* Feature list — compact 2-col grid */}
         <div className="w-full max-w-[360px] grid grid-cols-2 gap-x-4 gap-y-3">
           {FEATURES.map((f) => (
-            <div key={f.label} className="flex items-center gap-2.5">
+            <div key={f.label} className="flex items-center justify-center gap-2.5">
               <f.icon className="h-4 w-4 text-primary shrink-0" />
               <span className="text-[13px] font-medium text-foreground/80">{f.label}</span>
             </div>

@@ -109,6 +109,18 @@ export default function Dashboard() {
 
   useEffect(() => { trackInstallDate(); }, []);
 
+  // Persist weight-unit preference asynchronously — synchronous localStorage
+  // writes in click handlers block the main thread 20-50ms on iOS WebView.
+  useEffect(() => {
+    const id = (window as any).requestIdleCallback
+      ? (window as any).requestIdleCallback(() => localStorage.setItem('wcw_weight_unit', weightUnit))
+      : setTimeout(() => localStorage.setItem('wcw_weight_unit', weightUnit), 0);
+    return () => {
+      if ((window as any).cancelIdleCallback) (window as any).cancelIdleCallback(id);
+      else clearTimeout(id as number);
+    };
+  }, [weightUnit]);
+
   const getGreeting = () => {
     const hour = new Date().getHours();
     if (hour < 12) return "Good morning";
@@ -122,13 +134,16 @@ export default function Dashboard() {
     }
   }, [userId]);
 
-  // Refetch when user navigates back to this page (throttled to avoid duplicate requests)
+  // Refetch when user navigates back to this page — but respect the same 30s
+  // freshness window as cache-first loads. The previous 2s throttle re-fired
+  // 3 queries on every tab-back, causing 3-6s hangs on iOS Capacitor.
   useEffect(() => {
     const handleVisibility = () => {
-      if (document.visibilityState === 'visible' && userId) {
-        if (Date.now() - lastFetchRef.current < 2000) return;
-        loadDashboardData();
-      }
+      if (document.visibilityState !== 'visible' || !userId) return;
+      const lastDone = dashboardLastFetchedAt.get(userId);
+      if (lastDone && Date.now() - lastDone < DASHBOARD_FRESH_WINDOW_MS) return;
+      if (Date.now() - lastFetchRef.current < 2000) return;
+      loadDashboardData();
     };
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
@@ -566,26 +581,6 @@ export default function Dashboard() {
           </button>
         )}
 
-        {/* Weekly Consistency Ring */}
-        <div>
-          <ConsistencyRing {...weeklyConsistency} />
-        </div>
-
-        {/* Cut Plan + Sleep — side by side */}
-        <div className="grid grid-cols-2 gap-2">
-          {isFighter(profile?.goal_type) && hasCutPlan ? (
-            <button
-              onClick={() => { setCutPlanOpen(true); triggerHaptic(ImpactStyle.Light); }}
-              className="card-surface rounded-2xl border border-border p-2.5 flex items-center justify-center active:scale-[0.98] transition-all text-center"
-            >
-              <p className="text-[12px] font-semibold leading-tight">Cut Plan</p>
-            </button>
-          ) : (
-            <div />
-          )}
-          {userId && <SleepLogger userId={userId} compact />}
-        </div>
-
         {/* Wizard's Daily Wisdom card — conditional states */}
         <div data-tutorial="daily-wisdom-card">
         {!hasTodayLog ? (
@@ -635,6 +630,26 @@ export default function Dashboard() {
         )}
         </div>
 
+        {/* Weekly Consistency Ring */}
+        <div>
+          <ConsistencyRing {...weeklyConsistency} />
+        </div>
+
+        {/* Cut Plan + Sleep — side by side */}
+        <div className="grid grid-cols-2 gap-2">
+          {isFighter(profile?.goal_type) && hasCutPlan ? (
+            <button
+              onClick={() => { setCutPlanOpen(true); triggerHaptic(ImpactStyle.Light); }}
+              className="card-surface rounded-2xl border border-border p-2.5 flex items-center justify-center active:scale-[0.98] transition-all text-center"
+            >
+              <p className="text-[12px] font-semibold leading-tight">Cut Plan</p>
+            </button>
+          ) : (
+            <div />
+          )}
+          {userId && <SleepLogger userId={userId} compact />}
+        </div>
+
         {/* Training Coach (premium) */}
         {userId && <TrainingInsightsWidget userId={userId} />}
 
@@ -659,7 +674,7 @@ export default function Dashboard() {
                 <Button
                   variant={weightUnit === 'kg' ? 'default' : 'ghost'}
                   size="sm"
-                  onClick={() => { setWeightUnit('kg'); localStorage.setItem('wcw_weight_unit', 'kg'); triggerHapticSelection(); }}
+                  onClick={() => { setWeightUnit('kg'); triggerHapticSelection(); }}
                   className="h-5 min-h-0 text-[13px] px-1.5 rounded-full"
                 >
                   kg
@@ -667,7 +682,7 @@ export default function Dashboard() {
                 <Button
                   variant={weightUnit === 'lb' ? 'default' : 'ghost'}
                   size="sm"
-                  onClick={() => { setWeightUnit('lb'); localStorage.setItem('wcw_weight_unit', 'lb'); triggerHapticSelection(); }}
+                  onClick={() => { setWeightUnit('lb'); triggerHapticSelection(); }}
                   className="h-5 min-h-0 text-[13px] px-1.5 rounded-full"
                 >
                   lb

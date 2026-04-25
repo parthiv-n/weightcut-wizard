@@ -68,6 +68,29 @@ _idle(() => {
   }, 6000);
 });
 
+// Warm up the heaviest AI edge functions on idle so the first real call doesn't
+// pay a 2-3s cold-start. We send a GET ping (no body, no auth) — functions
+// short-circuit to a small response without doing real work. Anything that
+// fails is silent: warmup is best-effort.
+const SUPABASE_URL_FOR_WARMUP = import.meta.env.VITE_SUPABASE_URL;
+if (SUPABASE_URL_FOR_WARMUP) {
+  setTimeout(() => {
+    const fns = [
+      "meal-planner",
+      "generate-cut-plan",
+      "fight-week-analysis",
+      "training-insights",
+      "hydration-insights",
+    ];
+    for (const fn of fns) {
+      fetch(`${SUPABASE_URL_FOR_WARMUP}/functions/v1/${fn}`, {
+        method: "GET",
+        keepalive: true,
+      }).catch(() => {});
+    }
+  }, 4500);
+}
+
 const queryClient = new QueryClient();
 
 const SKIP_ROUTES = ['/', '/auth', '/onboarding', '/legal'];

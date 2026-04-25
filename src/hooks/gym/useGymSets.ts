@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { triggerHaptic } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import { gymSetSchema } from "@/lib/validation";
+import { invalidateExerciseHistory } from "./useGymAnalytics";
 import type { GymSet, Exercise, ExerciseGroup, ActiveWorkout } from "@/pages/gym/types";
 
 interface UseGymSetsOpts {
@@ -137,6 +138,8 @@ export function useGymSets({ activeSession, updateActiveSession }: UseGymSetsOpt
       );
 
       if (error) throw error;
+      // Bust the chart cache for this exercise so Strength Progression reflects the new set immediately
+      if (!newSet.is_warmup) invalidateExerciseHistory(userId, group.exercise.id);
     } catch {
       // Queue for offline sync
       syncQueue.enqueue(userId, {
@@ -171,6 +174,8 @@ export function useGymSets({ activeSession, updateActiveSession }: UseGymSetsOpt
   }>) => {
     if (!activeSession || !userId) return;
 
+    const group = activeSession.exerciseGroups.find(g => g.exerciseOrder === exerciseOrder);
+
     // Optimistic
     updateActiveSession(prev => ({
       ...prev,
@@ -189,6 +194,7 @@ export function useGymSets({ activeSession, updateActiveSession }: UseGymSetsOpt
       );
 
       if (error) throw error;
+      if (group) invalidateExerciseHistory(userId, group.exercise.id);
     } catch {
       syncQueue.enqueue(userId, {
         table: "gym_sets",
@@ -202,6 +208,8 @@ export function useGymSets({ activeSession, updateActiveSession }: UseGymSetsOpt
 
   const deleteSet = useCallback(async (setId: string, exerciseOrder: number) => {
     if (!activeSession || !userId) return;
+
+    const group = activeSession.exerciseGroups.find(g => g.exerciseOrder === exerciseOrder);
 
     updateActiveSession(prev => ({
       ...prev,
@@ -223,6 +231,7 @@ export function useGymSets({ activeSession, updateActiveSession }: UseGymSetsOpt
         undefined,
         "Delete gym set"
       );
+      if (group) invalidateExerciseHistory(userId, group.exercise.id);
     } catch {
       syncQueue.enqueue(userId, {
         table: "gym_sets",

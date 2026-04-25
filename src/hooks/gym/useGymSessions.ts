@@ -209,6 +209,25 @@ export function useGymSessions() {
       return null;
     }
 
+    // Reuse existing in-progress session — prevents orphan rows from double-tap or
+    // recovery flows where activeSession was already restored from localStorage.
+    if (activeSession) {
+      return activeSession.sessionId;
+    }
+
+    // Proactively refresh auth if the JWT is near expiry. iOS Capacitor backgrounding
+    // commonly leaves a stale token; without this, the RLS check fails and withRetry
+    // wastes its budget on the same expired token. Mirrors finishSession's approach.
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const expiresAt = session?.expires_at ? session.expires_at * 1000 : 0;
+      if (!session || expiresAt - Date.now() < 5 * 60 * 1000) {
+        await supabase.auth.refreshSession();
+      }
+    } catch {
+      // Best-effort — fall through to insert; if auth is truly broken the insert will surface it
+    }
+
     try {
       const { data, error } = await withRetry(
         () => withSupabaseTimeout(
@@ -222,7 +241,7 @@ export function useGymSessions() {
             } as any)
             .select()
             .single(),
-          undefined,
+          15000,
           "Start gym session"
         ),
         2,
@@ -244,10 +263,11 @@ export function useGymSessions() {
       return session.id;
     } catch (err) {
       logger.error("startSession failed", err);
-      toast({ description: "Failed to start workout", variant: "destructive" });
+      const msg = (err as any)?.message || "Failed to start workout";
+      toast({ description: msg, variant: "destructive" });
       return null;
     }
-  }, [userId, toast]);
+  }, [userId, activeSession, toast]);
 
   const finishSession = useCallback(async (opts: {
     durationMinutes?: number;

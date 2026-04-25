@@ -24,23 +24,72 @@ export function mapMealsWithTotalsToMeal(row: MealWithTotals): Meal {
   };
 }
 
+// Coalesce per-card fetchMealItems calls within a 50ms window into a single
+// `.in("meal_id", [...])` round-trip. With 6+ cards expanded near-simultaneously
+// (e.g. on initial scroll or when "expand all" is tapped), this collapses
+// N queries into 1 — saves ~30ms × N round-trips.
+const MEAL_ITEM_BATCH_WINDOW_MS = 50;
+const cache = new Map<string, MealItem[]>();
+let pendingIds: Set<string> | null = null;
+let pendingResolvers: Array<{ id: string; resolve: (items: MealItem[]) => void }> = [];
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function flushBatch() {
+  flushTimer = null;
+  const ids = pendingIds ? Array.from(pendingIds) : [];
+  const resolvers = pendingResolvers;
+  pendingIds = null;
+  pendingResolvers = [];
+  if (ids.length === 0) return;
+
+  try {
+    const result = await withSupabaseTimeout(
+      supabase
+        .from("meal_items")
+        .select("id, meal_id, food_id, name, grams, calories, protein_g, carbs_g, fats_g, position")
+        .in("meal_id", ids)
+        .order("position", { ascending: true }),
+      undefined,
+      "Load meal items (batched)"
+    );
+    if (result.error) {
+      logger.warn("fetchMealItems batch failed", { ids, error: result.error });
+      for (const r of resolvers) r.resolve([]);
+      return;
+    }
+    // Group by meal_id
+    const grouped = new Map<string, MealItem[]>();
+    for (const row of (result.data ?? []) as MealItem[]) {
+      const arr = grouped.get(row.meal_id) ?? [];
+      arr.push(row);
+      grouped.set(row.meal_id, arr);
+    }
+    for (const id of ids) cache.set(id, grouped.get(id) ?? []);
+    for (const r of resolvers) r.resolve(cache.get(r.id) ?? []);
+  } catch (err) {
+    logger.warn("fetchMealItems batch threw", { ids, error: err });
+    for (const r of resolvers) r.resolve([]);
+  }
+}
+
 /**
- * Lazily fetch `meal_items` for a single meal row. Exposed so MealCard can
- * expand into the ingredient list without the base list paying the cost.
+ * Lazily fetch `meal_items` for a single meal row. Calls within a 50ms window
+ * are coalesced into a single batched query.
  */
 export async function fetchMealItems(mealId: string): Promise<MealItem[]> {
-  const result = await withSupabaseTimeout(
-    supabase
-      .from("meal_items")
-      .select("id, meal_id, food_id, name, grams, calories, protein_g, carbs_g, fats_g, position")
-      .eq("meal_id", mealId)
-      .order("position", { ascending: true }),
-    undefined,
-    "Load meal items"
-  );
-  if (result.error) {
-    logger.warn("fetchMealItems failed", { mealId, error: result.error });
-    return [];
-  }
-  return (result.data ?? []) as MealItem[];
+  const cached = cache.get(mealId);
+  if (cached) return cached;
+
+  return new Promise<MealItem[]>((resolve) => {
+    if (!pendingIds) pendingIds = new Set();
+    pendingIds.add(mealId);
+    pendingResolvers.push({ id: mealId, resolve });
+    if (!flushTimer) flushTimer = setTimeout(flushBatch, MEAL_ITEM_BATCH_WINDOW_MS);
+  });
+}
+
+/** Clear the in-memory items cache — call after a meal mutation. */
+export function invalidateMealItemsCache(mealId?: string) {
+  if (mealId) cache.delete(mealId);
+  else cache.clear();
 }

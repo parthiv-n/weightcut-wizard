@@ -4,10 +4,11 @@ import { useUser } from "@/contexts/UserContext";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { localCache } from "@/lib/localCache";
 import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
+import { syncQueue } from "@/lib/syncQueue";
 import { useToast } from "@/hooks/use-toast";
 import { customExerciseSchema } from "@/lib/validation";
 import { EXERCISE_DATABASE } from "@/data/exerciseDatabase";
-import type { Exercise, ExerciseCategory, Equipment } from "@/pages/gym/types";
+import type { Exercise, ExerciseCategory, Equipment, MuscleGroup } from "@/pages/gym/types";
 
 const CACHE_KEY = "exercise_library";
 const CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
@@ -81,55 +82,79 @@ export function useExerciseLibrary() {
     fetchExercises();
   }, [fetchExercises]);
 
-  const addCustomExercise = useCallback(async (data: {
+  // Optimistic add: returns immediately with a client-generated UUID so the UI feels instant.
+  // The DB write happens in the background; on failure we enqueue an idempotent retry via syncQueue.
+  // The exercise stays visible in the library either way — once syncQueue flushes, the row exists in DB
+  // (23505 duplicate-key responses are treated as success, so the client UUID + future inserts are safe).
+  const addCustomExercise = useCallback((data: {
     name: string;
     category: ExerciseCategory;
     muscle_group: string;
     equipment: Equipment | null;
     is_bodyweight: boolean;
   }): Promise<Exercise | null> => {
-    if (!userId) return null;
+    if (!userId) return Promise.resolve(null);
 
     const result = customExerciseSchema.safeParse(data);
     if (!result.success) {
       toast({ description: result.error.errors[0].message, variant: "destructive" });
-      return null;
+      return Promise.resolve(null);
     }
 
-    try {
-      const { data: created, error } = await withSupabaseTimeout(
-        supabase
-          .from("exercises" as any)
-          .insert({
-            user_id: userId,
-            name: data.name,
-            category: data.category,
-            muscle_group: data.muscle_group,
-            equipment: data.equipment,
-            is_bodyweight: data.is_bodyweight,
-            is_custom: true,
-          } as any)
-          .select()
-          .single(),
-        undefined,
-        "Create custom exercise"
-      );
+    const exercise: Exercise = {
+      id: crypto.randomUUID(),
+      user_id: userId,
+      name: data.name,
+      category: data.category,
+      muscle_group: data.muscle_group as MuscleGroup,
+      equipment: data.equipment,
+      is_bodyweight: data.is_bodyweight,
+      is_custom: true,
+      created_at: new Date().toISOString(),
+    };
 
-      if (error) throw error;
+    // 1. Optimistic insert into local state + cache (instant UI)
+    setExercises(prev => {
+      const updated = [...prev, exercise].sort((a, b) => a.name.localeCompare(b.name));
+      localCache.set(userId, CACHE_KEY, updated);
+      return updated;
+    });
+    toast({ description: `${data.name} added` });
 
-      const exercise = created as unknown as Exercise;
-      setExercises(prev => {
-        const updated = [...prev, exercise].sort((a, b) => a.name.localeCompare(b.name));
-        if (userId) localCache.set(userId, CACHE_KEY, updated);
-        return updated;
-      });
+    // 2. Background DB write — pass id explicitly so retries are idempotent (PG dup-key = success)
+    const dbRow = {
+      id: exercise.id,
+      user_id: userId,
+      name: exercise.name,
+      category: exercise.category,
+      muscle_group: exercise.muscle_group,
+      equipment: exercise.equipment,
+      is_bodyweight: exercise.is_bodyweight,
+      is_custom: true,
+    };
 
-      toast({ description: `${data.name} added to your exercises` });
-      return exercise;
-    } catch (err) {
-      toast({ description: "Failed to create exercise", variant: "destructive" });
-      return null;
-    }
+    void (async () => {
+      try {
+        const { error } = await withSupabaseTimeout(
+          supabase.from("exercises" as any).insert(dbRow as any),
+          undefined,
+          "Create custom exercise"
+        );
+        if (error) throw error;
+      } catch {
+        // Network/auth blip — queue for retry. Exercise stays in UI; syncQueue will reconcile.
+        syncQueue.enqueue(userId, {
+          table: "exercises",
+          action: "insert",
+          payload: dbRow,
+          recordId: exercise.id,
+          timestamp: Date.now(),
+          persistOnFailure: true,
+        });
+      }
+    })();
+
+    return Promise.resolve(exercise);
   }, [userId, toast]);
 
   const deleteCustomExercise = useCallback(async (exerciseId: string) => {

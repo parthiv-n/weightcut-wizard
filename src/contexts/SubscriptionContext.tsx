@@ -169,6 +169,13 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
     let removeListener: (() => void) | null = null;
 
+    // Yield to first paint before initializing RevenueCat (~500ms native overhead).
+    // The listener + startup verification still run, just deferred to idle time.
+    const idle: (cb: () => void) => unknown =
+      (window as any).requestIdleCallback
+        ? (cb) => (window as any).requestIdleCallback(cb, { timeout: 3000 })
+        : (cb) => setTimeout(cb, 500);
+
     const init = async () => {
       await initializePurchases(userId);
 
@@ -227,11 +234,16 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       }
     };
 
-    init().catch((err) =>
-      logger.warn("RevenueCat init failed", { error: String(err) })
-    );
+    let cancelled = false;
+    idle(() => {
+      if (cancelled) return;
+      init().catch((err) =>
+        logger.warn("RevenueCat init failed", { error: String(err) })
+      );
+    });
 
     return () => {
+      cancelled = true;
       removeListener?.();
     };
   }, [userId, refreshProfile, forcePremium]);

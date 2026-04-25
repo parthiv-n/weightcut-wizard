@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Trophy } from "lucide-react";
 import { motion } from "motion/react";
@@ -21,26 +21,30 @@ export function ExerciseStatsSheet({ exercise, pr, open, onOpenChange, fetchHist
   const { userId } = useUser();
   const [sets, setSets] = useState<GymSet[]>([]);
   const [loading, setLoading] = useState(false);
-  const lastExerciseId = useRef<string | null>(null);
 
+  // Stale-while-revalidate: show cached data instantly (if any), always refetch in background.
+  // Cancellation flag prevents the late response of a previous exercise from clobbering current state.
   useEffect(() => {
-    if (open && exercise) {
-      // Serve cached data instantly for the chart (stale-while-revalidate)
-      if (userId) {
-        const cached = localCache.get<GymSet[]>(userId, `gym_exercise_history_${exercise.id}`);
-        if (cached) {
-          setSets(cached);
-          // If same exercise, skip refetch
-          if (lastExerciseId.current === exercise.id) return;
-        }
-      }
-      lastExerciseId.current = exercise.id;
+    if (!open || !exercise || !userId) return;
+
+    let cancelled = false;
+
+    const cached = localCache.get<GymSet[]>(userId, `gym_exercise_history_${exercise.id}`);
+    if (cached && cached.length > 0) {
+      setSets(cached);
+      setLoading(false);
+    } else {
+      setSets([]);
       setLoading(true);
-      fetchHistory(exercise.id).then(data => {
-        setSets(data);
-        setLoading(false);
-      });
     }
+
+    fetchHistory(exercise.id).then(data => {
+      if (cancelled) return;
+      setSets(data);
+      setLoading(false);
+    });
+
+    return () => { cancelled = true; };
   }, [open, exercise, fetchHistory, userId]);
 
   if (!exercise) return null;

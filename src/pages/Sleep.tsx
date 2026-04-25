@@ -58,6 +58,11 @@ export default function Sleep() {
     return cached ? cached.map(r => ({ date: r.date, hours: Number(r.hours) })) : [];
   });
   const [loading, setLoading] = useState(!allData.length);
+  // Track the deepest timeframe we've fetched so a "1W → 3M" tab switch
+  // triggers a backfill, but "3M → 1W" doesn't refetch.
+  const [fetchedDepth, setFetchedDepth] = useState<Timeframe | null>(() =>
+    !userId ? null : (localCache.get<any[]>(userId, "sleep_logs", 24 * 60 * 60 * 1000) ? "3M" : null)
+  );
 
   useEffect(() => {
     if (!userId) return;
@@ -68,14 +73,20 @@ export default function Sleep() {
       if (cached) {
         setAllData(cached.map(r => ({ date: r.date, hours: Number(r.hours) })));
         setLoading(false);
+        setFetchedDepth("3M");
       }
     }
 
-    // Always fetch fresh data in background
+    // Skip refetch if we've already fetched at this depth or deeper. Order: 1W < 1M < 3M.
+    const order: Record<Timeframe, number> = { "1W": 0, "1M": 1, "3M": 2 };
+    if (fetchedDepth && order[fetchedDepth] >= order[timeframe]) return;
+
+    // Fetch only the active timeframe — was hard-coded "3M" before, costing
+    // ~80 extra rows on first paint for users who never expand past 1W.
     let cancelled = false;
     (async () => {
       try {
-        const start = startDateFor("3M");
+        const start = startDateFor(timeframe);
         const { data, error } = await withSupabaseTimeout(
           supabase
             .from("sleep_logs")
@@ -91,6 +102,7 @@ export default function Sleep() {
           const typed = (data as any[]).map(r => ({ date: r.date, hours: Number(r.hours) }));
           setAllData(typed);
           localCache.set(userId, "sleep_logs", typed);
+          setFetchedDepth(timeframe);
         }
       } catch (err) {
         logger.error("Failed to fetch sleep logs", err);
@@ -102,7 +114,7 @@ export default function Sleep() {
       }
     })();
     return () => { cancelled = true; };
-  }, [userId]);
+  }, [userId, timeframe, fetchedDepth]);
 
   // Listen for sleep-logged events from SleepLogger (Dashboard widget)
   useEffect(() => {
