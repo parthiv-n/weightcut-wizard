@@ -238,8 +238,67 @@ function notifyMealsChange(evt: MealChangeEvent): void {
 }
 
 /**
- * Apply a realtime event from Supabase postgres_changes to the in-memory cache
- * and emit to subscribers. Returns the resolved date key affected.
+ * Source-of-truth guard: a Meal row is renderable only if it carries the
+ * minimum identifying fields. Rows missing any of these came from a partial
+ * realtime payload or a stale cache and must NOT be passed to the renderer
+ * (they produce empty "Logged meal" cards and duplicate-key warnings).
+ */
+export function isValidMealRow(m: any): boolean {
+  return (
+    m != null &&
+    typeof m === "object" &&
+    typeof m.id === "string" && m.id.length > 0 &&
+    typeof m.meal_name === "string" &&
+    typeof m.meal_type === "string" &&
+    typeof m.date === "string" && m.date.length > 0
+  );
+}
+
+/** Strip any rows that fail the isValidMealRow guard. Safe on null/undefined. */
+export function sanitizeMealRows<T = any>(rows: T[] | null | undefined): T[] {
+  if (!Array.isArray(rows)) return [];
+  return rows.filter(isValidMealRow);
+}
+
+/**
+ * Apply a realtime DELETE to the in-memory cache. Inserts and updates are
+ * NOT applied here — the realtime payload from the raw `meals` table is
+ * missing the `total_*` aggregations that come from the `meals_with_totals`
+ * view, so writing it would corrupt the cache. Use `invalidateMealsForDate`
+ * for INSERT/UPDATE; the listener will refetch via the view.
+ */
+export function applyMealRealtimeDelete(
+  userId: string,
+  date: string,
+  rowId: string
+): void {
+  if (!userId || !date || !rowId) return;
+  const cached = nutritionCache.getMeals(userId, date);
+  if (cached) {
+    nutritionCache.setMeals(userId, date, cached.filter((m: any) => m.id !== rowId));
+  }
+  notifyMealsChange({ type: "delete", userId, date, rowId });
+}
+
+/**
+ * Mark a date's meals as stale (drops the in-memory cache slot) and notifies
+ * subscribers so they can refetch from the canonical `meals_with_totals`
+ * view. Use this for INSERT and UPDATE realtime events.
+ */
+export function invalidateMealsForDate(userId: string, date: string): void {
+  if (!userId || !date) return;
+  nutritionCache.remove(userId, "meals", date);
+  // Synthesize an "update" notification with no row payload — listeners
+  // (useNutritionData.onMealsChange) will refetch and rehydrate.
+  notifyMealsChange({ type: "update", userId, date, row: null });
+}
+
+/**
+ * Legacy entry point. Retained as a thin shim so any older imports continue
+ * to compile, but it now delegates to the safe handlers above and never
+ * stores raw realtime rows in the cache.
+ *
+ * @deprecated use applyMealRealtimeDelete / invalidateMealsForDate.
  */
 export function applyMealRealtimeChange(
   userId: string,
@@ -248,29 +307,14 @@ export function applyMealRealtimeChange(
   oldRow: any
 ): string | null {
   const row = newRow ?? oldRow;
-  if (!row || !row.date) return null;
-  const date: string = row.date;
-
-  const cached = nutritionCache.getMeals(userId, date) ?? [];
-  let next = cached;
-
+  const date: string | undefined = row?.date;
+  if (!date) return null;
   if (eventType === "DELETE") {
-    next = cached.filter((m: any) => m.id !== (oldRow?.id ?? row.id));
-    nutritionCache.setMeals(userId, date, next);
-    notifyMealsChange({ type: "delete", userId, date, rowId: oldRow?.id ?? row.id });
-  } else if (eventType === "INSERT") {
-    if (!cached.some((m: any) => m.id === row.id)) {
-      next = [...cached, row];
-    }
-    nutritionCache.setMeals(userId, date, next);
-    notifyMealsChange({ type: "insert", userId, date, row });
-  } else if (eventType === "UPDATE") {
-    next = cached.map((m: any) => (m.id === row.id ? row : m));
-    if (!cached.some((m: any) => m.id === row.id)) next = [...cached, row];
-    nutritionCache.setMeals(userId, date, next);
-    notifyMealsChange({ type: "update", userId, date, row });
+    const id = oldRow?.id ?? row?.id;
+    if (id) applyMealRealtimeDelete(userId, date, id);
+  } else {
+    invalidateMealsForDate(userId, date);
   }
-
   return date;
 }
 

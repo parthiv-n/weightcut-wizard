@@ -2,12 +2,14 @@ import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { format, subDays } from "date-fns";
 import { Brain, ChevronRight, Dumbbell, Lock } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
 import { supabase } from "@/integrations/supabase/client";
 import { withSupabaseTimeout, withRetry } from "@/lib/timeoutWrapper";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { triggerHapticSelection } from "@/lib/haptics";
 import { useSubscription } from "@/hooks/useSubscription";
 import { getSessionColor, getUserColors } from "@/lib/sessionColors";
+import { ensureSessionReady } from "@/lib/sessionReady";
 import { logger } from "@/lib/logger";
 
 interface TrainingInsightsWidgetProps {
@@ -94,7 +96,9 @@ async function callTrainingInsights(
   sessionType: string,
   sessions: SessionRow[]
 ): Promise<{ insight?: DisciplineInsight; status: number }> {
-  const { data: { session } } = await supabase.auth.getSession();
+  // Wait for the auth bootstrap to land before calling — eliminates the
+  // race where a cold-start invocation fires its 401 before INITIAL_SESSION.
+  const session = await ensureSessionReady();
   if (!session?.access_token) return { status: 401 };
 
   const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/training-insights`;
@@ -127,12 +131,44 @@ async function callTrainingInsights(
   return { insight: body?.insight as DisciplineInsight | undefined, status: 200 };
 }
 
+// Read every cached insight for this user from localStorage, oldest first.
+// We don't know the discipline keys ahead of time so we sweep the standard
+// AIPersistence prefix — cheap because the data is tiny and there are at
+// most MAX_DISCIPLINES keys.
+function loadAllCachedInsights(userId: string): DisciplineInsight[] {
+  if (!userId) return [];
+  const out: DisciplineInsight[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      // AIPersistence key format includes the userId and the cacheKey we set.
+      if (!key.includes(userId) || !key.includes("training_insight_")) continue;
+      const match = key.match(/training_insight_([a-z0-9_]+)/i);
+      const sessionType = match?.[1];
+      if (!sessionType) continue;
+      const cached = AIPersistence.load(userId, `training_insight_${sessionType}`) as
+        | CachedInsight
+        | null;
+      if (cached?.insight) out.push(cached.insight);
+    }
+  } catch {
+    // localStorage unavailable / quota — degrade silently
+  }
+  return out;
+}
+
 export const TrainingInsightsWidget = memo(function TrainingInsightsWidget({
   userId,
 }: TrainingInsightsWidgetProps) {
   const { isPremium, openPaywall } = useSubscription();
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
+  // `coldLoading` blocks the UI on first render only — once we have any
+  // cached or fetched insight, it flips false and stays false. Background
+  // revalidation flips `refreshing` (a quiet "Refreshing…" hint), never
+  // the blocking spinner.
+  const [coldLoading, setColdLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [insights, setInsights] = useState<DisciplineInsight[]>([]);
   const [emptyState, setEmptyState] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -152,14 +188,26 @@ export const TrainingInsightsWidget = memo(function TrainingInsightsWidget({
     let cancelled = false;
     setErrorMsg(null);
 
+    // Step 0 — paint every cached insight INSTANTLY, with no spinner. If the
+    // user has anything cached we never block the UI. The fingerprint check
+    // happens later, in the background, against the live training data.
+    const cachedSnapshot = loadAllCachedInsights(userId);
+    const hasCache = cachedSnapshot.length > 0;
+    if (hasCache) {
+      setInsights(cachedSnapshot);
+      setColdLoading(false);
+    } else {
+      setColdLoading(true);
+    }
+
     const run = async () => {
-      setLoading(true);
       setEmptyState(false);
+      setRefreshing(hasCache);
 
       try {
         const rows = await fetchRecentSessions(userId);
         if (rows.length === 0) {
-          if (!cancelled) {
+          if (!cancelled && !hasCache) {
             setInsights([]);
             setEmptyState(true);
           }
@@ -168,14 +216,15 @@ export const TrainingInsightsWidget = memo(function TrainingInsightsWidget({
 
         const grouped = groupByDiscipline(rows);
         if (grouped.size === 0) {
-          if (!cancelled) {
+          if (!cancelled && !hasCache) {
             setInsights([]);
             setEmptyState(true);
           }
           return;
         }
 
-        // Stale-while-revalidate: paint cached insights immediately
+        // Stale-while-revalidate: re-evaluate fingerprints. Disciplines whose
+        // fingerprint matches the cache are skipped entirely (zero LLM cost).
         const initial: DisciplineInsight[] = [];
         const toFetch: Array<{ sessionType: string; sessions: SessionRow[]; fingerprint: string }> = [];
 
@@ -187,15 +236,20 @@ export const TrainingInsightsWidget = memo(function TrainingInsightsWidget({
           if (cached && cached.fingerprint === fingerprint && cached.insight) {
             initial.push(cached.insight);
           } else {
-            // Push a placeholder so order is stable; replaced once fetched
             if (cached?.insight) initial.push(cached.insight);
             toFetch.push({ sessionType, sessions, fingerprint });
           }
         }
 
-        if (!cancelled) setInsights(initial);
+        if (!cancelled && initial.length > 0) {
+          setInsights(initial);
+          setColdLoading(false);
+        }
 
-        if (toFetch.length === 0) return;
+        if (toFetch.length === 0) {
+          if (!cancelled) setRefreshing(false);
+          return;
+        }
 
         const results = await Promise.all(
           toFetch.map(async ({ sessionType, sessions, fingerprint }) => {
@@ -232,25 +286,35 @@ export const TrainingInsightsWidget = memo(function TrainingInsightsWidget({
               map.set(r.sessionType, r.insight);
             }
           }
-          // Order by original grouped iteration
           return Array.from(grouped.keys())
             .map((k) => map.get(k))
             .filter((v): v is DisciplineInsight => !!v);
         });
 
-        const failedCount = results.filter(
-          (r) => !("insight" in r) || !r.insight
-        ).length;
-        if (failedCount > 0 && initial.length === 0) {
+        const fetchedCount = results.filter((r) => "insight" in r && r.insight).length;
+        const failedCount = results.length - fetchedCount;
+
+        // Only surface an error if we have NOTHING to render (no cache, no
+        // fresh fetch). When cached insights are visible we keep the UI
+        // calm — the user already has something useful on screen.
+        if (failedCount > 0 && initial.length === 0 && !hasCache) {
           setErrorMsg("Couldn't generate insights. Try again later.");
         }
       } catch (err) {
         if (!cancelled) {
-          logger.warn("training-insights failed", { err });
-          setErrorMsg("Couldn't load training insights.");
+          logger.debug("training-insights load failed", { err: String((err as Error)?.message ?? err) });
+          // Only show the user a hard-failure card if we genuinely have
+          // nothing cached — otherwise their existing data stays put and
+          // we silently retry next time the sheet opens.
+          if (!hasCache) {
+            setErrorMsg("Couldn't load training insights.");
+          }
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setColdLoading(false);
+          setRefreshing(false);
+        }
       }
     };
 
@@ -327,12 +391,15 @@ export const TrainingInsightsWidget = memo(function TrainingInsightsWidget({
             </SheetHeader>
           </div>
 
+          <VisuallyHidden>
+            <p>Drilled coaching insights from your most recent training sessions, grouped by discipline.</p>
+          </VisuallyHidden>
           <div className="px-4 space-y-3">
-            {headline && !loading && (
+            {headline && !coldLoading && (
               <p className="display-number text-base text-foreground">{headline}</p>
             )}
 
-            {loading && insights.length === 0 && (
+            {coldLoading && insights.length === 0 && (
               <div className="space-y-2">
                 {[0, 1, 2].map((i) => (
                   <div
@@ -347,7 +414,7 @@ export const TrainingInsightsWidget = memo(function TrainingInsightsWidget({
               </div>
             )}
 
-            {!loading && emptyState && (
+            {!coldLoading && emptyState && (
               <div className="card-surface rounded-2xl border border-border p-4 text-center">
                 <p className="text-[13px] text-muted-foreground">
                   Log a session with notes to get coaching insights.
@@ -355,7 +422,7 @@ export const TrainingInsightsWidget = memo(function TrainingInsightsWidget({
               </div>
             )}
 
-            {!loading && !emptyState && errorMsg && insights.length === 0 && (
+            {!coldLoading && !emptyState && errorMsg && insights.length === 0 && (
               <div className="card-surface rounded-2xl border border-border p-4 text-center">
                 <p className="text-[13px] text-muted-foreground">{errorMsg}</p>
               </div>
@@ -418,7 +485,7 @@ export const TrainingInsightsWidget = memo(function TrainingInsightsWidget({
               );
             })}
 
-            {loading && insights.length > 0 && (
+            {refreshing && insights.length > 0 && (
               <p className="text-[11px] text-muted-foreground text-center pt-1">
                 Refreshing latest discipline…
               </p>

@@ -4,7 +4,6 @@ import wizardLogo from "@/assets/wizard-logo.webp";
 import { MacroPieChart } from "@/components/nutrition/MacroPieChart";
 import { SyncingIndicator } from "@/components/SyncingIndicator";
 import { PendingSyncPill } from "@/components/nutrition/PendingSyncPill";
-import { ShareButton } from "@/components/share/ShareButton";
 import { triggerHapticSelection } from "@/lib/haptics";
 import type { MacroGoals } from "@/pages/nutrition/types";
 
@@ -29,7 +28,6 @@ interface NutritionHeroProps {
   setSelectedDate: (date: string) => void;
   mealsLoading: boolean;
   mealsVisibleCount: number;
-  onShareOpen: () => void;
 }
 
 /**
@@ -49,7 +47,6 @@ export function NutritionHero({
   setSelectedDate,
   mealsLoading,
   mealsVisibleCount,
-  onShareOpen,
 }: NutritionHeroProps) {
   const todayStr = format(new Date(), "yyyy-MM-dd");
 
@@ -128,7 +125,6 @@ export function NutritionHero({
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
         </button>
-        <ShareButton onClick={onShareOpen} className="absolute right-0" />
       </div>
 
       <div className="flex justify-center">

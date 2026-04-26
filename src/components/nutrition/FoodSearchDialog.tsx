@@ -410,9 +410,14 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                                                     >
                                                         <div className="flex-1 min-w-0">
                                                             <p className="text-[13px] font-medium truncate">{food.name}</p>
-                                                            <p className="text-[13px] text-muted-foreground/70">
-                                                                {food.calories_per_100g} kcal · {food.protein_per_100g}P · {food.carbs_per_100g}C · {food.fats_per_100g}F
-                                                            </p>
+                                                            <p className="text-[11px] text-muted-foreground/50 mt-0.5">per 100g</p>
+                                                            <div className="flex items-center gap-2 mt-0.5 text-[12px] tabular-nums">
+                                                                <span className="font-semibold text-primary">{food.calories_per_100g} kcal</span>
+                                                                <span className="text-muted-foreground/40">·</span>
+                                                                <span className="text-blue-500">{food.protein_per_100g}P</span>
+                                                                <span className="text-orange-500">{food.carbs_per_100g}C</span>
+                                                                <span className="text-purple-500">{food.fats_per_100g}F</span>
+                                                            </div>
                                                         </div>
                                                         <ChevronRight className="h-3 w-3 text-muted-foreground/30 flex-shrink-0" />
                                                     </button>
@@ -465,11 +470,16 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                                             <div className="flex-1 min-w-0">
                                                 <p className="text-[13px] font-medium truncate">{food.name}</p>
                                                 {food.brand && (
-                                                    <p className="text-[13px] text-muted-foreground/60 truncate">{food.brand}</p>
+                                                    <p className="text-[12px] text-muted-foreground/60 truncate">{food.brand}</p>
                                                 )}
-                                                <p className="text-[13px] text-muted-foreground/70">
-                                                    {food.calories_per_100g} kcal · {food.protein_per_100g}P · {food.carbs_per_100g}C · {food.fats_per_100g}F
-                                                </p>
+                                                <p className="text-[11px] text-muted-foreground/50 mt-0.5">per 100g</p>
+                                                <div className="flex items-center gap-2 mt-0.5 text-[12px] tabular-nums">
+                                                    <span className="font-semibold text-primary">{food.calories_per_100g} kcal</span>
+                                                    <span className="text-muted-foreground/40">·</span>
+                                                    <span className="text-blue-500">{food.protein_per_100g}P</span>
+                                                    <span className="text-orange-500">{food.carbs_per_100g}C</span>
+                                                    <span className="text-purple-500">{food.fats_per_100g}F</span>
+                                                </div>
                                             </div>
                                             <ChevronRight className="h-3 w-3 text-muted-foreground/30 flex-shrink-0" />
                                         </button>

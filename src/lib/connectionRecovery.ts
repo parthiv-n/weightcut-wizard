@@ -41,32 +41,69 @@ export function recoverSupabaseConnection(reason: string): Promise<void> {
   logger.warn("Supabase wedge detected — recovering", { reason });
 
   inFlight = (async () => {
+    let refreshOk = false;
     try {
-      // 1. Force-cycle the realtime websocket so the auth mutex releases.
+      // 1. Disconnect realtime so the wedged auth mutex isn't holding a
+      //    promise tied to the dead socket.
       try {
         supabase.realtime.disconnect();
       } catch (e) {
         logger.warn("recoverSupabaseConnection: disconnect failed", { e: String(e) });
       }
-      try {
-        supabase.realtime.connect();
-      } catch (e) {
-        logger.warn("recoverSupabaseConnection: connect failed", { e: String(e) });
-      }
 
-      // 2. Bounded token refresh — if this also hangs we bail and let the
-      //    next user action retry. No infinite awaits.
+      // 2. Try a bounded refreshSession FIRST. If the client is healthy this
+      //    is the cheapest path back to a fresh JWT.
       try {
         await withHardTimeout(
           supabase.auth.refreshSession(),
           REFRESH_TIMEOUT_MS,
           "refreshSession"
         );
+        refreshOk = true;
       } catch (e) {
-        logger.warn("recoverSupabaseConnection: refreshSession failed", { e: String(e) });
+        logger.warn("recoverSupabaseConnection: refreshSession failed — escalating", { e: String(e) });
+      }
+
+      // 3. If refresh failed the auth mutex is genuinely deadlocked.
+      //    `signOut({ scope: 'local' })` clears the in-memory session and
+      //    drops the stuck promise, then we re-read from persisted storage
+      //    via getSession() which the caller's onAuthStateChange listener
+      //    will pick up as INITIAL_SESSION/TOKEN_REFRESHED.
+      if (!refreshOk) {
+        try {
+          await withHardTimeout(
+            supabase.auth.signOut({ scope: "local" }),
+            REFRESH_TIMEOUT_MS,
+            "local signOut"
+          );
+        } catch (e) {
+          logger.warn("recoverSupabaseConnection: local signOut failed", { e: String(e) });
+        }
+        // Brief breathing room before re-reading.
+        await new Promise((r) => setTimeout(r, 200));
+        try {
+          await withHardTimeout(
+            supabase.auth.getSession(),
+            REFRESH_TIMEOUT_MS,
+            "post-reset getSession"
+          );
+        } catch (e) {
+          logger.warn("recoverSupabaseConnection: post-reset getSession failed", { e: String(e) });
+        }
+      }
+
+      // 4. Reconnect realtime once auth is unstuck.
+      try {
+        supabase.realtime.connect();
+      } catch (e) {
+        logger.warn("recoverSupabaseConnection: connect failed", { e: String(e) });
       }
     } finally {
       inFlight = null;
+      // If the recovery itself failed, allow another attempt before the
+      // debounce window expires — otherwise we'd be locked out for 15s
+      // even though the user is staring at a wedged screen.
+      if (!refreshOk) lastRecoveryAt = 0;
     }
   })();
 

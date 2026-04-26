@@ -310,26 +310,42 @@ export function QuickAddDialog({
                     <div className="text-[22px] font-black tabular-nums text-primary display-number leading-none tracking-tight">{totalAiLineItemCalories}</div>
                     <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mt-1">kcal</div>
                   </div>
-                  <div className="grid grid-cols-3 gap-1.5">
+                  <div className="grid grid-cols-3 gap-1">
                     {[
                       { label: "Protein", grams: totalAiProtein, pct: proteinPct, color: "rgb(59 130 246)", text: "text-blue-500" },
                       { label: "Carbs", grams: totalAiCarbs, pct: carbsPct, color: "rgb(249 115 22)", text: "text-orange-500" },
                       { label: "Fats", grams: totalAiFats, pct: fatsPct, color: "rgb(168 85 247)", text: "text-purple-500" },
                     ].map((m) => (
-                      <div key={m.label} className="flex flex-col items-center gap-1.5 p-2">
-                        <div className="relative w-20 h-20">
+                      <div key={m.label} className="flex flex-col items-center gap-1 p-1 min-w-0">
+                        <div className="relative w-[68px] h-[68px]">
                           <div className="w-full h-full rounded-full" style={wheel(m.pct, m.color)} />
                           <div className="absolute inset-0 flex flex-col items-center justify-center leading-none">
-                            <span className={`text-[17px] font-black tabular-nums tracking-tight ${m.text}`}>{Math.round(m.grams)}g</span>
-                            <span className="text-[11px] font-semibold tabular-nums text-muted-foreground mt-1">{m.pct}%</span>
+                            <span className={`text-[13px] font-black tabular-nums tracking-tight ${m.text}`}>{Math.round(m.grams)}g</span>
+                            <span className="text-[9px] font-semibold tabular-nums text-muted-foreground mt-0.5">{m.pct}%</span>
                           </div>
                         </div>
-                        <div className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{m.label}</div>
+                        <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{m.label}</div>
                       </div>
                     ))}
                   </div>
                 </div>
                 <Input value={manualMeal.meal_name} onChange={(e) => setManualMeal((prev) => ({ ...prev, meal_name: e.target.value }))} placeholder="Meal name" className="text-[13px] h-7 rounded-md border-border/30 bg-muted/20" />
+                {/* Meal type selector — shown explicitly so the user always sees
+                 * which section the AI-analyzed meal will land in. Previously
+                 * AI saves silently used `manualMeal.meal_type` which could
+                 * stale-fall to "snack" when the dialog was opened from an
+                 * entry point that didn't set the type. */}
+                <Select value={manualMeal.meal_type} onValueChange={(v) => setManualMeal((prev) => ({ ...prev, meal_type: v }))}>
+                  <SelectTrigger className="h-7 text-[13px] rounded-md border-border/30 bg-muted/20">
+                    <SelectValue placeholder="Add to meal type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="breakfast">Breakfast</SelectItem>
+                    <SelectItem value="lunch">Lunch</SelectItem>
+                    <SelectItem value="dinner">Dinner</SelectItem>
+                    <SelectItem value="snack">Snack</SelectItem>
+                  </SelectContent>
+                </Select>
                 <button onClick={aiMeal.handleSaveAiMeal} disabled={aiMeal.aiLineItems.length === 0} className="w-full py-2 text-[13px] font-semibold text-primary active:bg-muted/50 transition-colors border-t border-border/40 disabled:opacity-40">Add Meal</button>
               </div>
             )}

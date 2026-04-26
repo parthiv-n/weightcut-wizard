@@ -103,15 +103,20 @@ export function MealSections({
                 <>
                   {groupMeals.length > 0 ? (
                     <div className="px-2">
-                      {groupMeals.map((meal) => (
-                        <MealCard
-                          key={`${meal.id}:${meal.date}:${meal.meal_type}`}
-                          meal={meal}
-                          onDelete={() => onDeleteMeal(meal)}
-                          onFavorite={() => quickActions.toggleFavorite(meal)}
-                          isFavorited={quickActions.isFavorited(meal)}
-                        />
-                      ))}
+                      {groupMeals
+                        .filter((meal) => meal && typeof meal.id === "string" && meal.id.length > 0)
+                        .map((meal, idx) => (
+                          <MealCard
+                            // Stable key — meal.id is guaranteed truthy by the
+                            // filter above, idx makes it collision-proof even
+                            // in pathological cases.
+                            key={`${meal.id}:${idx}`}
+                            meal={meal}
+                            onDelete={() => onDeleteMeal(meal)}
+                            onFavorite={() => quickActions.toggleFavorite(meal)}
+                            isFavorited={quickActions.isFavorited(meal)}
+                          />
+                        ))}
                     </div>
                   ) : mealsLoading ? (
                     <div className="px-2 pb-1">

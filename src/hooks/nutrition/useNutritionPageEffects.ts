@@ -2,6 +2,19 @@ import { useEffect, useRef } from "react";
 import type { ManualMealForm } from "@/pages/nutrition/types";
 import { setQuickAddSheetOpenRef } from "@/hooks/nutrition";
 
+/**
+ * Infer a sensible default meal section based on current local time. Used by
+ * dialog entry points that don't pin a specific section (deep-link, empty
+ * banner CTA) so the AI-saved meal lands in the contextually-correct row
+ * instead of defaulting to whatever stale type is in form state.
+ */
+function inferMealTypeByHour(hour: number): "breakfast" | "lunch" | "dinner" | "snack" {
+  if (hour < 10) return "breakfast";
+  if (hour < 15) return "lunch";
+  if (hour < 21) return "dinner";
+  return "snack";
+}
+
 interface Params {
   userId: string | null;
   isQuickAddSheetOpen: boolean;
@@ -81,13 +94,18 @@ export function useNutritionPageEffects({
     if (tab) {
       const targetTab = tab;
       setSearchParams(searchParams, { replace: true });
+      // Default the meal_type by time-of-day so a deep-link "Add meal" doesn't
+      // silently fall back to whatever stale type is in manualMeal (which
+      // produced "everything goes to Snack" reports).
+      const defaultType = inferMealTypeByHour(new Date().getHours());
+      setManualMeal((prev) => ({ ...prev, meal_type: defaultType }));
       const t = setTimeout(() => {
         setQuickAddTab(targetTab);
         setIsQuickAddSheetOpen(true);
       }, 150);
       return () => clearTimeout(t);
     }
-  }, [searchParams, setSearchParams, setIsQuickAddSheetOpen, setQuickAddTab]);
+  }, [searchParams, setSearchParams, setIsQuickAddSheetOpen, setQuickAddTab, setManualMeal]);
 
   // Auto-calculate meal totals from ingredients when macros per 100g are known
   useEffect(() => {

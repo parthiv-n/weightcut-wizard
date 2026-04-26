@@ -34,4 +34,15 @@ export const logger = {
       console.log(`[INFO] ${msg}`, data ?? "");
     }
   },
+
+  /**
+   * Dev-only diagnostic. Never reaches Sentry. Use for chatty internals
+   * (retry attempts, cache hits, polling ticks) that would otherwise drown
+   * the warn channel.
+   */
+  debug(msg: string, data?: Record<string, unknown>) {
+    if (isDev) {
+      console.debug(`[DEBUG] ${msg}`, data ?? "");
+    }
+  },
 };

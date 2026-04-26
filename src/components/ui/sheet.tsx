@@ -60,6 +60,7 @@ const SheetContent = React.forwardRef<React.ElementRef<typeof SheetPrimitive.Con
         <SheetOverlay />
         <SheetPrimitive.Content
           ref={ref}
+          aria-describedby={undefined}
           className={cn(sheetVariants({ side }), className)}
           onInteractOutside={(e) => {
             // Prevent ghost clicks/bubbled events from instantly closing the menu on mobile

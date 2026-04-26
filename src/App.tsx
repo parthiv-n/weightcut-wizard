@@ -257,7 +257,12 @@ const App = () => (
             <Sonner />
             <PaywallOverlay />
             <NoGemsOverlay />
-            <BrowserRouter>
+            <BrowserRouter
+              future={{
+                v7_startTransition: true,
+                v7_relativeSplatPath: true,
+              }}
+            >
               <NavigationDirectionProvider>
               <TutorialProvider>
               <RouteTracker />

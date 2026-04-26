@@ -1,6 +1,6 @@
-import { useState, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
-import { nutritionCache } from "@/lib/nutritionCache";
+import { nutritionCache, sanitizeMealRows } from "@/lib/nutritionCache";
 import { localCache } from "@/lib/localCache";
 import { useUser } from "@/contexts/UserContext";
 import type { Meal, MacroGoals, ManualMealForm, ManualNutritionDialogState, EditingTargets, BarcodeBaseMacros, AiLineItem, INITIAL_MANUAL_MEAL, INITIAL_MANUAL_NUTRITION_DIALOG } from "@/pages/nutrition/types";
@@ -13,12 +13,16 @@ interface PersistedMacroGoals {
 export function useNutritionState() {
   const { userId } = useUser();
   const today = format(new Date(), "yyyy-MM-dd");
-  // Initialize meals from cache to prevent empty→loaded flicker on navigation
+  // Initialize meals from cache to prevent empty→loaded flicker on navigation.
+  // Sanitize the cached payload so any partial-shape rows from prior versions
+  // (or from a now-removed realtime raw-row push) cannot reach the renderer.
   const [meals, setMeals] = useState<Meal[]>(() => {
     if (!userId) return [];
-    return nutritionCache.getMeals(userId, today)
+    const cached =
+      nutritionCache.getMeals(userId, today)
       || localCache.getForDate<Meal[]>(userId, "nutrition_logs", today)
       || [];
+    return sanitizeMealRows<Meal>(cached);
   });
   const [mealPlanIdeas, setMealPlanIdeas] = useState<Meal[]>([]);
   const [selectedDate, setSelectedDate] = useState(today);
@@ -39,6 +43,28 @@ export function useNutritionState() {
   });
   const [safetyStatus, setSafetyStatus] = useState<"green" | "yellow" | "red">("green");
   const [safetyMessage, setSafetyMessage] = useState("");
+
+  // Re-hydrate from cache whenever userId resolves OR selectedDate changes.
+  // The useState initializers above only run once on mount — if userId is still
+  // null at first render (cold auth bootstrap) the ring shows 0 until the
+  // network fetch lands. Reading the cache lazily here paints the last-known
+  // calorie ring instantly on every navigation back to Nutrition.
+  useEffect(() => {
+    if (!userId) return;
+    const cachedMeals = nutritionCache.getMeals(userId, selectedDate)
+      || localCache.getForDate<Meal[]>(userId, "nutrition_logs", selectedDate);
+    const cleanCached = sanitizeMealRows<Meal>(cachedMeals);
+    if (cleanCached.length > 0) {
+      setMeals((prev) => (prev.length === 0 ? cleanCached : prev));
+    }
+    const persisted = localCache.get<PersistedMacroGoals>(userId, "macro_goals");
+    if (persisted?.dailyCalorieTarget && persisted.dailyCalorieTarget > 0) {
+      setDailyCalorieTarget((prev) => (prev > 0 ? prev : persisted.dailyCalorieTarget!));
+    }
+    if (persisted?.macroGoals) {
+      setAiMacroGoals((prev) => prev ?? persisted.macroGoals!);
+    }
+  }, [userId, selectedDate]);
 
   // Derived totals
   const totalCalories = meals.reduce((sum, meal) => sum + meal.calories, 0);

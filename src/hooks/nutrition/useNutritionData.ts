@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
-import { format, subDays } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { AIPersistence } from "@/lib/aiPersistence";
-import { nutritionCache, onMealsChange } from "@/lib/nutritionCache";
+import { nutritionCache, onMealsChange, sanitizeMealRows } from "@/lib/nutritionCache";
 import { localCache } from "@/lib/localCache";
 import { syncQueue } from "@/lib/syncQueue";
 import { preloadAdjacentDates } from "@/lib/backgroundSync";
@@ -61,11 +60,6 @@ export function useNutritionData(params: UseNutritionDataParams) {
   // Diet analysis state
   const [dietAnalysis, setDietAnalysis] = useState<DietAnalysisResult | null>(null);
   const [dietAnalysisLoading, setDietAnalysisLoading] = useState(false);
-
-  // Share stats
-  const [shareOpen, setShareOpen] = useState(false);
-  const [nutritionStreak, setNutritionStreak] = useState(0);
-  const [totalMealsLogged, setTotalMealsLogged] = useState(0);
 
   const calculateCalorieTarget = (profileData: any) => {
     const target = calculateCalorieTargetUtil(profileData);
@@ -172,7 +166,7 @@ export function useNutritionData(params: UseNutritionDataParams) {
     if (!skipCache) {
       const cachedMeals = nutritionCache.getMeals(userId, fetchDate);
       if (cachedMeals) {
-        setMeals(cachedMeals);
+        setMeals(sanitizeMealRows<Meal>(cachedMeals));
         safeAsync(setMealsLoading)(false);
         return;
       }
@@ -182,11 +176,12 @@ export function useNutritionData(params: UseNutritionDataParams) {
     let servedFromLocal = false;
     if (!skipCache) {
       const localMeals = localCache.getForDate<Meal[]>(userId, "nutrition_logs", fetchDate, LOCAL_CACHE_TTL_MS);
-      if (localMeals && localMeals.length > 0) {
+      const cleanLocal = sanitizeMealRows<Meal>(localMeals);
+      if (cleanLocal.length > 0) {
         // Normalize meal_name to prevent "Untitled" display from stale cache
-        const normalized = localMeals.map(m => ({ ...m, meal_name: coerceMealName(m.meal_name, m.meal_type) }));
+        const normalized = cleanLocal.map(m => ({ ...m, meal_name: coerceMealName(m.meal_name, m.meal_type) }));
         setMeals(normalized);
-        nutritionCache.setMeals(userId, fetchDate, localMeals);
+        nutritionCache.setMeals(userId, fetchDate, cleanLocal);
         safeAsync(setMealsLoading)(false);
         servedFromLocal = true;
         // Don't return — continue to DB so stale cache gets corrected
@@ -368,7 +363,7 @@ export function useNutritionData(params: UseNutritionDataParams) {
       const cached =
         nutritionCache.getMeals(userId, selectedDate)
         ?? localCache.getForDate<Meal[]>(userId, "nutrition_logs", selectedDate, LOCAL_CACHE_TTL_MS);
-      setMeals(Array.isArray(cached) ? (cached as Meal[]) : []);
+      setMeals(sanitizeMealRows<Meal>(cached));
     } else {
       setMeals([]);
     }
@@ -440,8 +435,16 @@ export function useNutritionData(params: UseNutritionDataParams) {
     const unsubscribe = onMealsChange((evt) => {
       if (evt.userId !== userId) return;
       if (evt.date !== activeDateRef.current) return;
-      const cached = nutritionCache.getMeals(userId, evt.date);
-      if (cached) setMeals(cached as Meal[]);
+      // For DELETE: cache was patched in-place — sync state from cache.
+      if (evt.type === "delete") {
+        const cached = nutritionCache.getMeals(userId, evt.date);
+        if (cached) setMeals(sanitizeMealRows<Meal>(cached));
+        return;
+      }
+      // For INSERT/UPDATE: realtime invalidated the cache slot rather than
+      // pushing a (lossy) raw row. Re-fetch from `meals_with_totals` so we
+      // get the canonical mapped shape with aggregations.
+      loadMeals(/* skipCache */ true, 0, /* silent */ true);
     });
     return unsubscribe;
   }, [userId, setMeals]);
@@ -469,56 +472,6 @@ export function useNutritionData(params: UseNutritionDataParams) {
     };
   }, [userId, refreshProfile]);
 
-  // Fetch share stats
-  const fetchShareStats = useCallback(async () => {
-    if (!userId) return;
-
-    const cached = localCache.get<{ totalMeals: number; streak: number }>(userId, "share_stats", 60 * 60 * 1000);
-    if (cached) {
-      setTotalMealsLogged(cached.totalMeals);
-      setNutritionStreak(cached.streak);
-      return;
-    }
-
-    try {
-      const [countResult, datesResult] = await Promise.allSettled([
-        supabase.from("meals").select("*", { count: "exact", head: true }).eq("user_id", userId),
-        supabase.from("meals").select("date").eq("user_id", userId)
-          .gte("date", format(subDays(new Date(), 90), "yyyy-MM-dd"))
-          .order("date", { ascending: false })
-          .limit(90),
-      ]);
-
-      const totalMeals = countResult.status === "fulfilled" ? countResult.value.count || 0 : 0;
-      const dateRows = datesResult.status === "fulfilled" ? datesResult.value.data || [] : [];
-
-      setTotalMealsLogged(totalMeals);
-
-      const dates = [...new Set(dateRows.map((r: any) => r.date?.slice(0, 10)))].filter(Boolean).sort().reverse();
-      let streak = 0;
-      let cursor = new Date();
-      for (let i = 0; i < dates.length + 1; i++) {
-        const expected = format(cursor, "yyyy-MM-dd");
-        if (dates.includes(expected)) {
-          streak++;
-        } else if (i > 0) {
-          break;
-        }
-        cursor = subDays(cursor, 1);
-      }
-      setNutritionStreak(streak);
-
-      localCache.set(userId, "share_stats", { totalMeals, streak });
-    } catch {
-      // silent
-    }
-  }, [userId]);
-
-  const handleShareOpen = useCallback(() => {
-    setShareOpen(true);
-    fetchShareStats();
-  }, [fetchShareStats]);
-
   return {
     loadMeals,
     fetchMacroGoals,
@@ -527,10 +480,6 @@ export function useNutritionData(params: UseNutritionDataParams) {
     mealsLoading,
     dietAnalysis, setDietAnalysis,
     dietAnalysisLoading, setDietAnalysisLoading,
-    shareOpen, setShareOpen,
-    nutritionStreak,
-    totalMealsLogged,
-    handleShareOpen,
     lastFetchRef,
   };
 }

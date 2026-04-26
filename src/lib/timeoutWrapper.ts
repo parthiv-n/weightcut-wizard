@@ -60,7 +60,7 @@ export function withRetry<T>(
   return factory().catch(async (err) => {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       const delay = baseDelayMs * Math.pow(2, attempt - 1);
-      logger.warn(`withRetry: attempt ${attempt + 1}/${maxRetries + 1} after ${delay}ms`, { error: err?.message ?? err });
+      logger.debug(`withRetry: attempt ${attempt + 1}/${maxRetries + 1} after ${delay}ms`, { error: err?.message ?? err });
       await new Promise((r) => setTimeout(r, delay));
       try {
         return await factory();

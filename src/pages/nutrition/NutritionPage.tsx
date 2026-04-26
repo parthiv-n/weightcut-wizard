@@ -32,7 +32,6 @@ import { MealIdeasSection } from "./MealIdeasSection";
 import { TrainingWisdomSheet } from "./TrainingWisdomSheet";
 import { EmptyMealsBanner } from "./EmptyMealsBanner";
 import { AiTaskBanner } from "./AiTaskBanner";
-import { NutritionShareCard } from "./NutritionShareCard";
 import { QuickAddDialog } from "./dialogs/QuickAddDialog";
 import { AiMealPlanDialog } from "./dialogs/AiMealPlanDialog";
 import { EditTargetsDialog } from "./dialogs/EditTargetsDialog";
@@ -309,7 +308,6 @@ export default function NutritionPage() {
           setSelectedDate={setSelectedDate}
           mealsLoading={nutritionData.mealsLoading}
           mealsVisibleCount={meals.length}
-          onShareOpen={nutritionData.handleShareOpen}
         />
 
         <EmptyMealsBanner
@@ -317,7 +315,17 @@ export default function NutritionPage() {
           previousDayMealCount={quickActions.previousDayMealCount}
           copyingPreviousDay={quickActions.copyingPreviousDay}
           lastMeal={quickActions.lastMeal}
-          onQuickAdd={() => { setQuickAddTab("ai"); setIsQuickAddSheetOpen(true); }}
+          onQuickAdd={() => {
+            // Pin the meal_type before opening so the AI-saved meal lands in
+            // the section matching current time-of-day instead of whatever
+            // stale type is in form state.
+            const h = new Date().getHours();
+            const defaultType: "breakfast" | "lunch" | "dinner" | "snack" =
+              h < 10 ? "breakfast" : h < 15 ? "lunch" : h < 21 ? "dinner" : "snack";
+            setManualMeal((prev) => ({ ...prev, meal_type: defaultType }));
+            setQuickAddTab("ai");
+            setIsQuickAddSheetOpen(true);
+          }}
           onCopyPreviousDay={quickActions.copyPreviousDay}
           onRepeatLast={() => quickActions.repeatLastMeal()}
         />
@@ -462,20 +470,6 @@ export default function NutritionPage() {
         onGenerate={wisdom.generateTrainingFoodIdeas}
       />
 
-      <NutritionShareCard
-        open={nutritionData.shareOpen}
-        onOpenChange={nutritionData.setShareOpen}
-        selectedDate={selectedDate}
-        totalCalories={totalCalories}
-        totalProtein={totalProtein}
-        totalCarbs={totalCarbs}
-        totalFats={totalFats}
-        dailyCalorieTarget={dailyCalorieTarget}
-        aiMacroGoals={aiMacroGoals}
-        mealCount={meals.length}
-        nutritionStreak={nutritionData.nutritionStreak}
-        totalMealsLogged={nutritionData.totalMealsLogged}
-      />
     </>
   );
 }

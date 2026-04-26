@@ -1,9 +1,11 @@
 import { useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
-  applyMealRealtimeChange,
+  applyMealRealtimeDelete,
+  invalidateMealsForDate,
   nutritionCache,
 } from "@/lib/nutritionCache";
+import { localCache } from "@/lib/localCache";
 import { logger } from "@/lib/logger";
 
 /**
@@ -36,10 +38,9 @@ export function useMealsRealtime(userId: string | null): void {
       const parentCache = mealParentRef.current;
 
       const invalidateDate = (uid: string, date: string) => {
-        // Clear the cached meals list so useNutritionData's visibilitychange/
-        // onMealsChange paths re-fetch. We also emit a synthetic "update" so
-        // any listener wired to onMealsChange re-renders immediately.
         nutritionCache.remove(uid, "meals", date);
+        try { localCache.removeForDate?.(uid, "nutrition_logs", date); } catch { /* ignore */ }
+        invalidateMealsForDate(uid, date);
       };
 
       const channel = supabase
@@ -62,12 +63,29 @@ export function useMealsRealtime(userId: string | null): void {
                   parentCache.set(row.id, { userId: row.user_id, date: row.date });
                 }
               }
-              applyMealRealtimeChange(
-                userId,
-                payload.eventType as "INSERT" | "UPDATE" | "DELETE",
-                payload.new,
-                payload.old
-              );
+              // For INSERT/UPDATE we DO NOT push payload.new into the cache —
+              // realtime payloads only contain the raw `meals` table row, which
+              // lacks the `total_*` aggregations and (for partial UPDATEs) may
+              // be missing `meal_name`/`meal_type`. Storing those rows directly
+              // produced empty "Logged meal" cards and duplicate-key warnings.
+              // Instead, invalidate the affected date so useNutritionData
+              // refetches via the `meals_with_totals` view, which always
+              // returns the canonical mapped shape.
+              if (payload.eventType === "DELETE") {
+                const oldRow = payload.old as { id?: string; date?: string } | null;
+                if (oldRow?.id && oldRow?.date) {
+                  applyMealRealtimeDelete(userId, oldRow.date, oldRow.id);
+                }
+              } else {
+                const newRow = payload.new as { date?: string } | null;
+                if (newRow?.date) {
+                  // Drop any localStorage shadow for this date so a remount
+                  // doesn't paint pre-mutation data; then notify listeners to
+                  // refetch from the view.
+                  try { localCache.removeForDate?.(userId, "nutrition_logs", newRow.date); } catch { /* ignore */ }
+                  invalidateMealsForDate(userId, newRow.date);
+                }
+              }
             } catch (err) {
               logger.warn("useMealsRealtime: meals apply failed", { err });
             }
