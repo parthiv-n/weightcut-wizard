@@ -1,5 +1,5 @@
 import { Suspense, lazy } from "react";
-import { Plus, Search, Edit2, RotateCcw, ScanLine, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Search, RotateCcw, ScanLine, ChevronDown } from "lucide-react";
 import { MealCard } from "@/components/nutrition/MealCard";
 import { MealCardSkeleton } from "@/components/ui/skeleton-loader";
 import type { Meal } from "@/pages/nutrition/types";
@@ -65,7 +65,6 @@ export function MealSections({
       {mealTypes.map((mealType) => {
           const groupMeals = groupedMeals[mealType];
           const groupCalories = groupMeals.reduce((sum, m) => sum + (m.calories || 0), 0);
-          const isActionExpanded = expandedMealActions === mealType;
           const hasMeals = groupMeals.length > 0;
           const isSectionCollapsed = !hasMeals && !mealsLoading
             ? !collapsedSections.has(`${mealType}_expanded`)
@@ -123,60 +122,42 @@ export function MealSections({
                       <MealCardSkeleton />
                     </div>
                   ) : null}
-                  <div className="border-t border-border/10">
+                  <div className="border-t border-border/10 flex items-stretch">
                     <button
-                      onClick={() => setExpandedMealActions(isActionExpanded ? null : mealType)}
-                      className="w-full flex items-center justify-center gap-1.5 py-2 text-[13px] font-semibold text-primary/80 hover:text-primary hover:bg-primary/5 active:bg-primary/10 active:scale-[0.99] transition-all"
+                      onClick={() => onOpenQuickAdd(mealType)}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 text-[13px] font-semibold text-primary/80 hover:text-primary hover:bg-primary/5 active:bg-primary/10 active:scale-[0.99] transition-all"
                     >
                       <Plus className="h-3.5 w-3.5" />Add Food
-                      {isActionExpanded ? <ChevronUp className="h-3 w-3 ml-0.5" /> : <ChevronDown className="h-3 w-3 ml-0.5" />}
                     </button>
-                    {isActionExpanded && (
-                      <div className={`grid ${quickActions.lastMeal ? "grid-cols-5" : "grid-cols-4"} gap-1 px-3 pb-3 pt-1 animate-fade-in`}>
-                        <button onClick={() => onOpenFoodSearch(mealType)} className="flex flex-col items-center gap-1 py-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors">
-                          <Search className="h-4 w-4 text-blue-500" />
-                          <span className="text-[13px] text-muted-foreground">Search</span>
-                        </button>
-                        <Suspense
-                          fallback={
-                            <div className="flex flex-col items-center gap-1 py-2">
-                              <ScanLine className="h-4 w-4 text-muted-foreground" />
-                              <span className="text-[13px] text-muted-foreground">Barcode</span>
-                            </div>
-                          }
-                        >
-                          <BarcodeScanner
-                            onFoodScanned={aiMealHandlers.handleBarcodeScanned}
-                            disabled={generatingPlan || savingAllMeals}
-                            label="Barcode"
-                            className="flex flex-col items-center gap-1 py-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors !h-auto !border-0 !bg-transparent !px-0"
-                          />
-                        </Suspense>
+                    <div className="flex items-center gap-0.5 pr-2 border-l border-border/10">
+                      <button
+                        onClick={() => onOpenFoodSearch(mealType)}
+                        className="p-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors"
+                        aria-label="Search foods"
+                        title="Search"
+                      >
+                        <Search className="h-4 w-4 text-blue-500" />
+                      </button>
+                      <Suspense
+                        fallback={<div className="p-2"><ScanLine className="h-4 w-4 text-muted-foreground" /></div>}
+                      >
+                        <BarcodeScanner
+                          onFoodScanned={aiMealHandlers.handleBarcodeScanned}
+                          disabled={generatingPlan || savingAllMeals}
+                          className="p-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors !h-auto !border-0 !bg-transparent"
+                        />
+                      </Suspense>
+                      {quickActions.lastMeal && (
                         <button
-                          onClick={() => { onOpenQuickAdd(mealType); setExpandedMealActions(null); }}
-                          className="flex flex-col items-center gap-1 py-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors"
+                          onClick={() => quickActions.repeatLastMeal(mealType)}
+                          className="p-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors"
+                          aria-label="Repeat last meal"
+                          title="Repeat last"
                         >
-                          <Plus className="h-4 w-4 text-blue-500" />
-                          <span className="text-[13px] text-muted-foreground">Quick</span>
+                          <RotateCcw className="h-4 w-4 text-amber-500" />
                         </button>
-                        <button
-                          onClick={() => { onOpenManualAdd(mealType); setExpandedMealActions(null); }}
-                          className="flex flex-col items-center gap-1 py-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors"
-                        >
-                          <Edit2 className="h-4 w-4 text-green-500" />
-                          <span className="text-[13px] text-muted-foreground">Manual</span>
-                        </button>
-                        {quickActions.lastMeal && (
-                          <button
-                            onClick={() => { quickActions.repeatLastMeal(mealType); setExpandedMealActions(null); }}
-                            className="flex flex-col items-center gap-1 py-2 rounded-lg hover:bg-muted active:bg-muted/80 transition-colors"
-                          >
-                            <RotateCcw className="h-4 w-4 text-amber-500" />
-                            <span className="text-[13px] text-muted-foreground">Repeat</span>
-                          </button>
-                        )}
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </>
               )}
