@@ -162,6 +162,22 @@ export function GymLogoUpload({
       return;
     }
 
+    // PostgREST schema cache miss — column was added but the API hasn't
+    // reloaded its cache yet. Surfaces as PGRST204 on the gyms.update().
+    // Resolves on its own in 30-60s; the column truly exists in the DB.
+    if (
+      /PGRST204/.test(raw) ||
+      /column.*logo_url.*does not exist/i.test(raw) ||
+      /schema cache/i.test(raw)
+    ) {
+      toast({
+        title: "Sync in progress",
+        description: "Schema is still syncing. Please retry in 30 seconds.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     // RLS denial — usually means the user isn't the gym owner
     if (/row-level security|new row violates/i.test(raw)) {
       toast({

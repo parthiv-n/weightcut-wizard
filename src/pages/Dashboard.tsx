@@ -30,6 +30,7 @@ import { trackInstallDate, maybeRequestReview } from "@/lib/appReview";
 import { CutPlanDialog } from "@/components/dashboard/CutPlanDialog";
 import { SleepLogger } from "@/components/dashboard/SleepLogger";
 import { TrainingInsightsWidget } from "@/components/dashboard/TrainingInsightsWidget";
+import NewAnnouncementWidget from "@/components/dashboard/NewAnnouncementWidget";
 import { isFighter } from "@/lib/goalType";
 
 // Module-level dedupe so re-mounts within the session don't re-fire identical
@@ -634,6 +635,8 @@ export default function Dashboard() {
         <div>
           <ConsistencyRing {...weeklyConsistency} />
         </div>
+
+        {userId && <NewAnnouncementWidget userId={userId} />}
 
         {/* Cut Plan + Sleep — side by side */}
         <div className="grid grid-cols-2 gap-2">
