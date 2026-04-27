@@ -166,11 +166,13 @@ export function CoachSettingsSheet({ open, onOpenChange }: Props) {
       <AlertDialog open={logoutOpen} onOpenChange={setLogoutOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Sign out?</AlertDialogTitle>
-            <AlertDialogDescription>You'll need your email and password to sign back in.</AlertDialogDescription>
+            <AlertDialogTitle className="text-center">Sign out?</AlertDialogTitle>
+            <AlertDialogDescription className="text-center">
+              You'll need your email and password to sign back in.
+            </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={loggingOut}>Cancel</AlertDialogCancel>
+          <AlertDialogFooter className="flex-row justify-center sm:justify-center gap-2">
+            <AlertDialogCancel disabled={loggingOut} className="mt-0">Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleLogout} disabled={loggingOut}>
               {loggingOut ? <Loader2 className="h-4 w-4 animate-spin" /> : "Sign out"}
             </AlertDialogAction>

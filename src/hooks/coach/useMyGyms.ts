@@ -4,6 +4,13 @@ import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { localCache } from "@/lib/localCache";
 import { logger } from "@/lib/logger";
 
+// Coalesce realtime burst into a single refetch; matches the 400ms cadence
+// used by useCoachRealtimeSync so concurrent gym row updates collapse.
+const REALTIME_REFRESH_DEBOUNCE_MS = 400;
+// Defer subscribe to mirror useMealsRealtime — avoids piling on the
+// SIGNED_IN reconnect burst when auth restores.
+const REALTIME_SUBSCRIBE_DELAY_MS = 1000;
+
 export interface MyGymRow {
   member_id: string;
   gym_id: string;
@@ -90,6 +97,74 @@ export function useMyGyms(userId: string | null) {
   }, [userId]);
 
   useEffect(() => { void load(); }, [load]);
+
+  // Realtime: when a coach updates a gym we belong to (e.g. uploads a new
+  // logo, renames the gym, removes the logo), refetch so the new
+  // `gym_logo_url` reaches <GymLogoAvatar> within seconds. The avatar
+  // already keys off `logoUrl`, so an updated cache-busted URL forces the
+  // <img> to remount and refetch.
+  //
+  // Filtered server-side per gym id we're a member of so we don't receive
+  // unrelated rows. If the user is in 0 gyms we skip the subscription
+  // entirely. Channel name includes `userId` so two open tabs share the
+  // same socket per user.
+  const gymIdsKey = gyms.map((g) => g.gym_id).sort().join(",");
+  useEffect(() => {
+    if (!userId) return;
+    const gymIds = gymIdsKey ? gymIdsKey.split(",") : [];
+    if (gymIds.length === 0) return;
+
+    let cancelled = false;
+    let debounce: ReturnType<typeof setTimeout> | null = null;
+    const channelRef: { current: ReturnType<typeof supabase.channel> | null } = { current: null };
+
+    const scheduleRefresh = () => {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(() => {
+        if (cancelled) return;
+        // Drop the local cache so any remount paints fresh data, then
+        // force a refetch (bypasses the 30s freshness window).
+        try { localCache.remove(userId, "my_gyms"); } catch { /* ignore */ }
+        void load(true);
+      }, REALTIME_REFRESH_DEBOUNCE_MS);
+    };
+
+    const subscribeTimer = setTimeout(() => {
+      if (cancelled) return;
+      // Postgres-changes filter syntax requires a single value; for multi-row
+      // membership we filter to `id=in.(uuid1,uuid2,...)`.
+      const filter = `id=in.(${gymIds.join(",")})`;
+      const channel = supabase
+        .channel(`my-gyms:${userId}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "gyms",
+            filter,
+          },
+          () => scheduleRefresh()
+        )
+        .subscribe((status) => {
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            logger.warn("useMyGyms: realtime channel issue", { status });
+          }
+        });
+
+      channelRef.current = channel;
+    }, REALTIME_SUBSCRIBE_DELAY_MS);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(subscribeTimer);
+      if (debounce) clearTimeout(debounce);
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
+  }, [userId, gymIdsKey, load]);
 
   return { gyms, loading, refresh: () => load(true) };
 }

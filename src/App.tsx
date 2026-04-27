@@ -49,6 +49,7 @@ const CutPlanReview = lazy(() => import("./pages/CutPlanReview"));
 const Legal = lazy(() => import("./pages/Legal"));
 const CoachDashboard = lazy(() => import("./pages/coach/CoachDashboard"));
 const CoachSetup = lazy(() => import("./pages/coach/CoachSetup"));
+const CoachLogin = lazy(() => import("./pages/coach/CoachLogin"));
 const AthleteDetail = lazy(() => import("./pages/coach/AthleteDetail"));
 const JoinGym = lazy(() => import("./pages/JoinGym"));
 const MyGym = lazy(() => import("./pages/MyGym"));
@@ -68,6 +69,7 @@ _idle(() => {
     import("./pages/TrainingCalendar").catch(() => {});
     import("./pages/MyGym").catch(() => {});
     import("./pages/JoinGym").catch(() => {});
+    import("./pages/coach/CoachLogin").catch(() => {});
   }, 3000);
   setTimeout(() => {
     import("./pages/Recovery").catch(() => {});
@@ -278,6 +280,7 @@ const App = () => (
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/coach/login" element={<Suspense fallback={<DashboardSkeleton />}><CoachLogin /></Suspense>} />
                 <Route path="/legal" element={<Suspense fallback={null}><Legal /></Suspense>} />
                 <Route path="/onboarding" element={
                   <ProtectedRoute>

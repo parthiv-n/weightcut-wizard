@@ -21,6 +21,8 @@ export interface AthleteDetailData {
     ai_recommended_fats_g: number | null;
   } | null;
   weight_7d: { date: string; weight_kg: number }[] | null;
+  /** 7-day RPE-hours per day, oldest → newest. */
+  strain_7d: number[] | null;
   today_macros: { calories: number; protein_g: number; carbs_g: number; fats_g: number } | null;
   recent_sessions: { date: string; session_type: string; rpe: number; soreness_level: number | null; duration_minutes: number }[] | null;
   membership: { share_data: boolean; status: string; joined_at: string; gym_name: string } | null;

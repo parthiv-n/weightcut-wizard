@@ -1,15 +1,14 @@
 import { Navigate } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { useAuth, useUser } from "@/contexts/UserContext";
+import { useAuth } from "@/contexts/UserContext";
 import { WizardLoader } from "@/components/ui/WizardLoader";
 
 export function ProfileCompletionGuard({ children }: { children: React.ReactNode }) {
-  const { hasProfile, isLoading } = useAuth();
-  const { profile } = useUser();
-  const isCoach = profile?.role === "coach";
+  // `isCoach` resolves SYNCHRONOUSLY from JWT user_metadata + localStorage,
+  // so coaches are routed to /coach even before profile.role finishes loading.
+  // Without this, coaches signing in fresh would briefly see /onboarding.
+  const { hasProfile, isLoading, isCoach } = useAuth();
 
-  // Coaches don't go through fighter onboarding — bounce them into /coach
-  // (which is outside this guard). Athletes without a profile still go to /onboarding.
   if (!isLoading) {
     if (isCoach) return <Navigate to="/coach" replace />;
     if (!hasProfile) return <Navigate to="/onboarding" replace />;

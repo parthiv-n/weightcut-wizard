@@ -30,8 +30,7 @@ const FEATURES = [
 
 const Index = () => {
   const navigate = useNavigate();
-  const { userId, hasProfile, isLoading } = useAuth();
-  const { profile } = useUser();
+  const { userId, hasProfile, isLoading, isCoach } = useAuth();
 
   useEffect(() => {
     if (isLoading) return;
@@ -41,27 +40,26 @@ const Index = () => {
       return;
     }
     if (userId) {
-      // Warm critical edge functions in parallel with route transition (saves
-      // 500-800ms on dashboard first paint vs warming after mount).
       supabase.functions.invoke("daily-wisdom", { method: "GET" } as any).catch(() => {});
 
-      // Coach users skip fighter onboarding entirely.
-      const intendedRole = (() => {
-        try { return localStorage.getItem("wcw_intended_role"); } catch { return null; }
-      })();
-      const isCoach = profile?.role === "coach" || intendedRole === "coach";
       if (isCoach) {
-        navigate("/coach");
+        // Don't honour an athlete-side lastRoute for a coach
+        navigate("/coach", { replace: true });
         return;
       }
       if (hasProfile) {
         const lastRoute = localStorage.getItem("lastRoute");
-        navigate(lastRoute && lastRoute !== "/wizard" ? lastRoute : "/dashboard");
+        // Defensive: don't bounce a fighter into /coach/* via stale lastRoute
+        const safeLast =
+          lastRoute && lastRoute !== "/wizard" && !lastRoute.startsWith("/coach")
+            ? lastRoute
+            : null;
+        navigate(safeLast || "/dashboard");
       } else {
         navigate("/onboarding");
       }
     }
-  }, [userId, hasProfile, isLoading, profile?.role, navigate]);
+  }, [userId, hasProfile, isLoading, isCoach, navigate]);
 
   const [exiting, setExiting] = useState(false);
 
@@ -138,6 +136,13 @@ const Index = () => {
             className="w-full h-[54px] rounded-2xl border border-border text-foreground font-semibold text-[15px] flex items-center justify-center active:scale-[0.97] transition-transform hover:bg-muted/30 disabled:opacity-70"
           >
             I already have an account
+          </button>
+          <button
+            onClick={() => navigateWithTransition("/coach/login")}
+            disabled={exiting}
+            className="w-full text-center text-[12px] text-muted-foreground/70 hover:text-muted-foreground transition-colors py-1 disabled:opacity-50"
+          >
+            I'm a coach →
           </button>
         </div>
 

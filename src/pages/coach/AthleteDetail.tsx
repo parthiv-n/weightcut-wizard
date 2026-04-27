@@ -24,6 +24,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { AthleteAvatar } from "@/components/coach/AthleteAvatar";
+import { StrainSparkline } from "@/components/coach/StrainSparkline";
+import { FightTargetBadge } from "@/components/coach/FightTargetBadge";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
 function fmtPct(value: number, goal: number | null): string {
@@ -75,7 +77,8 @@ export default function AthleteDetail() {
     );
   }
 
-  const { profile: ath, weight_7d, today_macros, recent_sessions, membership } = data;
+  const { profile: ath, weight_7d, strain_7d, today_macros, recent_sessions, membership } = data;
+  const strainTotal = (strain_7d ?? []).reduce((s, v) => s + (v || 0), 0);
   const target = ath.fight_week_target_kg ?? ath.goal_weight_kg ?? null;
   const delta = target != null && ath.current_weight_kg != null
     ? +(ath.current_weight_kg - target).toFixed(1)
@@ -186,6 +189,37 @@ export default function AthleteDetail() {
           </div>
         </div>
 
+        {/* Fight target — date + target weight + on-track status. Only
+            renders when the athlete has set a target_date. */}
+        {ath.target_date && (
+          <FightTargetBadge
+            targetDate={ath.target_date}
+            fightWeekTargetKg={ath.fight_week_target_kg}
+            goalWeightKg={ath.goal_weight_kg}
+            currentWeightKg={ath.current_weight_kg}
+            goalType={ath.goal_type}
+            variant="card"
+          />
+        )}
+
+        {/* 7-day training strain — RPE-hours per day */}
+        <div className="card-surface rounded-2xl border border-border p-3">
+          <div className="flex items-baseline justify-between mb-2">
+            <span className="text-[11px] uppercase tracking-wider text-muted-foreground/70 font-semibold">
+              Strain · 7 days
+            </span>
+            <div className="text-right">
+              <p className="text-[18px] font-semibold tabular-nums leading-none">
+                {strainTotal.toFixed(1)}
+              </p>
+              <p className="text-[10px] text-muted-foreground tabular-nums mt-0.5">
+                RPE-hours
+              </p>
+            </div>
+          </div>
+          <StrainSparkline values={strain_7d ?? []} width={280} height={48} className="w-full" />
+        </div>
+
         {/* Today's macros */}
         {today_macros && (
           <div className="card-surface rounded-2xl border border-border p-3">
@@ -266,13 +300,13 @@ export default function AthleteDetail() {
       <AlertDialog open={removeDialogOpen} onOpenChange={setRemoveDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove athlete from gym?</AlertDialogTitle>
-            <AlertDialogDescription>
+            <AlertDialogTitle className="text-center">Remove athlete from gym?</AlertDialogTitle>
+            <AlertDialogDescription className="text-center">
               They'll lose access to your coaching feedback. They can rejoin with the invite code.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={removing}>Cancel</AlertDialogCancel>
+          <AlertDialogFooter className="flex-row justify-center sm:justify-center gap-2">
+            <AlertDialogCancel disabled={removing} className="mt-0">Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleRemove} disabled={removing} className="bg-destructive hover:bg-destructive/90">
               {removing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Remove"}
             </AlertDialogAction>

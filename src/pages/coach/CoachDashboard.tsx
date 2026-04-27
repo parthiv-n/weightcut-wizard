@@ -13,6 +13,8 @@ import { CoachSettingsSheet } from "@/components/coach/CoachSettingsSheet";
 import { GymLogoUpload } from "@/components/coach/GymLogoUpload";
 import { GymLogoAvatar } from "@/components/coach/GymLogoAvatar";
 import { AthleteAvatar } from "@/components/coach/AthleteAvatar";
+import { StrainSparkline } from "@/components/coach/StrainSparkline";
+import { FightTargetBadge } from "@/components/coach/FightTargetBadge";
 import { AnnouncementComposeSheet } from "@/components/coach/AnnouncementComposeSheet";
 import { localCache } from "@/lib/localCache";
 import ErrorBoundary from "@/components/ErrorBoundary";
@@ -297,12 +299,44 @@ export default function CoachDashboard() {
                           </p>
                         </div>
 
-                        <div className="text-right flex-shrink-0">
-                          <p className="text-[11px] font-medium tabular-nums">
-                            {Math.round(a.todays_calories || 0)}
-                          </p>
-                          <p className="text-[10px] text-muted-foreground">kcal today</p>
-                        </div>
+                        {/* 7-day training strain — sparkline updates in
+                            realtime via the existing fight_camp_calendar
+                            fanout trigger + useCoachRealtimeSync. */}
+                        <StrainSparkline
+                          values={a.strain_7d ?? []}
+                          width={56}
+                          height={22}
+                          className="flex-shrink-0 hidden sm:block"
+                        />
+                        <StrainSparkline
+                          values={a.strain_7d ?? []}
+                          width={44}
+                          height={20}
+                          className="flex-shrink-0 sm:hidden"
+                        />
+
+                        {/* Fight date + target — visible whenever the
+                            athlete has set a target_date in Goals. Updates
+                            in real time via the profiles_coach_fanout
+                            trigger when they change either field. */}
+                        {a.target_date ? (
+                          <FightTargetBadge
+                            targetDate={a.target_date}
+                            fightWeekTargetKg={a.fight_week_target_kg}
+                            goalWeightKg={a.goal_weight_kg}
+                            currentWeightKg={a.current_weight_kg}
+                            goalType={a.goal_type}
+                            variant="row"
+                            className="flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="text-right flex-shrink-0">
+                            <p className="text-[11px] font-medium tabular-nums">
+                              {Math.round(a.todays_calories || 0)}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">kcal today</p>
+                          </div>
+                        )}
 
                         <ChevronRight className="h-3 w-3 text-muted-foreground/40 flex-shrink-0" />
                       </button>

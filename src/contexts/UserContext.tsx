@@ -63,6 +63,15 @@ interface AuthContextType {
   hasProfile: boolean;
   authError: boolean;
   isOffline: boolean;
+  /**
+   * True as soon as the role can be determined — even before the profile
+   * row loads. Resolves from (in order): profile.role, JWT user_metadata.role,
+   * localStorage("wcw_intended_role"). Used by guards and the Index router
+   * to keep coaches out of fighter onboarding during the cold-start window.
+   */
+  isCoach: boolean;
+  /** True when isCoach has been resolved (false until first session is read). */
+  isRoleResolved: boolean;
   retryAuth: () => Promise<void>;
   checkSessionValidity: () => Promise<boolean>;
   refreshSession: () => Promise<boolean>;
@@ -91,6 +100,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [userName, setUserName] = useState<string>("");
   const [avatarUrl, setAvatarUrl] = useState<string>("");
   const [userId, setUserId] = useState<string | null>(null);
+  // JWT user_metadata.role — read synchronously the moment a session lands so
+  // role can be resolved before the profile row finishes loading. This is the
+  // anti-race fix for coaches getting bounced into fighter onboarding.
+  const [metadataRole, setMetadataRole] = useState<string | null>(null);
   useMealsRealtime(userId);
   usePushRegistration(userId);
   const [currentWeight, setCurrentWeight] = useState<number | null>(null);
@@ -300,6 +313,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
       setIsSessionValid(true);
       setUserId(user.id);
       userIdRef.current = user.id;
+      // Synchronous role from JWT — present immediately for users created
+      // via signUp({ options: { data: { role } } }).
+      const md = (user.user_metadata as any)?.role;
+      if (md === "coach" || md === "fighter") setMetadataRole(md);
 
       // Load name from localStorage first for instant display
       const savedName = localStorage.getItem(`user_name_${user.id}`);
@@ -746,6 +763,27 @@ export function UserProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval);
   }, [userId]);
 
+  // Synchronous role resolution. Source priority:
+  //   1. profile.role (authoritative once loaded)
+  //   2. JWT user_metadata.role (set during signUp({data:{role}}) — present
+  //      immediately on session)
+  //   3. localStorage('wcw_intended_role') — fallback for the brief gap
+  //      between signup and the auth state event firing
+  // This guarantees a coach is identified BEFORE the profile row arrives,
+  // so guards never bounce them into fighter onboarding by accident.
+  const isCoach = useMemo(() => {
+    if (profile?.role === "coach") return true;
+    if (profile?.role === "fighter") return false;
+    if (metadataRole === "coach") return true;
+    if (metadataRole === "fighter") return false;
+    try {
+      const ls = localStorage.getItem("wcw_intended_role");
+      if (ls === "coach") return true;
+    } catch {}
+    return false;
+  }, [profile?.role, metadataRole]);
+  const isRoleResolved = !isLoading;
+
   const authValue = useMemo(() => ({
     userId,
     isSessionValid,
@@ -753,12 +791,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
     hasProfile,
     authError,
     isOffline,
+    isCoach,
+    isRoleResolved,
     retryAuth,
     checkSessionValidity,
     refreshSession,
     loadUserData,
     signOut,
-  }), [userId, isSessionValid, isLoading, hasProfile, authError, isOffline,
+  }), [userId, isSessionValid, isLoading, hasProfile, authError, isOffline, isCoach, isRoleResolved,
        retryAuth, checkSessionValidity, refreshSession, loadUserData, signOut]);
 
   const profileValue = useMemo(() => ({
@@ -790,6 +830,8 @@ const AUTH_FALLBACK: AuthContextType = {
   authError: false,
   isSessionValid: false,
   isOffline: false,
+  isCoach: false,
+  isRoleResolved: false,
   retryAuth: async () => {},
   checkSessionValidity: async () => false,
   refreshSession: async () => false,

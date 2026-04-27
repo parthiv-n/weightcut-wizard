@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/UserContext";
+import { routeAfterAuth } from "@/lib/roleRouter";
 import wizardLogo from "@/assets/wizard-logo.webp";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ChevronLeft } from "lucide-react";
@@ -34,15 +35,16 @@ export default function Auth() {
 
   useEffect(() => {
     if (userId && !isPasswordReset) {
-      // If user came from a join link, finish the join flow first
       const joinCode = searchParams.get("join");
       if (joinCode) {
         navigate(`/join?code=${encodeURIComponent(joinCode)}`, { replace: true });
         return;
       }
-      navigate("/dashboard");
+      // Role-aware: if a coach signs in via the athlete door, bounce them
+      // to /coach instead of /dashboard. Single-column read on indexed `role`.
+      void routeAfterAuth(userId, "fighter", navigate, toast);
     }
-  }, [userId, isPasswordReset, navigate, searchParams]);
+  }, [userId, isPasswordReset, navigate, searchParams, toast]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();

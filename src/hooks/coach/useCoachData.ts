@@ -22,6 +22,8 @@ export interface AthleteOverviewRow {
   last_meal_at: string | null;
   share_data: boolean;
   joined_at: string;
+  /** 7-day strain (RPE-hours per day), oldest → newest. Always length 7. */
+  strain_7d: number[] | null;
 }
 
 export interface GymRow {
