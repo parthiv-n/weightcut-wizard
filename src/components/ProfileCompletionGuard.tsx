@@ -1,13 +1,18 @@
 import { Navigate } from "react-router-dom";
 import { AnimatePresence, motion } from "motion/react";
-import { useAuth } from "@/contexts/UserContext";
+import { useAuth, useUser } from "@/contexts/UserContext";
 import { WizardLoader } from "@/components/ui/WizardLoader";
 
 export function ProfileCompletionGuard({ children }: { children: React.ReactNode }) {
   const { hasProfile, isLoading } = useAuth();
+  const { profile } = useUser();
+  const isCoach = profile?.role === "coach";
 
-  if (!isLoading && !hasProfile) {
-    return <Navigate to="/onboarding" replace />;
+  // Coaches don't go through fighter onboarding — bounce them into /coach
+  // (which is outside this guard). Athletes without a profile still go to /onboarding.
+  if (!isLoading) {
+    if (isCoach) return <Navigate to="/coach" replace />;
+    if (!hasProfile) return <Navigate to="/onboarding" replace />;
   }
 
   // Keep both the splash and the real content mounted briefly so the transition

@@ -13,8 +13,9 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import wizardNutrition from "@/assets/wizard-nutrition.webp";
-import { useAuth } from "@/contexts/UserContext";
+import { useAuth, useUser } from "@/contexts/UserContext";
 import { WizardLoader } from "@/components/ui/WizardLoader";
+import { supabase } from "@/integrations/supabase/client";
 
 const FEATURES = [
   { icon: Flame, label: "Weight Management" },
@@ -30,6 +31,7 @@ const FEATURES = [
 const Index = () => {
   const navigate = useNavigate();
   const { userId, hasProfile, isLoading } = useAuth();
+  const { profile } = useUser();
 
   useEffect(() => {
     if (isLoading) return;
@@ -39,6 +41,19 @@ const Index = () => {
       return;
     }
     if (userId) {
+      // Warm critical edge functions in parallel with route transition (saves
+      // 500-800ms on dashboard first paint vs warming after mount).
+      supabase.functions.invoke("daily-wisdom", { method: "GET" } as any).catch(() => {});
+
+      // Coach users skip fighter onboarding entirely.
+      const intendedRole = (() => {
+        try { return localStorage.getItem("wcw_intended_role"); } catch { return null; }
+      })();
+      const isCoach = profile?.role === "coach" || intendedRole === "coach";
+      if (isCoach) {
+        navigate("/coach");
+        return;
+      }
       if (hasProfile) {
         const lastRoute = localStorage.getItem("lastRoute");
         navigate(lastRoute && lastRoute !== "/wizard" ? lastRoute : "/dashboard");
@@ -46,7 +61,7 @@ const Index = () => {
         navigate("/onboarding");
       }
     }
-  }, [userId, hasProfile, isLoading, navigate]);
+  }, [userId, hasProfile, isLoading, profile?.role, navigate]);
 
   const [exiting, setExiting] = useState(false);
 

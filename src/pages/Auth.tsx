@@ -21,6 +21,10 @@ export default function Auth() {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [signupRole, setSignupRole] = useState<"fighter" | "coach">(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("role") === "coach" ? "coach" : "fighter";
+  });
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
@@ -29,8 +33,16 @@ export default function Auth() {
   const isPasswordReset = searchParams.get("reset") === "true";
 
   useEffect(() => {
-    if (userId && !isPasswordReset) navigate("/dashboard");
-  }, [userId, isPasswordReset, navigate]);
+    if (userId && !isPasswordReset) {
+      // If user came from a join link, finish the join flow first
+      const joinCode = searchParams.get("join");
+      if (joinCode) {
+        navigate(`/join?code=${encodeURIComponent(joinCode)}`, { replace: true });
+        return;
+      }
+      navigate("/dashboard");
+    }
+  }, [userId, isPasswordReset, navigate, searchParams]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,16 +63,31 @@ export default function Auth() {
           setLoading(false);
           return;
         }
-        const { error } = await supabase.auth.signUp({
+        const redirectPath = signupRole === "coach" ? "coach/setup" : "dashboard";
+        const { data: signUpData, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
+            data: { role: signupRole },
             emailRedirectTo: window.location.protocol === 'file:' || window.location.hostname === 'localhost'
-              ? 'weightcutwizard://dashboard'
-              : `${window.location.origin}/dashboard`,
+              ? `weightcutwizard://${redirectPath}`
+              : `${window.location.origin}/${redirectPath}`,
           },
         });
         if (error) throw error;
+        // Stash intended role so first profile insert (onboarding/coach setup) picks it up.
+        try { localStorage.setItem("wcw_intended_role", signupRole); } catch {}
+        // If session exists immediately (no email confirm), set role on profile + route coaches.
+        if (signUpData?.user && signUpData.session) {
+          await supabase.from("profiles").upsert(
+            { id: signUpData.user.id, role: signupRole },
+            { onConflict: "id" }
+          );
+          if (signupRole === "coach") {
+            navigate("/coach/setup");
+            return;
+          }
+        }
       }
     } catch (error: any) {
       toast({ variant: "destructive", title: "Error", description: error.message || "Authentication failed" });
@@ -225,6 +252,24 @@ export default function Auth() {
               </form>
             ) : (
               <form onSubmit={handleAuth} className="space-y-3">
+                {!isLogin && (
+                  <div className="flex bg-muted/40 dark:bg-white/[0.06] rounded-2xl p-1 border border-border/40">
+                    <button
+                      type="button"
+                      onClick={() => setSignupRole("fighter")}
+                      className={`flex-1 h-[42px] rounded-xl text-[14px] font-medium transition-all ${signupRole === "fighter" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}
+                    >
+                      I'm an athlete
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSignupRole("coach")}
+                      className={`flex-1 h-[42px] rounded-xl text-[14px] font-medium transition-all ${signupRole === "coach" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}
+                    >
+                      I'm a coach
+                    </button>
+                  </div>
+                )}
                 <Input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required className={inputClass} autoFocus />
                 <Input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} className={`${inputClass} ${passwordError ? errorInputClass : ""}`} />
                 {!isLogin && (

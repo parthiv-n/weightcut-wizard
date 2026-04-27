@@ -9,6 +9,7 @@ import { AIPersistence } from "@/lib/aiPersistence";
 import { logger } from "@/lib/logger";
 import { PROFILE_COLUMNS } from "@/lib/queryColumns";
 import { useMealsRealtime } from "@/hooks/useMealsRealtime";
+import { usePushRegistration } from "@/hooks/usePushRegistration";
 
 export interface ProfileData {
   id?: string;
@@ -31,6 +32,8 @@ export interface ProfileData {
   manual_nutrition_override?: boolean;
   avatar_url?: string;
   goal_type?: 'cutting' | 'losing';
+  role?: 'fighter' | 'coach';
+  display_name?: string | null;
   is_premium?: boolean;
   subscription_tier?: string;
   subscription_expires_at?: string | null;
@@ -89,6 +92,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [avatarUrl, setAvatarUrl] = useState<string>("");
   const [userId, setUserId] = useState<string | null>(null);
   useMealsRealtime(userId);
+  usePushRegistration(userId);
   const [currentWeight, setCurrentWeight] = useState<number | null>(null);
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [isSessionValid, setIsSessionValid] = useState<boolean>(false);
@@ -363,6 +367,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
           if (profileData.avatar_url) {
             setAvatarUrl(profileData.avatar_url);
           }
+          // DB display_name is the source of truth for the user's settings name
+          // (localStorage is just a cold-start cache). Hydrate over the email-
+          // derived default once the row arrives.
+          const dbName = (profileData as any).display_name as string | null;
+          if (dbName && dbName.trim()) {
+            setUserName(dbName);
+            try { localStorage.setItem(`user_name_${user.id}`, dbName); } catch {}
+          }
           localCache.set(user.id, 'profiles', profileData);
         }
       }
@@ -462,6 +474,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
     setUserName(name);
     if (userIdRef.current) {
       localStorage.setItem(`user_name_${userIdRef.current}`, name);
+      // Persist to DB so coaches can see athletes' actual names via RLS.
+      // Fire-and-forget — localStorage was already updated for instant UI.
+      supabase
+        .from("profiles")
+        .update({ display_name: name })
+        .eq("id", userIdRef.current)
+        .then(({ error }) => {
+          if (error) logger.warn("updateUserName: DB write failed", { error });
+        });
     }
   }, []);
 
