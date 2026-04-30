@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { RefreshCw } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
+import { getPullRefreshHandler } from "@/lib/pullRefreshRegistry";
 
 const THRESHOLD = 80;
 const HOLD_DURATION = 200;
@@ -49,7 +50,22 @@ export function PullToRefresh() {
       setRefreshing(true);
       setPullDistance(THRESHOLD * 0.6);
       triggerHaptic(ImpactStyle.Medium);
-      setTimeout(() => window.location.reload(), 300);
+      const handler = getPullRefreshHandler();
+      if (handler) {
+        // Soft refresh: invoke the registered handler, then collapse the
+        // spinner. Falls back to reload if the handler throws.
+        Promise.resolve()
+          .then(() => handler())
+          .catch(() => window.location.reload())
+          .finally(() => {
+            setTimeout(() => {
+              setRefreshing(false);
+              setPullDistance(0);
+            }, 250);
+          });
+      } else {
+        setTimeout(() => window.location.reload(), 300);
+      }
     };
 
     const onTouchStart = (e: TouchEvent) => {

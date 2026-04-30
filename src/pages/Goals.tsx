@@ -62,10 +62,6 @@ const AGGRESSIVENESS_LABELS: Record<string, string> = {
   conservative: "Conservative", balanced: "Balanced", aggressive: "Aggressive",
 };
 
-const BUDGET_LABELS: Record<string, string> = {
-  budget: "Budget", flexible: "Flexible", no_limit: "No Limit",
-};
-
 export default function Goals() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -91,7 +87,6 @@ export default function Goals() {
     sleep_hours: "",
     primary_struggle: "",
     plan_aggressiveness: "",
-    food_budget: "",
     body_fat_pct: "",
   });
 
@@ -120,7 +115,6 @@ export default function Goals() {
         sleep_hours: p.sleep_hours || "",
         primary_struggle: p.primary_struggle || "",
         plan_aggressiveness: p.plan_aggressiveness || "",
-        food_budget: p.food_budget || "",
         body_fat_pct: p.body_fat_pct?.toString() || "",
       });
 
@@ -209,7 +203,6 @@ export default function Goals() {
         sleep_hours: formData.sleep_hours || null,
         primary_struggle: formData.primary_struggle || null,
         plan_aggressiveness: formData.plan_aggressiveness || null,
-        food_budget: formData.food_budget || null,
         body_fat_pct: formData.body_fat_pct ? parseFloat(formData.body_fat_pct) : null,
       }).eq("id", userId);
 
@@ -444,12 +437,6 @@ export default function Goals() {
                   className="w-12 text-right h-7 border-transparent focus-visible:ring-0 bg-transparent p-0 text-[13px]" placeholder="-" />
                 <span className="text-muted-foreground text-[13px]">/wk</span>
               </div>
-            </div>
-            <div className="px-2.5 py-2 space-y-1">
-              <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Food Budget</Label>
-              <ChipSelect value={formData.food_budget}
-                options={Object.entries(BUDGET_LABELS).map(([k, v]) => ({ value: k, label: v }))}
-                onChange={(v) => setFormData(prev => ({ ...prev, food_budget: v }))} />
             </div>
           </div>
         </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ChevronLeft, Loader2 } from "lucide-react";
 import { ResponsiveContainer, LineChart, Line, YAxis, Tooltip } from "recharts";
@@ -27,6 +27,8 @@ import { AthleteAvatar } from "@/components/coach/AthleteAvatar";
 import { StrainSparkline } from "@/components/coach/StrainSparkline";
 import { FightTargetBadge } from "@/components/coach/FightTargetBadge";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { registerPullRefresh } from "@/lib/pullRefreshRegistry";
+import { getSessionColor } from "@/lib/sessionColors";
 
 function fmtPct(value: number, goal: number | null): string {
   if (!goal || goal <= 0) return "—";
@@ -44,6 +46,7 @@ export default function AthleteDetail() {
   useCoachRealtimeSync(userId, () => { /* dashboard refresh handled there */ }, (ev) => {
     if (athleteId && ev.athlete_user_id === athleteId) refresh();
   });
+  useEffect(() => registerPullRefresh(() => refresh()), [refresh]);
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
   const [removing, setRemoving] = useState(false);
 
@@ -258,7 +261,11 @@ export default function AthleteDetail() {
           {recent_sessions && recent_sessions.length > 0 ? (
             <div className="divide-y divide-border/40">
               {recent_sessions.map((s, i) => (
-                <div key={`${s.date}-${i}`} className="flex items-center gap-3 px-3 py-2.5 min-h-[44px]">
+                <div
+                  key={`${s.date}-${i}`}
+                  className="flex items-center gap-3 px-3 py-2.5 min-h-[44px] border-l-[3px]"
+                  style={{ borderLeftColor: getSessionColor(s.session_type) }}
+                >
                   <div className="flex-1 min-w-0">
                     <p className="text-[12px] font-medium truncate capitalize">{s.session_type}</p>
                     <p className="text-[11px] text-muted-foreground tabular-nums">

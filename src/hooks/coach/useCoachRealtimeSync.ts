@@ -36,6 +36,8 @@ export function useCoachRealtimeSync(
     if (!coachId) return;
     let cancelled = false;
     let debounce: ReturnType<typeof setTimeout> | null = null;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let subscribeTimer: ReturnType<typeof setTimeout> | null = null;
 
     const scheduleRefresh = () => {
       if (debounce) clearTimeout(debounce);
@@ -44,11 +46,9 @@ export function useCoachRealtimeSync(
       }, 400);
     };
 
-    // Defer the subscribe to mirror useMealsRealtime — avoids piling on
-    // the SIGNED_IN burst when a hot reload restores session state.
-    const subscribeTimer = setTimeout(() => {
-      if (cancelled) return;
-      const channel = supabase
+    const subscribe = () => {
+      if (cancelled || channel) return;
+      channel = supabase
         .channel(`coach-realtime:${coachId}`)
         .on(
           "postgres_changes",
@@ -73,16 +73,40 @@ export function useCoachRealtimeSync(
             logger.warn("useCoachRealtimeSync subscription issue", { status });
           }
         });
+    };
 
-      return () => {
+    const unsubscribe = () => {
+      if (channel) {
         supabase.removeChannel(channel);
-      };
-    }, 800);
+        channel = null;
+      }
+    };
+
+    // Defer the initial subscribe to mirror useMealsRealtime — avoids piling
+    // on the SIGNED_IN network burst when a hot reload restores session state.
+    subscribeTimer = setTimeout(subscribe, 800);
+
+    // Visibility-aware: drop the channel when the tab is hidden so we don't
+    // hold an idle socket open per coach. On resume, reopen and force a
+    // refresh so the dashboard catches up on any events missed while away.
+    // This is the standard pattern for apps with many concurrent connections.
+    const onVisibility = () => {
+      if (cancelled) return;
+      if (document.visibilityState === "hidden") {
+        unsubscribe();
+      } else {
+        subscribe();
+        scheduleRefresh();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
       cancelled = true;
-      clearTimeout(subscribeTimer);
+      document.removeEventListener("visibilitychange", onVisibility);
+      if (subscribeTimer) clearTimeout(subscribeTimer);
       if (debounce) clearTimeout(debounce);
+      unsubscribe();
     };
   }, [coachId]);
 }

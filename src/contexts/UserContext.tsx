@@ -450,13 +450,21 @@ export function UserProvider({ children }: { children: ReactNode }) {
         return;
       }
 
+      // If a session was already established by an attempt (userId set
+      // during _performLoad even though profile/weight queries failed),
+      // do NOT clear userId — the user is authenticated, just couldn't
+      // load auxiliary data. Surface the error UI but keep the session so
+      // the user isn't bounced to /auth on a transient DB hiccup.
+      const hasValidSession = userIdRef.current !== null;
       setAuthError(true);
-      setIsSessionValid(false);
-      setUserId(null);
-      userIdRef.current = null;
-      setHasProfile(false);
       isUserLoadedRef.current = true;
       setIsLoading(false);
+      if (!hasValidSession) {
+        setIsSessionValid(false);
+        setUserId(null);
+        userIdRef.current = null;
+        setHasProfile(false);
+      }
     } finally {
       loadInProgressRef.current = false;
     }

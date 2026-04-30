@@ -163,6 +163,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
           body: JSON.stringify({
             imageBase64: imageData,
             mealDescription: aiMealDescription.trim() || undefined,
+            persist: false,
           }),
         }
       );
@@ -274,7 +275,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       if (!nutritionData) {
 
         const { data, error } = await supabase.functions.invoke("analyze-meal", {
-          body: { mealDescription: aiMealDescription },
+          body: { mealDescription: aiMealDescription, persist: false },
         });
 
         if (controller.signal.aborted) return;
@@ -399,7 +400,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     try {
 
       const { data, error } = await supabase.functions.invoke("analyze-meal", {
-        body: { mealDescription: aiIngredientDescription },
+        body: { mealDescription: aiIngredientDescription, persist: false },
       });
 
       if (ingController.signal.aborted) return;

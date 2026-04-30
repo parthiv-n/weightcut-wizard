@@ -18,6 +18,7 @@ import { FightTargetBadge } from "@/components/coach/FightTargetBadge";
 import { AnnouncementComposeSheet } from "@/components/coach/AnnouncementComposeSheet";
 import { localCache } from "@/lib/localCache";
 import ErrorBoundary from "@/components/ErrorBoundary";
+import { registerPullRefresh } from "@/lib/pullRefreshRegistry";
 
 function daysSince(iso: string | null): number | null {
   if (!iso) return null;
@@ -75,6 +76,10 @@ export default function CoachDashboard() {
   useEffect(() => {
     try { localStorage.removeItem("wcw_intended_role"); } catch {}
   }, []);
+
+  // Wire pull-to-refresh to a soft refetch instead of window.reload — keeps
+  // realtime channels alive and React state intact.
+  useEffect(() => registerPullRefresh(() => refresh()), [refresh]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, AthleteOverviewRow[]>();
