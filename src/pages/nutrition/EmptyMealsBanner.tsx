@@ -1,5 +1,4 @@
-import { Utensils, Loader2, RotateCcw } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Utensils, Loader2, RotateCcw, Plus } from "lucide-react";
 import type { Meal } from "@/pages/nutrition/types";
 
 interface EmptyMealsBannerProps {
@@ -23,49 +22,60 @@ export function EmptyMealsBanner({
 }: EmptyMealsBannerProps) {
   if (!visible) return null;
 
+  const hasSecondary = previousDayMealCount > 0 || !!lastMeal;
+
   return (
-    <div className="card-surface rounded-2xl border border-border p-3">
-      <div className="flex items-center gap-2.5">
-        <div className="rounded-full bg-primary/15 p-2 flex-shrink-0">
-          <Utensils className="h-4 w-4 text-primary" />
-        </div>
-        <div className="flex-1">
-          <h3 className="font-semibold text-sm">No Meals Logged Today</h3>
-        </div>
+    <div className="card-surface rounded-2xl border border-border/50 px-4 py-5 flex flex-col items-center text-center gap-3">
+      <div
+        className="h-12 w-12 rounded-2xl flex items-center justify-center flex-shrink-0"
+        style={{
+          background: "linear-gradient(135deg, hsl(var(--primary) / 0.18), hsl(var(--primary) / 0.06))",
+        }}
+      >
+        <Utensils className="h-5 w-5 text-primary" />
       </div>
-      <div className="flex flex-wrap items-center justify-center gap-1.5 mt-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-7 text-[12px] font-semibold px-3 rounded-full justify-center text-primary hover:bg-primary/10 active:scale-95 underline-offset-4 hover:underline transition-all"
-          onClick={onQuickAdd}
-        >
-          Quick Add
-        </Button>
-        {previousDayMealCount > 0 && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 text-[12px] font-semibold px-3 rounded-full justify-center text-primary hover:bg-primary/10 active:scale-95 underline-offset-4 hover:underline transition-all"
-            onClick={onCopyPreviousDay}
-            disabled={copyingPreviousDay}
-          >
-            {copyingPreviousDay && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
-            Copy Yesterday
-          </Button>
-        )}
-        {lastMeal && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 text-[11px] font-medium px-3 rounded-full justify-center max-w-full"
-            onClick={onRepeatLast}
-          >
-            <RotateCcw className="h-3 w-3 mr-1 flex-shrink-0" />
-            <span className="truncate">Repeat: {lastMeal.meal_name}</span>
-          </Button>
-        )}
+
+      <div className="space-y-0.5">
+        <h3 className="text-[15px] font-semibold leading-tight">Nothing logged yet</h3>
+        <p className="text-[12px] text-muted-foreground leading-snug">
+          Tap a meal section below or use Quick Add to start.
+        </p>
       </div>
+
+      <button
+        onClick={onQuickAdd}
+        className="w-full max-w-[260px] h-11 rounded-2xl bg-primary text-primary-foreground text-[13px] font-semibold shadow-lg shadow-primary/15 active:scale-[0.98] transition-transform inline-flex items-center justify-center gap-1.5"
+      >
+        <Plus className="h-4 w-4" />
+        Quick Add
+      </button>
+
+      {hasSecondary && (
+        <div className="flex items-center justify-center gap-3 pt-0.5">
+          {previousDayMealCount > 0 && (
+            <button
+              onClick={onCopyPreviousDay}
+              disabled={copyingPreviousDay}
+              className="inline-flex items-center gap-1 text-[12px] font-medium text-muted-foreground hover:text-foreground active:scale-[0.97] transition-all disabled:opacity-50"
+            >
+              {copyingPreviousDay && <Loader2 className="h-3 w-3 animate-spin" />}
+              Copy yesterday
+            </button>
+          )}
+          {previousDayMealCount > 0 && lastMeal && (
+            <span className="text-muted-foreground/40 text-[10px]">·</span>
+          )}
+          {lastMeal && (
+            <button
+              onClick={onRepeatLast}
+              className="inline-flex items-center gap-1 text-[12px] font-medium text-muted-foreground hover:text-foreground active:scale-[0.97] transition-all max-w-[140px]"
+            >
+              <RotateCcw className="h-3 w-3 flex-shrink-0" />
+              <span className="truncate">Repeat last</span>
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
