@@ -456,7 +456,7 @@ export function useNutritionData(params: UseNutritionDataParams) {
     let channel: ReturnType<typeof supabase.channel> | null = null;
     const subscribeTimer = setTimeout(() => {
       channel = supabase
-        .channel("profile-nutrition-updates")
+        .channel(`profile-nutrition-updates:${userId}`)
         .on("postgres_changes", {
           event: "UPDATE",
           schema: "public",

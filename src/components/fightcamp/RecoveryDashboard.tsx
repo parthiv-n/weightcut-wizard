@@ -116,7 +116,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
         .maybeSingle(),
       supabase
         .from('daily_wellness_checkins')
-        .select('date', { count: 'exact', head: true })
+        .select('date', { count: 'estimated', head: true })
         .eq('user_id', userId),
       supabase
         .from('sleep_logs')

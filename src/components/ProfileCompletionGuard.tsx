@@ -4,10 +4,14 @@ import { useAuth } from "@/contexts/UserContext";
 import { WizardLoader } from "@/components/ui/WizardLoader";
 
 export function ProfileCompletionGuard({ children }: { children: React.ReactNode }) {
-  const { hasProfile, isLoading } = useAuth();
+  // `isCoach` resolves SYNCHRONOUSLY from JWT user_metadata + localStorage,
+  // so coaches are routed to /coach even before profile.role finishes loading.
+  // Without this, coaches signing in fresh would briefly see /onboarding.
+  const { hasProfile, isLoading, isCoach } = useAuth();
 
-  if (!isLoading && !hasProfile) {
-    return <Navigate to="/onboarding" replace />;
+  if (!isLoading) {
+    if (isCoach) return <Navigate to="/coach" replace />;
+    if (!hasProfile) return <Navigate to="/onboarding" replace />;
   }
 
   // Keep both the splash and the real content mounted briefly so the transition

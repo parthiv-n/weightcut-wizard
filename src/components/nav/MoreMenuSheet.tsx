@@ -1,6 +1,7 @@
-import { Settings, LogOut, ChevronRight } from "lucide-react";
+import { Settings, LogOut, ChevronRight, Users } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { triggerHapticWarning } from "@/lib/haptics";
+import { GymLogoAvatar } from "@/components/coach/GymLogoAvatar";
 
 interface MoreMenuItem {
   title: string;
@@ -15,9 +16,13 @@ interface MoreMenuSheetProps {
   onItemClick: (url: string) => void;
   onSettings: () => void;
   onLogout: () => void;
+  onMyGym?: () => void;
+  /** Optional gym info for replacing the generic Users icon with a real logo */
+  gymLogoUrl?: string | null;
+  gymName?: string | null;
 }
 
-export function MoreMenuSheet({ open, onOpenChange, menuItems, onItemClick, onSettings, onLogout }: MoreMenuSheetProps) {
+export function MoreMenuSheet({ open, onOpenChange, menuItems, onItemClick, onSettings, onLogout, onMyGym, gymLogoUrl, gymName }: MoreMenuSheetProps) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange} modal={false}>
       <SheetContent
@@ -47,8 +52,27 @@ export function MoreMenuSheet({ open, onOpenChange, menuItems, onItemClick, onSe
             ))}
           </div>
 
-          {/* Settings & Logout group */}
+          {/* Account group: My gym (prominent) → Settings → Logout */}
           <div className="mt-3 rounded-2xl bg-muted/40 dark:bg-muted overflow-hidden border border-border">
+            {onMyGym && (
+              <button
+                type="button"
+                onClick={onMyGym}
+                className="w-full flex items-center gap-3 px-4 py-3 touch-manipulation text-left border-b border-border active:bg-muted/60 transition-colors duration-100 focus:outline-none focus-visible:outline-none"
+              >
+                {gymLogoUrl || gymName ? (
+                  <GymLogoAvatar logoUrl={gymLogoUrl ?? null} name={gymName ?? "Gym"} size={32} />
+                ) : (
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15">
+                    <Users className="h-[18px] w-[18px] text-primary" />
+                  </span>
+                )}
+                <span className="flex-1 text-[15px] font-medium text-foreground truncate">
+                  {gymName || "My gym"}
+                </span>
+                <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/60" />
+              </button>
+            )}
             <button
               type="button"
               onClick={onSettings}

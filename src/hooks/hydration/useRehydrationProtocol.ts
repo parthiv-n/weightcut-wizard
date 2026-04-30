@@ -20,11 +20,28 @@ export function useRehydrationProtocol() {
   const aiAbortRef = useRef<AbortController | null>(null);
 
   const currentWeight = contextProfile?.current_weight_kg ?? 0;
+  const fightWeekTarget = contextProfile?.fight_week_target_kg ?? contextProfile?.goal_weight_kg ?? null;
+  const targetDate = contextProfile?.target_date ?? null;
 
-  const [weightLost, setWeightLost] = useState("");
+  // Prefill weight-lost = current - fight-week target (if both present and current > target)
+  const initialWeightLost = (() => {
+    if (!currentWeight || !fightWeekTarget) return "";
+    const diff = currentWeight - fightWeekTarget;
+    if (diff <= 0 || diff > 15) return "";
+    return diff.toFixed(1);
+  })();
+  // Prefill fight date from profile target_date when sensible (today or future)
+  const initialFightDate = (() => {
+    if (!targetDate) return new Date().toISOString().split("T")[0];
+    const d = new Date(targetDate);
+    if (isNaN(d.getTime())) return new Date().toISOString().split("T")[0];
+    return d.toISOString().split("T")[0];
+  })();
+
+  const [weightLost, setWeightLost] = useState(initialWeightLost);
   const [weighInDate, setWeighInDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
   const [weighInTime, setWeighInTime] = useState<string>("16:00");
-  const [fightDate, setFightDate] = useState<string>(() => new Date().toISOString().split("T")[0]);
+  const [fightDate, setFightDate] = useState<string>(initialFightDate);
   const [fightTime, setFightTime] = useState<string>("21:00");
   const [glycogenDepletion, setGlycogenDepletion] = useState<string>("moderate");
   const [normalCarbs, setNormalCarbs] = useState<string>("");

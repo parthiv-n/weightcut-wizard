@@ -9,6 +9,7 @@ import { AlertTriangle, Loader2, Target } from "lucide-react";
 import { profileSchema } from "@/lib/validation";
 import { useUser } from "@/contexts/UserContext";
 import { celebrateSuccess, triggerHapticSelection } from "@/lib/haptics";
+import { GoalsSkeleton } from "@/components/ui/skeleton-loader";
 
 /** Inline chip selector — replaces dropdown selects with tappable pills */
 function ChipSelect({ value, options, onChange, columns = 3 }: {
@@ -223,7 +224,7 @@ export default function Goals() {
     }
   };
 
-  if (loading) return <div className="min-h-[50vh]" />;
+  if (loading) return <GoalsSkeleton />;
 
   const isFighter = formData.goal_type === "cutting";
   const safetyFeedback = formData.goal_weight_kg && formData.fight_week_target_kg

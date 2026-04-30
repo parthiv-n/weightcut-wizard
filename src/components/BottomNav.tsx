@@ -1,4 +1,4 @@
-import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Calendar, HeartPulse, Dumbbell, TrendingDown, Moon } from "lucide-react";
+import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Calendar, HeartPulse, Dumbbell, TrendingDown, Moon, Users } from "lucide-react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, memo } from "react";
 import { motion, LayoutGroup } from "motion/react";
@@ -8,6 +8,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useProfile, useUser, useAuth } from "@/contexts/UserContext";
+import { useMyGyms } from "@/hooks/coach/useMyGyms";
 import { useTutorial } from "@/tutorial/useTutorial";
 import { FIGHT_ONLY_PATHS, isFighter } from "@/lib/goalType";
 import {
@@ -44,6 +45,10 @@ export const BottomNav = memo(function BottomNav() {
   const { toast } = useToast();
   const { userName, avatarUrl, setUserName, setAvatarUrl } = useProfile();
   const { userId, profile, refreshProfile } = useUser();
+  // Only fetch gym memberships for athletes — coaches use the /coach surface
+  const isAthlete = profile?.role !== "coach";
+  const { gyms: myGyms } = useMyGyms(isAthlete ? userId : null);
+  const primaryGym = myGyms[0] ?? null;
   const { signOut } = useAuth();
   const { replayTutorial } = useTutorial();
   const goalType = (profile?.goal_type as 'cutting' | 'losing') ?? 'cutting';
@@ -268,6 +273,9 @@ export const BottomNav = memo(function BottomNav() {
         onOpenChange={setMoreMenuOpen}
         menuItems={filteredMoreMenuItems}
         onItemClick={handleMoreItemClick}
+        onMyGym={() => { setMoreMenuOpen(false); navigate("/my-gym"); }}
+        gymLogoUrl={primaryGym?.gym_logo_url ?? null}
+        gymName={primaryGym?.gym_name ?? null}
         onSettings={handleSettings}
         onLogout={() => setLogoutDialogOpen(true)}
       />

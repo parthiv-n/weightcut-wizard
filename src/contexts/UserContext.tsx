@@ -9,6 +9,7 @@ import { AIPersistence } from "@/lib/aiPersistence";
 import { logger } from "@/lib/logger";
 import { PROFILE_COLUMNS } from "@/lib/queryColumns";
 import { useMealsRealtime } from "@/hooks/useMealsRealtime";
+import { usePushRegistration } from "@/hooks/usePushRegistration";
 
 export interface ProfileData {
   id?: string;
@@ -31,6 +32,8 @@ export interface ProfileData {
   manual_nutrition_override?: boolean;
   avatar_url?: string;
   goal_type?: 'cutting' | 'losing';
+  role?: 'fighter' | 'coach';
+  display_name?: string | null;
   is_premium?: boolean;
   subscription_tier?: string;
   subscription_expires_at?: string | null;
@@ -60,6 +63,15 @@ interface AuthContextType {
   hasProfile: boolean;
   authError: boolean;
   isOffline: boolean;
+  /**
+   * True as soon as the role can be determined — even before the profile
+   * row loads. Resolves from (in order): profile.role, JWT user_metadata.role,
+   * localStorage("wcw_intended_role"). Used by guards and the Index router
+   * to keep coaches out of fighter onboarding during the cold-start window.
+   */
+  isCoach: boolean;
+  /** True when isCoach has been resolved (false until first session is read). */
+  isRoleResolved: boolean;
   retryAuth: () => Promise<void>;
   checkSessionValidity: () => Promise<boolean>;
   refreshSession: () => Promise<boolean>;
@@ -88,7 +100,12 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [userName, setUserName] = useState<string>("");
   const [avatarUrl, setAvatarUrl] = useState<string>("");
   const [userId, setUserId] = useState<string | null>(null);
+  // JWT user_metadata.role — read synchronously the moment a session lands so
+  // role can be resolved before the profile row finishes loading. This is the
+  // anti-race fix for coaches getting bounced into fighter onboarding.
+  const [metadataRole, setMetadataRole] = useState<string | null>(null);
   useMealsRealtime(userId);
+  usePushRegistration(userId);
   const [currentWeight, setCurrentWeight] = useState<number | null>(null);
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [isSessionValid, setIsSessionValid] = useState<boolean>(false);
@@ -296,6 +313,10 @@ export function UserProvider({ children }: { children: ReactNode }) {
       setIsSessionValid(true);
       setUserId(user.id);
       userIdRef.current = user.id;
+      // Synchronous role from JWT — present immediately for users created
+      // via signUp({ options: { data: { role } } }).
+      const md = (user.user_metadata as any)?.role;
+      if (md === "coach" || md === "fighter") setMetadataRole(md);
 
       // Load name from localStorage first for instant display
       const savedName = localStorage.getItem(`user_name_${user.id}`);
@@ -362,6 +383,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
           profileRef.current = profileData as ProfileData;
           if (profileData.avatar_url) {
             setAvatarUrl(profileData.avatar_url);
+          }
+          // DB display_name is the source of truth for the user's settings name
+          // (localStorage is just a cold-start cache). Hydrate over the email-
+          // derived default once the row arrives.
+          const dbName = (profileData as any).display_name as string | null;
+          if (dbName && dbName.trim()) {
+            setUserName(dbName);
+            try { localStorage.setItem(`user_name_${user.id}`, dbName); } catch {}
           }
           localCache.set(user.id, 'profiles', profileData);
         }
@@ -462,6 +491,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
     setUserName(name);
     if (userIdRef.current) {
       localStorage.setItem(`user_name_${userIdRef.current}`, name);
+      // Persist to DB so coaches can see athletes' actual names via RLS.
+      // Fire-and-forget — localStorage was already updated for instant UI.
+      supabase
+        .from("profiles")
+        .update({ display_name: name })
+        .eq("id", userIdRef.current)
+        .then(({ error }) => {
+          if (error) logger.warn("updateUserName: DB write failed", { error });
+        });
     }
   }, []);
 
@@ -725,6 +763,27 @@ export function UserProvider({ children }: { children: ReactNode }) {
     return () => clearInterval(interval);
   }, [userId]);
 
+  // Synchronous role resolution. Source priority:
+  //   1. profile.role (authoritative once loaded)
+  //   2. JWT user_metadata.role (set during signUp({data:{role}}) — present
+  //      immediately on session)
+  //   3. localStorage('wcw_intended_role') — fallback for the brief gap
+  //      between signup and the auth state event firing
+  // This guarantees a coach is identified BEFORE the profile row arrives,
+  // so guards never bounce them into fighter onboarding by accident.
+  const isCoach = useMemo(() => {
+    if (profile?.role === "coach") return true;
+    if (profile?.role === "fighter") return false;
+    if (metadataRole === "coach") return true;
+    if (metadataRole === "fighter") return false;
+    try {
+      const ls = localStorage.getItem("wcw_intended_role");
+      if (ls === "coach") return true;
+    } catch {}
+    return false;
+  }, [profile?.role, metadataRole]);
+  const isRoleResolved = !isLoading;
+
   const authValue = useMemo(() => ({
     userId,
     isSessionValid,
@@ -732,12 +791,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
     hasProfile,
     authError,
     isOffline,
+    isCoach,
+    isRoleResolved,
     retryAuth,
     checkSessionValidity,
     refreshSession,
     loadUserData,
     signOut,
-  }), [userId, isSessionValid, isLoading, hasProfile, authError, isOffline,
+  }), [userId, isSessionValid, isLoading, hasProfile, authError, isOffline, isCoach, isRoleResolved,
        retryAuth, checkSessionValidity, refreshSession, loadUserData, signOut]);
 
   const profileValue = useMemo(() => ({
@@ -769,6 +830,8 @@ const AUTH_FALLBACK: AuthContextType = {
   authError: false,
   isSessionValid: false,
   isOffline: false,
+  isCoach: false,
+  isRoleResolved: false,
   retryAuth: async () => {},
   checkSessionValidity: async () => false,
   refreshSession: async () => false,

@@ -149,7 +149,7 @@ export default function Onboarding() {
   const [generationStep, setGenerationStep] = useState(0);
   const navigate = useNavigate();
   const { refreshProfile } = useProfile();
-  const { hasProfile, isLoading: authLoading } = useAuth();
+  const { hasProfile, isLoading: authLoading, isCoach } = useAuth();
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -195,10 +195,16 @@ export default function Onboarding() {
 
   const [useAutoTarget, setUseAutoTarget] = useState(true);
 
-  // Redirect if profile exists
+  // Redirect if profile exists OR if this is a coach (coaches must never see
+  // the fighter onboarding wizard — they go straight to /coach).
   useEffect(() => {
-    if (!authLoading && hasProfile) navigate("/dashboard", { replace: true });
-  }, [authLoading, hasProfile, navigate]);
+    if (authLoading) return;
+    if (isCoach) {
+      navigate("/coach", { replace: true });
+      return;
+    }
+    if (hasProfile) navigate("/dashboard", { replace: true });
+  }, [authLoading, hasProfile, isCoach, navigate]);
 
   // Step 13 (plan_aggressiveness — "how aggressive / how fast") only applies
   // to non-fighters. Fighters' pace is determined by the fight date alone, so
@@ -606,7 +612,7 @@ export default function Onboarding() {
     );
   }
 
-  if (authLoading || hasProfile) return null;
+  if (authLoading || hasProfile || isCoach) return null;
 
   const progress = (step / TOTAL_STEPS) * 100;
 

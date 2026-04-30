@@ -292,16 +292,16 @@ export function useGamification(
 
       // 4 queries in parallel (weight dates reused from Dashboard prop)
       const results = await Promise.allSettled([
-        // Nutrition dates for past 7 days
+        // Nutrition dates for past 7 days — read meals (table) not nutrition_logs (view-over-join)
         supabase
-          .from("nutrition_logs")
+          .from("meals")
           .select("date")
           .eq("user_id", userId)
           .gte("date", sevenDaysAgo),
-        // Total meal count
+        // Total meal count — count `meals` directly (view counts force a join)
         supabase
-          .from("nutrition_logs")
-          .select("*", { count: "exact", head: true })
+          .from("meals")
+          .select("id", { count: "estimated", head: true })
           .eq("user_id", userId),
         // Fight week plans count
         supabase

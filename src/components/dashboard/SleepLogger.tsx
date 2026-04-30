@@ -4,7 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { localCache } from "@/lib/localCache";
 import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
-import { triggerHapticSuccess } from "@/lib/haptics";
+import { triggerHaptic, triggerHapticSuccess } from "@/lib/haptics";
+import { ImpactStyle } from "@capacitor/haptics";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 interface SleepLoggerProps {
   userId: string;
@@ -21,8 +23,10 @@ const cacheKey = (date: string) => `sleep_log_${date}`;
 
 export const SleepLogger = memo(function SleepLogger({ userId, compact }: SleepLoggerProps) {
   const [hours, setHours] = useState(DEFAULT_HOURS);
+  const [draftHours, setDraftHours] = useState(DEFAULT_HOURS);
   const [saved, setSaved] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   // Load from cache, then background-fetch from Supabase
   useEffect(() => {
@@ -30,6 +34,7 @@ export const SleepLogger = memo(function SleepLogger({ userId, compact }: SleepL
     const cached = localCache.get<number>(userId, cacheKey(date));
     if (cached !== null) {
       setHours(cached);
+      setDraftHours(cached);
       setSaved(true);
     }
 
@@ -47,6 +52,7 @@ export const SleepLogger = memo(function SleepLogger({ userId, compact }: SleepL
         if (error) throw error;
         if (data) {
           setHours(data.hours);
+          setDraftHours(data.hours);
           setSaved(true);
           localCache.set(userId, cacheKey(date), data.hours);
         }
@@ -56,122 +62,180 @@ export const SleepLogger = memo(function SleepLogger({ userId, compact }: SleepL
       });
   }, [userId]);
 
+  const openSheet = () => {
+    triggerHaptic(ImpactStyle.Light);
+    setDraftHours(hours);
+    setIsOpen(true);
+  };
+
   const handleSave = useCallback(async () => {
+    if (saving) return;
     const date = today();
+    const newHours = draftHours;
+    setSaving(true);
     // Optimistic update
+    setHours(newHours);
     setSaved(true);
-    setIsEditing(false);
-    localCache.set(userId, cacheKey(date), hours);
+    setIsOpen(false);
+    localCache.set(userId, cacheKey(date), newHours);
     // Also update the sleep_logs array cache so the Sleep chart page renders instantly
     const existing = localCache.get<{ date: string; hours: number }[]>(userId, "sleep_logs") ?? [];
-    const idx = existing.findIndex(r => r.date === date);
-    const updated = idx >= 0
-      ? existing.map((r, i) => i === idx ? { ...r, hours } : r)
-      : [...existing, { date, hours }].sort((a, b) => a.date.localeCompare(b.date));
+    const idx = existing.findIndex((r) => r.date === date);
+    const updated =
+      idx >= 0
+        ? existing.map((r, i) => (i === idx ? { ...r, hours: newHours } : r))
+        : [...existing, { date, hours: newHours }].sort((a, b) => a.date.localeCompare(b.date));
     localCache.set(userId, "sleep_logs", updated);
     window.dispatchEvent(new Event("sleep-logged"));
     triggerHapticSuccess();
 
     try {
       const { error } = await withSupabaseTimeout(
-        supabase.from("sleep_logs").upsert(
-          { user_id: userId, date, hours },
-          { onConflict: "user_id,date" }
-        ),
+        supabase
+          .from("sleep_logs")
+          .upsert({ user_id: userId, date, hours: newHours }, { onConflict: "user_id,date" }),
         6000,
         "Save sleep log"
       );
       if (error) throw error;
     } catch (err: any) {
       logger.error("SleepLogger: save failed", err);
+    } finally {
+      setSaving(false);
     }
-  }, [userId, hours]);
+  }, [userId, draftHours, saving]);
 
-  const adjust = (delta: number) => {
-    setHours((h) => Math.min(MAX_HOURS, Math.max(MIN_HOURS, Math.round((h + delta) * 10) / 10)));
+  const adjustDraft = (delta: number) => {
+    triggerHaptic(ImpactStyle.Light);
+    setDraftHours((h) => Math.min(MAX_HOURS, Math.max(MIN_HOURS, Math.round((h + delta) * 10) / 10)));
   };
 
-  // Collapsed state
-  if (!isEditing) {
-    if (compact) {
-      return (
-        <button
-          type="button"
-          className="card-surface rounded-2xl border border-border p-2.5 flex items-center justify-center active:scale-[0.98] transition-all text-center w-full"
-          onClick={() => setIsEditing(true)}
-        >
-          {saved ? (
-            <p className="text-[12px] font-semibold leading-tight"><span className="tabular-nums">{hours}</span><span className="text-muted-foreground">h</span> sleep</p>
-          ) : (
-            <p className="text-[12px] font-semibold leading-tight">Sleep</p>
-          )}
-        </button>
-      );
-    }
-    return (
-      <button
-        type="button"
-        className="card-surface rounded-2xl p-3 sm:p-4 w-full flex items-center gap-3 active:scale-[0.98] transition-all duration-200 text-left"
-        onClick={() => setIsEditing(true)}
-      >
-        <Moon className="w-5 h-5 text-primary flex-shrink-0" />
-        {saved ? (
-          <>
-            <span className="text-sm font-semibold flex-1">
-              <span className="tabular-nums">{hours}</span>
-              <span className="text-muted-foreground">h</span>
-            </span>
-            <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-          </>
-        ) : (
-          <>
-            <span className="text-sm font-medium text-muted-foreground flex-1">Log Sleep</span>
-            <ChevronRight className="w-4 h-4 text-muted-foreground/40 flex-shrink-0" />
-          </>
-        )}
-      </button>
-    );
-  }
+  // Compact pill — stays the EXACT same size whether the sheet is open or not.
+  // The bottom sheet handles all input, so the dashboard tile never resizes.
+  const trigger = compact ? (
+    <button
+      type="button"
+      className="card-surface rounded-2xl border border-border p-2.5 flex items-center justify-center active:scale-[0.98] transition-all text-center w-full"
+      onClick={openSheet}
+    >
+      {saved ? (
+        <p className="text-[12px] font-semibold leading-tight">
+          <span className="tabular-nums">{hours}</span>
+          <span className="text-muted-foreground">h</span> sleep
+        </p>
+      ) : (
+        <p className="text-[12px] font-semibold leading-tight">Sleep</p>
+      )}
+    </button>
+  ) : (
+    <button
+      type="button"
+      className="card-surface rounded-2xl p-3 sm:p-4 w-full flex items-center gap-3 active:scale-[0.98] transition-all duration-200 text-left"
+      onClick={openSheet}
+    >
+      <Moon className="w-5 h-5 text-primary flex-shrink-0" />
+      {saved ? (
+        <>
+          <span className="text-sm font-semibold flex-1">
+            <span className="tabular-nums">{hours}</span>
+            <span className="text-muted-foreground">h</span>
+          </span>
+          <Check className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+        </>
+      ) : (
+        <>
+          <span className="text-sm font-medium text-muted-foreground flex-1">Log Sleep</span>
+          <ChevronRight className="w-4 h-4 text-muted-foreground/40 flex-shrink-0" />
+        </>
+      )}
+    </button>
+  );
 
-  // Expanded stepper
   return (
-    <div className="card-surface rounded-2xl p-3 sm:p-4 space-y-3">
-      <div className="flex items-center gap-2">
-        <Moon className="w-5 h-5 text-primary flex-shrink-0" />
-        <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Sleep</span>
-      </div>
+    <>
+      {trigger}
+      <Sheet open={isOpen} onOpenChange={setIsOpen}>
+        <SheetContent
+          side="bottom"
+          className="rounded-t-2xl pb-[calc(env(safe-area-inset-bottom,0px)+1rem)] [&>button]:hidden flex flex-col max-h-[85vh]"
+        >
+          <div className="flex justify-center pt-1 pb-2 shrink-0">
+            <div className="w-10 h-1 rounded-full bg-muted-foreground/25" aria-hidden />
+          </div>
+          {/* Header with always-visible Save pill on the right */}
+          <div className="flex items-center justify-between px-1 pb-3 shrink-0 gap-3">
+            <SheetHeader className="text-left flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <Moon className="w-4 h-4 text-primary" />
+                <SheetTitle className="text-base font-semibold">Sleep</SheetTitle>
+              </div>
+              <p className="text-[12px] text-muted-foreground truncate">
+                How long did you sleep last night?
+              </p>
+            </SheetHeader>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="h-9 px-4 rounded-full bg-primary text-primary-foreground text-[13px] font-semibold active:scale-[0.95] transition-transform disabled:opacity-40 flex-shrink-0"
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
 
-      <div className="flex items-center justify-center gap-5">
-        <button
-          type="button"
-          className="h-7 w-7 rounded-full bg-muted/40 flex items-center justify-center text-sm font-medium active:bg-muted/60 transition-colors"
-          onClick={() => adjust(-STEP)}
-          disabled={hours <= MIN_HOURS}
-        >
-          <Minus className="w-3.5 h-3.5" />
-        </button>
-        <span className="text-lg font-bold tabular-nums">
-          {hours}<span className="text-muted-foreground ml-0.5">h</span>
-        </span>
-        <button
-          type="button"
-          className="h-7 w-7 rounded-full bg-muted/40 flex items-center justify-center text-sm font-medium active:bg-muted/60 transition-colors"
-          onClick={() => adjust(STEP)}
-          disabled={hours >= MAX_HOURS}
-        >
-          <Plus className="w-3.5 h-3.5" />
-        </button>
-      </div>
+          {/* Big-typography stepper — feels deliberate, not cramped */}
+          <div className="flex items-center justify-center gap-6 py-3 shrink-0">
+            <button
+              type="button"
+              className="h-12 w-12 rounded-full bg-muted/50 flex items-center justify-center active:bg-muted/70 active:scale-95 transition-all disabled:opacity-30"
+              onClick={() => adjustDraft(-STEP)}
+              disabled={draftHours <= MIN_HOURS}
+              aria-label="Decrease hours"
+            >
+              <Minus className="w-5 h-5" />
+            </button>
+            <div className="flex items-baseline gap-1 min-w-[88px] justify-center">
+              <span className="text-[44px] font-bold tabular-nums leading-none tracking-tight">
+                {draftHours}
+              </span>
+              <span className="text-[18px] text-muted-foreground font-medium">h</span>
+            </div>
+            <button
+              type="button"
+              className="h-12 w-12 rounded-full bg-muted/50 flex items-center justify-center active:bg-muted/70 active:scale-95 transition-all disabled:opacity-30"
+              onClick={() => adjustDraft(STEP)}
+              disabled={draftHours >= MAX_HOURS}
+              aria-label="Increase hours"
+            >
+              <Plus className="w-5 h-5" />
+            </button>
+          </div>
 
-      <div className="flex justify-end">
-        <button
-          type="button"
-          className="text-xs font-semibold text-primary active:opacity-70 transition-opacity"
-          onClick={handleSave}
-        >
-          Save
-        </button>
-      </div>
-    </div>
+          {/* Quick-pick chips for common values */}
+          <div className="flex flex-wrap justify-center gap-1.5 pb-3 shrink-0">
+            {[6, 7, 7.5, 8, 8.5, 9].map((preset) => {
+              const active = draftHours === preset;
+              return (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => {
+                    triggerHaptic(ImpactStyle.Light);
+                    setDraftHours(preset);
+                  }}
+                  className={`px-3 h-8 rounded-full text-[12px] font-medium tabular-nums transition-colors ${
+                    active
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted/40 text-muted-foreground active:bg-muted/60"
+                  }`}
+                >
+                  {preset}h
+                </button>
+              );
+            })}
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
   );
 });

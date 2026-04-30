@@ -13,8 +13,9 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import wizardNutrition from "@/assets/wizard-nutrition.webp";
-import { useAuth } from "@/contexts/UserContext";
+import { useAuth, useUser } from "@/contexts/UserContext";
 import { WizardLoader } from "@/components/ui/WizardLoader";
+import { supabase } from "@/integrations/supabase/client";
 
 const FEATURES = [
   { icon: Flame, label: "Weight Management" },
@@ -29,7 +30,7 @@ const FEATURES = [
 
 const Index = () => {
   const navigate = useNavigate();
-  const { userId, hasProfile, isLoading } = useAuth();
+  const { userId, hasProfile, isLoading, isCoach } = useAuth();
 
   useEffect(() => {
     if (isLoading) return;
@@ -39,14 +40,26 @@ const Index = () => {
       return;
     }
     if (userId) {
+      supabase.functions.invoke("daily-wisdom", { method: "GET" } as any).catch(() => {});
+
+      if (isCoach) {
+        // Don't honour an athlete-side lastRoute for a coach
+        navigate("/coach", { replace: true });
+        return;
+      }
       if (hasProfile) {
         const lastRoute = localStorage.getItem("lastRoute");
-        navigate(lastRoute && lastRoute !== "/wizard" ? lastRoute : "/dashboard");
+        // Defensive: don't bounce a fighter into /coach/* via stale lastRoute
+        const safeLast =
+          lastRoute && lastRoute !== "/wizard" && !lastRoute.startsWith("/coach")
+            ? lastRoute
+            : null;
+        navigate(safeLast || "/dashboard");
       } else {
         navigate("/onboarding");
       }
     }
-  }, [userId, hasProfile, isLoading, navigate]);
+  }, [userId, hasProfile, isLoading, isCoach, navigate]);
 
   const [exiting, setExiting] = useState(false);
 
@@ -123,6 +136,13 @@ const Index = () => {
             className="w-full h-[54px] rounded-2xl border border-border text-foreground font-semibold text-[15px] flex items-center justify-center active:scale-[0.97] transition-transform hover:bg-muted/30 disabled:opacity-70"
           >
             I already have an account
+          </button>
+          <button
+            onClick={() => navigateWithTransition("/coach/login")}
+            disabled={exiting}
+            className="w-full text-center text-[12px] text-muted-foreground/70 hover:text-muted-foreground transition-colors py-1 disabled:opacity-50"
+          >
+            I'm a coach →
           </button>
         </div>
 

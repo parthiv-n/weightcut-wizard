@@ -15,6 +15,7 @@ import { WizardBackgroundProvider } from "@/contexts/WizardBackgroundContext";
 import { AITaskProvider } from "@/contexts/AITaskContext";
 import { PaywallOverlay } from "@/components/subscription/PaywallOverlay";
 import { NoGemsOverlay } from "@/components/subscription/NoGemsOverlay";
+import { GlobalLoadingOverlay } from "@/components/GlobalLoadingOverlay";
 import { PageTransition } from "@/components/PageTransition";
 import { NavigationDirectionProvider } from "@/hooks/useNavigationDirection";
 import { TutorialProvider } from "@/tutorial/TutorialContext";
@@ -46,6 +47,12 @@ const GymTracker = lazy(() => import("./pages/GymTracker"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const CutPlanReview = lazy(() => import("./pages/CutPlanReview"));
 const Legal = lazy(() => import("./pages/Legal"));
+const CoachDashboard = lazy(() => import("./pages/coach/CoachDashboard"));
+const CoachSetup = lazy(() => import("./pages/coach/CoachSetup"));
+const CoachLogin = lazy(() => import("./pages/coach/CoachLogin"));
+const AthleteDetail = lazy(() => import("./pages/coach/AthleteDetail"));
+const JoinGym = lazy(() => import("./pages/JoinGym"));
+const MyGym = lazy(() => import("./pages/MyGym"));
 
 // Prioritized idle preloading — critical routes first, rest deferred
 const _idle = window.requestIdleCallback || ((cb: IdleRequestCallback) => setTimeout(cb, 50));
@@ -60,6 +67,9 @@ _idle(() => {
     import("./pages/WeightCut").catch(() => {});
     import("./pages/GymTracker").catch(() => {});
     import("./pages/TrainingCalendar").catch(() => {});
+    import("./pages/MyGym").catch(() => {});
+    import("./pages/JoinGym").catch(() => {});
+    import("./pages/coach/CoachLogin").catch(() => {});
   }, 3000);
   setTimeout(() => {
     import("./pages/Recovery").catch(() => {});
@@ -257,6 +267,7 @@ const App = () => (
             <Sonner />
             <PaywallOverlay />
             <NoGemsOverlay />
+            <GlobalLoadingOverlay />
             <BrowserRouter
               future={{
                 v7_startTransition: true,
@@ -269,6 +280,7 @@ const App = () => (
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/auth" element={<Auth />} />
+                <Route path="/coach/login" element={<Suspense fallback={<DashboardSkeleton />}><CoachLogin /></Suspense>} />
                 <Route path="/legal" element={<Suspense fallback={null}><Legal /></Suspense>} />
                 <Route path="/onboarding" element={
                   <ProtectedRoute>
@@ -281,23 +293,47 @@ const App = () => (
                   </ProtectedRoute>
                 } />
 
+                {/* Coach Mode routes — outside the ProfileCompletionGuard,
+                    coaches don't go through fighter onboarding. */}
+                <Route path="/coach/setup" element={
+                  <ProtectedRoute>
+                    <Suspense fallback={null}><CoachSetup /></Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/coach" element={
+                  <ProtectedRoute>
+                    <Suspense fallback={<DashboardSkeleton />}><CoachDashboard /></Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/coach/athletes/:id" element={
+                  <ProtectedRoute>
+                    <Suspense fallback={<DashboardSkeleton />}><AthleteDetail /></Suspense>
+                  </ProtectedRoute>
+                } />
+                <Route path="/join" element={
+                  <ProtectedRoute>
+                    <Suspense fallback={null}><JoinGym /></Suspense>
+                  </ProtectedRoute>
+                } />
+
                 {/* Shared layout route — AppLayout persists across all child navigations */}
                 <Route element={<ProtectedAppLayout />}>
                   <Route path="/dashboard" element={<ErrorBoundary><Suspense fallback={<DashboardSkeleton />}><Dashboard /></Suspense></ErrorBoundary>} />
                   <Route path="/goals" element={<ErrorBoundary><Suspense fallback={<GoalsSkeleton />}><Goals /></Suspense></ErrorBoundary>} />
                   <Route path="/nutrition" element={<ErrorBoundary><Suspense fallback={<NutritionPageSkeleton />}><Nutrition /></Suspense></ErrorBoundary>} />
                   <Route path="/weight" element={<ErrorBoundary><Suspense fallback={<WeightTrackerSkeleton />}><WeightTracker /></Suspense></ErrorBoundary>} />
-                  <Route path="/weight-cut" element={<ErrorBoundary><Suspense fallback={null}><WeightCut /></Suspense></ErrorBoundary>} />
+                  <Route path="/weight-cut" element={<ErrorBoundary><Suspense fallback={<DashboardSkeleton />}><WeightCut /></Suspense></ErrorBoundary>} />
                   <Route path="/hydration" element={<Navigate to="/weight-cut?tab=rehydration" replace />} />
                   <Route path="/fight-week" element={<Navigate to="/weight-cut" replace />} />
-                  <Route path="/fight-camps" element={<ErrorBoundary><Suspense fallback={null}><FightCamps /></Suspense></ErrorBoundary>} />
-                  <Route path="/fight-camps/:id" element={<ErrorBoundary><Suspense fallback={null}><FightCampDetail /></Suspense></ErrorBoundary>} />
-                  <Route path="/training-calendar" element={<ErrorBoundary><Suspense fallback={null}><TrainingCalendar /></Suspense></ErrorBoundary>} />
+                  <Route path="/fight-camps" element={<ErrorBoundary><Suspense fallback={<DashboardSkeleton />}><FightCamps /></Suspense></ErrorBoundary>} />
+                  <Route path="/fight-camps/:id" element={<ErrorBoundary><Suspense fallback={<DashboardSkeleton />}><FightCampDetail /></Suspense></ErrorBoundary>} />
+                  <Route path="/training-calendar" element={<ErrorBoundary><Suspense fallback={<DashboardSkeleton />}><TrainingCalendar /></Suspense></ErrorBoundary>} />
                   <Route path="/fight-camp-calendar" element={<Navigate to="/training-calendar" replace />} />
-                  <Route path="/recovery" element={<ErrorBoundary><Suspense fallback={null}><Recovery /></Suspense></ErrorBoundary>} />
-                  <Route path="/sleep" element={<ErrorBoundary><Suspense fallback={null}><Sleep /></Suspense></ErrorBoundary>} />
+                  <Route path="/recovery" element={<ErrorBoundary><Suspense fallback={<DashboardSkeleton />}><Recovery /></Suspense></ErrorBoundary>} />
+                  <Route path="/sleep" element={<ErrorBoundary><Suspense fallback={<DashboardSkeleton />}><Sleep /></Suspense></ErrorBoundary>} />
                   {/* Skill Tree temporarily hidden from UI */}
-                  <Route path="/gym" element={<ErrorBoundary><Suspense fallback={null}><GymTracker /></Suspense></ErrorBoundary>} />
+                  <Route path="/gym" element={<ErrorBoundary><Suspense fallback={<DashboardSkeleton />}><GymTracker /></Suspense></ErrorBoundary>} />
+                  <Route path="/my-gym" element={<ErrorBoundary><Suspense fallback={<DashboardSkeleton />}><MyGym /></Suspense></ErrorBoundary>} />
                 </Route>
 
                 <Route path="*" element={<NotFound />} />
