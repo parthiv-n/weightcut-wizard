@@ -139,23 +139,41 @@ Output JSON:
 
     edgeLogger.info("Calling Grok API for rehydration protocol");
 
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${GROQ_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "openai/gpt-oss-120b",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.1,
-        max_tokens: 2500,
-        response_format: { type: "json_object" },
-      }),
-    });
+    // connect timeout - upstream Groq
+    const groqController = new AbortController();
+    const groqTimer = setTimeout(() => groqController.abort(), 15000);
+    let response: Response;
+    try {
+      response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${GROQ_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "openai/gpt-oss-120b",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          temperature: 0.1,
+          max_tokens: 2500,
+          response_format: { type: "json_object" },
+        }),
+        signal: groqController.signal,
+      });
+    } catch (err: any) {
+      if (err?.name === "AbortError") {
+        edgeLogger.error("rehydration-protocol Groq timeout", undefined, { functionName: "rehydration-protocol", timeoutMs: 15000 });
+        return new Response(
+          JSON.stringify({ error: "AI service timed out — please try again", code: "AI_TIMEOUT" }),
+          { status: 504, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
+        );
+      }
+      throw err;
+    } finally {
+      clearTimeout(groqTimer);
+    }
 
     if (!response.ok) {
       if (response.status === 429) {

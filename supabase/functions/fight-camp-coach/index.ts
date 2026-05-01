@@ -329,11 +329,28 @@ ${sessionsText}${checkInText}${athleteBaselineText}`;
 
     let response: Response | null = null;
     for (let attempt = 0; attempt < 3; attempt++) {
-      response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: grokHeaders,
-        body: grokBody,
-      });
+      // connect timeout - upstream Groq
+      const groqController = new AbortController();
+      const groqTimer = setTimeout(() => groqController.abort(), 15000);
+      try {
+        response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: grokHeaders,
+          body: grokBody,
+          signal: groqController.signal,
+        });
+      } catch (err: any) {
+        if (err?.name === "AbortError") {
+          edgeLogger.error("fight-camp-coach Groq timeout", undefined, { functionName: "fight-camp-coach", timeoutMs: 15000, attempt });
+          return new Response(
+            JSON.stringify({ error: "AI service timed out — please try again", code: "AI_TIMEOUT" }),
+            { status: 504, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
+          );
+        }
+        throw err;
+      } finally {
+        clearTimeout(groqTimer);
+      }
 
       if (response.status !== 429) break;
 

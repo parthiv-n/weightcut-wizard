@@ -69,6 +69,8 @@ async function getApnsJwt(): Promise<string | null> {
 async function sendToApns(token: string, payload: { aps: any; data?: any }) {
   const jwt = await getApnsJwt();
   if (!jwt || !APNS_BUNDLE_ID) return { ok: false, reason: "apns-not-configured" };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
   try {
     const res = await fetch(`${APNS_HOST}/3/device/${token}`, {
       method: "POST",
@@ -80,15 +82,24 @@ async function sendToApns(token: string, payload: { aps: any; data?: any }) {
         "content-type": "application/json",
       },
       body: JSON.stringify(payload),
+      signal: controller.signal,
     });
     return { ok: res.ok, status: res.status };
-  } catch (err) {
+  } catch (err: any) {
+    if (err?.name === "AbortError") {
+      console.warn("APNs push timed out after 5s", { token: token.slice(0, 8) });
+      return { ok: false, reason: "apns-timeout" };
+    }
     return { ok: false, reason: String(err) };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
 async function sendToFcm(token: string, body: string, title: string) {
   if (!FCM_SERVER_KEY) return { ok: false, reason: "fcm-not-configured" };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
   try {
     const res = await fetch("https://fcm.googleapis.com/fcm/send", {
       method: "POST",
@@ -101,10 +112,17 @@ async function sendToFcm(token: string, body: string, title: string) {
         notification: { title, body, sound: "default" },
         priority: "high",
       }),
+      signal: controller.signal,
     });
     return { ok: res.ok, status: res.status };
-  } catch (err) {
+  } catch (err: any) {
+    if (err?.name === "AbortError") {
+      console.warn("FCM push timed out after 5s", { token: token.slice(0, 8) });
+      return { ok: false, reason: "fcm-timeout" };
+    }
     return { ok: false, reason: String(err) };
+  } finally {
+    clearTimeout(timer);
   }
 }
 

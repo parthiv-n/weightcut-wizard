@@ -221,7 +221,7 @@ const AppLayoutContent = () => {
           <main className="flex-1 overflow-auto overflow-x-hidden relative min-h-0 w-full pt-2 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right animate-app-content-in" style={{ paddingBottom: "calc(5.5rem + env(safe-area-inset-bottom, 0px))" }}>
             <PullToRefresh />
             <PageTransition>
-              <Suspense fallback={null}>
+              <Suspense fallback={<DashboardSkeleton />}>
                 <Outlet />
               </Suspense>
             </PageTransition>

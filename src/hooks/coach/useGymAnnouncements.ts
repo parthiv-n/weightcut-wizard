@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { localCache } from "@/lib/localCache";
 import { logger } from "@/lib/logger";
@@ -39,6 +39,9 @@ export function useGymAnnouncements(
   const seenIdsRef = useRef<Set<string>>(new Set());
   const channelsRef = useRef<ReturnType<typeof supabase.channel>[]>([]);
   const lastFetchRef = useRef(0);
+
+  // Stable identity for gymIds so callers don't need to memoize.
+  const gymIdsKey = useMemo(() => [...gymIds].sort().join("|"), [gymIds]);
 
   const upsertOne = useCallback((row: GymAnnouncement) => {
     if (seenIdsRef.current.has(row.id)) return;
@@ -94,54 +97,96 @@ export function useGymAnnouncements(
 
   // Realtime subscriptions: per-gym broadcast channel + per-user targets channel
   useEffect(() => {
-    if (!userId || gymIds.length === 0) return;
+    if (!userId) return;
+    const ids = gymIdsKey ? gymIdsKey.split("|") : [];
+    if (ids.length === 0) return;
+
+    let cancelled = false;
+    const reconnectAttempts = new Map<string, number>();
+    const reconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+    const subscribeOne = (channelKey: string, build: () => ReturnType<typeof supabase.channel>) => {
+      if (cancelled) return;
+      const ch = build().subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          reconnectAttempts.set(channelKey, 0);
+          return;
+        }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          logger.warn("useGymAnnouncements: channel status", { channelKey, status });
+          // Auto-reconnect with exponential backoff so background/network drops recover.
+          if (cancelled) return;
+          const attempt = reconnectAttempts.get(channelKey) ?? 0;
+          const delay = Math.min(2000 * Math.pow(2, attempt), 30000);
+          reconnectAttempts.set(channelKey, attempt + 1);
+          const existing = reconnectTimers.get(channelKey);
+          if (existing) clearTimeout(existing);
+          reconnectTimers.set(channelKey, setTimeout(() => {
+            if (cancelled) return;
+            const stale = channelsRef.current.find((c) => c === ch);
+            if (stale) {
+              supabase.removeChannel(stale);
+              channelsRef.current = channelsRef.current.filter((c) => c !== stale);
+            }
+            subscribeOne(channelKey, build);
+          }, delay));
+        }
+      });
+      channelsRef.current.push(ch);
+    };
+
     const cancelTimer = setTimeout(() => {
-      gymIds.forEach((gid) => {
-        const ch = supabase
-          .channel(`announcements:${userId}:${gid}`)
+      ids.forEach((gid) => {
+        const key = `announcements:${userId}:${gid}`;
+        subscribeOne(key, () =>
+          supabase
+            .channel(key)
+            .on(
+              "postgres_changes",
+              {
+                event: "INSERT",
+                schema: "public",
+                table: "gym_announcements",
+                filter: `gym_id=eq.${gid}`,
+              },
+              (payload) => {
+                const row = payload.new as { id: string; is_broadcast: boolean };
+                if (!row?.is_broadcast) return;
+                void hydrateAndUpsert(row.id);
+              }
+            )
+        );
+      });
+
+      const targetsKey = `announcement-targets:${userId}`;
+      subscribeOne(targetsKey, () =>
+        supabase
+          .channel(targetsKey)
           .on(
             "postgres_changes",
             {
               event: "INSERT",
               schema: "public",
-              table: "gym_announcements",
-              filter: `gym_id=eq.${gid}`,
+              table: "gym_announcement_targets",
+              filter: `user_id=eq.${userId}`,
             },
             (payload) => {
-              const row = payload.new as { id: string; is_broadcast: boolean };
-              if (!row?.is_broadcast) return;
-              void hydrateAndUpsert(row.id);
+              const row = payload.new as { announcement_id: string };
+              if (row?.announcement_id) void hydrateAndUpsert(row.announcement_id);
             }
           )
-          .subscribe();
-        channelsRef.current.push(ch);
-      });
-
-      const tCh = supabase
-        .channel(`announcement-targets:${userId}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "INSERT",
-            schema: "public",
-            table: "gym_announcement_targets",
-            filter: `user_id=eq.${userId}`,
-          },
-          (payload) => {
-            const row = payload.new as { announcement_id: string };
-            if (row?.announcement_id) void hydrateAndUpsert(row.announcement_id);
-          }
-        )
-        .subscribe();
-      channelsRef.current.push(tCh);
+      );
     }, 1000);
 
     return () => {
+      cancelled = true;
       clearTimeout(cancelTimer);
+      reconnectTimers.forEach((t) => clearTimeout(t));
+      reconnectTimers.clear();
       channelsRef.current.forEach((c) => supabase.removeChannel(c));
       channelsRef.current = [];
     };
-  }, [userId, gymIds.join(","), hydrateAndUpsert]);
+  }, [userId, gymIdsKey, hydrateAndUpsert]);
 
   // Optimistic dismiss with rollback on RPC failure.
   const dismiss = useCallback(async (a: GymAnnouncement) => {

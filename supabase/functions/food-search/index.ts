@@ -100,15 +100,29 @@ serve(async (req) => {
       throw new Error("USDA_API_KEY is not configured");
     }
 
-    const usdaResponse = await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${USDA_API_KEY}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        query: query.trim(),
-        dataType: ["Foundation", "SR Legacy", "Branded"],
-        pageSize: 25,
-      }),
-    });
+    const usdaController = new AbortController();
+    const usdaTimer = setTimeout(() => usdaController.abort(), 10000);
+    let usdaResponse: Response;
+    try {
+      usdaResponse = await fetch(`https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${USDA_API_KEY}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: query.trim(),
+          dataType: ["Foundation", "SR Legacy", "Branded"],
+          pageSize: 25,
+        }),
+        signal: usdaController.signal,
+      });
+    } catch (err: any) {
+      if (err?.name === "AbortError") {
+        edgeLogger.error("USDA API timeout", undefined, { functionName: "food-search", timeoutMs: 10000 });
+        return json({ error: "USDA timeout" }, 504);
+      }
+      throw err;
+    } finally {
+      clearTimeout(usdaTimer);
+    }
 
     if (!usdaResponse.ok) {
       const errText = await usdaResponse.text();

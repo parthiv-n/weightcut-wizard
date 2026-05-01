@@ -117,6 +117,8 @@ export function useMyGyms(userId: string | null) {
     let cancelled = false;
     let debounce: ReturnType<typeof setTimeout> | null = null;
     const channelRef: { current: ReturnType<typeof supabase.channel> | null } = { current: null };
+    const reconnectAttemptRef: { current: number } = { current: 0 };
+    const reconnectTimerRef: { current: ReturnType<typeof setTimeout> | null } = { current: null };
 
     const scheduleRefresh = () => {
       if (debounce) clearTimeout(debounce);
@@ -129,7 +131,7 @@ export function useMyGyms(userId: string | null) {
       }, REALTIME_REFRESH_DEBOUNCE_MS);
     };
 
-    const subscribeTimer = setTimeout(() => {
+    const createChannel = () => {
       if (cancelled) return;
       // Postgres-changes filter syntax requires a single value; for multi-row
       // membership we filter to `id=in.(uuid1,uuid2,...)`.
@@ -147,18 +149,39 @@ export function useMyGyms(userId: string | null) {
           () => scheduleRefresh()
         )
         .subscribe((status) => {
-          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          if (status === "SUBSCRIBED") {
+            reconnectAttemptRef.current = 0;
+            return;
+          }
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
             logger.warn("useMyGyms: realtime channel issue", { status });
+            // Auto-reconnect with exponential backoff so background/network drops recover.
+            if (cancelled) return;
+            const attempt = reconnectAttemptRef.current;
+            const delay = Math.min(2000 * Math.pow(2, attempt), 30000);
+            reconnectAttemptRef.current = attempt + 1;
+            if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+            reconnectTimerRef.current = setTimeout(() => {
+              if (cancelled) return;
+              if (channelRef.current) {
+                supabase.removeChannel(channelRef.current);
+                channelRef.current = null;
+              }
+              createChannel();
+            }, delay);
           }
         });
 
       channelRef.current = channel;
-    }, REALTIME_SUBSCRIBE_DELAY_MS);
+    };
+
+    const subscribeTimer = setTimeout(createChannel, REALTIME_SUBSCRIBE_DELAY_MS);
 
     return () => {
       cancelled = true;
       clearTimeout(subscribeTimer);
       if (debounce) clearTimeout(debounce);
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;

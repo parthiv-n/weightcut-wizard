@@ -29,14 +29,23 @@ function stripDashes(v: unknown): unknown {
 async function callGroqWithRetry(body: unknown, apiKey: string, maxAttempts = 3): Promise<Response> {
   let lastResponse: Response | null = null;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-    });
+    // connect timeout - upstream Groq
+    const groqController = new AbortController();
+    const groqTimer = setTimeout(() => groqController.abort(), 15000);
+    let response: Response;
+    try {
+      response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: groqController.signal,
+      });
+    } finally {
+      clearTimeout(groqTimer);
+    }
     if (response.status !== 429 && response.status !== 503) return response;
     lastResponse = response;
     if (attempt < maxAttempts - 1) {
@@ -249,19 +258,31 @@ Every narrative string must flow like a coach speaking, with no em dashes or en 
 
     edgeLogger.info("Calling Grok API for fight week protocol");
 
-    const response = await callGroqWithRetry(
-      {
-        model: "openai/gpt-oss-120b",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.15,
-        max_tokens: 4096,
-        response_format: { type: "json_object" },
-      },
-      GROQ_API_KEY,
-    );
+    let response: Response;
+    try {
+      response = await callGroqWithRetry(
+        {
+          model: "openai/gpt-oss-120b",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          temperature: 0.15,
+          max_tokens: 4096,
+          response_format: { type: "json_object" },
+        },
+        GROQ_API_KEY,
+      );
+    } catch (err: any) {
+      if (err?.name === "AbortError") {
+        edgeLogger.error("fight-week-analysis Groq timeout", undefined, { functionName: "fight-week-analysis", timeoutMs: 15000 });
+        return new Response(
+          JSON.stringify({ error: "AI service timed out — please try again", code: "AI_TIMEOUT" }),
+          { status: 504, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
+        );
+      }
+      throw err;
+    }
 
     if (!response.ok) {
       if (response.status === 429 || response.status === 503) {

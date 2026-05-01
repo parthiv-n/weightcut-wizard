@@ -219,6 +219,9 @@ Respond ONLY with this exact JSON structure:
 
     const userPrompt = `User Request: ${prompt}`;
 
+    // connect timeout - upstream Groq
+    const groqController = new AbortController();
+    const groqTimer = setTimeout(() => groqController.abort(), 15000);
     let response;
     try {
       response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -237,15 +240,25 @@ Respond ONLY with this exact JSON structure:
           max_tokens: 4096,
         response_format: { type: "json_object" },
         }),
+        signal: groqController.signal,
       });
 
       edgeLogger.info("Groq API response status", { status: response.status });
-    } catch (fetchError) {
+    } catch (fetchError: any) {
+      if (fetchError?.name === "AbortError") {
+        edgeLogger.error("meal-planner Groq timeout", undefined, { functionName: "meal-planner", timeoutMs: 15000 });
+        return new Response(
+          JSON.stringify({ error: "AI service timed out — please try again", code: "AI_TIMEOUT" }),
+          { status: 504, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
+        );
+      }
       edgeLogger.error("Groq API fetch error", fetchError, { functionName: "meal-planner" });
       return new Response(
         JSON.stringify({ error: "Failed to connect to AI service" }),
         { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
       );
+    } finally {
+      clearTimeout(groqTimer);
     }
 
     if (!response.ok) {

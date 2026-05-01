@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from "recharts";
+// Lazy-load recharts wrapper so the ~100KB charts bundle defers until first paint.
+const WeightTrackerChart = lazy(() => import("@/components/charts/WeightTrackerChart"));
 import { format } from "date-fns";
 import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Activity, Scale, Trash2, RefreshCw, ChevronDown, Check, CheckCircle2, Gem, Minus, Plus, Loader2 } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
@@ -301,38 +302,18 @@ export default function WeightTracker() {
           </div>
           {(() => { const chartData = getChartData(); const xTicks = chartData.length > 1 ? [chartData[0].date, chartData[chartData.length - 1].date] : chartData.map(d => d.date); return chartData.length > 0 ? (
             <>
-              <ResponsiveContainer width="100%" height={160}>
-                <LineChart data={chartData} onClick={handleChartClick} margin={{ top: 8, right: 8, bottom: 0, left: 8 }}>
-                  <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={9} tickLine={false} axisLine={false} opacity={0.5} ticks={xTicks} />
-                  <YAxis hide domain={["dataMin - 2", "dataMax + 2"]} />
-                  <Tooltip
-                    content={({ active, payload }) => {
-                      if (active && payload && payload.length) {
-                        const entry = payload[0].payload;
-                        const actualWeight = entry.weight;
-                        const projectedWeight = entry.projected;
-                        const isProjectedOnly = !actualWeight && projectedWeight;
-                        return (
-                          <div className="bg-card border border-border/50 rounded-2xl px-3 py-2 shadow-lg">
-                            <p className="text-[10px] text-muted-foreground">{entry.fullDate}</p>
-                            {actualWeight && <p className="text-base font-bold text-primary">{actualWeight}kg</p>}
-                            {isProjectedOnly && <p className="text-base font-bold text-muted-foreground">{projectedWeight.toFixed(1)}kg <span className="text-[10px] font-normal">projected</span></p>}
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                  />
-                  <ReferenceLine y={profile?.fight_week_target_kg || profile?.goal_weight_kg} stroke="hsl(var(--primary))" strokeDasharray="5 5" strokeOpacity={0.3} />
-                  {profile?.fight_week_target_kg && (
-                    <ReferenceLine y={profile.goal_weight_kg} stroke="hsl(var(--destructive))" strokeDasharray="3 3" strokeOpacity={0.25} />
-                  )}
-                  <Line type="monotone" dataKey="weight" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ fill: "hsl(var(--primary))", r: 3, stroke: "hsl(var(--background))", strokeWidth: 1.5, cursor: "pointer" }} activeDot={{ r: 5, fill: "hsl(var(--primary))", stroke: "hsl(var(--background))", strokeWidth: 2, cursor: "pointer" }} animationDuration={0} />
-                  {aiAnalysis && showProjected && (
-                    <Line type="monotone" dataKey="projected" stroke="hsl(var(--muted-foreground))" strokeWidth={1.5} strokeDasharray="6 4" dot={false} connectNulls={false} animationDuration={0} />
-                  )}
-                </LineChart>
-              </ResponsiveContainer>
+              <Suspense fallback={<div className="h-[160px] w-full animate-pulse bg-muted/20 rounded-2xl" />}>
+                <WeightTrackerChart
+                  data={chartData}
+                  xTicks={xTicks}
+                  fightWeekTarget={profile?.fight_week_target_kg}
+                  goalWeight={profile?.goal_weight_kg}
+                  hasFightWeekTarget={!!profile?.fight_week_target_kg}
+                  showProjected={showProjected}
+                  hasAiAnalysis={!!aiAnalysis}
+                  onChartClick={handleChartClick}
+                />
+              </Suspense>
               <div className="flex items-center justify-between px-1">
                 <div className="flex items-center gap-3">
                   <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground/60">

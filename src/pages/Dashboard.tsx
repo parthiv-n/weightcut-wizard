@@ -1,7 +1,8 @@
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { ComposedChart, Line, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+// Lazy-load recharts wrapper so the ~100KB charts bundle defers until first paint.
+const DashboardWeightChart = lazy(() => import("@/components/charts/DashboardWeightChart"));
 import { TrendingDown, Calendar, Lock, ChevronRight, Flame, Zap, CheckCircle2, Scale, Swords } from "lucide-react";
 import { TrainingWeekWidget, preloadTrainingWeek } from "@/components/dashboard/TrainingWeekWidget";
 import { WeightProgressRing } from "@/components/dashboard/WeightProgressRing";
@@ -54,7 +55,7 @@ interface DailyWisdom {
 }
 
 export default function Dashboard() {
-  const { userName, currentWeight, userId, profile } = useUser();
+  const { userName, currentWeight, userId, profile, loadCutPlan } = useUser();
   const [weightLogs, setWeightLogs] = useState<any[]>(() => {
     if (!userId) return [];
     return localCache.get<any[]>(userId, 'dashboard_weight_logs') || [];
@@ -93,20 +94,27 @@ export default function Dashboard() {
   }, [navigate]);
 
   // Rehydrate cut plan from DB if localStorage is empty (iOS WebView can wipe it).
-  // Once generated, the plan lives on profile.cut_plan_json permanently.
+  // cut_plan_json is no longer in PROFILE_COLUMNS, so we lazy-fetch it via
+  // loadCutPlan() — keeps the cold-start profile query small.
   useEffect(() => {
     if (localStorage.getItem("wcw_cut_plan")) {
       if (!hasCutPlan) setHasCutPlan(true);
       return;
     }
-    const dbPlan = profile?.cut_plan_json;
-    if (dbPlan && typeof dbPlan === "object" && dbPlan.weeklyPlan) {
-      localStorage.setItem("wcw_cut_plan", JSON.stringify(dbPlan));
-      setHasCutPlan(true);
-    } else if (hasCutPlan) {
-      setHasCutPlan(false);
-    }
-  }, [profile?.cut_plan_json, hasCutPlan]);
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      const dbPlan = await loadCutPlan();
+      if (cancelled) return;
+      if (dbPlan && typeof dbPlan === "object" && dbPlan.weeklyPlan) {
+        localStorage.setItem("wcw_cut_plan", JSON.stringify(dbPlan));
+        setHasCutPlan(true);
+      } else if (hasCutPlan) {
+        setHasCutPlan(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [userId, hasCutPlan, loadCutPlan]);
 
   useEffect(() => { trackInstallDate(); }, []);
 
@@ -696,35 +704,9 @@ export default function Dashboard() {
             </div>
             <div className="flex-1 min-h-0">
               {chartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-                    <YAxis
-                      stroke="hsl(var(--muted-foreground))"
-                      fontSize={9}
-                      tickLine={false}
-                      axisLine={false}
-                      width={30}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--background))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "8px",
-                        fontSize: 11,
-                      }}
-                      formatter={(value: number) => [`${value.toFixed(1)} ${weightUnit}`, 'Weight']}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="weight"
-                      stroke="hsl(var(--primary))"
-                      strokeWidth={2}
-                      dot={{ fill: "hsl(var(--primary))", r: 2.5, strokeWidth: 1.5, stroke: "hsl(var(--background))" }}
-                      activeDot={{ r: 4, strokeWidth: 1.5 }}
-                      animationDuration={0}
-                    />
-                  </ComposedChart>
-                </ResponsiveContainer>
+                <Suspense fallback={<div className="h-full w-full animate-pulse bg-muted/20 rounded-2xl" />}>
+                  <DashboardWeightChart data={chartData} weightUnit={weightUnit} />
+                </Suspense>
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <TrendingDown className="h-5 w-5 text-muted-foreground/40 mb-1" />

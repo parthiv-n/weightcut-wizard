@@ -38,6 +38,8 @@ export function useCoachRealtimeSync(
     let debounce: ReturnType<typeof setTimeout> | null = null;
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let subscribeTimer: ReturnType<typeof setTimeout> | null = null;
+    let reconnectAttempt = 0;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
     const scheduleRefresh = () => {
       if (debounce) clearTimeout(debounce);
@@ -69,8 +71,23 @@ export function useCoachRealtimeSync(
           }
         )
         .subscribe((status) => {
-          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          if (status === "SUBSCRIBED") {
+            reconnectAttempt = 0;
+            return;
+          }
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
             logger.warn("useCoachRealtimeSync subscription issue", { status });
+            // Auto-reconnect with exponential backoff so background/network drops recover.
+            if (cancelled) return;
+            const attempt = reconnectAttempt;
+            const delay = Math.min(2000 * Math.pow(2, attempt), 30000);
+            reconnectAttempt = attempt + 1;
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            reconnectTimer = setTimeout(() => {
+              if (cancelled) return;
+              unsubscribe();
+              subscribe();
+            }, delay);
           }
         });
     };
@@ -106,6 +123,7 @@ export function useCoachRealtimeSync(
       document.removeEventListener("visibilitychange", onVisibility);
       if (subscribeTimer) clearTimeout(subscribeTimer);
       if (debounce) clearTimeout(debounce);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       unsubscribe();
     };
   }, [coachId]);

@@ -10,7 +10,7 @@ import { AIPersistence } from "@/lib/aiPersistence";
 import { useAuth } from "@/contexts/UserContext";
 import { Capacitor } from "@capacitor/core";
 import { Camera as CapCamera, CameraPermissionState } from "@capacitor/camera";
-import { extractEdgeFunctionError } from "@/lib/timeoutWrapper";
+import { extractEdgeFunctionError, withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
 import { useSubscription } from "@/hooks/useSubscription";
 
@@ -78,9 +78,30 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className, label }: Ba
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke("scan-barcode", {
-        body: { barcode },
-      });
+      let data: any;
+      let error: any;
+      try {
+        const result = await withSupabaseTimeout(
+          supabase.functions.invoke("scan-barcode", {
+            body: { barcode },
+          }),
+          12000,
+          "Barcode lookup",
+        );
+        data = result.data;
+        error = result.error;
+      } catch (timeoutErr: any) {
+        if (timeoutErr?.message?.includes("timed out")) {
+          toast({
+            title: "Barcode lookup timed out",
+            description: "Barcode lookup timed out — try again",
+            variant: "destructive",
+          });
+          setIsProcessing(false);
+          return;
+        }
+        throw timeoutErr;
+      }
 
       if (error) throw new Error(await extractEdgeFunctionError(error, "Failed to get product information"));
       if (data?.error) throw new Error(data.error);

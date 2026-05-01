@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ChevronLeft, Loader2 } from "lucide-react";
-import { ResponsiveContainer, LineChart, Line, YAxis, Tooltip } from "recharts";
+// Lazy-load recharts wrapper so the ~100KB charts bundle defers until first paint.
+const AthleteWeightChart = lazy(() => import("@/components/charts/AthleteWeightChart"));
 import { useUser } from "@/contexts/UserContext";
 import { useAthleteDetail } from "@/hooks/coach/useAthleteDetail";
 import { useCoachRealtimeSync } from "@/hooks/coach/useCoachRealtimeSync";
@@ -155,35 +156,9 @@ export default function AthleteDetail() {
           </div>
           <div className="h-24">
             {weight_7d && weight_7d.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={weight_7d} margin={{ top: 4, right: 4, bottom: 0, left: -28 }}>
-                  <YAxis
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={9}
-                    tickLine={false}
-                    axisLine={false}
-                    width={28}
-                    domain={["auto", "auto"]}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--background))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: 8,
-                      fontSize: 11,
-                    }}
-                    formatter={(v: number) => [`${v.toFixed(1)} kg`, "Weight"]}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="weight_kg"
-                    stroke="hsl(var(--primary))"
-                    strokeWidth={2}
-                    dot={{ r: 2, fill: "hsl(var(--primary))" }}
-                    isAnimationActive={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <Suspense fallback={<div className="h-full w-full animate-pulse bg-muted/20 rounded-2xl" />}>
+                <AthleteWeightChart data={weight_7d} />
+              </Suspense>
             ) : (
               <div className="h-full flex items-center justify-center text-[11px] text-muted-foreground">
                 No weight data this week

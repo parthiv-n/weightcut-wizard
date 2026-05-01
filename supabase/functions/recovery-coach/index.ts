@@ -191,19 +191,42 @@ ${TONE_RULE}`;
     });
 
     step = "groq-fetch";
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${GROQ_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "llama-3.1-8b-instant",
-        messages: [{ role: "system", content: `${systemPrompt}\n\n${PROMPT_INJECTION_GUARD_INSTRUCTION}` }, ...safeMessages],
-        temperature: 0.6,
-        max_tokens: 900,
-      }),
-    });
+    // TODO: streaming Groq variant (via _shared/streamResponse.ts) needs its own
+    // connection-only timeout — abort on initial connect, but not once tokens flow.
+    const groqController = new AbortController();
+    const groqTimer = setTimeout(() => groqController.abort(), 15000);
+    let response: Response;
+    try {
+      response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${GROQ_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "llama-3.1-8b-instant",
+          messages: [{ role: "system", content: `${systemPrompt}\n\n${PROMPT_INJECTION_GUARD_INSTRUCTION}` }, ...safeMessages],
+          temperature: 0.6,
+          max_tokens: 900,
+        }),
+        signal: groqController.signal,
+      });
+    } catch (err: any) {
+      if (err?.name === "AbortError") {
+        edgeLogger.error("recovery-coach Groq timeout", undefined, {
+          functionName: "recovery-coach",
+          step,
+          timeoutMs: 15000,
+        });
+        return new Response(
+          JSON.stringify({ error: "AI service timed out. Please try again in a moment.", code: "AI_TIMEOUT" }),
+          { status: 504, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
+        );
+      }
+      throw err;
+    } finally {
+      clearTimeout(groqTimer);
+    }
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));

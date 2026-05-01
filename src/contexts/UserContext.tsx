@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback, ReactNode } from "react";
+import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { withAuthTimeout, withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { Capacitor } from "@capacitor/core";
@@ -10,6 +11,11 @@ import { logger } from "@/lib/logger";
 import { PROFILE_COLUMNS } from "@/lib/queryColumns";
 import { useMealsRealtime } from "@/hooks/useMealsRealtime";
 import { usePushRegistration } from "@/hooks/usePushRegistration";
+
+// Profile cache freshness — beyond this we serve cached data but flag it stale
+// so guards can show a banner and we trigger a background refresh. Prevents
+// users running on indefinitely-stale data after a network failure.
+const PROFILE_STALE_AFTER_MS = 24 * 60 * 60 * 1000;
 
 export interface ProfileData {
   id?: string;
@@ -63,6 +69,8 @@ interface AuthContextType {
   hasProfile: boolean;
   authError: boolean;
   isOffline: boolean;
+  /** True if `withAuthTimeout` rejected — surfaces to UI so we never blank-screen. */
+  authTimedOut: boolean;
   /**
    * True as soon as the role can be determined — even before the profile
    * row loads. Resolves from (in order): profile.role, JWT user_metadata.role,
@@ -84,11 +92,16 @@ interface ProfileContextType {
   userName: string;
   avatarUrl: string;
   currentWeight: number | null;
+  /** True when the cached profile is older than PROFILE_STALE_AFTER_MS and a fresh fetch failed. */
+  isProfileStale: boolean;
   setUserName: (name: string) => void;
   setAvatarUrl: (url: string) => void;
   refreshProfile: () => Promise<boolean>;
   updateCurrentWeight: (weight: number) => Promise<void>;
   syncDailyGem: () => Promise<void>;
+  /** Lazy-loads the (potentially large) cut_plan_json blob. Excluded from the
+   *  initial profile fetch so cold-start auth UI never blocks on it. */
+  loadCutPlan: () => Promise<any | null>;
 }
 
 type UserContextType = AuthContextType & ProfileContextType;
@@ -112,11 +125,17 @@ export function UserProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [hasProfile, setHasProfile] = useState<boolean>(false);
   const [authError, setAuthError] = useState<boolean>(false);
+  const [authTimedOut, setAuthTimedOut] = useState<boolean>(false);
+  const [isProfileStale, setIsProfileStale] = useState<boolean>(false);
   const [isOffline, setIsOffline] = useState<boolean>(!navigator.onLine);
   const isUserLoadedRef = useRef(false);
   const userIdRef = useRef<string | null>(null);
   const profileRef = useRef<ProfileData | null>(null);
   const signingOutRef = useRef(false);
+  // Session check interval lives in a ref so the cleanup always sees the
+  // latest handle, even if the bootstrap effect re-runs (StrictMode / HMR).
+  // Otherwise the previous interval leaks across remounts and stacks up.
+  const sessionCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const checkSessionValidity = useCallback(async (): Promise<boolean> => {
     try {
@@ -224,6 +243,8 @@ export function UserProvider({ children }: { children: ReactNode }) {
           if (weight !== null) setCurrentWeight(weight);
           localCache.set(uid, 'profiles', data);
         }
+        // Successful DB hit — cache is fresh again.
+        setIsProfileStale(false);
         return true;
       }
       return false;
@@ -257,6 +278,26 @@ export function UserProvider({ children }: { children: ReactNode }) {
   // Keep a ref to refreshProfile so syncDailyGem (declared earlier) can invoke it.
   refreshProfileRef.current = refreshProfile;
 
+  // Deferred fetch for the (potentially large) cut_plan_json blob — excluded
+  // from PROFILE_COLUMNS so the initial cold-start profile query is leaner.
+  // Callers should invoke this on demand (e.g. when rehydrating from DB after
+  // localStorage was wiped).
+  const loadCutPlan = useCallback(async (): Promise<any | null> => {
+    const uid = userIdRef.current;
+    if (!uid) return null;
+    try {
+      const { data } = await withSupabaseTimeout(
+        supabase.from("profiles").select("id, cut_plan_json").eq("id", uid).maybeSingle(),
+        5000,
+        "Cut plan query"
+      );
+      return (data as any)?.cut_plan_json ?? null;
+    } catch (error) {
+      logger.warn("loadCutPlan failed", { error: String(error) });
+      return null;
+    }
+  }, []);
+
   // Internal: performs one load attempt. Returns 'success' | 'no_session' | 'error'.
   // Does NOT touch isLoading, authError, or isUserLoadedRef.
   // When `providedSession` is given (from auth events), skips the redundant getSession() call.
@@ -276,21 +317,34 @@ export function UserProvider({ children }: { children: ReactNode }) {
           data = res.data;
           error = res.error;
         } catch (timeoutErr) {
-          logger.warn("UserContext._performLoad: auth attempt 1 timed out, cycling realtime + retrying in 2s", { error: String(timeoutErr) });
+          // First-retry backoff trimmed 2000→500ms: connection recovery already
+          // did the slow work (mutex unstick), so a long sleep just delays the UI
+          // recovering for users on flaky networks. The 15s auth timeout still
+          // gives the second attempt plenty of room.
+          logger.warn("UserContext._performLoad: auth attempt 1 timed out, cycling realtime + retrying in 500ms", { error: String(timeoutErr) });
           // Recovery before the retry — otherwise attempt 2 queues behind
           // the same wedged mutex and also hits its 15s timeout.
           try {
             const { recoverSupabaseConnection } = await import("@/lib/connectionRecovery");
             await recoverSupabaseConnection("auth-session-timeout");
           } catch { /* best-effort */ }
-          await new Promise((r) => setTimeout(r, 2000));
+          await new Promise((r) => setTimeout(r, 500));
           try {
             logger.warn("UserContext._performLoad: auth attempt 2/2");
             const res = await withAuthTimeout(supabase.auth.getSession());
             data = res.data;
             error = res.error;
           } catch (retryErr) {
+            // Surface a toast so the user never sits on a blank screen
+            // wondering what's happening. authTimedOut state is also flipped
+            // for any guard that wants to render an inline banner instead.
             logger.error("UserContext._performLoad: auth attempt 2 also timed out", retryErr);
+            setAuthTimedOut(true);
+            try {
+              toast.error("Connection timed out", {
+                description: "We couldn't reach the server. Pull down to retry.",
+              });
+            } catch { /* toast host may not be mounted yet */ }
             return 'error';
           }
         }
@@ -337,6 +391,14 @@ export function UserProvider({ children }: { children: ReactNode }) {
         setHasProfile(true);
         if (cachedProfile.avatar_url) setAvatarUrl(cachedProfile.avatar_url);
         if (cachedProfile.current_weight_kg) setCurrentWeight(cachedProfile.current_weight_kg);
+        // Tag the cache as stale if the envelope is older than the threshold —
+        // localCache stores `cachedAt` so we don't need to re-write timestamps
+        // here. Surfaces via context so guards can show a "data may be out of
+        // date" banner. Cleared below once the fresh DB query succeeds.
+        const cachedAt = localCache.cachedAt(user.id, 'profiles');
+        if (cachedAt !== null && Date.now() - cachedAt > PROFILE_STALE_AFTER_MS) {
+          setIsProfileStale(true);
+        }
         // Resolve loading now so ProtectedRoute renders without waiting for DB
         isUserLoadedRef.current = true;
         setIsLoading(false);
@@ -394,6 +456,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
           }
           localCache.set(user.id, 'profiles', profileData);
         }
+        // Fresh DB read succeeded — clear the stale-cache + auth-timeout flags.
+        setIsProfileStale(false);
+        setAuthTimedOut(false);
       }
 
       const weight = latestWeightLog?.weight_kg || profileData?.current_weight_kg || null;
@@ -472,6 +537,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   const retryAuth = useCallback(async () => {
     setAuthError(false);
+    setAuthTimedOut(false);
     setIsLoading(true);
     await loadUserData();
   }, [loadUserData]);
@@ -536,7 +602,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
     setProfile(null);
     profileRef.current = null;
     setHasProfile(false);
+    setIsProfileStale(false);
+    setAuthTimedOut(false);
     setIsLoading(false);
+    // Clear the periodic session check eagerly — otherwise a poll fires
+    // 30 minutes after logout and tries to revalidate a dead session.
+    if (sessionCheckIntervalRef.current) {
+      clearInterval(sessionCheckIntervalRef.current);
+      sessionCheckIntervalRef.current = null;
+    }
 
     // Clear Supabase session — local scope avoids 403 from expired/invalid tokens
     try {
@@ -651,8 +725,17 @@ export function UserProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    // Periodic session validity checks (every 30 minutes)
-    const sessionCheckInterval = setInterval(async () => {
+    // Periodic session validity checks (every 30 minutes). Stored in a ref
+    // so signOut() can also clear it (otherwise a poll fires 30 min after
+    // logout and revalidates a dead session). On effect-cleanup we also
+    // reset the ref so a subsequent remount doesn't keep two timers alive.
+    if (sessionCheckIntervalRef.current) {
+      clearInterval(sessionCheckIntervalRef.current);
+    }
+    sessionCheckIntervalRef.current = setInterval(async () => {
+      // If we've already been logged out the user id is null — skip the
+      // network round-trip rather than spamming Supabase auth.
+      if (!userIdRef.current) return;
       await checkSessionValidity();
     }, 30 * 60 * 1000);
 
@@ -672,17 +755,19 @@ export function UserProvider({ children }: { children: ReactNode }) {
           if (valid) syncDailyGem();
         });
       }
-      // Force-cycle the realtime websocket. When the tab has been idle for a
-      // while the websocket silently dies; the REST client then queues every
-      // query behind an internal auth-refresh mutex waiting on the dead
-      // socket, which manifests as "Weight logs query timed out" and a
-      // frozen nutrition ring. Disconnecting + reconnecting unsticks the
-      // mutex so subsequent requests land instantly.
+      // Realtime resume policy: only reconnect if the socket is actually
+      // disconnected. The previous unconditional disconnect()/connect()
+      // caused subscription churn on quick foreground→background flips and
+      // dropped events for users on flaky cell networks. If the socket is
+      // still alive, leave it alone — useMealsRealtime + heartbeat watcher
+      // will self-heal individual channel issues.
       try {
-        supabase.realtime.disconnect();
-        supabase.realtime.connect();
+        const isConnected = (supabase.realtime as any).isConnected?.();
+        if (isConnected === false) {
+          supabase.realtime.connect();
+        }
       } catch (err) {
-        logger.warn('realtime reconnect on resume failed', { err: String(err) });
+        logger.warn('realtime resume check failed', { err: String(err) });
       }
       // Flush any offline writes queued while the app was backgrounded
       if (userIdRef.current) {
@@ -697,9 +782,23 @@ export function UserProvider({ children }: { children: ReactNode }) {
     };
 
     if (Capacitor.isNativePlatform()) {
+      // Capacitor's addListener is async and resolves to a handle after this
+      // effect may have already torn down — track whether cleanup ran so a
+      // late-arriving handle is removed immediately and never leaks.
+      let cleanedUp = false;
       CapacitorApp.addListener('appStateChange', ({ isActive }) => {
         if (isActive) handleAppResume();
-      }).then(h => { appResumeHandle = h; });
+      }).then(h => {
+        if (cleanedUp) {
+          h.remove();
+        } else {
+          appResumeHandle = h;
+        }
+      }).catch(err => {
+        logger.warn('appStateChange listener attach failed', { err: String(err) });
+      });
+      // Stash the cleanup flag where the return below can flip it.
+      (handleAppResume as any).__capacitorCleanup = () => { cleanedUp = true; };
     } else {
       visibilityHandler = () => {
         if (document.visibilityState === 'visible') handleAppResume();
@@ -709,9 +808,19 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
     return () => {
       subscription.unsubscribe();
-      clearInterval(sessionCheckInterval);
-      appResumeHandle?.remove();
-      if (visibilityHandler) {
+      if (sessionCheckIntervalRef.current) {
+        clearInterval(sessionCheckIntervalRef.current);
+        sessionCheckIntervalRef.current = null;
+      }
+      // Native: flip the late-arrival flag AND remove any handle we managed
+      // to capture. Web: detach the document listener. Guarding on
+      // isNativePlatform avoids touching `document` on iOS WebView edge cases.
+      if (Capacitor.isNativePlatform()) {
+        const flip = (handleAppResume as any).__capacitorCleanup as (() => void) | undefined;
+        flip?.();
+        appResumeHandle?.remove();
+        appResumeHandle = null;
+      } else if (visibilityHandler) {
         document.removeEventListener('visibilitychange', visibilityHandler);
       }
     };
@@ -798,6 +907,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     isLoading,
     hasProfile,
     authError,
+    authTimedOut,
     isOffline,
     isCoach,
     isRoleResolved,
@@ -806,7 +916,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
     refreshSession,
     loadUserData,
     signOut,
-  }), [userId, isSessionValid, isLoading, hasProfile, authError, isOffline, isCoach, isRoleResolved,
+  }), [userId, isSessionValid, isLoading, hasProfile, authError, authTimedOut, isOffline, isCoach, isRoleResolved,
        retryAuth, checkSessionValidity, refreshSession, loadUserData, signOut]);
 
   const profileValue = useMemo(() => ({
@@ -814,13 +924,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
     userName,
     avatarUrl,
     currentWeight,
+    isProfileStale,
     setUserName: updateUserName,
     setAvatarUrl: updateAvatarUrl,
     refreshProfile,
     updateCurrentWeight,
     syncDailyGem,
-  }), [profile, userName, avatarUrl, currentWeight,
-       updateUserName, updateAvatarUrl, refreshProfile, updateCurrentWeight, syncDailyGem]);
+    loadCutPlan,
+  }), [profile, userName, avatarUrl, currentWeight, isProfileStale,
+       updateUserName, updateAvatarUrl, refreshProfile, updateCurrentWeight, syncDailyGem, loadCutPlan]);
 
   return (
     <AuthContext.Provider value={authValue}>
@@ -836,6 +948,7 @@ const AUTH_FALLBACK: AuthContextType = {
   hasProfile: false,
   isLoading: true,
   authError: false,
+  authTimedOut: false,
   isSessionValid: false,
   isOffline: false,
   isCoach: false,
@@ -852,11 +965,13 @@ const PROFILE_FALLBACK: ProfileContextType = {
   userName: "",
   avatarUrl: null as any,
   currentWeight: null,
+  isProfileStale: false,
   setUserName: () => {},
   setAvatarUrl: () => {},
   refreshProfile: async () => false,
   updateCurrentWeight: async () => {},
   syncDailyGem: async () => {},
+  loadCutPlan: async () => null,
 };
 
 export function useAuth() {

@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, useRef, memo } from "react";
+import { useState, useEffect, useCallback, useRef, memo, lazy, Suspense } from "react";
 import { Activity, Brain, AlertTriangle, TrendingUp, TrendingDown, Minus, BookOpen, ChevronDown, Heart, Flame, Shield, Moon, Dumbbell, Gauge, Zap, BarChart3 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { RecoveryRing } from "./RecoveryRing";
-import { StrainChart } from "./StrainChart";
+// Lazy-load the recharts-backed StrainChart so the ~100KB charts bundle defers until first paint.
+const StrainChart = lazy(() => import("./StrainChart").then(m => ({ default: m.StrainChart })));
 import { ReadinessBreakdownCard } from "./ReadinessBreakdownCard";
 import { BalanceMetricsCard } from "./BalanceMetricsCard";
 import { WellnessCheckIn } from "./WellnessCheckIn";
@@ -317,7 +318,9 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
         <div className="flex items-center gap-2 mb-3">
           <h2 className="text-lg font-bold">7-Day Strain Trend</h2>
         </div>
-        <StrainChart strainHistory={metrics.strainHistory} forecast={metrics.forecast} />
+        <Suspense fallback={<div className="h-[180px] w-full animate-pulse bg-muted/20 rounded-2xl" />}>
+          <StrainChart strainHistory={metrics.strainHistory} forecast={metrics.forecast} />
+        </Suspense>
       </div>
 
       {/* 4) Forecast Summary Card */}

@@ -16,6 +16,44 @@ const REFRESH_TIMEOUT_MS = 4_000;
 let lastRecoveryAt = 0;
 let inFlight: Promise<void> | null = null;
 
+// ---------------------------------------------------------------------------
+// Status broadcast
+// ---------------------------------------------------------------------------
+// Lightweight subscriber pattern so UI can render a "Reconnecting…" banner
+// while a recovery is running, without coupling to React internals here.
+// `recovering` is true from the moment a wedge is detected until the
+// disconnect/refresh/reconnect cycle finishes.
+
+export type ConnectionStatus = "ok" | "recovering";
+
+const statusListeners = new Set<(s: ConnectionStatus) => void>();
+let currentStatus: ConnectionStatus = "ok";
+
+function setStatus(next: ConnectionStatus): void {
+  if (next === currentStatus) return;
+  currentStatus = next;
+  for (const fn of statusListeners) {
+    try {
+      fn(next);
+    } catch {
+      // Listener errors must not break recovery.
+    }
+  }
+}
+
+export function getConnectionStatus(): ConnectionStatus {
+  return currentStatus;
+}
+
+export function subscribeConnectionStatus(
+  listener: (s: ConnectionStatus) => void
+): () => void {
+  statusListeners.add(listener);
+  return () => {
+    statusListeners.delete(listener);
+  };
+}
+
 function withHardTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
     p,
@@ -39,6 +77,7 @@ export function recoverSupabaseConnection(reason: string): Promise<void> {
   lastRecoveryAt = now;
 
   logger.warn("Supabase wedge detected — recovering", { reason });
+  setStatus("recovering");
 
   inFlight = (async () => {
     let refreshOk = false;
@@ -83,6 +122,7 @@ export function recoverSupabaseConnection(reason: string): Promise<void> {
       // debounce window expires — otherwise we'd be locked out for 15s
       // even though the user is staring at a wedged screen.
       if (!refreshOk) lastRecoveryAt = 0;
+      setStatus("ok");
     }
   })();
 
@@ -93,4 +133,5 @@ export function recoverSupabaseConnection(reason: string): Promise<void> {
 export function resetRecoveryDebounce(): void {
   lastRecoveryAt = 0;
   inFlight = null;
+  setStatus("ok");
 }

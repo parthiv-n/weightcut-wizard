@@ -26,22 +26,23 @@ export function useMealsRealtime(userId: string | null): void {
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   // meal_id → { userId, date }
   const mealParentRef = useRef<Map<string, { userId: string; date: string }>>(new Map());
+  const reconnectAttemptRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!userId) return;
     let cancelled = false;
 
-    // Defer 1s to avoid piling onto the SIGNED_IN network burst
-    const timer = setTimeout(() => {
+    const parentCache = mealParentRef.current;
+
+    const invalidateDate = (uid: string, date: string) => {
+      nutritionCache.remove(uid, "meals", date);
+      try { localCache.removeForDate?.(uid, "nutrition_logs", date); } catch { /* ignore */ }
+      invalidateMealsForDate(uid, date);
+    };
+
+    const createChannel = () => {
       if (cancelled) return;
-
-      const parentCache = mealParentRef.current;
-
-      const invalidateDate = (uid: string, date: string) => {
-        nutritionCache.remove(uid, "meals", date);
-        try { localCache.removeForDate?.(uid, "nutrition_logs", date); } catch { /* ignore */ }
-        invalidateMealsForDate(uid, date);
-      };
 
       const channel = supabase
         .channel(`meals-v2:${userId}`)
@@ -119,17 +120,42 @@ export function useMealsRealtime(userId: string | null): void {
           }
         )
         .subscribe((status) => {
-          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          if (status === "SUBSCRIBED") {
+            reconnectAttemptRef.current = 0;
+            return;
+          }
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
             logger.warn("useMealsRealtime: channel status", { status });
+            // Auto-reconnect with exponential backoff so background/network drops recover.
+            if (cancelled) return;
+            const attempt = reconnectAttemptRef.current;
+            const delay = Math.min(2000 * Math.pow(2, attempt), 30000);
+            reconnectAttemptRef.current = attempt + 1;
+            if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+            reconnectTimerRef.current = setTimeout(() => {
+              if (cancelled) return;
+              if (channelRef.current) {
+                supabase.removeChannel(channelRef.current);
+                channelRef.current = null;
+              }
+              createChannel();
+            }, delay);
           }
         });
 
       channelRef.current = channel;
-    }, 1000);
+    };
+
+    // Defer 1s to avoid piling onto the SIGNED_IN network burst
+    const timer = setTimeout(createChannel, 1000);
 
     return () => {
       cancelled = true;
       clearTimeout(timer);
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;

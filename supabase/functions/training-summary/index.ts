@@ -97,23 +97,41 @@ Return ONLY valid JSON:
 
     const userPrompt = `Here are my training sessions from this week. Organize the techniques and drills I worked on:\n\n${sessionsText}`;
 
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${GROQ_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "llama-3.1-8b-instant",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.2,
-        max_tokens: 2000,
-        response_format: { type: "json_object" },
-      }),
-    });
+    // connect timeout - upstream Groq
+    const groqController = new AbortController();
+    const groqTimer = setTimeout(() => groqController.abort(), 15000);
+    let response: Response;
+    try {
+      response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${GROQ_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "llama-3.1-8b-instant",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          temperature: 0.2,
+          max_tokens: 2000,
+          response_format: { type: "json_object" },
+        }),
+        signal: groqController.signal,
+      });
+    } catch (err: any) {
+      if (err?.name === "AbortError") {
+        edgeLogger.error("training-summary Groq timeout", undefined, { functionName: "training-summary", timeoutMs: 15000 });
+        return new Response(
+          JSON.stringify({ error: "AI service timed out — please try again", code: "AI_TIMEOUT" }),
+          { status: 504, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
+        );
+      }
+      throw err;
+    } finally {
+      clearTimeout(groqTimer);
+    }
 
     if (!response.ok) {
       if (response.status === 429) {

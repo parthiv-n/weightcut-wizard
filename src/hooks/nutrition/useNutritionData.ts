@@ -453,8 +453,13 @@ export function useNutritionData(params: UseNutritionDataParams) {
   useEffect(() => {
     if (!userId) return;
 
+    let cancelled = false;
     let channel: ReturnType<typeof supabase.channel> | null = null;
-    const subscribeTimer = setTimeout(() => {
+    let reconnectAttempt = 0;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const createChannel = () => {
+      if (cancelled) return;
       channel = supabase
         .channel(`profile-nutrition-updates:${userId}`)
         .on("postgres_changes", {
@@ -463,11 +468,37 @@ export function useNutritionData(params: UseNutritionDataParams) {
           table: "profiles",
           filter: `id=eq.${userId}`,
         }, () => { refreshProfile(); })
-        .subscribe();
-    }, 3000);
+        .subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            reconnectAttempt = 0;
+            return;
+          }
+          if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+            logger.warn("useNutritionData: profile channel status", { status });
+            // Auto-reconnect with exponential backoff so background/network drops recover.
+            if (cancelled) return;
+            const attempt = reconnectAttempt;
+            const delay = Math.min(2000 * Math.pow(2, attempt), 30000);
+            reconnectAttempt = attempt + 1;
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            reconnectTimer = setTimeout(() => {
+              if (cancelled) return;
+              if (channel) {
+                supabase.removeChannel(channel);
+                channel = null;
+              }
+              createChannel();
+            }, delay);
+          }
+        });
+    };
+
+    const subscribeTimer = setTimeout(createChannel, 3000);
 
     return () => {
+      cancelled = true;
       clearTimeout(subscribeTimer);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       if (channel) supabase.removeChannel(channel);
     };
   }, [userId, refreshProfile]);
