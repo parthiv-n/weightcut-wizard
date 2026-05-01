@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { ComposedChart, Line, YAxis, Tooltip, ResponsiveContainer } from "recharts";
-import { TrendingDown, Calendar, Lock, ChevronRight, Flame, Zap, CheckCircle2, Scale } from "lucide-react";
+import { TrendingDown, Calendar, Lock, ChevronRight, Flame, Zap, CheckCircle2, Scale, Swords } from "lucide-react";
 import { TrainingWeekWidget, preloadTrainingWeek } from "@/components/dashboard/TrainingWeekWidget";
 import { WeightProgressRing } from "@/components/dashboard/WeightProgressRing";
 import { StreakBadge } from "@/components/dashboard/StreakBadge";
@@ -560,60 +560,88 @@ export default function Dashboard() {
 
   return (
     <ErrorBoundary>
-      <div className="dashboard-zoom animate-page-in space-y-3 px-5 py-3 sm:p-5 md:p-6 w-full max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center gap-3">
-          {daysUntilTarget > 0 && (
-            <span className="text-xs text-muted-foreground">
-              <span className="font-bold display-number text-foreground">{daysUntilTarget}</span> days left
-            </span>
-          )}
-          {streak > 0 && <StreakBadge streak={streak} isActive={streakIncludesToday} />}
-        </div>
+      <div className="dashboard-zoom animate-page-in space-y-3.5 px-5 py-3 sm:p-5 md:p-6 w-full max-w-7xl mx-auto">
+        {/* Greeting header — Apple Fitness style: weekday eyebrow + name, days/streak right */}
+        <header className="flex items-end justify-between gap-3 pt-1">
+          <div className="min-w-0 flex-1">
+            <p className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground/70 font-bold">
+              {new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
+            </p>
+            <h1 className="text-[22px] font-semibold leading-tight truncate">
+              {userName ? `Hi, ${userName}` : "Today"}
+            </h1>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {daysUntilTarget > 0 && (
+              <div className="card-surface rounded-2xl border border-border/50 px-2.5 py-1.5 text-center">
+                <p className="text-[15px] font-bold display-number tabular-nums leading-none">{daysUntilTarget}</p>
+                <p className="text-[9px] uppercase tracking-wider text-muted-foreground mt-0.5">Days left</p>
+              </div>
+            )}
+            {streak > 0 && <StreakBadge streak={streak} isActive={streakIncludesToday} />}
+          </div>
+        </header>
 
         {weightLogs.length === 0 && (
-          <button onClick={() => navigate('/weight')} className="w-full rounded-2xl bg-muted/20 p-2.5 flex items-center gap-2 active:bg-muted/30 transition-colors">
-            <Scale className="h-4 w-4 text-primary shrink-0" />
+          <button onClick={() => navigate('/weight')} className="w-full card-surface rounded-2xl border border-border/50 p-3 flex items-center gap-2.5 active:scale-[0.99] transition-all">
+            <div className="h-9 w-9 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <Scale className="h-4 w-4 text-primary" />
+            </div>
             <div className="flex-1 text-left min-w-0">
               <p className="text-[13px] font-semibold">Welcome{userName ? `, ${userName}` : ''}</p>
-              <p className="text-[13px] text-muted-foreground">Log your first weigh-in to get started</p>
+              <p className="text-[12px] text-muted-foreground leading-snug">Log your first weigh-in to get started</p>
             </div>
-            <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           </button>
+        )}
+
+        {/* Hero: Weight Progress Ring — primary metric, top of fold */}
+        {profile && (
+          <div data-tutorial="weight-progress-ring">
+            <WeightProgressRing
+              currentWeight={currentWeightValue}
+              startingWeight={weightLogs.length > 0 ? parseFloat(weightLogs[0].weight_kg) : currentWeightValue}
+              goalWeight={profile.goal_weight_kg ?? 0}
+            />
+          </div>
         )}
 
         {/* Wizard's Daily Wisdom card — conditional states */}
         <div data-tutorial="daily-wisdom-card">
         {!hasTodayLog ? (
-          <button onClick={() => navigate('/weight')} className="w-full card-surface rounded-2xl border border-border p-2.5 flex items-center gap-2 active:scale-[0.99] transition-all">
+          <button onClick={() => navigate('/weight')} className="w-full card-surface rounded-2xl border border-border/50 p-3 flex items-center gap-2.5 active:scale-[0.99] transition-all">
+            <div className="h-8 w-8 rounded-xl bg-muted/40 flex items-center justify-center flex-shrink-0">
+              <Lock className="h-3.5 w-3.5 text-muted-foreground" />
+            </div>
             <div className="flex-1 text-left min-w-0">
-              <div className="flex items-center gap-1.5">
-                <p className="text-[12px] font-semibold">Daily Insight</p>
-                <Lock className="h-3 w-3 text-muted-foreground" />
-              </div>
+              <p className="text-[12px] font-semibold">Daily Insight</p>
               <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                Log today's weight to unlock your insight
+                Log today's weight to unlock
               </p>
             </div>
-            <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           </button>
         ) : wisdomLoading ? (
-          <div className="card-surface rounded-2xl border border-border p-2.5 flex items-center gap-2">
-            <div className="flex-1 min-w-0 space-y-1.5 py-0.5">
+          <div className="card-surface rounded-2xl border border-border/50 p-3 flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-xl bg-muted/40 flex-shrink-0" />
+            <div className="flex-1 min-w-0 space-y-1.5">
               <div className="h-2.5 rounded shimmer-skeleton w-1/3" />
               <div className="h-2.5 rounded shimmer-skeleton w-full" />
             </div>
           </div>
         ) : wisdom ? (
-          <button className="w-full text-left card-surface rounded-2xl border border-border p-2.5 flex items-center gap-2 active:scale-[0.99] transition-all" onClick={handleWisdomClick}>
+          <button className="w-full text-left card-surface rounded-2xl border border-border/50 p-3 flex items-center gap-2.5 active:scale-[0.99] transition-all" onClick={handleWisdomClick}>
+            <div className="h-8 w-8 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <Zap className="h-3.5 w-3.5 text-primary" />
+            </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between gap-1.5">
-                <p className="text-[11px] font-semibold">Daily Insight</p>
+                <p className="text-[12px] font-semibold">Daily Insight</p>
                 <div className="flex items-center gap-1.5 shrink-0">
-                  <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium ${riskColors[wisdom.riskLevel]}`}>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${riskColors[wisdom.riskLevel]}`}>
                     {wisdom.riskLevel.charAt(0).toUpperCase() + wisdom.riskLevel.slice(1)}
                   </span>
-                  <ChevronRight className="h-3 w-3 text-muted-foreground" />
+                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
                 </div>
               </div>
               <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug line-clamp-2">
@@ -622,9 +650,12 @@ export default function Dashboard() {
             </div>
           </button>
         ) : (
-          <div className="card-surface rounded-2xl border border-border p-2.5 flex items-center gap-2">
+          <div className="card-surface rounded-2xl border border-border/50 p-3 flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-xl bg-muted/40 flex items-center justify-center flex-shrink-0">
+              <Zap className="h-3.5 w-3.5 text-muted-foreground" />
+            </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-semibold">Daily Insight</p>
+              <p className="text-[12px] font-semibold">Daily Insight</p>
               <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug line-clamp-2">{getWizardWisdom()}</p>
             </div>
           </div>
@@ -637,35 +668,6 @@ export default function Dashboard() {
         </div>
 
         {userId && <NewAnnouncementWidget userId={userId} />}
-
-        {/* Cut Plan + Sleep — side by side */}
-        <div className="grid grid-cols-2 gap-2">
-          {isFighter(profile?.goal_type) && hasCutPlan ? (
-            <button
-              onClick={() => { setCutPlanOpen(true); triggerHaptic(ImpactStyle.Light); }}
-              className="card-surface rounded-2xl border border-border p-2.5 flex items-center justify-center active:scale-[0.98] transition-all text-center"
-            >
-              <p className="text-[12px] font-semibold leading-tight">Cut Plan</p>
-            </button>
-          ) : (
-            <div />
-          )}
-          {userId && <SleepLogger userId={userId} compact />}
-        </div>
-
-        {/* Training Coach (premium) */}
-        {userId && <TrainingInsightsWidget userId={userId} />}
-
-        {/* Weight Progress Bar — full width */}
-        {profile && (
-          <div data-tutorial="weight-progress-ring">
-            <WeightProgressRing
-              currentWeight={currentWeightValue}
-              startingWeight={weightLogs.length > 0 ? parseFloat(weightLogs[0].weight_kg) : currentWeightValue}
-              goalWeight={profile.goal_weight_kg ?? 0}
-            />
-          </div>
-        )}
 
         {/* Weight History + Training — side by side */}
         <div className="grid grid-cols-2 gap-2">
@@ -740,6 +742,31 @@ export default function Dashboard() {
             <TrainingWeekWidget userId={userId} compact />
           )}
         </div>
+
+        {/* Training Coach (premium) */}
+        {userId && <TrainingInsightsWidget userId={userId} />}
+
+        {/* Daily logging row — Cut Plan + Sleep, or Sleep full-width */}
+        {isFighter(profile?.goal_type) && hasCutPlan ? (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => { setCutPlanOpen(true); triggerHaptic(ImpactStyle.Light); }}
+              className="card-surface rounded-2xl border border-border/50 p-3 flex items-center gap-2.5 active:scale-[0.98] transition-all text-left"
+            >
+              <div className="h-9 w-9 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <Swords className="h-4 w-4 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[12px] font-semibold leading-tight">Cut Plan</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">View your plan</p>
+              </div>
+              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            </button>
+            {userId && <SleepLogger userId={userId} compact />}
+          </div>
+        ) : (
+          userId && <SleepLogger userId={userId} compact />
+        )}
 
         {/* Milestone Badges */}
         <div>
