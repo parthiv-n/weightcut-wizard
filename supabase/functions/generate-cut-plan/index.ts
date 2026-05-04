@@ -5,6 +5,10 @@ import { edgeLogger } from "../_shared/errorReporter.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { RESEARCH_SUMMARY } from "../_shared/researchSummary.ts";
 import { normaliseWeeklyPlan } from "../_shared/normalizeWeeklyPlan.ts";
+import { requiredDeficit, safetyBounds } from "../_shared/math.ts";
+import { CutPlanSchema } from "../_shared/aiSchemas.ts";
+import { aiCallWithValidation, buildRetryFeedback } from "../_shared/aiCallWithRetry.ts";
+import { logAIDecision } from "../_shared/aiDecisionLog.ts";
 
 // FREE for all users — generated during onboarding, no gem cost
 
@@ -52,11 +56,40 @@ serve(async (req) => {
     const weeksRemaining = Math.max(1, Math.ceil(daysRemaining / 7));
     const totalToLose = Math.max(0, currentWeight - fightWeekTarget);
     const weeklyLossRate = Math.min(totalToLose / weeksRemaining, 1.0);
-    const dailyDeficit = Math.round((weeklyLossRate * 7700) / 7);
+
+    // Deterministic deficit. Fight-camp flow assumes ~2kg of the cut comes
+    // from water on fight week, so the diet phase only needs to chase the
+    // remainder. We pass that as `waterCutAllowanceKg`.
+    const waterCutAllowanceKg = Math.max(0, currentWeight - fightWeekTarget) > 4 ? 2 : 1;
+    const deficitFacts = requiredDeficit({
+      currentKg: currentWeight,
+      targetKg: fightWeekTarget,
+      daysRemaining,
+      waterCutAllowanceKg,
+      tdee,
+    });
+    // Cap at 25% of TDEE OR 750 kcal/day (whichever is lower) — fight-camp
+    // athletes need to keep training quality high.
+    const dailyDeficit = Math.min(deficitFacts.dailyDeficitKcal, Math.round(tdee * 0.25), 750);
     const targetCalories = Math.max(sex === 'female' ? 1200 : 1500, Math.round(tdee - dailyDeficit));
-    const proteinTarget = Math.round(fightWeekTarget * 2.2);
+    // ISSN: protein at 2.0-2.5 g/kg of *current* bodyweight during a deficit —
+    // scaling off the (lower) fight-week target undershoots LBM preservation.
+    const proteinTarget = Math.round(currentWeight * 2.2);
     const fatTarget = Math.round((targetCalories * 0.25) / 9);
     const carbTarget = Math.round((targetCalories - (proteinTarget * 4) - (fatTarget * 9)) / 4);
+
+    // Pre-flight safety: log violations so we can see them, but don't block —
+    // existing UX surfaces a plan even if the user's inputs are aggressive.
+    const preflight = safetyBounds({
+      dailyKcal: targetCalories,
+      proteinG: proteinTarget,
+      weightLossPerWeekKg: weeklyLossRate,
+      weightKg: currentWeight,
+      bmr: bmr ?? Math.round(tdee / 1.5),
+    });
+    if (!preflight.ok) {
+      edgeLogger.warn?.("generate-cut-plan preflight safety violations", { violations: preflight.violations });
+    }
 
     const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
     if (!GROQ_API_KEY) throw new Error("GROQ_API_KEY not configured");
@@ -126,40 +159,59 @@ Return ONLY valid JSON:
   "keyPrinciples": ["","",""]
 }`;
 
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${GROQ_API_KEY}`,
+    const validated = await aiCallWithValidation({
+      schema: CutPlanSchema,
+      maxRetries: 2,
+      onRetry: (attempt, errors) => {
+        edgeLogger.info?.("generate-cut-plan retry", { attempt, errors });
       },
-      body: JSON.stringify({
-        model: "openai/gpt-oss-120b",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: "Generate my personalised weight cut plan." },
-        ],
-        temperature: 0.4,
-        max_tokens: 4000,
-        response_format: { type: "json_object" },
-      }),
+      groqRequest: async (_attempt, previousErrors) => {
+        const promptWithFeedback = systemPrompt + buildRetryFeedback(previousErrors);
+        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${GROQ_API_KEY}`,
+          },
+          body: JSON.stringify({
+            model: "openai/gpt-oss-120b",
+            messages: [
+              { role: "system", content: promptWithFeedback },
+              { role: "user", content: "Generate my personalised weight cut plan." },
+            ],
+            temperature: 0.4,
+            max_tokens: 4000,
+            response_format: { type: "json_object" },
+          }),
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          edgeLogger.error("Groq API error", undefined, { functionName: "generate-cut-plan", status: response.status, errText });
+          throw new Error(`AI service error: ${response.status}`);
+        }
+
+        const grokData = await response.json();
+        const { content, filtered } = extractContent(grokData);
+        if (!content || filtered) {
+          throw new Error("AI response was empty or filtered");
+        }
+        return parseJSON(content);
+      },
     });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      edgeLogger.error("Groq API error", undefined, { functionName: "generate-cut-plan", status: response.status, errText });
-      throw new Error(`AI service error: ${response.status}`);
+    if (!validated.ok) {
+      edgeLogger.error("generate-cut-plan validation failed", undefined, {
+        attempts: validated.attempts,
+        errors: validated.errors,
+      });
+      return new Response(
+        JSON.stringify({ error: "AI returned an invalid plan. Please try again.", code: "AI_VALIDATION_FAILED", details: validated.errors }),
+        { status: 502, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
+      );
     }
 
-    const grokData = await response.json();
-    const { content, filtered } = extractContent(grokData);
-    if (!content || filtered) {
-      throw new Error("AI response was empty or filtered");
-    }
-    const plan = parseJSON(content);
-
-    if (!plan || !plan.weeklyPlan) {
-      throw new Error("Invalid plan response from AI");
-    }
+    const plan: any = validated.data;
 
     // Enforce week count + final-week target weight = fight-week target.
     // The LLM occasionally drifts on either; normalise deterministically so
@@ -182,6 +234,35 @@ Return ONLY valid JSON:
     plan.maintenanceCalories = tdee;
     plan.deficit = dailyDeficit;
     plan.targetCalories = targetCalories;
+
+    // Fire-and-forget: record this decision for later outcome reconciliation.
+    // NEVER await — response must not block on the log write.
+    try {
+      void logAIDecision(supabaseClient, {
+        userId: user.id,
+        feature: 'generate-cut-plan',
+        inputSnapshot: {
+          currentWeight,
+          targetWeight: fightWeekTarget,
+          goalWeight,
+          daysToFight: daysRemaining,
+          tdee,
+          age,
+          sex,
+          heightCm,
+          activityLevel,
+          trainingFrequency,
+        },
+        outputJson: plan,
+        predictionFacts: {
+          predicted_kcal: targetCalories,
+          predicted_loss_per_week_kg: weeklyLossRate,
+        },
+        model: 'openai/gpt-oss-120b',
+      });
+    } catch (_logErr) {
+      // logAIDecision already swallows internally; defensive try/catch only.
+    }
 
     return new Response(JSON.stringify({ plan }), {
       headers: { ...corsHeaders(req), "Content-Type": "application/json" },

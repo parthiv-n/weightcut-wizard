@@ -4,6 +4,8 @@ import { edgeLogger } from "../_shared/errorReporter.ts";
 import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { checkAIUsage, aiLimitResponse } from "../_shared/subscriptionGuard.ts";
+import { buildAthleteSnapshot, snapshotToPromptBlock } from "../_shared/athleteSnapshot.ts";
+import { logAIDecision } from "../_shared/aiDecisionLog.ts";
 
 // Helper function to extract meals from plain text when JSON parsing fails
 function extractMealsFromText(text: string): any[] {
@@ -161,7 +163,12 @@ serve(async (req) => {
       targetFats = Math.round((dailyCalorieTarget - targetProtein * 4 - targetCarbs * 4) / 9);
     }
 
-    const systemPrompt = `Nutrition AI for fighters. Create safe meal plans.
+    // Athlete Snapshot — full context (training, recovery, weight slope) so the
+    // planner can cycle calories on training days and react to recovery state.
+    const snap = await buildAthleteSnapshot(supabaseClient, user.id);
+    const snapshotBlock = snapshotToPromptBlock(snap);
+
+    let systemPrompt = `Nutrition AI for fighters. Create safe meal plans.
 
 Athlete: ${profile?.sex || 'unspecified'}${profile?.age ? `, ${profile.age}y` : ''}
 Target: ${Math.round(dailyCalorieTarget)} cal/day (${currentWeight}kg→${goalWeight}kg, ${daysToGoal} days)
@@ -214,6 +221,7 @@ Respond ONLY with this exact JSON structure:
   "safetyMessage": "${safetyMessage}",
   "tips": "Brief tips"
 }`;
+    systemPrompt += `\n\n${snapshotBlock}`;
 
     edgeLogger.info("Calling Grok API for meal planning");
 
@@ -429,6 +437,30 @@ Respond ONLY with this exact JSON structure:
       mealPlanData.totalCarbs = mealPlanData.meals.reduce((s: number, m: any) => s + (m.carbs || 0), 0);
       mealPlanData.totalFats = mealPlanData.meals.reduce((s: number, m: any) => s + (m.fats || 0), 0);
       mealPlanData.totalCalories = mealPlanData.totalProtein * 4 + mealPlanData.totalCarbs * 4 + mealPlanData.totalFats * 9;
+    }
+
+    // Fire-and-forget: record this meal-plan decision for later outcome reconciliation.
+    // Only log on the true success path — fallback/preview branches have already returned above.
+    // NEVER await — response must not block on the log write.
+    try {
+      void logAIDecision(supabaseClient, {
+        userId: user.id,
+        feature: 'meal-planner',
+        inputSnapshot: snap ?? {
+          currentWeight,
+          targetWeight: goalWeight,
+          daysToFight: daysToGoal,
+          tdee,
+        },
+        outputJson: mealPlanData,
+        predictionFacts: {
+          predicted_kcal: Math.round(mealPlanData.totalCalories ?? dailyCalorieTarget),
+          predicted_protein_g: Math.round(mealPlanData.totalProtein ?? targetProtein),
+        },
+        model: 'openai/gpt-oss-120b',
+      });
+    } catch (_logErr) {
+      // logAIDecision already swallows internally; defensive try/catch only.
     }
 
     return new Response(

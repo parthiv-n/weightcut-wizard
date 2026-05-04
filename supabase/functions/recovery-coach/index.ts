@@ -6,6 +6,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { checkAIUsage, aiLimitResponse } from "../_shared/subscriptionGuard.ts";
 import { computeLoadMetrics, type SessionRow } from "../_shared/loadMetrics.ts";
 import { buildRecoveryContext } from "../_shared/recoveryContext.ts";
+import { buildAthleteSnapshot, snapshotToPromptBlock } from "../_shared/athleteSnapshot.ts";
 import { RECOVERY_RESEARCH_MD } from "./research.ts";
 
 const TONE_RULE = `CRITICAL TONE RULE: You must write in full, natural, conversational English — the way a real coach talks to their fighter face-to-face. Use complete sentences with proper grammar. Never write in shorthand, abbreviations, or clipped fragments. Never drop articles like "the", "a", "your". Never use slash-separated alternatives like "ice/heat". Instead write "ice or heat". Your writing should flow naturally and be pleasant to read aloud.`;
@@ -150,8 +151,13 @@ serve(async (req) => {
     const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
     if (!GROQ_API_KEY) throw new Error("GROQ_API_KEY is not configured");
 
+    // Athlete Snapshot — single source of truth for cross-feature context (5 min cache).
+    step = "build-snapshot";
+    const snap = await buildAthleteSnapshot(supabaseClient, user.id);
+    const snapshotBlock = snapshotToPromptBlock(snap);
+
     const athleteName = userName || null;
-    const systemPrompt = `You are the "Recovery Coach" — an elite combat sports recovery and training-load specialist.${
+    let systemPrompt = `You are the "Recovery Coach" — an elite combat sports recovery and training-load specialist.${
       athleteName ? ` The athlete's name is "${athleteName}". Use it sparingly when greeting or encouraging them.` : ""
     }
 
@@ -183,6 +189,7 @@ Behavior rules:
 - Markdown output. 120–300 words. Conversational, full-sentence prose. Use bullets only for lists of three or more.
 
 ${TONE_RULE}`;
+    systemPrompt += `\n\n${snapshotBlock}`;
 
     edgeLogger.info("recovery-coach: calling Groq", {
       messages: cappedMessages.length,

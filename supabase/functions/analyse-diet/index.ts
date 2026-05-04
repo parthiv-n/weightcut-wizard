@@ -4,6 +4,7 @@ import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
 import { edgeLogger } from "../_shared/errorReporter.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { checkAIUsage, aiLimitResponse } from "../_shared/subscriptionGuard.ts";
+import { buildAthleteSnapshot, snapshotToPromptBlock } from "../_shared/athleteSnapshot.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -58,7 +59,12 @@ serve(async (req) => {
 
     edgeLogger.info("Analysing diet", { date, mealCount: meals.length });
 
-    const systemPrompt = `You are a JSON API. Respond with ONLY the JSON object. NEVER use em dashes in any text, use commas, periods, or regular hyphens instead. No preamble, no explanation, no markdown — just raw JSON.
+    // Athlete Snapshot — gives the diet analyser sport, weight cut state, and
+    // recent training load so micronutrient gaps can be tied to performance demands.
+    const snap = await buildAthleteSnapshot(supabaseClient, user.id);
+    const snapshotBlock = snapshotToPromptBlock(snap);
+
+    let systemPrompt = `You are a JSON API. Respond with ONLY the JSON object. NEVER use em dashes in any text, use commas, periods, or regular hyphens instead. No preamble, no explanation, no markdown — just raw JSON.
 You are a professional combat sports nutritionist. Analyse the athlete's full day of eating and estimate micronutrient intake based on known food composition profiles.
 
 Return this exact JSON structure:
@@ -94,6 +100,7 @@ Rules:
 - Suggestions should be practical, whole-food-based, and optimised for combat sport recovery/performance
 - Keep suggestions to 2-4 items, prioritising the most critical gaps
 - percentRDA values should be integers, capped at 100`;
+    systemPrompt += `\n\n${snapshotBlock}`;
 
     const mealSummary = meals.map((m: any) =>
       `${m.meal_type || "meal"}: ${m.meal_name} (${m.calories} kcal, ${m.protein_g}g P, ${m.carbs_g}g C, ${m.fats_g}g F)${m.ingredients?.length ? ` — ingredients: ${m.ingredients.map((i: any) => `${i.name} ${i.grams}g`).join(", ")}` : ""}`

@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
 import { edgeLogger } from "../_shared/errorReporter.ts";
 import { corsHeaders } from "../_shared/cors.ts";
+import { buildAthleteSnapshot, snapshotToPromptBlock } from "../_shared/athleteSnapshot.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -89,7 +90,12 @@ serve(async (req) => {
       else paceStatus = "behind";
     }
 
-    const systemPrompt = `You are a JSON API. Respond with ONLY valid JSON.
+    // Athlete Snapshot — pull full context server-side so the model sees training
+    // load + recovery, not just the weight/calorie fields the client posted.
+    const snap = await buildAthleteSnapshot(supabaseClient, user.id);
+    const snapshotBlock = snapshotToPromptBlock(snap);
+
+    let systemPrompt = `You are a JSON API. Respond with ONLY valid JSON.
 You are the FightCamp Wizard — evidence-based fight sports nutritionist.
 
 RULES:
@@ -110,6 +116,7 @@ OUTPUT:
   "actionItems": ["item1", "item2", "item3"],
   "nutritionStatus": "string"
 }`;
+    systemPrompt += `\n\n${snapshotBlock}`;
 
     const userPrompt = `Athlete snapshot:
 - Weight: ${currentWeight}kg → Diet target: ${dietTarget}kg → Weigh-in: ${goalWeight}kg

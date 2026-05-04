@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronRight, Copy, Check, Share2, Megaphone } from "lucide-react";
+import { ChevronRight, Copy, Check, Share2, Megaphone, RefreshCw } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import { useCoachData, type AthleteOverviewRow, type GymRow } from "@/hooks/coach/useCoachData";
 import { useCoachRealtimeSync } from "@/hooks/coach/useCoachRealtimeSync";
@@ -172,6 +172,14 @@ export default function CoachDashboard() {
               {stats.total} {stats.total === 1 ? "athlete" : "athletes"}
             </span>
             <button
+              onClick={() => { triggerHaptic(ImpactStyle.Light); void refresh(); }}
+              disabled={loading}
+              className="h-9 w-9 rounded-full bg-muted/60 flex items-center justify-center active:bg-muted/80 transition-colors disabled:opacity-60"
+              aria-label="Refresh"
+            >
+              <RefreshCw className={`h-4 w-4 text-muted-foreground ${loading ? "animate-spin" : ""}`} />
+            </button>
+            <button
               onClick={() => setSettingsOpen(true)}
               className="h-9 w-9 rounded-full bg-muted/60 flex items-center justify-center active:bg-muted/80 transition-colors"
               aria-label="Settings"
@@ -291,17 +299,39 @@ export default function CoachDashboard() {
                             <span className={`h-1.5 w-1.5 rounded-full ${flagDot[sev]} flex-shrink-0`} aria-hidden />
                             <p className="text-[13px] font-medium truncate">{a.display_name}</p>
                           </div>
-                          <p className="text-[11px] text-muted-foreground mt-0.5 tabular-nums">
-                            {a.current_weight_kg != null ? `${a.current_weight_kg.toFixed(1)} kg` : "— kg"}
+                          <div className="mt-1 flex items-center gap-1.5 tabular-nums">
+                            <span className="text-[12px] font-semibold text-foreground/90">
+                              {a.current_weight_kg != null ? `${a.current_weight_kg.toFixed(1)}` : "—"}
+                              <span className="ml-0.5 text-[10px] font-normal text-muted-foreground">kg</span>
+                            </span>
                             {target != null && delta != null && (
-                              <span className="ml-1">
-                                · {delta > 0 ? "+" : ""}{delta.toFixed(1)} to target
+                              <>
+                                <span
+                                  className={`px-1 py-px rounded text-[10px] font-semibold leading-none ${
+                                    Math.abs(delta) < 0.1
+                                      ? "bg-emerald-500/10 text-emerald-400"
+                                      : delta > 0
+                                      ? "bg-amber-500/10 text-amber-500"
+                                      : "bg-emerald-500/10 text-emerald-400"
+                                  }`}
+                                >
+                                  {Math.abs(delta) < 0.1
+                                    ? "0.0"
+                                    : delta > 0
+                                    ? `−${delta.toFixed(1)}`
+                                    : `+${Math.abs(delta).toFixed(1)}`}
+                                </span>
+                                <span className="text-[10px] text-muted-foreground/70">
+                                  to {target.toFixed(1)}
+                                </span>
+                              </>
+                            )}
+                            {wDays != null && wDays >= 2 && (
+                              <span className="text-[10px] text-muted-foreground/60 ml-auto">
+                                {wDays}d ago
                               </span>
                             )}
-                            {wDays != null && wDays > 0 && (
-                              <span className="ml-1">· {wDays}d ago</span>
-                            )}
-                          </p>
+                          </div>
                         </div>
 
                         {/* 7-day training strain — sparkline updates in

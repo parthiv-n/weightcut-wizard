@@ -4,6 +4,9 @@ import { edgeLogger } from "../_shared/errorReporter.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from "../_shared/cors.ts";
 import { checkAIUsage, aiLimitResponse } from "../_shared/subscriptionGuard.ts";
+import { reidRealeWaterCut } from "../_shared/math.ts";
+import { RehydrationPlanSchema } from "../_shared/aiSchemas.ts";
+import { aiCallWithValidation, buildRetryFeedback } from "../_shared/aiCallWithRetry.ts";
 
 // ── Deterministic calculations (not LLM-generated) ─────────────────────────
 function computeTargets(
@@ -107,6 +110,13 @@ serve(async (req) => {
     // Recalculate hourly rate for awake hours only (more fluid per hour to compensate for sleep)
     const awakeHourlyFluidML = Math.min(1000, Math.round(targets.totalFluidML / awakeHours));
 
+    // Deterministic Reid Reale water-cut taper (Reale et al. 2018, IJSNEM).
+    // We don't ask the LLM to compute these; we expose them as facts so any
+    // narrative text it writes is grounded against numbers we control.
+    // Reale 2018 scales the taper to *cut-day target weight* (post-cut), not
+    // pre-cut weight — using currentWeightKg overshoots fluid/sodium by 5-15%.
+    const reale = reidRealeWaterCut(fightWeekTargetKg ?? currentWeightKg);
+
     const profileLines = [
       `Body weight: ${currentWeightKg}kg`,
       sex ? `Sex: ${sex}` : null,
@@ -125,6 +135,7 @@ Combat sports rehydration expert.
 
 ATHLETE: ${profileLines}
 TARGETS: Fluid ${targets.totalFluidLitres}L (${awakeHourlyFluidML}ml/h) | ${awakeHours}h awake${sleepNote} | Na ${targets.totalSodiumMg}mg | K ${targets.totalPotassiumMg}mg | Mg ${targets.totalMagnesiumMg}mg | Carbs ${targets.totalCarbsG}g (max ${targets.maxCarbsPerHour}g/h) | Depletion: ${glycogenDepletion}
+WATER-CUT TAPER (Reid Reale 2018, deterministic — do not recompute, only narrate if relevant): D-2 fluid ${reale.dayMinus2.fluidML}ml + sodium ${reale.dayMinus2.sodiumMg}mg | D-1 fluid ${reale.dayMinus1.fluidML}ml + sodium ${reale.dayMinus1.sodiumMg}mg | D-0 fluid 0ml + sodium 0mg.
 
 Output JSON:
 - summary: 1-2 sentence overview
@@ -139,73 +150,108 @@ Output JSON:
 
     edgeLogger.info("Calling Grok API for rehydration protocol");
 
-    // connect timeout - upstream Groq
-    const groqController = new AbortController();
-    const groqTimer = setTimeout(() => groqController.abort(), 15000);
-    let response: Response;
-    try {
-      response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${GROQ_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "openai/gpt-oss-120b",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          temperature: 0.1,
-          max_tokens: 2500,
-          response_format: { type: "json_object" },
-        }),
-        signal: groqController.signal,
-      });
-    } catch (err: any) {
-      if (err?.name === "AbortError") {
-        edgeLogger.error("rehydration-protocol Groq timeout", undefined, { functionName: "rehydration-protocol", timeoutMs: 15000 });
-        return new Response(
-          JSON.stringify({ error: "AI service timed out — please try again", code: "AI_TIMEOUT" }),
-          { status: 504, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
-        );
-      }
-      throw err;
-    } finally {
-      clearTimeout(groqTimer);
-    }
+    // Sentinel error codes used to bubble specific upstream conditions out of
+    // the validation wrapper so we can return the right HTTP status below.
+    let upstreamShortCircuit: { status: number; body: Record<string, unknown> } | null = null;
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "AI service is busy. Please try again in a moment.", code: "AI_BUSY" }),
-          { status: 503, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
-        );
+    const validated = await aiCallWithValidation({
+      schema: RehydrationPlanSchema,
+      maxRetries: 2,
+      onRetry: (attempt, errors) => {
+        edgeLogger.info?.("rehydration-protocol retry", { attempt, errors });
+      },
+      groqRequest: async (_attempt, previousErrors) => {
+        const promptWithFeedback = systemPrompt + buildRetryFeedback(previousErrors);
+        const groqController = new AbortController();
+        const groqTimer = setTimeout(() => groqController.abort(), 15000);
+        let response: Response;
+        try {
+          response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${GROQ_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "openai/gpt-oss-120b",
+              messages: [
+                { role: "system", content: promptWithFeedback },
+                { role: "user", content: userPrompt },
+              ],
+              temperature: 0.1,
+              max_tokens: 2500,
+              response_format: { type: "json_object" },
+            }),
+            signal: groqController.signal,
+          });
+        } catch (err: any) {
+          if (err?.name === "AbortError") {
+            edgeLogger.error("rehydration-protocol Groq timeout", undefined, { functionName: "rehydration-protocol", timeoutMs: 15000 });
+            upstreamShortCircuit = {
+              status: 504,
+              body: { error: "AI service timed out — please try again", code: "AI_TIMEOUT" },
+            };
+            throw new Error("AI_TIMEOUT");
+          }
+          throw err;
+        } finally {
+          clearTimeout(groqTimer);
+        }
+
+        if (!response.ok) {
+          if (response.status === 429) {
+            upstreamShortCircuit = {
+              status: 503,
+              body: { error: "AI service is busy. Please try again in a moment.", code: "AI_BUSY" },
+            };
+            throw new Error("AI_BUSY");
+          }
+          if (response.status === 401 || response.status === 403) {
+            upstreamShortCircuit = {
+              status: response.status,
+              body: { error: "API key invalid or quota exceeded." },
+            };
+            throw new Error("AI_AUTH");
+          }
+          const errorData = await response.json().catch(() => ({}));
+          edgeLogger.error("Groq API error", undefined, { functionName: "rehydration-protocol", status: response.status, errorData });
+          upstreamShortCircuit = {
+            status: 500,
+            body: { error: "AI service unavailable" },
+          };
+          throw new Error("AI_UNAVAILABLE");
+        }
+
+        const data = await response.json();
+        edgeLogger.info("Groq rehydration response received");
+
+        const { content, filtered } = extractContent(data);
+        if (!content) {
+          if (filtered) throw new Error("Content was filtered for safety. Please try a different request.");
+          throw new Error("No response from Groq API");
+        }
+        return parseJSON(content);
+      },
+    });
+
+    if (!validated.ok) {
+      if (upstreamShortCircuit) {
+        return new Response(JSON.stringify(upstreamShortCircuit.body), {
+          status: upstreamShortCircuit.status,
+          headers: { ...corsHeaders(req), "Content-Type": "application/json" },
+        });
       }
-      if (response.status === 401 || response.status === 403) {
-        return new Response(
-          JSON.stringify({ error: "API key invalid or quota exceeded." }),
-          { status: response.status, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
-        );
-      }
-      const errorData = await response.json();
-      edgeLogger.error("Groq API error", undefined, { functionName: "rehydration-protocol", status: response.status, errorData });
+      edgeLogger.error("rehydration-protocol validation failed", undefined, {
+        attempts: validated.attempts,
+        errors: validated.errors,
+      });
       return new Response(
-        JSON.stringify({ error: "AI service unavailable" }),
-        { status: 500, headers: { ...corsHeaders(req), "Content-Type": "application/json" } }
+        JSON.stringify({ error: "AI returned an invalid protocol. Please try again.", code: "AI_VALIDATION_FAILED", details: validated.errors }),
+        { status: 502, headers: { ...corsHeaders(req), "Content-Type": "application/json" } },
       );
     }
 
-    const data = await response.json();
-    edgeLogger.info("Groq rehydration response received");
-
-    const { content, filtered } = extractContent(data);
-    if (!content) {
-      if (filtered) throw new Error("Content was filtered for safety. Please try a different request.");
-      throw new Error("No response from Groq API");
-    }
-
-    const protocol = parseJSON(content);
+    const protocol: any = validated.data;
 
     // ── Expand phase groups into hourly steps (client expects hourlyProtocol) ────
     if (protocol.phases && Array.isArray(protocol.phases) && !protocol.hourlyProtocol) {
@@ -261,6 +307,15 @@ Output JSON:
       bodyWeightKg: currentWeightKg,
       caffeineLowMg: targets.caffeineLowMg,
       caffeineHighMg: targets.caffeineHighMg,
+    };
+    // Reid Reale 2-day water-cut taper (deterministic, additive — does not
+    // overwrite anything the client already reads). LLM can reference these
+    // values in narrative but cannot change them.
+    protocol.waterCutTaper = {
+      dayMinus2: reale.dayMinus2,
+      dayMinus1: reale.dayMinus1,
+      dayZero: reale.dayZero,
+      source: "Reale et al. 2018 (IJSNEM)",
     };
 
     return new Response(JSON.stringify({ protocol }), {

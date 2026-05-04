@@ -4,6 +4,7 @@ import { extractContent, parseJSON } from "../_shared/parseResponse.ts";
 import { edgeLogger } from "../_shared/errorReporter.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { checkAIUsage, aiLimitResponse } from "../_shared/subscriptionGuard.ts";
+import { buildAthleteSnapshot, snapshotToPromptBlock } from "../_shared/athleteSnapshot.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -134,7 +135,12 @@ serve(async (req) => {
     const requiredWeeklyLoss = weightToLose > 0 ? weightToLose / weeksRemaining : 0;
     const requiredWeeklyGain = weightToGain > 0 ? weightToGain / weeksRemaining : 0;
 
-    const systemPrompt = `You are a JSON API. Respond with ONLY the JSON object. NEVER use em dashes in any text, use commas, periods, or regular hyphens instead.
+    // Athlete Snapshot — single source of truth so prompt sees full training/recovery
+    // context, not just the weight history fields the client passed in.
+    const snap = await buildAthleteSnapshot(supabaseClient, user.id);
+    const snapshotBlock = snapshotToPromptBlock(snap);
+
+    let systemPrompt = `You are a JSON API. Respond with ONLY the JSON object. NEVER use em dashes in any text, use commas, periods, or regular hyphens instead.
 You are the FightCamp Wizard — evidence-based sports nutrition specialist for combat athletes.
 
 RULES:
@@ -189,6 +195,7 @@ OUTPUT:
     "notes": "string"
   }
 }`;
+    systemPrompt += `\n\n${snapshotBlock}`;
 
     // Build compact user prompt
     const weightStatus = weightToGain > 0
