@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuthActions } from "@convex-dev/auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -30,6 +30,7 @@ export default function Auth() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { toast } = useToast();
   const { userId } = useAuth();
+  const { signIn } = useAuthActions();
 
   const isPasswordReset = searchParams.get("reset") === "true";
 
@@ -52,8 +53,8 @@ export default function Auth() {
     setPasswordError("");
     try {
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
+        // Convex Auth Password provider: flow "signIn" verifies existing credentials.
+        await signIn("password", { email, password, flow: "signIn" });
       } else {
         if (password !== confirmPassword) {
           setPasswordError("Passwords do not match");
@@ -65,30 +66,18 @@ export default function Auth() {
           setLoading(false);
           return;
         }
-        const redirectPath = signupRole === "coach" ? "coach/setup" : "dashboard";
-        const { data: signUpData, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: { role: signupRole },
-            emailRedirectTo: window.location.protocol === 'file:' || window.location.hostname === 'localhost'
-              ? `weightcutwizard://${redirectPath}`
-              : `${window.location.origin}/${redirectPath}`,
-          },
-        });
-        if (error) throw error;
-        // Stash intended role so first profile insert (onboarding/coach setup) picks it up.
+        // Stash intended role so the profile bootstrap / onboarding flow picks it up.
+        // The role is also passed into the signUp params; Convex Auth's
+        // Password.profile callback can read it (Phase-3 wiring will update
+        // the profile row's `role` field to match).
         try { localStorage.setItem("wcw_intended_role", signupRole); } catch {}
-        // If session exists immediately (no email confirm), set role on profile + route coaches.
-        if (signUpData?.user && signUpData.session) {
-          await supabase.from("profiles").upsert(
-            { id: signUpData.user.id, role: signupRole },
-            { onConflict: "id" }
-          );
-          if (signupRole === "coach") {
-            navigate("/coach/setup");
-            return;
-          }
+
+        await signIn("password", { email, password, flow: "signUp", role: signupRole });
+
+        // Coaches go to setup; fighters fall through to the post-auth router.
+        if (signupRole === "coach") {
+          navigate("/coach/setup");
+          return;
         }
       }
     } catch (error: any) {
@@ -102,11 +91,12 @@ export default function Auth() {
     e.preventDefault();
     setLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/auth?reset=true`,
-      });
-      if (error) throw error;
-      toast({ title: "Email sent", description: "Check your inbox for the reset link." });
+      // Convex Auth Password provider: flow "reset" sends a verification
+      // code to the user's email via the configured email provider.
+      // TODO(phase-3): email provider (Resend) must be wired into
+      // `auth.ts`'s Password({ reset: ... }) before this works end-to-end.
+      await signIn("password", { email, flow: "reset" });
+      toast({ title: "Email sent", description: "Check your inbox for a reset code." });
       setShowForgotPassword(false);
       setEmail("");
     } catch (error: any) {
@@ -123,8 +113,18 @@ export default function Auth() {
     if (password.length < 6) { setPasswordError("Must be at least 6 characters"); return; }
     setLoading(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password });
-      if (error) throw error;
+      // Convex Auth's password reset is a two-step flow: the email contains
+      // a code that the user enters here together with their new password.
+      // The current UI doesn't yet collect the code — Phase-3 will add a
+      // code input. For now this submits with the code field empty, which
+      // will trip the validation on the server. Surface the TODO clearly.
+      const code = searchParams.get("code") ?? "";
+      await signIn("password", {
+        email,
+        code,
+        newPassword: password,
+        flow: "reset-verification",
+      });
       toast({ title: "Password updated!" });
       setSearchParams({});
       navigate("/dashboard");
@@ -139,29 +139,34 @@ export default function Auth() {
     setLoading(true);
     try {
       if (Capacitor.isNativePlatform()) {
+        // Native iOS path: use the @capacitor-community/apple-sign-in
+        // plugin (already in package.json) to get an identity token from
+        // Apple, then exchange it via Convex Auth.
         const rawNonce = crypto.randomUUID();
         const encoder = new TextEncoder();
         const hashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(rawNonce));
         const hashedNonce = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
         const { SignInWithApple } = await import("@capacitor-community/apple-sign-in");
         const result = await SignInWithApple.authorize({
+          // Native bundle ID (Apple Developer → App ID, NOT the Services ID).
           clientId: "com.weightcutwizard.app",
-          redirectURI: "https://pkubdwmnnsxjjnpjjqqy.supabase.co/auth/v1/callback",
+          // Convex Auth's Apple callback. Must be registered as a Return
+          // URL on the Sign-In-With-Apple Services ID configuration.
+          redirectURI: "https://fast-koala-318.eu-west-1.convex.site/api/auth/callback/apple",
           scopes: "email",
           nonce: hashedNonce,
         });
-        const { data: signInData, error } = await supabase.auth.signInWithIdToken({
-          provider: "apple",
-          token: result.response.identityToken,
+        // Convex Auth accepts an idToken parameter for OAuth providers to
+        // skip the browser round-trip when the client already has one.
+        await signIn("apple", {
+          idToken: result.response.identityToken,
           nonce: rawNonce,
         });
-        if (error && !signInData?.session) throw error;
       } else {
-        const { error } = await supabase.auth.signInWithOAuth({
-          provider: "apple",
-          options: { redirectTo: `${window.location.origin}/dashboard` },
-        });
-        if (error) throw error;
+        // Web / Capacitor-with-no-plugin path: open the OAuth browser flow.
+        // Convex Auth will redirect to its callback HTTP route and then
+        // back to the app via the `redirectTo` URL.
+        await signIn("apple", { redirectTo: `${window.location.origin}/dashboard` });
       }
     } catch (error: any) {
       const msg = error?.message?.toLowerCase() || "";

@@ -2,7 +2,8 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, us
 import { useProfile, useAuth } from "@/contexts/UserContext";
 import { Capacitor } from "@capacitor/core";
 import { initializePurchases, addCustomerInfoUpdateListener, isPremiumFromCustomerInfo, getSubscriptionFromCustomerInfo, getCustomerInfo } from "@/lib/purchases";
-import { supabase } from "@/integrations/supabase/client";
+import { useAction } from "convex/react";
+import { api } from "../../convex/_generated/api";
 import { logger } from "@/lib/logger";
 
 // ─── localStorage persistence ───
@@ -69,6 +70,7 @@ const SubscriptionContext = createContext<SubscriptionContextType | undefined>(u
 export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const { profile, refreshProfile } = useProfile();
   const { userId } = useAuth();
+  const activatePremium = useAction(api.actions.activatePremium.run);
   const [isPaywallOpen, setIsPaywallOpen] = useState(false);
   const [isNoGemsOpen, setIsNoGemsOpen] = useState(false);
   const [showWelcomePro, setShowWelcomePro] = useState(false);
@@ -193,10 +195,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
           if (sub) {
             forcePremium(sub.tier, sub.expiresAt);
             try {
-              await supabase.functions.invoke("activate-premium", {
-                body: { tier: sub.tier, expiresAt: sub.expiresAt },
-              });
-              logger.info("RevenueCat listener: synced premium via edge function", sub);
+              await activatePremium({ tier: sub.tier, expiresAt: sub.expiresAt });
+              logger.info("RevenueCat listener: synced premium via Convex action", sub);
             } catch (err) { logger.warn("Failed to sync premium in listener", err); }
           }
           await refreshProfile();
@@ -216,11 +216,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         if (sub) {
           // Always force premium locally (instant, cheap)
           forcePremium(sub.tier, sub.expiresAt);
-          // Always sync to DB via edge function (idempotent, ensures DB is correct)
+          // Always sync to DB via Convex action (idempotent, ensures DB is correct)
           try {
-            await supabase.functions.invoke("activate-premium", {
-              body: { tier: sub.tier, expiresAt: sub.expiresAt },
-            });
+            await activatePremium({ tier: sub.tier, expiresAt: sub.expiresAt });
             logger.info("Startup: premium synced to DB", sub);
           } catch (err) {
             logger.warn("Startup: failed to sync premium to DB (will retry on next launch)", err);
@@ -246,7 +244,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       removeListener?.();
     };
-  }, [userId, refreshProfile, forcePremium]);
+  }, [userId, refreshProfile, forcePremium, activatePremium]);
 
   // On app resume: re-validate premium via RevenueCat (catches expiry/cancellation)
   useEffect(() => {

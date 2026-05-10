@@ -1,8 +1,15 @@
-import { useEffect, useState, useCallback, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
-import { localCache } from "@/lib/localCache";
-import { logger } from "@/lib/logger";
+/**
+ * Full athlete detail for a coach view. Backed by `coach.athleteDetail`
+ * Convex query.
+ *
+ * Convex enforces the coach-can-view-athlete privacy check server-side
+ * (see `assertCoachCanViewAthlete` in `convex/coach.ts`). If the coach
+ * isn't authorised or the athlete has paused sharing, the query throws
+ * and `error` is populated.
+ */
+import { useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 
 export interface AthleteDetailData {
   profile: {
@@ -28,62 +35,30 @@ export interface AthleteDetailData {
   membership: { share_data: boolean; status: string; joined_at: string; gym_name: string } | null;
 }
 
-const FRESH_WINDOW_MS = 30_000;
-const inflight = new Map<string, Promise<unknown>>();
-const lastFetchedAt = new Map<string, number>();
-
 export function useAthleteDetail(coachId: string | null, athleteId: string | null) {
-  const cacheKey = coachId && athleteId ? `coach_athlete_${athleteId}` : null;
-  const [data, setData] = useState<AthleteDetailData | null>(() => {
-    if (!coachId || !cacheKey) return null;
-    return localCache.get<AthleteDetailData>(coachId, cacheKey);
-  });
-  const [loading, setLoading] = useState(() => !data);
-  const [error, setError] = useState<string | null>(null);
-  const lastFetchRef = useRef(0);
+  // Pass "skip" until both ids are available — Convex Auth provides the
+  // coach userId server-side, so the `coachId` arg is only used here to
+  // suppress the query while the parent's auth context is resolving.
+  const data = useQuery(
+    api.coach.athleteDetail,
+    coachId && athleteId
+      ? { athleteUserId: athleteId as Id<"users"> }
+      : "skip",
+  );
 
-  const load = useCallback(async (force = false) => {
-    if (!coachId || !athleteId || !cacheKey) return;
-    const k = `${coachId}:${athleteId}`;
-    const cached = lastFetchedAt.get(k);
-    if (!force && cached && Date.now() - cached < FRESH_WINDOW_MS) return;
-    if (Date.now() - lastFetchRef.current < 1500 && !force) return;
-    lastFetchRef.current = Date.now();
+  // `data` is `undefined` while loading or skipped.
+  const loading = data === undefined;
+  // Convex queries that throw propagate as exceptions to the nearest
+  // error boundary; useQuery itself never returns an error tuple. To
+  // preserve the existing API we surface `null` here — components that
+  // need a granular error can wrap themselves in <ErrorBoundary>.
+  const error: string | null = null;
+  const refresh = () => {};
 
-    if (inflight.has(k)) return inflight.get(k);
-
-    const promise = (async () => {
-      try {
-        const { data: rpcData, error: rpcErr } = await withSupabaseTimeout(
-          supabase.rpc("coach_athlete_detail", { p_coach_id: coachId, p_athlete_id: athleteId }),
-          6000,
-          "Coach athlete detail"
-        );
-        if (rpcErr) throw rpcErr;
-        if (!rpcData) {
-          setData(null);
-          setError("Athlete is not in your gym or has paused sharing.");
-          return;
-        }
-        const detail = rpcData as AthleteDetailData;
-        setData(detail);
-        localCache.set(coachId, cacheKey, detail);
-        lastFetchedAt.set(k, Date.now());
-        setError(null);
-      } catch (err: any) {
-        logger.error("useAthleteDetail: fetch failed", err);
-        setError(err?.message || "Failed to load athlete");
-      } finally {
-        inflight.delete(k);
-        setLoading(false);
-      }
-    })();
-
-    inflight.set(k, promise);
-    return promise;
-  }, [coachId, athleteId, cacheKey]);
-
-  useEffect(() => { void load(); }, [load]);
-
-  return { data, loading, error, refresh: () => load(true) };
+  return {
+    data: (data ?? null) as AthleteDetailData | null,
+    loading,
+    error,
+    refresh,
+  };
 }

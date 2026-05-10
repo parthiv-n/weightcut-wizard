@@ -1,0 +1,619 @@
+import { defineSchema, defineTable } from "convex/server";
+import { v } from "convex/values";
+import { authTables } from "@convex-dev/auth/server";
+
+/**
+ * Convex schema — ported from Supabase Postgres (Phase 1 of migration).
+ *
+ * Conventions:
+ *  - Table names stay snake_case to match Postgres (less remapping during migration)
+ *  - Column names converted to camelCase (Convex idiom)
+ *  - `created_at` → dropped; use Convex's auto `_creationTime` (epoch ms)
+ *  - `updated_at` → kept as `updatedAt: v.number()` because it has app-level semantics
+ *  - `id` uuid PK → dropped; Convex auto-generates `_id` (Id<"tableName">)
+ *  - `date` columns → kept as ISO strings (YYYY-MM-DD) for easier indexing
+ *  - `timestamptz` columns → `v.number()` (epoch ms)
+ *  - `profiles.userId` references the Convex Auth `users` table
+ */
+export default defineSchema({
+  // ────────────────────────────────────────────────────────────────────
+  // CONVEX AUTH TABLES (users, authSessions, authAccounts, etc.)
+  // The `users` table here is the authoritative auth identity; `profiles`
+  // (below) is a 1:1 application extension keyed by `userId: v.id("users")`.
+  // ────────────────────────────────────────────────────────────────────
+  ...authTables,
+
+  // ────────────────────────────────────────────────────────────────────
+  // AUTH / PROFILE
+  // ────────────────────────────────────────────────────────────────────
+
+  profiles: defineTable({
+    userId: v.id("users"),
+    // Onboarding / physiology
+    age: v.number(),
+    sex: v.string(),
+    heightCm: v.number(),
+    currentWeightKg: v.number(),
+    goalWeightKg: v.number(),
+    targetDate: v.string(), // ISO YYYY-MM-DD
+    activityLevel: v.string(),
+    goalType: v.string(),
+    // CHECK ('fighter','coach'); kept as union for safety
+    role: v.union(v.literal("fighter"), v.literal("coach")),
+
+    // Derived / nutrition targets
+    bmr: v.optional(v.number()),
+    tdee: v.optional(v.number()),
+    bodyFatPct: v.optional(v.number()),
+    fightWeekTargetKg: v.optional(v.number()),
+    normalDailyCarbsG: v.optional(v.number()),
+
+    // AI recommendations (last-applied snapshot)
+    aiRecommendedCalories: v.optional(v.number()),
+    aiRecommendedProteinG: v.optional(v.number()),
+    aiRecommendedCarbsG: v.optional(v.number()),
+    aiRecommendedFatsG: v.optional(v.number()),
+    aiRecommendationsUpdatedAt: v.optional(v.number()),
+    manualNutritionOverride: v.optional(v.boolean()),
+
+    // Plan storage — JSONB whose shape varies by feature
+    cutPlanJson: v.optional(v.any()),
+
+    // Onboarding v2 profile fields
+    athleteType: v.optional(v.string()),
+    // Convex Storage ID for the avatar image. Resolved to a long-lived URL
+    // server-side via ctx.storage.getUrl() before sending to the client.
+    avatarStorageId: v.optional(v.id("_storage")),
+    displayName: v.optional(v.string()),
+    experienceLevel: v.optional(v.string()),
+    foodBudget: v.optional(v.string()),
+    planAggressiveness: v.optional(v.string()),
+    primaryStruggle: v.optional(v.string()),
+    sleepHours: v.optional(v.string()),
+    trainingFrequency: v.optional(v.number()),
+    trainingTypes: v.optional(v.array(v.string())),
+
+    // Subscription / gems
+    gems: v.number(),
+    lastFreeGemDate: v.optional(v.string()),
+    adsWatchedToday: v.number(),
+    adsWatchedDate: v.optional(v.string()),
+    subscriptionTier: v.string(),
+    subscriptionExpiresAt: v.optional(v.number()),
+    subscriptionUpdatedAt: v.optional(v.number()),
+    revenuecatCustomerId: v.optional(v.string()),
+
+    updatedAt: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_role", ["role"]),
+
+  // ────────────────────────────────────────────────────────────────────
+  // DAILY LOGS
+  // ────────────────────────────────────────────────────────────────────
+
+  weight_logs: defineTable({
+    userId: v.id("users"),
+    date: v.string(),
+    weightKg: v.number(),
+  }).index("by_user_date", ["userId", "date"]),
+
+  hydration_logs: defineTable({
+    userId: v.id("users"),
+    date: v.string(),
+    amountMl: v.number(),
+    sodiumMg: v.optional(v.number()),
+    sweatLossPercent: v.optional(v.number()),
+    trainingWeightPre: v.optional(v.number()),
+    trainingWeightPost: v.optional(v.number()),
+    notes: v.optional(v.string()),
+  }).index("by_user_date", ["userId", "date"]),
+
+  sleep_logs: defineTable({
+    userId: v.id("users"),
+    date: v.string(),
+    hours: v.number(),
+  }).index("by_user_date", ["userId", "date"]),
+
+  // ────────────────────────────────────────────────────────────────────
+  // NUTRITION V2
+  // ────────────────────────────────────────────────────────────────────
+
+  foods: defineTable({
+    name: v.string(),
+    brand: v.optional(v.string()),
+    barcode: v.optional(v.string()),
+    source: v.string(), // 'usda' | 'off' | 'user' | 'ai' — kept as string (free-form in DB)
+    sourceRef: v.optional(v.string()),
+    verified: v.boolean(),
+    createdBy: v.optional(v.id("users")),
+    defaultServingG: v.optional(v.number()),
+    caloriesPer100g: v.number(),
+    proteinPer100g: v.number(),
+    carbsPer100g: v.number(),
+    fatsPer100g: v.number(),
+  })
+    .index("by_barcode", ["barcode"])
+    .index("by_source_ref", ["source", "sourceRef"])
+    // Replaces the Postgres pg_trgm index on foods.name
+    .searchIndex("search_name", {
+      searchField: "name",
+      filterFields: ["source", "verified"],
+    }),
+
+  meals: defineTable({
+    userId: v.id("users"),
+    date: v.string(),
+    mealType: v.string(),
+    mealName: v.string(),
+    isAiGenerated: v.boolean(),
+    notes: v.optional(v.string()),
+  })
+    .index("by_user_date", ["userId", "date"])
+    // by_user_created — _creationTime is appended automatically to every index
+    .index("by_user_created", ["userId"]),
+
+  meal_items: defineTable({
+    mealId: v.id("meals"),
+    foodId: v.optional(v.id("foods")),
+    name: v.string(),
+    position: v.number(),
+    grams: v.number(),
+    calories: v.number(),
+    proteinG: v.number(),
+    carbsG: v.number(),
+    fatsG: v.number(),
+  }).index("by_meal", ["mealId"]),
+
+  meal_plans: defineTable({
+    userId: v.id("users"),
+    planName: v.string(),
+    startDate: v.string(),
+    endDate: v.string(),
+    dailyCalorieTarget: v.number(),
+    dietaryPreferences: v.optional(v.string()),
+    updatedAt: v.optional(v.number()),
+  }).index("by_user", ["userId"]),
+
+  user_dietary_preferences: defineTable({
+    userId: v.id("users"),
+    dietaryRestrictions: v.optional(v.array(v.string())),
+    favoriteCuisines: v.optional(v.array(v.string())),
+    dislikedFoods: v.optional(v.array(v.string())),
+    mealPreferences: v.optional(v.string()),
+    updatedAt: v.optional(v.number()),
+  }).index("by_user", ["userId"]),
+
+  // ────────────────────────────────────────────────────────────────────
+  // TRAINING & GYM
+  // ────────────────────────────────────────────────────────────────────
+
+  exercises: defineTable({
+    // userId null = global library exercise; user-id set = custom user exercise
+    userId: v.optional(v.id("users")),
+    name: v.string(),
+    category: v.string(),
+    muscleGroup: v.string(),
+    equipment: v.optional(v.string()),
+    isCustom: v.boolean(),
+    isBodyweight: v.boolean(),
+  }).index("by_user", ["userId"]),
+
+  gym_sessions: defineTable({
+    userId: v.id("users"),
+    date: v.string(),
+    sessionType: v.string(),
+    status: v.string(),
+    durationMinutes: v.optional(v.number()),
+    perceivedFatigue: v.optional(v.number()),
+    notes: v.optional(v.string()),
+    updatedAt: v.number(),
+  }).index("by_user_date", ["userId", "date"]),
+
+  gym_sets: defineTable({
+    sessionId: v.id("gym_sessions"),
+    exerciseId: v.id("exercises"),
+    userId: v.id("users"),
+    exerciseOrder: v.number(),
+    setOrder: v.number(),
+    reps: v.number(),
+    weightKg: v.optional(v.number()),
+    assistedWeightKg: v.optional(v.number()),
+    rpe: v.optional(v.number()),
+    isWarmup: v.boolean(),
+    isBodyweight: v.boolean(),
+    notes: v.optional(v.string()),
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_exercise_user", ["exerciseId", "userId"]),
+
+  exercise_prs: defineTable({
+    userId: v.id("users"),
+    exerciseId: v.id("exercises"),
+    bestSetId: v.optional(v.id("gym_sets")),
+    maxWeightKg: v.optional(v.number()),
+    maxReps: v.optional(v.number()),
+    maxVolume: v.optional(v.number()),
+    estimated1rm: v.optional(v.number()),
+    updatedAt: v.number(),
+  }).index("by_user_exercise", ["userId", "exerciseId"]),
+
+  saved_routines: defineTable({
+    userId: v.id("users"),
+    name: v.string(),
+    goal: v.string(),
+    sport: v.optional(v.string()),
+    trainingDaysPerWeek: v.optional(v.number()),
+    isAiGenerated: v.boolean(),
+    sortOrder: v.number(),
+    // JSONB shape varies (different exercise structures per routine type)
+    exercises: v.any(),
+    updatedAt: v.number(),
+  }).index("by_user", ["userId"]),
+
+  // Fight-camp planning
+  fight_camps: defineTable({
+    userId: v.id("users"),
+    name: v.string(),
+    fightDate: v.string(),
+    eventName: v.optional(v.string()),
+    profilePicUrl: v.optional(v.string()),
+    weighInTiming: v.optional(v.string()),
+    startingWeightKg: v.optional(v.number()),
+    endWeightKg: v.optional(v.number()),
+    totalWeightCut: v.optional(v.number()),
+    weightViaDehydration: v.optional(v.number()),
+    weightViaCarbReduction: v.optional(v.number()),
+    rehydrationNotes: v.optional(v.string()),
+    performanceFeeling: v.optional(v.string()),
+    isCompleted: v.optional(v.boolean()),
+    updatedAt: v.optional(v.number()),
+  }).index("by_user", ["userId"]),
+
+  fight_camp_calendar: defineTable({
+    userId: v.id("users"),
+    date: v.string(),
+    sessionType: v.string(),
+    intensity: v.string(),
+    intensityLevel: v.optional(v.number()),
+    durationMinutes: v.number(),
+    rpe: v.number(),
+    bodyweight: v.optional(v.number()),
+    fatigueLevel: v.optional(v.number()),
+    sorenessLevel: v.optional(v.number()),
+    sleepHours: v.optional(v.number()),
+    sleepQuality: v.optional(v.string()),
+    mobilityDone: v.optional(v.boolean()),
+    // Convex Storage ID for an optional training-media attachment (photo or
+    // short video) captured at the gym. URL is resolved server-side.
+    mediaStorageId: v.optional(v.id("_storage")),
+    notes: v.optional(v.string()),
+  }).index("by_user_date", ["userId", "date"]),
+
+  fight_week_logs: defineTable({
+    userId: v.id("users"),
+    logDate: v.string(),
+    weightKg: v.optional(v.number()),
+    fluidIntakeMl: v.optional(v.number()),
+    carbsG: v.optional(v.number()),
+    sweatSessionMin: v.optional(v.number()),
+    supplements: v.optional(v.string()),
+    notes: v.optional(v.string()),
+    updatedAt: v.optional(v.number()),
+  }).index("by_user_date", ["userId", "logDate"]),
+
+  fight_week_plans: defineTable({
+    userId: v.id("users"),
+    fightCampId: v.optional(v.id("fight_camps")),
+    fightDate: v.string(),
+    startingWeightKg: v.number(),
+    targetWeightKg: v.number(),
+    updatedAt: v.optional(v.number()),
+  }).index("by_user", ["userId"]),
+
+  training_summaries: defineTable({
+    userId: v.id("users"),
+    weekStart: v.string(),
+    sessionIds: v.array(v.string()), // free-text fingerprint over external IDs; not v.id() refs
+    notesFingerprint: v.string(),
+    summaryData: v.any(),
+    updatedAt: v.optional(v.number()),
+  }).index("by_user_week", ["userId", "weekStart"]),
+
+  // ────────────────────────────────────────────────────────────────────
+  // SKILL TREE
+  // ────────────────────────────────────────────────────────────────────
+
+  techniques: defineTable({
+    name: v.string(),
+    nameNormalized: v.string(),
+    sport: v.string(),
+    category: v.optional(v.string()),
+    position: v.optional(v.string()),
+  }).index("by_normalized", ["nameNormalized", "sport"]),
+
+  technique_edges: defineTable({
+    fromTechniqueId: v.id("techniques"),
+    toTechniqueId: v.id("techniques"),
+    relationType: v.string(),
+  })
+    .index("by_from", ["fromTechniqueId"])
+    .index("by_to", ["toTechniqueId"]),
+
+  user_technique_progress: defineTable({
+    userId: v.id("users"),
+    techniqueId: v.id("techniques"),
+    level: v.string(),
+    timesLogged: v.number(),
+    firstLoggedAt: v.optional(v.number()),
+    lastLoggedAt: v.optional(v.number()),
+  }).index("by_user_technique", ["userId", "techniqueId"]),
+
+  training_technique_logs: defineTable({
+    userId: v.id("users"),
+    techniqueId: v.id("techniques"),
+    sessionId: v.optional(v.id("fight_camp_calendar")),
+    date: v.string(),
+    notes: v.optional(v.string()),
+  })
+    .index("by_user_date", ["userId", "date"])
+    .index("by_technique", ["techniqueId"]),
+
+  // ────────────────────────────────────────────────────────────────────
+  // WELLNESS / BASELINES / INSIGHTS
+  // ────────────────────────────────────────────────────────────────────
+
+  daily_wellness_checkins: defineTable({
+    userId: v.id("users"),
+    date: v.string(),
+    sleepQuality: v.number(),
+    fatigueLevel: v.number(),
+    sorenessLevel: v.number(),
+    stressLevel: v.number(),
+    sleepHours: v.optional(v.number()),
+    energyLevel: v.optional(v.number()),
+    motivationLevel: v.optional(v.number()),
+    appetiteLevel: v.optional(v.number()),
+    hydrationFeeling: v.optional(v.number()),
+    hooperIndex: v.optional(v.number()),
+    readinessScore: v.optional(v.number()),
+  }).index("by_user_date", ["userId", "date"]),
+
+  personal_baselines: defineTable({
+    userId: v.id("users"),
+    baselineDate: v.string(),
+    // 14d / 60d rolling stats (all nullable)
+    fatigueMean14d: v.optional(v.number()),
+    fatigueStd14d: v.optional(v.number()),
+    fatigueMean60d: v.optional(v.number()),
+    fatigueStd60d: v.optional(v.number()),
+    sorenessMean14d: v.optional(v.number()),
+    sorenessStd14d: v.optional(v.number()),
+    sorenessMean60d: v.optional(v.number()),
+    sorenessStd60d: v.optional(v.number()),
+    stressMean14d: v.optional(v.number()),
+    stressStd14d: v.optional(v.number()),
+    stressMean60d: v.optional(v.number()),
+    stressStd60d: v.optional(v.number()),
+    hooperMean14d: v.optional(v.number()),
+    hooperStd14d: v.optional(v.number()),
+    hooperCv14d: v.optional(v.number()),
+    hooperMean60d: v.optional(v.number()),
+    hooperStd60d: v.optional(v.number()),
+    sleepHoursMean14d: v.optional(v.number()),
+    sleepHoursStd14d: v.optional(v.number()),
+    sleepHoursMean60d: v.optional(v.number()),
+    sleepHoursStd60d: v.optional(v.number()),
+    dailyLoadMean14d: v.optional(v.number()),
+    dailyLoadStd14d: v.optional(v.number()),
+    dailyLoadMean60d: v.optional(v.number()),
+    dailyLoadStd60d: v.optional(v.number()),
+    avgDeficit7d: v.optional(v.number()),
+    avgDeficit14d: v.optional(v.number()),
+    updatedAt: v.optional(v.number()),
+  }).index("by_user_date", ["userId", "baselineDate"]),
+
+  user_insights: defineTable({
+    userId: v.id("users"),
+    insightType: v.string(),
+    // JSONB shape varies by insight type (correlation, trend, etc.)
+    insightData: v.any(),
+    confidenceScore: v.optional(v.number()),
+    updatedAt: v.optional(v.number()),
+  }).index("by_user_type", ["userId", "insightType"]),
+
+  // ────────────────────────────────────────────────────────────────────
+  // COACH MODE
+  // ────────────────────────────────────────────────────────────────────
+
+  gyms: defineTable({
+    name: v.string(),
+    ownerUserId: v.id("users"),
+    inviteCode: v.string(),
+    location: v.optional(v.string()),
+    // Convex Storage ID for the gym logo image. URL is resolved server-side.
+    logoStorageId: v.optional(v.id("_storage")),
+    updatedAt: v.number(),
+  })
+    .index("by_owner", ["ownerUserId"])
+    .index("by_invite_code", ["inviteCode"]),
+
+  gym_members: defineTable({
+    gymId: v.id("gyms"),
+    userId: v.id("users"),
+    memberRole: v.union(v.literal("coach"), v.literal("athlete")),
+    status: v.union(
+      v.literal("active"),
+      v.literal("pending"),
+      v.literal("removed"),
+    ),
+    shareData: v.boolean(),
+    joinedAt: v.number(),
+  })
+    .index("by_gym", ["gymId"])
+    .index("by_user", ["userId"])
+    .index("by_gym_user", ["gymId", "userId"]),
+
+  gym_announcements: defineTable({
+    gymId: v.id("gyms"),
+    senderUserId: v.id("users"),
+    body: v.optional(v.string()), // optional after rich-announcements migration
+    isBroadcast: v.boolean(),
+    // CHECK ('text','image','poll')
+    kind: v.union(
+      v.literal("text"),
+      v.literal("image"),
+      v.literal("poll"),
+    ),
+    imageUrl: v.optional(v.string()),
+    expiresAt: v.optional(v.number()),
+  })
+    // by_gym_created — _creationTime is appended automatically to every index
+    .index("by_gym_created", ["gymId"])
+    .index("by_sender", ["senderUserId"]),
+
+  gym_announcement_targets: defineTable({
+    announcementId: v.id("gym_announcements"),
+    userId: v.id("users"),
+  })
+    .index("by_announcement", ["announcementId"])
+    .index("by_user", ["userId"])
+    .index("by_announcement_user", ["announcementId", "userId"]),
+
+  announcement_poll_options: defineTable({
+    announcementId: v.id("gym_announcements"),
+    optionText: v.string(),
+    position: v.number(),
+  }).index("by_announcement", ["announcementId"]),
+
+  announcement_poll_votes: defineTable({
+    announcementId: v.id("gym_announcements"),
+    optionId: v.id("announcement_poll_options"),
+    voterUserId: v.id("users"),
+  })
+    .index("by_announcement", ["announcementId"])
+    .index("by_option", ["optionId"])
+    .index("by_announcement_voter", ["announcementId", "voterUserId"]),
+
+  announcement_dismissals: defineTable({
+    announcementId: v.id("gym_announcements"),
+    userId: v.id("users"),
+    dismissedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_announcement_user", ["announcementId", "userId"]),
+
+  // ────────────────────────────────────────────────────────────────────
+  // SUPPORTING
+  // ────────────────────────────────────────────────────────────────────
+
+  device_tokens: defineTable({
+    userId: v.id("users"),
+    token: v.string(),
+    platform: v.union(
+      v.literal("ios"),
+      v.literal("android"),
+      v.literal("web"),
+    ),
+    appVersion: v.optional(v.string()),
+    lastSeenAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_token", ["token"]),
+
+  chat_messages: defineTable({
+    userId: v.id("users"),
+    role: v.string(),
+    content: v.string(),
+  }).index("by_user", ["userId"]),
+
+  rate_limits: defineTable({
+    userId: v.id("users"),
+    functionName: v.string(),
+    requestCount: v.number(),
+    windowStart: v.number(),
+  }).index("by_user_function", ["userId", "functionName"]),
+
+  ai_decisions: defineTable({
+    userId: v.id("users"),
+    feature: v.string(),
+    // JSONB columns kept as v.any() because shape varies per AI feature
+    inputSnapshot: v.any(),
+    outputJson: v.any(),
+    predictionFacts: v.optional(v.any()),
+    actualOutcome: v.optional(v.any()),
+    model: v.optional(v.string()),
+    outcomeLoggedAt: v.optional(v.number()),
+    errorPct: v.optional(v.number()),
+    userAccepted: v.optional(v.boolean()),
+    userRating: v.optional(v.number()),
+  })
+    .index("by_user_feature_recent", ["userId", "feature"])
+    .index("by_user_outcome_pending", ["userId", "outcomeLoggedAt"]),
+});
+
+/*
+ * ─────────────────────────────────────────────────────────────────────
+ * MIGRATION NOTES
+ * ─────────────────────────────────────────────────────────────────────
+ *
+ * DROPPED TABLES (intentionally not migrated):
+ *  - coach_realtime_events       : Fan-out table no longer needed; Convex
+ *                                  query reactivity replaces it (clients
+ *                                  subscribe directly to gym_announcements
+ *                                  and dependent tables).
+ *  - meals_with_totals           : Postgres VIEW, not a table. Totals are
+ *                                  now computed in Convex queries by
+ *                                  joining meals + meal_items.
+ *  - nutrition_logs              : Postgres compat VIEW over the legacy
+ *                                  nutrition_logs_v1 archive. Not migrated
+ *                                  — clients use the meals + meal_items
+ *                                  shape directly.
+ *  - nutrition_logs_v1           : Archive table from old single-row-per-
+ *                                  meal model. Not migrated; will be
+ *                                  back-filled into meals/meal_items in
+ *                                  the data-migration phase.
+ *  - users (built-in)            : Provided by Convex Auth automatically;
+ *                                  referenced via v.id("users").
+ *
+ * DROPPED COLUMNS:
+ *  - <table>.created_at          : Replaced by Convex's built-in
+ *                                  _creationTime on every row.
+ *  - profiles.id                 : Was the auth user UUID. Replaced by
+ *                                  profiles.userId: v.id("users") which
+ *                                  references the Convex Auth users table.
+ *  - All `Relationships:` array  : Encoded structurally via v.id("…") FK
+ *    metadata from types.ts        types.
+ *
+ * INDEX NOTES:
+ *  - foods.name pg_trgm GIN      → Replaced by Convex .searchIndex
+ *                                  ("search_name") with filterFields for
+ *                                  source + verified.
+ *  - weight_logs partial index   → Convex doesn't support partial indexes;
+ *    (user_id, date DESC)          a plain by_user_date index covers the
+ *                                  same queries.
+ *
+ * OPEN QUESTIONS:
+ *  1. The `foods.source` column has no CHECK constraint in any migration
+ *     I could find, so it's modelled as a free-form v.string(). Confirm
+ *     whether you want a tighter v.union of ('usda'|'off'|'user'|'ai').
+ *  2. `gym_sessions.status` is also free-form text (CHECK constraint
+ *     wasn't in the migration I reviewed). Likely 'active'|'completed'|
+ *     'cancelled' — verify before tightening.
+ *  3. `saved_routines.exercises` JSONB shape: there are at least 2
+ *     variants in app code (manual vs AI). Left as v.any() for now;
+ *     consider a discriminated union once the variants are documented.
+ *  4. `training_summaries.sessionIds` is text[] of UUIDs in Postgres but
+ *     these are old gym_session/fight_camp_calendar UUIDs that won't map
+ *     1:1 to new Convex Ids. Modelled as v.array(v.string()) — will need
+ *     a translation table during data backfill.
+ *  5. `ai_decisions.userId` originally referenced public.profiles(id)
+ *     (NOT auth.users). After the migration, profiles uses _id not user
+ *     ids, so this is remapped to v.id("users") for consistency with
+ *     every other userId column.
+ *  6. The original `by_user_outcome_pending` index was a partial index
+ *     (WHERE outcome_logged_at IS NULL). Convex has no partial-index
+ *     support; the full index will work but is slightly larger. Filter
+ *     `.eq("outcomeLoggedAt", undefined)` in queries to mimic the
+ *     pending-only scan.
+ */

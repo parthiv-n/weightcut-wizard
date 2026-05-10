@@ -5,7 +5,8 @@ import { motion, LayoutGroup } from "motion/react";
 import { triggerHaptic, triggerHapticSelection } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { supabase } from "@/integrations/supabase/client";
+import { useAction, useMutation, useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
 import { useToast } from "@/hooks/use-toast";
 import { useProfile, useUser, useAuth } from "@/contexts/UserContext";
 import { useMyGyms } from "@/hooks/coach/useMyGyms";
@@ -50,6 +51,9 @@ export const BottomNav = memo(function BottomNav() {
   const { gyms: myGyms } = useMyGyms(isAthlete ? userId : null);
   const primaryGym = myGyms[0] ?? null;
   const { signOut } = useAuth();
+  const deleteAccount = useAction(api.actions.deleteAccount.run);
+  const updateGoalsMut = useMutation(api.profiles.updateGoals);
+  const authUser = useQuery(api.profiles.getMyAuthUser, userId ? {} : "skip");
   const { replayTutorial } = useTutorial();
   const goalType = (profile?.goal_type as 'cutting' | 'losing') ?? 'cutting';
   const filteredMoreMenuItems = isFighter(goalType)
@@ -124,18 +128,20 @@ export const BottomNav = memo(function BottomNav() {
     setMoreMenuOpen(false);
     setEditedName(userName);
     setSettingsDialogOpen(true);
-    const { data } = await supabase.auth.getUser();
-    if (data.user?.email) setUserEmail(data.user.email);
+    if (authUser?.email) setUserEmail(authUser.email);
   };
 
   const handleToggleGoalType = async (fighterMode: boolean) => {
     if (!userId) return;
     const newType = fighterMode ? 'cutting' : 'losing';
     try {
-      await supabase.from('profiles').update({
-        goal_type: newType,
-        ...(newType === 'losing' ? { fight_week_target_kg: null } : {}),
-      }).eq('id', userId);
+      // Pass `0` to clear the fight-week target — Convex's updateGoals only
+      // patches defined keys, so we send the sentinel and the backend ignores
+      // non-cutting flows for that field via the form-level UI guard.
+      await updateGoalsMut({
+        goalType: newType,
+        ...(newType === 'losing' ? { fightWeekTargetKg: 0 } : {}),
+      });
       await refreshProfile();
       triggerHapticSelection();
       if (newType === 'cutting') {
@@ -180,9 +186,8 @@ export const BottomNav = memo(function BottomNav() {
   const handleDeleteAccount = async () => {
     setDeleteLoading(true);
     try {
-      const { error } = await supabase.functions.invoke("delete-account");
-      if (error) throw error;
-      await supabase.auth.signOut();
+      await deleteAccount({});
+      await signOut();
       setDeleteAccountDialogOpen(false);
       setSettingsDialogOpen(false);
       navigate("/auth");

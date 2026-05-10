@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Upload, Loader2, X, ImagePlus, Check } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { useToast } from "@/hooks/use-toast";
 import { resizeImageToSquareWebp } from "@/lib/imageResize";
 import { triggerHaptic } from "@/lib/haptics";
@@ -18,20 +20,16 @@ interface Props {
   hideRemove?: boolean;
 }
 
+const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
+const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+
 /**
  * Tap the avatar → file picker → resize to 256×256 webp (or jpeg fallback) →
- * upload to gym-logos/{gymId}/logo.{ext} → update gyms.logo_url. Uses native
- * file picker (works in Capacitor WebView via FileReader).
- *
- * iOS WebKit notes:
- *  - `canvas.toBlob('image/webp', ...)` is buggy on iOS 14.0–14.4 and may
- *    silently produce a null/empty blob. The resizer falls back to jpeg.
- *  - Supabase storage uploads use `fetch()` under the hood; an empty body
- *    surfaces as `TypeError: Load failed` in WebKit. We surface friendlier
- *    errors and log blob.size/blob.type to make future debugging easier.
+ * upload to Convex File Storage → patch gyms.logoStorageId. The display URL
+ * comes from `currentLogoUrl` (Convex query, derived from logoStorageId
+ * server-side), so once the mutation resolves the parent re-renders with
+ * the new URL automatically.
  */
-const KNOWN_LOGO_EXTS = ["webp", "jpg", "jpeg", "png"] as const;
-
 export function GymLogoUpload({
   gymId,
   gymName,
@@ -45,6 +43,8 @@ export function GymLogoUpload({
   const [status, setStatus] = useState<"idle" | "success">("idle");
   const [pulseHint, setPulseHint] = useState<boolean>(currentLogoUrl == null);
   const { toast } = useToast();
+  const generateLogoUploadUrl = useMutation(api.gyms.generateLogoUploadUrl);
+  const setLogo = useMutation(api.gyms.setLogo);
 
   // Auto-disable the discoverability pulse after 3s on first render
   useEffect(() => {
@@ -64,12 +64,20 @@ export function GymLogoUpload({
     if (!file) return;
     e.target.value = ""; // allow re-selecting same file later
 
-    if (!file.type.startsWith("image/")) {
-      toast({ title: "Pick an image file", variant: "destructive" });
+    if (file.type && !ALLOWED_MIME.has(file.type)) {
+      toast({
+        title: "Unsupported image type",
+        description: "Use JPEG, PNG, or WebP.",
+        variant: "destructive",
+      });
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      toast({ title: "Image too large", description: "Keep it under 5MB", variant: "destructive" });
+    if (file.size > MAX_BYTES) {
+      toast({
+        title: "Image too large",
+        description: "Keep it under 5MB",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -94,39 +102,30 @@ export function GymLogoUpload({
         throw new Error("Encoded image is empty — please try a different photo.");
       }
 
-      // Best-effort cleanup of any previously uploaded variants under this gym.
-      // If the user previously uploaded `logo.webp` and now produces `logo.jpg`,
-      // the old file would otherwise linger forever (gyms.logo_url points to
-      // the new path, but the orphan eats storage). Errors here are ignored.
-      try {
-        await supabase.storage
-          .from("gym-logos")
-          .remove(KNOWN_LOGO_EXTS.map((e) => `${gymId}/logo.${e}`));
-      } catch {
-        /* best-effort */
+      // 1. Mint a one-time upload URL from Convex (auth-gated to the owner).
+      const uploadUrl = await generateLogoUploadUrl({ gymId: gymId as Id<"gyms"> });
+
+      // 2. POST the blob.
+      const uploadRes = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": mime },
+        body: blob,
+      });
+      if (!uploadRes.ok) {
+        throw new Error(`Upload failed (${uploadRes.status})`);
       }
+      const { storageId } = (await uploadRes.json()) as {
+        storageId: Id<"_storage">;
+      };
 
-      const path = `${gymId}/logo.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from("gym-logos")
-        .upload(path, blob, {
-          contentType: mime,
-          upsert: true,
-          cacheControl: "86400",
-        });
-      if (upErr) throw upErr;
+      // 3. Persist on the gym row — the mutation deletes the previous logo
+      //    storage object atomically.
+      await setLogo({ gymId: gymId as Id<"gyms">, storageId });
 
-      const { data: pub } = supabase.storage.from("gym-logos").getPublicUrl(path);
-      // Cache-bust so the freshly uploaded image shows immediately
-      const versioned = `${pub.publicUrl}?v=${Date.now()}`;
-
-      const { error: updErr } = await supabase
-        .from("gyms")
-        .update({ logo_url: versioned })
-        .eq("id", gymId);
-      if (updErr) throw updErr;
-
-      onUploaded(versioned);
+      // Reactive Convex query will surface the fresh URL on the next render.
+      // Pass null to clear any stale parent-cached value; the parent re-fetches
+      // from `api.gyms.getById` (or its overview) and gets the new URL.
+      onUploaded(null);
       setStatus("success");
       window.setTimeout(() => setStatus("idle"), 1000);
       toast({ title: "Logo updated" });
@@ -138,8 +137,6 @@ export function GymLogoUpload({
     }
   };
 
-  // Translate the various error shapes Supabase + WebKit throw into a
-  // toast the user can actually act on.
   const handleUploadError = (err: unknown) => {
     const e = (err ?? {}) as {
       message?: string;
@@ -152,34 +149,7 @@ export function GymLogoUpload({
       e.message ||
       "Unknown error";
 
-    // Bucket-not-deployed case (storage 404)
-    if (/bucket not found/i.test(raw)) {
-      toast({
-        title: "Setup incomplete",
-        description: "Storage bucket missing. Contact support.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // PostgREST schema cache miss — column was added but the API hasn't
-    // reloaded its cache yet. Surfaces as PGRST204 on the gyms.update().
-    // Resolves on its own in 30-60s; the column truly exists in the DB.
-    if (
-      /PGRST204/.test(raw) ||
-      /column.*logo_url.*does not exist/i.test(raw) ||
-      /schema cache/i.test(raw)
-    ) {
-      toast({
-        title: "Sync in progress",
-        description: "Schema is still syncing. Please retry in 30 seconds.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // RLS denial — usually means the user isn't the gym owner
-    if (/row-level security|new row violates/i.test(raw)) {
+    if (/only the gym owner/i.test(raw)) {
       toast({
         title: "Permission denied",
         description: "Only the gym owner can change the logo.",
@@ -188,7 +158,6 @@ export function GymLogoUpload({
       return;
     }
 
-    // iOS WebKit network error
     if (e.name === "TypeError" && /load failed/i.test(raw)) {
       toast({
         title: "Could not upload logo",
@@ -210,15 +179,7 @@ export function GymLogoUpload({
     setUploading(true);
     triggerHaptic(ImpactStyle.Medium);
     try {
-      // Remove every possible variant — we don't know which extension was used.
-      await supabase.storage
-        .from("gym-logos")
-        .remove(KNOWN_LOGO_EXTS.map((e) => `${gymId}/logo.${e}`));
-      const { error } = await supabase
-        .from("gyms")
-        .update({ logo_url: null })
-        .eq("id", gymId);
-      if (error) throw error;
+      await setLogo({ gymId: gymId as Id<"gyms">, storageId: null });
       onUploaded(null);
       toast({ title: "Logo removed" });
     } catch (err: unknown) {
@@ -245,8 +206,6 @@ export function GymLogoUpload({
         {hasLogo ? (
           <>
             <GymLogoAvatar logoUrl={currentLogoUrl} name={gymName} size={size} />
-            {/* Status badge — camera by default, spinner while uploading,
-                checkmark briefly on success */}
             <span className="absolute -bottom-1 -right-1 h-5 w-5 rounded-full bg-background border border-border flex items-center justify-center shadow-sm">
               {uploading ? (
                 <Loader2 className="h-2.5 w-2.5 text-foreground animate-spin" />
@@ -258,8 +217,6 @@ export function GymLogoUpload({
             </span>
           </>
         ) : (
-          // No logo yet — render a more inviting "tap to add logo" state
-          // with a dashed border + visible icon so users discover it.
           <div
             style={{ width: size, height: size }}
             className={`rounded-lg border-2 border-dashed border-primary/40 bg-primary/5 flex flex-col items-center justify-center text-primary active:bg-primary/10 transition-colors ${
@@ -295,7 +252,7 @@ export function GymLogoUpload({
       <input
         ref={inputRef}
         type="file"
-        accept="image/*"
+        accept="image/jpeg,image/png,image/webp"
         className="hidden"
         onChange={onFileChange}
       />

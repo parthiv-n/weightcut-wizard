@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Capacitor } from "@capacitor/core";
-import { supabase } from "@/integrations/supabase/client";
+import { useConvex } from "convex/react";
+import { api } from "@/../convex/_generated/api";
 import { logger } from "@/lib/logger";
 
 /**
@@ -12,6 +13,7 @@ import { logger } from "@/lib/logger";
  * Web platform: no-op. Permissions denied: logged, no retry until next session.
  */
 export function usePushRegistration(userId: string | null) {
+  const convex = useConvex();
   const registeredRef = useRef(false);
 
   useEffect(() => {
@@ -40,20 +42,12 @@ export function usePushRegistration(userId: string | null) {
         const tokenHandle = await PushNotifications.addListener("registration", async (token) => {
           try {
             const platform = Capacitor.getPlatform() === "ios" ? "ios" : "android";
-            const { error } = await supabase
-              .from("device_tokens")
-              .upsert(
-                {
-                  user_id: userId,
-                  token: token.value,
-                  platform,
-                  last_seen_at: new Date().toISOString(),
-                },
-                { onConflict: "user_id,token" }
-              );
-            if (error) logger.warn("device_tokens upsert failed", { error });
+            await convex.mutation(api.device_tokens.registerToken, {
+              token: token.value,
+              platform,
+            });
           } catch (err) {
-            logger.warn("device_tokens upsert exception", err);
+            logger.warn("device_tokens registerToken failed", { err });
           }
         });
         cleanups.push(() => tokenHandle.remove());
@@ -65,7 +59,7 @@ export function usePushRegistration(userId: string | null) {
 
         await PushNotifications.register();
       } catch (err) {
-        logger.warn("usePushRegistration: init failed", err);
+        logger.warn("usePushRegistration: init failed", { err });
       }
     })();
 
@@ -73,5 +67,5 @@ export function usePushRegistration(userId: string | null) {
       cleanups.forEach((c) => { try { c(); } catch {} });
       cleanups = [];
     };
-  }, [userId]);
+  }, [userId, convex]);
 }

@@ -13,60 +13,37 @@ import {
   presentPaywall,
   getCustomerInfo,
 } from "@/lib/purchases";
-import { supabase } from "@/integrations/supabase/client";
+import { useAction } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 import { useToast } from "@/hooks/use-toast";
 import { logger } from "@/lib/logger";
 import { isNativePlatform } from "@/hooks/useIsNative";
 
-/** Update Supabase profile directly from RevenueCat customerInfo */
-async function syncPremiumToDb(customerInfo: any): Promise<{ tier: string; expiresAt: string | null } | null> {
+/**
+ * Update the profile subscription tier from RevenueCat customerInfo.
+ *
+ * Post-Convex migration: there's a single Convex action that performs the
+ * authoritative write. We dropped the dual "direct update + fallback"
+ * pattern that existed under Supabase RLS — Convex has no RLS, the
+ * mutation is the single source of truth.
+ */
+async function syncPremiumToDb(
+  customerInfo: any,
+  activatePremium: (args: { tier: string; expiresAt: string | null }) => Promise<unknown>,
+): Promise<{ tier: string; expiresAt: string | null } | null> {
   const sub = getSubscriptionFromCustomerInfo(customerInfo);
   if (!sub) {
     logger.warn("syncPremiumToDb: could not extract subscription from customerInfo");
     return null;
   }
-  logger.info("syncPremiumToDb: attempting to write", sub);
+  logger.info("syncPremiumToDb: attempting to write via Convex action", sub);
 
-  // Attempt 1: Direct update via user's auth
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const { error } = await supabase.from("profiles").update({
-        subscription_tier: sub.tier,
-        subscription_expires_at: sub.expiresAt,
-      }).eq("id", user.id);
-
-      if (!error) {
-        // Verify the update took effect (RLS can silently block writes)
-        const { data: check } = await supabase.from("profiles")
-          .select("subscription_tier").eq("id", user.id).single();
-        if (check?.subscription_tier === sub.tier) {
-          logger.info("syncPremiumToDb: direct update verified", { tier: check.subscription_tier });
-          return sub;
-        }
-        logger.warn("syncPremiumToDb: direct update didn't persist (RLS?)", { expected: sub.tier, got: check?.subscription_tier });
-      } else {
-        logger.warn("syncPremiumToDb: direct update error", { code: error.code, message: error.message });
-      }
-    }
-  } catch (err) {
-    logger.warn("syncPremiumToDb: direct update exception", err);
-  }
-
-  // Attempt 2: Edge function with SERVICE_ROLE_KEY (bypasses RLS)
-  try {
-    logger.info("syncPremiumToDb: falling back to activate-premium edge function");
-    const { data, error } = await supabase.functions.invoke("activate-premium", {
-      body: { tier: sub.tier, expiresAt: sub.expiresAt },
-    });
-    if (error) {
-      logger.error("syncPremiumToDb: edge function error", error);
-      return null;
-    }
-    logger.info("syncPremiumToDb: edge function success", data);
+    await activatePremium({ tier: sub.tier, expiresAt: sub.expiresAt });
+    logger.info("syncPremiumToDb: Convex action success", sub);
     return sub;
   } catch (err) {
-    logger.error("syncPremiumToDb: edge function exception", err);
+    logger.error("syncPremiumToDb: Convex action exception", err);
     return null;
   }
 }
@@ -139,6 +116,7 @@ export function PaywallOverlay() {
   const { isPaywallOpen, closePaywall, refreshGems, forcePremium } = useSubscriptionContext();
   const { refreshProfile } = useProfile();
   const [activating, setActivating] = useState(false);
+  const activatePremium = useAction(api.actions.activatePremium.run);
 
   const activatePro = useCallback(async (customerInfo: any) => {
     setActivating(true);
@@ -149,23 +127,11 @@ export function PaywallOverlay() {
         forcePremium(sub.tier, sub.expiresAt);
         logger.info("activatePro: forced premium locally", sub);
       }
-      // Step 2: Write to DB and WAIT for it to persist
-      const dbResult = await syncPremiumToDb(customerInfo);
+      // Step 2: Write to DB. Convex mutations are transactional — the result
+      // is already canonical by the time `syncPremiumToDb` resolves, so the
+      // legacy "retry until profiles row updates" loop is no longer needed.
+      const dbResult = await syncPremiumToDb(customerInfo, activatePremium);
       logger.info("activatePro: DB sync result", { success: !!dbResult });
-
-      // Step 3: Verify the DB actually has the new tier (retry up to 3 times)
-      const { data: { user: authUser } } = await supabase.auth.getUser();
-      if (authUser) {
-        for (let attempt = 0; attempt < 3; attempt++) {
-          const { data: verifyData } = await supabase.from("profiles").select("subscription_tier").eq("id", authUser.id).single();
-          if (verifyData?.subscription_tier && verifyData.subscription_tier !== "free") {
-            logger.info("activatePro: DB verified premium", { tier: verifyData.subscription_tier, attempt });
-            break;
-          }
-          // DB hasn't caught up yet — wait and retry
-          await new Promise(r => setTimeout(r, 800));
-        }
-      }
 
       await refreshGems();
       // Small delay so user sees the "Unlocking features" step complete
@@ -176,7 +142,7 @@ export function PaywallOverlay() {
       setActivating(false);
       closePaywall();
     }
-  }, [refreshProfile, refreshGems, closePaywall, forcePremium]);
+  }, [refreshProfile, refreshGems, closePaywall, forcePremium, activatePremium]);
 
   useEffect(() => {
     if (!isPaywallOpen || !isNativePlatform) return;

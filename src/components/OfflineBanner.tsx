@@ -1,29 +1,19 @@
-import { useState, useEffect, useRef } from "react";
-import { WifiOff, Wifi, Loader2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Wifi, WifiOff } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
-import {
-  getConnectionStatus,
-  subscribeConnectionStatus,
-  type ConnectionStatus,
-} from "@/lib/connectionRecovery";
 
-type BannerMode = "offline" | "reconnecting" | "back-online" | "hidden";
+/**
+ * Network status banner. Post-Convex migration the legacy "reconnecting" hop
+ * (driven by `connectionRecovery.ts`) is gone — Convex's WebSocket client
+ * auto-reconnects, so we only render the offline / back-online states.
+ */
+type BannerMode = "offline" | "back-online" | "hidden";
 
 export function OfflineBanner() {
   const { isOffline } = useUser();
-  const [recoveryStatus, setRecoveryStatus] = useState<ConnectionStatus>(
-    () => getConnectionStatus()
-  );
   const [showBackOnline, setShowBackOnline] = useState(false);
   const wasOfflineRef = useRef(false);
 
-  // Subscribe to connection recovery state (wedge detection / websocket revive).
-  useEffect(() => {
-    const unsub = subscribeConnectionStatus(setRecoveryStatus);
-    return unsub;
-  }, []);
-
-  // Track offline → online transition for the brief "Back online" toast.
   useEffect(() => {
     if (isOffline) {
       wasOfflineRef.current = true;
@@ -36,19 +26,14 @@ export function OfflineBanner() {
     }
   }, [isOffline]);
 
-  // Resolve the single source of truth for which state to render.
-  // Priority: offline > reconnecting > back-online > hidden.
   const mode: BannerMode = isOffline
     ? "offline"
-    : recoveryStatus === "recovering"
-      ? "reconnecting"
-      : showBackOnline
-        ? "back-online"
-        : "hidden";
+    : showBackOnline
+      ? "back-online"
+      : "hidden";
 
   const visible = mode !== "hidden";
 
-  // Keep the element mounted briefly during slide-out so the transition plays.
   const [mounted, setMounted] = useState(visible);
   useEffect(() => {
     if (visible) {
@@ -64,9 +49,7 @@ export function OfflineBanner() {
   const palette =
     mode === "back-online"
       ? "bg-emerald-600/90 text-white"
-      : mode === "reconnecting"
-        ? "bg-zinc-900/95 text-zinc-200 border-b border-zinc-700/50"
-        : "bg-zinc-900/95 text-zinc-300 border-b border-zinc-700/50";
+      : "bg-zinc-900/95 text-zinc-300 border-b border-zinc-700/50";
 
   return (
     <div
@@ -81,12 +64,6 @@ export function OfflineBanner() {
         <>
           <WifiOff className="h-4 w-4" />
           <span>You're offline</span>
-        </>
-      )}
-      {mode === "reconnecting" && (
-        <>
-          <Loader2 className="h-4 w-4 animate-spin" />
-          <span>Reconnecting…</span>
         </>
       )}
       {mode === "back-online" && (

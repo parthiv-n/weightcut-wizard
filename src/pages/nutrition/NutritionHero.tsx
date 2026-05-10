@@ -3,7 +3,6 @@ import { Loader2, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
 import wizardLogo from "@/assets/wizard-logo.webp";
 import { MacroPieChart } from "@/components/nutrition/MacroPieChart";
 import { SyncingIndicator } from "@/components/SyncingIndicator";
-import { PendingSyncPill } from "@/components/nutrition/PendingSyncPill";
 import { triggerHapticSelection } from "@/lib/haptics";
 import type { MacroGoals } from "@/pages/nutrition/types";
 
@@ -127,9 +126,6 @@ export function NutritionHero({
         </button>
       </div>
 
-      <div className="flex justify-center">
-        <PendingSyncPill />
-      </div>
     </>
   );
 }

@@ -1,10 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { format, subDays } from "date-fns";
-import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { localCache } from "@/lib/localCache";
-import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { celebrateSuccess } from "@/lib/haptics";
 import { logger } from "@/lib/logger";
 import type { Meal, Ingredient, MealTemplate } from "@/pages/nutrition/types";
@@ -143,23 +141,10 @@ export function useQuickMealActions({ meals, selectedDate, saveMealToDb }: UseQu
 
     try {
       const yesterday = format(subDays(new Date(selectedDate), 1), "yyyy-MM-dd");
-      let yesterdayMeals = localCache.getForDate<Meal[]>(userId, "nutrition_logs", yesterday);
-
-      if (!yesterdayMeals || yesterdayMeals.length === 0) {
-        const { data, error } = await withSupabaseTimeout(
-          supabase
-            .from("nutrition_logs")
-            .select("meal_name, calories, protein_g, carbs_g, fats_g, meal_type, portion_size, recipe_notes, ingredients")
-            .eq("user_id", userId)
-            .eq("date", yesterday)
-            .order("created_at", { ascending: true })
-            .limit(50),
-          undefined,
-          "Copy previous day"
-        );
-        if (error) throw error;
-        yesterdayMeals = (data || []) as Meal[];
-      }
+      // Cache-only: NutritionHero's daily fetch populates `nutrition_logs`
+      // cache keyed by date. Falls back to "nothing to copy" if yesterday
+      // hasn't been viewed yet — better than firing a misleading toast.
+      const yesterdayMeals: Meal[] = localCache.getForDate<Meal[]>(userId, "nutrition_logs", yesterday) ?? [];
 
       if (yesterdayMeals.length === 0) {
         toast({ title: "Nothing to copy", description: "No meals logged yesterday" });

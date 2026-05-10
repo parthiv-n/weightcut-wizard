@@ -1,17 +1,17 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { localCache } from "@/lib/localCache";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "@/../convex/_generated/api";
+import type { Id } from "@/../convex/_generated/dataModel";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Save, Trophy, Scale, Droplets, TrendingDown, Upload, Camera, CheckCircle2, FileText, Zap, Share2 } from "lucide-react";
+import { ArrowLeft, Save, Trophy, Scale, Droplets, Camera, CheckCircle2, FileText, Zap, Share2, TrendingDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
-import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
@@ -39,93 +39,64 @@ export default function FightCampDetail() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { safeAsync, isMounted } = useSafeAsync();
-  const [camp, setCamp] = useState<FightCamp | null>(() => {
-    if (!id) return null;
-    return localCache.get<FightCamp>("shared", `fight_camp_${id}`, 10 * 60 * 1000);
-  });
-  const [loading, setLoading] = useState(() => {
-    if (!id) return true;
-    return localCache.get("shared", `fight_camp_${id}`, 10 * 60 * 1000) === null;
-  });
+  // Reactive Convex query — undefined while loading.
+  const campRow = useQuery(
+    api.fight_camp.getCamp,
+    id ? { id: id as Id<"fight_camps"> } : "skip",
+  );
+  const updateCamp = useMutation(api.fight_camp.updateCamp);
+  const generateMediaUploadUrl = useMutation(api.fight_camp.generateMediaUploadUrl);
+  const getMediaUrl = useQuery; // hoisted alias to avoid TS unused-var lint
+  void getMediaUrl;
+
+  const [camp, setCamp] = useState<FightCamp | null>(null);
   const [uploading, setUploading] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
 
+  // Project Convex row → legacy FightCamp shape so the component body stays
+  // unchanged. Convex returns camelCase; the UI was built around snake_case.
   useEffect(() => {
-    fetchCampDetails();
-  }, [id]);
+    if (!campRow) return;
+    const c: any = campRow;
+    safeAsync(setCamp)({
+      id: c._id,
+      name: c.name,
+      event_name: c.eventName ?? null,
+      fight_date: c.fightDate,
+      profile_pic_url: c.profilePicUrl ?? null,
+      starting_weight_kg: c.startingWeightKg ?? null,
+      end_weight_kg: c.endWeightKg ?? null,
+      total_weight_cut: c.totalWeightCut ?? null,
+      weight_via_dehydration: c.weightViaDehydration ?? null,
+      weight_via_carb_reduction: c.weightViaCarbReduction ?? null,
+      weigh_in_timing: c.weighInTiming ?? null,
+      rehydration_notes: c.rehydrationNotes ?? null,
+      performance_feeling: c.performanceFeeling ?? null,
+      is_completed: c.isCompleted ?? false,
+    });
+  }, [campRow, safeAsync]);
 
-  const fetchCampDetails = async () => {
-    if (!id) return;
-
-    // Cache-first: show cached camp instantly
-    const cacheKey = `fight_camp_${id}`;
-    const cached = localCache.get<FightCamp>("shared", cacheKey, 10 * 60 * 1000);
-    if (cached) {
-      setCamp(cached);
-      safeAsync(setLoading)(false);
-    } else {
-      safeAsync(setLoading)(true);
-    }
-
-    try {
-      const { data, error } = await withSupabaseTimeout(
-        supabase
-          .from("fight_camps")
-          .select("id, name, event_name, fight_date, profile_pic_url, starting_weight_kg, end_weight_kg, total_weight_cut, weight_via_dehydration, weight_via_carb_reduction, weigh_in_timing, rehydration_notes, performance_feeling, is_completed")
-          .eq("id", id)
-          .single(),
-        undefined,
-        "Load fight camp details"
-      );
-
-      if (!isMounted()) return;
-
-      if (error) {
-        throw error;
-      }
-
-      setCamp(data as FightCamp);
-      localCache.set("shared", cacheKey, data);
-    } catch (err) {
-      logger.warn("Error loading fight camp", { err });
-      const staleCached = localCache.get<FightCamp>("shared", cacheKey, 10 * 60 * 1000);
-      if (staleCached && isMounted()) {
-        safeAsync(setCamp)(staleCached);
-        safeAsync(setLoading)(false);
-        return;
-      }
-      if (isMounted()) {
-        toast({ title: "Error", description: "Failed to load fight camp", variant: "destructive" });
-        navigate("/fight-camps");
-      }
-    }
-    safeAsync(setLoading)(false);
-  };
+  const loading = campRow === undefined && !camp;
 
   const handleUpdate = async () => {
-    if (!camp) return;
-
-    const { error } = await supabase
-      .from("fight_camps")
-      .update({
-        starting_weight_kg: camp.starting_weight_kg,
-        end_weight_kg: camp.end_weight_kg,
-        total_weight_cut: camp.total_weight_cut,
-        weight_via_dehydration: camp.weight_via_dehydration,
-        weight_via_carb_reduction: camp.weight_via_carb_reduction,
-        weigh_in_timing: camp.weigh_in_timing,
-        rehydration_notes: camp.rehydration_notes,
-        performance_feeling: camp.performance_feeling,
-        is_completed: camp.is_completed,
-      })
-      .eq("id", camp.id);
-
-    if (error) {
-      toast({ title: "Error", description: "Failed to update camp", variant: "destructive" });
-    } else {
-      localCache.remove("shared", `fight_camp_${camp.id}`);
-      localCache.set("shared", `fight_camp_${camp.id}`, camp);
+    if (!camp || !id) return;
+    try {
+      await updateCamp({
+        id: id as Id<"fight_camps">,
+        startingWeightKg: camp.starting_weight_kg ?? undefined,
+        endWeightKg: camp.end_weight_kg ?? undefined,
+        totalWeightCut: camp.total_weight_cut ?? undefined,
+        weightViaDehydration: camp.weight_via_dehydration ?? undefined,
+        weightViaCarbReduction: camp.weight_via_carb_reduction ?? undefined,
+        weighInTiming: camp.weigh_in_timing ?? undefined,
+        rehydrationNotes: camp.rehydration_notes ?? undefined,
+        performanceFeeling: camp.performance_feeling ?? undefined,
+        isCompleted: camp.is_completed,
+      });
       navigate("/fight-camps");
+    } catch (err) {
+      logger.warn("FightCampDetail: update failed", { err });
+      toast({ title: "Error", description: "Failed to update camp", variant: "destructive" });
     }
   };
 
@@ -133,41 +104,66 @@ export default function FightCampDetail() {
     if (!e.target.files || e.target.files.length === 0 || !camp) return;
 
     const file = e.target.files[0];
-    safeAsync(setUploading)(true);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user || !isMounted()) return;
-
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${user.id}/fight-camp-${camp.id}.${fileExt}`;
-
-    const { error: uploadError } = await supabase.storage
-      .from("avatars")
-      .upload(fileName, file, { upsert: true });
-
-    if (!isMounted()) return;
-
-    if (uploadError) {
-      toast({ title: "Error", description: "Failed to upload image", variant: "destructive" });
-      setUploading(false);
+    // Basic client-side guards. Server can re-validate but we keep the user
+    // from waiting on an upload that's destined to fail.
+    if (file.size > 5 * 1024 * 1024) {
+      toast({
+        title: "Image too large",
+        description: "Keep camp images under 5 MB.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (file.type && !file.type.startsWith("image/")) {
+      toast({
+        title: "Unsupported file",
+        description: "Please choose an image.",
+        variant: "destructive",
+      });
       return;
     }
 
-    const { data } = supabase.storage.from("avatars").getPublicUrl(fileName);
+    safeAsync(setUploading)(true);
 
-    const { error: updateError } = await supabase
-      .from("fight_camps")
-      .update({ profile_pic_url: data.publicUrl })
-      .eq("id", camp.id);
+    try {
+      // 1. Generate a Convex storage upload URL, POST the bytes, resolve the
+      //    long-lived public URL.
+      const uploadUrl = await generateMediaUploadUrl({});
+      const uploadRes = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": file.type || "image/jpeg" },
+        body: file,
+      });
+      if (!uploadRes.ok) throw new Error(`Upload failed (${uploadRes.status})`);
+      const { storageId } = (await uploadRes.json()) as { storageId: string };
+      // Resolve the canonical public URL via the existing Convex query
+      // module surface; we lazy-import to keep the synchronous render light.
+      const { convex } = await import("@/integrations/convex/client");
+      const publicUrl = (await convex.query(api.fight_camp.getMediaUrl, {
+        storageId: storageId as any,
+      })) as string | null;
+      if (!publicUrl) throw new Error("Could not resolve uploaded image URL");
 
-    if (!isMounted()) return;
+      if (!isMounted()) return;
 
-    if (updateError) {
-      toast({ title: "Error", description: "Failed to update profile picture", variant: "destructive" });
-    } else {
-      setCamp({ ...camp, profile_pic_url: data.publicUrl });
+      // 2. Persist `profilePicUrl` on the Convex fight_camps row.
+      await updateCamp({
+        id: camp.id as Id<"fight_camps">,
+        profilePicUrl: publicUrl,
+      });
+
+      if (isMounted()) setCamp({ ...camp, profile_pic_url: publicUrl });
+    } catch (err) {
+      logger.error("Failed to upload fight-camp image", { err });
+      toast({
+        title: "Error",
+        description: "Failed to upload image",
+        variant: "destructive",
+      });
+    } finally {
+      if (isMounted()) setUploading(false);
     }
-    setUploading(false);
   };
 
   if (loading) {

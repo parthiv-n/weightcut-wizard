@@ -4,7 +4,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Input } from "@/components/ui/input";
 import { triggerHaptic, celebrateSuccess } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
-import { supabase } from "@/integrations/supabase/client";
+import { useMutation } from "convex/react";
+import { api } from "@/../convex/_generated/api";
 import { useUser } from "@/contexts/UserContext";
 import { useToast } from "@/hooks/use-toast";
 import { logger } from "@/lib/logger";
@@ -21,6 +22,8 @@ interface QuickLogDialogProps {
 export function QuickLogDialog({ open, onOpenChange, onLogFood, onLogWeight, onLogTraining, onLogGym }: QuickLogDialogProps) {
   const { userId, refreshProfile } = useUser();
   const { toast } = useToast();
+  const logWeightMut = useMutation(api.weight_logs.logWeight);
+  const updateCurrentWeightMut = useMutation(api.profiles.updateCurrentWeight);
   const [quickWeight, setQuickWeight] = useState("");
   const [savingWeight, setSavingWeight] = useState(false);
   const [unit, setUnit] = useState<"kg" | "lb">(
@@ -39,11 +42,8 @@ export function QuickLogDialog({ open, onOpenChange, onLogFood, onLogWeight, onL
     const today = new Date().toISOString().split("T")[0];
     setSavingWeight(true);
     try {
-      const { error } = await supabase
-        .from("weight_logs")
-        .upsert({ user_id: userId, weight_kg, date: today }, { onConflict: "user_id,date" });
-      if (error) throw error;
-      await supabase.from("profiles").update({ current_weight_kg: weight_kg }).eq("id", userId);
+      await logWeightMut({ date: today, weightKg: weight_kg });
+      await updateCurrentWeightMut({ weightKg: weight_kg });
       celebrateSuccess();
       refreshProfile?.();
       toast({ title: "Weight logged", description: `${raw.toFixed(1)} ${unit}` });

@@ -6,7 +6,7 @@
  * Tries `image/webp` first (smaller files). Falls back to `image/jpeg` if the
  * browser produces a null/empty blob — older iOS WebKit (14.0–14.4) silently
  * returns null for `canvas.toBlob('image/webp', ...)`, and an empty body
- * passed to `supabase.storage.upload()` surfaces as the cryptic
+ * passed to Convex Storage's upload URL surfaces as the cryptic
  * `TypeError: Load failed` in iOS WebKit.
  */
 export interface EncodedImage {

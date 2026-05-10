@@ -78,28 +78,7 @@ _idle(() => {
   }, 6000);
 });
 
-// Warm up the heaviest AI edge functions on idle so the first real call doesn't
-// pay a 2-3s cold-start. We send a GET ping (no body, no auth) — functions
-// short-circuit to a small response without doing real work. Anything that
-// fails is silent: warmup is best-effort.
-const SUPABASE_URL_FOR_WARMUP = import.meta.env.VITE_SUPABASE_URL;
-if (SUPABASE_URL_FOR_WARMUP) {
-  setTimeout(() => {
-    const fns = [
-      "meal-planner",
-      "generate-cut-plan",
-      "fight-week-analysis",
-      "training-insights",
-      "hydration-insights",
-    ];
-    for (const fn of fns) {
-      fetch(`${SUPABASE_URL_FOR_WARMUP}/functions/v1/${fn}`, {
-        method: "GET",
-        keepalive: true,
-      }).catch(() => {});
-    }
-  }, 4500);
-}
+// Convex actions don't need warmup — co-located with the deployment.
 
 const queryClient = new QueryClient();
 
@@ -108,7 +87,6 @@ const SKIP_ROUTES = ['/', '/auth', '/onboarding', '/legal'];
 import { App as CapacitorApp } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { Capacitor } from '@capacitor/core';
-import { supabase } from "@/integrations/supabase/client";
 import { logger } from "@/lib/logger";
 
 function RouteTracker() {
@@ -130,52 +108,42 @@ function RouteTracker() {
     }
   }, []);
 
-  // Handle Deep Links (Supabase Auth)
+  // Handle Deep Links (Convex Auth + generic in-app routing).
+  //
+  // Convex Auth uses an OAuth `code` query param on the callback URL, and
+  // <ConvexAuthProvider> (mounted in main.tsx) automatically detects and
+  // consumes that code when the URL is present in the browser. For the
+  // Capacitor native deep-link case, the browser never actually owns the
+  // URL — it arrives via `appUrlOpen`. We push the URL onto the JS-side
+  // location so the provider picks it up, then strip the code param.
   useEffect(() => {
     CapacitorApp.addListener('appUrlOpen', async ({ url }) => {
       logger.info('App opened with URL', { url });
 
-      // 1. Handle Supabase Auth (PKCE Code)
+      // 1. Convex Auth OAuth callback (e.g. weightcutwizard://callback?code=...)
+      //    Surface the code to the ConvexAuthProvider by setting
+      //    window.location's query string. The provider listens to it and
+      //    exchanges the code automatically.
       if (url.includes('code=')) {
         try {
-          const params = new URLSearchParams(new URL(url).search);
-          const code = params.get('code');
+          const u = new URL(url);
+          const code = u.searchParams.get('code');
           if (code) {
-            const { error } = await supabase.auth.exchangeCodeForSession(code);
-            if (!error) {
-              // Valid session estalished
-              // If we have a specific path in the URL, go there, otherwise dashboard
-              const path = url.split("weightcutwizard://")[1]?.split('?')[0];
-              if (path && path.length > 0 && path !== 'callback') {
-                navigate(`/${path}`);
-              } else {
-                navigate('/dashboard');
-              }
-            }
+            // Replace the current history entry so the provider sees the code
+            // on its next URL read, without leaving a junk entry in history.
+            const newUrl = `${window.location.pathname}?${u.search.replace(/^\?/, '')}`;
+            window.history.replaceState({}, '', newUrl);
+            // Give the provider a tick to pick up the code, then route.
+            setTimeout(() => navigate('/dashboard'), 100);
           }
         } catch (e) {
-          logger.error("Error exchanging code", e);
-        }
-        return; // specific auth handling done
-      }
-
-      // 2. Handle Supabase Auth (Implicit Flow / Hash Fragment)
-      if (url.includes('#access_token') || url.includes('&access_token')) {
-        try {
-          // Supabase client might handle this if it detects the hash, 
-          // but we can force a session check or navigation
-          const { data } = await supabase.auth.getSession();
-          if (data.session) {
-            navigate('/dashboard');
-          }
-        } catch (e) {
-          logger.error("Error handling implicit flow", e);
+          logger.error("Error handling Convex Auth callback", e);
         }
         return;
       }
 
-      // 3. Generic Deep Linking (weightcutwizard://page)
-      // e.g. weightcutwizard://nutrition -> /nutrition
+      // 2. Generic Deep Linking (weightcutwizard://page)
+      //    e.g. weightcutwizard://nutrition -> /nutrition
       if (url.includes('weightcutwizard://')) {
         const slug = url.split("weightcutwizard://")[1];
         if (slug) {
@@ -184,11 +152,9 @@ function RouteTracker() {
           const params = new URLSearchParams(queryString || '');
           const suffix = params.get('reset') === 'true' ? '?reset=true' : '';
 
-          // special case: 'callback' is often used for auth redirects, ignore it if we didn't match auth above
           if (path !== 'callback') {
             navigate(`/${path}${suffix}`);
           } else {
-            // callback without code? maybe just go to dashboard
             navigate('/dashboard');
           }
         }
@@ -288,6 +254,13 @@ const App = () => (
                   </ProtectedRoute>
                 } />
                 <Route path="/cut-plan" element={
+                  <ProtectedRoute>
+                    <Suspense fallback={null}><CutPlanReview /></Suspense>
+                  </ProtectedRoute>
+                } />
+                {/* Weight-loss flow reuses the same plan review component;
+                    CutPlanReview adapts its copy based on plan.planType. */}
+                <Route path="/weight-plan" element={
                   <ProtectedRoute>
                     <Suspense fallback={null}><CutPlanReview /></Suspense>
                   </ProtectedRoute>

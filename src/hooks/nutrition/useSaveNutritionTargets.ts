@@ -1,7 +1,8 @@
 import { useCallback } from "react";
+import { useMutation } from "convex/react";
+import { api } from "@/../convex/_generated/api";
 import { useUser } from "@/contexts/UserContext";
 import { useToast } from "@/hooks/use-toast";
-import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { optimisticUpdateManager, createNutritionTargetUpdate } from "@/lib/optimisticUpdates";
 import { nutritionCache } from "@/lib/nutritionCache";
 import { logger } from "@/lib/logger";
@@ -14,7 +15,7 @@ interface UseSaveNutritionTargetsArgs {
 }
 
 /**
- * Persist user-edited macro/calorie targets to the profile row,
+ * Persist user-edited macro/calorie targets to the profile row via Convex,
  * with optimistic cache update and toast surface for validation errors.
  */
 export function useSaveNutritionTargets({
@@ -24,6 +25,7 @@ export function useSaveNutritionTargets({
 }: UseSaveNutritionTargetsArgs) {
   const { userId, profile, refreshProfile } = useUser();
   const { toast } = useToast();
+  const updateGoals = useMutation(api.profiles.updateGoals);
 
   return useCallback(async (editingTargets: EditingTargets) => {
     const calories = parseFloat(editingTargets.calories);
@@ -67,21 +69,23 @@ export function useSaveNutritionTargets({
       setIsEditTargetsDialogOpen(false);
 
       const updateOperation = async () => {
-        const updateData: any = { manual_nutrition_override: true, ai_recommended_calories: Math.round(calories) };
-        if (editingTargets.protein) { const v = parseFloat(editingTargets.protein); if (!isNaN(v) && v >= 0) updateData.ai_recommended_protein_g = v; }
-        if (editingTargets.carbs) { const v = parseFloat(editingTargets.carbs); if (!isNaN(v) && v >= 0) updateData.ai_recommended_carbs_g = v; }
-        if (editingTargets.fats) { const v = parseFloat(editingTargets.fats); if (!isNaN(v) && v >= 0) updateData.ai_recommended_fats_g = v; }
-
-        const { supabase } = await import("@/integrations/supabase/client");
-        const { error } = await withSupabaseTimeout(
-          supabase.from("profiles").update(updateData).eq("id", userId),
-          undefined,
-          "Update nutrition targets"
-        );
-        if (error) {
-          if (error.code === "PGRST204") throw new Error("Database schema is missing required columns.");
-          throw error;
+        const args: Record<string, unknown> = {
+          manualNutritionOverride: true,
+          aiRecommendedCalories: Math.round(calories),
+        };
+        if (editingTargets.protein) {
+          const v = parseFloat(editingTargets.protein);
+          if (!isNaN(v) && v >= 0) args.aiRecommendedProteinG = v;
         }
+        if (editingTargets.carbs) {
+          const v = parseFloat(editingTargets.carbs);
+          if (!isNaN(v) && v >= 0) args.aiRecommendedCarbsG = v;
+        }
+        if (editingTargets.fats) {
+          const v = parseFloat(editingTargets.fats);
+          if (!isNaN(v) && v >= 0) args.aiRecommendedFatsG = v;
+        }
+        await updateGoals(args as any);
       };
 
       const update = createNutritionTargetUpdate(userId, optimisticProfile, originalProfile, updateOperation);
@@ -105,5 +109,5 @@ export function useSaveNutritionTargets({
       logger.error("Error in optimistic update setup", error);
       toast({ title: "Error", description: error.message || "Failed to update nutrition targets", variant: "destructive" });
     }
-  }, [userId, profile, refreshProfile, toast, setDailyCalorieTarget, setAiMacroGoals, setIsEditTargetsDialogOpen]);
+  }, [userId, profile, refreshProfile, toast, setDailyCalorieTarget, setAiMacroGoals, setIsEditTargetsDialogOpen, updateGoals]);
 }

@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { ChevronLeft, Users, Loader2 } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
-import { supabase } from "@/integrations/supabase/client";
+import { useAuthActions } from "@convex-dev/auth/react";
+import { useMutation } from "convex/react";
+import { api } from "@/../convex/_generated/api";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -28,6 +30,8 @@ export default function CoachLogin() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { userId } = useAuth();
+  const { signIn } = useAuthActions();
+  const setRoleMut = useMutation(api.profiles.setRole);
 
   // Already-authed user — route them to the right surface
   useEffect(() => {
@@ -46,41 +50,24 @@ export default function CoachLogin() {
     setConfirmPassword("");
   };
 
-  const buildRedirect = () => {
-    const path = "coach/setup";
-    return window.location.protocol === "file:" || window.location.hostname === "localhost"
-      ? `weightcutwizard://${path}`
-      : `${window.location.origin}/${path}`;
-  };
-
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrorMsg("");
     try {
       if (isLogin) {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-        if (data?.user) await routeAfterAuth(data.user.id, "coach", navigate, toast);
+        await signIn("password", { email, password, flow: "signIn" });
+        // routeAfterAuth fires from the useEffect once userId resolves.
       } else {
         if (password !== confirmPassword) { setErrorMsg("Passwords do not match"); setLoading(false); return; }
         if (password.length < 6) { setErrorMsg("Password must be at least 6 characters"); setLoading(false); return; }
         try { localStorage.setItem("wcw_intended_role", "coach"); } catch {}
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: { data: { role: "coach" }, emailRedirectTo: buildRedirect() },
-        });
-        if (error) throw error;
-        if (data?.user && data.session) {
-          await supabase.from("profiles").upsert(
-            { id: data.user.id, role: "coach" },
-            { onConflict: "id" }
-          );
-          navigate("/coach/setup", { replace: true });
-        } else {
-          toast({ title: "Check your inbox", description: "Confirm your email to finish setting up your gym." });
+        await signIn("password", { email, password, flow: "signUp", role: "coach" });
+        // Persist the role on the freshly-created profile row.
+        try { await setRoleMut({ role: "coach" }); } catch (err) {
+          logger.warn("CoachLogin: setRole failed", { err });
         }
+        navigate("/coach/setup", { replace: true });
       }
     } catch (err: any) {
       logger.warn("CoachLogin: auth failed", { err });
@@ -94,10 +81,7 @@ export default function CoachLogin() {
     e.preventDefault();
     setLoading(true);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/coach/login?reset=true`,
-      });
-      if (error) throw error;
+      await signIn("password", { email, flow: "reset" });
       toast({ title: "Email sent", description: "Check your inbox for the reset link." });
       setShowForgot(false);
     } catch (err: any) {
@@ -117,24 +101,21 @@ export default function CoachLogin() {
         const { SignInWithApple } = await import("@capacitor-community/apple-sign-in");
         const result = await SignInWithApple.authorize({
           clientId: "com.weightcutwizard.app",
-          redirectURI: "https://pkubdwmnnsxjjnpjjqqy.supabase.co/auth/v1/callback",
+          // Convex Auth's Apple callback (same as Auth.tsx).
+          redirectURI: "https://fast-koala-318.eu-west-1.convex.site/api/auth/callback/apple",
           scopes: "email",
           nonce: hashedNonce,
         });
-        const { data, error } = await supabase.auth.signInWithIdToken({
-          provider: "apple",
-          token: result.response.identityToken,
+        await signIn("apple", {
+          idToken: result.response.identityToken,
           nonce: rawNonce,
         });
-        if (error && !data?.session) throw error;
-        if (data?.user) {
-          await routeAfterAuth(data.user.id, "coach", navigate, toast, { upsertRole: "coach" });
+        // Mark the freshly-bootstrapped profile as coach.
+        try { await setRoleMut({ role: "coach" }); } catch (err) {
+          logger.warn("CoachLogin: setRole failed (Apple)", { err });
         }
       } else {
-        await supabase.auth.signInWithOAuth({
-          provider: "apple",
-          options: { redirectTo: `${window.location.origin}/coach` },
-        });
+        await signIn("apple", { redirectTo: `${window.location.origin}/coach` });
       }
     } catch (err: any) {
       const m = String(err?.message ?? "").toLowerCase();

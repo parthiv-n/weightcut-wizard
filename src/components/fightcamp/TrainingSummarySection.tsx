@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { format, startOfWeek, endOfWeek } from "date-fns";
 import { Brain, Loader2, ChevronDown, Trash2, CheckCircle, X, Dumbbell, Activity, Gem } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { useAction, useConvex, useMutation, useQuery } from "convex/react";
+import { api } from "@/../convex/_generated/api";
+import type { Id } from "@/../convex/_generated/dataModel";
 import { useToast } from "@/hooks/use-toast";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -85,7 +87,24 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
     const { gems, isPremium: gemsIsPremium } = useGems();
     const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
     const { tasks, addTask, completeTask, failTask, dismissTask } = useAITask();
-    const [savedSummaries, setSavedSummaries] = useState<SavedSummaryRow[]>([]);
+    const trainingSummaryAction = useAction(api.actions.trainingSummary.run);
+    const upsertSummaryMut = useMutation(api.fight_camp.upsertSummary);
+    const deleteSummaryMut = useMutation(api.fight_camp.deleteSummary);
+    const summariesRaw = useQuery(api.fight_camp.listAllSummaries, userId ? { limit: 20 } : "skip");
+    // Live-reactive subscription to training_summaries. The Convex client caches identically.
+    const savedSummaries = useMemo<SavedSummaryRow[]>(() => (
+        (summariesRaw ?? []).map((r: any) => ({
+            id: r._id,
+            week_start: r.weekStart,
+            summary_data: r.summaryData,
+            session_ids: r.sessionIds,
+            notes_fingerprint: r.notesFingerprint,
+            created_at: r._creationTime ? new Date(r._creationTime).toISOString() : "",
+            updated_at: r.updatedAt ? new Date(r.updatedAt).toISOString() : "",
+        }))
+    ), [summariesRaw]);
+    const setSavedSummaries = (_v: any) => { /* no-op — Convex subscription drives this */ };
+    void setSavedSummaries;
     const [weekSessions, setWeekSessions] = useState<SessionRow[]>([]);
     const [selectedWeekStart, setSelectedWeekStart] = useState<string>(
         format(startOfWeek(selectedDate, { weekStartsOn: 1 }), "yyyy-MM-dd")
@@ -115,29 +134,16 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
         setSelectedWeekStart(calendarWeekStart);
     }, [calendarWeekStart]);
 
-    // Fetch all saved summaries (cache-first)
-    const fetchAllSummaries = useCallback(async () => {
-        const cached = localCache.get<SavedSummaryRow[]>(userId, "training_summaries", 10 * 60 * 1000);
-        if (cached) setSavedSummaries(cached);
+    // Re-fetch hook is now a no-op shim — the Convex subscription keeps the list live.
+    // Kept under the same name so the rest of the file's call-sites compile.
+    const fetchAllSummaries = useCallback(async () => { /* live via useQuery */ }, []);
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data, error } = await (supabase as any)
-            .from("training_summaries")
-            .select("id, week_start, summary_data, session_ids, notes_fingerprint, created_at, updated_at")
-            .eq("user_id", userId)
-            .order("week_start", { ascending: false })
-            .limit(20);
-
-        if (error) {
-            logger.error("Error fetching summaries", error);
-            return;
-        }
-        setSavedSummaries((data as SavedSummaryRow[]) || []);
-        localCache.set(userId, "training_summaries", data || []);
-    }, [userId]);
-
-    // Fetch sessions for the current calendar week (for change detection)
+    // Fetch sessions for the current calendar week (for change detection).
+    // Now driven by the Convex fight_camp_calendar query mapped into the local
+    // SessionRow shape that `computeFingerprint` consumes.
+    const calendarConvex = useConvex();
     const fetchWeekSessions = useCallback(async (skipCache = false) => {
+        if (!userId) return;
         const ws = startOfWeek(selectedDate, { weekStartsOn: 1 });
         const we = endOfWeek(selectedDate, { weekStartsOn: 1 });
         const weekKey = `training_week_${format(ws, "yyyy-MM-dd")}`;
@@ -145,21 +151,24 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
             const cached = localCache.get<SessionRow[]>(userId, weekKey, 5 * 60 * 1000);
             if (cached) { setWeekSessions(cached); return; }
         }
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data, error } = await (supabase as any)
-            .from("fight_camp_calendar")
-            .select("id, date, session_type, duration_minutes, notes")
-            .eq("user_id", userId)
-            .gte("date", format(ws, "yyyy-MM-dd"))
-            .lte("date", format(we, "yyyy-MM-dd"));
-
-        if (error) {
-            logger.error("Error fetching week sessions", error);
-            return;
+        try {
+            const rawRows = await calendarConvex.query(api.fight_camp.listCalendar, {
+                from: format(ws, "yyyy-MM-dd"),
+                to: format(we, "yyyy-MM-dd"),
+            });
+            const rows: SessionRow[] = (rawRows ?? []).map((r: any) => ({
+                id: r._id,
+                date: r.date,
+                session_type: r.sessionType,
+                duration_minutes: r.durationMinutes,
+                notes: r.notes ?? null,
+            }));
+            setWeekSessions(rows);
+            localCache.set(userId, weekKey, rows);
+        } catch (err) {
+            logger.error("Error fetching week sessions", err);
         }
-        setWeekSessions((data as SessionRow[]) || []);
-        localCache.set(userId, weekKey, data || []);
-    }, [userId, selectedDate]);
+    }, [userId, selectedDate, calendarConvex]);
 
     useEffect(() => {
         fetchAllSummaries();
@@ -231,64 +240,44 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
             // If no new sessions, nothing to do (shouldn't happen since fingerprint would match)
             if (sessionsToSend.length === 0) { setIsLoading(false); return; }
 
-            const { data, error } = await supabase.functions.invoke("training-summary", {
-                body: {
-                    sessions: sessionsToSend.map(s => ({
-                        date: s.date,
-                        session_type: s.session_type,
-                        duration_minutes: s.duration_minutes,
-                        notes: s.notes,
-                    })),
-                },
-                signal: controller.signal,
-            });
-            if (controller.signal.aborted) return;
-
-            if (error) {
+            // Convex trainingSummary action only takes a weekStart. The
+            // session payload is server-side; we keep `sessionsToSend` to
+            // guard the fingerprint logic above.
+            void sessionsToSend;
+            let data: any;
+            try {
+                data = await trainingSummaryAction({ weekStart: calendarWeekStart });
+            } catch (error: any) {
+                if (controller.signal.aborted) return;
                 if (await handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
                 throw error;
             }
-            if (!data?.summary) throw new Error("No summary returned");
+            if (controller.signal.aborted) return;
+            // Convex action returns the parsed JSON directly. Normalise to `summary`
+            // shape that this UI expects.
+            const summaryData = data?.summary ?? data;
+            if (!summaryData) throw new Error("No summary returned");
 
             onAICallSuccess();
             const fingerprint = computeFingerprint(weekSessions);
             const allSessionIds = sessionsWithNotes.map(s => s.id);
 
-            // Upsert: insert or update
-            if (selectedSummary) {
-                // Merge new summary with existing — append new sport sections/techniques
-                const merged = mergeSummaries(selectedSummary.summary_data, data.summary);
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const { error: updateErr } = await (supabase as any)
-                    .from("training_summaries")
-                    .update({
-                        summary_data: merged,
-                        session_ids: allSessionIds,
-                        notes_fingerprint: fingerprint,
-                    })
-                    .eq("id", selectedSummary.id);
-
-                if (updateErr) throw updateErr;
-            } else {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const { error: insertErr } = await (supabase as any)
-                    .from("training_summaries")
-                    .insert([{
-                        user_id: userId,
-                        week_start: calendarWeekStart,
-                        summary_data: data.summary,
-                        session_ids: allSessionIds,
-                        notes_fingerprint: fingerprint,
-                    }]);
-
-                if (insertErr) throw insertErr;
-            }
+            // Upsert via Convex — handler is idempotent on (userId, weekStart).
+            const mergedData = selectedSummary
+                ? mergeSummaries(selectedSummary.summary_data, summaryData)
+                : summaryData;
+            await upsertSummaryMut({
+                weekStart: calendarWeekStart,
+                sessionIds: allSessionIds,
+                notesFingerprint: fingerprint,
+                summaryData: mergedData,
+            });
 
             // Bust cache and refresh immediately so summary appears live
             localCache.remove(userId, "training_summaries");
             await fetchAllSummaries();
             setIsSummaryOpen(true);
-            completeTask(taskId, data.summary);
+            completeTask(taskId, summaryData);
         } catch (error: any) {
             if (error?.name === 'AbortError' || controller.signal.aborted) return;
             logger.error("Error generating training summary", error);
@@ -304,22 +293,15 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
     };
 
     const handleDeleteSummary = async (id: string) => {
-        // Optimistic remove
-        setSavedSummaries(prev => prev.filter(s => s.id !== id));
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { error } = await (supabase as any)
-            .from("training_summaries")
-            .delete()
-            .eq("id", id);
-
-        if (error) {
+        try {
+            await deleteSummaryMut({ id: id as Id<"training_summaries"> });
+        } catch (error) {
             logger.error("Error deleting summary", error);
             toast({
                 title: "Error deleting summary",
                 description: "Could not delete the summary. Please try again.",
                 variant: "destructive",
             });
-            await fetchAllSummaries(); // revert
         }
     };
 

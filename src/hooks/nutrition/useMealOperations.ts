@@ -1,13 +1,11 @@
 import { useState, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useMutation } from "convex/react";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { localCache } from "@/lib/localCache";
 import { nutritionCache } from "@/lib/nutritionCache";
-import { syncQueue } from "@/lib/syncQueue";
-import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { celebrateSuccess } from "@/lib/haptics";
 import { logger } from "@/lib/logger";
 import { resolveMealType } from "@/lib/buildMealPayload";
@@ -16,7 +14,10 @@ import {
   buildCreateMealRpcArgs,
   ingredientsToRpcItems,
   type CreateMealRpcArgs,
+  type RpcItemPayload,
 } from "@/lib/buildMealRpcArgs";
+import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import type { Meal, Ingredient } from "@/pages/nutrition/types";
 
 // Re-export the helper so the tester's gate can pull it from this module.
@@ -68,26 +69,39 @@ function buildOptimisticMeal(args: {
   };
 }
 
+/** Map the RPC payload shape (snake_case) → Convex mutation arg shape (camelCase). */
+function rpcItemsToConvexItems(items: RpcItemPayload[]) {
+  return items.map((it) => ({
+    name: it.name,
+    grams: it.grams,
+    calories: it.calories,
+    proteinG: it.protein_g,
+    carbsG: it.carbs_g,
+    fatsG: it.fats_g,
+    // food_id is currently a UUID string from legacy code; Convex Ids are
+    // branded strings, so we deliberately drop it for now — Phase-4 will
+    // route through `foods.upsertFood` to get real Convex Ids before insert.
+  }));
+}
+
 export function useMealOperations(params: UseMealOperationsParams) {
   const { setMeals, setMealPlanIdeas, selectedDate, loadMeals } = params;
   const { userId } = useUser();
   const { toast } = useToast();
   const { isMounted: _isMounted } = useSafeAsync();
+  const createMealMut = useMutation(api.meals.createMealWithItems);
+  const deleteMealMut = useMutation(api.meals.deleteMeal);
   const [loggingMeal, setLoggingMeal] = useState<string | null>(null);
   const [savingAllMeals, setSavingAllMeals] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [mealToDelete, setMealToDelete] = useState<Meal | null>(null);
 
   /**
-   * Single point-of-truth for every insert path. Builds RPC args, fires an
-   * optimistic cache row, queues the op for offline replay, then calls
-   * `create_meal_with_items`. The pre-generated UUID is written to the meal
-   * row on success via an update so optimistic keys stay stable.
-   *
-   * Note: the RPC generates its own meal/item UUIDs server-side. We only use
-   * the `optimisticId` for local React keys + sync queue dedupe until the
-   * realtime subscription surfaces the canonical row (at which point the
-   * cache merges the real `id` by `date`).
+   * Single point-of-truth for every insert path. Fires an optimistic cache
+   * row, then calls the `createMealWithItems` Convex mutation. The mutation
+   * is transactional — both `meals` and `meal_items` inserts succeed or fail
+   * together. On success we swap the optimistic id for the canonical one so
+   * the reactive `listWithTotals` query doesn't briefly show duplicates.
    */
   const runInsertFlow = useCallback(async (opts: {
     args: CreateMealRpcArgs;
@@ -116,31 +130,21 @@ export function useMealOperations(params: UseMealOperationsParams) {
       return updated;
     });
 
-    // Queue for offline replay — replay path calls RPC with the same payload.
-    syncQueue.enqueue(userId, {
-      table: "meals",
-      action: "insert",
-      payload: opts.args as unknown as Record<string, unknown>,
-      recordId: optimisticId,
-      timestamp: Date.now(),
-      persistOnFailure: true,
-    });
-
     try {
-      const { data, error } = await withSupabaseTimeout(
-        supabase.rpc("create_meal_with_items", opts.args),
-        undefined,
-        "create_meal_with_items"
-      );
-      if (error) throw error;
+      const canonicalId = await createMealMut({
+        date: opts.args.p_date,
+        mealType: opts.args.p_meal_type,
+        mealName: opts.args.p_meal_name,
+        notes: opts.args.p_notes ?? undefined,
+        isAiGenerated: opts.args.p_is_ai_generated,
+        items: rpcItemsToConvexItems(opts.args.p_items),
+      });
 
-      // Swap the optimistic id for the canonical one returned by the RPC so
-      // realtime INSERT events don't produce duplicate rows in cache.
-      const canonical = Array.isArray(data) && data.length > 0 ? data[0] : null;
-      const canonicalId = canonical?.meal_id ?? optimisticId;
       if (canonicalId && canonicalId !== optimisticId) {
         setMeals((prev) => {
-          const updated = prev.map((m) => (m.id === optimisticId ? { ...m, id: canonicalId } : m));
+          const updated = prev.map((m) =>
+            m.id === optimisticId ? { ...m, id: canonicalId as unknown as string } : m,
+          );
           localCache.setForDate(userId, "nutrition_logs", selectedDate, updated);
           nutritionCache.setMeals(userId, selectedDate, updated);
           return updated;
@@ -149,15 +153,24 @@ export function useMealOperations(params: UseMealOperationsParams) {
 
       celebrateSuccess();
       if (opts.successToast) toast(opts.successToast);
-      syncQueue.dequeueByRecordId(userId, optimisticId);
       return canonicalId;
     } catch (err) {
-      logger.error("create_meal_with_items failed (queued for sync)", err);
-      celebrateSuccess();
-      toast({ title: "Saved offline", description: "Will sync when connected." });
-      return optimisticId;
+      logger.error("createMealWithItems failed", err);
+      // Roll back the optimistic insert so a stale row doesn't linger.
+      setMeals((prev) => {
+        const updated = prev.filter((m) => m.id !== optimisticId);
+        localCache.setForDate(userId, "nutrition_logs", selectedDate, updated);
+        nutritionCache.setMeals(userId, selectedDate, updated);
+        return updated;
+      });
+      toast({
+        title: "Failed to save meal",
+        description: err instanceof Error ? err.message : "Please try again.",
+        variant: "destructive",
+      });
+      return null;
     }
-  }, [userId, selectedDate, setMeals, toast]);
+  }, [userId, selectedDate, setMeals, toast, createMealMut]);
 
   // ── Insert path 1: manual submit ──
   const saveMealToDb = useCallback(async (mealData: {
@@ -301,7 +314,7 @@ export function useMealOperations(params: UseMealOperationsParams) {
     }
   };
 
-  // ── Delete: cascade removes items. ──
+  // ── Delete: cascade removes items via the Convex mutation. ──
   const initiateDeleteMeal = useCallback((meal: Meal) => {
     setMealToDelete(meal);
     setDeleteDialogOpen(true);
@@ -320,29 +333,18 @@ export function useMealOperations(params: UseMealOperationsParams) {
     setDeleteDialogOpen(false);
     setMealToDelete(null);
 
-    syncQueue.enqueue(userId, {
-      table: "meals",
-      action: "delete",
-      payload: {},
-      recordId: deletedId,
-      timestamp: Date.now(),
-      persistOnFailure: true,
-    });
-
     try {
-      const { error } = await withSupabaseTimeout(
-        supabase.from("meals").delete().eq("id", deletedId),
-        undefined,
-        "Delete meal"
-      );
-      if (error) throw error;
+      await deleteMealMut({ id: deletedId as unknown as Id<"meals"> });
       await loadMeals(true);
-      syncQueue.dequeueByRecordId(userId, deletedId);
     } catch (error) {
-      logger.error("Error deleting meal (queued for sync)", error);
-      toast({ title: "Deleted offline", description: "Will sync when connected." });
+      logger.error("Error deleting meal", error);
+      toast({
+        title: "Failed to delete",
+        description: error instanceof Error ? error.message : "Please try again.",
+        variant: "destructive",
+      });
     }
-  }, [mealToDelete, userId, setMeals, selectedDate, loadMeals, toast]);
+  }, [mealToDelete, userId, setMeals, selectedDate, loadMeals, toast, deleteMealMut]);
 
   // ── Insert path 4: food-search select ──
   const handleFoodSearchSelected = useCallback(async (food: {

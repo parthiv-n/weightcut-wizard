@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, subMonths, addMonths, subDays } from "date-fns";
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, subMonths, addMonths, subDays, startOfWeek } from "date-fns";
 import { ChevronLeft, ChevronRight, Plus, Activity, BookOpen } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "@/../convex/_generated/api";
+import type { Id } from "@/../convex/_generated/dataModel";
 import { localCache } from "@/lib/localCache";
 import { useUser } from "@/contexts/UserContext";
 import { useToast } from "@/hooks/use-toast";
@@ -26,12 +28,35 @@ import { logger } from "@/lib/logger";
 import { getUserColors, setUserColor } from "@/lib/sessionColors";
 import { encodeRunMeta, decodeRunMeta, formatPace } from "@/lib/runMeta";
 import { Skeleton } from "@/components/ui/skeleton-loader";
-import { withSupabaseTimeout, withRetry } from "@/lib/timeoutWrapper";
 
-import type { Tables, TablesInsert } from "@/integrations/supabase/types";
-
-type TrainingCalendarRow = Tables<"fight_camp_calendar">;
-type TrainingCalendarInsert = TablesInsert<"fight_camp_calendar">;
+// Local row + insert types for fight_camp_calendar entries.
+// All fields are nullable to match the Convex schema's optional shape.
+interface TrainingCalendarRow {
+  id: string;
+  user_id: string;
+  date: string;
+  session_type: string;
+  duration_minutes: number;
+  rpe: number;
+  intensity: string;
+  intensity_level: number | null;
+  bodyweight: number | null;
+  fatigue_level: number | null;
+  soreness_level: number | null;
+  sleep_hours: number | null;
+  sleep_quality: string | null;
+  mobility_done: boolean | null;
+  notes: string | null;
+  media_url: string | null;
+  created_at: string | null;
+}
+type TrainingCalendarInsert = Partial<TrainingCalendarRow> & {
+  date: string;
+  session_type: string;
+  duration_minutes: number;
+  rpe: number;
+  intensity: string;
+};
 
 // Module-level in-memory cache survives component remounts within a session,
 // so re-entering the page paints instantly without a JSON.parse from localStorage.
@@ -44,9 +69,13 @@ const FRESH_WINDOW_MS = 30 * 1000; // dedupe identical requests inside 30s
 
 export default function TrainingCalendar() {
     const { userId, profile } = useUser();
+    void profile;
     const { toast } = useToast();
     const { safeAsync, isMounted } = useSafeAsync();
     const [searchParams, setSearchParams] = useSearchParams();
+    const createCalendarMut = useMutation(api.fight_camp.createCalendarEntry);
+    const updateCalendarMut = useMutation(api.fight_camp.updateCalendarEntry);
+    const deleteCalendarMut = useMutation(api.fight_camp.deleteCalendarEntry);
     const [currentDate, setCurrentDate] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [sessions, setSessions] = useState<TrainingCalendarRow[]>(() => {
@@ -105,40 +134,57 @@ export default function TrainingCalendar() {
 
     const monthCacheKey = (d: Date) => `training_sessions_${format(d, "yyyy-MM")}`;
 
+    // Convex client used for ad-hoc imperative queries (the calendar still
+    // pages month-by-month and needs to fetch arbitrary ranges that don't
+    // bind to a single useQuery subscription).
+    const convexClientRef = useRef<any | null>(null);
+    useEffect(() => {
+        if (convexClientRef.current) return;
+        import("@/integrations/convex/client").then(({ convex }) => {
+            convexClientRef.current = convex;
+        });
+    }, []);
+
     const queryMonth = useCallback(async (uid: string, date: Date): Promise<TrainingCalendarRow[]> => {
         const memKey = `${uid}:${format(date, "yyyy-MM")}`;
         const inflight = monthInflight.get(memKey);
         if (inflight) return inflight;
 
         const promise = (async () => {
-            const { data, error } = await withRetry(
-                () => withSupabaseTimeout(
-                    supabase
-                        .from('fight_camp_calendar')
-                        .select('*')
-                        .eq('user_id', uid)
-                        .gte('date', format(startOfMonth(date), "yyyy-MM-dd"))
-                        .lte('date', format(endOfMonth(date), "yyyy-MM-dd"))
-                        .limit(100),
-                    12000,
-                    "Fetch training month",
-                ),
-                1,
-                500,
-            );
-            if (error) throw error;
-            const rows = (data ?? []) as TrainingCalendarRow[];
+            // Wait for the Convex client to mount (fast — the dynamic import
+            // resolves synchronously the second time around).
+            let client = convexClientRef.current;
+            if (!client) {
+                ({ convex: client } = await import("@/integrations/convex/client"));
+                convexClientRef.current = client;
+            }
+            const rawRows = await client.query(api.fight_camp.listCalendar, {
+                from: format(startOfMonth(date), "yyyy-MM-dd"),
+                to: format(endOfMonth(date), "yyyy-MM-dd"),
+            });
+            const rows: TrainingCalendarRow[] = (rawRows ?? []).map((r: any) => ({
+                id: r._id,
+                user_id: r.userId,
+                date: r.date,
+                session_type: r.sessionType,
+                duration_minutes: r.durationMinutes,
+                rpe: r.rpe,
+                intensity: r.intensity,
+                intensity_level: r.intensityLevel ?? null,
+                bodyweight: r.bodyweight ?? null,
+                fatigue_level: r.fatigueLevel ?? null,
+                soreness_level: r.sorenessLevel ?? null,
+                sleep_hours: r.sleepHours ?? null,
+                sleep_quality: r.sleepQuality ?? null,
+                mobility_done: r.mobilityDone ?? null,
+                notes: r.notes ?? null,
+                media_url: r.mediaUrl ?? null,
+                created_at: r._creationTime ? new Date(r._creationTime).toISOString() : null,
+            }));
             monthMemCache.set(memKey, { data: rows, fetchedAt: Date.now() });
             localCache.set(uid, monthCacheKey(date), rows);
             return rows;
-        })().catch((err) => {
-            // Kick connection recovery so a wedged auth mutex doesn't poison
-            // every subsequent call. Re-throw so callers still see the error.
-            void import('@/lib/connectionRecovery').then(({ recoverSupabaseConnection }) =>
-                recoverSupabaseConnection('training-month-fetch-timeout')
-            ).catch(() => {});
-            throw err;
-        });
+        })();
 
         monthInflight.set(memKey, promise);
         try {
@@ -168,7 +214,7 @@ export default function TrainingCalendar() {
             const rows = await queryMonth(userId, currentDate);
             safeAsync(setSessions)(rows);
         } catch (error) {
-            logger.warn("Error fetching sessions", error);
+            logger.warn("Error fetching sessions", { err: String(error) });
             // Only surface a destructive toast when we have nothing cached to
             // show the user; otherwise the cache covers it and we silently
             // retry next time UserContext flushes the queue.
@@ -203,23 +249,31 @@ export default function TrainingCalendar() {
         const promise = (async () => {
             const from = format(subDays(new Date(), 28), "yyyy-MM-dd");
             const to = format(new Date(), "yyyy-MM-dd");
-            const { data, error } = await withRetry(
-                () => withSupabaseTimeout(
-                    supabase
-                        .from('fight_camp_calendar')
-                        .select('*')
-                        .eq('user_id', userId)
-                        .gte('date', from)
-                        .lte('date', to)
-                        .limit(100),
-                    12000,
-                    "Fetch training 28d",
-                ),
-                1,
-                500,
-            );
-            if (error) throw error;
-            const rows = (data ?? []) as TrainingCalendarRow[];
+            let client = convexClientRef.current;
+            if (!client) {
+                ({ convex: client } = await import("@/integrations/convex/client"));
+                convexClientRef.current = client;
+            }
+            const rawRows = await client.query(api.fight_camp.listCalendar, { from, to });
+            const rows: TrainingCalendarRow[] = (rawRows ?? []).map((r: any) => ({
+                id: r._id,
+                user_id: r.userId,
+                date: r.date,
+                session_type: r.sessionType,
+                duration_minutes: r.durationMinutes,
+                rpe: r.rpe,
+                intensity: r.intensity,
+                intensity_level: r.intensityLevel ?? null,
+                bodyweight: r.bodyweight ?? null,
+                fatigue_level: r.fatigueLevel ?? null,
+                soreness_level: r.sorenessLevel ?? null,
+                sleep_hours: r.sleepHours ?? null,
+                sleep_quality: r.sleepQuality ?? null,
+                mobility_done: r.mobilityDone ?? null,
+                notes: r.notes ?? null,
+                media_url: r.mediaUrl ?? null,
+                created_at: r._creationTime ? new Date(r._creationTime).toISOString() : null,
+            }));
             recent28dMemCache.set(userId, { data: rows, fetchedAt: Date.now() });
             localCache.set(userId, "training_sessions_28d", rows);
             return rows;
@@ -451,27 +505,27 @@ export default function TrainingCalendar() {
             };
 
             if (editingSession) {
-                const { error } = await withRetry(
-                    () => withSupabaseTimeout(
-                        supabase.from('fight_camp_calendar').update(payload!).eq('id', editingSession.id),
-                        12000,
-                        "Update training session",
-                    ),
-                    1,
-                    500,
-                );
-                if (error) throw error;
+                await updateCalendarMut({
+                    id: editingSession.id as unknown as Id<"fight_camp_calendar">,
+                    sessionType: payload!.session_type,
+                    intensity: payload!.intensity,
+                    intensityLevel: payload!.intensity_level ?? undefined,
+                    durationMinutes: payload!.duration_minutes,
+                    rpe: payload!.rpe,
+                    sorenessLevel: payload!.soreness_level ?? undefined,
+                    notes: payload!.notes ?? undefined,
+                });
             } else {
-                const { error } = await withRetry(
-                    () => withSupabaseTimeout(
-                        supabase.from('fight_camp_calendar').insert([payload!]),
-                        12000,
-                        "Insert training session",
-                    ),
-                    1,
-                    500,
-                );
-                if (error) throw error;
+                await createCalendarMut({
+                    date: payload!.date,
+                    sessionType: payload!.session_type,
+                    intensity: payload!.intensity,
+                    intensityLevel: payload!.intensity_level ?? undefined,
+                    durationMinutes: payload!.duration_minutes,
+                    rpe: payload!.rpe,
+                    sorenessLevel: payload!.soreness_level ?? undefined,
+                    notes: payload!.notes ?? undefined,
+                });
             }
 
             // Patch the optimistic row with the resolved media URL using a
@@ -532,30 +586,16 @@ export default function TrainingCalendar() {
             }
             resetForm();
         } catch (error) {
-            // QUEUE for background sync instead of rolling back. The optimistic
-            // row stays visible; UserContext replays syncQueue on `online` /
-            // visibility-change / app-resume. Also kick connection recovery in
-            // case auth wedged (Promise.race timeouts don't cancel the
-            // underlying request, so the auth mutex can stay stuck — recovery
-            // cycles realtime + force-refreshes the session).
-            logger.warn("Save timed out, queueing for background sync", { error });
-            void import('@/lib/connectionRecovery').then(({ recoverSupabaseConnection }) =>
-                recoverSupabaseConnection('training-save-timeout')
-            ).catch(() => {});
+            // No more offline syncQueue path — surface a destructive toast and
+            // roll back the optimistic row when possible. The Convex client
+            // auto-reconnects so this is a "try again in a moment" prompt.
+            logger.warn("Save failed", { error });
 
             if (payload) {
-                const { syncQueue } = await import('@/lib/syncQueue');
-                syncQueue.enqueue(uid, {
-                    table: 'fight_camp_calendar',
-                    action: editingSession ? 'update' : 'insert',
-                    payload: payload as unknown as Record<string, unknown>,
-                    recordId: sessionId,
-                    timestamp: Date.now(),
-                    persistOnFailure: true,
-                });
                 toast({
-                    title: editingSession ? "Update queued" : "Saved offline",
-                    description: "We'll sync to the cloud when you're back online.",
+                    title: editingSession ? "Couldn't update session" : "Couldn't save session",
+                    description: "Check your connection and try again.",
+                    variant: "destructive",
                 });
                 resetForm();
             } else {
@@ -600,41 +640,21 @@ export default function TrainingCalendar() {
             if (session?.media_url) {
                 deleteSessionMedia(session.media_url).catch(() => {});
             }
-            const { error } = await withRetry(
-                () => withSupabaseTimeout(
-                    supabase.from('fight_camp_calendar').delete().eq('id', id),
-                    12000,
-                    "Delete training session",
-                ),
-                1,
-                500,
-            );
-            if (error) throw error;
+            await deleteCalendarMut({ id: id as unknown as Id<"fight_camp_calendar"> });
 
             recent28dMemCache.delete(uid);
             localCache.remove(uid, "training_sessions_28d");
             void fetch28DaySessions();
         } catch (error) {
-            // Queue the delete for background sync. Keep the local removal so
-            // the user sees their action; replay will reconcile when network
-            // recovers. Also kick connection recovery in case auth wedged.
-            logger.warn("Delete timed out, queueing for background sync", { error });
-            void import('@/lib/connectionRecovery').then(({ recoverSupabaseConnection }) =>
-                recoverSupabaseConnection('training-delete-timeout')
-            ).catch(() => {});
-
-            const { syncQueue } = await import('@/lib/syncQueue');
-            syncQueue.enqueue(uid, {
-                table: 'fight_camp_calendar',
-                action: 'delete',
-                payload: { id },
-                recordId: id,
-                timestamp: Date.now(),
-                persistOnFailure: true,
-            });
+            // Roll back the optimistic delete and surface the failure.
+            logger.warn("Delete failed", { error });
+            setSessions(previousSessions);
+            if (previousMem) monthMemCache.set(memMonthKey, previousMem);
+            localCache.set(uid, monthCacheKey(currentDate), previousSessions);
             toast({
-                title: "Delete queued",
-                description: "We'll finish syncing when you're back online.",
+                title: "Couldn't delete session",
+                description: "Check your connection and try again.",
+                variant: "destructive",
             });
         }
     };
@@ -903,7 +923,7 @@ export default function TrainingCalendar() {
                             </div>
                             <TrainingCalendarCard
                                 ref={cardRef}
-                                sessions={filtered}
+                                sessions={filtered as any}
                                 timeRange={shareTimeRange}
                                 aspect={aspect}
                                 customColors={customColors}

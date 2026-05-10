@@ -15,6 +15,7 @@
     "postinstall": "sed -i '' 's/from: \"7.0.0\"/from: \"8.0.0\"/' node_modules/@capacitor-community/apple-sign-in/Package.swift 2>/dev/null || true"
   },
   "dependencies": {
+    "@auth/core": "^0.37.4",
     "@capacitor-community/admob": "^8.0.0",
     "@capacitor-community/apple-sign-in": "^7.1.0",
     "@capacitor-community/in-app-review": "^7.0.0",
@@ -29,6 +30,7 @@
     "@capacitor/push-notifications": "^8.0.3",
     "@capacitor/share": "^8.0.1",
     "@capacitor/status-bar": "^8.0.1",
+    "@convex-dev/auth": "^0.0.92",
     "@dagrejs/dagre": "^2.0.4",
     "@hookform/resolvers": "^3.10.0",
     "@radix-ui/react-accordion": "^1.2.11",
@@ -62,11 +64,11 @@
     "@revenuecat/purchases-capacitor-ui": "^12.3.1",
     "@sentry/react": "^10.41.0",
     "@sentry/vite-plugin": "^5.1.1",
-    "@supabase/supabase-js": "^2.78.0",
     "@tanstack/react-query": "^5.83.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "convex": "^1.38.0",
     "date-fns": "^3.6.0",
     "embla-carousel-react": "^8.6.0",
     "html-to-image": "^1.11.13",

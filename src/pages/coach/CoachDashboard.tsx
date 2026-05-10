@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { ChevronRight, Copy, Check, Share2, Megaphone, RefreshCw } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import { useCoachData, type AthleteOverviewRow, type GymRow } from "@/hooks/coach/useCoachData";
-import { useCoachRealtimeSync } from "@/hooks/coach/useCoachRealtimeSync";
 import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
 import { useToast } from "@/hooks/use-toast";
 import { triggerHaptic } from "@/lib/haptics";
@@ -54,9 +53,10 @@ export default function CoachDashboard() {
   const { toast } = useToast();
   const { gyms, athletes, loading, refresh } = useCoachData(userId);
 
-  // Real-time fanout: any athlete logs a weight/meal/training → coach dash
-  // refetches within ~400ms. Debounce clusters bursts into one refetch.
-  useCoachRealtimeSync(userId, refresh);
+  // No realtime hook needed — Convex queries are reactive by default.
+  // Any athlete writing to weight_logs/meals/fight_camp_calendar/etc.
+  // triggers an automatic re-run of `useCoachData`'s underlying
+  // `coach.athletesOverview` query.
 
   const handleLogoUploaded = (gymId: string, newUrl: string | null) => {
     if (!userId) return;
@@ -335,8 +335,8 @@ export default function CoachDashboard() {
                         </div>
 
                         {/* 7-day training strain — sparkline updates in
-                            realtime via the existing fight_camp_calendar
-                            fanout trigger + useCoachRealtimeSync. */}
+                            realtime because Convex re-runs
+                            coach.athletesOverview on any athlete write. */}
                         <StrainSparkline
                           values={a.strain_7d ?? []}
                           width={56}
@@ -351,9 +351,9 @@ export default function CoachDashboard() {
                         />
 
                         {/* Fight date + target — visible whenever the
-                            athlete has set a target_date in Goals. Updates
-                            in real time via the profiles_coach_fanout
-                            trigger when they change either field. */}
+                            athlete has set a target_date in Goals. Convex
+                            re-runs coach.athletesOverview whenever the
+                            profile changes, so updates are live. */}
                         {a.target_date ? (
                           <FightTargetBadge
                             targetDate={a.target_date}

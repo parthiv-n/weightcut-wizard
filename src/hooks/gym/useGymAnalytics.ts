@@ -1,12 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useCallback, useMemo, useState } from "react";
+import { useConvex } from "convex/react";
+import { api } from "@/../convex/_generated/api";
+import type { Id } from "@/../convex/_generated/dataModel";
 import { useUser } from "@/contexts/UserContext";
-import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { localCache } from "@/lib/localCache";
-import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
-import { calculateVolume } from "@/lib/gymCalculations";
 import { logger } from "@/lib/logger";
-import type { GymSession, GymSet, SessionWithSets } from "@/pages/gym/types";
+import type { GymSet, SessionWithSets } from "@/pages/gym/types";
 
 const ANALYTICS_CACHE_KEY = "gym_analytics";
 const CACHE_TTL = 60 * 60 * 1000; // 1h
@@ -49,9 +48,8 @@ interface GymAnalyticsData {
 
 export function useGymAnalytics(history: SessionWithSets[]) {
   const { userId } = useUser();
-  const { safeAsync, isMounted } = useSafeAsync();
-  const [exerciseSetsMap, setExerciseSetsMap] = useState<Map<string, GymSet[]>>(new Map());
-  const [loading, setLoading] = useState(false);
+  const convex = useConvex();
+  const [loading] = useState(false);
 
   const analytics = useMemo((): GymAnalyticsData => {
     if (!history.length) {
@@ -138,38 +136,21 @@ export function useGymAnalytics(history: SessionWithSets[]) {
 
     const cacheKey = `gym_exercise_history_${exerciseId}`;
     const cached = localCache.get<GymSet[]>(userId, cacheKey, CACHE_TTL);
-    // Empty arrays are NOT a valid cache hit — they'd suppress refetch for a full hour
-    // even after the user has logged new sets. Only return populated caches.
     if (cached && cached.length > 0) return cached;
 
     try {
-      // NOTE: do NOT add `.eq("user_id", userId)` here — RLS already scopes by auth.uid()
-      // and adding the explicit filter excludes legacy rows where user_id was NULL,
-      // making the chart show "No data yet" even when sets exist for the exercise.
-      const { data, error } = await withSupabaseTimeout(
-        supabase
-          .from("gym_sets" as any)
-          .select("*")
-          .eq("exercise_id", exerciseId)
-          .eq("is_warmup", false)
-          .order("created_at", { ascending: false })
-          .limit(limit),
-        15000,
-        "Fetch exercise history"
-      );
-
-      if (error) throw error;
-
-      const sets = (data as any[] || []) as GymSet[];
-      // Only cache populated results — caching [] would mask transient failures
-      // and prevent the next fetch from finding newly-logged sets.
+      const rows = await convex.query(api.gym_sessions.listSetsForExercise, {
+        exerciseId: exerciseId as Id<"exercises">,
+        limit,
+      });
+      const sets = (rows ?? []) as unknown as GymSet[];
       if (sets.length > 0) localCache.set(userId, cacheKey, sets);
       return sets;
     } catch (err) {
       logger.warn("fetchExerciseHistory failed", { exerciseId, error: String(err) });
       return [];
     }
-  }, [userId]);
+  }, [userId, convex]);
 
   return {
     analytics,

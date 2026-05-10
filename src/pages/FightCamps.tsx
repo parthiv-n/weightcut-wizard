@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "@/../convex/_generated/api";
+import type { Id } from "@/../convex/_generated/dataModel";
 import { useAuth } from "@/contexts/UserContext";
-import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { format } from "date-fns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,8 +13,6 @@ import { Plus, Trophy, Trash2, GitCompareArrows, X, CheckSquare, Check } from "l
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
-import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
-import { localCache } from "@/lib/localCache";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { CampComparisonCard } from "@/components/share/cards/CampComparisonCard";
 import { logger } from "@/lib/logger";
@@ -35,14 +34,32 @@ interface FightCamp {
 
 export default function FightCamps() {
   const { userId } = useAuth();
-  const [camps, setCamps] = useState<FightCamp[]>(() => {
-    if (!userId) return [];
-    return localCache.get<FightCamp[]>(userId, 'fight_camps', 30 * 60 * 1000) || [];
-  });
-  const [loading, setLoading] = useState(() => {
-    if (!userId) return true;
-    return localCache.get(userId, 'fight_camps', 30 * 60 * 1000) === null;
-  });
+  const rawCamps = useQuery(api.fight_camp.listCamps, userId ? {} : "skip");
+  const createCampMut = useMutation(api.fight_camp.createCamp);
+  const deleteCampMut = useMutation(api.fight_camp.deleteCamp);
+
+  // Map Convex camelCase rows → legacy snake_case shape used by share cards.
+  const camps = useMemo<FightCamp[]>(() => {
+    if (!rawCamps) return [];
+    return [...rawCamps]
+      .sort((a: any, b: any) => (b.fightDate as string).localeCompare(a.fightDate as string))
+      .map((r: any) => ({
+        id: r._id,
+        name: r.name,
+        event_name: r.eventName ?? null,
+        fight_date: r.fightDate,
+        profile_pic_url: r.profilePicUrl ?? null,
+        is_completed: r.isCompleted ?? false,
+        starting_weight_kg: r.startingWeightKg ?? null,
+        end_weight_kg: r.endWeightKg ?? null,
+        total_weight_cut: r.totalWeightCut ?? null,
+        weight_via_dehydration: r.weightViaDehydration ?? null,
+        weight_via_carb_reduction: r.weightViaCarbReduction ?? null,
+        weigh_in_timing: r.weighInTiming ?? null,
+      }));
+  }, [rawCamps]);
+
+  const loading = rawCamps === undefined;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [campToDelete, setCampToDelete] = useState<FightCamp | null>(null);
@@ -61,107 +78,21 @@ export default function FightCamps() {
   const [creating, setCreating] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
-  const { safeAsync, isMounted } = useSafeAsync();
-
-  useEffect(() => {
-    if (userId) {
-      fetchCamps();
-    } else {
-      setLoading(false);
-    }
-  }, [userId]);
-
-  const fetchCamps = async (isRetry = false) => {
-    if (!userId) return;
-
-    const cached = localCache.get<FightCamp[]>(userId, 'fight_camps', 30 * 60 * 1000);
-    if (cached) {
-      safeAsync(setCamps)(cached);
-      safeAsync(setLoading)(false);
-    }
-
-    try {
-      const { data, error } = await withSupabaseTimeout(
-        supabase
-          .from("fight_camps")
-          .select("id, name, event_name, fight_date, profile_pic_url, is_completed, starting_weight_kg, end_weight_kg, total_weight_cut, weight_via_dehydration, weight_via_carb_reduction, weigh_in_timing")
-          .eq("user_id", userId)
-          .order("fight_date", { ascending: false })
-          .limit(50),
-        undefined,
-        "Load fight camps"
-      );
-
-      if (!isMounted()) return;
-
-      if (error) throw error;
-
-      safeAsync(setCamps)((data || []) as FightCamp[]);
-      localCache.set(userId, 'fight_camps', data || []);
-    } catch (error) {
-      logger.warn("Error loading fight camps", { error });
-
-      if (!isRetry) {
-        setTimeout(() => { if (isMounted()) fetchCamps(true); }, 2000);
-        return;
-      }
-
-      if (!cached) {
-        if (isMounted()) {
-          toast({ title: "Couldn't load fight camps", description: "Check your connection and try again.", variant: "destructive" });
-        }
-      }
-    } finally {
-      safeAsync(setLoading)(false);
-    }
-  };
 
   const handleCreateCamp = async () => {
-    // Re-entry guard: ignore double-clicks while an insert is in-flight
     if (creating) return;
-
     if (!newCamp.name.trim() || !newCamp.fight_date) {
       toast({ title: "Error", description: "Name and fight date are required", variant: "destructive" });
       return;
     }
-
     if (!userId) return;
-
     setCreating(true);
     try {
-      const { data, error } = await withSupabaseTimeout(
-        supabase
-          .from("fight_camps")
-          .insert([{
-            user_id: userId,
-            name: newCamp.name.trim(),
-            event_name: newCamp.event_name.trim() || null,
-            fight_date: newCamp.fight_date,
-          }])
-          .select("id, name, event_name, fight_date, profile_pic_url, is_completed, starting_weight_kg, end_weight_kg, total_weight_cut, weight_via_dehydration, weight_via_carb_reduction, weigh_in_timing")
-          .single(),
-        undefined,
-        "Create fight camp"
-      );
-
-      if (error) {
-        // 23505 = unique_violation → duplicate camp from a prior double-click
-        if ((error as any).code === "23505") {
-          toast({ title: "Already exists", description: "A camp with this name and date already exists.", variant: "destructive" });
-          localCache.remove(userId, 'fight_camps');
-          fetchCamps();
-        } else {
-          logger.warn("Create fight camp failed", { error });
-          toast({ title: "Error", description: "Failed to create fight camp. Please try again.", variant: "destructive" });
-        }
-        return;
-      }
-
-      // Optimistically prepend new camp, no need to refetch
-      if (data) {
-        setCamps(prev => [data as FightCamp, ...prev.filter(c => c.id !== (data as FightCamp).id)]);
-      }
-      localCache.remove(userId, 'fight_camps');
+      await createCampMut({
+        name: newCamp.name.trim(),
+        fightDate: newCamp.fight_date,
+        eventName: newCamp.event_name.trim() || undefined,
+      });
       setDialogOpen(false);
       setNewCamp({ name: "", event_name: "", fight_date: "" });
     } catch (err) {
@@ -174,21 +105,10 @@ export default function FightCamps() {
 
   const handleDeleteCamp = async () => {
     if (!campToDelete) return;
-
-    const { error } = await withSupabaseTimeout(
-      supabase
-        .from("fight_camps")
-        .delete()
-        .eq("id", campToDelete.id),
-      undefined,
-      "Delete fight camp"
-    );
-
-    if (error) {
+    try {
+      await deleteCampMut({ id: campToDelete.id as Id<"fight_camps"> });
+    } catch {
       toast({ title: "Error", description: "Failed to delete fight camp", variant: "destructive" });
-    } else {
-      if (userId) localCache.remove(userId, 'fight_camps');
-      fetchCamps();
     }
     setDeleteDialogOpen(false);
     setCampToDelete(null);
@@ -203,21 +123,11 @@ export default function FightCamps() {
     if (!userId || selectedForDelete.length === 0 || bulkDeleting) return;
     setBulkDeleting(true);
     try {
-      const { error } = await withSupabaseTimeout(
-        supabase
-          .from("fight_camps")
-          .delete()
-          .in("id", selectedForDelete)
-          .eq("user_id", userId),
-        undefined,
-        "Bulk delete fight camps"
+      // Convex has no batch-delete; fan out and swallow individual failures so a
+      // partial success still leaves the UI in a sane state.
+      await Promise.allSettled(
+        selectedForDelete.map((id) => deleteCampMut({ id: id as Id<"fight_camps"> })),
       );
-      if (error) {
-        toast({ title: "Error", description: "Failed to delete fight camps", variant: "destructive" });
-        return;
-      }
-      setCamps((prev) => prev.filter((c) => !selectedForDelete.includes(c.id)));
-      localCache.remove(userId, 'fight_camps');
       toast({ title: "Deleted", description: `${selectedForDelete.length} camp${selectedForDelete.length === 1 ? '' : 's'} removed.` });
       setSelectedForDelete([]);
       setSelectMode(false);
@@ -226,6 +136,10 @@ export default function FightCamps() {
       setBulkDeleteOpen(false);
     }
   };
+
+  // Mirrors the previous post-mount useEffect: silence unused-var lint while
+  // we keep the userId-gated render path tidy.
+  useEffect(() => { void userId; }, [userId]);
 
   const toggleSelectMode = () => {
     const next = !selectMode;

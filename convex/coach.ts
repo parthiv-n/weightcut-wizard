@@ -1,0 +1,479 @@
+/**
+ * Coach-mode aggregation queries.
+ *
+ * Replaces the Postgres SECURITY DEFINER RPCs that powered the coach
+ * dashboard:
+ *   - my_gyms_overview     → (lives in gyms.ts as `listMine`)
+ *   - coach_athletes_overview  → `athletesOverview`
+ *   - coach_athlete_detail     → `athleteDetail`
+ *
+ * Realtime fan-out (the SQL `coach_realtime_events` table + triggers) is
+ * GONE. Convex re-runs `athletesOverview` and `athleteDetail`
+ * automatically whenever any athlete writes to `weight_logs`, `meals`,
+ * `fight_camp_calendar`, etc. The reactivity is free; the coach UI just
+ * calls `useQuery(api.coach.athletesOverview)` and gets live updates.
+ *
+ * Performance note: these are read-heavy fan-out queries (one coach can
+ * have N athletes × 7-14 days × multiple log tables). Every read uses
+ * an index, and per-athlete reads are issued in parallel via Promise.all.
+ * If `athletesOverview` becomes a bottleneck on a coach with 50+
+ * athletes, consider:
+ *   1. Caching the 7-day strain summary into a denormalised column.
+ *   2. Splitting into `athletesOverviewLite` (just names + last weight)
+ *      for the dashboard list, with the heavy strain calc lazy-loaded
+ *      per row on tap.
+ */
+import { v } from "convex/values";
+import { query } from "./_generated/server";
+import type { QueryCtx } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
+import { requireUserId } from "./lib/auth";
+
+// ─────────────────────────────────────────────────────────────────────────
+// Date helpers — coach queries are date-window heavy.
+// ─────────────────────────────────────────────────────────────────────────
+
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function isoNDaysAgo(n: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Resolve a Convex Storage id to a long-lived URL, or null. Small helper
+ *  used by every coach query that returns avatars / gym logos. */
+async function resolveStorageUrl(
+  ctx: QueryCtx,
+  id: Id<"_storage"> | undefined | null,
+): Promise<string | null> {
+  if (!id) return null;
+  return await ctx.storage.getUrl(id);
+}
+
+/** Builds a 7-element array of RPE-hours (oldest -> newest), one bucket
+ *  per day. Used for the StrainSparkline in CoachDashboard. */
+function strain7d(
+  sessions: { date: string; rpe: number; durationMinutes?: number }[],
+): number[] {
+  const buckets = new Array(7).fill(0) as number[];
+  const todayMs = new Date(todayISO()).getTime();
+  for (const s of sessions) {
+    const sMs = new Date(s.date).getTime();
+    const dayDelta = Math.floor((todayMs - sMs) / 86_400_000);
+    if (dayDelta < 0 || dayDelta > 6) continue;
+    // oldest -> newest: index 6 = today, 0 = 6 days ago.
+    const idx = 6 - dayDelta;
+    const hours = (s.durationMinutes ?? 0) / 60;
+    buckets[idx] += (s.rpe || 0) * hours;
+  }
+  return buckets.map((v) => +v.toFixed(2));
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Access-check helper. Inline in every cross-user read.
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Asserts that the calling user is a coach (gym owner OR
+ * `member_role: "coach"`) in at least one gym that contains the given
+ * athlete as an active athlete-member with shareData = true.
+ *
+ * Replaces the SQL `coach_can_view_athlete` SECURITY DEFINER function.
+ *
+ * Returns the membership rows so callers can introspect the gym name etc.
+ */
+async function assertCoachCanViewAthlete(
+  ctx: QueryCtx,
+  coachUserId: Id<"users">,
+  athleteUserId: Id<"users">,
+): Promise<{ gym: Doc<"gyms">; athleteMember: Doc<"gym_members"> }> {
+  // 1. Every gym this user is coach-of (either owner or coach-role member).
+  const ownedGyms = await ctx.db
+    .query("gyms")
+    .withIndex("by_owner", (q) => q.eq("ownerUserId", coachUserId))
+    .collect();
+  const coachMemberships = await ctx.db
+    .query("gym_members")
+    .withIndex("by_user", (q) => q.eq("userId", coachUserId))
+    .filter((q) => q.eq(q.field("memberRole"), "coach"))
+    .collect();
+
+  const gymIds = new Set<string>();
+  for (const g of ownedGyms) gymIds.add(g._id);
+  for (const m of coachMemberships) gymIds.add(m.gymId);
+
+  if (gymIds.size === 0) throw new Error("Not a coach");
+
+  // 2. For each gym, look for the athlete as an active sharing member.
+  for (const gid of gymIds) {
+    const athleteRow = await ctx.db
+      .query("gym_members")
+      .withIndex("by_gym_user", (q) =>
+        q.eq("gymId", gid as Id<"gyms">).eq("userId", athleteUserId),
+      )
+      .unique();
+    if (
+      athleteRow &&
+      athleteRow.memberRole === "athlete" &&
+      athleteRow.status === "active" &&
+      athleteRow.shareData
+    ) {
+      const gym = await ctx.db.get(gid as Id<"gyms">);
+      if (!gym) continue;
+      return { gym, athleteMember: athleteRow };
+    }
+  }
+  throw new Error("Coach cannot view this athlete");
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// QUERIES
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Coach dashboard — one row per athlete across every gym this coach owns,
+ * with summary data for the dashboard list view.
+ *
+ * Privacy: only athletes with `shareData: true` are included. This is the
+ * coach-side enforcement of the athlete's per-gym privacy gate.
+ *
+ * Replicates the SQL `coach_athletes_overview` RPC. The shape returned
+ * mirrors `AthleteOverviewRow` in `useCoachData.ts` (snake_case fields)
+ * so the React layer compiles unchanged.
+ */
+export const athletesOverview = query({
+  args: {},
+  handler: async (ctx) => {
+    const coachUserId = await requireUserId(ctx);
+
+    // 1. Every gym the coach owns. (We don't fan-out to gyms where the
+    //    coach is just a coach-role member; the dashboard is for gym
+    //    owners. If you need that, extend with `coachMemberships` like
+    //    `assertCoachCanViewAthlete` does.)
+    const gyms = await ctx.db
+      .query("gyms")
+      .withIndex("by_owner", (q) => q.eq("ownerUserId", coachUserId))
+      .collect();
+    if (gyms.length === 0) return [];
+
+    // 2. For each gym, list its active sharing athletes.
+    const sevenDaysAgo = isoNDaysAgo(7);
+    const today = todayISO();
+
+    const allRows = await Promise.all(
+      gyms.map(async (gym) => {
+        const members = await ctx.db
+          .query("gym_members")
+          .withIndex("by_gym", (q) => q.eq("gymId", gym._id))
+          .collect();
+        const athletes = members.filter(
+          (m) =>
+            m.memberRole === "athlete" &&
+            m.status === "active" &&
+            m.shareData,
+        );
+
+        // Per-athlete fan-out: read profile + latest weight + today's
+        // meals total + 7d sessions in parallel.
+        // Resolve the gym's logo URL once per gym (shared across all athletes).
+        const gymLogoUrl = await resolveStorageUrl(ctx, gym.logoStorageId);
+
+        return Promise.all(
+          athletes.map(async (m) => {
+            const [profile, latestWeight, todayMeals, recent7dSessions] =
+              await Promise.all([
+                ctx.db
+                  .query("profiles")
+                  .withIndex("by_user", (q) => q.eq("userId", m.userId))
+                  .unique(),
+                ctx.db
+                  .query("weight_logs")
+                  .withIndex("by_user_date", (q) => q.eq("userId", m.userId))
+                  .order("desc")
+                  .first(),
+                ctx.db
+                  .query("meals")
+                  .withIndex("by_user_date", (q) =>
+                    q.eq("userId", m.userId).eq("date", today),
+                  )
+                  .collect(),
+                ctx.db
+                  .query("fight_camp_calendar")
+                  .withIndex("by_user_date", (q) =>
+                    q.eq("userId", m.userId).gte("date", sevenDaysAgo),
+                  )
+                  .collect(),
+              ]);
+
+            // Last meal across any date — used for the "last_meal_at"
+            // column. Cheap because we only need _creationTime, not items.
+            const lastMeal = await ctx.db
+              .query("meals")
+              .withIndex("by_user_created", (q) => q.eq("userId", m.userId))
+              .order("desc")
+              .first();
+
+            // Today's calories — sum across meal_items for today's meals.
+            let todaysCalories = 0;
+            if (todayMeals.length > 0) {
+              const itemsBatches = await Promise.all(
+                todayMeals.map((meal) =>
+                  ctx.db
+                    .query("meal_items")
+                    .withIndex("by_meal", (q) => q.eq("mealId", meal._id))
+                    .collect(),
+                ),
+              );
+              for (const batch of itemsBatches) {
+                for (const it of batch) todaysCalories += it.calories || 0;
+              }
+            }
+
+            const avatarUrl = await resolveStorageUrl(
+              ctx,
+              profile?.avatarStorageId,
+            );
+            return {
+              user_id: m.userId,
+              gym_id: gym._id,
+              gym_name: gym.name,
+              gym_logo_url: gymLogoUrl,
+              display_name: profile?.displayName ?? "Athlete",
+              avatar_url: avatarUrl,
+              goal_type: profile?.goalType ?? null,
+              current_weight_kg: profile?.currentWeightKg ?? null,
+              goal_weight_kg: profile?.goalWeightKg ?? null,
+              fight_week_target_kg: profile?.fightWeekTargetKg ?? null,
+              target_date: profile?.targetDate ?? null,
+              last_weight_at: latestWeight
+                ? new Date(latestWeight._creationTime).toISOString()
+                : null,
+              todays_calories: todaysCalories,
+              daily_calorie_goal: profile?.aiRecommendedCalories ?? null,
+              last_meal_at: lastMeal
+                ? new Date(lastMeal._creationTime).toISOString()
+                : null,
+              share_data: m.shareData,
+              joined_at: new Date(m.joinedAt).toISOString(),
+              strain_7d: strain7d(
+                recent7dSessions.map((s) => ({
+                  date: s.date,
+                  rpe: s.rpe,
+                  durationMinutes: s.durationMinutes,
+                })),
+              ),
+            };
+          }),
+        );
+      }),
+    );
+
+    // Flatten gym -> athlete arrays and sort by display name for stable
+    // rendering.
+    return allRows
+      .flat()
+      .sort((a, b) => a.display_name.localeCompare(b.display_name));
+  },
+});
+
+/**
+ * Coach mode — full detail for a single athlete. Requires
+ * coach-can-view-athlete check.
+ *
+ * Returns the same shape as the SQL `coach_athlete_detail` RPC consumes
+ * in `useAthleteDetail.ts` so AthleteDetail.tsx compiles unchanged.
+ */
+export const athleteDetail = query({
+  args: { athleteUserId: v.id("users") },
+  handler: async (ctx, { athleteUserId }) => {
+    const coachUserId = await requireUserId(ctx);
+    const { gym, athleteMember } = await assertCoachCanViewAthlete(
+      ctx,
+      coachUserId,
+      athleteUserId,
+    );
+
+    const sevenDaysAgo = isoNDaysAgo(7);
+    const fourteenDaysAgo = isoNDaysAgo(14);
+    const today = todayISO();
+
+    const [
+      profile,
+      weight14d,
+      todayMeals,
+      recentSessions,
+    ] = await Promise.all([
+      ctx.db
+        .query("profiles")
+        .withIndex("by_user", (q) => q.eq("userId", athleteUserId))
+        .unique(),
+      ctx.db
+        .query("weight_logs")
+        .withIndex("by_user_date", (q) =>
+          q.eq("userId", athleteUserId).gte("date", fourteenDaysAgo),
+        )
+        .collect(),
+      ctx.db
+        .query("meals")
+        .withIndex("by_user_date", (q) =>
+          q.eq("userId", athleteUserId).eq("date", today),
+        )
+        .collect(),
+      ctx.db
+        .query("fight_camp_calendar")
+        .withIndex("by_user_date", (q) =>
+          q.eq("userId", athleteUserId).gte("date", sevenDaysAgo),
+        )
+        .collect(),
+    ]);
+
+    // Today's macros — sum items across today's meals.
+    let calories = 0;
+    let proteinG = 0;
+    let carbsG = 0;
+    let fatsG = 0;
+    if (todayMeals.length > 0) {
+      const itemBatches = await Promise.all(
+        todayMeals.map((meal) =>
+          ctx.db
+            .query("meal_items")
+            .withIndex("by_meal", (q) => q.eq("mealId", meal._id))
+            .collect(),
+        ),
+      );
+      for (const batch of itemBatches) {
+        for (const it of batch) {
+          calories += it.calories || 0;
+          proteinG += it.proteinG || 0;
+          carbsG += it.carbsG || 0;
+          fatsG += it.fatsG || 0;
+        }
+      }
+    }
+
+    // Recent sessions w/ optional soreness join from daily_wellness_checkins.
+    const sortedSessions = [...recentSessions].sort((a, b) =>
+      a.date < b.date ? 1 : -1,
+    );
+    const recentWithSoreness = await Promise.all(
+      sortedSessions.slice(0, 10).map(async (s) => {
+        const checkin = await ctx.db
+          .query("daily_wellness_checkins")
+          .withIndex("by_user_date", (q) =>
+            q.eq("userId", athleteUserId).eq("date", s.date),
+          )
+          .unique();
+        return {
+          date: s.date,
+          session_type: s.sessionType,
+          rpe: s.rpe,
+          soreness_level: checkin?.sorenessLevel ?? null,
+          duration_minutes: s.durationMinutes,
+        };
+      }),
+    );
+
+    const profileAvatarUrl = await resolveStorageUrl(
+      ctx,
+      profile?.avatarStorageId,
+    );
+    return {
+      profile: profile
+        ? {
+            id: profile.userId,
+            display_name: profile.displayName ?? "Athlete",
+            athlete_type: profile.athleteType ?? null,
+            avatar_url: profileAvatarUrl,
+            goal_type: profile.goalType ?? null,
+            current_weight_kg: profile.currentWeightKg ?? null,
+            goal_weight_kg: profile.goalWeightKg ?? null,
+            fight_week_target_kg: profile.fightWeekTargetKg ?? null,
+            target_date: profile.targetDate ?? null,
+            ai_recommended_calories: profile.aiRecommendedCalories ?? null,
+            ai_recommended_protein_g: profile.aiRecommendedProteinG ?? null,
+            ai_recommended_carbs_g: profile.aiRecommendedCarbsG ?? null,
+            ai_recommended_fats_g: profile.aiRecommendedFatsG ?? null,
+          }
+        : null,
+      weight_7d: weight14d
+        .filter((w) => w.date >= sevenDaysAgo)
+        .sort((a, b) => (a.date < b.date ? -1 : 1))
+        .map((w) => ({ date: w.date, weight_kg: w.weightKg })),
+      strain_7d: strain7d(
+        recentSessions.map((s) => ({
+          date: s.date,
+          rpe: s.rpe,
+          durationMinutes: s.durationMinutes,
+        })),
+      ),
+      today_macros: {
+        calories,
+        protein_g: proteinG,
+        carbs_g: carbsG,
+        fats_g: fatsG,
+      },
+      recent_sessions: recentWithSoreness,
+      membership: {
+        share_data: athleteMember.shareData,
+        status: athleteMember.status,
+        joined_at: new Date(athleteMember.joinedAt).toISOString(),
+        gym_name: gym.name,
+      },
+    };
+  },
+});
+
+/**
+ * Coach's gyms with member-count + recent-announcement-count badges.
+ * Used by CoachDashboard's per-gym header. Replicates `my_gyms_overview`
+ * from the coach perspective.
+ */
+export const myGymsOverview = query({
+  args: {},
+  handler: async (ctx) => {
+    const coachUserId = await requireUserId(ctx);
+    const gyms = await ctx.db
+      .query("gyms")
+      .withIndex("by_owner", (q) => q.eq("ownerUserId", coachUserId))
+      .collect();
+
+    return Promise.all(
+      gyms
+        .sort((a, b) => a._creationTime - b._creationTime)
+        .map(async (gym) => {
+          const members = await ctx.db
+            .query("gym_members")
+            .withIndex("by_gym", (q) => q.eq("gymId", gym._id))
+            .collect();
+          const activeAthletes = members.filter(
+            (m) => m.memberRole === "athlete" && m.status === "active",
+          ).length;
+
+          const sevenDaysAgoMs = Date.now() - 7 * 86_400_000;
+          const recentAnnouncements = await ctx.db
+            .query("gym_announcements")
+            .withIndex("by_gym_created", (q) => q.eq("gymId", gym._id))
+            .order("desc")
+            .take(50);
+          const recentAnnouncementCount = recentAnnouncements.filter(
+            (a) => a._creationTime >= sevenDaysAgoMs,
+          ).length;
+
+          const logoUrl = await resolveStorageUrl(ctx, gym.logoStorageId);
+          return {
+            id: gym._id,
+            name: gym.name,
+            invite_code: gym.inviteCode,
+            location: gym.location ?? null,
+            logo_url: logoUrl,
+            athlete_count: activeAthletes,
+            recent_announcement_count: recentAnnouncementCount,
+            created_at: new Date(gym._creationTime).toISOString(),
+          };
+        }),
+    );
+  },
+});

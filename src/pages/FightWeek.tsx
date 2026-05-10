@@ -2,13 +2,14 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { supabase } from "@/integrations/supabase/client";
+import { useAction, useMutation, useQuery } from "convex/react";
+import { api } from "@/../convex/_generated/api";
 import { useToast } from "@/hooks/use-toast";
 import { addDays, differenceInDays, format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useUser } from "@/contexts/UserContext";
 import { AIPersistence } from "@/lib/aiPersistence";
-import { withSupabaseTimeout, createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
+import { createAIAbortController } from "@/lib/timeoutWrapper";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { localCache } from "@/lib/localCache";
 import { computeFightWeekPlan, type FightWeekProjection, type DayProjection } from "@/utils/fightWeekEngine";
@@ -107,6 +108,10 @@ export default function FightWeek() {
   const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
   const { tasks: aiTasks, dismissTask: aiDismiss, addTask, completeTask, failTask } = useAITask();
   const { safeAsync, isMounted } = useSafeAsync();
+  const fightWeekAnalysisAction = useAction(api.actions.fightWeekAnalysis.run);
+  const upsertFightWeekPlan = useMutation(api.fight_camp.upsertPlan);
+  const updateProfileGoals = useMutation(api.profiles.updateGoals);
+  const activePlan = useQuery(api.fight_camp.getActivePlan, userId ? {} : "skip");
   const aiAbortRef = useRef<AbortController | null>(null);
 
   // Deterministic strategies derived from bodyweight + research thresholds.
@@ -179,25 +184,27 @@ export default function FightWeek() {
     }
   }, [profile?.normal_daily_carbs_g]);
 
-  // Hydrate from cache immediately, then refresh from DB
+  // Hydrate from Convex reactive query; fall back to cached AI plan body.
   useEffect(() => {
     if (!userId) return;
-    const cached = localCache.get<DBPlan>(userId, "fight_week_plan");
-    if (cached) {
-      hydrateFromPlan(cached);
-      setInitialLoading(false);
+    if (activePlan !== undefined) {
+      if (activePlan) {
+        const plan: DBPlan = {
+          id: (activePlan as any)._id,
+          fight_date: (activePlan as any).fightDate,
+          starting_weight_kg: (activePlan as any).startingWeightKg,
+          target_weight_kg: (activePlan as any).targetWeightKg,
+        };
+        hydrateFromPlan(plan);
+        localCache.set(userId, "fight_week_plan", plan);
+      } else {
+        const cached = localCache.get<DBPlan>(userId, "fight_week_plan");
+        if (cached) hydrateFromPlan(cached);
+      }
+      safeAsync(setInitialLoading)(false);
     }
-    loadExistingPlan();
     loadPersistedPlan();
-  }, [userId]);
-
-  // Edge function warmup
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      supabase.functions.invoke("fight-week-analysis", { method: "GET" } as any).catch(() => {});
-    }, 500);
-    return () => clearTimeout(timer);
-  }, []);
+  }, [userId, activePlan, safeAsync]);
 
   const hydrateFromPlan = (plan: DBPlan) => {
     setDbPlan(plan);
@@ -207,35 +214,9 @@ export default function FightWeek() {
     setDaysUntilWeighIn(Math.min(daysLeft, 14).toString());
   };
 
-  const loadExistingPlan = async () => {
-    if (!userId) return;
-    try {
-      const { data } = await withSupabaseTimeout(
-        supabase
-          .from("fight_week_plans")
-          .select("id, fight_date, starting_weight_kg, target_weight_kg")
-          .eq("user_id", userId)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        undefined,
-        "Load fight week plan"
-      );
-      if (!isMounted()) return;
-      if (data) {
-        hydrateFromPlan(data);
-        localCache.set(userId, "fight_week_plan", data);
-      }
-    } catch {
-      // Timeout/network — cached data (if any) is already showing
-    } finally {
-      safeAsync(setInitialLoading)(false);
-    }
-  };
-
   const loadPersistedPlan = () => {
     if (!userId) return;
-    const persisted = AIPersistence.load<FightWeekAIPlan>(userId, "fight_week_plan_ai");
+    const persisted = AIPersistence.load(userId, "fight_week_plan_ai") as FightWeekAIPlan | null;
     if (persisted) setAiPlan(persisted);
   };
 
@@ -248,26 +229,26 @@ export default function FightWeek() {
     const days = parseInt(daysUntilWeighIn);
     const fightDate = format(addDays(new Date(), days), "yyyy-MM-dd");
 
-    const planData = {
-      user_id: userId,
-      fight_date: fightDate,
-      starting_weight_kg: cw,
-      target_weight_kg: tw,
-    };
-
-    const { data, error } = dbPlan
-      ? await supabase.from("fight_week_plans").update(planData).eq("id", dbPlan.id).select().single()
-      : await supabase.from("fight_week_plans").insert(planData).select().single();
-
-    if (!isMounted()) return;
-
-    if (error) {
-      toast({ title: "Error saving plan", description: error.message, variant: "destructive" });
-    } else {
-      setDbPlan(data);
-      localCache.set(userId, "fight_week_plan", data);
+    try {
+      const planId = await upsertFightWeekPlan({
+        fightDate,
+        startingWeightKg: cw,
+        targetWeightKg: tw,
+      });
+      if (!isMounted()) return;
+      const plan: DBPlan = {
+        id: planId as unknown as string,
+        fight_date: fightDate,
+        starting_weight_kg: cw,
+        target_weight_kg: tw,
+      };
+      setDbPlan(plan);
+      localCache.set(userId, "fight_week_plan", plan);
+    } catch (err: any) {
+      toast({ title: "Error saving plan", description: err?.message ?? "Try again.", variant: "destructive" });
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const generateProtocol = async () => {
@@ -300,44 +281,27 @@ export default function FightWeek() {
     const carbs = parseInt(normalDailyCarbs);
 
     try {
-      const { data, error } = await supabase.functions.invoke("fight-week-analysis", {
-        body: {
-          currentWeight: parseFloat(currentWeight),
-          targetWeight: parseFloat(targetWeight),
-          daysUntilWeighIn: parseInt(daysUntilWeighIn),
-          normalDailyCarbs: isNaN(carbs) ? null : carbs,
-          profile: {
-            sex: profile?.sex,
-            age: profile?.age,
-            height_cm: profile?.height_cm,
-            current_weight_kg: profile?.current_weight_kg,
-            goal_weight_kg: profile?.goal_weight_kg,
-            fight_week_target_kg: profile?.fight_week_target_kg,
-            tdee: profile?.tdee,
-            bmr: profile?.bmr,
-            activity_level: profile?.activity_level,
-            training_frequency: profile?.training_frequency,
-            goal_type: profile?.goal_type,
-            target_date: profile?.target_date,
-            ai_recommended_calories: profile?.ai_recommended_calories,
-            ai_recommended_protein_g: profile?.ai_recommended_protein_g,
-            ai_recommended_carbs_g: profile?.ai_recommended_carbs_g,
-            ai_recommended_fats_g: profile?.ai_recommended_fats_g,
-            normal_daily_carbs_g: profile?.normal_daily_carbs_g,
-          },
-        },
-        signal: controller.signal,
-      });
+      // Convex fightWeekAnalysis action sources athlete state from the
+      // server-side snapshot, so it does not accept client-provided weight
+      // inputs. Persist the user's typed values via savePlan() below so
+      // the snapshot reflects them on the next call.
+      let data: any;
+      try {
+        data = await fightWeekAnalysisAction({});
+      } catch (err: any) {
+        if (controller.signal.aborted) return;
+        if (!isMounted()) return;
+        if (await handleAILimitError(err)) { failTask(taskId, "Limit reached"); return; }
+        const msg = err?.message || "Protocol generation unavailable";
+        failTask(taskId, msg);
+        toast({ title: "Protocol unavailable", description: msg, variant: "destructive" });
+        return;
+      }
 
       if (controller.signal.aborted) return;
       if (!isMounted()) return;
 
-      if (error) {
-        if (await handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
-        const msg = await extractEdgeFunctionError(error, "Protocol generation unavailable");
-        failTask(taskId, msg);
-        toast({ title: "Protocol unavailable", description: msg, variant: "destructive" });
-      } else if (data?.plan) {
+      if (data?.plan) {
         onAICallSuccess();
         const plan = data.plan as FightWeekAIPlan;
 
@@ -354,9 +318,9 @@ export default function FightWeek() {
 
         // Persist the carbs baseline so next visit pre-fills it
         if (!isNaN(carbs) && carbs !== profile?.normal_daily_carbs_g) {
-          supabase.from("profiles").update({ normal_daily_carbs_g: carbs }).eq("id", userId).then(() => {
-            refreshProfile();
-          });
+          updateProfileGoals({ normalDailyCarbsG: carbs })
+            .then(() => refreshProfile())
+            .catch(() => { /* non-critical */ });
         }
 
         // Silently persist the weights/days so they auto-rehydrate next visit.

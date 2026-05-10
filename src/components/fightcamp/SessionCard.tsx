@@ -3,9 +3,26 @@ import { Moon, Check, Image } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getSessionColor, COLOR_PALETTE } from "@/lib/sessionColors";
 import { decodeRunMeta } from "@/lib/runMeta";
-import type { Tables } from "@/integrations/supabase/types";
-
-type TrainingCalendarRow = Tables<"fight_camp_calendar">;
+// Local row type — mirrors the shape produced by TrainingCalendar.tsx's queryMonth() mapper.
+interface TrainingCalendarRow {
+  id: string;
+  user_id: string;
+  date: string;
+  session_type: string;
+  duration_minutes: number;
+  rpe: number;
+  intensity: string;
+  intensity_level: number | null;
+  bodyweight: number | null;
+  fatigue_level: number | null;
+  soreness_level: number | null;
+  sleep_hours: number | null;
+  sleep_quality: string | null;
+  mobility_done: boolean | null;
+  notes: string | null;
+  media_url: string | null;
+  created_at: string | null;
+}
 
 interface SessionCardProps {
   session: TrainingCalendarRow;

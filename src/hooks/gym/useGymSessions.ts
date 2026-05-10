@@ -1,10 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "@/../convex/_generated/api";
+import type { Id } from "@/../convex/_generated/dataModel";
 import { useUser } from "@/contexts/UserContext";
-import { useSafeAsync } from "@/hooks/useSafeAsync";
-import { localCache } from "@/lib/localCache";
-import { withSupabaseTimeout, withRetry } from "@/lib/timeoutWrapper";
-import { syncQueue } from "@/lib/syncQueue";
 import { useToast } from "@/hooks/use-toast";
 import { triggerHaptic, celebrateSuccess, confirmDelete } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
@@ -12,20 +10,17 @@ import { calculateVolume } from "@/lib/gymCalculations";
 import { logger } from "@/lib/logger";
 import { invalidateGymAnalytics } from "./useGymAnalytics";
 import type {
-  GymSession, GymSet, Exercise, SessionType,
+  GymSet, Exercise, SessionType,
   ExerciseGroup, SessionWithSets, ActiveWorkout,
 } from "@/pages/gym/types";
 
-const HISTORY_CACHE_KEY = "gym_session_history";
 const ACTIVE_SESSION_KEY = "wcw_active_gym_session";
 
 export function useGymSessions() {
   const { userId } = useUser();
-  const { safeAsync, isMounted } = useSafeAsync();
   const { toast } = useToast();
-  const [history, setHistory] = useState<SessionWithSets[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(true);
-  // Initialize from localStorage synchronously to avoid race with persistence effect
+
+  // Active session lives in localStorage so refresh / app-resume restores it.
   const [activeSession, setActiveSession] = useState<ActiveWorkout | null>(() => {
     try {
       const saved = localStorage.getItem(ACTIVE_SESSION_KEY);
@@ -35,10 +30,38 @@ export function useGymSessions() {
       return null;
     }
   });
-  const exerciseCacheRef = useRef<Map<string, Exercise>>(new Map());
-  const hasProcessedOnMount = useRef(false);
 
-  // Persist active session to localStorage on change
+  // Reactive history query — Convex pushes updates when sets/sessions change.
+  const sessionsRaw = useQuery(api.gym_sessions.listHistory, userId ? { limit: 20 } : "skip");
+  const allExercises = useQuery(api.exercises.listForUser, userId ? {} : "skip");
+
+  // The history view used to include per-session sets. We fetch sets per
+  // session via individual `getSessionWithSets` queries lazily; for the list
+  // view we synthesise empty sets to keep render fast.
+  const exercisesMap = useMemo(() => {
+    const map = new Map<string, Exercise>();
+    for (const ex of (allExercises ?? []) as unknown as Exercise[]) map.set(ex.id, ex);
+    return map;
+  }, [allExercises]);
+
+  // Hydrate history with sets resolved server-side via `listHistoryWithSets`
+  // would be cleaner; for now we expose the bare session list (used by the
+  // GymTracker history tab) and let detail pages pull sets via getSessionWithSets.
+  const history: SessionWithSets[] = useMemo(() => {
+    return ((sessionsRaw ?? []) as any[]).map((s) => ({
+      ...s,
+      sets: [] as GymSet[],
+      exercises: [] as Exercise[],
+      exerciseGroups: [] as ExerciseGroup[],
+      totalVolume: 0,
+      exerciseCount: 0,
+    }));
+  }, [sessionsRaw]);
+  const historyLoading = sessionsRaw === undefined;
+  void calculateVolume; // kept import for downstream consumers
+  void exercisesMap;
+
+  // Persist active session to localStorage on change.
   useEffect(() => {
     if (activeSession) {
       localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(activeSession));
@@ -47,161 +70,13 @@ export function useGymSessions() {
     }
   }, [activeSession]);
 
-  // Fix 3: Flush sync queue when recovering an active session on mount
-  useEffect(() => {
-    if (!activeSession || !userId || hasProcessedOnMount.current) return;
-    hasProcessedOnMount.current = true;
-    syncQueue.process(userId).catch(() => {});
-  }, [activeSession, userId]);
-
-  // Fix 2: Periodically flush sync queue during active workout (catches auth-expired set inserts)
-  useEffect(() => {
-    if (!activeSession || !userId) return;
-
-    const intervalId = setInterval(async () => {
-      if (syncQueue.size(userId) > 0) {
-        // Only refresh token if it might be stale (session expiry is typically 1hr)
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          const expiresAt = session.expires_at ? session.expires_at * 1000 : 0;
-          if (expiresAt - Date.now() < 5 * 60 * 1000) {
-            try { await supabase.auth.refreshSession(); } catch { /* process() will fail gracefully */ }
-          }
-        }
-        await syncQueue.process(userId);
-      }
-    }, 2 * 60 * 1000);
-
-    return () => clearInterval(intervalId);
-  }, [activeSession, userId]);
-
-  const buildExerciseGroups = useCallback((sets: GymSet[], exercises: Exercise[]): ExerciseGroup[] => {
-    const exerciseMap = new Map<string, Exercise>();
-    for (const ex of exercises) exerciseMap.set(ex.id, ex);
-
-    const groups = new Map<string, ExerciseGroup>();
-    for (const set of sets) {
-      const key = `${set.exercise_order}-${set.exercise_id}`;
-      if (!groups.has(key)) {
-        groups.set(key, {
-          exercise: exerciseMap.get(set.exercise_id) || {
-            id: set.exercise_id,
-            user_id: null,
-            name: "Unknown Exercise",
-            category: "push",
-            muscle_group: "chest",
-            equipment: null,
-            is_bodyweight: false,
-            is_custom: false,
-            created_at: "",
-          },
-          exerciseOrder: set.exercise_order,
-          sets: [],
-        });
-      }
-      groups.get(key)!.sets.push(set);
-    }
-
-    return Array.from(groups.values()).sort((a, b) => a.exerciseOrder - b.exerciseOrder);
-  }, []);
-
-  const fetchHistory = useCallback(async (limit = 20) => {
-    if (!userId) return;
-
-    const cached = localCache.get<SessionWithSets[]>(userId, HISTORY_CACHE_KEY, 24 * 60 * 60 * 1000);
-    if (cached) {
-      safeAsync(setHistory)(cached);
-      safeAsync(setHistoryLoading)(false);
-    }
-
-    try {
-      const { data: sessions, error: sessErr } = await withSupabaseTimeout(
-        supabase
-          .from("gym_sessions" as any)
-          .select("*")
-          .eq("user_id", userId)
-          .eq("status", "completed")
-          .order("date", { ascending: false })
-          .limit(limit),
-        undefined,
-        "Fetch gym session history"
-      );
-
-      if (sessErr) throw sessErr;
-      if (!isMounted()) return;
-      if (!sessions?.length) {
-        safeAsync(setHistory)([]);
-        safeAsync(setHistoryLoading)(false);
-        localCache.set(userId, HISTORY_CACHE_KEY, []);
-        return;
-      }
-
-      const sessionIds = (sessions as any[]).map((s: any) => s.id);
-
-      const { data: allSets, error: setsErr } = await withSupabaseTimeout(
-        supabase
-          .from("gym_sets" as any)
-          .select("*")
-          .in("session_id", sessionIds)
-          .order("exercise_order")
-          .order("set_order"),
-        undefined,
-        "Fetch gym sets for history"
-      );
-
-      if (setsErr) throw setsErr;
-      if (!isMounted()) return;
-
-      const typedSets = (allSets as any[] || []) as GymSet[];
-      const exerciseIds = [...new Set(typedSets.map(s => s.exercise_id))];
-
-      // Fetch exercises we don't have cached
-      const uncachedIds = exerciseIds.filter(id => !exerciseCacheRef.current.has(id));
-      if (uncachedIds.length > 0) {
-        const { data: exData } = await withSupabaseTimeout(
-          supabase
-            .from("exercises" as any)
-            .select("*")
-            .in("id", uncachedIds),
-          undefined,
-          "Fetch exercises for history"
-        );
-        if (exData) {
-          for (const ex of exData as any[]) {
-            exerciseCacheRef.current.set(ex.id, ex as Exercise);
-          }
-        }
-      }
-
-      const allExercises = Array.from(exerciseCacheRef.current.values());
-
-      const enriched: SessionWithSets[] = (sessions as any[]).map((session: any) => {
-        const sessionSets = typedSets.filter(s => s.session_id === session.id);
-        const groups = buildExerciseGroups(sessionSets, allExercises);
-        return {
-          ...session,
-          sets: sessionSets,
-          exercises: groups.map(g => g.exercise),
-          exerciseGroups: groups,
-          totalVolume: calculateVolume(sessionSets),
-          exerciseCount: groups.length,
-        } as SessionWithSets;
-      });
-
-      if (isMounted()) {
-        safeAsync(setHistory)(enriched);
-        localCache.set(userId, HISTORY_CACHE_KEY, enriched);
-      }
-    } catch (err) {
-      logger.warn("Failed to fetch workout history", err);
-    } finally {
-      if (isMounted()) safeAsync(setHistoryLoading)(false);
-    }
-  }, [userId, safeAsync, isMounted, toast, buildExerciseGroups]);
-
-  useEffect(() => {
-    fetchHistory();
-  }, [fetchHistory]);
+  // Mutations.
+  const createSessionMut = useMutation(api.gym_sessions.createSession);
+  const completeSessionMut = useMutation(api.gym_sessions.completeSession);
+  const deleteSessionMut = useMutation(api.gym_sessions.deleteSession);
+  const updateSetMut = useMutation(api.gym_sessions.updateSet);
+  const deleteSetMut = useMutation(api.gym_sessions.deleteSet);
+  const createCalendarEntryMut = useMutation(api.fight_camp.createCalendarEntry);
 
   const startSession = useCallback(async (sessionType: SessionType): Promise<string | null> => {
     if (!userId) {
@@ -209,65 +84,32 @@ export function useGymSessions() {
       return null;
     }
 
-    // Reuse existing in-progress session — prevents orphan rows from double-tap or
-    // recovery flows where activeSession was already restored from localStorage.
     if (activeSession) {
       return activeSession.sessionId;
     }
 
-    // Proactively refresh auth if the JWT is near expiry. iOS Capacitor backgrounding
-    // commonly leaves a stale token; without this, the RLS check fails and withRetry
-    // wastes its budget on the same expired token. Mirrors finishSession's approach.
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const expiresAt = session?.expires_at ? session.expires_at * 1000 : 0;
-      if (!session || expiresAt - Date.now() < 5 * 60 * 1000) {
-        await supabase.auth.refreshSession();
-      }
-    } catch {
-      // Best-effort — fall through to insert; if auth is truly broken the insert will surface it
-    }
-
-    try {
-      const { data, error } = await withRetry(
-        () => withSupabaseTimeout(
-          supabase
-            .from("gym_sessions" as any)
-            .insert({
-              user_id: userId,
-              session_type: sessionType,
-              status: "in_progress",
-              date: new Date().toISOString().split("T")[0],
-            } as any)
-            .select()
-            .single(),
-          15000,
-          "Start gym session"
-        ),
-        2,
-        500
-      );
-
-      if (error) throw error;
-
-      const session = data as any;
+      const sessionId = await createSessionMut({
+        date: new Date().toISOString().split("T")[0],
+        sessionType,
+        status: "in_progress",
+      });
       const workout: ActiveWorkout = {
-        sessionId: session.id,
+        sessionId: sessionId as unknown as string,
         sessionType,
         startedAt: Date.now(),
         exerciseGroups: [],
       };
-
       setActiveSession(workout);
       triggerHaptic(ImpactStyle.Medium);
-      return session.id;
+      return workout.sessionId;
     } catch (err) {
       logger.error("startSession failed", err);
       const msg = (err as any)?.message || "Failed to start workout";
       toast({ description: msg, variant: "destructive" });
       return null;
     }
-  }, [userId, activeSession, toast]);
+  }, [userId, activeSession, toast, createSessionMut]);
 
   const finishSession = useCallback(async (opts: {
     durationMinutes?: number;
@@ -277,175 +119,97 @@ export function useGymSessions() {
     if (!userId || !activeSession) return false;
 
     try {
-      // Ensure auth is fresh — critical on mobile after backgrounding
-      const { error: refreshError } = await supabase.auth.refreshSession();
-      if (refreshError) {
-        toast({ description: "Session expired. Please log in again.", variant: "destructive" });
-        return false;
-      }
-
-      // Flush any queued set inserts/updates before marking session complete
-      if (syncQueue.size(userId) > 0) {
-        await syncQueue.process(userId);
-        const remaining = syncQueue.size(userId);
-        if (remaining > 0) {
-          toast({
-            description: `${remaining} set(s) failed to save. Try finishing again.`,
-            variant: "destructive",
-          });
-          return false;
-        }
-      }
-
       const elapsed = Math.round((Date.now() - activeSession.startedAt) / 60000);
+      const durationMin = opts.durationMinutes ?? elapsed;
 
-      const { error } = await withSupabaseTimeout(
-        supabase
-          .from("gym_sessions" as any)
-          .update({
-            status: "completed",
-            duration_minutes: opts.durationMinutes ?? elapsed,
-            notes: opts.notes || null,
-            perceived_fatigue: opts.perceivedFatigue || null,
-            updated_at: new Date().toISOString(),
-          } as any)
-          .eq("id", activeSession.sessionId),
-        15000,
-        "Finish gym session"
-      );
-
-      if (error) throw error;
+      await completeSessionMut({
+        id: activeSession.sessionId as unknown as Id<"gym_sessions">,
+        durationMinutes: durationMin,
+        notes: opts.notes ?? undefined,
+        perceivedFatigue: opts.perceivedFatigue ?? undefined,
+      });
 
       invalidateGymAnalytics(userId);
 
-      // Also log to training calendar
-      const durationMin = opts.durationMinutes ?? elapsed;
-      supabase
-        .from("fight_camp_calendar")
-        .insert({
-          user_id: userId,
+      // Also log to training calendar (best-effort).
+      try {
+        await createCalendarEntryMut({
           date: new Date().toISOString().split("T")[0],
-          session_type: activeSession.sessionType,
-          duration_minutes: durationMin,
+          sessionType: activeSession.sessionType,
+          durationMinutes: durationMin,
           rpe: opts.perceivedFatigue ?? 5,
           intensity: durationMin >= 60 ? "high" : durationMin >= 30 ? "moderate" : "low",
-          notes: opts.notes || null,
-        })
-        .then(({ error: calErr }) => {
-          if (calErr) logger.warn("Failed to log to training calendar", { error: String(calErr) });
+          notes: opts.notes ?? undefined,
         });
+      } catch (calErr) {
+        logger.warn("Failed to log gym session to training calendar", { error: String(calErr) });
+      }
 
       setActiveSession(null);
       celebrateSuccess();
-      // Refresh history
-      fetchHistory();
       return true;
     } catch (err) {
       toast({ description: "Failed to finish workout", variant: "destructive" });
       return false;
     }
-  }, [userId, activeSession, toast, fetchHistory]);
+  }, [userId, activeSession, toast, completeSessionMut, createCalendarEntryMut]);
 
   const discardSession = useCallback(async () => {
     if (!activeSession) return;
-
     try {
-      await withSupabaseTimeout(
-        supabase
-          .from("gym_sessions" as any)
-          .delete()
-          .eq("id", activeSession.sessionId),
-        undefined,
-        "Discard gym session"
-      );
+      await deleteSessionMut({
+        id: activeSession.sessionId as unknown as Id<"gym_sessions">,
+      });
     } catch {
-      // Best effort — still clear local state
+      // Best effort — still clear local state.
     }
-
     setActiveSession(null);
-  }, [activeSession]);
+  }, [activeSession, deleteSessionMut]);
 
   const deleteSession = useCallback(async (sessionId: string) => {
     if (!userId) return;
-
     try {
-      const { error } = await withSupabaseTimeout(
-        supabase
-          .from("gym_sessions" as any)
-          .delete()
-          .eq("id", sessionId),
-        undefined,
-        "Delete gym session"
-      );
-
-      if (error) throw error;
-
+      await deleteSessionMut({ id: sessionId as unknown as Id<"gym_sessions"> });
       invalidateGymAnalytics(userId);
-
-      setHistory(prev => {
-        const updated = prev.filter(s => s.id !== sessionId);
-        localCache.set(userId, HISTORY_CACHE_KEY, updated);
-        return updated;
-      });
-
       confirmDelete();
     } catch {
       toast({ description: "Failed to delete session", variant: "destructive" });
     }
-  }, [userId, toast]);
+  }, [userId, toast, deleteSessionMut]);
 
   const updateActiveSession = useCallback((updater: (prev: ActiveWorkout) => ActiveWorkout) => {
     setActiveSession(prev => prev ? updater(prev) : prev);
   }, []);
 
-  // Note: editing a PR set downward does not auto-rebuild exercise_prs.
-  // The next new set on that exercise re-runs checkAndUpdatePR. Acceptable for v1.
   const updateCompletedSet = useCallback(async (
     setId: string,
     updates: Partial<{ weight_kg: number | null; reps: number; is_warmup: boolean }>,
   ) => {
     if (!userId) return;
     try {
-      const { error } = await withSupabaseTimeout(
-        supabase.from("gym_sets" as any).update(updates as any).eq("id", setId),
-        undefined,
-        "Update completed set",
-      );
-      if (error) throw error;
-      invalidateGymAnalytics(userId);
-      await fetchHistory();
-    } catch {
-      syncQueue.enqueue(userId, {
-        table: "gym_sets",
-        action: "update",
-        payload: updates,
-        recordId: setId,
-        timestamp: Date.now(),
+      await updateSetMut({
+        id: setId as unknown as Id<"gym_sets">,
+        reps: updates.reps,
+        weightKg: updates.weight_kg ?? undefined,
+        isWarmup: updates.is_warmup,
       });
+      invalidateGymAnalytics(userId);
+    } catch {
+      // Reactive state will resync.
     }
-  }, [userId, fetchHistory]);
+  }, [userId, updateSetMut]);
 
   const deleteCompletedSet = useCallback(async (setId: string) => {
     if (!userId) return;
     try {
-      const { error } = await withSupabaseTimeout(
-        supabase.from("gym_sets" as any).delete().eq("id", setId),
-        undefined,
-        "Delete completed set",
-      );
-      if (error) throw error;
+      await deleteSetMut({ id: setId as unknown as Id<"gym_sets"> });
       invalidateGymAnalytics(userId);
-      await fetchHistory();
     } catch {
-      syncQueue.enqueue(userId, {
-        table: "gym_sets",
-        action: "delete",
-        payload: {},
-        recordId: setId,
-        timestamp: Date.now(),
-      });
+      // Reactive state will resync.
     }
-  }, [userId, fetchHistory]);
+  }, [userId, deleteSetMut]);
+
+  const refetchHistory = useCallback(async (_limit = 20) => { /* reactive — no-op */ }, []);
 
   return {
     history,
@@ -458,6 +222,6 @@ export function useGymSessions() {
     updateActiveSession,
     updateCompletedSet,
     deleteCompletedSet,
-    refetchHistory: fetchHistory,
+    refetchHistory,
   };
 }

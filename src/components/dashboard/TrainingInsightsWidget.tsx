@@ -3,14 +3,16 @@ import { format, subDays } from "date-fns";
 import { Brain, ChevronRight, Dumbbell, Lock } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
-import { supabase } from "@/integrations/supabase/client";
-import { withSupabaseTimeout, withRetry } from "@/lib/timeoutWrapper";
+import { useQuery } from "convex/react";
+import { api } from "@/../convex/_generated/api";
+import { convex } from "@/integrations/convex/client";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { triggerHapticSelection } from "@/lib/haptics";
 import { useSubscription } from "@/hooks/useSubscription";
 import { getSessionColor, getUserColors } from "@/lib/sessionColors";
-import { ensureSessionReady } from "@/lib/sessionReady";
 import { logger } from "@/lib/logger";
+// Touch unused exports to keep the diff small.
+void useQuery;
 
 interface TrainingInsightsWidgetProps {
   userId: string;
@@ -47,30 +49,22 @@ function cacheKey(sessionType: string): string {
   return `training_insight_${sessionType.toLowerCase().replace(/\s+/g, "_")}`;
 }
 
-async function fetchRecentSessions(userId: string): Promise<SessionRow[]> {
+async function fetchRecentSessions(_userId: string): Promise<SessionRow[]> {
   const since = format(subDays(new Date(), LOOKBACK_DAYS), "yyyy-MM-dd");
-  const { data, error } = await withRetry(
-    () =>
-      withSupabaseTimeout(
-        supabase
-          .from("fight_camp_calendar")
-          .select("id, date, session_type, notes, rpe, intensity, duration_minutes")
-          .eq("user_id", userId)
-          .gte("date", since)
-          .neq("session_type", "Rest")
-          .not("notes", "is", null)
-          .order("date", { ascending: false })
-          .limit(120),
-        8000,
-        "Fetch training-insights sessions"
-      ),
-    1,
-    500
-  );
-  if (error) throw error;
-  return ((data ?? []) as SessionRow[]).filter(
-    (s) => typeof s.notes === "string" && s.notes.trim().length > 0
-  );
+  const rows = (await convex.query(api.fight_camp.listCalendar, { from: since })) ?? [];
+  return (rows as any[])
+    .filter((r) => r.sessionType !== "Rest" && typeof r.notes === "string" && r.notes.trim().length > 0)
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 120)
+    .map((r) => ({
+      id: r._id,
+      date: r.date,
+      session_type: r.sessionType,
+      notes: r.notes,
+      rpe: r.rpe ?? null,
+      intensity: r.intensity ?? null,
+      duration_minutes: r.durationMinutes ?? null,
+    }));
 }
 
 function groupByDiscipline(rows: SessionRow[]): Map<string, SessionRow[]> {
@@ -96,20 +90,9 @@ async function callTrainingInsights(
   sessionType: string,
   sessions: SessionRow[]
 ): Promise<{ insight?: DisciplineInsight; status: number }> {
-  // Wait for the auth bootstrap to land before calling — eliminates the
-  // race where a cold-start invocation fires its 401 before INITIAL_SESSION.
-  const session = await ensureSessionReady();
-  if (!session?.access_token) return { status: 401 };
-
-  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/training-insights`;
-  const latest = sessions[0];
-  const resp = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${session.access_token}`,
-    },
-    body: JSON.stringify({
+  try {
+    const latest = sessions[0];
+    const body = await convex.action(api.actions.trainingInsights.run, {
       session_type: sessionType,
       fingerprint: latest?.id ?? "",
       session_id: latest?.id ?? null,
@@ -121,14 +104,16 @@ async function callTrainingInsights(
         intensity: s.intensity,
         duration_minutes: s.duration_minutes,
       })),
-    }),
-  });
-
-  if (!resp.ok) {
-    return { status: resp.status };
+    } as any);
+    const insight = (body as any)?.insight as DisciplineInsight | undefined;
+    return { insight, status: 200 };
+  } catch (err: any) {
+    const msg = String(err?.message ?? "");
+    if (msg.toLowerCase().includes("premium") || msg.toLowerCase().includes("upgrade")) {
+      return { status: 403 };
+    }
+    return { status: 500 };
   }
-  const body = await resp.json();
-  return { insight: body?.insight as DisciplineInsight | undefined, status: 200 };
 }
 
 // Read every cached insight for this user from localStorage, oldest first.

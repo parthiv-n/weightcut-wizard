@@ -3,7 +3,6 @@ import { useSearchParams } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { supabase } from "@/integrations/supabase/client";
 // Lazy-load recharts wrapper so the ~100KB charts bundle defers until first paint.
 const WeightTrackerChart = lazy(() => import("@/components/charts/WeightTrackerChart"));
 import { format } from "date-fns";
@@ -78,14 +77,7 @@ export default function WeightTracker() {
     if (stored !== null) setShowProjected(JSON.parse(stored));
   }, [userId]);
 
-  // Warmup ping
-  useEffect(() => {
-    if (!userId) return;
-    const timer = setTimeout(() => {
-      supabase.functions.invoke("weight-tracker-analysis", { method: "GET" } as any).catch(() => {});
-    }, 500);
-    return () => clearTimeout(timer);
-  }, [userId]);
+  // No warmup needed under Convex — actions are co-located with the deployment.
 
   const handleAddWeight = async (e: React.FormEvent) => {
     const loggedWeight = await rawHandleAddWeight(e);

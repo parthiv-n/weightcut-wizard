@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useMemo, ReactNode, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useAction } from "convex/react";
+import { api } from "@/../convex/_generated/api";
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { useAuth, useUser } from "./UserContext";
@@ -26,6 +27,7 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
   const { userId } = useAuth();
   const { userName } = useUser();
   const { isPremium, openNoGemsDialog, onAICallSuccess, onAICallBlocked, gems } = useSubscriptionContext();
+  const wizardChatAction = useAction(api.actions.wizardChat.run);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -113,45 +115,40 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
     }
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("No active session");
+      // Filter out any "system" messages — the Convex wizardChat action only
+      // accepts {user|assistant}, and the server already injects the system prompt.
+      const apiMessages = newMessages
+        .filter((m): m is Message & { role: "user" | "assistant" } =>
+          m.role === "user" || m.role === "assistant",
+        )
+        .map((m) => ({ role: m.role, content: m.content }));
 
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/wizard-chat`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({ messages: newMessages, userName: userName || undefined }),
+      let data: any;
+      try {
+        data = await wizardChatAction({
+          messages: apiMessages,
+          userName: userName || undefined,
+        });
+      } catch (err: any) {
+        // Limit / NO_GEMS errors come through here as thrown errors with .data.
+        const msg: string = err?.message || "";
+        const isLimit = /NO_GEMS|limit|429/i.test(msg);
+        if (isLimit && !isPremium) {
+          onAICallBlocked();
+          const limitMessages: Message[] = [...newMessages, {
+            role: "assistant",
+            content: "Sorry, you've run out of AI gems. Upgrade to **Premium** for unlimited access, watch an ad to earn a gem, or wait until tomorrow when your free tokens refresh."
+          }];
+          setMessages(limitMessages);
+          localStorage.setItem(`wizard_chat_history_${userId}`, JSON.stringify(limitMessages));
+          openNoGemsDialog();
+          setIsLoading(false);
+          return;
         }
-      );
-
-      if (response.status === 429 && !isPremium) {
-        let serverGems: number | undefined;
-        try { const body = await response.json(); serverGems = body?.gems; } catch { /* body unavailable */ }
-        onAICallBlocked(serverGems);
-        const limitMessages: Message[] = [...newMessages, {
-          role: "assistant",
-          content: "Sorry, you've run out of AI gems. Upgrade to **Premium** for unlimited access, watch an ad to earn a gem, or wait until tomorrow when your free tokens refresh."
-        }];
-        setMessages(limitMessages);
-        localStorage.setItem(`wizard_chat_history_${userId}`, JSON.stringify(limitMessages));
-        openNoGemsDialog();
-        setIsLoading(false);
-        return;
-      }
-      if (response.status === 429) {
-        throw new Error("Temporary server error — please try again");
-      }
-
-      if (!response.ok) {
-        throw new Error("Failed to get response from Wizard");
+        throw new Error(msg || "Failed to get response from Wizard");
       }
 
       onAICallSuccess();
-      const data = await response.json();
       const assistantMessage = data.choices[0].message.content;
 
       const finalMessages: Message[] = [...newMessages, { role: "assistant", content: assistantMessage }];

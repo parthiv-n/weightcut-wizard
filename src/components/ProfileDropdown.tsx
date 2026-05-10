@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { User, LogOut, Settings } from "lucide-react";
+import { useEffect, useState } from "react";
+import { LogOut, Settings } from "lucide-react";
 import { useProfile, useAuth } from "@/contexts/UserContext";
 import {
   DropdownMenu,
@@ -14,34 +14,24 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "convex/react";
+import { api } from "@/../convex/_generated/api";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, Link } from "react-router-dom";
 import { ProfilePictureUpload } from "./ProfilePictureUpload";
 
 export function ProfileDropdown() {
-  const [user, setUser] = useState<any>(null);
   const { userName, avatarUrl, setUserName, setAvatarUrl } = useProfile();
   const { signOut } = useAuth();
+  const user = useQuery(api.profiles.getMyAuthUser, {});
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [editedName, setEditedName] = useState("");
   const { toast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
-    loadUserData();
-  }, []);
-
-  useEffect(() => {
     setEditedName(userName);
   }, [userName]);
-
-  const loadUserData = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      setUser(user);
-    }
-  };
 
   const handleSignOut = async () => {
     await signOut();
@@ -127,7 +117,7 @@ export function ProfileDropdown() {
             <div className="space-y-2">
               <Label>Account Created</Label>
               <Input
-                value={user?.created_at ? new Date(user.created_at).toLocaleDateString() : ""}
+                value={user?.createdAt ? new Date(user.createdAt).toLocaleDateString() : ""}
                 disabled
                 className="bg-muted"
               />

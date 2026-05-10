@@ -13,9 +13,8 @@ import {
 } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import wizardNutrition from "@/assets/wizard-nutrition.webp";
-import { useAuth, useUser } from "@/contexts/UserContext";
+import { useAuth } from "@/contexts/UserContext";
 import { WizardLoader } from "@/components/ui/WizardLoader";
-import { supabase } from "@/integrations/supabase/client";
 
 const FEATURES = [
   { icon: Flame, label: "Weight Management" },
@@ -40,8 +39,7 @@ const Index = () => {
       return;
     }
     if (userId) {
-      supabase.functions.invoke("daily-wisdom", { method: "GET" } as any).catch(() => {});
-
+      // Convex actions don't need warmup — co-located with deployment.
       if (isCoach) {
         // Don't honour an athlete-side lastRoute for a coach
         navigate("/coach", { replace: true });

@@ -5,11 +5,11 @@ import { ChevronLeft, Loader2 } from "lucide-react";
 const AthleteWeightChart = lazy(() => import("@/components/charts/AthleteWeightChart"));
 import { useUser } from "@/contexts/UserContext";
 import { useAthleteDetail } from "@/hooks/coach/useAthleteDetail";
-import { useCoachRealtimeSync } from "@/hooks/coach/useCoachRealtimeSync";
 import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
-import { supabase } from "@/integrations/supabase/client";
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { useToast } from "@/hooks/use-toast";
-import { localCache } from "@/lib/localCache";
 import { triggerHaptic } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import { globalLoading } from "@/lib/globalLoading";
@@ -42,11 +42,10 @@ export default function AthleteDetail() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { data, loading, error, refresh } = useAthleteDetail(userId, athleteId ?? null);
+  const removeAthlete = useMutation(api.gym_members.removeAthleteFromMyGyms);
 
-  // Realtime sync — refresh detail when this specific athlete logs anything.
-  useCoachRealtimeSync(userId, () => { /* dashboard refresh handled there */ }, (ev) => {
-    if (athleteId && ev.athlete_user_id === athleteId) refresh();
-  });
+  // No realtime sync needed — Convex re-runs `coach.athleteDetail`
+  // automatically when this athlete writes to weight_logs/meals/etc.
   useEffect(() => registerPullRefresh(() => refresh()), [refresh]);
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -93,14 +92,9 @@ export default function AthleteDetail() {
     setRemoving(true);
     globalLoading.show("Removing athlete…");
     try {
-      const { error: rmErr } = await supabase
-        .from("gym_members")
-        .update({ status: "removed" })
-        .eq("user_id", athleteId);
-      if (rmErr) throw rmErr;
-      // Invalidate caches so the dashboard refetches fresh
-      localCache.remove(userId, "coach_athletes");
-      localCache.remove(userId, `coach_athlete_${athleteId}`);
+      await removeAthlete({ athleteUserId: athleteId as Id<"users"> });
+      // Convex re-runs coach.athletesOverview automatically — no manual
+      // cache invalidation needed.
       triggerHaptic(ImpactStyle.Medium);
       setRemoveDialogOpen(false);
       toast({ title: "Athlete removed from gym" });

@@ -1,32 +1,77 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { format, subDays } from "date-fns";
-import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "convex/react";
+import { api } from "@/../convex/_generated/api";
 import { useUser } from "@/contexts/UserContext";
 import { RecoveryDashboard } from "@/components/fightcamp/RecoveryDashboard";
-import { logger } from "@/lib/logger";
 import { localCache } from "@/lib/localCache";
 import { Skeleton } from "@/components/ui/skeleton-loader";
 import { Card } from "@/components/ui/card";
-import { useSafeAsync } from "@/hooks/useSafeAsync";
-import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
-import { useToast } from "@/hooks/use-toast";
 
-import type { Tables } from "@/integrations/supabase/types";
-
-type TrainingCalendarRow = Tables<"fight_camp_calendar">;
+// Local row shape — snake_case shape consumed by RecoveryDashboard / performanceEngine.
+interface TrainingCalendarRow {
+    id: string;
+    user_id: string;
+    date: string;
+    session_type: string;
+    duration_minutes: number;
+    rpe: number;
+    intensity: string;
+    intensity_level: number | null;
+    bodyweight: number | null;
+    fatigue_level: number | null;
+    soreness_level: number | null;
+    sleep_hours: number | null;
+    sleep_quality: string | null;
+    mobility_done: boolean | null;
+    notes: string | null;
+    media_url: string | null;
+    created_at: string | null;
+}
 
 export default function Recovery() {
     const { userId, profile } = useUser();
-    const { safeAsync, isMounted } = useSafeAsync();
-    const { toast } = useToast();
-    const [sessions28d, setSessions28d] = useState<TrainingCalendarRow[]>(() => {
+    const from = useMemo(() => format(subDays(new Date(), 28), "yyyy-MM-dd"), []);
+    const to = useMemo(() => format(new Date(), "yyyy-MM-dd"), []);
+
+    // Live-reactive Convex subscription.
+    const rawSessions = useQuery(api.fight_camp.listCalendar, userId ? { from, to } : "skip");
+
+    const sessions28d = useMemo<TrainingCalendarRow[]>(() => {
+        if (!rawSessions) return [];
+        return rawSessions.map((r: any) => ({
+            id: r._id,
+            user_id: r.userId,
+            date: r.date,
+            session_type: r.sessionType,
+            duration_minutes: r.durationMinutes,
+            rpe: r.rpe,
+            intensity: r.intensity,
+            intensity_level: r.intensityLevel ?? null,
+            bodyweight: r.bodyweight ?? null,
+            fatigue_level: r.fatigueLevel ?? null,
+            soreness_level: r.sorenessLevel ?? null,
+            sleep_hours: r.sleepHours ?? null,
+            sleep_quality: r.sleepQuality ?? null,
+            mobility_done: r.mobilityDone ?? null,
+            notes: r.notes ?? null,
+            media_url: r.mediaUrl ?? null,
+            created_at: r._creationTime ? new Date(r._creationTime).toISOString() : null,
+        }));
+    }, [rawSessions]);
+
+    // Cache the mapped result so a remount has instant first-paint while Convex
+    // re-subscribes. Mirrors the pattern in TrainingCalendar.tsx.
+    const [cachedSessions, setCachedSessions] = useState<TrainingCalendarRow[]>(() => {
         if (!userId) return [];
         return localCache.get<TrainingCalendarRow[]>(userId, "recovery_sessions_28d", 24 * 60 * 60 * 1000) || [];
     });
-    const [isLoading, setIsLoading] = useState(() => {
-        if (!userId) return true;
-        return localCache.get(userId, "recovery_sessions_28d", 24 * 60 * 60 * 1000) === null;
-    });
+    useEffect(() => {
+        if (rawSessions && userId) {
+            localCache.set(userId, "recovery_sessions_28d", sessions28d);
+            setCachedSessions(sessions28d);
+        }
+    }, [rawSessions, sessions28d, userId]);
 
     const athleteProfile = useMemo(() => profile ? {
         trainingFrequency: profile.training_frequency ?? null,
@@ -35,58 +80,9 @@ export default function Recovery() {
         age: profile.age ?? null,
     } : undefined, [profile?.training_frequency, profile?.activity_level, profile?.sex, profile?.age]);
 
-    const fetch28DaySessions = useCallback(async (isRetry = false) => {
-        if (!userId) return;
-
-        // Cache-first: serve cached data instantly (only on first attempt)
-        if (!isRetry) {
-            const cached = localCache.get<TrainingCalendarRow[]>(userId, "recovery_sessions_28d", 24 * 60 * 60 * 1000);
-            if (cached) {
-                safeAsync(setSessions28d)(cached);
-                safeAsync(setIsLoading)(false);
-            } else {
-                safeAsync(setIsLoading)(true);
-            }
-        }
-
-        try {
-            const from = format(subDays(new Date(), 28), "yyyy-MM-dd");
-            const to = format(new Date(), "yyyy-MM-dd");
-            const { data, error } = await withSupabaseTimeout(
-                supabase
-                    .from('fight_camp_calendar')
-                    .select('*')
-                    .eq('user_id', userId)
-                    .gte('date', from)
-                    .lte('date', to)
-                    .limit(100),
-                undefined,
-                "Load recovery sessions"
-            );
-
-            if (!isMounted()) return;
-            if (error) throw error;
-
-            safeAsync(setSessions28d)(data || []);
-            localCache.set(userId, "recovery_sessions_28d", data || []);
-        } catch (err) {
-            logger.warn("Error loading recovery sessions", { err });
-
-            if (!isRetry) {
-                setTimeout(() => { if (isMounted()) fetch28DaySessions(true); }, 2000);
-                return;
-            }
-
-            const cached = userId ? localCache.get<TrainingCalendarRow[]>(userId, "recovery_sessions_28d", 24 * 60 * 60 * 1000) : null;
-            if (isMounted() && (!cached || cached.length === 0)) {
-                toast({ title: "Couldn't load recovery data", description: "Check your connection and try again.", variant: "destructive" });
-            }
-        } finally {
-            if (isMounted()) safeAsync(setIsLoading)(false);
-        }
-    }, [userId, safeAsync, isMounted, toast]);
-
-    useEffect(() => { fetch28DaySessions(); }, [fetch28DaySessions]);
+    // Loading: Convex result not yet hydrated AND no cache to fall back on.
+    const isLoading = rawSessions === undefined && cachedSessions.length === 0;
+    const display = rawSessions ? sessions28d : cachedSessions;
 
     if (isLoading) {
         return (
@@ -99,7 +95,7 @@ export default function Recovery() {
         );
     }
 
-    if (sessions28d.length === 0) {
+    if (display.length === 0) {
         return (
             <div className="space-y-3 px-5 py-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
                 <Card className="p-8 rounded-2xl card-surface border-dashed flex flex-col items-center justify-center text-foreground/70">
@@ -114,7 +110,7 @@ export default function Recovery() {
         <div className="animate-page-in space-y-3 px-5 py-3 sm:p-5 md:p-6 max-w-7xl mx-auto pb-16 md:pb-6">
             {userId && (
                 <RecoveryDashboard
-                    sessions28d={sessions28d as any}
+                    sessions28d={display as any}
                     userId={userId}
                     athleteProfile={athleteProfile}
                     tdee={profile?.tdee ?? null}

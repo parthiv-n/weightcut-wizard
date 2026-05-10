@@ -2,9 +2,9 @@ import { memo, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, startOfWeek, endOfWeek } from "date-fns";
 import { ChevronRight } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { convex } from "@/integrations/convex/client";
+import { api } from "@/../convex/_generated/api";
 import { localCache } from "@/lib/localCache";
-import { withSupabaseTimeout, withRetry } from "@/lib/timeoutWrapper";
 import { getSessionColor, getUserColors } from "@/lib/sessionColors";
 import { AnimatedRing } from "@/components/motion";
 import { Skeleton } from "@/components/ui/skeleton-loader";
@@ -35,24 +35,19 @@ async function fetchWeekFromServer(userId: string): Promise<WeekSession[]> {
     const now = new Date();
     const ws = startOfWeek(now, { weekStartsOn: 1 });
     const we = endOfWeek(now, { weekStartsOn: 1 });
-    const { data, error } = await withRetry(
-      () => withSupabaseTimeout(
-        supabase
-          .from("fight_camp_calendar")
-          .select("id, date, session_type, duration_minutes, rpe")
-          .eq("user_id", userId)
-          .gte("date", format(ws, "yyyy-MM-dd"))
-          .lte("date", format(we, "yyyy-MM-dd"))
-          .neq("session_type", "Rest")
-          .limit(30),
-        6000,
-        "Fetch training week",
-      ),
-      1,
-      500,
-    );
-    if (error) throw error;
-    const result = ((data ?? []) as WeekSession[]);
+    const raw = (await convex.query(api.fight_camp.listCalendar, {
+      from: format(ws, "yyyy-MM-dd"),
+      to: format(we, "yyyy-MM-dd"),
+    })) ?? [];
+    const result: WeekSession[] = (raw as any[])
+      .filter((r) => r.sessionType !== "Rest")
+      .map((r) => ({
+        id: r._id,
+        date: r.date,
+        session_type: r.sessionType,
+        duration_minutes: r.durationMinutes,
+        rpe: r.rpe,
+      }));
     memCache.set(userId, { data: result, fetchedAt: Date.now() });
     localCache.set(userId, CACHE_KEY, result);
     return result;

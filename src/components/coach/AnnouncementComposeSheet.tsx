@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
 import { Loader2, Send, Check } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { supabase } from "@/integrations/supabase/client";
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { useToast } from "@/hooks/use-toast";
 import { celebrateSuccess, triggerHaptic } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
@@ -26,6 +28,7 @@ export function AnnouncementComposeSheet({ open, onOpenChange, gymId, gymName, a
   const [mode, setMode] = useState<"all" | "specific">("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState(false);
+  const createAnnouncement = useMutation(api.announcements.create);
 
   const remaining = MAX_BODY - body.length;
   const canSend = useMemo(() => {
@@ -56,13 +59,16 @@ export function AnnouncementComposeSheet({ open, onOpenChange, gymId, gymName, a
     setSending(true);
     triggerHaptic(ImpactStyle.Medium);
     try {
-      const targets = mode === "specific" ? Array.from(selected) : null;
-      const { error } = await supabase.rpc("create_announcement", {
-        p_gym_id: gymId,
-        p_body: body.trim(),
-        p_target_user_ids: targets,
+      const targets =
+        mode === "specific"
+          ? Array.from(selected).map((id) => id as Id<"users">)
+          : undefined;
+      await createAnnouncement({
+        gymId: gymId as Id<"gyms">,
+        body: body.trim(),
+        kind: "text",
+        targetUserIds: targets,
       });
-      if (error) throw error;
       celebrateSuccess();
       toast({
         title: "Announcement sent",
