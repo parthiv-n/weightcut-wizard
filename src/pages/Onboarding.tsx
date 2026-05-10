@@ -13,7 +13,7 @@ import {
   TrendingDown, ChevronLeft, Swords, Flame, Dumbbell,
   Moon, Brain, Gauge, Utensils, Loader2,
 } from "lucide-react";
-import InlinePlanDisplay from "@/components/onboarding/InlinePlanDisplay";
+import { InlinePlanDisplay } from "@/components/onboarding/InlinePlanDisplay";
 import { profileSchema } from "@/lib/validation";
 import { celebrateSuccess, triggerHapticSelection } from "@/lib/haptics";
 import { logger } from "@/lib/logger";
