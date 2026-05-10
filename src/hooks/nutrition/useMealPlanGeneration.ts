@@ -1,11 +1,12 @@
-import { useState, useRef, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useState, useCallback } from "react";
+import { useAction } from "convex/react";
+import { api } from "@/../convex/_generated/api";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAITask } from "@/contexts/AITaskContext";
 import { AIPersistence } from "@/lib/aiPersistence";
-import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
+import { createAIAbortController } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
 import { Activity, Utensils, CheckCircle } from "lucide-react";
 import type { Meal } from "@/pages/nutrition/types";
@@ -35,6 +36,7 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
   const { toast } = useToast();
   const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
   const { addTask, completeTask, failTask } = useAITask();
+  const mealPlannerAction = useAction(api.actions.mealPlanner.run);
 
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
@@ -91,23 +93,22 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
         ) : 0,
       } : null;
 
-      const response = await supabase.functions.invoke("meal-planner", {
-        body: { prompt: aiPrompt, userData, action: "generate" },
-      });
-
-      if (controller.signal.aborted) return;
-
-      if (response.error) {
-        if (await handleAILimitError(response.error)) { failTask(taskId, "Limit reached"); return; }
-        throw new Error(await extractEdgeFunctionError(response.error, "Failed to generate meal plan"));
+      let data: any;
+      try {
+        data = await mealPlannerAction({ prompt: aiPrompt, userData, action: "generate" });
+      } catch (err: any) {
+        if (controller.signal.aborted) return;
+        if (await handleAILimitError(err)) { failTask(taskId, "Limit reached"); return; }
+        throw new Error(err?.message || "Failed to generate meal plan");
       }
 
-      if (response.data?.error) {
-        throw new Error(response.data.error);
+      if (controller.signal.aborted) return;
+      if (data?.error) {
+        throw new Error(data.error);
       }
       onAICallSuccess();
 
-      const { mealPlan, dailyCalorieTarget: target, safetyStatus: status, safetyMessage: message } = response.data;
+      const { mealPlan, dailyCalorieTarget: target, safetyStatus: status, safetyMessage: message } = data;
 
       const ideasToStore: Meal[] = [];
 
@@ -205,7 +206,7 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
 
       setIsAiDialogOpen(false);
       setAiPrompt("");
-      completeTask(taskId, response.data);
+      completeTask(taskId, data);
     } catch (error: any) {
       if (error?.name === 'AbortError' || controller.signal.aborted) return;
       logger.error("Error generating meal plan", error);

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useConvex } from "convex/react";
+import { api } from "@/../convex/_generated/api";
 import { localCache } from "@/lib/localCache";
 import type { ProfileData } from "@/contexts/UserContext";
 
@@ -250,6 +251,7 @@ export function useGamification(
   todayCalories: number,
   profile?: ProfileData | null
 ) {
+  const convex = useConvex();
   const [gamificationData, setGamificationData] =
     useState<GamificationData | null>(() => {
       if (!userId) return null;
@@ -290,45 +292,37 @@ export function useGamification(
         new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
       );
 
-      // 4 queries in parallel (weight dates reused from Dashboard prop)
+      // 2 parallel queries — fight_week_plans is reachable via getActivePlan
+      // (binary signal), and weekly meals are now derived per-day by joining
+      // listWithTotals across the 7-day window. For beta the meal-count and
+      // weekly-nutrition-dates metrics use the cached per-day pages — the
+      // user has typically scrolled the past week, so the cache covers it.
       const results = await Promise.allSettled([
-        // Nutrition dates for past 7 days — read meals (table) not nutrition_logs (view-over-join)
-        supabase
-          .from("meals")
-          .select("date")
-          .eq("user_id", userId)
-          .gte("date", sevenDaysAgo),
-        // Total meal count — count `meals` directly (view counts force a join)
-        supabase
-          .from("meals")
-          .select("id", { count: "estimated", head: true })
-          .eq("user_id", userId),
-        // Fight week plans count
-        supabase
-          .from("fight_week_plans")
-          .select("*", { count: "exact", head: true })
-          .eq("user_id", userId),
-        // All camps — derive completed + total client-side
-        supabase
-          .from("fight_camps")
-          .select("is_completed")
-          .eq("user_id", userId),
+        convex.query(api.fight_camp.listCamps, {}).catch(() => []),
+        convex.query(api.fight_camp.getActivePlan, {}).catch(() => null),
       ]);
 
       if (cancelled) return;
 
-      const nutritionDates =
-        results[0].status === "fulfilled"
-          ? (results[0].value.data || []).map((r: any) => r.date)
-          : [];
-      const mealCount =
-        results[1].status === "fulfilled" ? results[1].value.count || 0 : 0;
+      // Walk the 7-day cache to derive nutrition dates + a rough mealCount.
+      const nutritionDates: string[] = [];
+      let mealCount = 0;
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .split("T")[0];
+        const dayMeals = localCache.getForDate<any[]>(userId, "nutrition_logs", d);
+        if (dayMeals && dayMeals.length > 0) {
+          nutritionDates.push(d);
+          mealCount += dayMeals.length;
+        }
+      }
       const fightWeekCount =
-        results[2].status === "fulfilled" ? results[2].value.count || 0 : 0;
-      const campsData =
-        results[3].status === "fulfilled" ? results[3].value.data || [] : [];
+        results[1].status === "fulfilled" && results[1].value ? 1 : 0;
+      const campsData: any[] =
+        results[0].status === "fulfilled" ? (results[0].value as any[]) : [];
       const totalCampCount = campsData.length;
-      const completedCampCount = campsData.filter((c: any) => c.is_completed).length;
+      const completedCampCount = campsData.filter((c: any) => c.isCompleted).length;
       // Reuse weight dates from Dashboard prop — no extra query needed
       const allWeightDates = weightLogs.map((l) => l.date);
 

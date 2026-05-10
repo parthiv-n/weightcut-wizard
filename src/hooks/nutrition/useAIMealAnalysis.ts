@@ -1,12 +1,13 @@
 import { useState, useRef, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useAction } from "convex/react";
+import { api } from "@/../convex/_generated/api";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAITask } from "@/contexts/AITaskContext";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { AIPersistence } from "@/lib/aiPersistence";
-import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
+import { createAIAbortController } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
 import { lookupUSDA } from "@/lib/usdaLookup";
 import { Capacitor } from "@capacitor/core";
@@ -28,6 +29,8 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
   const { isMounted } = useSafeAsync();
   const { checkAIAccess, openNoGemsDialog, onAICallSuccess, onAICallBlocked, handleAILimitError } = useSubscription();
   const { addTask, completeTask, failTask } = useAITask();
+  const analyzeMealAction = useAction(api.actions.analyzeMeal.run);
+  const lookupIngredientAction = useAction(api.actions.lookupIngredient.run);
   const aiAbortRef = useRef<AbortController | null>(null);
 
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
@@ -148,43 +151,20 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     });
 
     try {
-      // Use raw fetch instead of supabase.functions.invoke to handle large base64 payloads
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("No active session");
-
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/analyze-meal`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-          body: JSON.stringify({
-            imageBase64: imageData,
-            mealDescription: aiMealDescription.trim() || undefined,
-            persist: false,
-          }),
-        }
-      );
+      let data: any;
+      try {
+        data = await analyzeMealAction({
+          imageBase64: imageData,
+          mealDescription: aiMealDescription.trim() || undefined,
+          persist: false,
+        });
+      } catch (err: any) {
+        if (controller.signal.aborted) return;
+        if (await handleAILimitError(err)) { onAICallBlocked(); failTask(taskId, "Limit reached"); return; }
+        throw new Error(err?.message || "Photo analysis failed");
+      }
 
       if (controller.signal.aborted) return;
-
-      if (response.status === 429) {
-        if (!checkAIAccess()) {
-          onAICallBlocked();
-          openNoGemsDialog();
-        }
-        failTask(taskId, "Limit reached");
-        return;
-      }
-
-      if (!response.ok) {
-        const errText = await response.text().catch(() => "Unknown error");
-        throw new Error(errText || `HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
       if (data?.error) throw new Error(data.error);
       onAICallSuccess();
 
@@ -273,16 +253,19 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       let nutritionData = cachedData;
 
       if (!nutritionData) {
-
-        const { data, error } = await supabase.functions.invoke("analyze-meal", {
-          body: { mealDescription: aiMealDescription, persist: false },
-        });
+        let data: any;
+        try {
+          data = await analyzeMealAction({
+            mealDescription: aiMealDescription,
+            persist: false,
+          });
+        } catch (error: any) {
+          if (controller.signal.aborted) return;
+          if (await handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
+          throw new Error(error?.message || "Failed to analyze meal");
+        }
 
         if (controller.signal.aborted) return;
-        if (error) {
-          if (await handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
-          throw new Error(await extractEdgeFunctionError(error, "Failed to analyze meal"));
-        }
         if (data?.error) throw new Error(data.error);
         onAICallSuccess();
         nutritionData = data.nutritionData;
@@ -398,16 +381,19 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       returnPath: "/nutrition",
     });
     try {
-
-      const { data, error } = await supabase.functions.invoke("analyze-meal", {
-        body: { mealDescription: aiIngredientDescription, persist: false },
-      });
+      let data: any;
+      try {
+        data = await analyzeMealAction({
+          mealDescription: aiIngredientDescription,
+          persist: false,
+        });
+      } catch (error: any) {
+        if (ingController.signal.aborted) return;
+        if (await handleAILimitError(error)) { failTask(ingTaskId, "Limit reached"); return; }
+        throw new Error(error?.message || "Failed to analyze ingredient");
+      }
 
       if (ingController.signal.aborted) return;
-      if (error) {
-        if (await handleAILimitError(error)) { failTask(ingTaskId, "Limit reached"); return; }
-        throw new Error(await extractEdgeFunctionError(error, "Failed to analyze ingredient"));
-      }
       if (data?.error) throw new Error(data.error);
       onAICallSuccess();
 
@@ -573,11 +559,10 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
         return null;
       }
 
-      const { data, error } = await supabase.functions.invoke("lookup-ingredient", {
-        body: { ingredientName },
-      });
-
-      if (error) {
+      let data: any;
+      try {
+        data = await lookupIngredientAction({ name: ingredientName });
+      } catch (error: any) {
         if (await handleAILimitError(error)) {
           setIngredientLookupError("Daily AI limit reached. Please enter nutrition info manually.");
           return null;
@@ -591,6 +576,18 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
         return null;
       }
 
+      // The Convex action returns a flat shape with per100g rates. Normalise to
+      // the per_100g fields the UI expects.
+      if (data?.per100g) {
+        onAICallSuccess();
+        return {
+          calories_per_100g: data.per100g.calories ?? 0,
+          protein_per_100g: data.per100g.protein_g ?? 0,
+          carbs_per_100g: data.per100g.carbs_g ?? 0,
+          fats_per_100g: data.per100g.fats_g ?? 0,
+          source: "AI",
+        };
+      }
       if (data?.nutritionData) {
         onAICallSuccess();
         return data.nutritionData;

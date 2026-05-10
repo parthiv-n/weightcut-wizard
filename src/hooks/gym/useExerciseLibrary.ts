@@ -1,17 +1,12 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useCallback, useMemo, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "@/../convex/_generated/api";
+import type { Id } from "@/../convex/_generated/dataModel";
 import { useUser } from "@/contexts/UserContext";
-import { useSafeAsync } from "@/hooks/useSafeAsync";
-import { localCache } from "@/lib/localCache";
-import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
-import { syncQueue } from "@/lib/syncQueue";
 import { useToast } from "@/hooks/use-toast";
 import { customExerciseSchema } from "@/lib/validation";
 import { EXERCISE_DATABASE } from "@/data/exerciseDatabase";
 import type { Exercise, ExerciseCategory, Equipment, MuscleGroup } from "@/pages/gym/types";
-
-const CACHE_KEY = "exercise_library";
-const CACHE_TTL = 24 * 60 * 60 * 1000; // 24h
 
 let _fallbackCache: Exercise[] | null = null;
 function getFallbackExercises(): Exercise[] {
@@ -28,157 +23,75 @@ function getFallbackExercises(): Exercise[] {
 
 export function useExerciseLibrary() {
   const { userId } = useUser();
-  const { safeAsync, isMounted } = useSafeAsync();
   const { toast } = useToast();
-  const [exercises, setExercises] = useState<Exercise[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Reactive query — returns the union of built-in + user-custom rows.
+  const rows = useQuery(api.exercises.listForUser, userId ? {} : "skip");
+  const createCustomMut = useMutation(api.exercises.createCustom);
+  const deleteCustomMut = useMutation(api.exercises.deleteCustom);
+
+  const exercises: Exercise[] = useMemo(() => {
+    if (rows === undefined) return getFallbackExercises();
+    if (rows.length === 0) return getFallbackExercises();
+    return rows as unknown as Exercise[];
+  }, [rows]);
+  const loading = rows === undefined;
+
   const [searchQuery, setSearchQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<ExerciseCategory | null>(null);
   const [equipmentFilter, setEquipmentFilter] = useState<Equipment | null>(null);
 
-  const fetchExercises = useCallback(async () => {
-    if (!userId) return;
-
-    // Cache first
-    const cached = localCache.get<Exercise[]>(userId, CACHE_KEY, CACHE_TTL);
-    if (cached) {
-      safeAsync(setExercises)(cached);
-      safeAsync(setLoading)(false);
-    }
-
-    try {
-      const { data, error } = await withSupabaseTimeout(
-        supabase
-          .from("exercises" as any)
-          .select("*")
-          .order("name")
-          .limit(500),
-        undefined,
-        "Fetch exercises"
-      );
-
-      if (error) throw error;
-      if (!isMounted()) return;
-
-      const typed = (data as any[]) as Exercise[];
-      if (typed.length > 0) {
-        safeAsync(setExercises)(typed);
-        localCache.set(userId, CACHE_KEY, typed);
-      } else {
-        // DB returned empty — use local fallback
-        safeAsync(setExercises)(getFallbackExercises());
-      }
-    } catch (err) {
-      if (!localCache.get(userId, CACHE_KEY)) {
-        // Network/RLS error and no cache — use local fallback
-        safeAsync(setExercises)(getFallbackExercises());
-      }
-    } finally {
-      if (isMounted()) safeAsync(setLoading)(false);
-    }
-  }, [userId, safeAsync, isMounted, toast]);
-
-  useEffect(() => {
-    fetchExercises();
-  }, [fetchExercises]);
-
-  // Optimistic add: returns immediately with a client-generated UUID so the UI feels instant.
-  // The DB write happens in the background; on failure we enqueue an idempotent retry via syncQueue.
-  // The exercise stays visible in the library either way — once syncQueue flushes, the row exists in DB
-  // (23505 duplicate-key responses are treated as success, so the client UUID + future inserts are safe).
-  const addCustomExercise = useCallback((data: {
+  // Optimistic insert via Convex mutation. The reactive query refreshes the
+  // list automatically once the mutation commits — no manual cache writes
+  // and no syncQueue fallback needed for a beta app.
+  const addCustomExercise = useCallback(async (data: {
     name: string;
     category: ExerciseCategory;
     muscle_group: string;
     equipment: Equipment | null;
     is_bodyweight: boolean;
   }): Promise<Exercise | null> => {
-    if (!userId) return Promise.resolve(null);
+    if (!userId) return null;
 
     const result = customExerciseSchema.safeParse(data);
     if (!result.success) {
       toast({ description: result.error.errors[0].message, variant: "destructive" });
-      return Promise.resolve(null);
+      return null;
     }
 
-    const exercise: Exercise = {
-      id: crypto.randomUUID(),
-      user_id: userId,
-      name: data.name,
-      category: data.category,
-      muscle_group: data.muscle_group as MuscleGroup,
-      equipment: data.equipment,
-      is_bodyweight: data.is_bodyweight,
-      is_custom: true,
-      created_at: new Date().toISOString(),
-    };
-
-    // 1. Optimistic insert into local state + cache (instant UI)
-    setExercises(prev => {
-      const updated = [...prev, exercise].sort((a, b) => a.name.localeCompare(b.name));
-      localCache.set(userId, CACHE_KEY, updated);
-      return updated;
-    });
-    toast({ description: `${data.name} added` });
-
-    // 2. Background DB write — pass id explicitly so retries are idempotent (PG dup-key = success)
-    const dbRow = {
-      id: exercise.id,
-      user_id: userId,
-      name: exercise.name,
-      category: exercise.category,
-      muscle_group: exercise.muscle_group,
-      equipment: exercise.equipment,
-      is_bodyweight: exercise.is_bodyweight,
-      is_custom: true,
-    };
-
-    void (async () => {
-      try {
-        const { error } = await withSupabaseTimeout(
-          supabase.from("exercises" as any).insert(dbRow as any),
-          undefined,
-          "Create custom exercise"
-        );
-        if (error) throw error;
-      } catch {
-        // Network/auth blip — queue for retry. Exercise stays in UI; syncQueue will reconcile.
-        syncQueue.enqueue(userId, {
-          table: "exercises",
-          action: "insert",
-          payload: dbRow,
-          recordId: exercise.id,
-          timestamp: Date.now(),
-          persistOnFailure: true,
-        });
-      }
-    })();
-
-    return Promise.resolve(exercise);
-  }, [userId, toast]);
+    try {
+      const id = await createCustomMut({
+        name: data.name,
+        category: data.category,
+        muscleGroup: data.muscle_group,
+        equipment: data.equipment ?? undefined,
+        isBodyweight: data.is_bodyweight,
+      });
+      toast({ description: `${data.name} added` });
+      return {
+        id: id as unknown as string,
+        user_id: userId,
+        name: data.name,
+        category: data.category,
+        muscle_group: data.muscle_group as MuscleGroup,
+        equipment: data.equipment,
+        is_bodyweight: data.is_bodyweight,
+        is_custom: true,
+        created_at: new Date().toISOString(),
+      };
+    } catch (err) {
+      toast({ description: "Failed to add exercise", variant: "destructive" });
+      return null;
+    }
+  }, [userId, toast, createCustomMut]);
 
   const deleteCustomExercise = useCallback(async (exerciseId: string) => {
     if (!userId) return;
-
     try {
-      const { error } = await withSupabaseTimeout(
-        supabase.from("exercises" as any).delete().eq("id", exerciseId),
-        undefined,
-        "Delete custom exercise"
-      );
-
-      if (error) throw error;
-
-      setExercises(prev => {
-        const updated = prev.filter(e => e.id !== exerciseId);
-        localCache.set(userId, CACHE_KEY, updated);
-        return updated;
-      });
-
+      await deleteCustomMut({ id: exerciseId as unknown as Id<"exercises"> });
     } catch {
       toast({ description: "Failed to delete exercise", variant: "destructive" });
     }
-  }, [userId, toast]);
+  }, [userId, toast, deleteCustomMut]);
 
   const filteredExercises = useMemo(() => {
     let filtered = exercises;
@@ -191,15 +104,8 @@ export function useExerciseLibrary() {
         e.category.toLowerCase().includes(q)
       );
     }
-
-    if (categoryFilter) {
-      filtered = filtered.filter(e => e.category === categoryFilter);
-    }
-
-    if (equipmentFilter) {
-      filtered = filtered.filter(e => e.equipment === equipmentFilter);
-    }
-
+    if (categoryFilter) filtered = filtered.filter(e => e.category === categoryFilter);
+    if (equipmentFilter) filtered = filtered.filter(e => e.equipment === equipmentFilter);
     return filtered;
   }, [exercises, searchQuery, categoryFilter, equipmentFilter]);
 
@@ -212,6 +118,9 @@ export function useExerciseLibrary() {
     }
     return groups;
   }, [filteredExercises]);
+
+  // No-op refetch retained for backward compat.
+  const refetch = useCallback(async () => { /* reactive */ }, []);
 
   return {
     exercises,
@@ -226,6 +135,6 @@ export function useExerciseLibrary() {
     setEquipmentFilter,
     addCustomExercise,
     deleteCustomExercise,
-    refetch: fetchExercises,
+    refetch,
   };
 }

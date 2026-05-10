@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { useMutation } from "convex/react";
+import { api } from "@/../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -68,6 +69,7 @@ export default function Goals() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { userId, currentWeight, profile: contextProfile, refreshProfile } = useUser();
+  const updateGoals = useMutation(api.profiles.updateGoals);
 
   const [formData, setFormData] = useState({
     age: "",
@@ -184,29 +186,27 @@ export default function Goals() {
       const bmr = calculateBMR();
       const tdee = bmr * (ACTIVITY_MULTIPLIERS[formData.activity_level as keyof typeof ACTIVITY_MULTIPLIERS] ?? 1.55);
 
-      const { error } = await supabase.from("profiles").update({
+      await updateGoals({
         age: parseInt(formData.age),
         sex: formData.sex,
-        height_cm: parseFloat(formData.height_cm),
-        current_weight_kg: parseFloat(formData.current_weight_kg),
-        goal_weight_kg: parseFloat(formData.goal_weight_kg),
-        fight_week_target_kg: goalType === 'cutting' ? parseFloat(formData.fight_week_target_kg) : null,
-        target_date: formData.target_date,
-        activity_level: formData.activity_level,
-        training_frequency: parseInt(formData.training_frequency),
+        heightCm: parseFloat(formData.height_cm),
+        currentWeightKg: parseFloat(formData.current_weight_kg),
+        goalWeightKg: parseFloat(formData.goal_weight_kg),
+        fightWeekTargetKg: goalType === 'cutting' ? parseFloat(formData.fight_week_target_kg) : undefined,
+        targetDate: formData.target_date,
+        activityLevel: formData.activity_level,
+        trainingFrequency: parseInt(formData.training_frequency),
         bmr,
         tdee,
-        athlete_type: formData.athlete_type || null,
-        goal_type: formData.goal_type || null,
-        experience_level: formData.experience_level || null,
-        training_types: formData.training_types.length > 0 ? formData.training_types : null,
-        sleep_hours: formData.sleep_hours || null,
-        primary_struggle: formData.primary_struggle || null,
-        plan_aggressiveness: formData.plan_aggressiveness || null,
-        body_fat_pct: formData.body_fat_pct ? parseFloat(formData.body_fat_pct) : null,
-      }).eq("id", userId);
-
-      if (error) throw error;
+        athleteType: formData.athlete_type || undefined,
+        goalType: formData.goal_type || undefined,
+        experienceLevel: formData.experience_level || undefined,
+        trainingTypes: formData.training_types.length > 0 ? formData.training_types : undefined,
+        sleepHours: formData.sleep_hours || undefined,
+        primaryStruggle: formData.primary_struggle || undefined,
+        planAggressiveness: formData.plan_aggressiveness || undefined,
+        bodyFatPct: formData.body_fat_pct ? parseFloat(formData.body_fat_pct) : undefined,
+      });
       await refreshProfile();
       celebrateSuccess();
       navigate("/dashboard");

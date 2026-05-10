@@ -35,8 +35,7 @@ export function coerceMealName(
  * Note: meal_type matching is case-sensitive against the lowercase enum.
  * "Breakfast" (capitalised) is NOT a known type per the DB enum and falls
  * through to "Logged meal". Kept consistent with
- * supabase/functions/analyze-meal/index.ts defaultNameFor and the
- * `nutrition_logs` column default from migration 20260418000000.
+ * convex/actions/analyzeMeal.ts defaultNameFor.
  */
 export function defaultNameFor(mealType: string | null | undefined): string {
   if (typeof mealType !== "string") return "Logged meal";

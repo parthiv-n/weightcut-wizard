@@ -1,8 +1,16 @@
-import { useEffect, useState, useCallback, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
-import { localCache } from "@/lib/localCache";
-import { logger } from "@/lib/logger";
+/**
+ * Coach dashboard data — list of gyms owned by this coach + one row per
+ * athlete summarised. Backed by `coach.myGymsOverview` and
+ * `coach.athletesOverview` Convex queries.
+ *
+ * Convex `useQuery` is reactive: any mutation in `weight_logs`, `meals`,
+ * `meal_items`, `fight_camp_calendar`, `profiles`, or `gym_members` for
+ * any athlete in any of this coach's gyms triggers a re-render. That
+ * replaces the Postgres trigger fan-out + `coach_realtime_events`
+ * subscription pattern.
+ */
+import { useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 
 export interface AthleteOverviewRow {
   user_id: string;
@@ -34,105 +42,55 @@ export interface GymRow {
   logo_url: string | null;
 }
 
-const COACH_FRESH_WINDOW_MS = 30_000;
-const inflight = new Map<string, Promise<unknown>>();
-const lastFetchedAt = new Map<string, number>();
-
-/**
- * Single round-trip per coach load:
- *  1. SELECT * FROM gyms WHERE owner_user_id = coach
- *  2. RPC coach_athletes_overview(coach) — server-side join + aggregate
- *
- * Cached in localCache for instant repaint on remount; refreshes in
- * background if stale (>30s).
- */
-// Bound the cache age so stale display_names / weights don't bleed across
-// sessions. 60s is well within the 30s in-memory freshness window's "instant
-// repaint, refetch in background" pattern, but expires fast enough that a
-// week-old "MMA" placeholder doesn't reappear after the athlete renames.
-const COACH_CACHE_TTL_MS = 60_000;
-
 export function useCoachData(coachId: string | null) {
-  const [gyms, setGyms] = useState<GymRow[]>(() => {
-    if (!coachId) return [];
-    return localCache.get<GymRow[]>(coachId, "coach_gyms", COACH_CACHE_TTL_MS) || [];
-  });
-  const [athletes, setAthletes] = useState<AthleteOverviewRow[]>(() => {
-    if (!coachId) return [];
-    return localCache.get<AthleteOverviewRow[]>(coachId, "coach_athletes", COACH_CACHE_TTL_MS) || [];
-  });
-  const [loading, setLoading] = useState<boolean>(() => {
-    if (!coachId) return false;
-    return localCache.get(coachId, "coach_athletes", COACH_CACHE_TTL_MS) === null;
-  });
-  const [error, setError] = useState<string | null>(null);
-  const lastFetchRef = useRef(0);
+  const gymsData = useQuery(
+    api.coach.myGymsOverview,
+    coachId ? {} : "skip",
+  );
+  const athletesData = useQuery(
+    api.coach.athletesOverview,
+    coachId ? {} : "skip",
+  );
 
-  const load = useCallback(async (force = false) => {
-    if (!coachId) return;
-    const cached = lastFetchedAt.get(coachId);
-    if (!force && cached && Date.now() - cached < COACH_FRESH_WINDOW_MS) return;
-    if (Date.now() - lastFetchRef.current < 1500 && !force) return;
-    lastFetchRef.current = Date.now();
+  const gyms: GymRow[] = (gymsData ?? []).map((g) => ({
+    id: g.id,
+    name: g.name,
+    invite_code: g.invite_code,
+    location: g.location,
+    logo_url: g.logo_url,
+  }));
 
-    const inflightKey = coachId;
-    if (inflight.has(inflightKey)) return inflight.get(inflightKey);
+  const athletes: AthleteOverviewRow[] = (athletesData ?? []).map((a) => ({
+    user_id: a.user_id,
+    gym_id: a.gym_id,
+    gym_name: a.gym_name,
+    gym_logo_url: a.gym_logo_url,
+    display_name: a.display_name,
+    avatar_url: a.avatar_url,
+    goal_type: a.goal_type,
+    current_weight_kg: a.current_weight_kg,
+    goal_weight_kg: a.goal_weight_kg,
+    fight_week_target_kg: a.fight_week_target_kg,
+    target_date: a.target_date,
+    last_weight_at: a.last_weight_at,
+    todays_calories: a.todays_calories,
+    daily_calorie_goal: a.daily_calorie_goal,
+    last_meal_at: a.last_meal_at,
+    share_data: a.share_data,
+    joined_at: a.joined_at,
+    strain_7d: a.strain_7d,
+  }));
 
-    const promise = (async () => {
-      try {
-        // Run both queries in parallel
-        const [gymsRes, athletesRes] = await Promise.all([
-          withSupabaseTimeout(
-            supabase
-              .from("gyms")
-              .select("id, name, invite_code, location, logo_url")
-              .eq("owner_user_id", coachId)
-              .order("created_at", { ascending: true }),
-            6000,
-            "Coach gyms fetch"
-          ),
-          withSupabaseTimeout(
-            supabase.rpc("coach_athletes_overview", { p_coach_id: coachId }),
-            6000,
-            "Coach athletes overview"
-          ),
-        ]);
+  const loading = gymsData === undefined || athletesData === undefined;
 
-        if (gymsRes.error) throw gymsRes.error;
-        if (athletesRes.error) throw athletesRes.error;
-
-        const gymsData = (gymsRes.data || []) as GymRow[];
-        const athletesData = (athletesRes.data || []) as AthleteOverviewRow[];
-
-        setGyms(gymsData);
-        setAthletes(athletesData);
-        localCache.set(coachId, "coach_gyms", gymsData);
-        localCache.set(coachId, "coach_athletes", athletesData);
-        lastFetchedAt.set(coachId, Date.now());
-        setError(null);
-      } catch (err: any) {
-        logger.error("Coach data fetch failed", err);
-        setError(err?.message || "Failed to load coach data");
-      } finally {
-        inflight.delete(inflightKey);
-        setLoading(false);
-      }
-    })();
-
-    inflight.set(inflightKey, promise);
-    return promise;
-  }, [coachId]);
-
-  useEffect(() => { if (coachId) load(); }, [coachId, load]);
-
-  // Refetch on visibility change (respect freshness window)
-  useEffect(() => {
-    const onVis = () => {
-      if (document.visibilityState === "visible" && coachId) load();
-    };
-    document.addEventListener("visibilitychange", onVis);
-    return () => document.removeEventListener("visibilitychange", onVis);
-  }, [coachId, load]);
-
-  return { gyms, athletes, loading, error, refresh: () => load(true) };
+  // `refresh` and `error` are kept for API compatibility — Convex
+  // auto-refreshes on writes and surfaces errors via thrown exceptions
+  // intercepted by ErrorBoundary upstream.
+  return {
+    gyms,
+    athletes,
+    loading,
+    error: null as string | null,
+    refresh: () => {},
+  };
 }

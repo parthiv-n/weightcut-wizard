@@ -1,8 +1,8 @@
 import { memo, useCallback, useEffect, useState } from "react";
 import { Moon, ChevronRight, Check, Minus, Plus } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "@/../convex/_generated/api";
 import { localCache } from "@/lib/localCache";
-import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
 import { triggerHaptic, triggerHapticSuccess } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
@@ -28,7 +28,10 @@ export const SleepLogger = memo(function SleepLogger({ userId, compact }: SleepL
   const [isOpen, setIsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Load from cache, then background-fetch from Supabase
+  // Convex query for today's sleep row — reactive, no manual cache logic needed.
+  const todayRow = useQuery(api.sleep_logs.listForUser, userId ? { limit: 7 } : "skip");
+  const logSleepMut = useMutation(api.sleep_logs.logSleep);
+
   useEffect(() => {
     const date = today();
     const cached = localCache.get<number>(userId, cacheKey(date));
@@ -37,30 +40,16 @@ export const SleepLogger = memo(function SleepLogger({ userId, compact }: SleepL
       setDraftHours(cached);
       setSaved(true);
     }
-
-    withSupabaseTimeout(
-      supabase
-        .from("sleep_logs")
-        .select("hours")
-        .eq("user_id", userId)
-        .eq("date", date)
-        .maybeSingle(),
-      6000,
-      "Fetch sleep log"
-    )
-      .then(({ data, error }) => {
-        if (error) throw error;
-        if (data) {
-          setHours(data.hours);
-          setDraftHours(data.hours);
-          setSaved(true);
-          localCache.set(userId, cacheKey(date), data.hours);
-        }
-      })
-      .catch((err) => {
-        logger.warn("SleepLogger: fetch failed", { error: err?.message });
-      });
-  }, [userId]);
+    if (todayRow) {
+      const t = (todayRow as Array<any>).find((r) => r.date === date);
+      if (t && typeof t.hours === "number") {
+        setHours(t.hours);
+        setDraftHours(t.hours);
+        setSaved(true);
+        localCache.set(userId, cacheKey(date), t.hours);
+      }
+    }
+  }, [userId, todayRow]);
 
   const openSheet = () => {
     triggerHaptic(ImpactStyle.Light);
@@ -90,14 +79,7 @@ export const SleepLogger = memo(function SleepLogger({ userId, compact }: SleepL
     triggerHapticSuccess();
 
     try {
-      const { error } = await withSupabaseTimeout(
-        supabase
-          .from("sleep_logs")
-          .upsert({ user_id: userId, date, hours: newHours }, { onConflict: "user_id,date" }),
-        6000,
-        "Save sleep log"
-      );
-      if (error) throw error;
+      await logSleepMut({ date, hours: newHours });
     } catch (err: any) {
       logger.error("SleepLogger: save failed", err);
     } finally {

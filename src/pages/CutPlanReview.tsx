@@ -72,11 +72,26 @@ export default function CutPlanReview() {
   const currentWeight = (planData as any).currentWeight || plan.weeklyPlan[0]?.targetWeight || 0;
   const goalWeight = (planData as any).goalWeight || plan.weeklyPlan[plan.weeklyPlan.length - 1]?.targetWeight || 0;
   const targetDate = (planData as any).targetDate || "";
+  // Same component renders both fight-camp and weight-loss plans — adapt the
+  // copy based on planType written by Onboarding. /cut-plan vs /weight-plan
+  // routes share this view but pull different labels.
+  const isWeightLoss = (planData as any).planType === "weight_loss";
+  const headerTitle = isWeightLoss ? "Your Weight Loss Plan" : "Your Weight Cut Plan";
+  const headerSubtitle = isWeightLoss
+    ? "Personalised · Sustainable · Adaptive"
+    : "Personalised · Science-backed · Adaptive";
+  const shareTitle = isWeightLoss ? "My Weight Loss Plan" : "My Weight Cut Plan";
+  const shareCardTitle = isWeightLoss ? "Weight Loss Plan" : "Weight Cut Plan";
+  const shareCardText = isWeightLoss
+    ? "Check out my personalised weight loss plan from FightCamp Wizard"
+    : "Check out my personalised weight cut plan from FightCamp Wizard";
 
   const handleContinue = () => {
     triggerHaptic(ImpactStyle.Medium);
     localStorage.setItem("wcw_cut_plan_seen", "true");
-    // Re-assert so tutorial triggers on dashboard arrival (onboarding may have consumed it)
+    // Re-assert so tutorial triggers on dashboard arrival (onboarding may have consumed it).
+    // TutorialContext auto-starts the onboarding tutorial flow when /dashboard
+    // detects this flag in localStorage.
     localStorage.setItem("wcw_onboarding_just_completed", "true");
     navigate("/dashboard", { replace: true });
   };
@@ -89,8 +104,8 @@ export default function CutPlanReview() {
           <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-primary/10 mb-4">
             <TrendingDown className="h-7 w-7 text-primary" />
           </div>
-          <h1 className="text-xl font-bold tracking-tight mb-1">Your Weight Cut Plan</h1>
-          <p className="text-sm text-muted-foreground">Personalised · Science-backed · Adaptive</p>
+          <h1 className="text-xl font-bold tracking-tight mb-1">{headerTitle}</h1>
+          <p className="text-sm text-muted-foreground">{headerSubtitle}</p>
         </div>
 
         {/* Summary — structured breakdown */}
@@ -203,10 +218,10 @@ export default function CutPlanReview() {
           ))}
         </div>
 
-        {/* Fight Week Strategy — structured sections */}
-        <p className="section-header mb-2">Fight Week — Final Week Game Plan</p>
+        {/* Fight Week Strategy — structured sections (cutting flow only) */}
+        {!isWeightLoss && <p className="section-header mb-2">Fight Week — Final Week Game Plan</p>}
 
-        {plan.fightWeek ? (
+        {!isWeightLoss && plan.fightWeek ? (
           <div className="space-y-2 mb-4">
             <div className="card-surface rounded-2xl p-4">
               <div className="flex items-center gap-2 mb-2">
@@ -240,7 +255,7 @@ export default function CutPlanReview() {
               <p className="text-sm text-muted-foreground leading-relaxed">{plan.fightWeek.nutrition}</p>
             </div>
           </div>
-        ) : plan.fightWeekStrategy ? (
+        ) : !isWeightLoss && plan.fightWeekStrategy ? (
           <div className="card-surface rounded-2xl p-4 mb-4 border-l-2 border-l-warning">
             <div className="flex items-center gap-2 mb-1.5">
               <Zap className="h-4 w-4 text-warning" />
@@ -286,9 +301,9 @@ export default function CutPlanReview() {
       <ShareCardDialog
         open={shareOpen}
         onOpenChange={setShareOpen}
-        title="Weight Cut Plan"
-        shareTitle="My Weight Cut Plan"
-        shareText="Check out my personalised weight cut plan from FightCamp Wizard"
+        title={shareCardTitle}
+        shareTitle={shareTitle}
+        shareText={shareCardText}
       >
         {({ cardRef, aspect }) => (
           <CutPlanCard

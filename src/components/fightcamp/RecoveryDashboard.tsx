@@ -1,9 +1,11 @@
-import { useState, useEffect, useCallback, useRef, memo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, memo, lazy, Suspense } from "react";
 import { Activity, Brain, AlertTriangle, TrendingUp, TrendingDown, Minus, BookOpen, ChevronDown, Heart, Flame, Shield, Moon, Dumbbell, Gauge, Zap, BarChart3 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "convex/react";
+import { api } from "@/../convex/_generated/api";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { RecoveryRing } from "./RecoveryRing";
-import { StrainChart } from "./StrainChart";
+// Lazy-load the recharts-backed StrainChart so the ~100KB charts bundle defers until first paint.
+const StrainChart = lazy(() => import("./StrainChart").then(m => ({ default: m.StrainChart })));
 import { ReadinessBreakdownCard } from "./ReadinessBreakdownCard";
 import { BalanceMetricsCard } from "./BalanceMetricsCard";
 import { WellnessCheckIn } from "./WellnessCheckIn";
@@ -91,57 +93,74 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
   const uniqueDays = new Set(sessions28d.map(s => s.date)).size;
   const hasEnoughData = uniqueDays >= 1;
 
+  // ── Live-reactive Convex subscriptions for wellness + sleep ──
+  const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
+  const from28dStr = useMemo(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 28);
+    return d.toISOString().split('T')[0];
+  }, []);
+
+  // Today's wellness check-in (last 1 day window — `.unique()` enforced server-side).
+  const checkinsRows = useQuery(api.wellness.listCheckins, userId ? { from: todayStr, to: todayStr, limit: 1 } : "skip");
+  // Total lifetime check-in count for the "consistency" metric. listCheckins
+  // caps to 90 by default which matches the prior estimate-count behaviour
+  // well enough for beta — past 90d the gradient flattens anyway.
+  const checkinHistoryRows = useQuery(api.wellness.listCheckins, userId ? { limit: 90 } : "skip");
+  // 28d sleep logs.
+  const sleepRows = useQuery(api.sleep_logs.listForUser, userId ? { limit: 90 } : "skip");
+
   // Reset baselineLoadedRef when userId changes to prevent cross-account data leak
   useEffect(() => {
     baselineLoadedRef.current = false;
   }, [userId]);
 
-  // Load baseline on mount
+  // Load baseline once on mount (still a one-shot — baseline computation is
+  // synchronous against the in-memory data and doesn't need to be reactive).
   useEffect(() => {
     if (baselineLoadedRef.current) return;
     baselineLoadedRef.current = true;
-
-    const today = new Date().toISOString().split('T')[0];
-    const from28d = new Date();
-    from28d.setDate(from28d.getDate() - 28);
-    const fromDate = from28d.toISOString().split('T')[0];
-
-    Promise.allSettled([
-      loadOrComputeBaseline(userId, tdee),
-      supabase
-        .from('daily_wellness_checkins')
-        .select('sleep_quality, stress_level, fatigue_level, soreness_level, energy_level, motivation_level, sleep_hours, hydration_feeling, appetite_level, hooper_index')
-        .eq('user_id', userId)
-        .eq('date', today)
-        .maybeSingle(),
-      supabase
-        .from('daily_wellness_checkins')
-        .select('date', { count: 'estimated', head: true })
-        .eq('user_id', userId),
-      supabase
-        .from('sleep_logs')
-        .select('date, hours')
-        .eq('user_id', userId)
-        .gte('date', fromDate)
-        .order('date', { ascending: true }),
-    ]).then(([baselineRes, wellnessRes, countRes, sleepRes]) => {
-      if (baselineRes.status === 'fulfilled' && baselineRes.value) setBaseline(baselineRes.value);
-      else if (baselineRes.status === 'rejected') logger.warn("RecoveryDashboard: baseline fetch failed", { err: baselineRes.reason });
-
-      if (wellnessRes.status === 'fulfilled' && wellnessRes.value.data) {
-        setTodayCheckedIn(true);
-        setWellnessCheckIn(wellnessRes.value.data as WellnessCheckInData);
-      } else if (wellnessRes.status === 'rejected') {
-        logger.warn("RecoveryDashboard: wellness fetch failed", { err: wellnessRes.reason });
-      }
-
-      if (countRes.status === 'fulfilled') setCheckInDaysCount(countRes.value.count ?? 0);
-      else logger.warn("RecoveryDashboard: check-in count fetch failed", { err: countRes.reason });
-
-      if (sleepRes.status === 'fulfilled' && sleepRes.value.data) setSleepLogs(sleepRes.value.data);
-      else if (sleepRes.status === 'rejected') logger.warn("RecoveryDashboard: sleep fetch failed", { err: sleepRes.reason });
-    });
+    loadOrComputeBaseline(userId, tdee)
+      .then((b) => { if (b) setBaseline(b); })
+      .catch((err) => logger.warn("RecoveryDashboard: baseline fetch failed", { err }));
   }, [userId, tdee]);
+
+  // Apply Convex subscription results to local state. Convex returns undefined
+  // until the first query lands; treat that as "still loading" and don't churn
+  // dependent state.
+  useEffect(() => {
+    if (!checkinsRows) return;
+    const todayRow: any = checkinsRows[0];
+    if (todayRow) {
+      setTodayCheckedIn(true);
+      setWellnessCheckIn({
+        sleep_quality: todayRow.sleepQuality,
+        fatigue_level: todayRow.fatigueLevel,
+        soreness_level: todayRow.sorenessLevel,
+        stress_level: todayRow.stressLevel,
+        energy_level: todayRow.energyLevel,
+        motivation_level: todayRow.motivationLevel,
+        sleep_hours: todayRow.sleepHours,
+        hydration_feeling: todayRow.hydrationFeeling,
+        appetite_level: todayRow.appetiteLevel,
+        hooper_index: todayRow.hooperIndex,
+      } as WellnessCheckInData);
+    }
+  }, [checkinsRows]);
+
+  useEffect(() => {
+    if (!checkinHistoryRows) return;
+    setCheckInDaysCount(checkinHistoryRows.length);
+  }, [checkinHistoryRows]);
+
+  useEffect(() => {
+    if (!sleepRows) return;
+    const filtered = sleepRows
+      .filter((r: any) => r.date >= from28dStr)
+      .sort((a: any, b: any) => a.date.localeCompare(b.date))
+      .map((r: any) => ({ date: r.date, hours: r.hours }));
+    setSleepLogs(filtered);
+  }, [sleepRows, from28dStr]);
 
   // Compute metrics whenever sessions or wellness data changes
   useEffect(() => {
@@ -317,7 +336,9 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
         <div className="flex items-center gap-2 mb-3">
           <h2 className="text-lg font-bold">7-Day Strain Trend</h2>
         </div>
-        <StrainChart strainHistory={metrics.strainHistory} forecast={metrics.forecast} />
+        <Suspense fallback={<div className="h-[180px] w-full animate-pulse bg-muted/20 rounded-2xl" />}>
+          <StrainChart strainHistory={metrics.strainHistory} forecast={metrics.forecast} />
+        </Suspense>
       </div>
 
       {/* 4) Forecast Summary Card */}

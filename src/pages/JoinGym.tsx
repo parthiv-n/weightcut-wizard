@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
 import { useUser } from "@/contexts/UserContext";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -8,7 +9,6 @@ import { celebrateSuccess, triggerHaptic } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import { logger } from "@/lib/logger";
 import { Loader2 } from "lucide-react";
-import { localCache } from "@/lib/localCache";
 import { globalLoading } from "@/lib/globalLoading";
 
 const CODE_RE = /^[A-HJ-KMNP-Z2-9]{6}$/i;
@@ -19,9 +19,8 @@ export default function JoinGym() {
   const { toast } = useToast();
   const [params] = useSearchParams();
   const [code, setCode] = useState(params.get("code")?.toUpperCase() ?? "");
-  const [gymPreview, setGymPreview] = useState<{ id: string; name: string; location: string | null } | null>(null);
-  const [lookingUp, setLookingUp] = useState(false);
   const [joining, setJoining] = useState(false);
+  const joinByInviteCode = useMutation(api.gyms.joinByInviteCode);
 
   // Pre-warm the MyGym lazy chunk on mount so the post-join navigation
   // does not stall on a chunk download (Suspense-fallback flash → blank screen).
@@ -29,33 +28,18 @@ export default function JoinGym() {
     void import("@/pages/MyGym");
   }, []);
 
-  // Live lookup once user enters a valid code
-  useEffect(() => {
-    const clean = code.trim().toUpperCase();
-    if (!CODE_RE.test(clean)) { setGymPreview(null); return; }
-    let cancelled = false;
-    setLookingUp(true);
-    (async () => {
-      try {
-        const { data, error } = await supabase
-          .from("gyms")
-          .select("id, name, location")
-          .eq("invite_code", clean)
-          .maybeSingle();
-        if (cancelled) return;
-        if (error) throw error;
-        setGymPreview(data ?? null);
-      } catch (err) {
-        if (!cancelled) {
-          logger.warn("JoinGym lookup failed", err);
-          setGymPreview(null);
-        }
-      } finally {
-        if (!cancelled) setLookingUp(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [code]);
+  // Live lookup once user enters a valid code. Skipped while the code is
+  // shorter than 6 chars; Convex returns `undefined` while in-flight.
+  const trimmedCode = code.trim().toUpperCase();
+  const validCode = CODE_RE.test(trimmedCode);
+  const previewData = useQuery(
+    api.gyms.getByInviteCode,
+    validCode ? { inviteCode: trimmedCode } : "skip",
+  );
+  const lookingUp = validCode && previewData === undefined;
+  const gymPreview = previewData
+    ? { id: previewData.id, name: previewData.name, location: previewData.location }
+    : null;
 
   const canJoin = useMemo(() => !!gymPreview && !!userId && !joining, [gymPreview, userId, joining]);
 
@@ -69,45 +53,13 @@ export default function JoinGym() {
     // unmount so the user sees continuous feedback through MyGym's first paint.
     globalLoading.show(`Joining ${gymPreview.name}…`, "Setting up your coach connection");
 
-    // Optimistic cache write so MyGym paints with the new gym row immediately
-    // (skips the DashboardSkeleton branch). Reconciled by the real refetch.
-    const optimisticRow = {
-      member_id: `tmp_${Date.now()}`,
-      gym_id: gymPreview.id,
-      gym_name: gymPreview.name,
-      gym_location: gymPreview.location,
-      coach_user_id: "",
-      coach_name: null,
-      share_data: true,
-      joined_at: new Date().toISOString(),
-    };
     try {
-      const existing = localCache.get<typeof optimisticRow[]>(userId, "my_gyms") || [];
-      const merged = [...existing.filter(g => g.gym_id !== gymPreview.id), optimisticRow];
-      localCache.set(userId, "my_gyms", merged);
-    } catch {}
-
-    try {
-      // Single upsert — covers re-join after leaving (sets status back to active).
-      const { error } = await supabase
-        .from("gym_members")
-        .upsert(
-          {
-            gym_id: gymPreview.id,
-            user_id: userId,
-            member_role: "athlete",
-            status: "active",
-            share_data: true,
-          },
-          { onConflict: "gym_id,user_id" }
-        );
-      if (error) throw error;
-
-      // Invalidate caches that need a real refetch (the optimistic my_gyms row
-      // is fine; coach_athletes belongs to the coach side and is unaffected by
-      // this user's local cache, but clear in case the user is also a coach).
-      try { localCache.remove(userId, "coach_athletes"); } catch {}
-
+      // Convex mutation handles both first-join AND re-join (flips status
+      // back to "active" if previously "removed"). Convex's optimistic
+      // update pattern would require an explicit `withOptimisticUpdate`
+      // — for now the perceived latency is fine because the listMine
+      // query re-runs immediately after the mutation commits.
+      await joinByInviteCode({ inviteCode: trimmedCode });
       celebrateSuccess();
       toast({ title: `Joined ${gymPreview.name}` });
       navigate("/my-gym", { replace: true });
@@ -115,11 +67,6 @@ export default function JoinGym() {
       globalLoading.hideAfterPaint();
     } catch (err: any) {
       logger.error("JoinGym: failed to join", err);
-      // Roll back optimistic write
-      try {
-        const existing = localCache.get<typeof optimisticRow[]>(userId, "my_gyms") || [];
-        localCache.set(userId, "my_gyms", existing.filter(g => g.member_id !== optimisticRow.member_id));
-      } catch {}
       globalLoading.hide();
       toast({ title: "Could not join gym", description: err?.message, variant: "destructive" });
       setJoining(false);

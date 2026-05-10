@@ -1,5 +1,3 @@
-import type { Database } from "@/integrations/supabase/types";
-
 export interface Ingredient {
   name: string;
   grams: number;
@@ -24,11 +22,58 @@ export interface AiLineItem {
   fats_g: number;
 }
 
-// ── DB-backed type aliases from the regenerated supabase types ──
-export type FoodRow = Database["public"]["Tables"]["foods"]["Row"];
-export type MealRow = Database["public"]["Tables"]["meals"]["Row"];
-export type MealItemRow = Database["public"]["Tables"]["meal_items"]["Row"];
-export type MealWithTotalsRow = Database["public"]["Views"]["meals_with_totals"]["Row"];
+// ── DB-backed type aliases. Hand-written snake_case shape that the
+// nutrition UI consumes. `meals_with_totals` is produced by Convex
+// `meals.listWithTotals` (a per-meal aggregation) and the client mapper.
+export interface FoodRow {
+  id: string;
+  name: string;
+  brand: string | null;
+  barcode: string | null;
+  source: string;
+  source_ref: string | null;
+  verified: boolean;
+  default_serving_g: number | null;
+  calories_per_100g: number;
+  protein_per_100g: number;
+  carbs_per_100g: number;
+  fats_per_100g: number;
+}
+export interface MealRow {
+  id: string;
+  user_id: string;
+  date: string;
+  meal_type: string;
+  meal_name: string;
+  is_ai_generated: boolean;
+  notes: string | null;
+}
+export interface MealItemRow {
+  id: string;
+  meal_id: string;
+  food_id: string | null;
+  name: string;
+  position: number;
+  grams: number;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fats_g: number;
+}
+export interface MealWithTotalsRow {
+  id: string;
+  user_id: string;
+  date: string;
+  meal_type: string;
+  meal_name: string;
+  is_ai_generated: boolean;
+  notes: string | null;
+  total_calories: number;
+  total_protein_g: number;
+  total_carbs_g: number;
+  total_fats_g: number;
+  item_count: number;
+}
 
 /** Foods catalog row (USDA / OFF / user / AI sourced). */
 export type Food = FoodRow;

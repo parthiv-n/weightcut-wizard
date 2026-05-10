@@ -6,7 +6,6 @@ import ReactMarkdown from "react-markdown";
 import { triggerHapticSelection, triggerHapticSuccess, triggerHaptic } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import wizardAvatar from "@/assets/wizard-logo.webp";
-import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/hooks/useSubscription";
 
 const FAB_SIZE = 48;
@@ -108,21 +107,7 @@ export function FloatingWizardChat() {
     }
   }, [snapToEdge]);
 
-  // Edge function warmup on mount
-  useEffect(() => {
-    const timer = setTimeout(async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/wizard-chat`, {
-            method: "GET",
-            headers: { Authorization: `Bearer ${session.access_token}` },
-          }).catch(() => {});
-        }
-      } catch {}
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, []);
+  // No warmup needed under Convex — actions are co-located with the deployment.
 
   // Auto-scroll on new messages. For assistant replies, show the top of the new
   // message; for user sends / loading, stay at the bottom.

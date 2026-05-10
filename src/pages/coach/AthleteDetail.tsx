@@ -1,14 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, lazy, Suspense } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ChevronLeft, Loader2 } from "lucide-react";
-import { ResponsiveContainer, LineChart, Line, YAxis, Tooltip } from "recharts";
+// Lazy-load recharts wrapper so the ~100KB charts bundle defers until first paint.
+const AthleteWeightChart = lazy(() => import("@/components/charts/AthleteWeightChart"));
 import { useUser } from "@/contexts/UserContext";
 import { useAthleteDetail } from "@/hooks/coach/useAthleteDetail";
-import { useCoachRealtimeSync } from "@/hooks/coach/useCoachRealtimeSync";
 import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
-import { supabase } from "@/integrations/supabase/client";
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import type { Id } from "../../../convex/_generated/dataModel";
 import { useToast } from "@/hooks/use-toast";
-import { localCache } from "@/lib/localCache";
 import { triggerHaptic } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import { globalLoading } from "@/lib/globalLoading";
@@ -41,11 +42,10 @@ export default function AthleteDetail() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { data, loading, error, refresh } = useAthleteDetail(userId, athleteId ?? null);
+  const removeAthlete = useMutation(api.gym_members.removeAthleteFromMyGyms);
 
-  // Realtime sync — refresh detail when this specific athlete logs anything.
-  useCoachRealtimeSync(userId, () => { /* dashboard refresh handled there */ }, (ev) => {
-    if (athleteId && ev.athlete_user_id === athleteId) refresh();
-  });
+  // No realtime sync needed — Convex re-runs `coach.athleteDetail`
+  // automatically when this athlete writes to weight_logs/meals/etc.
   useEffect(() => registerPullRefresh(() => refresh()), [refresh]);
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
   const [removing, setRemoving] = useState(false);
@@ -92,14 +92,9 @@ export default function AthleteDetail() {
     setRemoving(true);
     globalLoading.show("Removing athlete…");
     try {
-      const { error: rmErr } = await supabase
-        .from("gym_members")
-        .update({ status: "removed" })
-        .eq("user_id", athleteId);
-      if (rmErr) throw rmErr;
-      // Invalidate caches so the dashboard refetches fresh
-      localCache.remove(userId, "coach_athletes");
-      localCache.remove(userId, `coach_athlete_${athleteId}`);
+      await removeAthlete({ athleteUserId: athleteId as Id<"users"> });
+      // Convex re-runs coach.athletesOverview automatically — no manual
+      // cache invalidation needed.
       triggerHaptic(ImpactStyle.Medium);
       setRemoveDialogOpen(false);
       toast({ title: "Athlete removed from gym" });
@@ -155,35 +150,9 @@ export default function AthleteDetail() {
           </div>
           <div className="h-24">
             {weight_7d && weight_7d.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={weight_7d} margin={{ top: 4, right: 4, bottom: 0, left: -28 }}>
-                  <YAxis
-                    stroke="hsl(var(--muted-foreground))"
-                    fontSize={9}
-                    tickLine={false}
-                    axisLine={false}
-                    width={28}
-                    domain={["auto", "auto"]}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "hsl(var(--background))",
-                      border: "1px solid hsl(var(--border))",
-                      borderRadius: 8,
-                      fontSize: 11,
-                    }}
-                    formatter={(v: number) => [`${v.toFixed(1)} kg`, "Weight"]}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="weight_kg"
-                    stroke="hsl(var(--primary))"
-                    strokeWidth={2}
-                    dot={{ r: 2, fill: "hsl(var(--primary))" }}
-                    isAnimationActive={false}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <Suspense fallback={<div className="h-full w-full animate-pulse bg-muted/20 rounded-2xl" />}>
+                <AthleteWeightChart data={weight_7d} />
+              </Suspense>
             ) : (
               <div className="h-full flex items-center justify-center text-[11px] text-muted-foreground">
                 No weight data this week

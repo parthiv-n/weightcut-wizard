@@ -1,6 +1,8 @@
 import { createRoot } from "react-dom/client";
 import * as Sentry from "@sentry/react";
+import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import App from "./App.tsx";
+import { convex } from "./integrations/convex/client";
 import "./index.css";
 
 const dsn = import.meta.env.VITE_SENTRY_DSN;
@@ -32,4 +34,8 @@ window.addEventListener("unhandledrejection", (event) => {
   }
 });
 
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById("root")!).render(
+  <ConvexAuthProvider client={convex}>
+    <App />
+  </ConvexAuthProvider>
+);

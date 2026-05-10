@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 import { useUser } from "@/contexts/UserContext";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { triggerHaptic, celebrateSuccess } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import { globalLoading } from "@/lib/globalLoading";
-import { localCache } from "@/lib/localCache";
 import { logger } from "@/lib/logger";
 import { Loader2 } from "lucide-react";
 
@@ -18,16 +18,7 @@ export default function CoachSetup() {
   const [name, setName] = useState("");
   const [location, setLocation] = useState("");
   const [saving, setSaving] = useState(false);
-
-  // No-ambiguous-chars alphabet (matches the SQL function and JoinGym regex)
-  const CODE_CHARS = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
-  const generateCode = () => {
-    let out = "";
-    const buf = new Uint32Array(6);
-    crypto.getRandomValues(buf);
-    for (let i = 0; i < 6; i++) out += CODE_CHARS[buf[i] % CODE_CHARS.length];
-    return out;
-  };
+  const createGym = useMutation(api.gyms.create);
 
   // Pre-warm the CoachDashboard chunk on mount so the post-create navigation
   // doesn't stall on a chunk download.
@@ -40,50 +31,14 @@ export default function CoachSetup() {
     (document.activeElement as HTMLElement | null)?.blur?.();
     globalLoading.show("Creating gym…", "Setting up your invite code");
     try {
-      // 1. Mark profile as coach (idempotent)
-      await supabase.from("profiles").upsert({ id: userId, role: "coach" }, { onConflict: "id" });
-
-      // 2. Insert gym with a client-generated invite code; retry on unique-collision.
-      // (Avoids dependency on the generate_gym_invite_code() RPC being in the
-      // schema cache. The unique constraint on gyms.invite_code is the source
-      // of truth — collisions just trigger another roll.)
-      let gym: { id: string; invite_code: string } | null = null;
-      let lastErr: any = null;
-      for (let attempt = 0; attempt < 6; attempt++) {
-        const inviteCode = generateCode();
-        const { data, error } = await supabase
-          .from("gyms")
-          .insert({
-            name: name.trim(),
-            location: location.trim() || null,
-            owner_user_id: userId,
-            invite_code: inviteCode,
-          })
-          .select("id, invite_code")
-          .single();
-        if (!error && data) { gym = data; break; }
-        lastErr = error;
-        // 23505 = unique_violation on invite_code; retry. Anything else: bail.
-        if (error?.code !== "23505") throw error;
-      }
-      if (!gym) throw lastErr ?? new Error("Could not generate a unique invite code");
-
-      // 3. Add coach as a 'coach' member of their own gym
-      await supabase.from("gym_members").upsert(
-        { gym_id: gym.id, user_id: userId, member_role: "coach", status: "active" },
-        { onConflict: "gym_id,user_id" }
-      );
-
-      // Optimistic cache write so CoachDashboard paints without a skeleton flash
-      try {
-        localCache.set(userId, "coach_gyms", [{
-          id: gym.id,
-          name: name.trim(),
-          location: location.trim() || null,
-          invite_code: gym.invite_code,
-        }]);
-        localCache.set(userId, "coach_athletes", []);
-      } catch {}
+      // Single atomic mutation: promotes profile.role to "coach", creates
+      // the gym with a unique invite code (server-side retry on collision),
+      // and inserts the coach as a member of their own gym.
+      const gym = await createGym({
+        name: name.trim(),
+        location: location.trim() || undefined,
+      });
+      if (!gym) throw new Error("Gym creation returned no result");
 
       celebrateSuccess();
       toast({ title: "Gym created", description: `Invite code: ${gym.invite_code}` });

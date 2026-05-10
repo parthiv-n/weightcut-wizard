@@ -1,10 +1,14 @@
 import { useState, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useMutation } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Upload, X } from "lucide-react";
+import { Upload, X, Loader2 } from "lucide-react";
 import Cropper from "react-easy-crop";
 import { Area } from "react-easy-crop";
+import { resizeImageToSquareWebp } from "@/lib/imageResize";
+import { logger } from "@/lib/logger";
 
 interface ProfilePictureUploadProps {
   currentAvatarUrl?: string;
@@ -12,6 +16,11 @@ interface ProfilePictureUploadProps {
   size?: "sm" | "lg";
   showRemove?: boolean;
 }
+
+// Allowed image MIME types for avatar uploads.
+const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/webp"]);
+const MAX_BYTES = 5 * 1024 * 1024; // 5 MB
+const OUTPUT_SIZE_PX = 512; // 512×512 is plenty for retina avatars
 
 const createImage = (url: string): Promise<HTMLImageElement> =>
   new Promise((resolve, reject) => {
@@ -21,18 +30,20 @@ const createImage = (url: string): Promise<HTMLImageElement> =>
     image.src = url;
   });
 
-async function getCroppedImg(imageSrc: string, pixelCrop: Area): Promise<Blob> {
+/**
+ * Crop to the user-selected area first, then return a dataUrl. The resize
+ * step (in `handleUpload`) re-encodes the cropped output to webp/jpeg and
+ * shrinks it to OUTPUT_SIZE_PX×OUTPUT_SIZE_PX — so this canvas only needs
+ * to be big enough to capture the crop, not the final upload dimensions.
+ */
+async function getCroppedDataUrl(imageSrc: string, pixelCrop: Area): Promise<string> {
   const image = await createImage(imageSrc);
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
-
-  if (!ctx) {
-    throw new Error("No 2d context");
-  }
+  if (!ctx) throw new Error("No 2d context");
 
   canvas.width = pixelCrop.width;
   canvas.height = pixelCrop.height;
-
   ctx.drawImage(
     image,
     pixelCrop.x,
@@ -42,21 +53,19 @@ async function getCroppedImg(imageSrc: string, pixelCrop: Area): Promise<Blob> {
     0,
     0,
     pixelCrop.width,
-    pixelCrop.height
+    pixelCrop.height,
   );
-
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (blob) {
-        resolve(blob);
-      } else {
-        reject(new Error("Canvas is empty"));
-      }
-    }, "image/jpeg");
-  });
+  // Use JPEG here because it's just an intermediate; the resize step picks
+  // webp/jpeg based on browser support.
+  return canvas.toDataURL("image/jpeg", 0.95);
 }
 
-export function ProfilePictureUpload({ currentAvatarUrl, onUploadSuccess, size = "lg", showRemove = true }: ProfilePictureUploadProps) {
+export function ProfilePictureUpload({
+  currentAvatarUrl,
+  onUploadSuccess,
+  size = "lg",
+  showRemove = true,
+}: ProfilePictureUploadProps) {
   const avatarClass = size === "sm" ? "h-10 w-10" : "h-20 w-20";
   const iconClass = size === "sm" ? "h-4 w-4" : "h-6 w-6";
   const overlayIconClass = size === "sm" ? "h-4 w-4" : "h-5 w-5";
@@ -68,39 +77,45 @@ export function ProfilePictureUpload({ currentAvatarUrl, onUploadSuccess, size =
   const [uploading, setUploading] = useState(false);
   const { toast } = useToast();
 
-  const onCropComplete = useCallback((croppedArea: Area, croppedAreaPixels: Area) => {
-    setCroppedAreaPixels(croppedAreaPixels);
+  // Convex mutations for the avatar-upload flow.
+  const generateUploadUrl = useMutation(api.profiles.generateAvatarUploadUrl);
+  const setAvatar = useMutation(api.profiles.setAvatar);
+
+  const onCropComplete = useCallback((_: Area, croppedPx: Area) => {
+    setCroppedAreaPixels(croppedPx);
   }, []);
 
   const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
-      
-      if (!file.type.startsWith("image/")) {
-        toast({
-          variant: "destructive",
-          title: "Invalid file type",
-          description: "Please select an image file",
-        });
-        return;
-      }
+    if (!e.target.files || e.target.files.length === 0) return;
+    const file = e.target.files[0];
 
-      if (file.size > 5 * 1024 * 1024) {
-        toast({
-          variant: "destructive",
-          title: "File too large",
-          description: "Please select an image under 5MB",
-        });
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.addEventListener("load", () => {
-        setImageSrc(reader.result as string);
-        setIsOpen(true);
+    // MIME validation. Some pickers report empty file.type on iOS; fall back
+    // to the broader `image/*` check the input accept attribute already
+    // enforces, but still reject anything we recognize as wrong.
+    if (file.type && !ALLOWED_MIME.has(file.type)) {
+      toast({
+        variant: "destructive",
+        title: "Unsupported image type",
+        description: "Please choose a JPEG, PNG, or WebP image.",
       });
-      reader.readAsDataURL(file);
+      return;
     }
+
+    if (file.size > MAX_BYTES) {
+      toast({
+        variant: "destructive",
+        title: "File too large",
+        description: "Please select an image under 5MB",
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.addEventListener("load", () => {
+      setImageSrc(reader.result as string);
+      setIsOpen(true);
+    });
+    reader.readAsDataURL(file);
   };
 
   const handleUpload = async () => {
@@ -108,54 +123,55 @@ export function ProfilePictureUpload({ currentAvatarUrl, onUploadSuccess, size =
 
     setUploading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      const croppedBlob = await getCroppedImg(imageSrc, croppedAreaPixels);
-      const fileName = `${user.id}/${Date.now()}.jpg`;
-
-      // Delete old avatar if exists
-      if (currentAvatarUrl) {
-        const oldPath = currentAvatarUrl.split("/").slice(-2).join("/");
-        await supabase.storage.from("avatars").remove([oldPath]);
+      // 1. Crop to a dataUrl, then resize to a 512×512 webp/jpeg blob. The
+      //    resize step keeps avatar storage tiny (~25-40 KB per upload)
+      //    instead of multi-megabyte camera frames.
+      const croppedDataUrl = await getCroppedDataUrl(imageSrc, croppedAreaPixels);
+      const { blob, mime } = await resizeImageToSquareWebp(
+        croppedDataUrl,
+        OUTPUT_SIZE_PX,
+        0.88,
+      );
+      if (!blob.size) {
+        throw new Error("Image encoding produced an empty file");
       }
 
-      // Upload new avatar
-      const { error: uploadError } = await supabase.storage
-        .from("avatars")
-        .upload(fileName, croppedBlob, {
-          contentType: "image/jpeg",
-          upsert: true,
-        });
+      // 2. Ask Convex for a one-time POST URL and stream the blob to it.
+      const uploadUrl = await generateUploadUrl({});
+      const uploadRes = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": mime },
+        body: blob,
+      });
+      if (!uploadRes.ok) {
+        throw new Error(`Upload failed (${uploadRes.status})`);
+      }
+      const { storageId } = (await uploadRes.json()) as {
+        storageId: Id<"_storage">;
+      };
 
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from("avatars")
-        .getPublicUrl(fileName);
-
-      // Update profile
-      const { error: updateError } = await supabase
-        .from("profiles")
-        .update({ avatar_url: publicUrl })
-        .eq("id", user.id);
-
-      if (updateError) throw updateError;
+      // 3. Persist the storage id on the profile. The Convex mutation
+      //    deletes the previous avatar storage atomically — no race risk.
+      await setAvatar({ storageId });
 
       toast({
         title: "Success",
         description: "Profile picture updated successfully",
       });
 
-      onUploadSuccess(publicUrl);
+      // The new public URL flows back through `profiles.getMine` reactivity
+      // (UserContext re-renders); pass an empty string to signal "refresh
+      // from the server" and avoid a stale local override.
+      onUploadSuccess("");
       setIsOpen(false);
       setImageSrc(null);
-    } catch (error: any) {
+    } catch (err) {
+      logger.error("Avatar upload failed", err);
+      const msg = err instanceof Error ? err.message : "Upload failed";
       toast({
         variant: "destructive",
         title: "Upload failed",
-        description: error.message,
+        description: msg,
       });
     } finally {
       setUploading(false);
@@ -163,34 +179,21 @@ export function ProfilePictureUpload({ currentAvatarUrl, onUploadSuccess, size =
   };
 
   const handleRemove = async () => {
+    if (uploading) return;
+    setUploading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      if (currentAvatarUrl) {
-        const oldPath = currentAvatarUrl.split("/").slice(-2).join("/");
-        await supabase.storage.from("avatars").remove([oldPath]);
-      }
-
-      const { error } = await supabase
-        .from("profiles")
-        .update({ avatar_url: null })
-        .eq("id", user.id);
-
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "Profile picture removed",
-      });
-
+      await setAvatar({ storageId: null });
+      toast({ title: "Success", description: "Profile picture removed" });
       onUploadSuccess("");
-    } catch (error: any) {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Failed to remove";
       toast({
         variant: "destructive",
         title: "Failed to remove",
-        description: error.message,
+        description: msg,
       });
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -217,13 +220,19 @@ export function ProfilePictureUpload({ currentAvatarUrl, onUploadSuccess, size =
           </div>
           <input
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp"
             onChange={onFileChange}
             className="hidden"
           />
         </label>
         {showRemove && currentAvatarUrl && (
-          <Button variant="destructive" size="icon" onClick={handleRemove} aria-label="Remove photo">
+          <Button
+            variant="destructive"
+            size="icon"
+            onClick={handleRemove}
+            disabled={uploading}
+            aria-label="Remove photo"
+          >
             <X className="h-4 w-4" />
           </Button>
         )}
@@ -233,14 +242,15 @@ export function ProfilePictureUpload({ currentAvatarUrl, onUploadSuccess, size =
         <>
           <div
             className="fixed inset-0 z-[10003] bg-black/80 animate-in fade-in duration-200"
-            onClick={() => setIsOpen(false)}
+            onClick={() => !uploading && setIsOpen(false)}
           />
           <div className="fixed left-1/2 top-[env(safe-area-inset-top,1rem)] z-[10004] -translate-x-1/2 w-[calc(100vw-2rem)] sm:max-w-lg sm:top-1/2 sm:-translate-y-1/2 max-h-[calc(100vh-2rem)] overflow-y-auto border bg-background p-4 sm:p-6 shadow-lg rounded-2xl space-y-3 sm:space-y-4 mt-2 sm:mt-0">
             <div className="flex items-center justify-between">
               <h3 className="text-base sm:text-lg font-semibold">Crop Profile Picture</h3>
               <button
-                onClick={() => setIsOpen(false)}
-                className="rounded-sm opacity-70 hover:opacity-100 transition-opacity min-h-[44px] min-w-[44px] flex items-center justify-center"
+                onClick={() => !uploading && setIsOpen(false)}
+                disabled={uploading}
+                className="rounded-sm opacity-70 hover:opacity-100 transition-opacity min-h-[44px] min-w-[44px] flex items-center justify-center disabled:opacity-40"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -273,11 +283,18 @@ export function ProfilePictureUpload({ currentAvatarUrl, onUploadSuccess, size =
               />
             </div>
             <div className="flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2">
-              <Button variant="outline" onClick={() => setIsOpen(false)}>
+              <Button variant="outline" onClick={() => setIsOpen(false)} disabled={uploading}>
                 Cancel
               </Button>
               <Button onClick={handleUpload} disabled={uploading}>
-                {uploading ? "Uploading..." : "Upload"}
+                {uploading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  "Upload"
+                )}
               </Button>
             </div>
           </div>

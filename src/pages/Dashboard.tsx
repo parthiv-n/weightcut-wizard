@@ -1,7 +1,9 @@
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useState, useCallback, useRef, useMemo, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
-import { ComposedChart, Line, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { useAction, useConvex } from "convex/react";
+import { api } from "@/../convex/_generated/api";
+// Lazy-load recharts wrapper so the ~100KB charts bundle defers until first paint.
+const DashboardWeightChart = lazy(() => import("@/components/charts/DashboardWeightChart"));
 import { TrendingDown, Calendar, Lock, ChevronRight, Flame, Zap, CheckCircle2, Scale, Swords } from "lucide-react";
 import { TrainingWeekWidget, preloadTrainingWeek } from "@/components/dashboard/TrainingWeekWidget";
 import { WeightProgressRing } from "@/components/dashboard/WeightProgressRing";
@@ -12,14 +14,12 @@ import { useGamification } from "@/hooks/useGamification";
 import { useUser } from "@/contexts/UserContext";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
-import { withSupabaseTimeout, withRetry } from "@/lib/timeoutWrapper";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { Button } from "@/components/ui/button";
 import { calculateCalorieTarget } from "@/lib/calorieCalculation";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { localCache } from "@/lib/localCache";
 import { nutritionCache } from "@/lib/nutritionCache";
-import { preloadNutritionData } from "@/lib/backgroundSync";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { WeightIncreaseQuestionnaire } from "@/components/dashboard/WeightIncreaseQuestionnaire";
 import { AchievementSheet } from "@/components/achievements/AchievementSheet";
@@ -54,7 +54,9 @@ interface DailyWisdom {
 }
 
 export default function Dashboard() {
-  const { userName, currentWeight, userId, profile } = useUser();
+  const { userName, currentWeight, userId, profile, loadCutPlan } = useUser();
+  const convex = useConvex();
+  const dailyWisdomAction = useAction(api.actions.dailyWisdom.run);
   const [weightLogs, setWeightLogs] = useState<any[]>(() => {
     if (!userId) return [];
     return localCache.get<any[]>(userId, 'dashboard_weight_logs') || [];
@@ -83,30 +85,47 @@ export default function Dashboard() {
 
   const lastFetchRef = useRef(0);
 
-  // Redirect to cut plan if it hasn't been seen yet
+  // Redirect to cut plan if it hasn't been seen yet. Same plan blob is used
+  // for both fight-camp and weight-loss flows — route by planType so the
+  // weight-loss user lands on /weight-plan (which reuses CutPlanReview with
+  // adjusted labels).
   useEffect(() => {
     const cutPlan = localStorage.getItem("wcw_cut_plan");
     const cutPlanSeen = localStorage.getItem("wcw_cut_plan_seen");
     if (cutPlan && !cutPlanSeen) {
-      navigate("/cut-plan", { replace: true });
+      let route = "/cut-plan";
+      try {
+        const parsed = JSON.parse(cutPlan);
+        if (parsed?.planType === "weight_loss") route = "/weight-plan";
+      } catch {
+        // ignore malformed payload — fall back to /cut-plan
+      }
+      navigate(route, { replace: true });
     }
   }, [navigate]);
 
   // Rehydrate cut plan from DB if localStorage is empty (iOS WebView can wipe it).
-  // Once generated, the plan lives on profile.cut_plan_json permanently.
+  // cut_plan_json is no longer in PROFILE_COLUMNS, so we lazy-fetch it via
+  // loadCutPlan() — keeps the cold-start profile query small.
   useEffect(() => {
     if (localStorage.getItem("wcw_cut_plan")) {
       if (!hasCutPlan) setHasCutPlan(true);
       return;
     }
-    const dbPlan = profile?.cut_plan_json;
-    if (dbPlan && typeof dbPlan === "object" && dbPlan.weeklyPlan) {
-      localStorage.setItem("wcw_cut_plan", JSON.stringify(dbPlan));
-      setHasCutPlan(true);
-    } else if (hasCutPlan) {
-      setHasCutPlan(false);
-    }
-  }, [profile?.cut_plan_json, hasCutPlan]);
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      const dbPlan = await loadCutPlan();
+      if (cancelled) return;
+      if (dbPlan && typeof dbPlan === "object" && dbPlan.weeklyPlan) {
+        localStorage.setItem("wcw_cut_plan", JSON.stringify(dbPlan));
+        setHasCutPlan(true);
+      } else if (hasCutPlan) {
+        setHasCutPlan(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [userId, hasCutPlan, loadCutPlan]);
 
   useEffect(() => { trackInstallDate(); }, []);
 
@@ -150,53 +169,38 @@ export default function Dashboard() {
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [userId]);
 
-  // Warmup the daily-wisdom edge function 2s after mount
-  useEffect(() => {
-    if (userId) {
-      const t = setTimeout(() =>
-        supabase.functions.invoke("daily-wisdom", { method: "GET" } as any).catch(() => { }), 500);
-      return () => clearTimeout(t);
-    }
-  }, [userId]);
+  // No warmup needed under Convex — actions are co-located with the deployment.
 
-  // Load frequent meals (last 14 days) when the wisdom sheet opens.
-  // Must be declared BEFORE any early return (e.g. the `loading` skeleton) or
-  // React will throw "rendered more hooks than during the previous render".
+  // Frequent meals (last 14 days). Derived from cached per-day nutrition pages
+  // — the legacy `nutrition_logs` view was retired in the Convex migration and
+  // walking 14 days × 1 query is wasteful for the wisdom sheet. Cache covers
+  // anything the user has scrolled this week (which is the typical case).
   useEffect(() => {
     if (!userId || !wisdomSheetOpen) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const since = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-        const { data } = await supabase
-          .from('nutrition_logs')
-          .select('meal_name, calories')
-          .eq('user_id', userId)
-          .gte('date', since);
-        if (cancelled || !data) return;
-        const counts = new Map<string, { count: number; totalCal: number }>();
-        for (const m of data as Array<{ meal_name: string | null; calories: number | null }>) {
-          const name = (m.meal_name || '').trim();
-          if (!name) continue;
-          const key = name.toLowerCase();
-          const entry = counts.get(key) || { count: 0, totalCal: 0 };
-          entry.count++;
-          entry.totalCal += m.calories || 0;
-          counts.set(key, entry);
-        }
-        const top = Array.from(counts.entries())
-          .filter(([, v]) => v.count >= 2)
-          .sort((a, b) => b[1].count - a[1].count)
-          .slice(0, 4)
-          .map(([name, v]) => ({
-            name: name.replace(/\b\w/g, (c) => c.toUpperCase()),
-            count: v.count,
-            avgCalories: Math.round(v.totalCal / v.count),
-          }));
-        setFrequentMeals(top);
-      } catch { /* ignore */ }
-    })();
-    return () => { cancelled = true; };
+    const counts = new Map<string, { count: number; totalCal: number }>();
+    for (let i = 0; i < 14; i++) {
+      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const dayMeals = localCache.getForDate<any[]>(userId, 'nutrition_logs', d) ?? [];
+      for (const m of dayMeals) {
+        const name = (m.meal_name || '').trim();
+        if (!name) continue;
+        const key = name.toLowerCase();
+        const entry = counts.get(key) || { count: 0, totalCal: 0 };
+        entry.count++;
+        entry.totalCal += m.calories || 0;
+        counts.set(key, entry);
+      }
+    }
+    const top = Array.from(counts.entries())
+      .filter(([, v]) => v.count >= 2)
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 4)
+      .map(([name, v]) => ({
+        name: name.replace(/\b\w/g, (c) => c.toUpperCase()),
+        count: v.count,
+        avgCalories: Math.round(v.totalCal / v.count),
+      }));
+    setFrequentMeals(top);
   }, [userId, wisdomSheetOpen]);
 
   const generateWisdom = async (profileData: any, logs: any[], calories: number, hydration: number) => {
@@ -207,6 +211,10 @@ export default function Dashboard() {
       const cacheKey = `daily_wisdom_${today}`;
       const calorieGoal = calculateCalorieTarget(profileData);
       const last7 = logs.slice(-7).map((l: any) => ({ date: l.date, weight_kg: l.weight_kg }));
+
+      // Touch `hydration` so the optimistic readout above is still tracked,
+      // even though Convex's daily-wisdom action doesn't take hydration inputs.
+      void hydration;
 
       const payload = {
         currentWeight: profileData.current_weight_kg,
@@ -222,17 +230,18 @@ export default function Dashboard() {
         aiRecommendedCalories: profileData.ai_recommended_calories,
         todayCalories: calories,
         dailyCalorieGoal: calorieGoal,
-        todayHydration: hydration,
-        hydrationGoalMl: 3000,
         weightHistory: last7,
       };
 
-      const { data, error } = await supabase.functions.invoke("daily-wisdom", { body: payload });
-      if (!isMounted()) return;
-      if (error || !data?.wisdom) {
+      let data: any = null;
+      try {
+        data = await dailyWisdomAction(payload);
+      } catch (error) {
         logger.error("daily-wisdom error", error);
         return;
       }
+      if (!isMounted()) return;
+      if (!data?.wisdom) return;
       AIPersistence.save(userId, cacheKey, data.wisdom, 25);
       setWisdom(data.wisdom);
     } catch (err) {
@@ -305,40 +314,19 @@ export default function Dashboard() {
       return;
     }
 
-    // --- Fetch fresh data from Supabase (3 core queries — gamification handled by useGamification) ---
-    // 12s timeout aligns with auth wrapper's 15s ceiling — gives iOS Capacitor
-    // cold start (secure-storage session restore + slow network) breathing room.
+    // --- Fetch fresh data from Convex (3 core queries — gamification handled by useGamification) ---
+    // Weight logs → live list (last 30). Nutrition for today → derived from
+    // meals.listWithTotals. Hydration for today → hydration_logs filtered by date.
     const fetchPromise = Promise.allSettled([
-      withRetry(() => withSupabaseTimeout(
-        supabase
-          .from("weight_logs")
-          .select("date, weight_kg")
-          .eq("user_id", userId)
-          .order("date", { ascending: true })
-          .limit(30),
-        12000,
-        "Weight logs query"
-      )),
-
-      withRetry(() => withSupabaseTimeout(
-        supabase
-          .from("nutrition_logs")
-          .select("calories")
-          .eq("user_id", userId)
-          .eq("date", today),
-        12000,
-        "Nutrition logs query"
-      )),
-
-      withRetry(() => withSupabaseTimeout(
-        supabase
-          .from("hydration_logs")
-          .select("amount_ml")
-          .eq("user_id", userId)
-          .eq("date", today),
-        12000,
-        "Hydration logs query"
-      )),
+      convex.query(api.weight_logs.listForUser, { limit: 30 }).then((rows) => ({
+        data: (rows ?? []).map((r: any) => ({ date: r.date, weight_kg: String(r.weight_kg) })),
+      })),
+      convex.query(api.meals.listWithTotals, { date: today }).then((rows) => ({
+        data: (rows ?? []).map((r: any) => ({ calories: r.total_calories ?? 0 })),
+      })),
+      convex.query(api.hydration_logs.listForUser, { from: today, to: today, limit: 50 }).then((rows) => ({
+        data: (rows ?? []).map((r: any) => ({ amount_ml: r.amount_ml ?? 0 })),
+      })),
     ]);
     dashboardInflight.set(inflightKey, fetchPromise);
 
@@ -367,14 +355,8 @@ export default function Dashboard() {
         }
       });
 
-      // If any query failed, the supabase client may be wedged behind a stale
-      // auth mutex. Kick the recovery flow (cycle realtime + refresh session)
-      // so the next visit / next visibility-change has a clean client.
-      if (anyRejected) {
-        void import('@/lib/connectionRecovery').then(({ recoverSupabaseConnection }) =>
-          recoverSupabaseConnection('dashboard-fetch-timeout')
-        ).catch(() => {});
-      }
+      // Convex auto-reconnects its WebSocket; nothing to do on rejection beyond logging.
+      void anyRejected;
 
       if (logsOk) {
         const logsData = (results[0] as PromiseFulfilledResult<any>).value.data || [];
@@ -406,11 +388,6 @@ export default function Dashboard() {
         : todayHydration;
       checkAndGenerateWisdom(profile, wisdomLogs, wisdomCals, wisdomHydration);
 
-      // Prefetch nutrition data for today so Nutrition page opens instantly
-      setTimeout(() => {
-        if (userId) preloadNutritionData(userId, [today]);
-      }, 2000);
-
       // Warm training-week cache so widget paints instantly on mount / next visit
       if (userId) preloadTrainingWeek(userId);
 
@@ -439,10 +416,6 @@ export default function Dashboard() {
         safeAsync(setTodayCalories)(0);
         safeAsync(setTodayHydration)(0);
       }
-      // Same recovery kick as per-query failure — defends against wedged auth.
-      void import('@/lib/connectionRecovery').then(({ recoverSupabaseConnection }) =>
-        recoverSupabaseConnection('dashboard-load-error')
-      ).catch(() => {});
     } finally {
       dashboardInflight.delete(inflightKey);
       safeAsync(setLoading)(false);
@@ -696,35 +669,9 @@ export default function Dashboard() {
             </div>
             <div className="flex-1 min-h-0">
               {chartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
-                    <YAxis
-                      stroke="hsl(var(--muted-foreground))"
-                      fontSize={9}
-                      tickLine={false}
-                      axisLine={false}
-                      width={30}
-                    />
-                    <Tooltip
-                      contentStyle={{
-                        backgroundColor: "hsl(var(--background))",
-                        border: "1px solid hsl(var(--border))",
-                        borderRadius: "8px",
-                        fontSize: 11,
-                      }}
-                      formatter={(value: number) => [`${value.toFixed(1)} ${weightUnit}`, 'Weight']}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="weight"
-                      stroke="hsl(var(--primary))"
-                      strokeWidth={2}
-                      dot={{ fill: "hsl(var(--primary))", r: 2.5, strokeWidth: 1.5, stroke: "hsl(var(--background))" }}
-                      activeDot={{ r: 4, strokeWidth: 1.5 }}
-                      animationDuration={0}
-                    />
-                  </ComposedChart>
-                </ResponsiveContainer>
+                <Suspense fallback={<div className="h-full w-full animate-pulse bg-muted/20 rounded-2xl" />}>
+                  <DashboardWeightChart data={chartData} weightUnit={weightUnit} />
+                </Suspense>
               ) : (
                 <div className="flex flex-col items-center justify-center h-full text-center">
                   <TrendingDown className="h-5 w-5 text-muted-foreground/40 mb-1" />

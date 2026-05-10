@@ -1,19 +1,20 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { useProfile, useAuth } from "@/contexts/UserContext";
-import { supabase } from "@/integrations/supabase/client";
+import { useAction, useMutation } from "convex/react";
+import { api } from "@/../convex/_generated/api";
+import { useProfile, useAuth, useUser } from "@/contexts/UserContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
-  AlertTriangle, CheckCircle, Zap, Shield, Activity,
+  AlertTriangle, CheckCircle, Zap, Shield,
   TrendingDown, ChevronLeft, Swords, Flame, Dumbbell,
-  Moon, Brain, Gauge, Utensils,
+  Moon, Brain, Gauge, Utensils, Loader2,
 } from "lucide-react";
+import InlinePlanDisplay from "@/components/onboarding/InlinePlanDisplay";
 import { profileSchema } from "@/lib/validation";
-import wizardLogo from "@/assets/wizard-logo.webp";
 import { celebrateSuccess, triggerHapticSelection } from "@/lib/haptics";
 import { logger } from "@/lib/logger";
 import { seedDemoData } from "@/lib/demoData";
@@ -31,48 +32,6 @@ const ACTIVITY_MULTIPLIERS: Record<string, number> = {
 };
 
 const TOTAL_STEPS = 15;
-
-// ── Progress bar that crawls smoothly ──
-function ProgressCrawl({ targetPercent, className }: { targetPercent: number; className?: string }) {
-  const [display, setDisplay] = useState(0);
-  const rafRef = useRef<number>(0);
-  const displayRef = useRef(0);
-
-  useEffect(() => {
-    if (targetPercent > displayRef.current + 10) {
-      displayRef.current = targetPercent - 8;
-    }
-  }, [targetPercent]);
-
-  useEffect(() => {
-    let lastTime = performance.now();
-    const tick = (now: number) => {
-      const dt = (now - lastTime) / 1000;
-      lastTime = now;
-      const target = Math.min(targetPercent, 95);
-      const diff = target - displayRef.current;
-      const speed = diff > 10 ? 12 : diff > 5 ? 4 : diff > 2 ? 1.5 : 0.4;
-      displayRef.current = Math.min(displayRef.current + speed * dt, target);
-      if (diff < 1 && targetPercent < 95) {
-        displayRef.current = Math.min(displayRef.current + 0.3 * dt, targetPercent + 5);
-      }
-      setDisplay(displayRef.current);
-      rafRef.current = requestAnimationFrame(tick);
-    };
-    rafRef.current = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafRef.current);
-  }, [targetPercent]);
-
-  useEffect(() => {
-    if (targetPercent >= 100) { displayRef.current = 100; setDisplay(100); }
-  }, [targetPercent]);
-
-  return (
-    <div className={`w-full h-1.5 rounded-full bg-muted/50 overflow-hidden ${className || ""}`}>
-      <div className="h-full rounded-full bg-primary" style={{ width: `${display}%`, transition: "none" }} />
-    </div>
-  );
-}
 
 // ── Selectable card ──
 function OptionCard({ selected, icon, label, description, onClick }: {
@@ -146,11 +105,18 @@ export default function Onboarding() {
   const [direction, setDirection] = useState(1); // 1=forward, -1=back
   const [loading, setLoading] = useState(false);
   const [generatingPlan, setGeneratingPlan] = useState(false);
-  const [generationStep, setGenerationStep] = useState(0);
+  // Holds the AI-generated plan once it resolves. Rendered inline below the
+  // chart on the final step instead of navigating to /cut-plan or /weight-plan.
+  const [generatedPlan, setGeneratedPlan] = useState<any>(null);
+  const [generatedPlanType, setGeneratedPlanType] = useState<"cut" | "weight_loss">("cut");
   const navigate = useNavigate();
   const { refreshProfile } = useProfile();
   const { hasProfile, isLoading: authLoading, isCoach } = useAuth();
+  const { userId } = useUser();
   const { toast } = useToast();
+  const generateCutPlanAction = useAction(api.actions.generateCutPlan.run);
+  const generateWeightPlanAction = useAction(api.actions.generateWeightPlan.run);
+  const updateGoalsMut = useMutation(api.profiles.updateGoals);
 
   const [formData, setFormData] = useState({
     // Screen 1 — flow split
@@ -370,72 +336,77 @@ export default function Onboarding() {
     const isFighterFlow = formData.goal_type === "cutting";
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("No user found");
+      if (!userId) throw new Error("No user found");
 
       const bmr = calculateBMR();
       const tdee = bmr * (ACTIVITY_MULTIPLIERS[activityLevel] || 1.55);
       const trainingFreq = parseInt(formData.training_frequency) || 3;
 
-      // 1. Save profile (sync, fast)
-      const { error } = await supabase.from("profiles").insert({
-        id: user.id,
+      const targetDate = formData.target_date || (() => {
+        if (formData.target_weeks) {
+          const weeks = parseInt(formData.target_weeks) || 12;
+          return new Date(Date.now() + weeks * 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        }
+        const diff = Math.abs(parseFloat(formData.current_weight_kg) - parseFloat(formData.goal_weight_kg));
+        const weeks = Math.max(4, Math.ceil(diff / 0.5));
+        return new Date(Date.now() + weeks * 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      })();
+
+      // 1. Save profile via the Convex `updateGoals` mutation. The auth
+      //    callback already inserted a placeholder profile row; this is the
+      //    first authoritative write of the user's onboarding answers.
+      await updateGoalsMut({
         age: parseInt(formData.age || "25"),
         sex: formData.sex || "male",
-        height_cm: parseFloat(formData.height_cm),
-        current_weight_kg: parseFloat(formData.current_weight_kg),
-        goal_weight_kg: parseFloat(formData.goal_weight_kg),
-        fight_week_target_kg: isFighterFlow ? parseFloat(formData.fight_week_target_kg) : null,
-        target_date: formData.target_date || (() => {
-          if (formData.target_weeks) {
-            const weeks = parseInt(formData.target_weeks) || 12;
-            return new Date(Date.now() + weeks * 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-          }
-          const diff = Math.abs(parseFloat(formData.current_weight_kg) - parseFloat(formData.goal_weight_kg));
-          const weeks = Math.max(4, Math.ceil(diff / 0.5));
-          return new Date(Date.now() + weeks * 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-        })(),
-        activity_level: activityLevel,
-        training_frequency: trainingFreq,
-        goal_type: formData.goal_type || "losing",
+        heightCm: parseFloat(formData.height_cm),
+        currentWeightKg: parseFloat(formData.current_weight_kg),
+        goalWeightKg: parseFloat(formData.goal_weight_kg),
+        fightWeekTargetKg: isFighterFlow ? parseFloat(formData.fight_week_target_kg) : undefined,
+        targetDate,
+        activityLevel,
+        trainingFrequency: trainingFreq,
+        goalType: formData.goal_type || "losing",
         bmr,
         tdee,
-        athlete_type: formData.athlete_types.length > 0
+        athleteType: formData.athlete_types.length > 0
           ? formData.athlete_types.join(",")
-          : (formData.athlete_type || null),
-        experience_level: formData.experience_level || null,
-        training_types: formData.training_types.length > 0 ? formData.training_types : null,
-        sleep_hours: formData.sleep_hours || null,
-        primary_struggle: formData.primary_struggle || null,
-        plan_aggressiveness: formData.plan_aggressiveness || "balanced",
-        body_fat_pct: formData.body_fat_pct ? parseFloat(formData.body_fat_pct) : null,
+          : (formData.athlete_type || undefined),
+        experienceLevel: formData.experience_level || undefined,
+        trainingTypes: formData.training_types.length > 0 ? formData.training_types : undefined,
+        sleepHours: formData.sleep_hours || undefined,
+        primaryStruggle: formData.primary_struggle || undefined,
+        planAggressiveness: formData.plan_aggressiveness || "balanced",
+        bodyFatPct: formData.body_fat_pct ? parseFloat(formData.body_fat_pct) : undefined,
       });
 
-      if (error) throw error;
+      // 2. Mark generation as in-flight — this drives the inline pill near
+      //    the Generate button. The chart page stays visible behind it; we no
+      //    longer route to a full-screen overlay or to /cut-plan|/weight-plan.
+      setGeneratingPlan(true);
 
-      // 2. Fire the AI plan in the BACKGROUND while we show the paywall.
-      // We race the paywall dismissal against the plan promise so the user
-      // only sees a generation overlay if the plan hasn't finished by the
-      // time they close the paywall.
-      const planPromise: Promise<boolean> = (async () => {
+      // Fire the AI plan. Resolves with the saved plan payload (or null on
+      // failure) so we can render it in-place once it lands.
+      const planPromise: Promise<any | null> = (async () => {
         try {
           if (isFighterFlow) {
-            const { data: planData, error: planError } = await supabase.functions.invoke("generate-cut-plan", {
-              body: {
+            // Touch values that the Convex action sources from server snapshot
+            // so unused-locals lint stays happy on this shortened payload.
+            void trainingFreq; void bmr; void tdee;
+            let planData: any = null;
+            try {
+              planData = await generateCutPlanAction({
                 currentWeight: parseFloat(formData.current_weight_kg),
                 goalWeight: parseFloat(formData.goal_weight_kg),
-                fightWeekTarget: parseFloat(formData.fight_week_target_kg),
+                fightWeekTargetKg: parseFloat(formData.fight_week_target_kg),
                 targetDate: formData.target_date,
                 age: parseInt(formData.age || "25"),
-                sex: formData.sex || "male",
+                sex: (formData.sex === "female" ? "female" : "male") as "male" | "female",
                 heightCm: parseFloat(formData.height_cm),
                 activityLevel,
-                trainingFrequency: trainingFreq,
-                bmr,
-                tdee,
-              },
-            });
-            if (planError) logger.warn("Cut plan generation failed", { error: planError });
+              });
+            } catch (planError) {
+              logger.warn("Cut plan generation failed", { error: planError });
+            }
             const plan = planData?.plan || planData;
             if (plan?.weeklyPlan) {
               const planPayload = {
@@ -446,36 +417,40 @@ export default function Onboarding() {
               };
               localStorage.setItem("wcw_cut_plan", JSON.stringify(planPayload));
               const week1 = plan.weeklyPlan[0];
-              const profileUpdate: Record<string, any> = { cut_plan_json: planPayload };
-              if (week1) {
-                profileUpdate.ai_recommended_calories = week1.calories;
-                profileUpdate.ai_recommended_protein_g = week1.protein_g;
-                profileUpdate.ai_recommended_carbs_g = week1.carbs_g;
-                profileUpdate.ai_recommended_fats_g = week1.fats_g;
-              }
-              await supabase.from("profiles").update(profileUpdate).eq("id", user.id);
-              return true;
+              await updateGoalsMut({
+                cutPlanJson: planPayload,
+                ...(week1 ? {
+                  aiRecommendedCalories: week1.calories,
+                  aiRecommendedProteinG: week1.protein_g,
+                  aiRecommendedCarbsG: week1.carbs_g,
+                  aiRecommendedFatsG: week1.fats_g,
+                } : {}),
+              });
+              return planPayload;
             }
-            return false;
+            return null;
           } else {
             logger.info("Generating weight loss plan for non-fighter", { goalType: formData.goal_type, targetWeeks: formData.target_weeks });
             const targetWeeks = parseInt(formData.target_weeks) || Math.max(4, Math.ceil(Math.abs(parseFloat(formData.current_weight_kg) - parseFloat(formData.goal_weight_kg)) / 0.5));
-            const { data: planData, error: planError } = await supabase.functions.invoke("generate-weight-plan", {
-              body: {
+            // Derive target date from target weeks since Convex action expects a date.
+            const derivedTargetDate = formData.target_date
+              || new Date(Date.now() + targetWeeks * 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+            void trainingFreq; void bmr; void tdee;
+            let planData: any = null;
+            try {
+              planData = await generateWeightPlanAction({
                 currentWeight: parseFloat(formData.current_weight_kg),
                 goalWeight: parseFloat(formData.goal_weight_kg),
-                targetWeeks,
+                targetDate: derivedTargetDate,
                 age: parseInt(formData.age || "25"),
-                sex: formData.sex || "male",
+                sex: (formData.sex === "female" ? "female" : "male") as "male" | "female",
                 heightCm: parseFloat(formData.height_cm),
                 activityLevel,
-                trainingFrequency: trainingFreq,
-                bmr,
-                tdee,
-                planAggressiveness: formData.plan_aggressiveness || "balanced",
-              },
-            });
-            if (planError) logger.warn("Weight plan generation failed", { error: planError });
+                goalType: formData.goal_type,
+              });
+            } catch (planError) {
+              logger.warn("Weight plan generation failed", { error: planError });
+            }
             const plan = planData?.plan || planData;
             if (plan?.weeklyPlan) {
               const planPayload = {
@@ -487,93 +462,62 @@ export default function Onboarding() {
               };
               localStorage.setItem("wcw_cut_plan", JSON.stringify(planPayload));
               const week1 = plan.weeklyPlan[0];
-              const profileUpdate: Record<string, any> = { cut_plan_json: planPayload };
-              if (week1) {
-                profileUpdate.ai_recommended_calories = week1.calories;
-                profileUpdate.ai_recommended_protein_g = week1.protein_g;
-                profileUpdate.ai_recommended_carbs_g = week1.carbs_g;
-                profileUpdate.ai_recommended_fats_g = week1.fats_g;
-              }
-              await supabase.from("profiles").update(profileUpdate).eq("id", user.id);
-              return true;
+              await updateGoalsMut({
+                cutPlanJson: planPayload,
+                ...(week1 ? {
+                  aiRecommendedCalories: week1.calories,
+                  aiRecommendedProteinG: week1.protein_g,
+                  aiRecommendedCarbsG: week1.carbs_g,
+                  aiRecommendedFatsG: week1.fats_g,
+                } : {}),
+              });
+              return planPayload;
             }
-            return false;
+            return null;
           }
         } catch (planErr) {
-          logger.warn("Plan generation error", planErr);
-          return false;
+          logger.warn("Plan generation error", { err: String(planErr) });
+          return null;
         }
       })();
 
-      // Track whether the plan promise has already settled when the paywall closes.
-      let planSettled = false;
-      let planResult: boolean = false;
-      planPromise.then((r) => { planSettled = true; planResult = r; }).catch(() => { planSettled = true; planResult = false; });
-
-      // 3. Show the RevenueCat paywall NOW, before any generation overlay.
-      // We only show it once per onboarding — later flows never re-trigger.
+      // 3. Show the RevenueCat paywall in parallel with generation. The user
+      //    only sees the inline pill on the chart page; no full-screen takeover.
       if (Capacitor.isNativePlatform()) {
         try {
           await presentPaywallIfNeeded();
           await refreshProfile();
-        } catch (err) { logger.warn("Paywall presentation error", err); }
+        } catch (err) { logger.warn("Paywall presentation error", { err: String(err) }); }
       }
 
-      // 4. ALWAYS show the AI overlay after the paywall closes — this covers
-      //    every race between "user dismisses paywall fast" and "plan finishes
-      //    fast", so the user never sees the dashboard mid-flight while their
-      //    plan is being prepared. If the plan is already done we just skip
-      //    to the "ready" step for a smooth handoff; otherwise we wait.
-      setGeneratingPlan(true);
-      let hasPlan: boolean;
-      if (planSettled) {
-        // Plan finished while paywall was open — short "ready" beat, then transition
-        setGenerationStep(GENERATION_STEPS.length - 1);
-        await new Promise(r => setTimeout(r, 600));
-        hasPlan = planResult;
-      } else {
-        setGenerationStep(0);
-        const stepTimers = [
-          setTimeout(() => setGenerationStep(1), 1200),
-          setTimeout(() => setGenerationStep(2), 3000),
-          setTimeout(() => setGenerationStep(3), 5000),
-        ];
-        try {
-          hasPlan = await planPromise;
-        } finally {
-          stepTimers.forEach(clearTimeout);
-        }
-        setGenerationStep(4);
-        await new Promise(r => setTimeout(r, 900));
-      }
+      // 4. Await the plan. The inline pill stays visible until it resolves.
+      const planPayload = await planPromise;
 
       await refreshProfile();
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      if (currentUser) seedDemoData(currentUser.id);
-      celebrateSuccess();
+      if (userId) seedDemoData(userId);
 
-      localStorage.setItem("wcw_onboarding_just_completed", "true");
-
-      // Safety net: even if hasPlan came back false (e.g. response shape edge
-      // case) but a plan was actually written to localStorage by the promise
-      // body, treat it as success. Prevents the "land on dashboard, then the
-      // Dashboard auto-redirects to /cut-plan a few seconds later" flicker.
-      if (!hasPlan && localStorage.getItem("wcw_cut_plan")) {
-        hasPlan = true;
-      }
-
-      if (hasPlan) {
-        setGenerationStep(GENERATION_STEPS.length - 1);
+      if (planPayload) {
         localStorage.removeItem("wcw_cut_plan_seen"); // Force user to see plan first
-        navigate("/cut-plan", { replace: true });
+        celebrateSuccess();
+        // Render the plan in-place below the chart. The Continue button on
+        // InlinePlanDisplay sets `wcw_onboarding_just_completed` and routes
+        // to /dashboard, which auto-triggers the tutorial flow.
+        setGeneratedPlanType(isFighterFlow ? "cut" : "weight_loss");
+        setGeneratedPlan(planPayload);
+        setGeneratingPlan(false);
       } else {
-        setGenerationStep(5);
+        // Plan generation failed entirely. Surface the failure and let the
+        // user retry or skip ahead to the dashboard.
+        setGeneratingPlan(false);
+        toast({
+          title: "Plan unavailable",
+          description: "We couldn't build your plan right now. You can regenerate it from Settings.",
+        });
         setTimeout(() => navigate("/dashboard"), 800);
       }
     } catch (error: any) {
       logger.error("Onboarding failed", error);
       setGeneratingPlan(false);
-      setGenerationStep(0);
       toast({ variant: "destructive", title: "Error", description: error.message });
     } finally {
       setLoading(false);
@@ -583,63 +527,12 @@ export default function Onboarding() {
   // Wire submitRef so goNext can fire handleSubmit at end-of-flow.
   submitRef.current = handleSubmit;
 
-  // ── Generation overlay ──
-  const isFight = formData.goal_type === "cutting";
-  const GENERATION_STEPS = [
-    { icon: Activity, label: isFight ? "Analyzing your fight profile" : "Analyzing your profile", color: "text-blue-400" },
-    { icon: Zap, label: "Calculating nutrition targets", color: "text-yellow-400" },
-    { icon: Shield, label: isFight ? "Building your weight cut strategy" : "Building your weight loss plan", color: "text-blue-400" },
-    { icon: TrendingDown, label: isFight ? "Generating your AI fight plan" : "Generating your meal plan", color: "text-primary" },
-    { icon: Activity, label: "Finalizing your plan", color: "text-primary" },
-    { icon: CheckCircle, label: isFight ? "Your fight camp starts now" : "Your plan is ready", color: "text-green-400" },
-  ];
-
-  if (generatingPlan) {
-    const totalSteps = GENERATION_STEPS.length - 1;
-    const progressPercent = Math.min((generationStep / totalSteps) * 100, 100);
-    const isReady = generationStep >= GENERATION_STEPS.length - 1;
-    return (
-      <div className="fixed inset-0 bg-background text-foreground flex flex-col items-center justify-center z-50 px-6">
-        <div className="relative z-10 flex flex-col items-center max-w-sm w-full">
-          <div className="relative mb-8">
-            <img src={wizardLogo} alt="Wizard" className="relative h-20 w-20 object-contain" />
-          </div>
-          <h2 className="text-xl font-bold text-foreground tracking-tight mb-1 text-center">
-            {isReady ? "All Set!" : isFight ? "Building Your Fight Plan" : "Building Your Plan"}
-          </h2>
-          <p className="text-sm text-muted-foreground mb-8 text-center">
-            {isReady ? "Opening your dashboard..." : "This will only take a moment"}
-          </p>
-          <ProgressCrawl targetPercent={progressPercent} className="mb-8" />
-          <div className="w-full space-y-3.5">
-            {GENERATION_STEPS.map((s, i) => {
-              const Icon = s.icon;
-              const isActive = i === generationStep;
-              const isDone = i < generationStep;
-              const isPending = i > generationStep;
-              return (
-                <div key={i} className={`flex items-center gap-3 transition-all duration-500 ${isPending ? "opacity-15" : isDone ? "opacity-50" : "opacity-100"}`}>
-                  <div className="relative h-9 w-9 flex-shrink-0">
-                    {isActive && !isDone && (
-                      <svg className="absolute inset-0 h-9 w-9 animate-spin" style={{ animationDuration: "2s" }} viewBox="0 0 36 36">
-                        <circle cx="18" cy="18" r="16" fill="none" stroke="hsl(var(--primary))" strokeWidth="2" strokeDasharray="80 20" strokeLinecap="round" opacity="0.4" />
-                      </svg>
-                    )}
-                    <div className={`h-9 w-9 rounded-full flex items-center justify-center transition-all duration-500 ${isDone ? "bg-primary/20" : isActive ? "bg-muted" : "bg-muted/50"}`}>
-                      {isDone ? <CheckCircle className="h-4 w-4 text-primary" /> : <Icon className={`h-4 w-4 ${isActive ? s.color : "text-muted-foreground"}`} />}
-                    </div>
-                  </div>
-                  <span className={`text-sm font-medium transition-colors duration-500 ${isDone ? "text-muted-foreground line-through" : isActive ? "text-foreground" : "text-muted-foreground"}`}>
-                    {s.label}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Continue handler for the in-page plan view. Sets the flag the
+  // TutorialContext watches for the first-run tutorial flow.
+  const handleContinueToDashboard = useCallback(() => {
+    localStorage.setItem("wcw_onboarding_just_completed", "1");
+    navigate("/dashboard");
+  }, [navigate]);
 
   if (authLoading || hasProfile || isCoach) return null;
 
@@ -1372,8 +1265,19 @@ export default function Onboarding() {
         {/* ── Screen 13: Aggressiveness (losing flow only) ── */}
         {step === 13 && formData.goal_type === "losing" && (
           <StepLayout step={13} title="How aggressive do you want to go?" subtitle="This controls how fast we push your weight cut and plan intensity."
-            footer={<Button onClick={goNext} disabled={!formData.plan_aggressiveness}
-              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+            footer={
+              generatedPlan ? null : generatingPlan ? (
+                <div className="w-full flex justify-center">
+                  <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    Generating your plan…
+                  </div>
+                </div>
+              ) : (
+                <Button onClick={goNext} disabled={loading || !formData.plan_aggressiveness}
+                  className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>
+              )
+            }
           >
             <div className="space-y-2.5">
               {[
@@ -1384,6 +1288,28 @@ export default function Onboarding() {
                 <OptionCard key={opt.value} selected={formData.plan_aggressiveness === opt.value} icon={opt.icon}
                   label={opt.label} description={opt.description} onClick={() => selectAndAdvance("plan_aggressiveness", opt.value)} />
               ))}
+
+              {/* In-page plan display — slides in below the cards once the
+                  AI plan resolves. The Continue button inside this component
+                  handles the dashboard handoff + tutorial trigger. */}
+              <AnimatePresence>
+                {generatedPlan && (
+                  <motion.div
+                    key="inline-plan-losing"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    transition={{ duration: 0.45, ease: "easeOut" }}
+                    className="pt-3"
+                  >
+                    <InlinePlanDisplay
+                      plan={generatedPlan}
+                      planType={generatedPlanType}
+                      onContinue={handleContinueToDashboard}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </StepLayout>
         )}
@@ -1480,10 +1406,19 @@ export default function Onboarding() {
           return (
             <StepLayout step={13} title="Your projected cut" subtitle="Review before we generate your plan."
               footer={
-                <Button onClick={goNext} disabled={loading || !validInputs}
-                  className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">
-                  Generate plan
-                </Button>
+                generatedPlan ? null : generatingPlan ? (
+                  <div className="w-full flex justify-center">
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Generating your plan…
+                    </div>
+                  </div>
+                ) : (
+                  <Button onClick={goNext} disabled={loading || !validInputs}
+                    className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">
+                    Generate plan
+                  </Button>
+                )
               }
             >
               <div className="space-y-3">
@@ -1516,6 +1451,28 @@ export default function Onboarding() {
                     </p>
                   </div>
                 )}
+
+                {/* In-page plan display — slides in below the chart once the
+                    AI plan resolves. The Continue button inside this component
+                    handles the dashboard handoff + tutorial trigger. */}
+                <AnimatePresence>
+                  {generatedPlan && (
+                    <motion.div
+                      key="inline-plan"
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: 10 }}
+                      transition={{ duration: 0.45, ease: "easeOut" }}
+                      className="pt-2"
+                    >
+                      <InlinePlanDisplay
+                        plan={generatedPlan}
+                        planType={generatedPlanType}
+                        onContinue={handleContinueToDashboard}
+                      />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             </StepLayout>
           );

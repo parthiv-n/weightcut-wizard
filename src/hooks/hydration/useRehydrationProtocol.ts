@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useAction } from "convex/react";
+import { api } from "@/../convex/_generated/api";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { useAITask } from "@/contexts/AITaskContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { AIPersistence } from "@/lib/aiPersistence";
-import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
+import { createAIAbortController } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
 import { Droplets, Activity, CheckCircle } from "lucide-react";
 import type { RehydrationProtocol } from "@/pages/hydration/types";
@@ -17,6 +18,7 @@ export function useRehydrationProtocol() {
   const { addTask, completeTask, failTask } = useAITask();
   const { safeAsync, isMounted } = useSafeAsync();
   const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
+  const rehydrationProtocolAction = useAction(api.actions.rehydrationProtocol.run);
   const aiAbortRef = useRef<AbortController | null>(null);
 
   const currentWeight = contextProfile?.current_weight_kg ?? 0;
@@ -80,14 +82,7 @@ export function useRehydrationProtocol() {
     loadPersistedProtocol();
   }, [userId]);
 
-  // Warmup ping
-  useEffect(() => {
-    if (!userId) return;
-    const timer = setTimeout(() => {
-      supabase.functions.invoke("rehydration-protocol", { method: "GET" } as any).catch(() => {});
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, [userId]);
+  // No warmup needed under Convex — actions are co-located with the deployment.
 
   const loadPersistedProtocol = () => {
     if (!userId || protocol) return;
@@ -138,32 +133,27 @@ export function useRehydrationProtocol() {
     });
 
     try {
+      const weightLostKg = parseFloat(weightLost);
+      const weighInWeightKg = Math.max(0.1, currentWeight - weightLostKg);
+      // Action signature: { weighInWeightKg, fightWeightKg?, hoursUntilFight, sex, dehydrationPercent? }
+      const sexNarrow: "male" | "female" =
+        contextProfile?.sex === "female" ? "female" : "male";
 
-      const { data, error } = await supabase.functions.invoke("rehydration-protocol", {
-        body: {
-          weightLostKg: parseFloat(weightLost),
-          availableHours,
-          awakeHours,
-          weighInTiming: availableHours <= 6 ? "same-day" : "day-before",
-          currentWeightKg: currentWeight,
-          glycogenDepletion,
-          sex: contextProfile?.sex,
-          age: contextProfile?.age,
-          heightCm: contextProfile?.height_cm,
-          activityLevel: contextProfile?.activity_level,
-          trainingFrequency: contextProfile?.training_frequency,
-          tdee: contextProfile?.tdee,
-          goalWeightKg: contextProfile?.goal_weight_kg,
-          fightWeekTargetKg: contextProfile?.fight_week_target_kg,
-        },
-      });
+      let data: any;
+      try {
+        data = await rehydrationProtocolAction({
+          weighInWeightKg,
+          fightWeightKg: currentWeight,
+          hoursUntilFight: availableHours,
+          sex: sexNarrow,
+        });
+      } catch (err: any) {
+        if (await handleAILimitError(err)) { failTask(taskId, "Limit reached"); return; }
+        throw new Error(err?.message || "Failed to generate protocol");
+      }
 
       if (controller.signal.aborted) return;
       if (!isMounted()) return;
-      if (error) {
-        if (await handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
-        throw new Error(await extractEdgeFunctionError(error, "Failed to generate protocol"));
-      }
 
       if (data?.protocol) {
         onAICallSuccess();

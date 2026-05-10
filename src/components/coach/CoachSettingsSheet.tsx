@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth, useUser, useProfile } from "@/contexts/UserContext";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { useAction, useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 import { logger } from "@/lib/logger";
 import { triggerHaptic } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
@@ -39,16 +40,14 @@ export function CoachSettingsSheet({ open, onOpenChange }: Props) {
   const [loggingOut, setLoggingOut] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const deleteAccount = useAction(api.actions.deleteAccount.run);
+  const setUserNameMut = useMutation(api.profiles.setUserName);
 
   const handleSaveName = async () => {
     if (!userId || !editedName.trim() || editedName === userName) return;
     setSavingName(true);
     try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ display_name: editedName.trim() })
-        .eq("id", userId);
-      if (error) throw error;
+      await setUserNameMut({ displayName: editedName.trim() });
       setUserName(editedName.trim());
       toast({ title: "Name updated" });
     } catch (err: any) {
@@ -81,9 +80,9 @@ export function CoachSettingsSheet({ open, onOpenChange }: Props) {
     setDeleting(true);
     globalLoading.show("Deleting account…", "This may take a moment");
     try {
-      const { error } = await supabase.functions.invoke("delete-account");
-      if (error) throw error;
-      await supabase.auth.signOut();
+      await deleteAccount({});
+      // Convex auth: signOut handled by the parent context.
+      await signOut();
       onOpenChange(false);
       setDeleteOpen(false);
       navigate("/auth");

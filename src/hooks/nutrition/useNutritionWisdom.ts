@@ -1,12 +1,12 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { supabase } from "@/integrations/supabase/client";
+import { useAction } from "convex/react";
+import { api } from "@/../convex/_generated/api";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { AIPersistence } from "@/lib/aiPersistence";
-import { extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
 import type { TrainingFoodTip, MacroGoals } from "@/pages/nutrition/types";
 
@@ -30,6 +30,7 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
   const { toast } = useToast();
   const { safeAsync, isMounted } = useSafeAsync();
   const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
+  const mealPlannerAction = useAction(api.actions.mealPlanner.run);
 
   const [trainingWisdom, setTrainingWisdom] = useState<TrainingFoodTip | null>(null);
   const [trainingWisdomLoading, setTrainingWisdomLoading] = useState(false);
@@ -111,21 +112,21 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
       const cGoal = aiMacroGoals?.carbsGrams || 0;
       const fGoal = aiMacroGoals?.fatsGrams || 0;
 
-      const { data, error } = await supabase.functions.invoke("meal-planner", {
-        body: {
+      let data: any;
+      try {
+        data = await mealPlannerAction({
           prompt: `You are a combat sports nutritionist. Give ONE short sentence (max 25 words) of personalised advice for a fighter based on their intake today.\n\nCurrent intake: ${Math.round(totalCalories)} kcal (goal: ${calGoal}), ${Math.round(totalProtein)}g protein (goal: ${pGoal}g), ${Math.round(totalCarbs)}g carbs (goal: ${cGoal}g), ${Math.round(totalFats)}g fat (goal: ${fGoal}g).\n\nReturn ONLY the advice sentence, no JSON, no quotes, no explanation. Be specific (mention actual foods) and motivating. Use fight/training context.`,
           action: "generate",
           userData: { dailyCalorieTarget: calGoal },
-        },
-      });
+        });
+      } catch (error: any) {
+        if (!isMounted()) return;
+        if (userInitiated && await handleAILimitError(error)) return;
+        if (!userInitiated) return;
+        throw new Error(error?.message || "Could not generate nutrition advice");
+      }
 
       if (!isMounted()) return;
-      if (error) {
-        // Only show limit dialog if user explicitly requested it
-        if (userInitiated && await handleAILimitError(error)) return;
-        if (!userInitiated) return; // silently fail for auto-triggered calls
-        throw new Error(await extractEdgeFunctionError(error, "Could not generate nutrition advice"));
-      }
       if (data?.error) throw new Error(data.error);
       onAICallSuccess();
 
@@ -184,8 +185,9 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
         prefClause = `\nUser preference: "${prefKey}". Tailor the suggestions accordingly (e.g. if they want easily digestible food, suggest lighter options; if they mention a food preference, incorporate it).`;
       }
 
-      const { data, error } = await supabase.functions.invoke("meal-planner", {
-        body: {
+      let data: any;
+      try {
+        data = await mealPlannerAction({
           prompt: `Generate optimal pre-training and post-training food recommendations for a combat athlete.
             Their daily calorie target is ${calorieTarget} kcal with ${proteinGoal}g protein goal.${prefClause}
 
@@ -203,14 +205,14 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
             Give 3 pre-training and 3 post-training options. Focus on fight camp nutrition.`,
           action: "generate",
           userData: { dailyCalorieTarget: calorieTarget, proteinGoal },
-        },
-      });
+        });
+      } catch (error: any) {
+        if (!isMounted()) return;
+        if (await handleAILimitError(error)) return;
+        throw new Error(error?.message || "Could not generate training food ideas");
+      }
 
       if (!isMounted()) return;
-      if (error) {
-        if (await handleAILimitError(error)) return;
-        throw new Error(await extractEdgeFunctionError(error, "Could not generate training food ideas"));
-      }
       if (data?.error) throw new Error(data.error);
       onAICallSuccess();
 

@@ -1,0 +1,185 @@
+/* eslint-disable */
+/**
+ * Generated `api` utility.
+ *
+ * THIS CODE IS AUTOMATICALLY GENERATED.
+ *
+ * To regenerate, run `npx convex dev`.
+ * @module
+ */
+
+import type * as _shared_aiSchemas from "../_shared/aiSchemas.js";
+import type * as _shared_apnsJwt from "../_shared/apnsJwt.js";
+import type * as _shared_athleteSnapshot from "../_shared/athleteSnapshot.js";
+import type * as _shared_errorReporter from "../_shared/errorReporter.js";
+import type * as _shared_groq from "../_shared/groq.js";
+import type * as _shared_loadMetrics from "../_shared/loadMetrics.js";
+import type * as _shared_math from "../_shared/math.js";
+import type * as _shared_normalizeWeeklyPlan from "../_shared/normalizeWeeklyPlan.js";
+import type * as _shared_parseResponse from "../_shared/parseResponse.js";
+import type * as _shared_recoveryContext from "../_shared/recoveryContext.js";
+import type * as _shared_researchSummary from "../_shared/researchSummary.js";
+import type * as _shared_sanitizeUserText from "../_shared/sanitizeUserText.js";
+import type * as _shared_subscriptionGuard from "../_shared/subscriptionGuard.js";
+import type * as actions__helpers from "../actions/_helpers.js";
+import type * as actions_activatePremium from "../actions/activatePremium.js";
+import type * as actions_analyseDiet from "../actions/analyseDiet.js";
+import type * as actions_analyzeMeal from "../actions/analyzeMeal.js";
+import type * as actions_dailyWisdom from "../actions/dailyWisdom.js";
+import type * as actions_deleteAccount from "../actions/deleteAccount.js";
+import type * as actions_fightCampCoach from "../actions/fightCampCoach.js";
+import type * as actions_fightWeekAnalysis from "../actions/fightWeekAnalysis.js";
+import type * as actions_foodSearch from "../actions/foodSearch.js";
+import type * as actions_generateCutPlan from "../actions/generateCutPlan.js";
+import type * as actions_generateTechniqueChains from "../actions/generateTechniqueChains.js";
+import type * as actions_generateWeightPlan from "../actions/generateWeightPlan.js";
+import type * as actions_hydrationInsights from "../actions/hydrationInsights.js";
+import type * as actions_lookupIngredient from "../actions/lookupIngredient.js";
+import type * as actions_mealPlanner from "../actions/mealPlanner.js";
+import type * as actions_reconcileAiOutcomes from "../actions/reconcileAiOutcomes.js";
+import type * as actions_recoveryCoach from "../actions/recoveryCoach.js";
+import type * as actions_rehydrationProtocol from "../actions/rehydrationProtocol.js";
+import type * as actions_scanBarcode from "../actions/scanBarcode.js";
+import type * as actions_sendAnnouncementPush from "../actions/sendAnnouncementPush.js";
+import type * as actions_trainingInsights from "../actions/trainingInsights.js";
+import type * as actions_trainingSummary from "../actions/trainingSummary.js";
+import type * as actions_transcribeAudio from "../actions/transcribeAudio.js";
+import type * as actions_weightTrackerAnalysis from "../actions/weightTrackerAnalysis.js";
+import type * as actions_wizardChat from "../actions/wizardChat.js";
+import type * as actions_workoutGenerator from "../actions/workoutGenerator.js";
+import type * as actions_internal from "../actions_internal.js";
+import type * as ai_decisions from "../ai_decisions.js";
+import type * as announcement_polls from "../announcement_polls.js";
+import type * as announcements from "../announcements.js";
+import type * as auth from "../auth.js";
+import type * as coach from "../coach.js";
+import type * as crons from "../crons.js";
+import type * as deleteAccountMutations from "../deleteAccountMutations.js";
+import type * as device_tokens from "../device_tokens.js";
+import type * as exercise_prs from "../exercise_prs.js";
+import type * as exercises from "../exercises.js";
+import type * as fight_camp from "../fight_camp.js";
+import type * as foods from "../foods.js";
+import type * as gym_members from "../gym_members.js";
+import type * as gym_sessions from "../gym_sessions.js";
+import type * as gyms from "../gyms.js";
+import type * as http from "../http.js";
+import type * as hydration_logs from "../hydration_logs.js";
+import type * as lib_auth from "../lib/auth.js";
+import type * as meal_plans from "../meal_plans.js";
+import type * as meals from "../meals.js";
+import type * as profiles from "../profiles.js";
+import type * as profiles_internal from "../profiles_internal.js";
+import type * as pushFanout from "../pushFanout.js";
+import type * as rate_limits from "../rate_limits.js";
+import type * as routines from "../routines.js";
+import type * as sleep_logs from "../sleep_logs.js";
+import type * as techniques from "../techniques.js";
+import type * as weight_logs from "../weight_logs.js";
+import type * as wellness from "../wellness.js";
+
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
+
+declare const fullApi: ApiFromModules<{
+  "_shared/aiSchemas": typeof _shared_aiSchemas;
+  "_shared/apnsJwt": typeof _shared_apnsJwt;
+  "_shared/athleteSnapshot": typeof _shared_athleteSnapshot;
+  "_shared/errorReporter": typeof _shared_errorReporter;
+  "_shared/groq": typeof _shared_groq;
+  "_shared/loadMetrics": typeof _shared_loadMetrics;
+  "_shared/math": typeof _shared_math;
+  "_shared/normalizeWeeklyPlan": typeof _shared_normalizeWeeklyPlan;
+  "_shared/parseResponse": typeof _shared_parseResponse;
+  "_shared/recoveryContext": typeof _shared_recoveryContext;
+  "_shared/researchSummary": typeof _shared_researchSummary;
+  "_shared/sanitizeUserText": typeof _shared_sanitizeUserText;
+  "_shared/subscriptionGuard": typeof _shared_subscriptionGuard;
+  "actions/_helpers": typeof actions__helpers;
+  "actions/activatePremium": typeof actions_activatePremium;
+  "actions/analyseDiet": typeof actions_analyseDiet;
+  "actions/analyzeMeal": typeof actions_analyzeMeal;
+  "actions/dailyWisdom": typeof actions_dailyWisdom;
+  "actions/deleteAccount": typeof actions_deleteAccount;
+  "actions/fightCampCoach": typeof actions_fightCampCoach;
+  "actions/fightWeekAnalysis": typeof actions_fightWeekAnalysis;
+  "actions/foodSearch": typeof actions_foodSearch;
+  "actions/generateCutPlan": typeof actions_generateCutPlan;
+  "actions/generateTechniqueChains": typeof actions_generateTechniqueChains;
+  "actions/generateWeightPlan": typeof actions_generateWeightPlan;
+  "actions/hydrationInsights": typeof actions_hydrationInsights;
+  "actions/lookupIngredient": typeof actions_lookupIngredient;
+  "actions/mealPlanner": typeof actions_mealPlanner;
+  "actions/reconcileAiOutcomes": typeof actions_reconcileAiOutcomes;
+  "actions/recoveryCoach": typeof actions_recoveryCoach;
+  "actions/rehydrationProtocol": typeof actions_rehydrationProtocol;
+  "actions/scanBarcode": typeof actions_scanBarcode;
+  "actions/sendAnnouncementPush": typeof actions_sendAnnouncementPush;
+  "actions/trainingInsights": typeof actions_trainingInsights;
+  "actions/trainingSummary": typeof actions_trainingSummary;
+  "actions/transcribeAudio": typeof actions_transcribeAudio;
+  "actions/weightTrackerAnalysis": typeof actions_weightTrackerAnalysis;
+  "actions/wizardChat": typeof actions_wizardChat;
+  "actions/workoutGenerator": typeof actions_workoutGenerator;
+  actions_internal: typeof actions_internal;
+  ai_decisions: typeof ai_decisions;
+  announcement_polls: typeof announcement_polls;
+  announcements: typeof announcements;
+  auth: typeof auth;
+  coach: typeof coach;
+  crons: typeof crons;
+  deleteAccountMutations: typeof deleteAccountMutations;
+  device_tokens: typeof device_tokens;
+  exercise_prs: typeof exercise_prs;
+  exercises: typeof exercises;
+  fight_camp: typeof fight_camp;
+  foods: typeof foods;
+  gym_members: typeof gym_members;
+  gym_sessions: typeof gym_sessions;
+  gyms: typeof gyms;
+  http: typeof http;
+  hydration_logs: typeof hydration_logs;
+  "lib/auth": typeof lib_auth;
+  meal_plans: typeof meal_plans;
+  meals: typeof meals;
+  profiles: typeof profiles;
+  profiles_internal: typeof profiles_internal;
+  pushFanout: typeof pushFanout;
+  rate_limits: typeof rate_limits;
+  routines: typeof routines;
+  sleep_logs: typeof sleep_logs;
+  techniques: typeof techniques;
+  weight_logs: typeof weight_logs;
+  wellness: typeof wellness;
+}>;
+
+/**
+ * A utility for referencing Convex functions in your app's public API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = api.myModule.myFunction;
+ * ```
+ */
+export declare const api: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "public">
+>;
+
+/**
+ * A utility for referencing Convex functions in your app's internal API.
+ *
+ * Usage:
+ * ```js
+ * const myFunctionReference = internal.myModule.myFunction;
+ * ```
+ */
+export declare const internal: FilterApi<
+  typeof fullApi,
+  FunctionReference<any, "internal">
+>;
+
+export declare const components: {};

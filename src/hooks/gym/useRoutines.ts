@@ -1,12 +1,12 @@
-import { useState, useCallback, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useCallback, useMemo, useState } from "react";
+import { useAction, useMutation, useQuery } from "convex/react";
+import { api } from "@/../convex/_generated/api";
+import type { Id } from "@/../convex/_generated/dataModel";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { useAITask } from "@/contexts/AITaskContext";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { useSubscription } from "@/hooks/useSubscription";
-import { localCache } from "@/lib/localCache";
-import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
 import { Dumbbell, Activity, CheckCircle } from "lucide-react";
 import type {
@@ -16,8 +16,6 @@ import type {
   TrainingGoal,
   CombatSport,
 } from "@/pages/gym/types";
-
-const CACHE_KEY = "saved_routines";
 
 export function useRoutines() {
   const { userId } = useUser();
@@ -30,49 +28,32 @@ export function useRoutines() {
     onAICallSuccess,
     handleAILimitError,
   } = useSubscription();
+  const workoutGeneratorAction = useAction(api.actions.workoutGenerator.run);
+  const rawRoutines = useQuery(api.routines.listForUser, userId ? {} : "skip");
+  const createRoutineMut = useMutation(api.routines.createRoutine);
+  const updateRoutineMut = useMutation(api.routines.updateRoutine);
+  const deleteRoutineMut = useMutation(api.routines.deleteRoutine);
 
-  const [routines, setRoutines] = useState<SavedRoutine[]>([]);
-  const [routinesLoading, setRoutinesLoading] = useState(true);
+  const routines: SavedRoutine[] = useMemo(
+    () => (rawRoutines ?? []).map((r: any) => ({
+      id: r._id,
+      user_id: r.userId,
+      name: r.name,
+      goal: r.goal,
+      sport: r.sport ?? null,
+      training_days_per_week: r.trainingDaysPerWeek ?? null,
+      exercises: r.exercises as RoutineExercise[],
+      is_ai_generated: !!r.isAiGenerated,
+      sort_order: r.sortOrder ?? 0,
+      created_at: new Date(r._creationTime).toISOString(),
+      updated_at: r.updatedAt ? new Date(r.updatedAt).toISOString() : new Date().toISOString(),
+    })),
+    [rawRoutines],
+  );
+  const routinesLoading = rawRoutines === undefined;
   const [generatingRoutine, setGeneratingRoutine] = useState(false);
 
-  const fetchRoutines = useCallback(async () => {
-    if (!userId) return;
-
-    const cached = localCache.get<SavedRoutine[]>(userId, CACHE_KEY);
-    if (cached) {
-      safeAsync(setRoutines)(cached);
-      safeAsync(setRoutinesLoading)(false);
-    }
-
-    try {
-      const { data, error } = await withSupabaseTimeout(
-        supabase
-          .from("saved_routines")
-          .select("*")
-          .eq("user_id", userId)
-          .order("sort_order")
-          .order("created_at", { ascending: false })
-          .limit(50),
-        undefined,
-        "Fetch saved routines"
-      );
-
-      if (error) throw error;
-      if (!isMounted()) return;
-
-      const typed = (data || []) as SavedRoutine[];
-      safeAsync(setRoutines)(typed);
-      localCache.set(userId, CACHE_KEY, typed);
-    } catch (err) {
-      logger.warn("Failed to fetch routines", err);
-    } finally {
-      if (isMounted()) safeAsync(setRoutinesLoading)(false);
-    }
-  }, [userId, safeAsync, isMounted, toast]);
-
-  useEffect(() => {
-    fetchRoutines();
-  }, [fetchRoutines]);
+  const fetchRoutines = useCallback(async () => { /* reactive — no-op */ }, []);
 
   const generateRoutine = useCallback(
     async (params: RoutineGenerationParams) => {
@@ -95,12 +76,26 @@ export function useRoutines() {
       });
 
       try {
-        const { data, error } = await supabase.functions.invoke(
-          "workout-generator",
-          { body: params }
-        );
-
-        if (error) {
+        // The Convex workoutGenerator action signature is narrower than the
+        // legacy edge function. Flatten the rich RoutineGenerationParams into
+        // {goal, duration, equipment, notes} the action expects.
+        const primaryGoal = params.goals?.[0] ?? "hypertrophy";
+        const notes = [
+          `Sport: ${params.sport}`,
+          `Training days: ${params.sportTrainingDays}`,
+          `Goals: ${(params.goals ?? []).join(", ")}`,
+          `Focus areas: ${(params.focusAreas ?? []).join(", ")}`,
+          `Preferred split: ${params.preferredSplit}`,
+        ].join(". ");
+        let data: any;
+        try {
+          data = await workoutGeneratorAction({
+            goal: primaryGoal,
+            duration: params.sessionDurationMinutes,
+            equipment: params.availableEquipment as string[],
+            notes,
+          });
+        } catch (error: any) {
           if (await handleAILimitError(error)) { failTask(taskId, "Limit reached"); return null; }
           throw error;
         }
@@ -153,96 +148,47 @@ export function useRoutines() {
       isAiGenerated?: boolean
     ) => {
       if (!userId) return;
-
       try {
-        const { error } = await withSupabaseTimeout(
-          supabase.from("saved_routines").insert({
-            user_id: userId,
-            name,
-            goal,
-            exercises,
-            sport: sport || null,
-            training_days_per_week: trainingDays || null,
-            is_ai_generated: isAiGenerated ?? false,
-          }),
-          undefined,
-          "Save routine"
-        );
-
-        if (error) throw error;
-
-        await fetchRoutines();
+        await createRoutineMut({
+          name,
+          goal,
+          exercises,
+          sport: sport ?? undefined,
+          trainingDaysPerWeek: trainingDays ?? undefined,
+          isAiGenerated: isAiGenerated ?? false,
+        });
       } catch (err) {
         logger.error("Failed to save routine", err);
         toast({ description: "Failed to save routine", variant: "destructive" });
       }
     },
-    [userId, fetchRoutines, toast]
+    [userId, createRoutineMut, toast]
   );
 
   const deleteRoutine = useCallback(
     async (id: string) => {
       if (!userId) return;
-
       try {
-        const { error } = await withSupabaseTimeout(
-          supabase.from("saved_routines")
-            .delete()
-            .eq("id", id),
-          undefined,
-          "Delete routine"
-        );
-
-        if (error) throw error;
-
-        setRoutines((prev) => {
-          const updated = prev.filter((r) => r.id !== id);
-          localCache.set(userId, CACHE_KEY, updated);
-          return updated;
-        });
-
+        await deleteRoutineMut({ id: id as unknown as Id<"saved_routines"> });
       } catch (err) {
         logger.error("Failed to delete routine", err);
-        toast({
-          description: "Failed to delete routine",
-          variant: "destructive",
-        });
+        toast({ description: "Failed to delete routine", variant: "destructive" });
       }
     },
-    [userId, toast]
+    [userId, deleteRoutineMut, toast]
   );
 
   const renameRoutine = useCallback(
     async (id: string, name: string) => {
       if (!userId) return;
-
       try {
-        const { error } = await withSupabaseTimeout(
-          supabase.from("saved_routines")
-            .update({ name, updated_at: new Date().toISOString() })
-            .eq("id", id),
-          undefined,
-          "Rename routine"
-        );
-
-        if (error) throw error;
-
-        setRoutines((prev) => {
-          const updated = prev.map((r) =>
-            r.id === id ? { ...r, name } : r
-          );
-          localCache.set(userId, CACHE_KEY, updated);
-          return updated;
-        });
+        await updateRoutineMut({ id: id as unknown as Id<"saved_routines">, name });
       } catch (err) {
         logger.error("Failed to rename routine", err);
-        toast({
-          description: "Failed to rename routine",
-          variant: "destructive",
-        });
+        toast({ description: "Failed to rename routine", variant: "destructive" });
       }
     },
-    [userId, toast]
+    [userId, updateRoutineMut, toast]
   );
 
   return {

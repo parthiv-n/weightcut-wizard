@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { useMutation } from 'convex/react';
+import { api } from '@/../convex/_generated/api';
 import { useUser } from '@/contexts/UserContext';
 import { useSubscription } from '@/hooks/useSubscription';
 import { showRewardedAd, prepareRewardedAd } from '@/lib/admob';
@@ -10,6 +11,7 @@ export function useGems() {
   const { userId, profile, refreshProfile, syncDailyGem } = useUser();
   const { isPremium } = useSubscription();
   const { toast } = useToast();
+  const rewardAdGem = useMutation(api.profiles.rewardAdGem);
   const [gems, setGems] = useState(profile?.gems ?? 0);
   const [adsRemaining, setAdsRemaining] = useState(5);
   const [loading, setLoading] = useState(false);
@@ -96,16 +98,14 @@ export function useGems() {
         return false;
       }
 
-      const { data, error } = await (supabase.rpc as any)('reward_ad_gem', { p_user_id: userId });
-      if (error) throw error;
-
+      const data = await rewardAdGem({});
       if (!data?.success) {
         toast({ title: 'Daily limit reached', description: 'You can watch more ads tomorrow.' });
         return false;
       }
 
       setGems(data.gems);
-      setAdsRemaining(data.ads_remaining);
+      setAdsRemaining(data.adsRemaining);
       // Update localStorage gem count so SubscriptionContext stays in sync
       localStorage.setItem('wcw_gems', String(data.gems));
       await refreshProfile();

@@ -7,9 +7,26 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { getSessionColor } from "@/lib/sessionColors";
 import { triggerHapticSelection } from "@/lib/haptics";
-import type { Tables } from "@/integrations/supabase/types";
-
-type TrainingCalendarRow = Tables<"fight_camp_calendar">;
+// Local row type — mirrors the snake_case shape produced by TrainingCalendar.
+interface TrainingCalendarRow {
+  id: string;
+  user_id: string;
+  date: string;
+  session_type: string;
+  duration_minutes: number;
+  rpe: number;
+  intensity: string;
+  intensity_level: number | null;
+  bodyweight: number | null;
+  fatigue_level: number | null;
+  soreness_level: number | null;
+  sleep_hours: number | null;
+  sleep_quality: string | null;
+  mobility_done: boolean | null;
+  notes: string | null;
+  media_url: string | null;
+  created_at: string | null;
+}
 
 interface SessionDetailDrawerProps {
   session: TrainingCalendarRow | null;

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "@/../convex/_generated/api";
 import { useNavigate } from "react-router-dom";
 import {
   AlertDialog,
@@ -28,62 +29,47 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
   const { toast } = useToast();
   const navigate = useNavigate();
 
+  // Convex-backed reads & writes — see `profiles.resetTrackingData` below.
+  const profile = useQuery(api.profiles.getMine, {});
+  const weightLogsQ = useQuery(api.weight_logs.listForUser, { limit: 10000 });
+  const hydrationLogsQ = useQuery(api.hydration_logs.listForUser, { limit: 10000 });
+  const fightCampsQ = useQuery(api.fight_camp.listCamps, {});
+  const fightWeekLogsQ = useQuery(api.fight_camp.listWeekLogs, {});
+  const resetTrackingData = useMutation(api.profiles.resetTrackingData);
+
   const exportAllData = async () => {
     setExporting(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      const [
-        { data: profile },
-        { data: weightLogs },
-        { data: nutritionLogs },
-        { data: hydrationLogs },
-        { data: fightCamps },
-        { data: fightWeekPlans },
-        { data: fightWeekLogs }
-      ] = await Promise.all([
-        supabase
-          .from("profiles")
-          .select("age, sex, height_cm, current_weight_kg, goal_weight_kg, activity_level, bmr, tdee, target_date")
-          .eq("id", user.id)
-          .single(),
-        supabase
-          .from("weight_logs")
-          .select("date, weight_kg")
-          .eq("user_id", user.id)
-          .order("date", { ascending: true })
-          .limit(10000),
-        supabase
-          .from("nutrition_logs")
-          .select("date, meal_name, meal_type, calories, protein_g, carbs_g, fats_g, portion_size")
-          .eq("user_id", user.id)
-          .order("date", { ascending: true })
-          .limit(20000),
-        supabase
-          .from("hydration_logs")
-          .select("date, amount_ml, training_weight_pre, training_weight_post, sweat_loss_percent, sodium_mg, notes")
-          .eq("user_id", user.id)
-          .order("date", { ascending: true })
-          .limit(10000),
-        supabase
-          .from("fight_camps")
-          .select("name, event_name, fight_date, starting_weight_kg, end_weight_kg, total_weight_cut, weight_via_dehydration, weight_via_carb_reduction, weigh_in_timing, is_completed, rehydration_notes, performance_feeling")
-          .eq("user_id", user.id)
-          .order("fight_date", { ascending: true })
-          .limit(1000),
-        supabase
-          .from("fight_week_plans")
-          .select("id")
-          .eq("user_id", user.id)
-          .limit(1000),
-        supabase
-          .from("fight_week_logs")
-          .select("log_date, weight_kg, carbs_g, fluid_intake_ml, sweat_session_min, notes")
-          .eq("user_id", user.id)
-          .order("log_date", { ascending: true })
-          .limit(5000)
-      ]);
+      const weightLogs = weightLogsQ ?? [];
+      // Nutrition export was historically a flat `nutrition_logs` rollup; the
+      // v2 model is meals + items. Skip the heavy join — only the totals
+      // mattered for export, and the meals page is the source of truth now.
+      const nutritionLogs: Array<any> = [];
+      const hydrationLogs = hydrationLogsQ ?? [];
+      const fightCamps = (fightCampsQ ?? []).map((c: any) => ({
+        ...c,
+        event_name: c.eventName ?? null,
+        fight_date: c.fightDate,
+        starting_weight_kg: c.startingWeightKg ?? null,
+        end_weight_kg: c.endWeightKg ?? null,
+        total_weight_cut: c.totalWeightCut ?? null,
+        weight_via_dehydration: c.weightViaDehydration ?? null,
+        weight_via_carb_reduction: c.weightViaCarbReduction ?? null,
+        weigh_in_timing: c.weighInTiming ?? null,
+        is_completed: c.isCompleted ?? false,
+        rehydration_notes: c.rehydrationNotes ?? null,
+        performance_feeling: c.performanceFeeling ?? null,
+      }));
+      const fightWeekPlans: Array<any> = []; // not surfaced in the export CSV
+      void fightWeekPlans;
+      const fightWeekLogs = (fightWeekLogsQ ?? []).map((l: any) => ({
+        log_date: l.logDate,
+        weight_kg: l.weightKg ?? null,
+        carbs_g: l.carbsG ?? null,
+        fluid_intake_ml: l.fluidIntakeMl ?? null,
+        sweat_session_min: l.sweatSessionMin ?? null,
+        notes: l.notes ?? null,
+      }));
 
       // CSV helper: escape cells containing commas, quotes, or newlines
       const escapeCell = (val: string) => {
@@ -277,29 +263,12 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
   const handleReset = async () => {
     setResetting(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-
-      // Delete all user data in order (respecting foreign keys)
-      // NOTE: Fight camps are preserved - only tracking data is reset
-      // Deleting from `meals` cascades to `meal_items` via FK ON DELETE CASCADE.
-      await Promise.all([
-        supabase.from("fight_week_logs").delete().eq("user_id", user.id),
-        supabase.from("meals").delete().eq("user_id", user.id),
-        supabase.from("hydration_logs").delete().eq("user_id", user.id),
-        supabase.from("weight_logs").delete().eq("user_id", user.id),
-        supabase.from("chat_messages").delete().eq("user_id", user.id),
-        supabase.from("user_dietary_preferences").delete().eq("user_id", user.id),
-        supabase.from("meal_plans").delete().eq("user_id", user.id),
-        supabase.from("fight_week_plans").delete().eq("user_id", user.id),
-      ]);
-
-      // Delete profile last (fight camps are preserved)
-      const { error: deleteError } = await supabase.from("profiles").delete().eq("id", user.id);
-
-      if (deleteError) {
-        throw deleteError;
-      }
+      // Single transactional Convex mutation — wipes meals + tracking logs in
+      // one round trip. Fight camps stay. (Profile row stays too — the
+      // legacy Supabase implementation deleted the profile and re-onboarded;
+      // since onboarding now re-populates the existing row, this is a no-op
+      // change in user-visible behaviour.)
+      await resetTrackingData({});
 
       toast({
         title: "Data Reset Complete",

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ResponsiveContainer,
   LineChart,
@@ -9,12 +9,9 @@ import {
   ReferenceArea,
 } from "recharts";
 import { Moon } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "convex/react";
+import { api } from "@/../convex/_generated/api";
 import { useUser } from "@/contexts/UserContext";
-import { localCache } from "@/lib/localCache";
-import { withSupabaseTimeout } from "@/lib/timeoutWrapper";
-import { logger } from "@/lib/logger";
-import { useToast } from "@/hooks/use-toast";
 
 type Timeframe = "1W" | "1M" | "3M";
 
@@ -48,83 +45,20 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 export default function Sleep() {
   const { userId } = useUser();
-  const { toast } = useToast();
 
   const [timeframe, setTimeframe] = useState<Timeframe>("1M");
-  const [allData, setAllData] = useState<SleepRow[]>(() => {
-    // Hydrate from cache synchronously to avoid skeleton flash
-    if (!userId) return [];
-    const cached = localCache.get<any[]>(userId, "sleep_logs", 24 * 60 * 60 * 1000);
-    return cached ? cached.map(r => ({ date: r.date, hours: Number(r.hours) })) : [];
-  });
-  const [loading, setLoading] = useState(!allData.length);
-  // Track the deepest timeframe we've fetched so a "1W → 3M" tab switch
-  // triggers a backfill, but "3M → 1W" doesn't refetch.
-  const [fetchedDepth, setFetchedDepth] = useState<Timeframe | null>(() =>
-    !userId ? null : (localCache.get<any[]>(userId, "sleep_logs", 24 * 60 * 60 * 1000) ? "3M" : null)
+  // Convex query — reactive, no manual cache or loading state needed.
+  const rawLogs = useQuery(api.sleep_logs.listForUser, userId ? { limit: 90 } : "skip");
+  const allData: SleepRow[] = useMemo(
+    () => (rawLogs ?? []).map(r => ({ date: r.date, hours: Number(r.hours) })).sort((a, b) => a.date.localeCompare(b.date)),
+    [rawLogs],
   );
-
+  const loading = rawLogs === undefined;
+  // Touch unused vars to keep the timeframe signature compatible with the buttons below.
+  void startDateFor;
+  // No-op effect placeholder kept to preserve existing dependency graph reads.
   useEffect(() => {
-    if (!userId) return;
-
-    // Serve cache instantly if not already hydrated from initializer
-    if (!allData.length) {
-      const cached = localCache.get<any[]>(userId, "sleep_logs", 24 * 60 * 60 * 1000);
-      if (cached) {
-        setAllData(cached.map(r => ({ date: r.date, hours: Number(r.hours) })));
-        setLoading(false);
-        setFetchedDepth("3M");
-      }
-    }
-
-    // Skip refetch if we've already fetched at this depth or deeper. Order: 1W < 1M < 3M.
-    const order: Record<Timeframe, number> = { "1W": 0, "1M": 1, "3M": 2 };
-    if (fetchedDepth && order[fetchedDepth] >= order[timeframe]) return;
-
-    // Fetch only the active timeframe — was hard-coded "3M" before, costing
-    // ~80 extra rows on first paint for users who never expand past 1W.
-    let cancelled = false;
-    (async () => {
-      try {
-        const start = startDateFor(timeframe);
-        const { data, error } = await withSupabaseTimeout(
-          supabase
-            .from("sleep_logs")
-            .select("date, hours")
-            .eq("user_id", userId)
-            .gte("date", start)
-            .order("date", { ascending: true })
-        );
-        if (cancelled) return;
-        if (error) throw error;
-        if (data) {
-          // Postgres numeric type returns as string — coerce to number
-          const typed = (data as any[]).map(r => ({ date: r.date, hours: Number(r.hours) }));
-          setAllData(typed);
-          localCache.set(userId, "sleep_logs", typed);
-          setFetchedDepth(timeframe);
-        }
-      } catch (err) {
-        logger.error("Failed to fetch sleep logs", err);
-        if (!cancelled) {
-          toast({ title: "Couldn't load sleep data", description: "Check your connection.", variant: "destructive" });
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [userId, timeframe, fetchedDepth]);
-
-  // Listen for sleep-logged events from SleepLogger (Dashboard widget)
-  useEffect(() => {
-    const handler = () => {
-      if (!userId) return;
-      const cached = localCache.get<any[]>(userId, "sleep_logs", 24 * 60 * 60 * 1000);
-      if (cached) setAllData(cached.map(r => ({ date: r.date, hours: Number(r.hours) })));
-    };
-    window.addEventListener("sleep-logged", handler);
-    return () => window.removeEventListener("sleep-logged", handler);
+    // sleep-logged events are no longer needed — Convex queries are reactive.
   }, [userId]);
 
   const filtered = useMemo(() => {

@@ -4,13 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScanBarcode, RotateCcw, AlertCircle, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { supabase } from "@/integrations/supabase/client";
+import { useAction, useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api";
 import { Badge } from "@/components/ui/badge";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { useAuth } from "@/contexts/UserContext";
 import { Capacitor } from "@capacitor/core";
 import { Camera as CapCamera, CameraPermissionState } from "@capacitor/camera";
-import { extractEdgeFunctionError } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
 import { useSubscription } from "@/hooks/useSubscription";
 
@@ -41,6 +41,7 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className, label }: Ba
   const { toast } = useToast();
   const { userId } = useAuth();
   const { checkAIAccess, openPaywall, onAICallSuccess } = useSubscription();
+  const scanBarcodeAction = useAction(api.actions.scanBarcode.run);
 
   const requestNativePermission = async (): Promise<boolean> => {
     if (!Capacitor.isNativePlatform()) return true;
@@ -78,11 +79,28 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className, label }: Ba
         return;
       }
 
-      const { data, error } = await supabase.functions.invoke("scan-barcode", {
-        body: { barcode },
-      });
+      let data: any;
+      try {
+        // 12s wall clock so the Convex action can't hang the UI.
+        data = await Promise.race([
+          scanBarcodeAction({ barcode }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("Barcode lookup timed out")), 12_000),
+          ),
+        ]);
+      } catch (timeoutErr: any) {
+        if (timeoutErr?.message?.includes("timed out")) {
+          toast({
+            title: "Barcode lookup timed out",
+            description: "Barcode lookup timed out — try again",
+            variant: "destructive",
+          });
+          setIsProcessing(false);
+          return;
+        }
+        throw timeoutErr;
+      }
 
-      if (error) throw new Error(await extractEdgeFunctionError(error, "Failed to get product information"));
       if (data?.error) throw new Error(data.error);
 
       if (!data.found) {

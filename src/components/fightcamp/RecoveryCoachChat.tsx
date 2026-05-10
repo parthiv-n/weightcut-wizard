@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Brain, Loader2, Mic, MicOff, Send, Trash2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { useAction } from "convex/react";
+import { api } from "@/../convex/_generated/api";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useToast } from "@/hooks/use-toast";
@@ -37,6 +38,7 @@ function newId() {
 export function RecoveryCoachChat({ userId, userName }: RecoveryCoachChatProps) {
   const { checkAIAccess, openNoGemsDialog, handleAILimitError, onAICallSuccess } = useSubscription();
   const { toast } = useToast();
+  const recoveryCoachAction = useAction(api.actions.recoveryCoach.run);
 
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -67,22 +69,7 @@ export function RecoveryCoachChat({ userId, userName }: RecoveryCoachChatProps) 
     el.scrollTop = el.scrollHeight;
   }, [messages, sending]);
 
-  // Edge function warmup
-  useEffect(() => {
-    const timer = setTimeout(async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
-        fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/recovery-coach`, {
-          method: "GET",
-          headers: { Authorization: `Bearer ${session.access_token}` },
-        }).catch(() => {});
-      } catch {
-        // Ignore warmup errors
-      }
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, []);
+  // No warmup needed under Convex — actions are co-located with the deployment.
 
   // Cleanup any in-flight request on unmount
   useEffect(() => () => abortRef.current?.abort(), []);
@@ -135,43 +122,22 @@ export function RecoveryCoachChat({ userId, userName }: RecoveryCoachChatProps) 
     abortRef.current = controller;
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error("Not signed in");
-
       const apiHistory = nextHistory.map((m) => ({ role: m.role, content: m.content }));
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/recovery-coach`, {
-        method: "POST",
-        signal: controller.signal,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        },
-        body: JSON.stringify({ messages: apiHistory, userName: userName ?? null }),
-      });
-
-      if (!res.ok) {
-        const rawBody = await res.text();
-        let body: { error?: string; code?: string; message?: string } = {};
-        try {
-          body = JSON.parse(rawBody);
-        } catch {
-          // non-JSON response — keep raw for diagnostic
-        }
-        logger.error("recovery-coach non-OK response", { status: res.status, body, rawBody });
-        if (res.status === 429 && body?.code === "NO_GEMS") {
-          await handleAILimitError({ context: { status: 429, json: () => Promise.resolve(body) } });
+      let data: any;
+      try {
+        data = await recoveryCoachAction({
+          messages: apiHistory,
+          userName: userName ?? undefined,
+        });
+      } catch (err: any) {
+        if (controller.signal.aborted) return;
+        if (await handleAILimitError(err)) {
           setMessages(messages);
           return;
         }
-        if (res.status === 404) {
-          throw new Error("Coach endpoint not deployed yet.");
-        }
-        const serverMsg = body?.error || body?.message || rawBody.slice(0, 200) || `HTTP ${res.status}`;
-        throw new Error(serverMsg);
+        logger.error("recovery-coach failed", err);
+        throw new Error(err?.message || "Coach unavailable");
       }
-
-      const data = await res.json();
       const assistantText: string = data?.choices?.[0]?.message?.content ?? "";
       if (!assistantText) throw new Error("Empty response");
 

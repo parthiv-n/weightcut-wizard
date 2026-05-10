@@ -52,31 +52,14 @@ export function useNutritionPageEffects({
   dismissTask,
   setDietAnalysis,
 }: Params) {
-  // Warmup analyze-meal edge function when quick add sheet opens on AI tab
+  // Warmup is no longer needed under Convex — actions are co-located with
+  // the deployment and cold-start latency is negligible compared to the
+  // previous edge-function model. We still publish the quick-add sheet open
+  // state to the shared ref so downstream effects (page transitions etc.)
+  // can react.
   useEffect(() => {
     setQuickAddSheetOpenRef(isQuickAddSheetOpen);
-    if (isQuickAddSheetOpen && quickAddTab === "ai" && userId) {
-      import("@/integrations/supabase/client").then(({ supabase }) => {
-        supabase.functions.invoke("analyze-meal", { method: "GET" } as any).catch(() => {});
-      });
-    }
   }, [isQuickAddSheetOpen, quickAddTab, userId]);
-
-  // Warmup food-search edge function so search dialog opens instantly.
-  // Must include Authorization; food-search returns 401 on anon pings post-hardening.
-  useEffect(() => {
-    if (!userId) return;
-    const t = setTimeout(async () => {
-      const { supabase } = await import("@/integrations/supabase/client");
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) return;
-      fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/food-search`, {
-        method: "GET",
-        headers: { Authorization: `Bearer ${session.access_token}` },
-      }).catch(() => {});
-    }, 2000);
-    return () => clearTimeout(t);
-  }, [userId]);
 
   // Preload FoodSearchDialog chunk so it's ready when user taps search
   useEffect(() => {

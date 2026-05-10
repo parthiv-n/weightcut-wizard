@@ -1,13 +1,14 @@
 import { useState, useRef } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useMutation, useAction } from "convex/react";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { useAITask } from "@/contexts/AITaskContext";
 import { useSubscription } from "@/hooks/useSubscription";
 import { AIPersistence } from "@/lib/aiPersistence";
-import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
+import { createAIAbortController } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
 import { nutritionCache } from "@/lib/nutritionCache";
+import { api } from "../../../convex/_generated/api";
 import { Scale, TrendingDown, CheckCircle } from "lucide-react";
 import type { AIAnalysis, Profile, DebugData } from "@/pages/weight/types";
 
@@ -20,6 +21,8 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
   const { toast } = useToast();
   const { addTask, completeTask, failTask } = useAITask();
   const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
+  const updateGoalsMut = useMutation(api.profiles.updateGoals);
+  const weightTrackerAnalysisAction = useAction(api.actions.weightTrackerAnalysis.run);
   const aiAbortRef = useRef<AbortController | null>(null);
 
   const [analyzingWeight, setAnalyzingWeight] = useState(false);
@@ -113,31 +116,33 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
       }
 
       const requestPayload = {
+        weightHistory: [] as Array<{ date: string; weight_kg: number }>,
         currentWeight,
         goalWeight: fightWeekTarget,
-        weighInDayWeight: profile.goal_weight_kg || fightWeekTarget,
         targetDate: profile.target_date,
-        activityLevel: profile.activity_level,
-        age: profile.age,
-        sex: profile.sex,
-        heightCm: profile.height_cm,
-        tdee: profile.tdee,
       };
 
-      const { data, error } = await supabase.functions.invoke("weight-tracker-analysis", {
-        body: requestPayload,
-      });
+      let data: any = null;
+      let error: any = null;
+      try {
+        data = await weightTrackerAnalysisAction(requestPayload);
+      } catch (err: any) {
+        error = err;
+      }
 
-      // Always persist result even if user navigated away — they'll see it when they return
-      if (data?.analysis && userId) {
-        AIPersistence.save(userId, "weight_analysis", { analysis: data.analysis, currentWeight, fightWeekTarget }, 24);
+      // The Convex action returns parsed analysis JSON directly (no `analysis` wrapper).
+      // Normalise to the shape the rest of this hook expects.
+      const analysis = data && !data.analysis ? data : data?.analysis;
+
+      if (analysis && userId) {
+        AIPersistence.save(userId, "weight_analysis", { analysis, currentWeight, fightWeekTarget }, 24);
       }
       if (controller.signal.aborted) return;
 
       const debugInfo: DebugData = {
         requestPayload,
         rawResponse: data || error,
-        parsedResponse: data?.analysis || null,
+        parsedResponse: analysis || null,
         currentWeightSource,
         currentWeightValue: currentWeight,
         latestWeightLog: null,
@@ -157,27 +162,27 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
 
       if (error) {
         if (await handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
-        const msg = await extractEdgeFunctionError(error, "AI analysis unavailable");
+        const msg = error?.message || "AI analysis unavailable";
         toast({
           title: "AI analysis unavailable",
           description: msg,
           variant: "destructive"
         });
-      } else if (data?.analysis) {
+      } else if (analysis) {
         onAICallSuccess();
         setTargetsApplied(false);
-        setAiAnalysis(data.analysis);
+        setAiAnalysis(analysis);
         setAiAnalysisWeight(currentWeight);
         setAiAnalysisTarget(fightWeekTarget);
 
         if (userId) {
           AIPersistence.save(userId, "weight_analysis", {
-            analysis: data.analysis,
+            analysis,
             currentWeight,
             fightWeekTarget,
           }, 24);
         }
-        completeTask(taskId, data.analysis);
+        completeTask(taskId, analysis);
       }
     } catch (err: any) {
       if (err?.name === 'AbortError' || controller.signal.aborted) return;
@@ -201,14 +206,13 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
     if (!userId || !aiAnalysis) return;
     setApplyingTargets(true);
     try {
-      const { error } = await supabase.from("profiles").update({
-        manual_nutrition_override: false,
-        ai_recommended_calories: aiAnalysis.recommendedCalories,
-        ai_recommended_protein_g: aiAnalysis.proteinGrams,
-        ai_recommended_carbs_g: aiAnalysis.carbsGrams,
-        ai_recommended_fats_g: aiAnalysis.fatsGrams,
-      }).eq("id", userId);
-      if (error) throw error;
+      await updateGoalsMut({
+        manualNutritionOverride: false,
+        aiRecommendedCalories: aiAnalysis.recommendedCalories,
+        aiRecommendedProteinG: aiAnalysis.proteinGrams,
+        aiRecommendedCarbsG: aiAnalysis.carbsGrams,
+        aiRecommendedFatsG: aiAnalysis.fatsGrams,
+      });
       nutritionCache.remove(userId, 'profile');
       nutritionCache.remove(userId, 'macroGoals');
       await refreshProfile();

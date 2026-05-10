@@ -1,5 +1,6 @@
 import { useRef, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useAction } from "convex/react";
+import { api } from "@/../convex/_generated/api";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -35,6 +36,7 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
   const { toast } = useToast();
   const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
   const { addTask, completeTask, failTask } = useAITask();
+  const analyseDietAction = useAction(api.actions.analyseDiet.run);
 
   const handleAnalyseDiet = useCallback(async (forceRefresh = false) => {
     if (!userId || meals.length === 0) return;
@@ -72,8 +74,9 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
     });
     try {
 
-      const { data, error } = await supabase.functions.invoke("analyse-diet", {
-        body: {
+      let data: any;
+      try {
+        data = await analyseDietAction({
           meals: meals.map(m => ({
             meal_name: m.meal_name,
             calories: m.calories,
@@ -98,15 +101,13 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
             fatsGrams: aiMacroGoals.fatsGrams,
           } : {},
           date: selectedDate,
-        },
-      });
+        });
+      } catch (error: any) {
+        if (await handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
+        throw new Error(error?.message || "Could not analyse your diet");
+      }
 
       if (dietController.signal.aborted) return;
-      if (error) {
-        if (await handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
-        throw new Error(await extractEdgeFunctionError(error, "Could not analyse your diet"));
-      }
-      if (data?.error) throw new Error(data.error);
       onAICallSuccess();
 
       const result = data.analysisData as DietAnalysisResult;

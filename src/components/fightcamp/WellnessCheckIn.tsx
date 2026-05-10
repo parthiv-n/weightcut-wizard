@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Brain, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { supabase } from "@/integrations/supabase/client";
+import { useMutation } from "convex/react";
+import { api } from "@/../convex/_generated/api";
 import type { WellnessCheckIn as WellnessCheckInData } from "@/utils/performanceEngine";
 import { logger } from "@/lib/logger";
 
@@ -58,6 +59,8 @@ function getThumbColor(value: number): string {
 }
 
 export function WellnessCheckIn({ userId, onSubmit, isSubmitting }: WellnessCheckInProps) {
+  void userId; // userId is now derived from Convex auth; keep prop for backward compat.
+  const upsertCheckin = useMutation(api.wellness.upsertCheckin);
   const [values, setValues] = useState({
     sleep_quality: 2,
     stress_level: 3,
@@ -94,16 +97,19 @@ export function WellnessCheckIn({ userId, onSubmit, isSubmitting }: WellnessChec
 
     // Persist to database
     try {
-      await supabase.from('daily_wellness_checkins').upsert({
-        user_id: userId,
+      await upsertCheckin({
         date: today,
-        ...values,
-        energy_level: optionalValues.energy_level,
-        motivation_level: optionalValues.motivation_level,
-        sleep_hours: optionalValues.sleep_hours,
-        hydration_feeling: optionalValues.hydration_feeling,
-        appetite_level: optionalValues.appetite_level,
-      }, { onConflict: 'user_id,date' });
+        sleepQuality: values.sleep_quality,
+        fatigueLevel: values.fatigue_level,
+        sorenessLevel: values.soreness_level,
+        stressLevel: values.stress_level,
+        energyLevel: optionalValues.energy_level ?? undefined,
+        motivationLevel: optionalValues.motivation_level ?? undefined,
+        sleepHours: optionalValues.sleep_hours ?? undefined,
+        hydrationFeeling: optionalValues.hydration_feeling ?? undefined,
+        appetiteLevel: optionalValues.appetite_level ?? undefined,
+        hooperIndex,
+      });
     } catch (err) {
       logger.error("Failed to persist wellness check-in", err);
     }

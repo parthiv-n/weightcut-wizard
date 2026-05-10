@@ -3,12 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import { useMyGyms, type MyGymRow } from "@/hooks/coach/useMyGyms";
-import { supabase } from "@/integrations/supabase/client";
+import { useMutation } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { triggerHaptic } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
-import { localCache } from "@/lib/localCache";
 import { globalLoading } from "@/lib/globalLoading";
 import { logger } from "@/lib/logger";
 import { DashboardSkeleton } from "@/components/ui/skeleton-loader";
@@ -30,7 +31,9 @@ export default function MyGym() {
   const { userId } = useUser();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { gyms, loading, refresh } = useMyGyms(userId);
+  const { gyms, loading } = useMyGyms(userId);
+  const setShareData = useMutation(api.gym_members.setShareData);
+  const leaveGym = useMutation(api.gym_members.removeMember);
   const [pendingShareToggle, setPendingShareToggle] = useState<string | null>(null);
   const [leaveTarget, setLeaveTarget] = useState<MyGymRow | null>(null);
   const [leaving, setLeaving] = useState(false);
@@ -42,13 +45,11 @@ export default function MyGym() {
     setPendingShareToggle(gym.member_id);
     triggerHaptic(ImpactStyle.Light);
     try {
-      const { error } = await supabase
-        .from("gym_members")
-        .update({ share_data: next })
-        .eq("id", gym.member_id);
-      if (error) throw error;
-      localCache.remove(userId, "my_gyms");
-      await refresh();
+      await setShareData({
+        memberId: gym.member_id as Id<"gym_members">,
+        shareData: next,
+      });
+      // Convex re-runs `gyms.listMine` automatically; no manual refetch.
       toast({
         title: next ? "Sharing enabled" : "Sharing paused",
         description: next ? "Your coach can see your data again." : "Your coach can't see your data until re-enabled.",
@@ -65,27 +66,17 @@ export default function MyGym() {
     if (!userId || !leaveTarget) return;
     setLeaving(true);
     const target = leaveTarget;
-    // Optimistic remove from UI immediately
-    const prevGyms = gyms;
-    const filtered = gyms.filter(g => g.member_id !== target.member_id);
-    try { localCache.set(userId, "my_gyms", filtered); } catch {}
     globalLoading.show(`Leaving ${target.gym_name}…`);
     try {
-      const { error } = await supabase
-        .from("gym_members")
-        .update({ status: "removed" })
-        .eq("id", target.member_id);
-      if (error) throw error;
+      await leaveGym({ memberId: target.member_id as Id<"gym_members"> });
+      // Convex re-runs gyms.listMine — the gym disappears from the list
+      // without any client-side cache plumbing.
       triggerHaptic(ImpactStyle.Medium);
       setLeaveTarget(null);
-      await refresh();
       globalLoading.hide();
       toast({ title: `Left ${target.gym_name}` });
     } catch (err: any) {
       logger.error("MyGym: leave failed", err);
-      // Rollback optimistic write
-      try { localCache.set(userId, "my_gyms", prevGyms); } catch {}
-      await refresh();
       globalLoading.hide();
       toast({ title: "Could not leave gym", description: err?.message, variant: "destructive" });
     } finally {
