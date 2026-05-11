@@ -43,7 +43,7 @@ export default defineConfig(({ mode }) => ({
         manualChunks: {
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
           'vendor-charts': ['recharts'],
-          'vendor-supabase': ['@supabase/supabase-js'],
+          'vendor-convex': ['convex', 'convex/react', '@convex-dev/auth/react'],
           'vendor-ui': ['@radix-ui/react-dialog', '@radix-ui/react-select'],
           'vendor-motion': ['motion'],
           'vendor-barcode': ['react-zxing'],
