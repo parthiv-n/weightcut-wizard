@@ -3,7 +3,6 @@ import { X, Zap, Check, Loader2, RotateCcw, Clock, Crown } from "lucide-react";
 import { useNextGemCountdown } from "@/components/subscription/AILimitTimer";
 import { Button } from "@/components/ui/button";
 import { useSubscriptionContext } from "@/contexts/SubscriptionContext";
-import { useProfile } from "@/contexts/UserContext";
 import {
   isPremiumFromCustomerInfo,
   getSubscriptionFromCustomerInfo,
@@ -114,35 +113,49 @@ const FEATURES = [
 
 export function PaywallOverlay() {
   const { isPaywallOpen, closePaywall, refreshGems, forcePremium } = useSubscriptionContext();
-  const { refreshProfile } = useProfile();
   const [activating, setActivating] = useState(false);
   const activatePremium = useAction(api.actions.activatePremium.run);
 
   const activatePro = useCallback(async (customerInfo: any) => {
     setActivating(true);
+    const startedAt = Date.now();
+
     try {
-      // Step 1: Force premium in client state IMMEDIATELY — no DB roundtrip needed
+      // Step 1: force premium in client state IMMEDIATELY so all premium gates
+      // unlock before the user even sees the animation finish.
       const sub = getSubscriptionFromCustomerInfo(customerInfo);
       if (sub) {
         forcePremium(sub.tier, sub.expiresAt);
         logger.info("activatePro: forced premium locally", sub);
       }
-      // Step 2: Write to DB. Convex mutations are transactional — the result
-      // is already canonical by the time `syncPremiumToDb` resolves, so the
-      // legacy "retry until profiles row updates" loop is no longer needed.
+
+      // Step 2: write to Convex. Mutations are transactional — once this
+      // resolves, profiles.getMine will push the new tier to all consumers.
       const dbResult = await syncPremiumToDb(customerInfo, activatePremium);
-      logger.info("activatePro: DB sync result", { success: !!dbResult });
+      if (!dbResult) {
+        // DB write failed — surface a toast, but DON'T undo the local
+        // override. The startup check will re-sync via RevenueCat on next
+        // launch (RC remains the platform authority).
+        logger.warn("activatePro: DB sync failed, relying on RC startup re-sync");
+      }
 
       await refreshGems();
-      // Small delay so user sees the "Unlocking features" step complete
-      await new Promise(r => setTimeout(r, 400));
+
+      // Ensure the activation animation plays through all 3 steps (~2000ms).
+      // The animation: step 0 -> 800ms -> step 1 -> 800ms -> step 2 -> done.
+      // We want the user to see step 2 land before we close.
+      const MIN_ANIMATION_MS = 2200;
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < MIN_ANIMATION_MS) {
+        await new Promise(r => setTimeout(r, MIN_ANIMATION_MS - elapsed));
+      }
     } catch (err) {
       logger.error("Pro activation error", err);
     } finally {
       setActivating(false);
       closePaywall();
     }
-  }, [refreshProfile, refreshGems, closePaywall, forcePremium, activatePremium]);
+  }, [refreshGems, closePaywall, forcePremium, activatePremium]);
 
   useEffect(() => {
     if (!isPaywallOpen || !isNativePlatform) return;
@@ -187,7 +200,6 @@ export function PaywallOverlay() {
  */
 function WebFallbackPaywall({ activatePro }: { activatePro: (info: any) => Promise<void> }) {
   const { closePaywall, refreshGems } = useSubscriptionContext();
-  const { refreshProfile } = useProfile();
   const { toast } = useToast();
   const { gems, isPremium } = useSubscriptionContext();
   const countdown = useNextGemCountdown(gems, isPremium);

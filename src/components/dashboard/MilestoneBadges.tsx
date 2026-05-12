@@ -24,6 +24,14 @@ function BadgeSkeleton() {
   );
 }
 
+// iOS-friendly horizontal scroll: -webkit-overflow-scrolling for momentum,
+// touch-action: pan-x so the gesture is recognised as horizontal pan and
+// not eaten by a parent button or the page's vertical scroll.
+const SCROLL_TRACK_CLASS =
+  "flex gap-3 overflow-x-auto pb-1 scrollbar-hide snap-x scroll-smooth " +
+  "[-webkit-overflow-scrolling:touch] [touch-action:pan-x] " +
+  "[scrollbar-width:none] [&::-webkit-scrollbar]:hidden";
+
 export const MilestoneBadges = memo(function MilestoneBadges({ badges, loading, onTap }: MilestoneBadgesProps) {
   if (loading) {
     return (
@@ -31,7 +39,7 @@ export const MilestoneBadges = memo(function MilestoneBadges({ badges, loading, 
         <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
           Achievements
         </div>
-        <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
+        <div className={SCROLL_TRACK_CLASS}>
           {Array.from({ length: 4 }).map((_, i) => (
             <BadgeSkeleton key={i} />
           ))}
@@ -40,26 +48,45 @@ export const MilestoneBadges = memo(function MilestoneBadges({ badges, loading, 
     );
   }
 
-  const Wrapper = onTap ? "button" : "div";
+  // NOTE: tap target is the header row only. The scroll track sits OUTSIDE
+  // any button so horizontal swipes aren't intercepted on iOS — wrapping the
+  // whole component in <button> swallows the gesture before the inner
+  // overflow-x container can scroll. Individual badges are also tap targets
+  // for users who land directly on a badge.
+  const handleHeaderTap = onTap;
+  const handleBadgeTap = onTap;
 
   return (
-    <Wrapper
-      {...(onTap ? { onClick: onTap, type: "button" as const } : {})}
-      className={onTap ? "w-full text-left" : undefined}
-    >
+    <div>
       <div className="flex items-center justify-between mb-3">
-        <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
-          Achievements
-        </div>
-        {onTap && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+        {handleHeaderTap ? (
+          <button
+            type="button"
+            onClick={handleHeaderTap}
+            className="flex items-center gap-1 text-left touch-target"
+          >
+            <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              Achievements
+            </span>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </button>
+        ) : (
+          <div className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+            Achievements
+          </div>
+        )}
       </div>
-      <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1">
+      <div className={SCROLL_TRACK_CLASS}>
         {badges.map((badge) => {
           const Icon = iconMap[badge.icon];
+          const BadgeWrapper = handleBadgeTap ? "button" : "div";
           return (
-            <div
+            <BadgeWrapper
               key={badge.id}
-              className="w-28 flex-shrink-0 rounded-2xl border border-border p-3 text-center card-surface"
+              {...(handleBadgeTap
+                ? { onClick: handleBadgeTap, type: "button" as const }
+                : {})}
+              className="w-28 flex-shrink-0 snap-start rounded-2xl border border-border p-3 text-center card-surface active:scale-[0.98] transition-transform"
             >
               {/* Icon circle */}
               <div
@@ -102,10 +129,10 @@ export const MilestoneBadges = memo(function MilestoneBadges({ badges, loading, 
                   />
                 </div>
               )}
-            </div>
+            </BadgeWrapper>
           );
         })}
       </div>
-    </Wrapper>
+    </div>
   );
 });

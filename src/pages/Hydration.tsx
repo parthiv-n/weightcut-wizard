@@ -12,17 +12,18 @@ import {
   Beaker,
   Activity,
   Zap,
-  Coffee,
   Shield,
   User,
   Clock,
   Gem,
 } from "lucide-react";
-import { AIGeneratingOverlay } from "@/components/AIGeneratingOverlay";
 import { useAITask } from "@/contexts/AITaskContext";
 import { AICompactOverlay } from "@/components/AICompactOverlay";
 import { useRehydrationProtocol } from "@/hooks/hydration/useRehydrationProtocol";
 import { useGems } from "@/hooks/useGems";
+import { HydrationSkeleton } from "@/components/hydration/HydrationSkeleton";
+import { InputsUsedChipRow } from "@/components/hydration/InputsUsedChipRow";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   DEFAULT_WARNINGS, SUGGESTED_FOODS, SUGGESTED_DRINKS, DEFAULT_EDUCATION,
   getSodium, getPotassium, getCarbs, getMealFoods, getPhaseBadge,
@@ -39,7 +40,7 @@ export default function Hydration() {
     normalCarbs, setNormalCarbs,
     fightWeekCarbs, setFightWeekCarbs,
     availableHours, awakeHours,
-    protocol, loading,
+    protocol, loading, lastError,
     currentWeight, profileParts,
     handleGenerateProtocol, handleAICancel,
   } = useRehydrationProtocol();
@@ -50,6 +51,18 @@ export default function Hydration() {
   const [scienceOpen, setScienceOpen] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [disclaimerOpen, setDisclaimerOpen] = useState(false);
+  // When a protocol exists we collapse the form into a chip row. The user can
+  // still re-expand it via the Edit button.
+  const [formExpanded, setFormExpanded] = useState(false);
+  const showForm = !protocol || formExpanded;
+
+  // Detect a fallback/empty AI summary so we can swap it for a muted banner
+  // without hiding the deterministic protocol data (timeline, totals, etc.).
+  const summaryRaw = (protocol?.summary ?? "").trim();
+  const summaryIsFallback =
+    !!protocol &&
+    (summaryRaw.length === 0 ||
+      summaryRaw.toLowerCase().includes("ai commentary is temporarily unavailable"));
 
 
   const formatTime = (startStr: string, hourIndex: number) => {
@@ -118,7 +131,19 @@ export default function Hydration() {
           <p className="text-[11px] text-muted-foreground mt-0.5">Science-based recovery protocol</p>
         </div>
 
+        {/* Compact "Inputs used" chip row when a protocol is already on screen.
+            The full form re-expands via the Edit button. */}
+        {protocol && !formExpanded && (
+          <InputsUsedChipRow
+            weightLost={weightLost}
+            availableHours={availableHours}
+            glycogenDepletion={glycogenDepletion}
+            onEdit={() => setFormExpanded(true)}
+          />
+        )}
+
         {/* Input Form */}
+        {showForm && (
         <div className="rounded-2xl border border-border p-4 mb-4 relative overflow-hidden bg-card">
           <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
           </div>
@@ -198,6 +223,16 @@ export default function Hydration() {
               <button type="button" className="w-full px-3 py-2.5 flex items-center gap-2 text-left" onClick={() => setAdvancedOpen(o => !o)}>
                 <Beaker className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="text-[11px] font-medium text-muted-foreground">Advanced: Glycogen Depletion</span>
+                {parseFloat(normalCarbs) > 0 && fightWeekCarbs !== "" && parseFloat(fightWeekCarbs) >= 0 && (
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="text-[10px] font-semibold rounded-full bg-muted/60 border border-border/40 px-1.5 py-0.5 text-foreground/70">auto-detected: {glycogenDepletion}</span>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-[240px] text-[11px]">Inferred from your reported carbs (significant = fight-week &lt; 50g; moderate = ≥50% reduction; none otherwise).</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
                 <span className="ml-auto text-muted-foreground">{advancedOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}</span>
               </button>
               {advancedOpen && (
@@ -270,24 +305,44 @@ export default function Hydration() {
               )}
             </div>
 
-            <Button type="submit" className="w-full h-11 mt-1 font-semibold text-sm rounded-2xl transition-all active:scale-[0.98]" disabled={loading || !currentWeight || !weightLost || parseFloat(weightLost) <= 0}>
-              {loading ? "Generating Protocol..." : <>Generate Protocol{!gemsIsPremium && <span className="inline-flex items-center gap-0.5 ml-1.5 text-primary-foreground/60"><Gem className="h-3 w-3" /><span className="text-[10px] font-medium tabular-nums">{gems}</span></span>}</>}
+            <Button
+              type="submit"
+              className={`w-full h-11 mt-1 font-semibold text-sm rounded-2xl transition-all active:scale-[0.98] ${lastError && !loading ? "ring-1 ring-red-500/30" : ""}`}
+              disabled={loading || !currentWeight || !weightLost || parseFloat(weightLost) <= 0}
+            >
+              {loading ? (
+                <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full border-2 border-current border-t-transparent animate-spin" />Building plan...</span>
+              ) : lastError ? "Try again" : (
+                <>Generate Protocol{!gemsIsPremium && <span className="inline-flex items-center gap-0.5 ml-1.5 text-primary-foreground/60"><Gem className="h-3 w-3" /><span className="text-[10px] font-medium tabular-nums">{gems}</span></span>}</>
+              )}
             </Button>
           </form>
         </div>
+        )}
 
-        {/* PROTOCOL RESULTS */}
+        {/* Skeleton during generation gives the wait some shape. */}
+        {loading && !protocol && <HydrationSkeleton />}
+
+        {/* PROTOCOL RESULTS — render the deterministic plan even when AI text is missing. */}
         {protocol && (
           <div className="space-y-2.5">
-            {/* Summary */}
-            <div className="rounded-2xl bg-muted/50 border border-border p-3">
-              <div className="flex items-start justify-between gap-3">
-                <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-line">{protocol.summary}</p>
-                <button onClick={() => handleGenerateProtocol(new Event("submit") as any)} disabled={loading} className="shrink-0 p-1.5 rounded-lg hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors" aria-label="Regenerate">
+            {/* Summary — falls back to a muted banner when AI text is empty. */}
+            {summaryIsFallback ? (
+              <div className="rounded-2xl border border-border/40 bg-muted/30 p-3 flex items-start gap-2">
+                <Info className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                <p className="text-[12px] text-muted-foreground leading-relaxed flex-1">AI commentary unavailable — showing computed plan.</p>
+                <button onClick={() => { setFormExpanded(false); handleGenerateProtocol(new Event("submit") as unknown as React.FormEvent); }} disabled={loading} className="shrink-0 p-1 rounded-lg hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors" aria-label="Regenerate">
+                  <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
+                </button>
+              </div>
+            ) : (
+              <div className="rounded-2xl bg-muted/50 border border-border p-3 flex items-start justify-between gap-3">
+                <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-line">{summaryRaw}</p>
+                <button onClick={() => { setFormExpanded(false); handleGenerateProtocol(new Event("submit") as unknown as React.FormEvent); }} disabled={loading} className="shrink-0 p-1.5 rounded-lg hover:bg-muted/50 text-muted-foreground hover:text-foreground transition-colors" aria-label="Regenerate">
                   <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
                 </button>
               </div>
-            </div>
+            )}
 
             {/* Totals Dashboard */}
             {totals && (

@@ -1,12 +1,12 @@
-import { useState, useEffect } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Trophy } from "lucide-react";
 import { motion } from "motion/react";
+import { useQuery } from "convex/react";
+import { api } from "@/../convex/_generated/api";
+import type { Id } from "@/../convex/_generated/dataModel";
 import { staggerContainer, staggerItem } from "@/lib/motion";
 import { ExercisePerformanceChart } from "./ExercisePerformanceChart";
 import { formatWeight, formatVolume } from "@/lib/gymCalculations";
-import { localCache } from "@/lib/localCache";
-import { useUser } from "@/contexts/UserContext";
 import type { Exercise, ExercisePR, GymSet } from "@/pages/gym/types";
 
 interface ExerciseStatsSheetProps {
@@ -14,38 +14,17 @@ interface ExerciseStatsSheetProps {
   pr: ExercisePR | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  fetchHistory: (exerciseId: string) => Promise<GymSet[]>;
 }
 
-export function ExerciseStatsSheet({ exercise, pr, open, onOpenChange, fetchHistory }: ExerciseStatsSheetProps) {
-  const { userId } = useUser();
-  const [sets, setSets] = useState<GymSet[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  // Stale-while-revalidate: show cached data instantly (if any), always refetch in background.
-  // Cancellation flag prevents the late response of a previous exercise from clobbering current state.
-  useEffect(() => {
-    if (!open || !exercise || !userId) return;
-
-    let cancelled = false;
-
-    const cached = localCache.get<GymSet[]>(userId, `gym_exercise_history_${exercise.id}`);
-    if (cached && cached.length > 0) {
-      setSets(cached);
-      setLoading(false);
-    } else {
-      setSets([]);
-      setLoading(true);
-    }
-
-    fetchHistory(exercise.id).then(data => {
-      if (cancelled) return;
-      setSets(data);
-      setLoading(false);
-    });
-
-    return () => { cancelled = true; };
-  }, [open, exercise, fetchHistory, userId]);
+export function ExerciseStatsSheet({ exercise, pr, open, onOpenChange }: ExerciseStatsSheetProps) {
+  // Reactive Convex query — chart and PRs auto-refresh as the user logs more
+  // sets in any active session, including this one. No manual cache layer.
+  const rows = useQuery(
+    api.gym_sessions.listSetsForExercise,
+    open && exercise ? { exerciseId: exercise.id as unknown as Id<"exercises">, limit: 100 } : "skip",
+  );
+  const sets = (rows ?? []) as unknown as GymSet[];
+  const loading = open && exercise !== null && rows === undefined;
 
   if (!exercise) return null;
 

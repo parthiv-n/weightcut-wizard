@@ -130,14 +130,15 @@ export function ExerciseBlock({
         </div>
       )}
 
-      {/* Column headers */}
+      {/* Column headers — mirror SetRow flex/gap/widths so labels sit centered above inputs */}
       {group.sets.length > 0 && (
-        <div className="flex items-center gap-2 px-3 pb-1.5 text-[11px] text-muted-foreground/70 uppercase tracking-wider border-b border-border/20 mx-3 mb-1">
-          <div className="w-8 text-center">Set</div>
-          <div className="flex-1 text-center">Weight</div>
-          <div className="flex-1 text-center">Reps</div>
-          <div className="w-8" />
-          <div className="w-8" />
+        <div className="flex items-center gap-2 px-3 pb-1.5 mb-1 text-[11px] text-muted-foreground/70 uppercase tracking-wider border-b border-border/20">
+          <div className="w-8 shrink-0 text-center">Set</div>
+          <div className="w-[72px] text-center">Weight</div>
+          <div className="w-[72px] text-center">Reps</div>
+          <div className="w-7 shrink-0" />
+          <div className="w-9 shrink-0" />
+          <div className="w-7 shrink-0" />
         </div>
       )}
 

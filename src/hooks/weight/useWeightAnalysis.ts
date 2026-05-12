@@ -41,10 +41,14 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
       const persisted = AIPersistence.load(userId, "weight_analysis");
       if (persisted) {
         const { analysis, currentWeight, fightWeekTarget } = persisted;
-        if (analysis) {
+        // Shape check: the rich macros/protocol shape has requiredWeeklyLoss as a number.
+        // The migration-era stripped shape lacks it and crashes the UI on .toFixed.
+        if (analysis && typeof analysis.requiredWeeklyLoss === "number") {
           setAiAnalysis(analysis);
           setAiAnalysisWeight(currentWeight);
           setAiAnalysisTarget(fightWeekTarget);
+        } else if (analysis) {
+          AIPersistence.remove(userId, "weight_analysis");
         }
       }
     } catch (error) {
@@ -169,6 +173,15 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
           variant: "destructive"
         });
       } else if (analysis) {
+        if (typeof analysis.requiredWeeklyLoss !== "number") {
+          failTask(taskId, "Server returned an unexpected response shape");
+          toast({
+            title: "AI analysis unavailable",
+            description: "The server returned an incomplete response. Please try again.",
+            variant: "destructive",
+          });
+          return;
+        }
         onAICallSuccess();
         setTargetsApplied(false);
         setAiAnalysis(analysis);

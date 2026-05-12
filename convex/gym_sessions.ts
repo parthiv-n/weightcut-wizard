@@ -22,8 +22,10 @@ function sessionToClient(row: Doc<"gym_sessions">) {
     duration_minutes: row.durationMinutes,
     perceived_fatigue: row.perceivedFatigue,
     notes: row.notes,
-    updated_at: row.updatedAt,
-    created_at: row._creationTime,
+    updated_at: row.updatedAt ? new Date(row.updatedAt).toISOString() : null,
+    // ISO string — matches the legacy Supabase contract that the UI relies on
+    // (e.g. `.split("T")` in ExercisePerformanceChart, `new Date(s.created_at)` formatters).
+    created_at: new Date(row._creationTime).toISOString(),
   };
 }
 
@@ -42,7 +44,7 @@ function setToClient(row: Doc<"gym_sets">) {
     is_warmup: row.isWarmup,
     is_bodyweight: row.isBodyweight,
     notes: row.notes ?? null,
-    created_at: row._creationTime,
+    created_at: new Date(row._creationTime).toISOString(),
   };
 }
 
@@ -98,9 +100,22 @@ export const listHistory = query({
       .withIndex("by_user_date", (q) => q.eq("userId", userId))
       .order("desc")
       .take(limit ?? 20);
-    return sessions
-      .filter((s) => s.status === "completed")
-      .map(sessionToClient);
+    const completed = sessions.filter((s) => s.status === "completed");
+    // Join sets per session so the history detail sheet can render
+    // exercises + reps without a second round-trip per row.
+    const withSets = await Promise.all(
+      completed.map(async (s) => {
+        const sets = await ctx.db
+          .query("gym_sets")
+          .withIndex("by_session", (q) => q.eq("sessionId", s._id))
+          .collect();
+        return {
+          ...sessionToClient(s),
+          sets: sets.map(setToClient),
+        };
+      }),
+    );
+    return withSets;
   },
 });
 

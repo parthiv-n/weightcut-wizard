@@ -51,8 +51,8 @@ function toClientGym(row: Doc<"gyms">, logoUrl: string | null = null) {
     invite_code: row.inviteCode,
     location: row.location ?? null,
     logo_url: logoUrl,
-    updated_at: row.updatedAt,
-    created_at: row._creationTime,
+    updated_at: row.updatedAt ? new Date(row.updatedAt).toISOString() : null,
+    created_at: new Date(row._creationTime).toISOString(),
   };
 }
 

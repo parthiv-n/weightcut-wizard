@@ -68,12 +68,33 @@ const revenueCatWebhook = httpAction(async (ctx, req) => {
     });
   }
 
+  const eventType = String(event.type ?? "");
+  const KNOWN_EVENTS = new Set([
+    "INITIAL_PURCHASE",
+    "RENEWAL",
+    "PRODUCT_CHANGE",
+    "UNCANCELLATION",
+    "EXPIRATION",
+    "CANCELLATION",
+    "BILLING_ISSUE",
+  ]);
+  if (eventType && !KNOWN_EVENTS.has(eventType)) {
+    // Surface unfamiliar RevenueCat events at the HTTP layer too — gives
+    // us a paper trail in Convex logs without needing to wait for a DB
+    // round-trip into the mutation.
+    console.info("[revenuecat-webhook] unrecognised event type", {
+      eventType,
+      appUserId: event.app_user_id,
+    });
+  }
+
+  let result: { ok: boolean; reason?: string; skipped?: string };
   try {
-    await ctx.runMutation(
+    result = await ctx.runMutation(
       internal.profiles.updateSubscriptionFromRevenueCat,
       {
         appUserId: event.app_user_id as string,
-        eventType: String(event.type ?? ""),
+        eventType,
         productId:
           typeof event.product_id === "string" ? event.product_id : undefined,
         expirationAtMs:
@@ -90,7 +111,20 @@ const revenueCatWebhook = httpAction(async (ctx, req) => {
     });
   }
 
-  return new Response(JSON.stringify({ ok: true }), {
+  // Orphaned events (user deleted, never finished signup, etc.) should NOT
+  // bounce RevenueCat with a 5xx — they'll retry forever. Acknowledge with
+  // 200 and surface the reason in the body.
+  if (!result?.ok) {
+    return new Response(
+      JSON.stringify({ ok: false, reason: result?.reason ?? "unknown" }),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  }
+
+  return new Response(JSON.stringify(result), {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });

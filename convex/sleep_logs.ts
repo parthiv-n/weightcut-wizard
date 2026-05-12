@@ -12,7 +12,7 @@ function toClient(row: Doc<"sleep_logs">) {
     user_id: row.userId,
     date: row.date,
     hours: row.hours,
-    created_at: row._creationTime,
+    created_at: new Date(row._creationTime).toISOString(),
   };
 }
 
