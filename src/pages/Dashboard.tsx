@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef, useMemo, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAction, useConvex, useQuery, useMutation } from "convex/react";
+import { useAction, useConvex, useQuery } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { FEATURE_FLAGS } from "@/lib/featureFlags";
 import { FightFormRing } from "@/components/dashboard/FightFormRing";
@@ -90,7 +90,6 @@ export default function Dashboard() {
     api.fightFormScore.loggedTodayBundle,
     FEATURE_FLAGS.enableFightFormScore ? {} : "skip",
   );
-  const recomputeNow = useMutation(api.fightFormScore.recomputeNow);
   const navigate = useNavigate();
   const { safeAsync, isMounted } = useSafeAsync();
   const { streak, streakIncludesToday, weeklyConsistency, badges, badgesLoading, allAchievements } = useGamification(userId, weightLogs, todayCalories, profile);
@@ -693,7 +692,6 @@ export default function Dashboard() {
           appliedCeiling={ffScore.appliedCeiling}
           coachNarrative={wisdom?.summary ?? null}
           actionItems={wisdom?.actionItems ?? []}
-          onRefresh={() => { void recomputeNow({}); }}
         />
 
         <AchievementSheet
