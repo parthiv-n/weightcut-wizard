@@ -6,6 +6,7 @@
  */
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { requireUserId } from "./lib/auth";
 
 // ───────────────────────────────────────────────────────────────────────
@@ -58,18 +59,25 @@ export const upsertCheckin = mutation({
         q.eq("userId", userId).eq("date", args.date),
       )
       .unique();
+    let resultId;
     if (existing) {
       const patch: Record<string, unknown> = {};
       for (const [k, val] of Object.entries(args)) {
         if (val !== undefined && k !== "date") patch[k] = val;
       }
       await ctx.db.patch(existing._id, patch as any);
-      return existing._id;
+      resultId = existing._id;
+    } else {
+      resultId = await ctx.db.insert("daily_wellness_checkins", {
+        userId,
+        ...args,
+      });
     }
-    return await ctx.db.insert("daily_wellness_checkins", {
+    await ctx.scheduler.runAfter(5_000, internal.fightFormScore.recomputeForUserDate, {
       userId,
-      ...args,
+      date: args.date,
     });
+    return resultId;
   },
 });
 

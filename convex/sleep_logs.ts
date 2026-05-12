@@ -3,6 +3,7 @@
  */
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { requireUserId } from "./lib/auth";
 import type { Doc } from "./_generated/dataModel";
 
@@ -52,11 +53,18 @@ export const logSleep = mutation({
         q.eq("userId", userId).eq("date", date),
       )
       .unique();
+    let resultId;
     if (existing) {
       await ctx.db.patch(existing._id, { hours });
-      return existing._id;
+      resultId = existing._id;
+    } else {
+      resultId = await ctx.db.insert("sleep_logs", { userId, date, hours });
     }
-    return await ctx.db.insert("sleep_logs", { userId, date, hours });
+    await ctx.scheduler.runAfter(5_000, internal.fightFormScore.recomputeForUserDate, {
+      userId,
+      date,
+    });
+    return resultId;
   },
 });
 
