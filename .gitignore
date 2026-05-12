@@ -38,3 +38,9 @@ scripts/generate-apple-secret.mjs
 .claudeflow/
 .mcp.json
 CLAUDE.md
+
+# Agent skills + agent-tooling artifacts
+.agents/
+AGENTS.md
+skills-lock.json
+convex/_generated/ai/
