@@ -605,8 +605,17 @@ export default function Dashboard() {
                   ? { current: distinctDaysLoggedCount, needed: 7 }
                   : undefined
               }
-              onTap={() => setScoreSheetOpen(true)}
+              onTap={() =>
+                ffScore.state === "no_camp"
+                  ? navigate("/fight-camps")
+                  : setScoreSheetOpen(true)
+              }
             />
+            {ffScore.state === "no_camp" && (
+              <p className="text-[12px] text-muted-foreground text-center mt-2 px-6 max-w-xs leading-snug">
+                Fight Form Score needs a fight camp (a fight date, starting weight, and goal weight) to compute your cut pace and readiness.
+              </p>
+            )}
             {ffScore.campAge && (
               <p className="text-[12px] text-muted-foreground mt-1.5">
                 {ffScore.campAge.weeksAhead === 0

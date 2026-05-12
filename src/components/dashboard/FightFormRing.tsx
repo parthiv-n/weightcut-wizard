@@ -81,9 +81,12 @@ export function FightFormRing({ score, label, state, calibratingDays, onTap, siz
           </>
         )}
         {state === "no_camp" && (
-          <span className="text-sm text-muted-foreground text-center px-6">
-            Start a fight camp to unlock
-          </span>
+          <>
+            <span className="section-header">No active camp</span>
+            <span className="text-xs text-muted-foreground text-center px-8 mt-2 leading-snug">
+              Tap to create one
+            </span>
+          </>
         )}
         {state === "paused" && (
           <>
