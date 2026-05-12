@@ -21,7 +21,7 @@ function toClient(row: Doc<"hydration_logs">) {
     training_weight_pre: row.trainingWeightPre,
     training_weight_post: row.trainingWeightPost,
     notes: row.notes,
-    created_at: row._creationTime,
+    created_at: new Date(row._creationTime).toISOString(),
   };
 }
 

@@ -19,7 +19,7 @@ function toClient(row: Doc<"exercises">) {
     equipment: row.equipment,
     is_custom: row.isCustom,
     is_bodyweight: row.isBodyweight,
-    created_at: row._creationTime,
+    created_at: new Date(row._creationTime).toISOString(),
   };
 }
 

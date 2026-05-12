@@ -7,8 +7,18 @@ import { useToast } from "@/hooks/use-toast";
 import { triggerHaptic } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import { gymSetSchema } from "@/lib/validation";
+import { logger } from "@/lib/logger";
 import { invalidateExerciseHistory } from "./useGymAnalytics";
 import type { GymSet, Exercise, ExerciseGroup, ActiveWorkout } from "@/pages/gym/types";
+
+/** Convex `_id` strings are base32-alphabet, ~32 chars, no separators. A
+ *  positive check excludes stale Supabase UUIDs (`xxxxxxxx-xxxx-...`), the
+ *  client-side fallback library ids (`local-0`, `local-1`, ...), and any
+ *  other fabricated placeholder. Anything that doesn't pass this WILL be
+ *  rejected by Convex `v.id(...)` validators with an ArgumentValidationError. */
+function looksLikeConvexId(id: string): boolean {
+  return typeof id === "string" && /^[a-z0-9]{20,40}$/i.test(id);
+}
 
 interface UseGymSetsOpts {
   activeSession: ActiveWorkout | null;
@@ -26,12 +36,36 @@ export function useGymSets({ activeSession, updateActiveSession }: UseGymSetsOpt
   const addSetMut = useMutation(api.gym_sessions.addSetToSession);
   const updateSetMut = useMutation(api.gym_sessions.updateSet);
   const deleteSetMut = useMutation(api.gym_sessions.deleteSet);
+  const createCustomExerciseMut = useMutation(api.exercises.createCustom);
 
-  const addExerciseToSession = useCallback((exercise: Exercise) => {
+  const addExerciseToSession = useCallback(async (exercise: Exercise) => {
     if (!activeSession || !userId) return;
+
+    // Materialize fallback-library exercises (id like `local-0`) and any other
+    // synthetic-id exercise into a real Convex row so set-saving has a valid
+    // `Id<"exercises">`. The fallback library fires whenever the user's Convex
+    // `exercises` table is empty.
+    let finalExercise = exercise;
+    if (!looksLikeConvexId(exercise.id)) {
+      try {
+        const insertedId = await createCustomExerciseMut({
+          name: exercise.name,
+          category: exercise.category,
+          muscleGroup: exercise.muscle_group,
+          equipment: exercise.equipment ?? undefined,
+          isBodyweight: exercise.is_bodyweight,
+        });
+        finalExercise = { ...exercise, id: insertedId as unknown as string, is_custom: true };
+      } catch (err) {
+        logger.error("Failed to persist exercise before adding to session", err);
+        toast({ description: "Couldn't add exercise. Please try again.", variant: "destructive" });
+        return;
+      }
+    }
+
     const nextOrder = activeSession.exerciseGroups.length + 1;
     const newGroup: ExerciseGroup = {
-      exercise,
+      exercise: finalExercise,
       exerciseOrder: nextOrder,
       sets: [],
     };
@@ -40,7 +74,7 @@ export function useGymSets({ activeSession, updateActiveSession }: UseGymSetsOpt
       exerciseGroups: [...prev.exerciseGroups, newGroup],
     }));
     triggerHaptic(ImpactStyle.Light);
-  }, [activeSession, userId, updateActiveSession]);
+  }, [activeSession, userId, updateActiveSession, createCustomExerciseMut, toast]);
 
   const removeExerciseFromSession = useCallback(async (exerciseOrder: number) => {
     if (!activeSession || !userId) return;
@@ -79,6 +113,32 @@ export function useGymSets({ activeSession, updateActiveSession }: UseGymSetsOpt
 
     const setOrder = group.sets.length + 1;
     triggerHaptic(ImpactStyle.Light);
+
+    // Guard against stale active sessions (e.g. a Supabase UUID left in
+    // localStorage after the Convex migration) — fail fast with a clear
+    // message rather than letting the Convex validator throw an opaque
+    // ArgumentValidationError.
+    if (!looksLikeConvexId(activeSession.sessionId)) {
+      logger.warn("Stale active gym session id detected; cannot save set", {
+        sessionId: activeSession.sessionId,
+      });
+      toast({
+        description: "Workout session is out of date — please discard and restart.",
+        variant: "destructive",
+      });
+      return null;
+    }
+    if (!looksLikeConvexId(group.exercise.id)) {
+      logger.warn("Synthetic exercise id from routine import cannot be saved", {
+        exerciseId: group.exercise.id,
+        exerciseName: group.exercise.name,
+      });
+      toast({
+        description: `"${group.exercise.name}" isn't in your exercise library yet — pick it from the picker first.`,
+        variant: "destructive",
+      });
+      return null;
+    }
 
     try {
       const insertedId = await addSetMut({
@@ -122,7 +182,15 @@ export function useGymSets({ activeSession, updateActiveSession }: UseGymSetsOpt
       if (!newSet.is_warmup) invalidateExerciseHistory(userId, group.exercise.id);
       return newSet;
     } catch (err) {
-      toast({ description: "Failed to save set. Try again.", variant: "destructive" });
+      // Surface the underlying Convex error so the user (and logs) get a
+      // real signal instead of a generic toast — invaluable while we shake
+      // out post-migration shape mismatches.
+      const msg = (err as { message?: string } | null)?.message;
+      logger.error("addSetToSession failed", { error: msg ?? String(err) });
+      toast({
+        description: msg ? `Failed to save set: ${msg}` : "Failed to save set. Try again.",
+        variant: "destructive",
+      });
       return null;
     }
   }, [activeSession, userId, updateActiveSession, toast, addSetMut]);

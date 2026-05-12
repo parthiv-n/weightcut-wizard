@@ -21,8 +21,8 @@ function toClient(row: Doc<"exercise_prs">) {
     max_reps: row.maxReps ?? null,
     max_volume: row.maxVolume ?? null,
     estimated_1rm: row.estimated1rm ?? null,
-    updated_at: row.updatedAt,
-    created_at: row._creationTime,
+    updated_at: row.updatedAt ? new Date(row.updatedAt).toISOString() : null,
+    created_at: new Date(row._creationTime).toISOString(),
   };
 }
 

@@ -10,7 +10,7 @@ import { calculateVolume } from "@/lib/gymCalculations";
 import { logger } from "@/lib/logger";
 import { invalidateGymAnalytics } from "./useGymAnalytics";
 import type {
-  GymSet, Exercise, SessionType,
+  GymSet, Exercise, SessionType, GymSession,
   ExerciseGroup, SessionWithSets, ActiveWorkout,
 } from "@/pages/gym/types";
 
@@ -35,31 +35,72 @@ export function useGymSessions() {
   const sessionsRaw = useQuery(api.gym_sessions.listHistory, userId ? { limit: 20 } : "skip");
   const allExercises = useQuery(api.exercises.listForUser, userId ? {} : "skip");
 
-  // The history view used to include per-session sets. We fetch sets per
-  // session via individual `getSessionWithSets` queries lazily; for the list
-  // view we synthesise empty sets to keep render fast.
+  // `listHistory` now returns sessions with their sets joined server-side.
+  // We resolve exerciseId → Exercise from the user's exercise library here so
+  // the detail sheet has names/muscle groups to render.
   const exercisesMap = useMemo(() => {
     const map = new Map<string, Exercise>();
     for (const ex of (allExercises ?? []) as unknown as Exercise[]) map.set(ex.id, ex);
     return map;
   }, [allExercises]);
 
-  // Hydrate history with sets resolved server-side via `listHistoryWithSets`
-  // would be cleaner; for now we expose the bare session list (used by the
-  // GymTracker history tab) and let detail pages pull sets via getSessionWithSets.
   const history: SessionWithSets[] = useMemo(() => {
-    return ((sessionsRaw ?? []) as any[]).map((s) => ({
-      ...s,
-      sets: [] as GymSet[],
-      exercises: [] as Exercise[],
-      exerciseGroups: [] as ExerciseGroup[],
-      totalVolume: 0,
-      exerciseCount: 0,
-    }));
-  }, [sessionsRaw]);
+    return ((sessionsRaw ?? []) as Array<GymSession & { sets: GymSet[] }>).map((s) => {
+      const sets = s.sets ?? [];
+
+      // Group sets by exerciseOrder so exercises render in the order the user
+      // performed them. Sets within each group are sorted by set_order.
+      const groupsByOrder = new Map<number, { exerciseId: string; sets: GymSet[] }>();
+      for (const set of sets) {
+        const order = set.exercise_order;
+        const existing = groupsByOrder.get(order);
+        if (existing) {
+          existing.sets.push(set);
+        } else {
+          groupsByOrder.set(order, { exerciseId: set.exercise_id, sets: [set] });
+        }
+      }
+
+      const exerciseGroups: ExerciseGroup[] = Array.from(groupsByOrder.entries())
+        .sort(([a], [b]) => a - b)
+        .map(([exerciseOrder, group]) => {
+          const exercise = exercisesMap.get(group.exerciseId);
+          // Fallback Exercise stub if the library hasn't loaded yet or the
+          // exercise has been deleted — the sheet still needs SOMETHING to
+          // render rather than crashing on group.exercise.name.
+          const safeExercise: Exercise = exercise ?? {
+            id: group.exerciseId,
+            user_id: null,
+            name: "Exercise",
+            category: "full_body",
+            muscle_group: "full_body",
+            equipment: null,
+            is_bodyweight: false,
+            is_custom: false,
+            created_at: "",
+          };
+          return {
+            exercise: safeExercise,
+            exerciseOrder,
+            sets: group.sets.sort((a, b) => a.set_order - b.set_order),
+          };
+        });
+
+      const exercises: Exercise[] = exerciseGroups.map((g) => g.exercise);
+      const totalVolume = calculateVolume(sets);
+      const exerciseCount = exerciseGroups.length;
+
+      return {
+        ...(s as GymSession),
+        sets,
+        exercises,
+        exerciseGroups,
+        totalVolume,
+        exerciseCount,
+      };
+    });
+  }, [sessionsRaw, exercisesMap]);
   const historyLoading = sessionsRaw === undefined;
-  void calculateVolume; // kept import for downstream consumers
-  void exercisesMap;
 
   // Persist active session to localStorage on change.
   useEffect(() => {

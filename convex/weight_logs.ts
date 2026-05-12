@@ -15,7 +15,7 @@ function toClient(row: Doc<"weight_logs">) {
     user_id: row.userId,
     date: row.date,
     weight_kg: row.weightKg,
-    created_at: row._creationTime,
+    created_at: new Date(row._creationTime).toISOString(),
   };
 }
 

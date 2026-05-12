@@ -1,6 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Plus, ChevronRight, List, CalendarDays } from "lucide-react";
+import { useMutation } from "convex/react";
+import { api } from "@/../convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { useGymSessions } from "@/hooks/gym/useGymSessions";
@@ -47,6 +49,9 @@ export default function GymTracker() {
   } = useGymSets({ activeSession, updateActiveSession });
 
   const { exercises, filteredExercises, loading: exercisesLoading, addCustomExercise } = useExerciseLibrary();
+  // Used by handleStartFromRoutine to upgrade routine exercises that aren't in
+  // the library into real Convex rows — set-saving requires a valid Convex id.
+  const createCustomExerciseMut = useMutation(api.exercises.createCustom);
   const { prs, checkAndUpdatePR, getPRForExercise } = useExercisePRs();
   const { analytics, fetchExerciseHistory } = useGymAnalytics(history);
   const previousSetsMap = usePreviousSets(activeSession, history);
@@ -136,33 +141,66 @@ export default function GymTracker() {
       return "full_body";
     };
 
-    // Import routine exercises into the workout with empty sets
-    const groups: import("@/pages/gym/types").ExerciseGroup[] = routineExercises.map((re, idx) => {
-      const matched = (re.exercise_id && exercises.find(e => e.id === re.exercise_id))
+    // Resolve every routine exercise to a real Convex `exercises` row. Anything
+    // not already in the library is created on the fly so the eventual set
+    // mutation has a valid `Id<"exercises">`. Without this, sets fail with an
+    // opaque ArgumentValidationError because a fabricated string id can't pass
+    // `v.id("exercises")`.
+    let createdCount = 0;
+    const resolved: import("@/pages/gym/types").Exercise[] = [];
+    for (const re of routineExercises) {
+      let matched = (re.exercise_id && exercises.find(e => e.id === re.exercise_id))
         || exercises.find(e => e.name.toLowerCase() === re.name.toLowerCase());
 
-      const exercise: import("@/pages/gym/types").Exercise = matched || {
-        id: re.exercise_id || `routine-${idx}`,
-        user_id: null,
-        name: re.name,
-        category: muscleToCategory(re.muscle_group),
-        muscle_group: re.muscle_group,
-        equipment: null,
-        is_bodyweight: false,
-        is_custom: false,
-        created_at: new Date().toISOString(),
-      };
+      if (!matched) {
+        try {
+          const category = muscleToCategory(re.muscle_group);
+          const insertedId = await createCustomExerciseMut({
+            name: re.name,
+            category,
+            muscleGroup: re.muscle_group,
+            isBodyweight: false,
+          });
+          matched = {
+            id: insertedId as unknown as string,
+            user_id: null,
+            name: re.name,
+            category,
+            muscle_group: re.muscle_group,
+            equipment: null,
+            is_bodyweight: false,
+            is_custom: true,
+            created_at: new Date().toISOString(),
+          };
+          createdCount++;
+        } catch {
+          // If creation fails, skip this exercise so the session stays usable
+          // for the rest of the routine.
+          continue;
+        }
+      }
 
-      return {
-        exercise,
-        exerciseOrder: idx + 1,
-        sets: [],
-      };
-    });
+      resolved.push(matched);
+    }
+
+    if (resolved.length === 0) {
+      toast({ description: "Couldn't import any exercises from this routine", variant: "destructive" });
+      discardSession();
+      return;
+    }
+
+    const groups: import("@/pages/gym/types").ExerciseGroup[] = resolved.map((exercise, idx) => ({
+      exercise,
+      exerciseOrder: idx + 1,
+      sets: [],
+    }));
 
     updateActiveSession(prev => ({ ...prev, exerciseGroups: groups }));
+    if (createdCount > 0) {
+      toast({ description: `Added ${createdCount} new exercise${createdCount > 1 ? "s" : ""} to your library` });
+    }
     setTab("workouts");
-  }, [startSession, exercises, exercisesLoading, updateActiveSession, discardSession, toast]);
+  }, [startSession, exercises, exercisesLoading, updateActiveSession, discardSession, toast, createCustomExerciseMut]);
 
   const handleAddSet = useCallback(async (exerciseOrder: number, data: any) => {
     const set = await addSet(exerciseOrder, data);
@@ -520,7 +558,6 @@ export default function GymTracker() {
         pr={statsExercise ? getPRForExercise(statsExercise.id) : null}
         open={statsOpen}
         onOpenChange={setStatsOpen}
-        fetchHistory={fetchExerciseHistory}
       />
 
       <RoutineGeneratorSheet

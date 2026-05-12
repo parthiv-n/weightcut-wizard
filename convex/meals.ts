@@ -44,7 +44,7 @@ function mealToClient(
     carbs_g: totals.carbs_g,
     fats_g: totals.fats_g,
     item_count: items.length,
-    created_at: meal._creationTime,
+    created_at: new Date(meal._creationTime).toISOString(),
   };
 }
 
