@@ -125,3 +125,20 @@ export const scheduleDailyRecomputeAcrossUsers = internalAction({
     }
   },
 });
+
+export const backfillLast30Days = internalAction({
+  args: { userId: v.optional(v.id("users")) },
+  handler: async (ctx, { userId }) => {
+    const ids: any[] = userId
+      ? [userId]
+      : await ctx.runQuery(internal.fightFormScore_internal.listActiveCampUserIds, {});
+    for (const id of ids) {
+      for (let i = 0; i < 30; i++) {
+        const d = new Date();
+        d.setUTCDate(d.getUTCDate() - i);
+        const date = d.toISOString().slice(0, 10);
+        await ctx.runAction(internal.fightFormScore.recomputeForUserDate, { userId: id, date });
+      }
+    }
+  },
+});
