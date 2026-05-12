@@ -38,6 +38,48 @@ const SERVING_PRESETS = [50, 100, 150, 200, 250];
 const SWIPE_THRESHOLD = 70;
 const HIDDEN_RECENTS_KEY = "wcw_hidden_recent_meals";
 
+/**
+ * Compact stat panel for a food row. Calories sit prominently on the left;
+ * macros are color-coded chips on the right. Wrapped in a subtle bordered
+ * box so the numbers are visibly grouped and scannable at list density.
+ */
+function FoodStatPanel({
+  calories,
+  protein,
+  carbs,
+  fats,
+}: {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
+}) {
+  // Fixed column widths so calories and the three macro chips line up
+  // vertically across every row in the list. The calories column is
+  // right-aligned inside its own width so a 3-digit and 4-digit value
+  // both anchor against the same gutter, and each macro chip is given a
+  // fixed width so chip starts/ends never drift between rows.
+  return (
+    <div className="mt-1 rounded-lg bg-muted/30 border border-border/40 px-2 py-1.5 flex items-center gap-2">
+      <div className="flex items-baseline gap-1 flex-shrink-0 w-[64px] justify-end">
+        <span className="display-number text-[14px] text-primary leading-none tabular-nums">{calories}</span>
+        <span className="text-[9px] text-muted-foreground uppercase tracking-wider font-semibold">kcal</span>
+      </div>
+      <div className="flex items-center gap-1 text-[10px] font-semibold tabular-nums flex-shrink-0 ml-auto">
+        <span className="w-[44px] text-center px-1 py-0.5 rounded-md bg-blue-500/15 text-blue-400">
+          {protein}<span className="opacity-70 ml-0.5">P</span>
+        </span>
+        <span className="w-[44px] text-center px-1 py-0.5 rounded-md bg-orange-500/15 text-orange-400">
+          {carbs}<span className="opacity-70 ml-0.5">C</span>
+        </span>
+        <span className="w-[44px] text-center px-1 py-0.5 rounded-md bg-purple-500/15 text-purple-400">
+          {fats}<span className="opacity-70 ml-0.5">F</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function getHiddenRecents(): Set<string> {
     try {
         const raw = localStorage.getItem(HIDDEN_RECENTS_KEY);
@@ -282,14 +324,13 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                                                     >
                                                         <div className="flex-1 min-w-0">
                                                             <p className="text-[13px] font-medium truncate">{food.name}</p>
-                                                            <p className="text-[11px] text-muted-foreground/50 mt-0.5">per 100g</p>
-                                                            <div className="flex items-center gap-2 mt-0.5 text-[12px] tabular-nums">
-                                                                <span className="font-semibold text-primary">{food.calories_per_100g} kcal</span>
-                                                                <span className="text-muted-foreground/40">·</span>
-                                                                <span className="text-blue-500">{food.protein_per_100g}P</span>
-                                                                <span className="text-orange-500">{food.carbs_per_100g}C</span>
-                                                                <span className="text-purple-500">{food.fats_per_100g}F</span>
-                                                            </div>
+                                                            <p className="text-[10px] text-muted-foreground/50 mt-0.5 uppercase tracking-wide">per 100g</p>
+                                                            <FoodStatPanel
+                                                                calories={food.calories_per_100g}
+                                                                protein={food.protein_per_100g}
+                                                                carbs={food.carbs_per_100g}
+                                                                fats={food.fats_per_100g}
+                                                            />
                                                         </div>
                                                         <ChevronRight className="h-3 w-3 text-muted-foreground/30 flex-shrink-0" />
                                                     </button>
@@ -344,14 +385,13 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                                                 {food.brand && (
                                                     <p className="text-[12px] text-muted-foreground/60 truncate">{food.brand}</p>
                                                 )}
-                                                <p className="text-[11px] text-muted-foreground/50 mt-0.5">per 100g</p>
-                                                <div className="flex items-center gap-2 mt-0.5 text-[12px] tabular-nums">
-                                                    <span className="font-semibold text-primary">{food.calories_per_100g} kcal</span>
-                                                    <span className="text-muted-foreground/40">·</span>
-                                                    <span className="text-blue-500">{food.protein_per_100g}P</span>
-                                                    <span className="text-orange-500">{food.carbs_per_100g}C</span>
-                                                    <span className="text-purple-500">{food.fats_per_100g}F</span>
-                                                </div>
+                                                <p className="text-[10px] text-muted-foreground/50 mt-0.5 uppercase tracking-wide">per 100g</p>
+                                                <FoodStatPanel
+                                                    calories={food.calories_per_100g}
+                                                    protein={food.protein_per_100g}
+                                                    carbs={food.carbs_per_100g}
+                                                    fats={food.fats_per_100g}
+                                                />
                                             </div>
                                             <ChevronRight className="h-3 w-3 text-muted-foreground/30 flex-shrink-0" />
                                         </button>
