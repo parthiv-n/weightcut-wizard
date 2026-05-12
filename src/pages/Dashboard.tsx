@@ -1,7 +1,12 @@
 import { useEffect, useState, useCallback, useRef, useMemo, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAction, useConvex } from "convex/react";
+import { useAction, useConvex, useQuery, useMutation } from "convex/react";
 import { api } from "@/../convex/_generated/api";
+import { FEATURE_FLAGS } from "@/lib/featureFlags";
+import { FightFormRing } from "@/components/dashboard/FightFormRing";
+import { FightFormStatChips } from "@/components/dashboard/FightFormStatChips";
+import { TodayPanel } from "@/components/dashboard/TodayPanel";
+import { FightFormScoreSheet } from "@/components/dashboard/FightFormScoreSheet";
 // Lazy-load recharts wrapper so the ~100KB charts bundle defers until first paint.
 const DashboardWeightChart = lazy(() => import("@/components/charts/DashboardWeightChart"));
 import { TrendingDown, Calendar, Lock, ChevronRight, Flame, Zap, CheckCircle2, Scale, Swords } from "lucide-react";
@@ -79,6 +84,9 @@ export default function Dashboard() {
   const [hasCutPlan, setHasCutPlan] = useState<boolean>(() => !!localStorage.getItem("wcw_cut_plan"));
   const [expandedInfo, setExpandedInfo] = useState<'risk' | 'pace' | null>(null);
   const [frequentMeals, setFrequentMeals] = useState<Array<{ name: string; count: number; avgCalories: number }>>([]);
+  const [scoreSheetOpen, setScoreSheetOpen] = useState(false);
+  const ffScore = useQuery(api.fightFormScore.getToday, FEATURE_FLAGS.enableFightFormScore ? {} : "skip");
+  const recomputeNow = useMutation(api.fightFormScore.recomputeNow);
   const navigate = useNavigate();
   const { safeAsync, isMounted } = useSafeAsync();
   const { streak, streakIncludesToday, weeklyConsistency, badges, badgesLoading, allAchievements } = useGamification(userId, weightLogs, todayCalories, profile);
@@ -530,6 +538,167 @@ export default function Dashboard() {
     behind: "text-yellow-400",
     at_target: "text-green-400",
   };
+
+  // --- Fight Form Score hero (feature-flagged) -----------------------------
+  // Renders a new dashboard hero behind VITE_FF_FIGHT_FORM_SCORE. When the
+  // flag is off or the query is still loading, fall through to the legacy
+  // render below. When the query returns null (unauthenticated) we also fall
+  // through so the legacy guards apply.
+  if (FEATURE_FLAGS.enableFightFormScore && ffScore !== null && ffScore !== undefined) {
+    const startingWeight = weightLogs.length > 0 ? parseFloat(weightLogs[0].weight_kg) : currentWeightValue;
+    const goalWeight = profile?.goal_weight_kg ?? 0;
+    const totalCut = startingWeight - goalWeight;
+    const pctComplete = totalCut > 0
+      ? Math.max(0, Math.min(1, (startingWeight - currentWeightValue) / totalCut))
+      : 0;
+    const weightChip = profile
+      ? { current: currentWeightValue, goal: goalWeight, pctComplete }
+      : null;
+    // Distinct days a weight was logged (used to drive the calibrating ring).
+    const distinctDaysLoggedCount = new Set(weightLogs.map((l: any) => l.date)).size;
+    // Today-adherence booleans. Weight uses the existing `hasTodayLog`
+    // derivation; the others are stubbed to false here and will be wired up
+    // in Task 20 (training/sleep/wellness today-log queries).
+    const adherence = {
+      weight: hasTodayLog,
+      training: false,
+      sleep: false,
+      wellnessCheckin: false,
+    };
+
+    return (
+      <ErrorBoundary>
+        <div className="dashboard-zoom animate-page-in space-y-3.5 px-5 py-3 sm:p-5 md:p-6 w-full max-w-7xl mx-auto">
+          {/* Greeting header — mirrors legacy layout for visual consistency */}
+          <header className="flex items-end justify-between gap-3 pt-1">
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground/70 font-bold">
+                {new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
+              </p>
+              <h1 className="text-[22px] font-semibold leading-tight truncate">
+                {userName ? `${getGreeting()}, ${userName}` : "Today"}
+              </h1>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {daysUntilTarget > 0 && (
+                <div className="card-surface rounded-2xl border border-border/50 px-2.5 py-1.5 text-center">
+                  <p className="text-[15px] font-bold display-number tabular-nums leading-none">{daysUntilTarget}</p>
+                  <p className="text-[9px] uppercase tracking-wider text-muted-foreground mt-0.5">Days left</p>
+                </div>
+              )}
+              {streak > 0 && <StreakBadge streak={streak} isActive={streakIncludesToday} />}
+            </div>
+          </header>
+
+          {/* Fight Form Score ring */}
+          <div className="flex flex-col items-center pt-1">
+            <FightFormRing
+              score={ffScore.displayedScore}
+              label={ffScore.label}
+              state={ffScore.state}
+              calibratingDays={
+                ffScore.state === "calibrating"
+                  ? { current: distinctDaysLoggedCount, needed: 7 }
+                  : undefined
+              }
+              onTap={() => setScoreSheetOpen(true)}
+            />
+            {ffScore.campAge && (
+              <p className="text-[12px] text-muted-foreground mt-1.5">
+                {ffScore.campAge.weeksAhead === 0
+                  ? "On pace with schedule"
+                  : `${ffScore.campAge.weeksAhead > 0 ? "+" : ""}${ffScore.campAge.weeksAhead.toFixed(1)} weeks ${ffScore.campAge.weeksAhead >= 0 ? "ahead of" : "behind"} schedule`}
+              </p>
+            )}
+          </div>
+
+          {/* Stat chips */}
+          <FightFormStatChips weight={weightChip} campAge={ffScore.campAge} />
+
+          {/* Today panel */}
+          <TodayPanel adherence={adherence} nextWorkout={null} />
+
+          {/* Below the fold — re-used legacy sections in the same order */}
+          <div>
+            <ConsistencyRing {...weeklyConsistency} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="card-surface rounded-2xl border border-border p-2.5 aspect-square flex flex-col">
+              <div className="flex items-center justify-between mb-1">
+                <span className="section-header text-foreground font-bold">Weight</span>
+                <div className="flex gap-0.5 bg-muted rounded-full p-0.5">
+                  <Button
+                    variant={weightUnit === 'kg' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => { setWeightUnit('kg'); triggerHapticSelection(); }}
+                    className="h-5 min-h-0 text-[13px] px-1.5 rounded-full"
+                  >
+                    kg
+                  </Button>
+                  <Button
+                    variant={weightUnit === 'lb' ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => { setWeightUnit('lb'); triggerHapticSelection(); }}
+                    className="h-5 min-h-0 text-[13px] px-1.5 rounded-full"
+                  >
+                    lb
+                  </Button>
+                </div>
+              </div>
+              <div className="flex-1 min-h-0">
+                {chartData.length > 0 ? (
+                  <Suspense fallback={<div className="h-full w-full animate-pulse bg-muted/20 rounded-2xl" />}>
+                    <DashboardWeightChart data={chartData} weightUnit={weightUnit} />
+                  </Suspense>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full text-center">
+                    <TrendingDown className="h-5 w-5 text-muted-foreground/40 mb-1" />
+                    <p className="text-[13px] text-muted-foreground">No data yet</p>
+                    <Button variant="ghost" size="sm" className="h-6 text-[13px] px-2" onClick={() => navigate('/weight')}>
+                      Log Weight
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+            {userId && <TrainingWeekWidget userId={userId} compact />}
+          </div>
+
+          {userId && <TrainingInsightsWidget userId={userId} />}
+
+          <div>
+            <MilestoneBadges badges={badges} loading={badgesLoading} onTap={() => setAchievementSheetOpen(true)} />
+          </div>
+
+          {userId && <NewAnnouncementWidget userId={userId} />}
+        </div>
+
+        <FightFormScoreSheet
+          open={scoreSheetOpen}
+          onClose={() => setScoreSheetOpen(false)}
+          score={ffScore.displayedScore}
+          label={ffScore.label}
+          phase={ffScore.phase}
+          daysToFight={daysUntilTarget || null}
+          campAge={ffScore.campAge}
+          subScores={ffScore.subScores}
+          topDriver={ffScore.topDriver}
+          topLimiter={ffScore.topLimiter}
+          appliedCeiling={ffScore.appliedCeiling}
+          coachNarrative={null}
+          actionItems={[]}
+          onRefresh={() => { void recomputeNow({}); }}
+        />
+
+        <AchievementSheet
+          open={achievementSheetOpen}
+          onOpenChange={setAchievementSheetOpen}
+          categories={allAchievements}
+        />
+      </ErrorBoundary>
+    );
+  }
 
   return (
     <ErrorBoundary>
