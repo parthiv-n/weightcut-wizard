@@ -51,3 +51,60 @@ export const getHistory = query({
     return rows;
   },
 });
+
+import { internalAction, mutation } from "./_generated/server";
+import { internal } from "./_generated/api";
+import { computeFightFormScore } from "../src/scoring/compose";
+import { CURRENT_CONFIG } from "../src/scoring/config";
+
+export const recomputeForUserDate = internalAction({
+  args: { userId: v.id("users"), date: v.string() },
+  handler: async (ctx, { userId, date }) => {
+    const inputs = await ctx.runQuery(internal.fightFormScore_internal.fetchScoringInputs, { userId, date });
+    const scoringInputs = {
+      date,
+      fightDate: inputs.camp?.fightDate ?? null,
+      campStartDate: inputs.camp?._creationTime
+        ? new Date(inputs.camp._creationTime).toISOString().slice(0, 10)
+        : null,
+      startingWeightKg: inputs.camp?.startingWeightKg ?? null,
+      goalWeightKg: inputs.camp?.endWeightKg ?? inputs.profile?.goalWeightKg ?? null,
+      currentWeightKg:
+        inputs.weights.length > 0 ? inputs.weights[inputs.weights.length - 1].weightKg : null,
+      isCampPaused: false,
+      isCampCompleted: inputs.camp?.isCompleted ?? false,
+      sessions: inputs.sessions,
+      sleepHours: inputs.sleepHours,
+      weights: inputs.weights,
+      hooperByDate: inputs.hooperByDate,
+      meals: inputs.meals,
+      targets: {
+        calories: inputs.profile?.aiRecommendedCalories ?? null,
+        proteinG: inputs.profile?.aiRecommendedProteinG ?? null,
+      },
+      priorRawScores: inputs.priorRawScores,
+    };
+    const score = computeFightFormScore(scoringInputs, CURRENT_CONFIG);
+    await ctx.runMutation(internal.fightFormScore_internal.upsertScore, {
+      userId,
+      date,
+      campId: inputs.camp?._id,
+      score,
+    });
+    return score;
+  },
+});
+
+export const recomputeNow = mutation({
+  args: { date: v.optional(v.string()) },
+  handler: async (ctx, { date }) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("unauthenticated");
+    const userId = identity.subject as any;
+    const target = date ?? new Date().toISOString().slice(0, 10);
+    await ctx.scheduler.runAfter(0, internal.fightFormScore.recomputeForUserDate, {
+      userId,
+      date: target,
+    });
+  },
+});
