@@ -15,7 +15,7 @@ type Props = {
 
 const ITEMS: Array<{ key: keyof Adherence; label: string; href: string }> = [
   { key: "weight", label: "Weight", href: "/weight" },
-  { key: "training", label: "Training", href: "/gym" },
+  { key: "training", label: "Training", href: "/training-calendar" },
   { key: "sleep", label: "Sleep", href: "/sleep" },
   { key: "wellnessCheckin", label: "Check-in", href: "/recovery" },
 ];
