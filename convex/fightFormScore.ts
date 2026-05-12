@@ -37,6 +37,51 @@ export const getToday = query({
   },
 });
 
+/**
+ * Returns four booleans for whether the authenticated user has logged each
+ * core daily input today (or for the supplied `date`). Used by the new
+ * dashboard `TodayPanel` to render its adherence dots without firing four
+ * separate `useQuery` hooks. Returns `null` when unauthenticated so callers
+ * can fall back to optimistic state.
+ */
+export const loggedTodayBundle = query({
+  args: { date: v.optional(v.string()) },
+  handler: async (ctx, { date }) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return null;
+    const userId = identity.subject as any;
+    const targetDate = date ?? todayInUtc();
+
+    const weight = await ctx.db
+      .query("weight_logs")
+      .withIndex("by_user_date", (q) => q.eq("userId", userId).eq("date", targetDate))
+      .first();
+    const sleep = await ctx.db
+      .query("sleep_logs")
+      .withIndex("by_user_date", (q) => q.eq("userId", userId).eq("date", targetDate))
+      .first();
+    const wellnessCheckin = await ctx.db
+      .query("daily_wellness_checkins")
+      .withIndex("by_user_date", (q) => q.eq("userId", userId).eq("date", targetDate))
+      .first();
+    // Training counts as "done" when there's any gym_session on the date with
+    // status "completed" — matches the literal used by `gym_sessions.complete`
+    // and the cleanup query in gym_sessions.ts.
+    const sessions = await ctx.db
+      .query("gym_sessions")
+      .withIndex("by_user_date", (q) => q.eq("userId", userId).eq("date", targetDate))
+      .collect();
+    const training = sessions.some((s) => s.status === "completed");
+
+    return {
+      weight: weight != null,
+      sleep: sleep != null,
+      training,
+      wellnessCheckin: wellnessCheckin != null,
+    };
+  },
+});
+
 export const getHistory = query({
   args: { campId: v.id("fight_camps"), limit: v.optional(v.number()) },
   handler: async (ctx, { campId, limit }) => {

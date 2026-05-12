@@ -86,6 +86,10 @@ export default function Dashboard() {
   const [frequentMeals, setFrequentMeals] = useState<Array<{ name: string; count: number; avgCalories: number }>>([]);
   const [scoreSheetOpen, setScoreSheetOpen] = useState(false);
   const ffScore = useQuery(api.fightFormScore.getToday, FEATURE_FLAGS.enableFightFormScore ? {} : "skip");
+  const ffAdherence = useQuery(
+    api.fightFormScore.loggedTodayBundle,
+    FEATURE_FLAGS.enableFightFormScore ? {} : "skip",
+  );
   const recomputeNow = useMutation(api.fightFormScore.recomputeNow);
   const navigate = useNavigate();
   const { safeAsync, isMounted } = useSafeAsync();
@@ -556,14 +560,15 @@ export default function Dashboard() {
       : null;
     // Distinct days a weight was logged (used to drive the calibrating ring).
     const distinctDaysLoggedCount = new Set(weightLogs.map((l: any) => l.date)).size;
-    // Today-adherence booleans. Weight uses the existing `hasTodayLog`
-    // derivation; the others are stubbed to false here and will be wired up
-    // in Task 20 (training/sleep/wellness today-log queries).
+    // Today-adherence booleans. Sourced from `loggedTodayBundle` (one Convex
+    // round-trip for all four checks). Falls back to the locally-derived
+    // `hasTodayLog` while the query is still loading on first render so the
+    // weight dot isn't briefly off when we already know it's on.
     const adherence = {
-      weight: hasTodayLog,
-      training: false,
-      sleep: false,
-      wellnessCheckin: false,
+      weight: ffAdherence?.weight ?? hasTodayLog,
+      training: ffAdherence?.training ?? false,
+      sleep: ffAdherence?.sleep ?? false,
+      wellnessCheckin: ffAdherence?.wellnessCheckin ?? false,
     };
 
     return (
@@ -686,8 +691,8 @@ export default function Dashboard() {
           topDriver={ffScore.topDriver}
           topLimiter={ffScore.topLimiter}
           appliedCeiling={ffScore.appliedCeiling}
-          coachNarrative={null}
-          actionItems={[]}
+          coachNarrative={wisdom?.summary ?? null}
+          actionItems={wisdom?.actionItems ?? []}
           onRefresh={() => { void recomputeNow({}); }}
         />
 
