@@ -10,15 +10,6 @@ export const fetchScoringInputs = internalQuery({
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .first();
 
-    // Active camp = most recent non-completed camp by creation time.
-    const camps = await ctx.db
-      .query("fight_camps")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .collect();
-    const active = camps
-      .filter((c) => !c.isCompleted)
-      .sort((a, b) => b._creationTime - a._creationTime)[0] ?? null;
-
     const end = new Date(date + "T00:00:00Z");
     const lookbackStart = new Date(end);
     lookbackStart.setUTCDate(lookbackStart.getUTCDate() - 28);
@@ -75,7 +66,6 @@ export const fetchScoringInputs = internalQuery({
     return {
       date,
       profile,
-      camp: active,
       weights: weights.map((w) => ({ date: w.date, weightKg: w.weightKg })),
       sleepHours: sleep.map((s) => ({ date: s.date, hours: s.hours })),
       // gym_sessions has no session-level `rpe`; use `perceivedFatigue` as proxy.
@@ -130,12 +120,18 @@ export const upsertScore = internalMutation({
   },
 });
 
+/**
+ * Returns the userIds of every profile that has a target date set.
+ * The fight camp is now derived from `profiles.targetDate` (the date the
+ * user is walking towards) plus the earliest weight log, so anyone with a
+ * profile is in scope. Previously this scanned the `fight_camps` table.
+ */
 export const listActiveCampUserIds = internalQuery({
   args: {},
   handler: async (ctx): Promise<Array<Id<"users">>> => {
-    const camps = await ctx.db.query("fight_camps").collect();
-    const active = camps.filter((c) => !c.isCompleted);
-    const userIds = Array.from(new Set(active.map((c) => c.userId)));
-    return userIds;
+    const profiles = await ctx.db.query("profiles").collect();
+    return profiles
+      .filter((p) => typeof p.targetDate === "string" && p.targetDate.length > 0)
+      .map((p) => p.userId);
   },
 });

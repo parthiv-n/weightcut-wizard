@@ -102,18 +102,35 @@ export const recomputeForUserDate = internalAction({
   args: { userId: v.id("users"), date: v.string() },
   handler: async (ctx, { userId, date }) => {
     const inputs = await ctx.runQuery(internal.fightFormScore_internal.fetchScoringInputs, { userId, date });
+
+    // The fight camp is derived from the user's profile rather than a
+    // separate fight_camps row: `profile.targetDate` is the fight date,
+    // `profile.goalWeightKg` is the goal, and the earliest weight log is
+    // both the starting weight and the camp start date. When the user
+    // edits their target date in the Goals page, the next debounced
+    // recompute picks it up automatically (Convex queries are reactive).
+    const sortedWeights = [...inputs.weights].sort((a, b) => a.date.localeCompare(b.date));
+    const earliestWeight = sortedWeights[0] ?? null;
+    const latestWeight = sortedWeights[sortedWeights.length - 1] ?? null;
+
+    const fightDate = inputs.profile?.targetDate ?? null;
+    const goalWeightKg = inputs.profile?.goalWeightKg ?? null;
+    const startingWeightKg = earliestWeight?.weightKg ?? inputs.profile?.currentWeightKg ?? null;
+    // Camp starts at the first logged weight. If the user hasn't logged a
+    // weight yet, treat today as the camp start so we don't block scoring
+    // on the very first day.
+    const campStartDate = earliestWeight?.date ?? date;
+    const currentWeightKg = latestWeight?.weightKg ?? inputs.profile?.currentWeightKg ?? null;
+
     const scoringInputs = {
       date,
-      fightDate: inputs.camp?.fightDate ?? null,
-      campStartDate: inputs.camp?._creationTime
-        ? new Date(inputs.camp._creationTime).toISOString().slice(0, 10)
-        : null,
-      startingWeightKg: inputs.camp?.startingWeightKg ?? null,
-      goalWeightKg: inputs.camp?.endWeightKg ?? inputs.profile?.goalWeightKg ?? null,
-      currentWeightKg:
-        inputs.weights.length > 0 ? inputs.weights[inputs.weights.length - 1].weightKg : null,
+      fightDate,
+      campStartDate,
+      startingWeightKg,
+      goalWeightKg,
+      currentWeightKg,
       isCampPaused: false,
-      isCampCompleted: inputs.camp?.isCompleted ?? false,
+      isCampCompleted: false,
       sessions: inputs.sessions,
       sleepHours: inputs.sleepHours,
       weights: inputs.weights,
@@ -129,7 +146,7 @@ export const recomputeForUserDate = internalAction({
     await ctx.runMutation(internal.fightFormScore_internal.upsertScore, {
       userId,
       date,
-      campId: inputs.camp?._id,
+      campId: undefined,
       score,
     });
     return score;

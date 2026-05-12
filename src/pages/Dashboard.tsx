@@ -607,13 +607,13 @@ export default function Dashboard() {
               }
               onTap={() =>
                 ffScore.state === "no_camp"
-                  ? navigate("/fight-camps")
+                  ? navigate("/goals")
                   : setScoreSheetOpen(true)
               }
             />
             {ffScore.state === "no_camp" && (
               <p className="text-[12px] text-muted-foreground text-center mt-2 px-6 max-w-xs leading-snug">
-                Fight Form Score needs a fight camp (a fight date, starting weight, and goal weight) to compute your cut pace and readiness.
+                Set a target date and goal weight in Goals to start scoring your camp.
               </p>
             )}
             {ffScore.campAge && (
