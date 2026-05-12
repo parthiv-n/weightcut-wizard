@@ -14,7 +14,7 @@ export function WizardLoader({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.32, ease: [0.32, 0.72, 0, 1] }}
+      transition={{ duration: 0.40, ease: [0.32, 0.72, 0, 1] }}
       style={{ willChange: "opacity" }}
     >
       <p className="text-lg font-bold tracking-tight text-foreground">

@@ -79,7 +79,8 @@ function toClientShape(
     updated_at: row.updatedAt,
     is_premium:
       row.subscriptionTier !== "free" &&
-      row.subscriptionTier !== undefined,
+      row.subscriptionTier !== undefined &&
+      (!row.subscriptionExpiresAt || row.subscriptionExpiresAt > Date.now()),
   };
 }
 
@@ -424,7 +425,14 @@ export const spendGem = mutation({
 
 /** Apple IAP / RevenueCat client-side activation. Called by an authenticated
  *  user immediately after a successful purchase to flip their tier locally
- *  while the RevenueCat webhook catches up. Idempotent. */
+ *  while the RevenueCat webhook catches up. Idempotent.
+ *
+ *  Out-of-order guard: if the server already knows about a *later* renewal
+ *  (existing.subscriptionExpiresAt > incoming) and the existing tier is not
+ *  "free", we keep the server's expiry — the client RevenueCat snapshot is
+ *  stale and we don't want to downgrade a user with a fresher renewal on
+ *  file. The tier from the client is still honoured (it never flips you
+ *  to "free"; the webhook does that). */
 export const activatePremium = mutation({
   args: {
     tier: v.string(),
@@ -434,21 +442,98 @@ export const activatePremium = mutation({
     const userId = await requireUserId(ctx);
     const existing = await findByUser(ctx, userId);
     if (!existing) throw new Error("Profile not found");
-    const expiresAtMs =
-      expiresAt && expiresAt.length > 0 ? Date.parse(expiresAt) : undefined;
-    await ctx.db.patch(existing._id, {
-      subscriptionTier: tier,
-      subscriptionExpiresAt: expiresAtMs,
+
+    // Lifetime guard — a stale client snapshot must never downgrade an
+    // already-lifetime user back to monthly/annual. The webhook is the
+    // only path allowed to change a lifetime entitlement.
+    if (existing.subscriptionTier === "premium_lifetime" && tier !== "premium_lifetime") {
+      console.info("[activatePremium] refusing to downgrade lifetime user", { userId, incomingTier: tier });
+      await ctx.db.patch(existing._id, {
+        subscriptionUpdatedAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      return {
+        tier: existing.subscriptionTier,
+        expiresAt: existing.subscriptionExpiresAt
+          ? new Date(existing.subscriptionExpiresAt).toISOString()
+          : null,
+        source: "client-activation" as const,
+        skipped: "lifetime-preserved" as const,
+      };
+    }
+
+    const parsed =
+      expiresAt && expiresAt.length > 0 ? Date.parse(expiresAt) : NaN;
+    const incomingExpiresAtMs = Number.isFinite(parsed) ? parsed : undefined;
+
+    // Out-of-order guard — preserve a later server-side expiry over a
+    // stale client-supplied one, AND also preserve the existing tier in
+    // that case (a stale snapshot shouldn't be allowed to silently change
+    // tier either; e.g. premium_annual → premium_monthly).
+    let effectiveTier = tier;
+    let effectiveExpiresAtMs = incomingExpiresAtMs;
+    if (
+      existing.subscriptionExpiresAt &&
+      incomingExpiresAtMs &&
+      incomingExpiresAtMs < existing.subscriptionExpiresAt &&
+      existing.subscriptionTier &&
+      existing.subscriptionTier !== "free"
+    ) {
+      console.info(
+        "[activatePremium] ignoring stale client snapshot",
+        {
+          userId,
+          incomingTier: tier,
+          incomingExpiresAtMs,
+          existingTier: existing.subscriptionTier,
+          existingExpiresAtMs: existing.subscriptionExpiresAt,
+        },
+      );
+      effectiveTier = existing.subscriptionTier;
+      effectiveExpiresAtMs = existing.subscriptionExpiresAt;
+    }
+
+    // Only overwrite the stored expiry when we actually have a value —
+    // never clobber an existing expiry with `undefined`.
+    const patch: Partial<Doc<"profiles">> = {
+      subscriptionTier: effectiveTier,
       subscriptionUpdatedAt: Date.now(),
       updatedAt: Date.now(),
-    });
-    return { tier, expiresAt: expiresAt ?? null };
+      ...(effectiveExpiresAtMs !== undefined
+        ? { subscriptionExpiresAt: effectiveExpiresAtMs }
+        : {}),
+    };
+    await ctx.db.patch(existing._id, patch);
+    return {
+      tier: effectiveTier,
+      expiresAt:
+        effectiveExpiresAtMs !== undefined
+          ? new Date(effectiveExpiresAtMs).toISOString()
+          : null,
+      source: "client-activation" as const,
+    };
   },
 });
 
 /** Internal variant used by the RevenueCat webhook (no auth context — the
  *  webhook is verified by its shared-secret header). Looks up the profile
- *  by `revenuecat_customer_id` first, then by user id. */
+ *  by `userId` (RevenueCat is configured with our Convex users._id as the
+ *  `app_user_id`).
+ *
+ *  Hardening rules:
+ *   - Idempotent: replaying the same event yields the same final state.
+ *   - Out-of-order guard: a stale webhook carrying an `expirationAtMs`
+ *     older than what we already have on file MUST NOT downgrade the user.
+ *     Applies to RENEWAL / UNCANCELLATION / PRODUCT_CHANGE / CANCELLATION.
+ *     EXPIRATION is allowed to clear regardless — that's the canonical
+ *     "subscription is over" signal.
+ *   - Never set `subscriptionExpiresAt` to `undefined` unless we mean to
+ *     wipe it (only EXPIRATION wipes it).
+ *   - CANCELLATION keeps the tier untouched (the user keeps premium until
+ *     the existing expiry fires; only the expiry timestamp can move).
+ *   - BILLING_ISSUE is a grace period — touch nothing.
+ *   - Unknown event types are logged via `console.info` and treated as a
+ *     no-op so we can spot new RevenueCat events without breaking. */
 export const updateSubscriptionFromRevenueCat = internalMutation({
   args: {
     appUserId: v.string(),
@@ -463,16 +548,55 @@ export const updateSubscriptionFromRevenueCat = internalMutation({
       .query("profiles")
       .withIndex("by_user", (q) => q.eq("userId", appUserId as any))
       .unique();
-    if (!profile) return { ok: false, reason: "profile-not-found" };
+    if (!profile) return { ok: false, reason: "profile-not-found" as const };
 
     const tierFromProduct = (pid?: string): string => {
-      if (!pid) return profile.subscriptionTier;
+      if (!pid) {
+        // Fall back to current tier so we don't accidentally flip to a
+        // wrong product. If the user was already free we promote to
+        // monthly as a sensible default.
+        return profile.subscriptionTier && profile.subscriptionTier !== "free"
+          ? profile.subscriptionTier
+          : "premium_monthly";
+      }
+      if (pid.includes("lifetime")) return "premium_lifetime";
       if (pid.includes("yearly") || pid.includes("annual")) {
         return "premium_annual";
       }
       if (pid.includes("monthly")) return "premium_monthly";
       return "premium_monthly";
     };
+
+    // Out-of-order guard. RevenueCat doesn't guarantee delivery order, so a
+    // late RENEWAL/CANCELLATION/etc. with an older expiry than the one we
+    // already hold should be ignored for the expiry field. EXPIRATION is
+    // explicitly exempt — that event means the sub is over and we always
+    // honour it.
+    const isStaleExpiry =
+      !!profile.subscriptionExpiresAt &&
+      typeof expirationAtMs === "number" &&
+      expirationAtMs < profile.subscriptionExpiresAt &&
+      eventType !== "EXPIRATION";
+
+    if (isStaleExpiry) {
+      console.info(
+        "[revenuecat-webhook] ignoring stale event",
+        {
+          appUserId,
+          eventType,
+          incomingExpiresAtMs: expirationAtMs,
+          existingExpiresAtMs: profile.subscriptionExpiresAt,
+        },
+      );
+      // Still bump `subscriptionUpdatedAt` so we have a record we saw the
+      // event, but DO NOT touch tier or expiresAt.
+      await ctx.db.patch(profile._id, {
+        revenuecatCustomerId: appUserId,
+        subscriptionUpdatedAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      return { ok: true, skipped: "stale-expiry" as const };
+    }
 
     const patch: Record<string, unknown> = {
       revenuecatCustomerId: appUserId,
@@ -486,21 +610,33 @@ export const updateSubscriptionFromRevenueCat = internalMutation({
       case "PRODUCT_CHANGE":
       case "UNCANCELLATION":
         patch.subscriptionTier = tierFromProduct(productId);
-        patch.subscriptionExpiresAt = expirationAtMs ?? undefined;
+        // Only write expiry when RevenueCat actually supplied one. Don't
+        // wipe an existing expiry with undefined on a malformed event.
+        if (typeof expirationAtMs === "number") {
+          patch.subscriptionExpiresAt = expirationAtMs;
+        }
         break;
       case "EXPIRATION":
         patch.subscriptionTier = "free";
         patch.subscriptionExpiresAt = undefined;
         break;
       case "CANCELLATION":
-        // User cancelled but keeps access until expiry — only update expiry.
-        patch.subscriptionExpiresAt = expirationAtMs ?? undefined;
+        // User cancelled but keeps access until expiry — DO NOT change
+        // tier. Only update the expiry if we got a fresh value.
+        if (typeof expirationAtMs === "number") {
+          patch.subscriptionExpiresAt = expirationAtMs;
+        }
         break;
       case "BILLING_ISSUE":
-        // Grace period — leave tier alone.
+        // Grace period — leave tier and expiry untouched.
         break;
       default:
-        // Unhandled event — touch updated timestamps but nothing else.
+        // Unknown event — log so we can spot RevenueCat additions early,
+        // but don't mutate subscription state.
+        console.info(
+          "[revenuecat-webhook] unknown event type",
+          { appUserId, eventType, productId },
+        );
         break;
     }
 

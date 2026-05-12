@@ -16,6 +16,13 @@ import wizardNutrition from "@/assets/wizard-nutrition.webp";
 import { useAuth } from "@/contexts/UserContext";
 import { WizardLoader } from "@/components/ui/WizardLoader";
 
+// Cold-start grace period: Convex auth can briefly report
+// `{ isLoading: false, isAuthenticated: false }` between mount and
+// session restoration for a returning user. Without this guard, the
+// landing CTA would flash for a frame in that window between the splash
+// fade and the dashboard. We hold the splash for this long on first paint.
+const BOOT_GRACE_MS = 1200;
+
 const FEATURES = [
   { icon: Flame, label: "Weight Management" },
   { icon: Brain, label: "AI Game Plans" },
@@ -31,6 +38,15 @@ const Index = () => {
   const navigate = useNavigate();
   const { userId, hasProfile, isLoading, isCoach } = useAuth();
 
+  // Hold the splash for a brief window even when auth has "settled" to
+  // no-session — Convex can flicker through that state on cold start
+  // before restoring a returning user's session.
+  const [bootGraceExpired, setBootGraceExpired] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setBootGraceExpired(true), BOOT_GRACE_MS);
+    return () => clearTimeout(t);
+  }, []);
+
   useEffect(() => {
     if (isLoading) return;
     const params = new URLSearchParams(window.location.search);
@@ -45,16 +61,14 @@ const Index = () => {
         navigate("/coach", { replace: true });
         return;
       }
+      // Fighters always land on /dashboard from cold start.
+      // RouteTracker still writes lastRoute for in-app navigation, but the
+      // splash explicitly resolves to /dashboard so users land on a known
+      // surface every launch.
       if (hasProfile) {
-        const lastRoute = localStorage.getItem("lastRoute");
-        // Defensive: don't bounce a fighter into /coach/* via stale lastRoute
-        const safeLast =
-          lastRoute && lastRoute !== "/wizard" && !lastRoute.startsWith("/coach")
-            ? lastRoute
-            : null;
-        navigate(safeLast || "/dashboard");
+        navigate("/dashboard", { replace: true });
       } else {
-        navigate("/onboarding");
+        navigate("/onboarding", { replace: true });
       }
     }
   }, [userId, hasProfile, isLoading, isCoach, navigate]);
@@ -69,7 +83,7 @@ const Index = () => {
     [navigate],
   );
 
-  if (isLoading || userId) {
+  if (isLoading || userId || !bootGraceExpired) {
     return <WizardLoader />;
   }
 

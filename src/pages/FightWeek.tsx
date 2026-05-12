@@ -22,13 +22,17 @@ import { ManipulationCard, type SodiumStrategy, type FibreStrategy } from "@/com
 import { DehydrationTacticsCard, type DehydrationTactic } from "@/components/fightweek/DehydrationTacticsCard";
 import { PostWeighInCard, type PostWeighInData } from "@/components/fightweek/PostWeighInCard";
 import { sanitizeAIText } from "@/lib/sanitizeAIText";
-import { Activity, Shield, CheckCircle, AlertTriangle } from "lucide-react";
+import { Activity, Shield, CheckCircle, AlertTriangle, Info } from "lucide-react";
 import { ShareButton } from "@/components/share/ShareButton";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { FightWeekSummaryCard } from "@/components/share/cards/FightWeekSummaryCard";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useAITask } from "@/contexts/AITaskContext";
 import { AICompactOverlay } from "@/components/AICompactOverlay";
+import { ToastAction } from "@/components/ui/toast";
+import { createElement } from "react";
+import { logger } from "@/lib/logger";
+import { FightWeekSkeleton } from "@/components/fight-week/FightWeekSkeleton";
 
 interface DBPlan {
   id: string;
@@ -102,6 +106,7 @@ export default function FightWeek() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
 
   const { toast } = useToast();
   const { userId, profile, refreshProfile } = useUser();
@@ -251,6 +256,20 @@ export default function FightWeek() {
     }
   };
 
+  // Toast helper with a "Try again" action that re-runs generation.
+  const showFailureToast = (title: string, description: string) => {
+    toast({
+      title,
+      description,
+      variant: "destructive",
+      action: createElement(
+        ToastAction,
+        { altText: "Try again", onClick: () => { void generateProtocol(); } },
+        "Try again",
+      ),
+    });
+  };
+
   const generateProtocol = async () => {
     if (!userId || !inputsValid) return;
 
@@ -264,8 +283,8 @@ export default function FightWeek() {
     aiAbortRef.current = controller;
 
     safeAsync(setIsGenerating)(true);
-    safeAsync(setAiPlan)(null);
-
+    safeAsync(setLastError)(null);
+    // Note: do NOT clear `aiPlan` here — on failure the previous result stays visible.
     const taskId = addTask({
       id: `fight-week-${Date.now()}`,
       type: "fight-week",
@@ -281,25 +300,37 @@ export default function FightWeek() {
     const carbs = parseInt(normalDailyCarbs);
 
     try {
-      // Convex fightWeekAnalysis action sources athlete state from the
-      // server-side snapshot, so it does not accept client-provided weight
-      // inputs. Persist the user's typed values via savePlan() below so
-      // the snapshot reflects them on the next call.
+      const cwArg = parseFloat(currentWeight);
+      const twArg = parseFloat(targetWeight);
+      const daysArg = parseInt(daysUntilWeighIn);
       let data: any;
       try {
-        data = await fightWeekAnalysisAction({});
+        data = await fightWeekAnalysisAction({
+          currentWeightKg: Number.isFinite(cwArg) && cwArg > 0 ? cwArg : undefined,
+          targetWeightKg: Number.isFinite(twArg) && twArg > 0 ? twArg : undefined,
+          daysUntilWeighIn: Number.isFinite(daysArg) && daysArg > 0 ? daysArg : undefined,
+          normalDailyCarbsG: Number.isFinite(carbs) && carbs > 0 ? carbs : undefined,
+        });
       } catch (err: any) {
         if (controller.signal.aborted) return;
         if (!isMounted()) return;
         if (await handleAILimitError(err)) { failTask(taskId, "Limit reached"); return; }
         const msg = err?.message || "Protocol generation unavailable";
         failTask(taskId, msg);
-        toast({ title: "Protocol unavailable", description: msg, variant: "destructive" });
+        setLastError(msg);
+        showFailureToast("Protocol unavailable", msg);
         return;
       }
 
       if (controller.signal.aborted) return;
       if (!isMounted()) return;
+
+      // No-camp branch — informational, not a failure.
+      if (data?.ok === false && typeof data?.reason === "string") {
+        completeTask(taskId, null);
+        toast({ title: "No fight scheduled", description: data.reason });
+        return;
+      }
 
       if (data?.plan) {
         onAICallSuccess();
@@ -312,6 +343,8 @@ export default function FightWeek() {
         }
 
         setAiPlan(plan);
+        setLastError(null);
+        // Only persist on success — failed/partial responses never reach this branch.
         // Persist effectively forever (1 year). The plan only clears when the user regenerates.
         AIPersistence.save(userId, "fight_week_plan_ai", plan, 24 * 365);
         completeTask(taskId, plan);
@@ -326,11 +359,21 @@ export default function FightWeek() {
         // Silently persist the weights/days so they auto-rehydrate next visit.
         // Previously this was behind a manual "Save Plan" button which is now gone.
         savePlan();
+        return;
       }
+
+      // Defensive: 200 OK but envelope is missing. Surface + log to Sentry.
+      const partialMsg = "We had a partial response. Please try again.";
+      logger.error("Fight week plan envelope missing", undefined, { data });
+      failTask(taskId, partialMsg);
+      setLastError(partialMsg);
+      showFailureToast("AI didn't complete", partialMsg);
     } catch (err: any) {
       if (err?.name === 'AbortError' || controller.signal.aborted) return;
-      failTask(taskId, err?.message || "Something went wrong");
-      toast({ title: "Protocol unavailable", description: err?.message || "Something went wrong", variant: "destructive" });
+      const msg = err?.message || "Something went wrong";
+      failTask(taskId, msg);
+      setLastError(msg);
+      showFailureToast("Protocol unavailable", msg);
     } finally {
       safeAsync(setIsGenerating)(false);
     }
@@ -409,6 +452,9 @@ export default function FightWeek() {
     : null;
 
   const fwAiTask = aiTasks.find(t => t.status === "running" && t.type === "fight-week");
+
+  const summaryRaw = (aiPlan?.summary ?? "").trim();
+  const summaryIsFallback = !!aiPlan && (summaryRaw.length === 0 || summaryRaw.toLowerCase().includes("ai commentary is temporarily unavailable"));
 
   return (
     <div className="space-y-2.5 text-foreground">
@@ -494,27 +540,31 @@ export default function FightWeek() {
               <Button
                 onClick={generateProtocol}
                 disabled={isGenerating || !normalDailyCarbs}
-                className="h-9 rounded-2xl text-sm px-6"
+                className={`h-9 rounded-2xl text-sm px-6 ${lastError && !isGenerating ? "ring-1 ring-red-500/30" : ""}`}
               >
-                {isGenerating ? "Generating..." : aiPlan ? "Regenerate" : "Generate Protocol"}
+                {isGenerating ? (
+                  <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full border-2 border-current border-t-transparent animate-spin" />Building plan...</span>
+                ) : lastError ? "Try again" : aiPlan ? "Regenerate" : "Generate Fight Week Plan"}
               </Button>
             </div>
           )}
         </div>
 
+        {/* Skeleton while generating — gives shape to the wait. */}
+        {isGenerating && !aiPlan && <FightWeekSkeleton />}
+
         {/* Nothing below renders until the AI returns a plan */}
         {aiPlan && (
           <>
-            {/* Summary narrative */}
-            <div className="card-surface rounded-2xl border border-border/50 p-4">
-              <p className="text-sm text-foreground/90 leading-relaxed">{sanitizeAIText(aiPlan.summary)}</p>
-            </div>
-
-            {/* Sanity-check banner */}
-            {sanityWarning && (
-              <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-3 flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 text-yellow-400 mt-0.5 flex-shrink-0" />
-                <p className="text-xs text-yellow-200 leading-relaxed">{sanityWarning}</p>
+            {/* Summary narrative — falls back to a muted banner when AI text is empty */}
+            {summaryIsFallback ? (
+              <div className="rounded-2xl border border-border/40 bg-muted/30 p-3 flex items-start gap-2">
+                <Info className="h-3.5 w-3.5 text-muted-foreground mt-0.5 flex-shrink-0" />
+                <p className="text-[12px] text-muted-foreground leading-relaxed">AI commentary unavailable — showing computed plan.</p>
+              </div>
+            ) : (
+              <div className="card-surface rounded-2xl border border-border/50 p-4">
+                <p className="text-sm text-foreground/90 leading-relaxed">{sanitizeAIText(summaryRaw)}</p>
               </div>
             )}
 
@@ -556,6 +606,14 @@ export default function FightWeek() {
               dietTotal={aiPlan.breakdown.dietTotal}
               totalToCut={aiPlan.breakdown.totalToCut}
             />
+
+            {/* Sanity warning surfaced gently near the breakdown it relates to. */}
+            {sanityWarning && (
+              <div className="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-3 flex items-start gap-2" role="alert">
+                <AlertTriangle className="h-4 w-4 text-yellow-400 mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-yellow-200 leading-relaxed">{sanityWarning}</p>
+              </div>
+            )}
 
             <DehydrationRingPanel
               dehydrationPercentBW={aiPlan.dehydration.percentBW}

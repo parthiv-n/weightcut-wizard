@@ -8,6 +8,7 @@ import { nutritionCache, startCacheCleanup, stopCacheCleanup } from "@/lib/nutri
 import { AIPersistence } from "@/lib/aiPersistence";
 import { logger } from "@/lib/logger";
 import { usePushRegistration } from "@/hooks/usePushRegistration";
+import { clearLocalSubscriptionState } from "@/contexts/SubscriptionContext";
 import { api } from "../../convex/_generated/api";
 
 // Profile cache freshness — beyond this we serve cached data but flag it stale
@@ -300,6 +301,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
     if (uid && uid !== "pending") {
       localCache.clearUser(uid);
       nutritionCache.clearUser(uid);
+    }
+    if (uid && uid !== "pending") {
+      clearLocalSubscriptionState(uid);
     }
     // Clear local state immediately so the UI updates without waiting.
     setUserName("");

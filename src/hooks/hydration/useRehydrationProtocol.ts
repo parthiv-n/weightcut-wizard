@@ -9,7 +9,9 @@ import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { createAIAbortController } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
+import { ToastAction } from "@/components/ui/toast";
 import { Droplets, Activity, CheckCircle } from "lucide-react";
+import { createElement } from "react";
 import type { RehydrationProtocol } from "@/pages/hydration/types";
 
 export function useRehydrationProtocol() {
@@ -50,6 +52,7 @@ export function useRehydrationProtocol() {
   const [fightWeekCarbs, setFightWeekCarbs] = useState<string>("");
   const [protocol, setProtocol] = useState<RehydrationProtocol | null>(null);
   const [loading, setLoading] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
 
   const availableHours = useMemo(() => {
     const weighIn = new Date(`${weighInDate}T${weighInTime}`);
@@ -106,6 +109,21 @@ export function useRehydrationProtocol() {
     }
   };
 
+  // Toast helper that includes a "Try again" action which re-runs generation.
+  // Kept as a closure so the retry references the latest event handler.
+  const showFailureToast = (title: string, description: string, retry: () => void) => {
+    toast({
+      title,
+      description,
+      variant: "destructive",
+      action: createElement(
+        ToastAction,
+        { altText: "Try again", onClick: retry },
+        "Try again",
+      ),
+    });
+  };
+
   const handleGenerateProtocol = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentWeight) return;
@@ -120,6 +138,9 @@ export function useRehydrationProtocol() {
     aiAbortRef.current = controller;
 
     safeAsync(setLoading)(true);
+    safeAsync(setLastError)(null);
+    // Intentionally NOT clearing `protocol` here — if the call fails the user
+    // keeps their previous result visible instead of an empty page.
     const taskId = addTask({
       id: `rehydration-${Date.now()}`,
       type: "rehydration",
@@ -131,6 +152,12 @@ export function useRehydrationProtocol() {
       ],
       returnPath: "/weight-cut?tab=rehydration",
     });
+
+    const retry = () => {
+      // Synthesise a submit event so callers don't need to forward one.
+      const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+      void handleGenerateProtocol(fakeEvent);
+    };
 
     try {
       const weightLostKg = parseFloat(weightLost);
@@ -158,7 +185,9 @@ export function useRehydrationProtocol() {
       if (data?.protocol) {
         onAICallSuccess();
         setProtocol(data.protocol);
+        setLastError(null);
 
+        // Only persist on success — failed/partial responses never reach this branch.
         if (userId) {
           AIPersistence.save(
             userId,
@@ -171,17 +200,23 @@ export function useRehydrationProtocol() {
           );
         }
         completeTask(taskId, data.protocol);
+      } else {
+        // Defensive: backend returned successfully but without the expected envelope.
+        // Likely a backend regression — surface clearly and log to Sentry.
+        const msg = "We had a partial response. Please try again.";
+        logger.error("Rehydration protocol envelope missing", undefined, { data });
+        failTask(taskId, msg);
+        setLastError(msg);
+        showFailureToast("AI didn't complete", msg, retry);
       }
     } catch (error: any) {
       if (error?.name === 'AbortError' || controller.signal.aborted) return;
       if (!isMounted()) return;
-      failTask(taskId, error?.message || "Failed to generate rehydration protocol");
+      const msg = error?.message || "AI couldn't complete the protocol. Please try again.";
+      failTask(taskId, msg);
+      setLastError(msg);
       logger.error("Error generating protocol", error);
-      toast({
-        title: "Error",
-        description: "Failed to generate rehydration protocol",
-        variant: "destructive",
-      });
+      showFailureToast("Protocol unavailable", msg, retry);
     } finally {
       safeAsync(setLoading)(false);
     }
@@ -215,6 +250,7 @@ export function useRehydrationProtocol() {
     // Protocol state
     protocol,
     loading,
+    lastError,
     // Derived
     currentWeight,
     profileParts,

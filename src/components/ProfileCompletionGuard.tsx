@@ -25,7 +25,7 @@ export function ProfileCompletionGuard({ children }: { children: React.ReactNode
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.32, ease: [0.32, 0.72, 0, 1], delay: 0.08 }}
+          transition={{ duration: 0.40, ease: [0.32, 0.72, 0, 1], delay: 0.12 }}
           style={{ willChange: "opacity" }}
         >
           {children}
