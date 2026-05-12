@@ -665,4 +665,88 @@ All colors MUST be HSL.
     .shimmer-skeleton::after {
       animation: none !important;
     }
-  }}
+
+    .ff-ring-halo,
+    .ff-ring-particle,
+    .ff-ring-calib-sweep {
+      animation: none !important;
+    }
+  }
+
+  /* --- Fight Form Score hero ring animations -----------------------------
+     Score-reactive halo, "earned" particles (only on Sharp), and a sweeping
+     calibrating indicator. All three honour prefers-reduced-motion above. */
+
+  .ff-ring-halo {
+    background: radial-gradient(
+      circle,
+      rgba(var(--ff-halo-rgb), var(--ff-halo-peak, 0.4)) 0%,
+      rgba(var(--ff-halo-rgb), 0) 65%
+    );
+    filter: blur(22px);
+    animation-name: ffHaloPulse;
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+    will-change: opacity, transform;
+  }
+
+  @keyframes ffHaloPulse {
+    0%, 100% {
+      opacity: 0.55;
+      transform: scale(0.94);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.06);
+    }
+  }
+
+  .ff-ring-particle {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 4px;
+    height: 4px;
+    margin: -2px 0 0 -2px;
+    border-radius: 9999px;
+    background: rgb(var(--ff-halo-rgb));
+    box-shadow: 0 0 8px rgba(var(--ff-halo-rgb), 0.8);
+    transform-origin: center;
+    animation-name: ffParticleOrbit, ffParticleTwinkle;
+    animation-timing-function: linear, ease-in-out;
+    animation-iteration-count: infinite, infinite;
+    will-change: transform, opacity;
+  }
+
+  @keyframes ffParticleOrbit {
+    from {
+      transform: rotate(0deg) translateX(var(--ff-orbit-r, 80px));
+    }
+    to {
+      transform: rotate(360deg) translateX(var(--ff-orbit-r, 80px));
+    }
+  }
+
+  @keyframes ffParticleTwinkle {
+    0%, 100% {
+      opacity: 0.25;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  .ff-ring-calib-sweep {
+    animation: ffCalibSweep 3s linear infinite;
+    will-change: transform;
+  }
+
+  @keyframes ffCalibSweep {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
+  }
+}
