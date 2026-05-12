@@ -17,4 +17,10 @@ crons.hourly(
   internal.actions.reconcileAiOutcomes.run,
 );
 
+crons.hourly(
+  "fight-form-score-daily",
+  { minuteUTC: 5 },
+  internal.fightFormScore.scheduleDailyRecomputeAcrossUsers,
+);
+
 export default crons;

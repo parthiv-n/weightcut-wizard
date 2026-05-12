@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalQuery, internalMutation } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 
 export const fetchScoringInputs = internalQuery({
   args: { userId: v.id("users"), date: v.string() },
@@ -126,5 +127,15 @@ export const upsertScore = internalMutation({
       return existing._id;
     }
     return await ctx.db.insert("fight_form_scores", row);
+  },
+});
+
+export const listActiveCampUserIds = internalQuery({
+  args: {},
+  handler: async (ctx): Promise<Array<Id<"users">>> => {
+    const camps = await ctx.db.query("fight_camps").collect();
+    const active = camps.filter((c) => !c.isCompleted);
+    const userIds = Array.from(new Set(active.map((c) => c.userId)));
+    return userIds;
   },
 });

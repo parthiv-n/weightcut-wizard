@@ -108,3 +108,20 @@ export const recomputeNow = mutation({
     });
   },
 });
+
+export const scheduleDailyRecomputeAcrossUsers = internalAction({
+  args: {},
+  handler: async (ctx) => {
+    // Hourly fan-out: v1 simplification — only actually run at UTC 04:00.
+    // A proper timezone-aware fan-out is a follow-up.
+    const nowUtcHour = new Date().getUTCHours();
+    if (nowUtcHour !== 4) return;
+    const userIds = await ctx.runQuery(internal.fightFormScore_internal.listActiveCampUserIds, {});
+    const yesterday = new Date();
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    const date = yesterday.toISOString().slice(0, 10);
+    for (const userId of userIds) {
+      await ctx.runAction(internal.fightFormScore.recomputeForUserDate, { userId, date });
+    }
+  },
+});
