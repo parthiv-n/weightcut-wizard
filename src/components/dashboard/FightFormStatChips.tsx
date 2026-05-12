@@ -22,16 +22,20 @@ export function FightFormStatChips({ weight, campAge }: Props) {
         )}
       </div>
       <div className="card-surface rounded-2xl p-3">
-        <div className="section-header mb-1">Camp Age</div>
+        <div className="section-header mb-1">Camp Pace</div>
         {campAge ? (
           <>
             <div className="display-number text-base">
               {campAge.weeksAhead === 0
-                ? "On pace"
-                : `${campAge.weeksAhead > 0 ? "+" : ""}${campAge.weeksAhead.toFixed(1)} wks`}
+                ? "On schedule"
+                : `${campAge.weeksAhead > 0 ? "+" : ""}${campAge.weeksAhead.toFixed(0)} wk${Math.abs(campAge.weeksAhead) === 1 ? "" : "s"}`}
             </div>
             <div className="text-xs text-muted-foreground mt-0.5">
-              {campAge.weeksAhead >= 0 ? "ahead of schedule" : "behind schedule"}
+              {campAge.weeksAhead === 0
+                ? "right on track"
+                : campAge.weeksAhead > 0
+                  ? "ahead of schedule"
+                  : "behind schedule"}
             </div>
           </>
         ) : (

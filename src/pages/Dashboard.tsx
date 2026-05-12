@@ -611,8 +611,8 @@ export default function Dashboard() {
             {ffScore.campAge && (
               <p className="text-[12px] text-muted-foreground mt-1.5">
                 {ffScore.campAge.weeksAhead === 0
-                  ? "On pace with schedule"
-                  : `${ffScore.campAge.weeksAhead > 0 ? "+" : ""}${ffScore.campAge.weeksAhead.toFixed(1)} weeks ${ffScore.campAge.weeksAhead >= 0 ? "ahead of" : "behind"} schedule`}
+                  ? "Camp pace: on schedule"
+                  : `Camp pace: ${ffScore.campAge.weeksAhead > 0 ? "+" : ""}${ffScore.campAge.weeksAhead.toFixed(0)} ${Math.abs(ffScore.campAge.weeksAhead) === 1 ? "week" : "weeks"} ${ffScore.campAge.weeksAhead > 0 ? "ahead of" : "behind"} schedule`}
               </p>
             )}
           </div>

@@ -1,7 +1,9 @@
+import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, RefreshCw } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { AlertTriangle, RefreshCw, ChevronDown } from "lucide-react";
 
 type SubScore = { value: number; weight: number; reason: string };
 
@@ -49,8 +51,9 @@ export function FightFormScoreSheet(p: Props) {
             <div className="section-header">{p.label}</div>
             {p.campAge && (
               <div className="text-xs text-muted-foreground mt-1">
-                {p.campAge.weeksAhead >= 0 ? "+" : ""}
-                {p.campAge.weeksAhead.toFixed(1)} wks vs schedule
+                Camp pace: {p.campAge.weeksAhead === 0
+                  ? "on schedule"
+                  : `${p.campAge.weeksAhead > 0 ? "+" : ""}${p.campAge.weeksAhead.toFixed(0)} wk${Math.abs(p.campAge.weeksAhead) === 1 ? "" : "s"} ${p.campAge.weeksAhead > 0 ? "ahead" : "behind"}`}
               </div>
             )}
             {p.phase && p.daysToFight != null && (
@@ -113,7 +116,99 @@ export function FightFormScoreSheet(p: Props) {
             <RefreshCw className="size-4" /> Refresh
           </Button>
         </div>
+
+        <ScoreGuide />
       </SheetContent>
     </Sheet>
+  );
+}
+
+function ScoreGuide() {
+  const [open, setOpen] = useState(false);
+  return (
+    <Collapsible open={open} onOpenChange={setOpen} className="mt-6 border-t border-border/50 pt-4">
+      <CollapsibleTrigger className="flex w-full items-center justify-between text-left">
+        <span className="section-header">How your score works</span>
+        <ChevronDown className={`size-4 text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`} />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="mt-3 space-y-4 text-sm leading-relaxed">
+        <section>
+          <h4 className="font-semibold mb-1">What the number means</h4>
+          <p className="text-muted-foreground">
+            Fight Form Score is a single 0–100 readout of how well your camp is going right now. It
+            blends short-term readiness (today's recovery, training, sleep) with long-term camp
+            progress (weight cut trajectory, nutrition adherence). The number you see is a 3-day
+            average — one off day won't tank it.
+          </p>
+        </section>
+
+        <section>
+          <h4 className="font-semibold mb-1">Labels at a glance</h4>
+          <ul className="space-y-1 text-muted-foreground">
+            <li><span className="text-emerald-400 font-medium">Sharp (80+)</span> — peaking; ride this</li>
+            <li><span className="text-amber-400 font-medium">Sharpening (60–79)</span> — on track; small fixes available</li>
+            <li><span className="text-orange-400 font-medium">Off Pace (40–59)</span> — drifting; pick one driver to address</li>
+            <li><span className="text-rose-400 font-medium">At Risk (&lt;40)</span> — something's wrong; check the limiter and the ceiling banner</li>
+          </ul>
+        </section>
+
+        <section>
+          <h4 className="font-semibold mb-1">The five components</h4>
+          <ul className="space-y-1.5 text-muted-foreground">
+            <li><span className="text-foreground">Training Load</span> — your acute:chronic workload ratio (last 7d ÷ last 28d). Sweet spot is 0.8–1.3. Too low = detraining; too high = injury risk.</li>
+            <li><span className="text-foreground">Sleep</span> — 7-day debt vs an 8h/night target. 1h short × 7 nights is already a ~56pt deduction.</li>
+            <li><span className="text-foreground">Weight Cut</span> — your loss rate vs the sustainable band (0.3–1.0% of bodyweight per week) and whether you'll hit your goal by fight night.</li>
+            <li><span className="text-foreground">Wellness</span> — your Hooper Index (sleep quality + fatigue + soreness + stress) compared to your own baseline. Logged via the daily check-in.</li>
+            <li><span className="text-foreground">Nutrition</span> — how many days last week you hit your calorie target (±10%) and whether protein cleared 80% of target.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h4 className="font-semibold mb-1">Camp phase matters</h4>
+          <p className="text-muted-foreground">
+            Component weights shift automatically as you approach fight night. In build phase
+            (&gt;14 days out) training load and weight cut share the spotlight. In peak (7–14 days)
+            sleep and weight cut get heavier. In fight week (≤7 days) the score is dominated by
+            weight cut, sleep, and wellness — training load barely matters.
+          </p>
+        </section>
+
+        <section>
+          <h4 className="font-semibold mb-1">Soft ceilings (why a great-looking score can still cap)</h4>
+          <p className="text-muted-foreground">
+            Some signals override everything else because they signal danger:
+          </p>
+          <ul className="mt-1 space-y-1 text-muted-foreground">
+            <li>• Cutting &gt;2% bodyweight/week for 3+ days → capped at 50</li>
+            <li>• Sleep debt &gt;10h over 7 days → capped at 65</li>
+            <li>• Training spike (ACWR &gt; 1.8) → capped at 45</li>
+          </ul>
+          <p className="mt-1 text-muted-foreground">
+            When a ceiling fires you'll see a yellow banner. The fix is mechanical: address the
+            specific signal and the cap lifts within a few days.
+          </p>
+        </section>
+
+        <section>
+          <h4 className="font-semibold mb-1">How to use it day-to-day</h4>
+          <ul className="space-y-1 text-muted-foreground">
+            <li>• Check it in the morning. The label tells you whether to push or recover.</li>
+            <li>• Read the <span className="text-foreground">limiter</span> — that's where you'll move the score fastest.</li>
+            <li>• Don't optimise for the number itself. Optimise for the components; the number follows.</li>
+            <li>• One bad day is noise. Trends over 3–7 days are signal.</li>
+            <li>• Calibrating state (under 7 days of data) is normal at the start of camp.</li>
+          </ul>
+        </section>
+
+        <section>
+          <h4 className="font-semibold mb-1">What it doesn't measure</h4>
+          <p className="text-muted-foreground">
+            No HRV/resting-HR yet (no wearable integration). Skill, technique, fight-IQ, and how
+            specific the work is to your opponent aren't in here either. Use the score for
+            physical preparation and adherence — not as the only signal for fight readiness.
+          </p>
+        </section>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
