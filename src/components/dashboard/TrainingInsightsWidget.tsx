@@ -31,8 +31,18 @@ interface SessionRow {
 interface DisciplineInsight {
   session_type: string;
   last_logged: string;
-  what_you_did: string;
-  next_focus: string;
+  /** Coach's read on the latest session. Not a recap. */
+  interpretation: string;
+  /** Specific drill / partner setup / cue to bring into the next session. */
+  training_application: string;
+  /** Three compounding steps for the very next session. */
+  pathway: string[];
+  // Legacy fields kept for backwards-compatibility with old cached entries
+  // in localStorage. The action's defensive shape repair maps these into
+  // the new fields on the server side, but if a user has a stale cache
+  // we still want to render something rather than nothing.
+  what_you_did?: string;
+  next_focus?: string;
 }
 
 interface CachedInsight {
@@ -63,8 +73,12 @@ const SESSIONS_PER_DISCIPLINE = 3;
 const LOOKBACK_DAYS = 60;
 const CACHE_TTL_HOURS = 24 * 30; // fingerprint is the real cache key — TTL is GC only
 
+// `v2` suffix bumps the cache namespace when the insight schema changes.
+// Old `training_insight_<type>` entries from the v1 schema (what_you_did /
+// next_focus only) are ignored so we never render stale, fieldless cards.
+const CACHE_VERSION = "v2";
 function cacheKey(sessionType: string): string {
-  return `training_insight_${sessionType.toLowerCase().replace(/\s+/g, "_")}`;
+  return `training_insight_${CACHE_VERSION}_${sessionType.toLowerCase().replace(/\s+/g, "_")}`;
 }
 
 async function fetchRecentSessions(_userId: string): Promise<SessionRow[]> {
@@ -146,13 +160,16 @@ function loadAllCachedInsights(userId: string): DisciplineInsight[] {
       const key = localStorage.key(i);
       if (!key) continue;
       // AIPersistence key format includes the userId and the cacheKey we set.
-      if (!key.includes(userId) || !key.includes("training_insight_")) continue;
-      const match = key.match(/training_insight_([a-z0-9_]+)/i);
+      if (!key.includes(userId) || !key.includes(`training_insight_${CACHE_VERSION}_`)) continue;
+      const match = key.match(
+        new RegExp(`training_insight_${CACHE_VERSION}_([a-z0-9_]+)`, "i"),
+      );
       const sessionType = match?.[1];
       if (!sessionType) continue;
-      const cached = AIPersistence.load(userId, `training_insight_${sessionType}`) as
-        | CachedInsight
-        | null;
+      const cached = AIPersistence.load(
+        userId,
+        `training_insight_${CACHE_VERSION}_${sessionType}`,
+      ) as CachedInsight | null;
       if (cached?.insight) out.push(cached.insight);
     }
   } catch {
@@ -543,12 +560,33 @@ export const TrainingInsightsWidget = memo(function TrainingInsightsWidget({
               </div>
             )}
 
-            {insights.map((insight) => {
+            {(() => {
+              // Defensive dedup: collapse cards that share a normalized
+              // discipline key, keeping the most recent. Prevents stale
+              // localStorage entries with casing or whitespace drift from
+              // ever rendering twice (e.g. "Muay Thai" and "muay thai").
+              const byKey = new Map<string, DisciplineInsight>();
+              for (const ins of insights) {
+                const key = ins.session_type.trim().toLowerCase().replace(/\s+/g, " ");
+                const existing = byKey.get(key);
+                if (!existing || (ins.last_logged ?? "") > (existing.last_logged ?? "")) {
+                  byKey.set(key, ins);
+                }
+              }
+              return Array.from(byKey.values());
+            })().map((insight) => {
               const color = getSessionColor(insight.session_type, userColors);
+              const interpretation =
+                insight.interpretation || insight.what_you_did || "";
+              const application =
+                insight.training_application || insight.next_focus || "";
+              const pathway = Array.isArray(insight.pathway)
+                ? insight.pathway.filter((s) => typeof s === "string" && s.trim())
+                : [];
               return (
                 <div
                   key={insight.session_type}
-                  className="card-surface rounded-2xl border border-border p-3 space-y-2 relative overflow-hidden"
+                  className="card-surface rounded-2xl border border-border p-3 space-y-2.5 relative overflow-hidden"
                   style={{ borderLeft: `3px solid ${color}` }}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -572,12 +610,19 @@ export const TrainingInsightsWidget = memo(function TrainingInsightsWidget({
                       </span>
                     )}
                   </div>
-                  {insight.what_you_did && (
-                    <p className="text-[13px] text-muted-foreground leading-snug">
-                      {insight.what_you_did}
-                    </p>
+
+                  {interpretation && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground mb-1">
+                        Coach's read
+                      </p>
+                      <p className="text-[13px] text-foreground/90 leading-snug">
+                        {interpretation}
+                      </p>
+                    </div>
                   )}
-                  {insight.next_focus && (
+
+                  {application && (
                     <div
                       className="rounded-lg p-2.5"
                       style={{
@@ -589,11 +634,37 @@ export const TrainingInsightsWidget = memo(function TrainingInsightsWidget({
                         className="text-[10px] uppercase tracking-wide font-semibold mb-1"
                         style={{ color }}
                       >
-                        Focus next
+                        Apply next session
                       </p>
                       <p className="text-[13px] text-foreground leading-snug">
-                        {insight.next_focus}
+                        {application}
                       </p>
+                    </div>
+                  )}
+
+                  {pathway.length > 0 && (
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wide font-semibold text-muted-foreground mb-1.5">
+                        Improvement pathway
+                      </p>
+                      <ol className="space-y-1.5">
+                        {pathway.map((step, i) => (
+                          <li key={i} className="flex items-start gap-2">
+                            <span
+                              className="h-5 w-5 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 text-[10px] font-bold tabular-nums"
+                              style={{
+                                backgroundColor: `${color}20`,
+                                color,
+                              }}
+                            >
+                              {i + 1}
+                            </span>
+                            <span className="text-[13px] text-foreground/90 leading-snug">
+                              {step}
+                            </span>
+                          </li>
+                        ))}
+                      </ol>
                     </div>
                   )}
                 </div>

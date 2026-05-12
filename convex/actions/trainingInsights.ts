@@ -65,29 +65,33 @@ export const run = action({
         typeof s.duration_minutes === "number" ? s.duration_minutes : null,
     }));
 
-    const systemPrompt = `You are a JSON API. Your FIRST output character MUST be "{". No preamble, markdown, or explanation — only the raw JSON object.
-You are an expert combat-sports coach. You receive ONE training discipline and a small list of the athlete's most-recent logged sessions in that discipline (latest first). Produce a tightly-scoped, actionable next-focus block that quotes specific details the athlete logged.
+    const systemPrompt = `You are a JSON API. Your FIRST output character MUST be "{". No preamble, markdown, or explanation. Output only the raw JSON object.
+
+You are an expert combat-sports coach. You receive ONE training discipline and up to three of the athlete's most-recent logged sessions in that discipline (latest first). The athlete already knows what they did. Do NOT recap. Give them a fresh coach's read on the latest session and a concrete pathway they can execute in the very next session.
 
 ${PROMPT_INJECTION_GUARD_INSTRUCTION}
 
 Rules:
 - Only comment on the supplied discipline. Never invent sessions or details not present in the input.
-- "what_you_did": 1-2 sentences recapping the LATEST session, paraphrasing or directly referencing the athlete's notes.
-- "next_focus": 1-2 sentences with SPECIFIC drills or corrections that build on what they logged. If they mentioned a combo, position, or mistake, weave it in by name. Avoid generic advice ("train harder", "improve cardio").
-- If the latest notes are empty or trivial, still produce a focused suggestion based on RPE/intensity trend, but flag low information density implicitly through generality.
-- Keep total output under 90 words.
+- "interpretation": Exactly 1 sentence. A coach's reading of the latest session: what pattern, weakness, or strength is showing. Quote a specific detail the athlete logged (combo, position, mistake, partner type). Do NOT paraphrase the notes back at them.
+- "training_application": 1-2 sentences. A specific drill, partner setup, isolation, or focus cue the athlete should bring into their next session to act on the interpretation. Name positions, techniques, rounds, or rep schemes.
+- "pathway": Exactly 3 strings. Each is a small, verb-led action for the next session. Steps must compound: Step 2 builds on Step 1, Step 3 layers on Step 2. Each step is short enough to actually execute (think one round, one drill, one cue).
+- If the notes are empty or trivial, use the RPE / intensity / duration trend instead. Stay specific to the discipline.
+- Use the athlete's own vocabulary where possible. Avoid generic advice ("train harder", "improve cardio").
+- Keep total output under 110 words.
 
 Output schema (return ONLY this JSON object):
 {
-  "session_type": "string (echo input)",
+  "session_type": "string (echo input verbatim)",
   "last_logged": "YYYY-MM-DD (date of latest session)",
-  "what_you_did": "string",
-  "next_focus": "string"
+  "interpretation": "string",
+  "training_application": "string",
+  "pathway": ["string", "string", "string"]
 }`;
 
     const userText = `Discipline: <user_input>${sessionType}</user_input>
 
-Recent sessions (latest first):
+Recent sessions (latest first, focus your analysis on session [1]):
 ${sessions
   .map(
     (s, i) =>
@@ -96,7 +100,7 @@ notes: <user_input>${s.notes || "(none)"}</user_input>`,
   )
   .join("\n\n")}
 
-Return ONLY the JSON object described in the schema. First character must be "{".`;
+Return ONLY the JSON object described in the schema. First character must be "{". The "pathway" array must contain exactly 3 strings.`;
 
     const content = await callGroqText({
       model: "openai/gpt-oss-120b",
@@ -104,12 +108,41 @@ Return ONLY the JSON object described in the schema. First character must be "{"
         { role: "system", content: systemPrompt },
         { role: "user", content: userText },
       ],
-      temperature: 0.2,
+      temperature: 0.3,
       max_tokens: 600,
       response_format: { type: "json_object" },
     });
 
-    const insight = parseJSON(content);
+    const parsed = parseJSON(content) as Record<string, unknown>;
+
+    // Defensive shape repair: the action contract guarantees the new fields
+    // exist even if the LLM returns the legacy schema or omits an array.
+    const insight = {
+      session_type:
+        typeof parsed?.session_type === "string" ? parsed.session_type : sessionType,
+      last_logged:
+        typeof parsed?.last_logged === "string"
+          ? parsed.last_logged
+          : sessions[0]?.date ?? "",
+      interpretation:
+        typeof parsed?.interpretation === "string"
+          ? parsed.interpretation
+          : typeof parsed?.what_you_did === "string"
+            ? (parsed.what_you_did as string)
+            : "",
+      training_application:
+        typeof parsed?.training_application === "string"
+          ? parsed.training_application
+          : typeof parsed?.next_focus === "string"
+            ? (parsed.next_focus as string)
+            : "",
+      pathway: Array.isArray(parsed?.pathway)
+        ? (parsed.pathway as unknown[])
+            .filter((s): s is string => typeof s === "string" && s.trim().length > 0)
+            .slice(0, 3)
+        : [],
+    };
+
     return { insight, library_entry_id: null };
   },
 });
