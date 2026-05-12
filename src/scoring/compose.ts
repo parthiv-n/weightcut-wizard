@@ -1,0 +1,182 @@
+import type { FightFormScore, ScoringConfig, ScoringInputs, SubScoreKey } from "./types";
+import { computeTrainingLoad } from "./subScores/trainingLoad";
+import { computeSleep } from "./subScores/sleep";
+import { computeWeightCut } from "./subScores/weightCut";
+import { computeWellness } from "./subScores/wellness";
+import { computeNutritionAdherence } from "./subScores/nutritionAdherence";
+import { resolvePhase, weightsForPhase } from "./phaseWeights";
+import { applyCeilings } from "./ceilings";
+import { computeCampAge } from "./campAge";
+
+function countDistinctDaysOfData(inputs: ScoringInputs): number {
+  const days = new Set<string>();
+  for (const x of [...inputs.sleepHours, ...inputs.weights, ...inputs.sessions, ...inputs.hooperByDate, ...inputs.meals]) {
+    days.add(x.date);
+  }
+  return days.size;
+}
+
+function emaSmooth(rawToday: number, prior: Array<{ date: string; rawScore: number }>, days: number): number {
+  if (prior.length === 0) return rawToday;
+  const series = [...prior.sort((a, b) => a.date.localeCompare(b.date)).slice(-(days - 1)).map((p) => p.rawScore), rawToday];
+  const alpha = 2 / (days + 1);
+  let v = series[0];
+  for (let i = 1; i < series.length; i++) v = alpha * series[i] + (1 - alpha) * v;
+  return v;
+}
+
+function pickLabel(score: number, cfg: ScoringConfig): FightFormScore["label"] {
+  const t = cfg.labelThresholds;
+  if (score >= t.sharp) return "sharp";
+  if (score >= t.sharpening) return "sharpening";
+  if (score >= t.offPace) return "off_pace";
+  return "at_risk";
+}
+
+function consecutiveDangerousDays(
+  weights: Array<{ date: string; weightKg: number }>,
+  startingWeightKg: number | null,
+  campStartDate: string | null,
+  cfg: ScoringConfig,
+): number {
+  if (!startingWeightKg || !campStartDate) return 0;
+  const sorted = [...weights].sort((a, b) => a.date.localeCompare(b.date));
+  if (sorted.length < 2) return 0;
+  let consecutive = 0;
+  for (let i = sorted.length - 1; i > 0; i--) {
+    const prior = sorted[i - 1];
+    const cur = sorted[i];
+    const days = (new Date(cur.date + "T00:00:00Z").getTime() - new Date(prior.date + "T00:00:00Z").getTime()) / 86400000;
+    if (days <= 0) continue;
+    const pctPerWeek = ((prior.weightKg - cur.weightKg) / startingWeightKg / (days / 7)) * 100;
+    if (pctPerWeek > cfg.weightCut.dangerEdgePct) consecutive++;
+    else break;
+  }
+  return consecutive;
+}
+
+function sleepDebt7d(
+  sleep: Array<{ date: string; hours: number }>,
+  asOfDate: string,
+  cfg: ScoringConfig,
+): number {
+  const end = new Date(asOfDate + "T00:00:00Z");
+  const start = new Date(end);
+  start.setUTCDate(start.getUTCDate() - 6);
+  let total = 0;
+  for (const s of sleep) {
+    const t = new Date(s.date + "T00:00:00Z").getTime();
+    if (t >= start.getTime() && t <= end.getTime()) total += s.hours;
+  }
+  return Math.max(0, 7 * cfg.sleep.targetHoursPerNight - total);
+}
+
+function computeAcwr(sessions: ScoringInputs["sessions"], asOfDate: string, cfg: ScoringConfig): number {
+  if (sessions.length === 0) return 0;
+  const sumLoad = (windowDays: number) => {
+    const end = new Date(asOfDate + "T00:00:00Z");
+    const start = new Date(end);
+    start.setUTCDate(start.getUTCDate() - (windowDays - 1));
+    let total = 0;
+    for (const s of sessions) {
+      const t = new Date(s.date + "T00:00:00Z").getTime();
+      if (t >= start.getTime() && t <= end.getTime()) total += s.rpe * s.durationMinutes;
+    }
+    return total / windowDays;
+  };
+  const acute = sumLoad(cfg.trainingLoad.acuteWindowDays);
+  const chronic = sumLoad(cfg.trainingLoad.chronicWindowDays);
+  if (chronic === 0) return acute > 0 ? 999 : 0;
+  return acute / chronic;
+}
+
+function emptySubScores(): FightFormScore["subScores"] {
+  const empty = { value: 0, weight: 0, reason: "—" };
+  return { trainingLoad: empty, sleep: empty, weightCut: empty, wellness: empty, nutritionAdherence: empty };
+}
+
+export function computeFightFormScore(inputs: ScoringInputs, cfg: ScoringConfig): FightFormScore {
+  if (inputs.isCampPaused) {
+    return {
+      score: 0, rawScore: 0, label: "off_pace", state: "paused", phase: null,
+      campAge: null, subScores: emptySubScores(), topDriver: "weightCut",
+      topLimiter: "weightCut", appliedCeiling: null, algorithmVersion: cfg.version,
+    };
+  }
+  if (!inputs.fightDate || !inputs.campStartDate) {
+    return {
+      score: 0, rawScore: 0, label: "off_pace", state: "no_camp", phase: null,
+      campAge: null, subScores: emptySubScores(), topDriver: "weightCut",
+      topLimiter: "weightCut", appliedCeiling: null, algorithmVersion: cfg.version,
+    };
+  }
+
+  const daysOfData = countDistinctDaysOfData(inputs);
+  if (daysOfData < cfg.coldStart.minDaysOfDataIn7d) {
+    return {
+      score: 0, rawScore: 0, label: "off_pace", state: "calibrating", phase: null,
+      campAge: null, subScores: emptySubScores(), topDriver: "weightCut",
+      topLimiter: "weightCut", appliedCeiling: null, algorithmVersion: cfg.version,
+    };
+  }
+
+  const phase = resolvePhase(inputs.date, inputs.fightDate, cfg);
+  const weights = weightsForPhase(phase, cfg);
+
+  const trainingLoad = computeTrainingLoad(inputs.sessions, inputs.date, cfg);
+  const sleep = computeSleep(inputs.sleepHours, inputs.date, cfg);
+  const weightCut = computeWeightCut(
+    { weights: inputs.weights, startingWeightKg: inputs.startingWeightKg, goalWeightKg: inputs.goalWeightKg, campStartDate: inputs.campStartDate, fightDate: inputs.fightDate },
+    inputs.date, cfg,
+  );
+  const wellness = computeWellness(inputs.hooperByDate, inputs.date, cfg);
+  const nutritionAdherence = computeNutritionAdherence(inputs.meals, inputs.targets, inputs.date, cfg);
+
+  const subScores: FightFormScore["subScores"] = {
+    trainingLoad: { ...trainingLoad, weight: weights.trainingLoad },
+    sleep: { ...sleep, weight: weights.sleep },
+    weightCut: { ...weightCut, weight: weights.weightCut },
+    wellness: { ...wellness, weight: weights.wellness },
+    nutritionAdherence: { ...nutritionAdherence, weight: weights.nutritionAdherence },
+  };
+
+  const totalWeight = Object.values(subScores).reduce((a, s) => a + s.weight, 0);
+  const rawScore = Object.values(subScores).reduce((a, s) => a + s.value * s.weight, 0) / Math.max(1e-9, totalWeight);
+
+  const ceil = applyCeilings(rawScore, {
+    weightCutDangerousDays: consecutiveDangerousDays(inputs.weights, inputs.startingWeightKg, inputs.campStartDate, cfg),
+    sleepDebt7d: sleepDebt7d(inputs.sleepHours, inputs.date, cfg),
+    acwr: computeAcwr(inputs.sessions, inputs.date, cfg),
+  }, cfg);
+
+  const displayed = emaSmooth(ceil.score, inputs.priorRawScores, cfg.smoothing.emaDays);
+  const finalScore = Math.round(Math.max(0, Math.min(100, displayed)));
+
+  const contributions = (Object.keys(subScores) as SubScoreKey[]).map((k) => ({
+    key: k, contribution: subScores[k].value * subScores[k].weight,
+  }));
+  const sorted = [...contributions].sort((a, b) => b.contribution - a.contribution);
+  const topDriver = sorted[0].key;
+  const topLimiter = sorted[sorted.length - 1].key;
+
+  return {
+    score: finalScore,
+    rawScore: Math.round(ceil.score),
+    label: pickLabel(finalScore, cfg),
+    state: "ok",
+    phase,
+    campAge: computeCampAge({
+      campStartDate: inputs.campStartDate,
+      fightDate: inputs.fightDate,
+      asOfDate: inputs.date,
+      startingWeightKg: inputs.startingWeightKg,
+      goalWeightKg: inputs.goalWeightKg,
+      currentWeightKg: inputs.currentWeightKg,
+    }, cfg),
+    subScores,
+    topDriver,
+    topLimiter,
+    appliedCeiling: ceil.applied,
+    algorithmVersion: cfg.version,
+  };
+}
