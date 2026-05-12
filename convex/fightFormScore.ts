@@ -1,5 +1,9 @@
 import { v } from "convex/values";
-import { query } from "./_generated/server";
+import { query, internalAction, mutation } from "./_generated/server";
+import { internal } from "./_generated/api";
+import { optionalUserId, requireUserId } from "./lib/auth";
+import { computeFightFormScore } from "../src/scoring/compose";
+import { CURRENT_CONFIG } from "../src/scoring/config";
 
 function todayInUtc(): string {
   return new Date().toISOString().slice(0, 10);
@@ -8,9 +12,8 @@ function todayInUtc(): string {
 export const getToday = query({
   args: { date: v.optional(v.string()) },
   handler: async (ctx, { date }) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return null;
-    const userId = identity.subject as any;
+    const userId = await optionalUserId(ctx);
+    if (!userId) return null;
     const targetDate = date ?? todayInUtc();
     const row = await ctx.db
       .query("fight_form_scores")
@@ -47,9 +50,8 @@ export const getToday = query({
 export const loggedTodayBundle = query({
   args: { date: v.optional(v.string()) },
   handler: async (ctx, { date }) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return null;
-    const userId = identity.subject as any;
+    const userId = await optionalUserId(ctx);
+    if (!userId) return null;
     const targetDate = date ?? todayInUtc();
 
     const weight = await ctx.db
@@ -85,9 +87,8 @@ export const loggedTodayBundle = query({
 export const getHistory = query({
   args: { campId: v.id("fight_camps"), limit: v.optional(v.number()) },
   handler: async (ctx, { campId, limit }) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) return [];
-    const userId = identity.subject as any;
+    const userId = await optionalUserId(ctx);
+    if (!userId) return [];
     const rows = await ctx.db
       .query("fight_form_scores")
       .withIndex("by_user_camp", (q) => q.eq("userId", userId).eq("campId", campId))
@@ -96,11 +97,6 @@ export const getHistory = query({
     return rows;
   },
 });
-
-import { internalAction, mutation } from "./_generated/server";
-import { internal } from "./_generated/api";
-import { computeFightFormScore } from "../src/scoring/compose";
-import { CURRENT_CONFIG } from "../src/scoring/config";
 
 export const recomputeForUserDate = internalAction({
   args: { userId: v.id("users"), date: v.string() },
@@ -143,9 +139,7 @@ export const recomputeForUserDate = internalAction({
 export const recomputeNow = mutation({
   args: { date: v.optional(v.string()) },
   handler: async (ctx, { date }) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("unauthenticated");
-    const userId = identity.subject as any;
+    const userId = await requireUserId(ctx);
     const target = date ?? new Date().toISOString().slice(0, 10);
     await ctx.scheduler.runAfter(0, internal.fightFormScore.recomputeForUserDate, {
       userId,
@@ -157,7 +151,7 @@ export const recomputeNow = mutation({
 export const scheduleDailyRecomputeAcrossUsers = internalAction({
   args: {},
   handler: async (ctx) => {
-    // Hourly fan-out: v1 simplification — only actually run at UTC 04:00.
+    // Hourly fan-out: v1 simplification, only actually run at UTC 04:00.
     // A proper timezone-aware fan-out is a follow-up.
     const nowUtcHour = new Date().getUTCHours();
     if (nowUtcHour !== 4) return;
