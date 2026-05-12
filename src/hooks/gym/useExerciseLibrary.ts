@@ -29,10 +29,20 @@ export function useExerciseLibrary() {
   const createCustomMut = useMutation(api.exercises.createCustom);
   const deleteCustomMut = useMutation(api.exercises.deleteCustom);
 
+  // Always present the union of {user-custom rows from Convex} ∪ {fallback
+  // EXERCISE_DATABASE library}. Without this merge, the moment a user has even
+  // one custom row in Convex (e.g. auto-created during set-saving or routine
+  // import), the entire fallback library disappears from pickers — the manual
+  // routine sheet, exercise picker, etc. would only show those few customs.
+  // Dedupe by lowercased name so a user-renamed custom shadows the built-in
+  // and a seeded global library would naturally take over.
   const exercises: Exercise[] = useMemo(() => {
     if (rows === undefined) return getFallbackExercises();
-    if (rows.length === 0) return getFallbackExercises();
-    return rows as unknown as Exercise[];
+    const customs = rows as unknown as Exercise[];
+    const fallback = getFallbackExercises();
+    const customNames = new Set(customs.map((e) => e.name.toLowerCase()));
+    const fallbackUnique = fallback.filter((e) => !customNames.has(e.name.toLowerCase()));
+    return [...customs, ...fallbackUnique];
   }, [rows]);
   const loading = rows === undefined;
 

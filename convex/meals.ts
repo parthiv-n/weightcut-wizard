@@ -11,6 +11,7 @@
  */
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { requireUserId } from "./lib/auth";
 import type { Doc, Id } from "./_generated/dataModel";
 
@@ -180,6 +181,10 @@ export const createMealWithItems = mutation({
       });
       i += 1;
     }
+    await ctx.scheduler.runAfter(5_000, internal.fightFormScore.recomputeForUserDate, {
+      userId,
+      date: args.date,
+    });
     return mealId;
   },
 });

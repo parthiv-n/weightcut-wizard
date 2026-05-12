@@ -8,10 +8,13 @@ import {
   Tooltip,
   ReferenceArea,
 } from "recharts";
-import { Moon } from "lucide-react";
-import { useQuery } from "convex/react";
+import { Moon, Plus, Minus } from "lucide-react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { useUser } from "@/contexts/UserContext";
+import { useToast } from "@/hooks/use-toast";
+import { triggerHaptic } from "@/lib/haptics";
+import { ImpactStyle } from "@capacitor/haptics";
 
 type Timeframe = "1W" | "1M" | "3M";
 
@@ -43,8 +46,13 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   );
 };
 
+function todayISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export default function Sleep() {
   const { userId } = useUser();
+  const { toast } = useToast();
 
   const [timeframe, setTimeframe] = useState<Timeframe>("1M");
   // Convex query — reactive, no manual cache or loading state needed.
@@ -54,6 +62,45 @@ export default function Sleep() {
     [rawLogs],
   );
   const loading = rawLogs === undefined;
+
+  // Sleep logger state — upsert keyed on (userId, date), so re-logging today
+  // just overwrites the existing row.
+  const logSleepMut = useMutation(api.sleep_logs.logSleep);
+  const [logDate, setLogDate] = useState<string>(todayISO);
+  const [logHours, setLogHours] = useState<number>(8);
+  const [saving, setSaving] = useState(false);
+
+  // Pre-fill hours from any existing log for the selected date so the user
+  // sees what's currently saved and can adjust from there.
+  useEffect(() => {
+    const existing = allData.find((r) => r.date === logDate);
+    if (existing) setLogHours(existing.hours);
+  }, [logDate, allData]);
+
+  const handleSave = async () => {
+    if (!userId || saving) return;
+    if (!Number.isFinite(logHours) || logHours <= 0 || logHours > 24) {
+      toast({ description: "Hours must be between 0 and 24", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    try {
+      await logSleepMut({ date: logDate, hours: logHours });
+      triggerHaptic(ImpactStyle.Light);
+      toast({ description: `Logged ${logHours.toFixed(1)}h for ${logDate}` });
+    } catch {
+      toast({ description: "Couldn't save sleep. Please try again.", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const adjust = (delta: number) => {
+    setLogHours((prev) => {
+      const next = Math.round((prev + delta) * 2) / 2; // 0.5 increments
+      return Math.max(0, Math.min(24, next));
+    });
+  };
   // Touch unused vars to keep the timeframe signature compatible with the buttons below.
   void startDateFor;
   // No-op effect placeholder kept to preserve existing dependency graph reads.
@@ -155,6 +202,52 @@ export default function Sleep() {
             />
           </LineChart>
         </ResponsiveContainer>
+      </div>
+
+      {/* Log sleep — upsert by (userId, date) so re-saving for the same day overwrites */}
+      <div className="card-surface rounded-2xl border border-border/50 p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold">Log Sleep</p>
+          <input
+            type="date"
+            value={logDate}
+            max={todayISO()}
+            onChange={(e) => setLogDate(e.target.value)}
+            className="text-xs bg-muted/30 border border-border/40 rounded-lg px-2 py-1 text-foreground"
+          />
+        </div>
+        <div className="flex items-center justify-center gap-4">
+          <button
+            type="button"
+            onClick={() => adjust(-0.5)}
+            disabled={logHours <= 0}
+            className="h-10 w-10 rounded-full bg-muted/40 active:bg-muted/60 flex items-center justify-center disabled:opacity-40"
+            aria-label="Decrease hours"
+          >
+            <Minus className="h-4 w-4" />
+          </button>
+          <div className="flex items-baseline gap-1 tabular-nums">
+            <span className="display-number text-3xl font-bold">{logHours.toFixed(1)}</span>
+            <span className="text-sm text-muted-foreground">hrs</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => adjust(0.5)}
+            disabled={logHours >= 24}
+            className="h-10 w-10 rounded-full bg-muted/40 active:bg-muted/60 flex items-center justify-center disabled:opacity-40"
+            aria-label="Increase hours"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving || !userId}
+          className="w-full h-10 rounded-2xl text-sm font-semibold text-white bg-gradient-to-r from-primary to-primary/80 active:scale-[0.98] transition-transform disabled:opacity-60"
+        >
+          {saving ? "Saving..." : "Save"}
+        </button>
       </div>
 
       {/* Stats */}

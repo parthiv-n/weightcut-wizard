@@ -3,7 +3,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  ChevronDown, Play, Trash2, Pencil, Check, X,
+  ChevronDown, Play, Trash2, Pencil, Check, X, ChevronRight,
 } from "lucide-react";
 import type { SavedRoutine, RoutineExercise } from "@/pages/gym/types";
 
@@ -46,7 +46,34 @@ const DAY_COLORS = [
   "border-l-cyan-500",
 ];
 
-function GroupedExerciseList({ exercises }: { exercises: RoutineExercise[] }) {
+interface GroupedExerciseListProps {
+  exercises: RoutineExercise[];
+  onStartDay?: (day: string) => void;
+}
+
+function ExerciseRow({ ex, idx }: { ex: RoutineExercise; idx: number }) {
+  // Explicit grid columns guarantee alignment and prevent the muscle pill from
+  // colliding with sets×reps even when names or values get long. min-w-0 on
+  // every cell lets each column truncate independently instead of pushing
+  // siblings around. Each cell uses overflow-hidden so a long pill can't bleed
+  // into the next column visually.
+  return (
+    <div className="grid grid-cols-[1rem_minmax(0,1fr)_3.5rem_5.75rem] items-center gap-2 px-3 py-2">
+      <span className="text-[10px] text-muted-foreground/50 text-right tabular-nums">{idx + 1}</span>
+      <span className="text-xs font-medium truncate min-w-0">{ex.name}</span>
+      <span className="text-[11px] text-muted-foreground tabular-nums text-right min-w-0 truncate">
+        {ex.sets}&times;{ex.reps}
+      </span>
+      <div className="min-w-0 flex justify-end overflow-hidden">
+        <span className={`text-[9px] px-1.5 py-0.5 rounded-full max-w-full truncate ${MUSCLE_COLORS[ex.muscle_group] || "bg-muted/50 text-muted-foreground"}`}>
+          {ex.muscle_group.replace("_", " ")}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function GroupedExerciseList({ exercises, onStartDay }: GroupedExerciseListProps) {
   const hasDays = exercises.some(e => e.day);
 
   const groups = useMemo(() => {
@@ -66,15 +93,8 @@ function GroupedExerciseList({ exercises }: { exercises: RoutineExercise[] }) {
     return (
       <div className="px-4 pb-2 space-y-1">
         {exercises.map((ex, i) => (
-          <div key={i} className="flex items-center gap-3 py-2 border-t border-border/20 first:border-t-0">
-            <span className="text-[10px] text-muted-foreground/50 w-4 text-right tabular-nums shrink-0">{i + 1}</span>
-            <div className="flex-1 min-w-0">
-              <span className="text-xs font-medium truncate block">{ex.name}</span>
-            </div>
-            <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">{ex.sets}&times;{ex.reps}</span>
-            <span className={`text-[9px] px-1.5 py-0.5 rounded-full shrink-0 ${MUSCLE_COLORS[ex.muscle_group] || "bg-muted/50 text-muted-foreground"}`}>
-              {ex.muscle_group.replace("_", " ")}
-            </span>
+          <div key={i} className="border-t border-border/20 first:border-t-0">
+            <ExerciseRow ex={ex} idx={i} />
           </div>
         ))}
       </div>
@@ -85,22 +105,25 @@ function GroupedExerciseList({ exercises }: { exercises: RoutineExercise[] }) {
     <div className="px-3 pb-2 space-y-2.5 pt-1">
       {groups.map((group, gi) => (
         <div key={group.day || gi} className={`rounded-2xl border border-border/30 overflow-hidden border-l-[3px] ${DAY_COLORS[gi % DAY_COLORS.length]}`}>
-          <div className="px-3 py-2 bg-muted/15 flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wide text-foreground/80">{group.day}</span>
-            <span className="text-[10px] text-muted-foreground">{group.exercises.length} exercises</span>
-          </div>
+          {/* Day header — tappable to start that day's workout */}
+          <button
+            type="button"
+            onClick={() => onStartDay?.(group.day)}
+            disabled={!onStartDay}
+            className="w-full px-3 py-2.5 bg-muted/15 flex items-center justify-between gap-2 active:bg-muted/30 transition-colors disabled:active:bg-muted/15 text-left"
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <Play className="h-3 w-3 text-primary shrink-0" />
+              <span className="text-[11px] font-bold uppercase tracking-wide text-foreground truncate">{group.day}</span>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="text-[10px] text-muted-foreground">{group.exercises.length} exercises</span>
+              {onStartDay && <ChevronRight className="h-3 w-3 text-muted-foreground/60" />}
+            </div>
+          </button>
           <div className="divide-y divide-border/15">
             {group.exercises.map((ex, i) => (
-              <div key={i} className="flex items-center gap-3 px-3 py-2">
-                <span className="text-[10px] text-muted-foreground/50 w-4 text-right tabular-nums shrink-0">{i + 1}</span>
-                <div className="flex-1 min-w-0">
-                  <span className="text-xs font-medium truncate block">{ex.name}</span>
-                </div>
-                <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">{ex.sets}&times;{ex.reps}</span>
-                <span className={`text-[9px] px-1.5 py-0.5 rounded-full shrink-0 ${MUSCLE_COLORS[ex.muscle_group] || "bg-muted/50 text-muted-foreground"}`}>
-                  {ex.muscle_group.replace("_", " ")}
-                </span>
-              </div>
+              <ExerciseRow key={i} ex={ex} idx={i} />
             ))}
           </div>
         </div>
@@ -210,73 +233,36 @@ export function RoutineDetailCard({ routine, onDelete, onRename, onStartWorkout 
             </button>
           </CollapsibleTrigger>
 
-          {/* Exercises list — grouped by day if available */}
+          {/* Exercises list — grouped by day if available. Tap a day header to
+              start just that day; for single-day / flat routines the footer
+              "Start Workout" button starts the whole thing. */}
           <CollapsibleContent>
-            <GroupedExerciseList exercises={routine.exercises} />
+            <GroupedExerciseList
+              exercises={routine.exercises}
+              onStartDay={(day) => onStartWorkout(routine, day)}
+            />
 
             {/* Footer actions */}
-            <div className="px-4 pb-4 pt-2 border-t border-border/20 space-y-2">
+            <div className="px-4 pb-4 pt-2 border-t border-border/20">
               {(() => {
                 const hasDays = routine.exercises.some(e => e.day);
-                if (!hasDays) {
-                  return (
-                    <div className="flex items-center gap-2">
-                      <Button
-                        onClick={() => onStartWorkout(routine)}
-                        className="flex-1 h-10 rounded-2xl text-xs font-semibold bg-gradient-to-r from-primary to-primary/80"
-                        size="sm"
-                      >
-                        <Play className="h-3.5 w-3.5 mr-1.5" />
-                        Start Workout
-                      </Button>
-                      <button
-                        onClick={() => onDelete(routine.id)}
-                        className="h-10 w-10 rounded-2xl flex items-center justify-center border border-border/50 hover:bg-destructive/10 hover:border-destructive/30 transition-colors"
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive transition-colors" />
-                      </button>
-                    </div>
-                  );
-                }
-                // Multi-day routine: show per-day Start buttons
-                const dayGroups: string[] = [];
-                for (const ex of routine.exercises) {
-                  const d = ex.day || "Exercises";
-                  if (!dayGroups.includes(d)) dayGroups.push(d);
-                }
                 return (
-                  <>
-                    <div className="grid grid-cols-2 gap-2">
-                      {dayGroups.map((day) => (
-                        <Button
-                          key={day}
-                          onClick={() => onStartWorkout(routine, day)}
-                          variant="outline"
-                          className="h-9 rounded-2xl text-[11px] font-semibold gap-1.5"
-                          size="sm"
-                        >
-                          <Play className="h-3 w-3" />
-                          {day.replace(/^Day\s*\d+:\s*/i, "")}
-                        </Button>
-                      ))}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        onClick={() => onStartWorkout(routine)}
-                        className="flex-1 h-10 rounded-2xl text-xs font-semibold bg-gradient-to-r from-primary to-primary/80"
-                        size="sm"
-                      >
-                        <Play className="h-3.5 w-3.5 mr-1.5" />
-                        Start Full Routine
-                      </Button>
-                      <button
-                        onClick={() => onDelete(routine.id)}
-                        className="h-10 w-10 rounded-2xl flex items-center justify-center border border-border/50 hover:bg-destructive/10 hover:border-destructive/30 transition-colors"
-                      >
-                        <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive transition-colors" />
-                      </button>
-                    </div>
-                  </>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={() => onStartWorkout(routine)}
+                      className="flex-1 h-10 rounded-2xl text-xs font-semibold bg-gradient-to-r from-primary to-primary/80"
+                      size="sm"
+                    >
+                      <Play className="h-3.5 w-3.5 mr-1.5" />
+                      {hasDays ? "Start Full Routine" : "Start Workout"}
+                    </Button>
+                    <button
+                      onClick={() => onDelete(routine.id)}
+                      className="h-10 w-10 rounded-2xl flex items-center justify-center border border-border/50 hover:bg-destructive/10 hover:border-destructive/30 transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5 text-muted-foreground hover:text-destructive transition-colors" />
+                    </button>
+                  </div>
                 );
               })()}
             </div>

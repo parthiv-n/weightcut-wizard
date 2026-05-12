@@ -9,6 +9,7 @@
  */
 import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { requireUserId } from "./lib/auth";
 import type { Doc, Id } from "./_generated/dataModel";
 
@@ -248,6 +249,10 @@ export const completeSession = mutation({
       perceivedFatigue: args.perceivedFatigue,
       notes: args.notes,
       updatedAt: Date.now(),
+    });
+    await ctx.scheduler.runAfter(5_000, internal.fightFormScore.recomputeForUserDate, {
+      userId,
+      date: row.date,
     });
   },
 });

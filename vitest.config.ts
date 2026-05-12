@@ -14,7 +14,10 @@ export default defineConfig({
   test: {
     environment: "node",
     globals: false,
-    include: ["tests/**/*.{spec,test}.{ts,tsx}"],
+    include: [
+      "tests/**/*.{spec,test}.{ts,tsx}",
+      "src/**/__tests__/**/*.{spec,test}.{ts,tsx}",
+    ],
     // Security RLS suite hits a live Supabase test project; skipped cleanly
     // when env vars are absent, so default testTimeout stays conservative.
     testTimeout: 15_000,
