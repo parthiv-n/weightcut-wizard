@@ -253,10 +253,11 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
                 throw error;
             }
             if (controller.signal.aborted) return;
-            // Convex action returns the parsed JSON directly. Normalise to `summary`
-            // shape that this UI expects.
-            const summaryData = data?.summary ?? data;
+            const summaryData = data;
             if (!summaryData) throw new Error("No summary returned");
+            if (!Array.isArray(summaryData.sportSections) || typeof summaryData.weekOverview !== "string") {
+                throw new Error("AI returned malformed summary — please retry.");
+            }
 
             onAICallSuccess();
             const fingerprint = computeFingerprint(weekSessions);
@@ -311,6 +312,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
     }
 
     const summaryToDisplay = selectedSummary?.summary_data ?? null;
+    const summaryIsValid = !!(summaryToDisplay && Array.isArray((summaryToDisplay as any).sportSections) && typeof (summaryToDisplay as any).weekOverview === "string");
 
     return (
         <div className="mt-6 space-y-4">
@@ -368,7 +370,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
             )}
 
             {/* Summary display */}
-            {summaryToDisplay && (
+            {summaryIsValid && summaryToDisplay && (
                 <div className="space-y-3">
                     <div className="flex items-center justify-between w-full">
                         <button onClick={() => setIsSummaryOpen(!isSummaryOpen)} className="flex items-center gap-2">

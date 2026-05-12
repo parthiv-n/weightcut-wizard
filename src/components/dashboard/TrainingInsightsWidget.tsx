@@ -40,6 +40,24 @@ interface CachedInsight {
   insight: DisciplineInsight;
 }
 
+interface TrainingSummaryTechnique {
+  name: string;
+  steps: string[];
+  sparringTip: string;
+  drillFlow?: string[];
+}
+
+interface TrainingSummarySportSection {
+  sport: string;
+  sessions_count: number;
+  techniques: TrainingSummaryTechnique[];
+}
+
+interface TrainingSummary {
+  sportSections: TrainingSummarySportSection[];
+  weekOverview: string;
+}
+
 const MAX_DISCIPLINES = 8;
 const SESSIONS_PER_DISCIPLINE = 3;
 const LOOKBACK_DAYS = 60;
@@ -158,6 +176,20 @@ export const TrainingInsightsWidget = memo(function TrainingInsightsWidget({
   const [emptyState, setEmptyState] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const userColors = useMemo(() => (userId ? getUserColors(userId) : {}), [userId, open]);
+
+  const summariesRaw = useQuery(
+    api.fight_camp.listAllSummaries,
+    open && userId ? { limit: 1 } : "skip"
+  );
+  const latestSummary = summariesRaw?.[0];
+  const summaryData = latestSummary?.summaryData as TrainingSummary | undefined;
+  const summaryWeekStart = latestSummary?.weekStart as string | undefined;
+  // Defensive: only treat as valid if the rich shape is intact
+  const hasSummary = !!(
+    summaryData &&
+    typeof summaryData.weekOverview === "string" &&
+    Array.isArray(summaryData.sportSections)
+  );
 
   const handleCardPress = useCallback(() => {
     triggerHapticSelection();
@@ -380,6 +412,104 @@ export const TrainingInsightsWidget = memo(function TrainingInsightsWidget({
             <p>Drilled coaching insights from your most recent training sessions, grouped by discipline.</p>
           </VisuallyHidden>
           <div className="px-4 space-y-3">
+            {hasSummary && summaryData && (
+              <div className="space-y-3">
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">
+                  {(() => {
+                    try {
+                      return `Week of ${format(new Date(summaryWeekStart as string), "MMM d")}`;
+                    } catch {
+                      return `Week of ${summaryWeekStart ?? ""}`;
+                    }
+                  })()}
+                </p>
+                <p className="text-[14px] text-foreground/95 leading-relaxed">
+                  {summaryData.weekOverview}
+                </p>
+                {summaryData.sportSections.map((section, idx) => {
+                  const sportColor = getSessionColor(section.sport, userColors);
+                  return (
+                    <div
+                      key={`${section.sport}-${idx}`}
+                      className="card-surface rounded-2xl border border-border overflow-hidden shadow-sm"
+                      style={{ borderTop: `3px solid ${sportColor}` }}
+                    >
+                      <div className="flex items-center gap-2.5 px-3.5 py-3 bg-muted/20 border-b border-border/60">
+                        <div
+                          className="h-3.5 w-3.5 rounded-full flex-shrink-0 ring-2 ring-background"
+                          style={{ backgroundColor: sportColor }}
+                        />
+                        <span className="text-[15px] font-bold text-foreground tracking-tight">
+                          {section.sport}
+                        </span>
+                        <span className="text-[11px] font-semibold text-muted-foreground ml-auto tabular-nums uppercase tracking-wider">
+                          {section.sessions_count} session{section.sessions_count !== 1 ? "s" : ""}
+                        </span>
+                      </div>
+                      <div>
+                        {section.techniques?.map((tech, i) => (
+                          <div
+                            key={i}
+                            className={`px-3.5 py-3.5 ${i > 0 ? "border-t-2 border-border/50" : ""}`}
+                          >
+                            <p className="text-[14px] font-bold text-foreground mb-2.5">
+                              {tech.name}
+                            </p>
+                            {tech.steps?.length > 0 && (
+                              <div className="space-y-1.5 mb-3">
+                                {tech.steps.map((step, j) => (
+                                  <div key={j} className="flex items-start gap-2.5">
+                                    <div className="h-5 w-5 rounded-full bg-muted/60 flex items-center justify-center flex-shrink-0 mt-0.5">
+                                      <span className="text-[10px] font-bold text-foreground tabular-nums">
+                                        {j + 1}
+                                      </span>
+                                    </div>
+                                    <p className="text-[13px] text-foreground/95 leading-relaxed">
+                                      {step}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {tech.sparringTip && (
+                              <div className="rounded-xl bg-primary/15 border border-primary/25 px-3 py-2.5">
+                                <p className="text-[13px] text-foreground leading-relaxed">
+                                  <span className="font-bold text-primary uppercase text-[10px] tracking-wider block mb-0.5">
+                                    Sparring tip
+                                  </span>
+                                  {tech.sparringTip}
+                                </p>
+                              </div>
+                            )}
+                            {tech.drillFlow && tech.drillFlow.length > 0 && (
+                              <div className="flex items-center gap-1 flex-wrap mt-3">
+                                {tech.drillFlow.map((step, k) => (
+                                  <div key={k} className="flex items-center gap-1">
+                                    {k > 0 && (
+                                      <span className="text-muted-foreground/60 text-[11px] font-bold">
+                                        →
+                                      </span>
+                                    )}
+                                    <span className="text-[12px] font-medium text-foreground bg-muted/50 border border-border/40 rounded-lg px-2 py-0.5">
+                                      {step}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {hasSummary && (insights.length > 0 || coldLoading || emptyState || errorMsg) && (
+              <div className="border-t border-border/50 my-2" />
+            )}
+
             {headline && !coldLoading && (
               <p className="display-number text-base text-foreground">{headline}</p>
             )}
