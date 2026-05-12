@@ -85,7 +85,7 @@ export default function Dashboard() {
   const [expandedInfo, setExpandedInfo] = useState<'risk' | 'pace' | null>(null);
   const [frequentMeals, setFrequentMeals] = useState<Array<{ name: string; count: number; avgCalories: number }>>([]);
   const [scoreSheetOpen, setScoreSheetOpen] = useState(false);
-  const ffScore = useQuery(api.fightFormScore.getToday, FEATURE_FLAGS.enableFightFormScore ? {} : "skip");
+  const ffScoreData = useQuery(api.fightFormScore.getToday, FEATURE_FLAGS.enableFightFormScore ? {} : "skip");
   const ffAdherence = useQuery(
     api.fightFormScore.loggedTodayBundle,
     FEATURE_FLAGS.enableFightFormScore ? {} : "skip",
@@ -544,10 +544,31 @@ export default function Dashboard() {
 
   // --- Fight Form Score hero (feature-flagged) -----------------------------
   // Renders a new dashboard hero behind VITE_FF_FIGHT_FORM_SCORE. When the
-  // flag is off or the query is still loading, fall through to the legacy
-  // render below. When the query returns null (unauthenticated) we also fall
-  // through so the legacy guards apply.
-  if (FEATURE_FLAGS.enableFightFormScore && ffScore !== null && ffScore !== undefined) {
+  // flag is on we ALWAYS take this branch so we never briefly flash the
+  // legacy layout while the score query is loading (which caused a flicker
+  // when navigating to /dashboard from other pages). The flag-off path
+  // below still serves users with the env var unset, and unauthenticated
+  // callers are gated upstream by ProtectedRoute. While the query is
+  // loading we use a calibrating placeholder so the structural layout
+  // stays stable across the resolve.
+  if (FEATURE_FLAGS.enableFightFormScore) {
+    // Shadow the query value with a defaulted local so the JSX below
+    // never sees `undefined` while the score query is still loading. This
+    // is what prevents the legacy layout from briefly flashing on first
+    // navigation into /dashboard.
+    const ffScore = ffScoreData ?? {
+      displayedScore: 0,
+      rawScore: 0,
+      label: "off_pace" as const,
+      state: "calibrating" as const,
+      phase: null,
+      campAge: null,
+      subScores: null,
+      appliedCeiling: null,
+      topDriver: null,
+      topLimiter: null,
+      algorithmVersion: "1.0.0",
+    };
     const startingWeight = weightLogs.length > 0 ? parseFloat(weightLogs[0].weight_kg) : currentWeightValue;
     const goalWeight = profile?.goal_weight_kg ?? 0;
     const totalCut = startingWeight - goalWeight;
