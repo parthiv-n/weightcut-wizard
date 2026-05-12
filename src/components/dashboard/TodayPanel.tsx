@@ -15,9 +15,9 @@ type Props = {
 
 const ITEMS: Array<{ key: keyof Adherence; label: string; href: string }> = [
   { key: "weight", label: "Weight", href: "/weight" },
-  { key: "training", label: "Training", href: "/training" },
+  { key: "training", label: "Training", href: "/gym" },
   { key: "sleep", label: "Sleep", href: "/sleep" },
-  { key: "wellnessCheckin", label: "Check-in", href: "/wellness" },
+  { key: "wellnessCheckin", label: "Check-in", href: "/recovery" },
 ];
 
 export function TodayPanel({ adherence, nextWorkout }: Props) {
