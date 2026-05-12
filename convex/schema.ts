@@ -270,6 +270,33 @@ export default defineSchema({
     updatedAt: v.optional(v.number()),
   }).index("by_user", ["userId"]),
 
+  fight_form_scores: defineTable({
+    userId: v.id("users"),
+    date: v.string(),
+    campId: v.optional(v.id("fight_camps")),
+    rawScore: v.number(),
+    displayedScore: v.number(),
+    label: v.union(v.literal("sharp"), v.literal("sharpening"), v.literal("off_pace"), v.literal("at_risk")),
+    state: v.union(v.literal("ok"), v.literal("calibrating"), v.literal("no_camp"), v.literal("paused")),
+    phase: v.optional(v.union(v.literal("build"), v.literal("peak"), v.literal("fightWeek"))),
+    subScores: v.object({
+      trainingLoad:        v.object({ value: v.number(), weight: v.number(), reason: v.string() }),
+      sleep:               v.object({ value: v.number(), weight: v.number(), reason: v.string() }),
+      weightCut:           v.object({ value: v.number(), weight: v.number(), reason: v.string() }),
+      wellness:            v.object({ value: v.number(), weight: v.number(), reason: v.string() }),
+      nutritionAdherence:  v.object({ value: v.number(), weight: v.number(), reason: v.string() }),
+    }),
+    appliedCeiling: v.optional(v.object({ ruleId: v.string(), cap: v.number() })),
+    campAge: v.optional(v.object({ weeksAhead: v.number() })),
+    topDriver: v.string(),
+    topLimiter: v.string(),
+    algorithmVersion: v.string(),
+    computedAt: v.number(),
+  })
+    .index("by_user_date", ["userId", "date"])
+    .index("by_user_camp", ["userId", "campId"])
+    .index("by_user_date_version", ["userId", "date", "algorithmVersion"]),
+
   fight_camp_calendar: defineTable({
     userId: v.id("users"),
     date: v.string(),
