@@ -1,11 +1,13 @@
 import { AICompactOverlay } from "@/components/AICompactOverlay";
 import { MealPhotoScanOverlay } from "@/components/nutrition/MealPhotoScanOverlay";
+import type { AITaskType } from "@/contexts/AITaskContext";
 
 interface AiTaskLike {
   id: string;
   steps: any[];
   startedAt: number;
   label: string;
+  type?: AITaskType;
 }
 
 interface AiTaskBannerProps {
@@ -14,6 +16,13 @@ interface AiTaskBannerProps {
   photoBase64: string | null;
   onCancel: () => void;
   onDismiss: (id: string) => void;
+  /**
+   * When true, suppress the banner for `meal-analysis` tasks. Used by the
+   * Nutrition page while the QuickAddDialog is open — that dialog renders
+   * its own MealPhotoScanOverlay, so showing this one too leaves a ghost
+   * copy of the photo sitting behind the dimmed dialog backdrop.
+   */
+  suppressMealAnalysis?: boolean;
 }
 
 /**
@@ -21,8 +30,9 @@ interface AiTaskBannerProps {
  * long-running AI task is active (meal analysis, ingredient lookup,
  * meal plan generation, diet analysis).
  */
-export function AiTaskBanner({ aiTask, photoAnalyzing, photoBase64, onCancel, onDismiss }: AiTaskBannerProps) {
+export function AiTaskBanner({ aiTask, photoAnalyzing, photoBase64, onCancel, onDismiss, suppressMealAnalysis }: AiTaskBannerProps) {
   if (!aiTask) return null;
+  if (suppressMealAnalysis && aiTask.type === "meal-analysis") return null;
   const handleCancel = () => { onCancel(); onDismiss(aiTask.id); };
 
   return (

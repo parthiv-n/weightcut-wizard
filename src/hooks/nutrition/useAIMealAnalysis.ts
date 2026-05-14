@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { useAction } from "convex/react";
+import { useAction, useMutation } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
@@ -31,6 +31,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
   const { addTask, completeTask, failTask } = useAITask();
   const analyzeMealAction = useAction(api.actions.analyzeMeal.run);
   const lookupIngredientAction = useAction(api.actions.lookupIngredient.run);
+  const generatePhotoUploadUrl = useMutation(api.meals.generatePhotoUploadUrl);
   const aiAbortRef = useRef<AbortController | null>(null);
 
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
@@ -329,6 +330,37 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       quantity: item.quantity,
     }));
 
+    // Upload the AI-scanned photo to Convex Storage so the meal card can
+    // render the actual photo where the macro donut normally sits. Failure
+    // is non-blocking — the meal still saves, the photo just won't appear.
+    let photoStorageId: string | null = null;
+    let photoPreviewUrl: string | null = null;
+    if (photoBase64) {
+      try {
+        photoPreviewUrl = `data:image/jpeg;base64,${photoBase64}`;
+        const uploadUrl = await generatePhotoUploadUrl();
+        const binary = atob(photoBase64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const blob = new Blob([bytes], { type: "image/jpeg" });
+        const resp = await fetch(uploadUrl, {
+          method: "POST",
+          headers: { "Content-Type": "image/jpeg" },
+          body: blob,
+        });
+        if (resp.ok) {
+          const { storageId } = await resp.json();
+          if (typeof storageId === "string") photoStorageId = storageId;
+        } else {
+          logger.warn("Meal photo upload returned non-OK", { status: resp.status });
+        }
+      } catch (e) {
+        logger.warn("Meal photo upload failed (continuing without photo)", {
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+
     try {
       await saveMealToDb({
         meal_name: manualMeal.meal_name || aiMealDescription,
@@ -341,18 +373,21 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
         recipe_notes: itemBreakdown,
         ingredients: ingredients,
         is_ai_generated: true,
+        photo_storage_id: photoStorageId,
+        photo_preview_url: photoPreviewUrl,
       });
 
       setIsQuickAddSheetOpen(false);
       setAiLineItems([]);
       setAiAnalysisComplete(false);
       setAiMealDescription("");
+      setPhotoBase64(null);
       setManualMeal(prev => ({ ...prev, meal_name: "" }));
     } catch (error) {
       logger.error("Error saving AI meal", error);
       toast({ title: "Error", description: "Failed to add meal", variant: "destructive" });
     }
-  }, [aiLineItems, manualMeal, aiMealDescription, saveMealToDb, setIsQuickAddSheetOpen, setManualMeal, toast]);
+  }, [aiLineItems, manualMeal, aiMealDescription, photoBase64, generatePhotoUploadUrl, saveMealToDb, setIsQuickAddSheetOpen, setManualMeal, toast]);
 
   const handleAiAnalyzeIngredient = useCallback(async () => {
     if (!aiIngredientDescription.trim()) {

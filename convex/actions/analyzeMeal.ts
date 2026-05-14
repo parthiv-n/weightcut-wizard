@@ -21,6 +21,55 @@ import {
 import { requireUserIdFromAction } from "./_helpers";
 import { enforceGemGate } from "../_shared/subscriptionGuard";
 
+/**
+ * Strip whitespace + any inadvertent `data:image/*;base64,` prefix from the
+ * incoming payload. The client SHOULD send only the raw base64 body, but
+ * defensive cleaning here removes one entire class of "invalid image data"
+ * errors from Groq when the prefix gets included twice.
+ */
+function cleanBase64(b64: string): string {
+  return b64.replace(/^data:[^,]+,/i, "").replace(/\s/g, "");
+}
+
+/**
+ * Sniff the first 16 bytes of an image to recover the real MIME type. The
+ * Camera plugin defaults to JPEG but iOS users on "High Efficiency" mode
+ * can produce HEIC, and gallery-picked images may be PNG/WebP. Hardcoding
+ * `image/jpeg` for all of those makes Groq reject the request with the
+ * generic "invalid image data" message — sniffing lets us either send the
+ * correct MIME or fail fast with a user-readable error.
+ */
+function detectImageMime(b64: string): { mime: string; isHeic: boolean } {
+  if (b64.length < 32) return { mime: "", isHeic: false };
+  let head: Buffer;
+  try {
+    head = Buffer.from(b64.slice(0, 32), "base64");
+  } catch {
+    return { mime: "", isHeic: false };
+  }
+  if (head.length < 12) return { mime: "", isHeic: false };
+  // JPEG: FF D8 FF
+  if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) {
+    return { mime: "image/jpeg", isHeic: false };
+  }
+  // PNG: 89 50 4E 47
+  if (head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47) {
+    return { mime: "image/png", isHeic: false };
+  }
+  // WebP: "RIFF"...."WEBP"
+  if (
+    head[0] === 0x52 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x46 &&
+    head[8] === 0x57 && head[9] === 0x45 && head[10] === 0x42 && head[11] === 0x50
+  ) {
+    return { mime: "image/webp", isHeic: false };
+  }
+  // HEIC/HEIF: bytes 4..7 spell "ftyp"
+  if (head[4] === 0x66 && head[5] === 0x74 && head[6] === 0x79 && head[7] === 0x70) {
+    return { mime: "image/heic", isHeic: true };
+  }
+  return { mime: "", isHeic: false };
+}
+
 export const run = action({
   args: {
     mealDescription: v.optional(v.string()),
@@ -42,13 +91,37 @@ export const run = action({
     if (!cleanDesc && !imageBase64) {
       throw new Error("Provide a meal description or photo");
     }
-    if (imageBase64 && imageBase64.length > 5_000_000) {
-      throw new Error("Image too large");
+
+    // Clean + validate the image early so we never fan out an obviously
+    // bad payload to Groq (which surfaces only a generic "invalid image
+    // data" error). Size cap tightened to 4 MB to match Groq's vision
+    // input limit; previous 5 MB allowed borderline images that Groq then
+    // rejected, leading to the exact error we're guarding against here.
+    let cleanedImage: string | null = null;
+    let imageMime: string | null = null;
+    if (imageBase64) {
+      cleanedImage = cleanBase64(imageBase64);
+      if (cleanedImage.length === 0) {
+        throw new Error("Photo data was empty. Please retake the photo.");
+      }
+      if (cleanedImage.length > 4_000_000) {
+        throw new Error("Photo is too large. Please retake at lower quality.");
+      }
+      const { mime, isHeic } = detectImageMime(cleanedImage);
+      if (isHeic) {
+        throw new Error(
+          "HEIC photos aren't supported yet. Open iOS Settings → Camera → Formats and choose 'Most Compatible', then retake.",
+        );
+      }
+      if (!mime) {
+        throw new Error("Photo format not recognized. Please retake the photo.");
+      }
+      imageMime = mime;
     }
 
     let nutritionData: any;
 
-    if (imageBase64) {
+    if (cleanedImage && imageMime) {
       const visionPrompt = `You are a JSON API. Respond with ONLY the JSON object.
 You are a visual food identification expert. Identify each visible food item with portion estimates and cooking method. No macro math.
 
@@ -58,7 +131,7 @@ ${PROMPT_INJECTION_GUARD_INSTRUCTION}
       const visionUserContent: any = [
         {
           type: "image_url",
-          image_url: { url: `data:image/jpeg;base64,${imageBase64}` },
+          image_url: { url: `data:${imageMime};base64,${cleanedImage}` },
         },
         {
           type: "text",

@@ -1,19 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { Activity, Ruler, Plus, X, Check, Route, Timer, Gauge, Mic, MicOff, Loader2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Plus, X, Check, Mic, MicOff, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectSeparator,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { getCustomTypes, addCustomType, removeCustomType } from "@/lib/customSessionTypes";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { triggerHapticSelection } from "@/lib/haptics";
@@ -56,6 +47,9 @@ interface FightCampLogFormProps {
   canSave?: boolean;
 }
 
+const INPUT_CLASS =
+  "h-11 rounded-2xl bg-muted/40 dark:bg-white/[0.06] border-border/30 text-[15px] text-foreground placeholder:text-muted-foreground/50 px-4 focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition-all";
+
 export function FightCampLogForm({
   isEditing,
   userId,
@@ -80,8 +74,8 @@ export function FightCampLogForm({
   const { toast } = useToast();
 
   const handleVoiceTranscript = useCallback((text: string) => {
-    setNotes(prev => prev ? prev + " " + text : text);
-  }, [setNotes]);
+    setNotes(notes ? notes + " " + text : text);
+  }, [notes, setNotes]);
 
   const handleVoiceError = useCallback((error: string) => {
     toast({ title: "Voice Input", description: error, variant: "destructive" });
@@ -96,9 +90,7 @@ export function FightCampLogForm({
     if (userId) setCustomTypes(getCustomTypes(userId));
   }, [userId]);
 
-  // Build full list of types for the dropdown
   const allTypes = [...SESSION_TYPES, ...customTypes];
-  // If editing a session with a legacy/unknown type, include it temporarily
   const hasLegacyType = sessionType && !allTypes.includes(sessionType);
   const displayTypes = hasLegacyType ? [...allTypes, sessionType] : allTypes;
 
@@ -122,102 +114,121 @@ export function FightCampLogForm({
     }
   };
 
+  const adjustDuration = (delta: number) => {
+    const next = Math.max(0, (parseInt(duration) || 0) + delta);
+    setDuration(String(next));
+    triggerHapticSelection();
+  };
+
   return (
-    <div className="grid gap-3 py-1">
-      {/* Session Type */}
-      <div className="space-y-1.5">
-        <Label className="text-[10px] font-medium text-foreground/50 uppercase tracking-widest">Type</Label>
-        <div className="flex gap-1.5">
-          <Select value={sessionType} onValueChange={setSessionType}>
-            <SelectTrigger className="flex-1 rounded-2xl h-10 text-[13px] border-border/20 bg-muted/15">
-              <SelectValue placeholder="Select type" />
-            </SelectTrigger>
-            <SelectContent>
-              {SESSION_TYPES.map(type => (
-                <SelectItem key={type} value={type}>{type}</SelectItem>
-              ))}
-              {customTypes.length > 0 && <SelectSeparator />}
-              {customTypes.map(type => (
-                <div key={type} className="relative flex items-center">
-                  <SelectItem value={type} className="flex-1 pr-8">{type}</SelectItem>
+    <div className="space-y-4">
+      {/* ── Session Type — horizontal scrolling chip rail ──────── */}
+      <div className="space-y-2">
+        <Label className="text-[10px] uppercase tracking-[0.12em] font-semibold text-muted-foreground/60">
+          Session type
+        </Label>
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x">
+          {displayTypes.map((type) => {
+            const active = sessionType === type;
+            const isCustom = customTypes.includes(type);
+            return (
+              <div key={type} className="relative shrink-0 snap-start">
+                <button
+                  type="button"
+                  onClick={() => { setSessionType(type); triggerHapticSelection(); }}
+                  className={`h-10 px-4 rounded-full text-[13.5px] font-semibold transition-all active:scale-[0.96] ${
+                    active
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "bg-muted/40 dark:bg-white/[0.06] border border-border/30 text-foreground/80 hover:bg-muted/60"
+                  } ${isCustom ? "pr-7" : ""}`}
+                >
+                  {type}
+                </button>
+                {isCustom && (
                   <button
-                    onPointerDown={(e) => {
-                      e.stopPropagation();
-                      e.preventDefault();
-                      handleRemoveCustomType(type);
-                    }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded-full hover:bg-destructive/20 text-muted-foreground hover:text-destructive transition-colors z-10"
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); handleRemoveCustomType(type); }}
                     aria-label={`Remove ${type}`}
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2 h-5 w-5 rounded-full bg-background/40 flex items-center justify-center text-muted-foreground/60 active:text-destructive transition-colors"
                   >
-                    <X className="h-3.5 w-3.5" />
+                    <X className="h-3 w-3" strokeWidth={2.4} />
                   </button>
-                </div>
-              ))}
-              {hasLegacyType && (
-                <>
-                  <SelectSeparator />
-                  <SelectItem value={sessionType}>{sessionType}</SelectItem>
-                </>
-              )}
-            </SelectContent>
-          </Select>
+                )}
+              </div>
+            );
+          })}
           <button
-            className="h-10 w-10 rounded-2xl bg-muted/15 flex items-center justify-center shrink-0 active:bg-muted/30 transition-colors border border-border/20"
+            type="button"
             onClick={() => setIsAddingNew(!isAddingNew)}
             aria-label="Add custom type"
+            className="shrink-0 snap-start h-10 w-10 rounded-full bg-muted/40 dark:bg-white/[0.06] border border-border/30 flex items-center justify-center active:scale-[0.96] transition-transform"
           >
-            <Plus className="h-4 w-4 text-foreground/60" />
+            <Plus className="h-4 w-4 text-foreground/70" strokeWidth={2.4} />
           </button>
         </div>
 
         {isAddingNew && (
-          <div className="flex gap-1.5 mt-1">
+          <div className="flex gap-2 mt-2">
             <Input
-              placeholder="e.g. Swimming, Yoga..."
+              placeholder="e.g. Swimming, Yoga…"
               value={newTypeName}
               onChange={(e) => setNewTypeName(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleAddCustomType(); }}
-              className="rounded-lg flex-1 h-8 text-[13px] border-border/30 bg-muted/20"
+              className={`${INPUT_CLASS} flex-1`}
               autoFocus
             />
             <button
-              className="h-8 w-8 rounded-lg bg-muted/30 flex items-center justify-center shrink-0 active:bg-muted/50 transition-colors disabled:opacity-40"
+              type="button"
               onClick={handleAddCustomType}
               disabled={!newTypeName.trim()}
               aria-label="Confirm new type"
+              className="h-11 w-11 rounded-2xl bg-primary/15 hover:bg-primary/25 text-primary flex items-center justify-center shrink-0 active:scale-[0.96] transition-transform disabled:opacity-40"
             >
-              <Check className="h-3.5 w-3.5" />
+              <Check className="h-4 w-4" strokeWidth={2.6} />
             </button>
           </div>
         )}
       </div>
 
-      {/* Training Metrics */}
-      <div className="rounded-2xl bg-muted/10 border border-border/15 overflow-hidden">
+      {/* ── Training metrics — single grouped card ────────────── */}
+      <div className="card-surface rounded-2xl divide-y divide-border/15 overflow-hidden">
         {/* Duration */}
-        <div className="flex items-center justify-between px-3.5 py-3 border-b border-border/10">
-          <span className="text-[13px] text-foreground/70">Duration</span>
+        <div className="flex items-center justify-between px-4 py-3.5">
+          <span className="text-[14px] font-medium text-foreground/85">Duration</span>
           <div className="flex items-center gap-2">
-            <button onClick={() => setDuration(String(Math.max(0, parseInt(duration) - 5)))}
-              className="h-5 w-5 rounded-full bg-muted/40 flex items-center justify-center text-[12px] font-medium active:bg-muted/60 transition-colors">
-              −
+            <button
+              type="button"
+              onClick={() => adjustDuration(-5)}
+              className="h-8 w-8 rounded-full bg-muted/40 dark:bg-white/[0.06] border border-border/30 flex items-center justify-center text-foreground/80 active:scale-95 transition-all"
+              aria-label="Decrease duration"
+            >
+              <span className="text-[16px] font-medium leading-none">−</span>
             </button>
-            <span className="text-[13px] font-semibold tabular-nums w-8 text-center">{duration}<span className="text-[10px] text-muted-foreground ml-0.5">m</span></span>
-            <button onClick={() => setDuration(String(parseInt(duration) + 5))}
-              className="h-5 w-5 rounded-full bg-muted/40 flex items-center justify-center text-[12px] font-medium active:bg-muted/60 transition-colors">
-              +
+            <span className="text-[15px] font-bold tabular-nums w-14 text-center">
+              {duration}
+              <span className="text-[11px] font-medium text-muted-foreground/60 ml-0.5">min</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => adjustDuration(5)}
+              className="h-8 w-8 rounded-full bg-muted/40 dark:bg-white/[0.06] border border-border/30 flex items-center justify-center text-foreground/80 active:scale-95 transition-all"
+              aria-label="Increase duration"
+            >
+              <span className="text-[14px] font-medium leading-none">+</span>
             </button>
           </div>
         </div>
 
         {/* Intensity */}
-        <div className="px-3.5 py-3 border-b border-border/10">
+        <div className="px-4 py-3.5 space-y-2">
           <div className="flex justify-between items-center">
-            <span className="text-[13px] text-foreground/70">Intensity</span>
-            <span className="text-[13px] font-semibold tabular-nums">{intensityLevel[0]}<span className="text-foreground/40">/5</span></span>
+            <span className="text-[14px] font-medium text-foreground/85">Intensity</span>
+            <span className="text-[14px] font-bold tabular-nums">
+              {intensityLevel[0]}<span className="text-muted-foreground/50 font-medium">/5</span>
+            </span>
           </div>
-          <Slider value={intensityLevel} onValueChange={setIntensityLevel} max={5} min={1} step={1} className="py-1" />
-          <div className="flex justify-between text-[9px] text-muted-foreground/70">
+          <Slider value={intensityLevel} onValueChange={setIntensityLevel} max={5} min={1} step={1} />
+          <div className="flex justify-between text-[10px] font-medium text-muted-foreground/60 pt-0.5">
             <span>Easy</span>
             <span>Mod</span>
             <span>Max</span>
@@ -225,78 +236,101 @@ export function FightCampLogForm({
         </div>
 
         {/* RPE */}
-        <div className="px-3.5 py-3">
+        <div className="px-4 py-3.5 space-y-2">
           <div className="flex justify-between items-center">
-            <span className="text-[13px] text-foreground/70">RPE</span>
-            <span className="text-[13px] font-semibold tabular-nums">{rpe[0]}<span className="text-foreground/40">/10</span></span>
+            <span className="text-[14px] font-medium text-foreground/85">RPE</span>
+            <span className="text-[14px] font-bold tabular-nums">
+              {rpe[0]}<span className="text-muted-foreground/50 font-medium">/10</span>
+            </span>
           </div>
-          <Slider value={rpe} onValueChange={setRpe} max={10} min={1} step={1} className="py-1" />
-          <div className="flex justify-between text-[9px] text-muted-foreground/70">
+          <Slider value={rpe} onValueChange={setRpe} max={10} min={1} step={1} />
+          <div className="flex justify-between text-[10px] font-medium text-muted-foreground/60 pt-0.5">
             <span>Light</span>
             <span>Max</span>
           </div>
         </div>
       </div>
 
-      {/* Run Details */}
+      {/* ── Run details (conditional) ─────────────────────────── */}
       {sessionType === "Run" && (
-        <div className="rounded-2xl bg-muted/10 border border-border/15 overflow-hidden">
-          <div className="flex items-center justify-between px-3.5 py-3 border-b border-border/10">
-            <span className="text-[13px] text-foreground/70">Distance</span>
-            <div className="flex items-center gap-1.5">
-              <Input type="number" inputMode="decimal" step="0.1" min="0" value={runDistance} onChange={(e) => setRunDistance(e.target.value)} placeholder="0"
-                className="w-16 h-7 rounded-md text-right text-[12px] font-semibold bg-transparent border-border/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-              <button type="button" onClick={() => setRunDistanceUnit(runDistanceUnit === "km" ? "mi" : "km")}
-                className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-muted/40 active:bg-muted/60 transition-colors min-w-[28px]">
+        <div className="card-surface rounded-2xl divide-y divide-border/15 overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3.5">
+            <span className="text-[14px] font-medium text-foreground/85">Distance</span>
+            <div className="flex items-center gap-2">
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="0.1"
+                min="0"
+                value={runDistance}
+                onChange={(e) => setRunDistance(e.target.value)}
+                placeholder="0"
+                className="w-20 h-9 rounded-xl text-right text-[14px] font-bold tabular-nums bg-muted/40 dark:bg-white/[0.06] border-border/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+              />
+              <button
+                type="button"
+                onClick={() => setRunDistanceUnit(runDistanceUnit === "km" ? "mi" : "km")}
+                className="h-9 px-3 rounded-full bg-muted/40 dark:bg-white/[0.06] border border-border/30 text-[12px] font-semibold active:scale-95 transition-transform min-w-[44px]"
+              >
                 {runDistanceUnit}
               </button>
             </div>
           </div>
-          <div className="flex items-center justify-between px-3.5 py-3 border-b border-border/10">
-            <span className="text-[13px] text-foreground/70">Time</span>
-            <Input type="text" inputMode="numeric" value={runTime} onChange={(e) => setRunTime(e.target.value)} placeholder="mm:ss"
-              className="w-20 h-7 rounded-md text-right text-[12px] font-semibold bg-transparent border-border/30" />
+          <div className="flex items-center justify-between px-4 py-3.5">
+            <span className="text-[14px] font-medium text-foreground/85">Time</span>
+            <Input
+              type="text"
+              inputMode="numeric"
+              value={runTime}
+              onChange={(e) => setRunTime(e.target.value)}
+              placeholder="mm:ss"
+              className="w-24 h-9 rounded-xl text-right text-[14px] font-bold tabular-nums bg-muted/40 dark:bg-white/[0.06] border-border/30"
+            />
           </div>
-          <div className="flex items-center justify-between px-3.5 py-3">
-            <span className="text-[13px] text-foreground/70">Pace</span>
-            <span className="text-[12px] font-semibold text-foreground/70">{runPace ? `${runPace} /${runDistanceUnit}` : "—"}</span>
+          <div className="flex items-center justify-between px-4 py-3.5">
+            <span className="text-[14px] font-medium text-foreground/85">Pace</span>
+            <span className="text-[13px] font-semibold text-foreground/70 tabular-nums">
+              {runPace ? `${runPace} /${runDistanceUnit}` : "—"}
+            </span>
           </div>
         </div>
       )}
 
-      {/* Recovery */}
-      <div className="rounded-2xl bg-muted/10 border border-border/15 overflow-hidden">
-        {/* Soreness */}
-        <div className="px-3.5 py-3">
+      {/* ── Recovery (soreness) ───────────────────────────────── */}
+      <div className="card-surface rounded-2xl overflow-hidden">
+        <div className="px-4 py-3.5">
           <div className="flex items-center justify-between">
-            <span className="text-[13px] text-foreground/70">Soreness</span>
+            <span className="text-[14px] font-medium text-foreground/85">Soreness</span>
             <Switch checked={hasSoreness} onCheckedChange={setHasSoreness} />
           </div>
           {hasSoreness && (
-            <div className="pt-1.5">
+            <div className="pt-3 space-y-2">
               <div className="flex justify-between items-center">
-                <span className="text-[10px] text-muted-foreground">Level</span>
-                <span className="text-[13px] font-semibold">{sorenessLevel[0]}</span>
+                <span className="text-[12px] text-muted-foreground/70 font-medium">Level</span>
+                <span className="text-[14px] font-bold tabular-nums">
+                  {sorenessLevel[0]}<span className="text-muted-foreground/50 font-medium">/10</span>
+                </span>
               </div>
-              <Slider value={sorenessLevel} onValueChange={setSorenessLevel} max={10} min={1} step={1} className="py-1" />
+              <Slider value={sorenessLevel} onValueChange={setSorenessLevel} max={10} min={1} step={1} />
             </div>
           )}
         </div>
-
       </div>
 
-      {/* Notes */}
-      <div className="space-y-1.5">
+      {/* ── Notes ─────────────────────────────────────────────── */}
+      <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <Label className="text-[10px] font-medium text-foreground/50 uppercase tracking-widest">Notes</Label>
+          <Label className="text-[10px] uppercase tracking-[0.12em] font-semibold text-muted-foreground/60">
+            Notes
+          </Label>
           {voiceSupported && (
             <button
               type="button"
               onClick={() => { triggerHapticSelection(); isListening ? stopListening() : startListening(); }}
-              className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold transition-all ${
+              className={`flex items-center gap-1 h-7 px-2.5 rounded-full text-[11px] font-semibold transition-all ${
                 isListening
                   ? "bg-red-500/15 text-red-500 animate-pulse"
-                  : "bg-muted/30 text-muted-foreground active:bg-muted/50"
+                  : "bg-muted/40 dark:bg-white/[0.06] border border-border/30 text-muted-foreground active:bg-muted/60"
               }`}
             >
               {isListening ? <MicOff className="h-3 w-3" /> : <Mic className="h-3 w-3" />}
@@ -307,25 +341,27 @@ export function FightCampLogForm({
         <Textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          placeholder={isListening ? "Listening..." : "Techniques, drills, notes..."}
-          className={`rounded-2xl border-border/15 bg-muted/10 min-h-[50px] resize-none text-[13px] ${isListening ? "border-red-500/30" : ""}`}
+          placeholder={isListening ? "Listening…" : "Techniques, drills, anything worth remembering…"}
+          className={`min-h-[88px] resize-none rounded-2xl bg-muted/40 dark:bg-white/[0.06] border-border/30 text-[14px] px-4 py-3 placeholder:text-muted-foreground/50 ${isListening ? "ring-2 ring-red-500/40" : ""}`}
         />
         {isListening && interimText && (
-          <p className="text-[10px] text-muted-foreground/60 italic px-1">{interimText}</p>
+          <p className="text-[12px] text-muted-foreground/70 italic px-1">{interimText}</p>
         )}
       </div>
 
+      {/* ── Save ──────────────────────────────────────────────── */}
       <button
-        className="w-full h-11 rounded-2xl bg-primary text-primary-foreground text-[14px] font-semibold active:opacity-80 transition-opacity mt-1 flex items-center justify-center gap-2 disabled:opacity-60 disabled:active:opacity-60"
+        type="button"
         onClick={onSave}
         disabled={saving || !canSave}
+        className="w-full h-12 rounded-2xl bg-primary text-primary-foreground text-[15px] font-semibold active:scale-[0.98] transition-transform flex items-center justify-center gap-2 disabled:opacity-40 disabled:active:scale-100"
       >
         {saving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
         {saving
-          ? (isEditing ? 'Updating…' : 'Saving…')
+          ? (isEditing ? "Updating…" : "Saving…")
           : !canSave
-            ? 'Loading account…'
-            : (isEditing ? 'Update Session' : 'Save Session')}
+            ? "Loading account…"
+            : (isEditing ? "Update session" : "Save session")}
       </button>
     </div>
   );

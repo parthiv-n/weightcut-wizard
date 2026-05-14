@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, type ReactNode } from "react";
 import { Settings } from "lucide-react";
 
 interface MacroPieChartProps {
@@ -13,6 +13,67 @@ interface MacroPieChartProps {
     onEditTargets?: () => void;
 }
 
+interface RingProps {
+    pct: number;
+    color: string;
+    trackOpacity?: number;
+    size: number;
+    strokeWidth: number;
+    children: ReactNode;
+    glow?: boolean;
+}
+
+const Ring = ({ pct, color, size, strokeWidth, children, trackOpacity = 0.18, glow = true }: RingProps) => {
+    const r = (size - strokeWidth) / 2;
+    const c = 2 * Math.PI * r;
+    const clamped = Math.min(Math.max(pct, 0), 100);
+    const offset = c - (clamped / 100) * c;
+    return (
+        <div className="relative flex-shrink-0" style={{ width: size, height: size }}>
+            <svg viewBox={`0 0 ${size} ${size}`} className="w-full h-full -rotate-90">
+                <circle cx={size / 2} cy={size / 2} r={r}
+                    fill="none" stroke={`hsl(var(--border) / ${trackOpacity})`} strokeWidth={strokeWidth} />
+                <circle cx={size / 2} cy={size / 2} r={r}
+                    fill="none" stroke={color} strokeWidth={strokeWidth}
+                    strokeLinecap="round" strokeDasharray={c} strokeDashoffset={offset}
+                    className="transition-all duration-700 ease-out"
+                    style={glow ? { filter: `drop-shadow(0 0 5px ${color}55)` } : undefined} />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center leading-none">
+                {children}
+            </div>
+        </div>
+    );
+};
+
+interface MacroCardProps {
+    label: string;
+    value: number;
+    goal: number;
+    color: string;
+}
+
+const MacroCard = ({ label, value, goal, color }: MacroCardProps) => {
+    const pct = goal > 0 ? (value / goal) * 100 : 0;
+    const left = Math.max(0, goal - value);
+    return (
+        <div className="card-surface rounded-3xl px-3 py-4 flex flex-col items-center gap-2">
+            <Ring pct={pct} color={color} size={64} strokeWidth={8}>
+                <span className="text-[15px] font-bold tabular-nums" style={{ color }}>
+                    {Math.round(value)}
+                    <span className="text-[10px] font-semibold ml-0.5" style={{ color }}>g</span>
+                </span>
+            </Ring>
+            <div className="text-center">
+                <p className="text-[12px] font-semibold text-foreground leading-none">{label}</p>
+                <p className="text-[10px] tabular-nums text-muted-foreground/60 mt-1">
+                    {goal > 0 ? `${Math.round(left)}g left` : "—"}
+                </p>
+            </div>
+        </div>
+    );
+};
+
 export const MacroPieChart = memo(function MacroPieChart({
     calories,
     calorieTarget,
@@ -24,176 +85,47 @@ export const MacroPieChart = memo(function MacroPieChart({
     fatsGoal,
     onEditTargets,
 }: MacroPieChartProps) {
-    const remaining = Math.max(0, calorieTarget - calories);
     const isOver = calories > calorieTarget;
-    const calPct = calorieTarget > 0 ? Math.min((calories / calorieTarget) * 100, 100) : 0;
-
-    // Circular progress for calories
-    const RADIUS = 44;
-    const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
-    const strokeDashoffset = CIRCUMFERENCE - (calPct / 100) * CIRCUMFERENCE;
-
-    // Macro bar helper
-    const MacroRow = ({
-        label,
-        value,
-        goal,
-        color,
-        bgColor,
-    }: {
-        label: string;
-        value: number;
-        goal: number;
-        color: string;
-        bgColor: string;
-    }) => {
-        const pct = goal > 0 ? Math.min((value / goal) * 100, 100) : 0;
-        const left = Math.max(0, goal - value);
-        const isReached = value >= goal && goal > 0;
-
-        return (
-            <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5">
-                        <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
-                        <span className="text-[11px] font-semibold text-foreground/80">{label}</span>
-                    </div>
-                    <span className="text-[11px] tabular-nums text-muted-foreground">
-                        <span className="font-semibold text-foreground">{Math.round(value)}</span>
-                        <span className="text-muted-foreground/60"> / {Math.round(goal)}g</span>
-                    </span>
-                </div>
-                <div className="relative h-2.5 rounded-full overflow-hidden" style={{ backgroundColor: bgColor }}>
-                    <div
-                        className="absolute inset-y-0 left-0 rounded-full transition-all duration-700 ease-out"
-                        style={{
-                            width: `${pct}%`,
-                            background: isReached
-                                ? `linear-gradient(90deg, ${color}, ${color}dd)`
-                                : `linear-gradient(90deg, ${color}cc, ${color})`,
-                            boxShadow: pct > 5 ? `0 0 8px ${color}40` : 'none',
-                        }}
-                    />
-                </div>
-            </div>
-        );
-    };
+    const calPct = calorieTarget > 0 ? (calories / calorieTarget) * 100 : 0;
+    const calColor = isOver ? "hsl(var(--destructive))" : "hsl(var(--primary))";
 
     return (
-        <div className="card-surface p-4">
-            {/* Top section: Ring + Stats */}
-            <div className="flex items-center gap-3.5">
-                {/* Circular calorie ring */}
-                <div className="relative flex-shrink-0" style={{ width: 96, height: 96 }}>
-                    <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-                        {/* Background track */}
-                        <circle
-                            cx="50" cy="50" r={RADIUS}
-                            fill="none"
-                            stroke="hsl(var(--border) / 0.2)"
-                            strokeWidth="7"
-                        />
-                        {/* Progress arc */}
-                        <circle
-                            cx="50" cy="50" r={RADIUS}
-                            fill="none"
-                            stroke={isOver ? "hsl(var(--destructive))" : "url(#calGradient)"}
-                            strokeWidth="7"
-                            strokeLinecap="round"
-                            strokeDasharray={CIRCUMFERENCE}
-                            strokeDashoffset={strokeDashoffset}
-                            className="transition-all duration-700 ease-out"
-                            style={{ filter: `drop-shadow(0 0 4px ${isOver ? 'hsl(var(--destructive) / 0.4)' : 'hsl(var(--primary) / 0.3)'})` }}
-                        />
-                        <defs>
-                            <linearGradient id="calGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                                <stop offset="0%" stopColor="hsl(var(--primary))" />
-                                <stop offset="100%" stopColor="hsl(var(--secondary))" />
-                            </linearGradient>
-                        </defs>
-                    </svg>
-                    {/* Center label */}
-                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-xl font-bold tabular-nums leading-none tracking-tight">
-                            {Math.round(calories)}
-                        </span>
-                        <span className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground/60 mt-0.5 font-medium">
-                            kcal
-                        </span>
-                    </div>
-                </div>
-
-                {/* Right side: Goal / Food / Remaining */}
-                <div className="flex-1 min-w-0 space-y-2">
-                    <div className="grid grid-cols-3 gap-1">
-                        {[
-                            { label: "Goal", value: Math.round(calorieTarget), color: "text-foreground" },
-                            { label: "Eaten", value: Math.round(calories), color: "text-primary" },
-                            { label: isOver ? "Over" : "Left", value: isOver ? Math.round(calories - calorieTarget) : Math.round(remaining), color: isOver ? "text-destructive" : "text-emerald-500" },
-                        ].map((stat) => (
-                            <div key={stat.label} className="text-center">
-                                <p className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground/60 font-medium">{stat.label}</p>
-                                <p className={`text-[19px] font-bold tabular-nums leading-snug ${stat.color}`}>{stat.value}</p>
-                            </div>
-                        ))}
-                    </div>
-
-                    {/* Linear calorie progress below stats */}
-                    <div>
-                        <div className="relative h-2.5 rounded-full overflow-hidden bg-border/20">
-                            <div
-                                className="absolute inset-y-0 left-0 rounded-full transition-all duration-700 ease-out"
-                                style={{
-                                    width: `${calPct}%`,
-                                    background: isOver
-                                        ? 'hsl(var(--destructive))'
-                                        : 'linear-gradient(90deg, hsl(var(--primary)), hsl(var(--secondary)))',
-                                    boxShadow: calPct > 5 ? `0 0 8px hsl(var(--primary) / 0.3)` : 'none',
-                                }}
-                            />
-                        </div>
-                        <p className="text-[11px] text-muted-foreground/40 tabular-nums text-right mt-0.5">
-                            {Math.round(calPct)}% of daily goal
+        <div className="space-y-5">
+            {/* Calorie card — wide rectangle, big kcal number on left, ring on right */}
+            <div className="card-surface rounded-3xl px-6 py-5 flex items-center gap-5">
+                <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                        <p className="text-[10px] uppercase tracking-[0.15em] font-semibold text-muted-foreground/60">
+                            Calories
                         </p>
+                        {onEditTargets && (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); onEditTargets(); }}
+                                className="flex items-center gap-1 text-[10px] text-muted-foreground/50 hover:text-primary transition-colors"
+                            >
+                                <Settings className="h-3 w-3" />
+                            </button>
+                        )}
                     </div>
+                    <p className="text-[36px] font-bold tabular-nums leading-none tracking-tight mt-2 text-foreground">
+                        {Math.round(calories)}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground/60 mt-2 tabular-nums font-medium">
+                        kcal today
+                    </p>
                 </div>
+                <Ring pct={calPct} color={calColor} size={88} strokeWidth={10}>
+                    <span className="text-[18px] font-bold tabular-nums tracking-tight" style={{ color: calColor }}>
+                        {Math.round(Math.min(calPct, 999))}%
+                    </span>
+                </Ring>
             </div>
 
-            {/* Macro progress bars */}
-            <div className="mt-3 pt-3 border-t border-border/20 space-y-2">
-                <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] uppercase tracking-[0.15em] font-semibold text-muted-foreground/60">Macros</span>
-                    {onEditTargets && (
-                        <button
-                            onClick={(e) => { e.stopPropagation(); onEditTargets(); }}
-                            className="flex items-center gap-1 text-[10px] text-muted-foreground/50 hover:text-primary transition-colors"
-                        >
-                            <Settings className="h-3 w-3" />
-                            Edit targets
-                        </button>
-                    )}
-                </div>
-                <MacroRow
-                    label="Protein"
-                    value={protein}
-                    goal={proteinGoal || 0}
-                    color="#3b82f6"
-                    bgColor="rgba(59, 130, 246, 0.08)"
-                />
-                <MacroRow
-                    label="Carbs"
-                    value={carbs}
-                    goal={carbsGoal || 0}
-                    color="#f97316"
-                    bgColor="rgba(249, 115, 22, 0.08)"
-                />
-                <MacroRow
-                    label="Fat"
-                    value={fats}
-                    goal={fatsGoal || 0}
-                    color="#a855f7"
-                    bgColor="rgba(168, 85, 247, 0.08)"
-                />
+            {/* Macro grid — 3 cards, each with its own ring; backgrounds neutral, only numbers tinted */}
+            <div className="grid grid-cols-3 gap-3">
+                <MacroCard label="Protein" value={protein} goal={proteinGoal ?? 0} color="#3b82f6" />
+                <MacroCard label="Carbs" value={carbs} goal={carbsGoal ?? 0} color="#f97316" />
+                <MacroCard label="Fat" value={fats} goal={fatsGoal ?? 0} color="#a855f7" />
             </div>
         </div>
     );

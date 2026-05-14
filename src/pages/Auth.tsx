@@ -10,6 +10,8 @@ import wizardLogo from "@/assets/wizard-logo.webp";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ChevronLeft } from "lucide-react";
 import { Capacitor } from "@capacitor/core";
+import { motion, LayoutGroup, AnimatePresence } from "motion/react";
+import { triggerHapticSelection } from "@/lib/haptics";
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(() => {
@@ -22,7 +24,7 @@ export default function Auth() {
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [passwordError, setPasswordError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [signupRole, setSignupRole] = useState<"fighter" | "coach">(() => {
+  const [selectedRole, setSelectedRole] = useState<"fighter" | "coach">(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get("role") === "coach" ? "coach" : "fighter";
   });
@@ -43,9 +45,9 @@ export default function Auth() {
       }
       // Role-aware: if a coach signs in via the athlete door, bounce them
       // to /coach instead of /dashboard. Single-column read on indexed `role`.
-      void routeAfterAuth(userId, "fighter", navigate, toast);
+      void routeAfterAuth(userId, selectedRole, navigate, toast);
     }
-  }, [userId, isPasswordReset, navigate, searchParams, toast]);
+  }, [userId, isPasswordReset, navigate, searchParams, toast, selectedRole]);
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,12 +72,12 @@ export default function Auth() {
         // The role is also passed into the signUp params; Convex Auth's
         // Password.profile callback can read it (Phase-3 wiring will update
         // the profile row's `role` field to match).
-        try { localStorage.setItem("wcw_intended_role", signupRole); } catch {}
+        try { localStorage.setItem("wcw_intended_role", selectedRole); } catch {}
 
-        await signIn("password", { email, password, flow: "signUp", role: signupRole });
+        await signIn("password", { email, password, flow: "signUp", role: selectedRole });
 
         // Coaches go to setup; fighters fall through to the post-auth router.
-        if (signupRole === "coach") {
+        if (selectedRole === "coach") {
           navigate("/coach/setup");
           return;
         }
@@ -233,9 +235,36 @@ export default function Auth() {
             <h1 className="text-2xl font-bold tracking-tight text-foreground">
               {isPasswordReset ? "New Password" : showForgotPassword ? "Reset Password" : isLogin ? "Welcome Back" : "Create Account"}
             </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {isPasswordReset ? "Choose a strong password" : showForgotPassword ? "We'll send you a reset link" : isLogin ? "Sign in to continue" : "Get started with FightCamp Wizard"}
-            </p>
+            <div className="text-sm text-muted-foreground mt-1 h-5 relative w-full">
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.p
+                  key={
+                    isPasswordReset
+                      ? "reset"
+                      : showForgotPassword
+                      ? "forgot"
+                      : `${isLogin ? "in" : "up"}-${selectedRole}`
+                  }
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
+                  transition={{ duration: 0.18, ease: "easeOut" }}
+                  className="absolute inset-0"
+                >
+                  {isPasswordReset
+                    ? "Choose a strong password"
+                    : showForgotPassword
+                    ? "We'll send you a reset link"
+                    : isLogin
+                    ? selectedRole === "coach"
+                      ? "Sign in to your coach account"
+                      : "Sign in to your athlete account"
+                    : selectedRole === "coach"
+                    ? "Get started as a coach"
+                    : "Get started as an athlete"}
+                </motion.p>
+              </AnimatePresence>
+            </div>
           </div>
 
           {/* Forms */}
@@ -259,24 +288,51 @@ export default function Auth() {
               </form>
             ) : (
               <form onSubmit={handleAuth} className="space-y-3">
-                {!isLogin && (
-                  <div className="flex bg-muted/40 dark:bg-white/[0.06] rounded-2xl p-1 border border-border/40">
-                    <button
-                      type="button"
-                      onClick={() => setSignupRole("fighter")}
-                      className={`flex-1 h-[42px] rounded-xl text-[14px] font-medium transition-all ${signupRole === "fighter" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}
-                    >
-                      I'm an athlete
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSignupRole("coach")}
-                      className={`flex-1 h-[42px] rounded-xl text-[14px] font-medium transition-all ${signupRole === "coach" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"}`}
-                    >
-                      I'm a coach
-                    </button>
+                <LayoutGroup id="auth-role-toggle">
+                  <div
+                    role="tablist"
+                    aria-label={isLogin ? "Sign in as" : "Sign up as"}
+                    className="relative flex bg-muted/40 dark:bg-white/[0.06] rounded-2xl p-1 border border-border/40"
+                  >
+                    {(["fighter", "coach"] as const).map((role) => {
+                      const active = selectedRole === role;
+                      const label = role === "fighter" ? "I'm an athlete" : "I'm a coach";
+                      return (
+                        <button
+                          key={role}
+                          type="button"
+                          role="tab"
+                          aria-selected={active}
+                          onClick={() => {
+                            if (active) return;
+                            setSelectedRole(role);
+                            void triggerHapticSelection();
+                          }}
+                          className="relative flex-1 h-[42px] rounded-xl text-[14px] font-medium active:scale-[0.97] transition-transform touch-manipulation"
+                        >
+                          {active && (
+                            <motion.div
+                              layoutId="auth-role-pill"
+                              className="absolute inset-0 rounded-xl bg-background shadow-sm ring-1 ring-border/30"
+                              transition={{ type: "spring", damping: 28, stiffness: 380 }}
+                            />
+                          )}
+                          <motion.span
+                            className="relative z-10"
+                            animate={{
+                              color: active
+                                ? "hsl(var(--foreground))"
+                                : "hsl(var(--muted-foreground))",
+                            }}
+                            transition={{ duration: 0.18 }}
+                          >
+                            {label}
+                          </motion.span>
+                        </button>
+                      );
+                    })}
                   </div>
-                )}
+                </LayoutGroup>
                 <Input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required className={inputClass} autoFocus />
                 <Input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} className={`${inputClass} ${passwordError ? errorInputClass : ""}`} />
                 {!isLogin && (

@@ -66,14 +66,22 @@ export const loggedTodayBundle = query({
       .query("daily_wellness_checkins")
       .withIndex("by_user_date", (q) => q.eq("userId", userId).eq("date", targetDate))
       .first();
-    // Training counts as "done" when there's any gym_session on the date with
-    // status "completed" — matches the literal used by `gym_sessions.complete`
-    // and the cleanup query in gym_sessions.ts.
+    // Training counts as "done" when EITHER (a) there's a completed
+    // `gym_sessions` row, OR (b) there's a non-Rest `fight_camp_calendar`
+    // entry for the date. The latter is the TrainingCalendar/fight-camp
+    // page's primary write surface — without it, logging from that page
+    // wouldn't flip the dashboard's training tick.
     const sessions = await ctx.db
       .query("gym_sessions")
       .withIndex("by_user_date", (q) => q.eq("userId", userId).eq("date", targetDate))
       .collect();
-    const training = sessions.some((s) => s.status === "completed");
+    const calendarEntries = await ctx.db
+      .query("fight_camp_calendar")
+      .withIndex("by_user_date", (q) => q.eq("userId", userId).eq("date", targetDate))
+      .collect();
+    const training =
+      sessions.some((s) => s.status === "completed") ||
+      calendarEntries.some((c) => (c.sessionType ?? "").toLowerCase() !== "rest");
 
     return {
       weight: weight != null,
@@ -81,6 +89,171 @@ export const loggedTodayBundle = query({
       training,
       wellnessCheckin: wellnessCheckin != null,
     };
+  },
+});
+
+/**
+ * Per-source 7-day logging breakdown + overall unlock progress for the
+ * dashboard's Fight Form insight strip. Mirrors the cold-start gate used by
+ * `computeFightFormScore` (`daysOfData < cfg.coldStart.minDaysOfDataIn7d`)
+ * so the displayed numerator and threshold match when the score actually
+ * unlocks. `perSource` is bucketed to the trailing 7 calendar days because
+ * a 28-day-wide "X of 28 nights logged" reads as useless to a user.
+ */
+export const calibrationProgress = query({
+  args: { date: v.optional(v.string()) },
+  handler: async (ctx, { date }) => {
+    const userId = await optionalUserId(ctx);
+    if (!userId) return null;
+    const targetDate = date ?? todayInUtc();
+    const end = new Date(targetDate + "T00:00:00Z");
+
+    const sevenStart = new Date(end);
+    sevenStart.setUTCDate(sevenStart.getUTCDate() - 6);
+    const sevenStartIso = sevenStart.toISOString().slice(0, 10);
+
+    // Match the lookback window in `fightFormScore_internal.fetchScoringInputs`
+    // so `daysWithAnyLog` lines up with the engine's `countDistinctDaysOfData`.
+    const lookback = new Date(end);
+    lookback.setUTCDate(lookback.getUTCDate() - 28);
+    const lookbackIso = lookback.toISOString().slice(0, 10);
+
+    const [weights, sleep, sessions, wellness, meals] = await Promise.all([
+      ctx.db
+        .query("weight_logs")
+        .withIndex("by_user_date", (q) => q.eq("userId", userId).gte("date", lookbackIso))
+        .collect(),
+      ctx.db
+        .query("sleep_logs")
+        .withIndex("by_user_date", (q) => q.eq("userId", userId).gte("date", lookbackIso))
+        .collect(),
+      ctx.db
+        .query("gym_sessions")
+        .withIndex("by_user_date", (q) => q.eq("userId", userId).gte("date", lookbackIso))
+        .collect(),
+      ctx.db
+        .query("daily_wellness_checkins")
+        .withIndex("by_user_date", (q) => q.eq("userId", userId).gte("date", lookbackIso))
+        .collect(),
+      ctx.db
+        .query("meals")
+        .withIndex("by_user_date", (q) => q.eq("userId", userId).gte("date", lookbackIso))
+        .collect(),
+    ]);
+
+    const completedSessions = sessions.filter((s) => s.status === "completed");
+
+    const inWindow7 = (d: string) => d >= sevenStartIso && d <= targetDate;
+    const distinctIn7 = (rows: ReadonlyArray<{ date: string }>) =>
+      new Set(rows.filter((r) => inWindow7(r.date)).map((r) => r.date)).size;
+
+    const perSource = {
+      sleep: distinctIn7(sleep),
+      weight: distinctIn7(weights),
+      training: distinctIn7(completedSessions),
+      wellness: distinctIn7(wellness),
+      nutrition: distinctIn7(meals),
+    };
+
+    // Union of distinct logged dates across all five sources within the
+    // engine's lookback window — drives `unlocked` so it flips at the same
+    // moment compose.ts stops returning `state: "calibrating"`.
+    const unionDays = new Set<string>();
+    for (const r of weights) unionDays.add(r.date);
+    for (const r of sleep) unionDays.add(r.date);
+    for (const r of completedSessions) unionDays.add(r.date);
+    for (const r of wellness) unionDays.add(r.date);
+    for (const r of meals) unionDays.add(r.date);
+    const daysWithAnyLog = unionDays.size;
+    const daysNeeded = CURRENT_CONFIG.coldStart.minDaysOfDataIn7d;
+
+    return {
+      daysWithAnyLog,
+      daysNeeded,
+      unlocked: daysWithAnyLog >= daysNeeded,
+      perSource,
+    };
+  },
+});
+
+/**
+ * Day-over-day delta for the dashboard's proactive callout. Returns `null`
+ * for the unauthenticated case and a stable shape otherwise so the client
+ * can decide whether to render the banner without a second round-trip.
+ *
+ * `yesterdayScore` may be null even for active users when the daily cron
+ * hasn't yet written a row for the prior date or when the score was still
+ * calibrating yesterday — both cases collapse to "no banner".
+ */
+export const getDeltaInfo = query({
+  args: { date: v.optional(v.string()) },
+  handler: async (ctx, { date }) => {
+    const userId = await optionalUserId(ctx);
+    if (!userId) return null;
+    const targetDate = date ?? todayInUtc();
+
+    const today = await ctx.db
+      .query("fight_form_scores")
+      .withIndex("by_user_date", (q) => q.eq("userId", userId).eq("date", targetDate))
+      .first();
+    if (!today || today.state !== "ok") {
+      return { yesterdayScore: null, todayScore: null, delta: null };
+    }
+
+    const y = new Date(targetDate + "T00:00:00Z");
+    y.setUTCDate(y.getUTCDate() - 1);
+    const yesterdayIso = y.toISOString().slice(0, 10);
+
+    const yesterday = await ctx.db
+      .query("fight_form_scores")
+      .withIndex("by_user_date", (q) => q.eq("userId", userId).eq("date", yesterdayIso))
+      .first();
+
+    if (!yesterday || yesterday.state !== "ok") {
+      return { yesterdayScore: null, todayScore: today.displayedScore, delta: null };
+    }
+
+    return {
+      yesterdayScore: yesterday.displayedScore,
+      todayScore: today.displayedScore,
+      delta: today.displayedScore - yesterday.displayedScore,
+    };
+  },
+});
+
+/**
+ * Last 14 days of computed Fight Form scores for the dashboard's mini-trend
+ * sparkline. Unlike `getHistory` (which requires a `campId`), this is keyed
+ * by user + date range so it works with the camp-less flow where the score
+ * is derived from `profiles.targetDate` rather than a `fight_camps` row.
+ * Returns rows ascending by date so callers can render directly into an SVG
+ * path without re-sorting.
+ */
+export const getRecentScores = query({
+  args: { days: v.optional(v.number()) },
+  handler: async (ctx, { days }) => {
+    const userId = await optionalUserId(ctx);
+    if (!userId) return [];
+    const span = days ?? 14;
+    const end = new Date();
+    const start = new Date(end);
+    start.setUTCDate(start.getUTCDate() - (span - 1));
+    const startIso = start.toISOString().slice(0, 10);
+    const endIso = end.toISOString().slice(0, 10);
+
+    const rows = await ctx.db
+      .query("fight_form_scores")
+      .withIndex("by_user_date", (q) =>
+        q.eq("userId", userId).gte("date", startIso).lte("date", endIso),
+      )
+      .collect();
+
+    rows.sort((a, b) => a.date.localeCompare(b.date));
+    return rows.map((r) => ({
+      date: r.date,
+      score: r.displayedScore,
+      state: r.state,
+    }));
   },
 });
 

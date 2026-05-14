@@ -1,5 +1,5 @@
 import { format, subDays, addDays } from "date-fns";
-import { Loader2, ChevronRight, Calendar as CalendarIcon } from "lucide-react";
+import { Loader2, ChevronRight, Calendar as CalendarIcon, ChevronLeft } from "lucide-react";
 import wizardLogo from "@/assets/wizard-logo.webp";
 import { MacroPieChart } from "@/components/nutrition/MacroPieChart";
 import { SyncingIndicator } from "@/components/SyncingIndicator";
@@ -100,29 +100,31 @@ export function NutritionHero({
         onEditTargets={onEditTargets}
       />
 
-      {/* Date Navigator */}
-      <div className="relative flex items-center justify-center gap-3">
+      {/* Date Navigator — iOS-native pill chevrons + central date pill */}
+      <div className="relative flex items-center justify-center gap-2.5">
         <button
           onClick={() => { setSelectedDate(format(subDays(new Date(selectedDate), 1), "yyyy-MM-dd")); triggerHapticSelection(); }}
-          className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 active:scale-95 transition-all"
+          aria-label="Previous day"
+          className="h-10 w-10 rounded-full flex items-center justify-center bg-muted/40 dark:bg-white/[0.06] border border-border/30 text-foreground/80 hover:bg-muted/60 hover:text-foreground active:scale-95 transition-all touch-manipulation"
         >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M10 4L6 8l4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          <ChevronLeft className="h-5 w-5" strokeWidth={2.4} />
         </button>
-        <div className="inline-flex items-center gap-1.5">
+        <div className="inline-flex items-center gap-2">
           <button
             onClick={() => { setSelectedDate(format(new Date(), "yyyy-MM-dd")); triggerHapticSelection(); }}
-            className="flex items-center gap-1.5 text-[13px] font-semibold px-3 py-1 rounded-full bg-muted/40 hover:bg-muted/70 active:scale-[0.97] transition-all"
+            className="flex items-center gap-1.5 h-10 px-4 rounded-full bg-muted/40 dark:bg-white/[0.06] border border-border/30 text-[14px] font-semibold text-foreground hover:bg-muted/60 active:scale-[0.97] transition-all touch-manipulation"
           >
-            <CalendarIcon className="h-3 w-3 text-primary" />
+            <CalendarIcon className="h-3.5 w-3.5 text-primary" strokeWidth={2.4} />
             {selectedDate === todayStr ? "Today" : format(new Date(selectedDate), "EEE, MMM d")}
           </button>
           <SyncingIndicator active={mealsLoading && mealsVisibleCount > 0} />
         </div>
         <button
           onClick={() => { setSelectedDate(format(addDays(new Date(selectedDate), 1), "yyyy-MM-dd")); triggerHapticSelection(); }}
-          className="h-7 w-7 rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/60 active:scale-95 transition-all"
+          aria-label="Next day"
+          className="h-10 w-10 rounded-full flex items-center justify-center bg-muted/40 dark:bg-white/[0.06] border border-border/30 text-foreground/80 hover:bg-muted/60 hover:text-foreground active:scale-95 transition-all touch-manipulation"
         >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+          <ChevronRight className="h-5 w-5" strokeWidth={2.4} />
         </button>
       </div>
 

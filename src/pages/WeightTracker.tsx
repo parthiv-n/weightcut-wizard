@@ -272,18 +272,97 @@ export default function WeightTracker() {
           />
         </div>
       )}
-      <div className="animate-page-in space-y-2.5 px-5 py-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
+      <div className="animate-page-in space-y-4 px-5 py-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
+        {/* ── Hero log form — primary action, prominent ───────── */}
+        <div className="card-surface rounded-3xl px-5 py-5">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.15em] font-semibold text-muted-foreground/60">
+                {editingLogId ? "Editing" : "Log weight"}
+              </p>
+              <p className="text-[15px] font-semibold text-foreground mt-0.5">
+                {editingLogId ? "Update this entry" : "How much do you weigh today?"}
+              </p>
+            </div>
+            {showWeightSuccess && (
+              <span className="text-success animate-[fadeSlideUp_0.3s_ease-out_both] inline-flex items-center gap-1 text-[12px] font-semibold">
+                <CheckCircle2 className="h-4 w-4" />
+                Logged
+              </span>
+            )}
+          </div>
+
+          <form onSubmit={handleAddWeight} className="space-y-3">
+            {/* Big stepper row */}
+            <div className="flex items-center justify-center gap-3 py-2">
+              <button
+                type="button"
+                onClick={() => adjustWeight(-0.1)}
+                aria-label="Decrease weight by 0.1"
+                className="h-12 w-12 shrink-0 rounded-full bg-muted/40 dark:bg-white/[0.06] border border-border/30 flex items-center justify-center text-foreground/80 hover:bg-muted/60 active:scale-95 transition-all touch-manipulation"
+              >
+                <Minus className="h-5 w-5" strokeWidth={2.4} />
+              </button>
+              <div className="flex-1 flex items-baseline justify-center gap-2 min-w-0">
+                <Input
+                  ref={weightInputRef}
+                  type="number"
+                  inputMode="decimal"
+                  step="0.1"
+                  placeholder={weightLogs.length > 0
+                    ? parseFloat(weightLogs[weightLogs.length - 1].weight_kg).toFixed(1)
+                    : "0.0"}
+                  value={newWeight}
+                  onChange={(e) => setNewWeight(e.target.value)}
+                  required
+                  className="text-center font-bold tabular-nums tracking-tight text-[40px] h-14 px-0 bg-transparent border-0 focus-visible:ring-0 placeholder:text-muted-foreground/30 w-full max-w-[180px]"
+                />
+                <span className="text-[14px] font-semibold text-muted-foreground/60">kg</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => adjustWeight(0.1)}
+                aria-label="Increase weight by 0.1"
+                className="h-12 w-12 shrink-0 rounded-full bg-muted/40 dark:bg-white/[0.06] border border-border/30 flex items-center justify-center text-foreground/80 hover:bg-muted/60 active:scale-95 transition-all touch-manipulation"
+              >
+                <Plus className="h-5 w-5" strokeWidth={2.4} />
+              </button>
+            </div>
+
+            {/* Date + log button row */}
+            <div className="flex gap-2">
+              <div className="flex-1 relative">
+                <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/60 pointer-events-none" />
+                <Input
+                  type="date"
+                  value={newDate}
+                  onChange={(e) => setNewDate(e.target.value)}
+                  required
+                  className="h-12 pl-9 pr-3 text-[14px] rounded-2xl bg-muted/40 dark:bg-white/[0.06] border-border/30 text-foreground"
+                />
+              </div>
+              <Button
+                type="submit"
+                disabled={loading || !newWeight}
+                className="h-12 px-6 rounded-2xl text-[15px] font-semibold bg-primary text-primary-foreground active:scale-[0.98] transition-transform disabled:opacity-40"
+              >
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : editingLogId ? "Update" : "Log weight"}
+              </Button>
+            </div>
+          </form>
+        </div>
+
         {/* Chart + History */}
-        <div className="card-surface p-3 space-y-3">
+        <div className="card-surface rounded-3xl p-4 space-y-3">
           <div className="flex items-center justify-between">
-            <div className="flex rounded-full bg-muted p-0.5">
+            <div className="flex rounded-full bg-muted/40 dark:bg-white/[0.06] border border-border/30 p-1">
               {(["1W", "1M", "ALL"] as const).map((filter) => (
                 <button
                   key={filter}
                   onClick={() => setTimeFilter(filter)}
-                  className={`px-3 py-1 rounded-full text-[10px] font-bold transition-all ${timeFilter === filter
+                  className={`px-3.5 h-7 rounded-full text-[12px] font-semibold transition-all ${timeFilter === filter
                     ? "bg-primary text-primary-foreground shadow-sm"
-                    : "text-muted-foreground hover:text-foreground"
+                    : "text-muted-foreground/80 active:text-foreground"
                     }`}
                 >
                   {filter}
@@ -346,25 +425,29 @@ export default function WeightTracker() {
                   </div>
                   <CollapsibleContent className="pt-2">
                     <div
-                      className="flex gap-2 overflow-x-auto pb-2 pr-1 snap-x snap-mandatory scroll-smooth [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                      className="flex gap-2.5 overflow-x-auto pb-2 pr-1 snap-x snap-mandatory scroll-smooth [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
                     >
                       {weightLogs.slice().reverse().map((log) => (
-                        <button
+                        <div
                           key={log.id}
-                          onClick={() => initiateDelete(log)}
-                          className="snap-start shrink-0 aspect-square w-24 flex flex-col items-center justify-center rounded-2xl bg-muted/30 border border-border/40 active:scale-95 active:bg-muted/50 transition-all"
+                          className="relative snap-start shrink-0 aspect-square w-[104px] flex flex-col items-center justify-center rounded-3xl bg-muted/40 dark:bg-white/[0.06] border border-border/30"
                         >
-                          <span className="text-[17px] font-bold tabular-nums text-foreground leading-none">
+                          <span className="text-[20px] font-bold tabular-nums text-foreground leading-none">
                             {parseFloat(log.weight_kg).toFixed(1)}
                           </span>
-                          <span className="text-[10px] font-medium text-muted-foreground mt-0.5">kg</span>
-                          <span className="text-[10px] text-muted-foreground/70 mt-2 tabular-nums">
+                          <span className="text-[10px] font-medium text-muted-foreground/70 mt-1">kg</span>
+                          <span className="text-[11px] text-muted-foreground/80 mt-2 tabular-nums font-medium">
                             {format(new Date(log.date), "MMM dd")}
                           </span>
-                          <span className="text-[9px] text-muted-foreground/50 tabular-nums">
-                            {format(new Date(log.date), "yyyy")}
-                          </span>
-                        </button>
+                          <button
+                            type="button"
+                            onClick={() => initiateDelete(log)}
+                            aria-label="Delete log"
+                            className="absolute top-1.5 right-1.5 h-6 w-6 rounded-full flex items-center justify-center text-muted-foreground/50 active:text-destructive active:bg-destructive/10 transition-colors"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </button>
+                        </div>
                       ))}
                     </div>
                   </CollapsibleContent>
@@ -381,92 +464,63 @@ export default function WeightTracker() {
           ); })()}
         </div>
 
-        {/* Header + Inline Log Form */}
-        <div className="flex flex-col gap-2">
-          <form onSubmit={handleAddWeight} className="flex gap-1.5 items-center">
-            <div className="flex items-center gap-1 flex-1">
-              <button
-                type="button"
-                onClick={() => adjustWeight(-0.1)}
-                className="h-8 w-8 shrink-0 rounded-lg bg-muted flex items-center justify-center text-muted-foreground active:scale-95 transition-transform"
-                aria-label="Decrease weight"
-              >
-                <Minus className="h-3.5 w-3.5" />
-              </button>
-              <Input ref={weightInputRef} type="number" inputMode="decimal" step="0.1" placeholder={weightLogs.length > 0 ? `e.g. ${parseFloat(weightLogs[weightLogs.length - 1].weight_kg).toFixed(1)}` : "0.0"} value={newWeight} onChange={(e) => setNewWeight(e.target.value)} required className="flex-1 min-w-0 h-9 text-sm" />
-              <button
-                type="button"
-                onClick={() => adjustWeight(0.1)}
-                className="h-8 w-8 shrink-0 rounded-lg bg-muted flex items-center justify-center text-muted-foreground active:scale-95 transition-transform"
-                aria-label="Increase weight"
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} required className="w-[120px] h-9 text-sm" />
-            <Button type="submit" disabled={loading} className="h-9 px-3 text-sm shrink-0">
-              {loading ? "..." : editingLogId ? "Update" : "Log"}
-            </Button>
-            {showWeightSuccess && (
-              <span className="text-success animate-[fadeSlideUp_0.3s_ease-out_both]">
-                <CheckCircle2 className="h-5 w-5" />
-              </span>
-            )}
-          </form>
-        </div>
-
-        {/* Stats Overview */}
+        {/* Stats Overview — Current / Target / Δ / Deadline */}
         {profile && (
           <div className="grid grid-cols-4 gap-2">
-            <div className="card-surface p-2.5 text-center">
-              <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">Current</p>
-              <p className="display-number text-lg">{getCurrentWeight().toFixed(1)}</p>
-              <p className="text-[9px] text-muted-foreground">kg</p>
+            <div className="card-surface rounded-3xl p-3 text-center">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60 font-semibold">Current</p>
+              <p className="text-[20px] font-bold tabular-nums text-foreground mt-1.5 leading-none">{getCurrentWeight().toFixed(1)}</p>
+              <p className="text-[10px] text-muted-foreground/60 mt-1">kg</p>
             </div>
-            <div className="card-surface p-2.5 text-center">
-              <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">Target</p>
-              <p className="display-number text-lg">{(profile.fight_week_target_kg || profile.goal_weight_kg).toFixed(1)}</p>
-              <p className="text-[9px] text-muted-foreground">kg</p>
+            <div className="card-surface rounded-3xl p-3 text-center">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60 font-semibold">Target</p>
+              <p className="text-[20px] font-bold tabular-nums text-foreground mt-1.5 leading-none">{(profile.fight_week_target_kg || profile.goal_weight_kg).toFixed(1)}</p>
+              <p className="text-[10px] text-muted-foreground/60 mt-1">kg</p>
             </div>
-            <div className="card-surface p-2.5 text-center">
+            <div className="card-surface rounded-3xl p-3 text-center">
               {(() => {
                 const current = getCurrentWeight();
                 const target = profile.fight_week_target_kg || profile.goal_weight_kg;
                 const diff = target - current;
-                if (diff > 0) return (<><p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">To Gain</p><p className="display-number text-lg text-green-500">+{diff.toFixed(1)}</p><p className="text-[9px] text-muted-foreground">kg</p></>);
-                if (diff < 0) return (<><p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">To Lose</p><p className="display-number text-lg text-primary">{Math.abs(diff).toFixed(1)}</p><p className="text-[9px] text-muted-foreground">kg</p></>);
-                return (<><p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">Status</p><p className="display-number text-lg text-green-500">✓</p><p className="text-[9px] text-muted-foreground">At Target</p></>);
+                if (diff > 0) return (<><p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60 font-semibold">To gain</p><p className="text-[20px] font-bold tabular-nums text-emerald-500 mt-1.5 leading-none">+{diff.toFixed(1)}</p><p className="text-[10px] text-muted-foreground/60 mt-1">kg</p></>);
+                if (diff < 0) return (<><p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60 font-semibold">To lose</p><p className="text-[20px] font-bold tabular-nums text-primary mt-1.5 leading-none">{Math.abs(diff).toFixed(1)}</p><p className="text-[10px] text-muted-foreground/60 mt-1">kg</p></>);
+                return (<><p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60 font-semibold">Status</p><p className="text-[20px] font-bold tabular-nums text-emerald-500 mt-1.5 leading-none">✓</p><p className="text-[10px] text-muted-foreground/60 mt-1">At target</p></>);
               })()}
             </div>
-            <div className="card-surface p-2.5 text-center">
-              <p className="text-[9px] uppercase tracking-widest text-muted-foreground mb-0.5">Deadline</p>
-              <p className="text-sm font-semibold">{format(new Date(profile.target_date), "MMM dd")}</p>
-              <p className="text-[9px] text-muted-foreground">{format(new Date(profile.target_date), "yyyy")}</p>
+            <div className="card-surface rounded-3xl p-3 text-center">
+              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60 font-semibold">Deadline</p>
+              <p className="text-[14px] font-bold text-foreground mt-1.5 leading-none">{format(new Date(profile.target_date), "MMM dd")}</p>
+              <p className="text-[10px] text-muted-foreground/60 mt-1">{format(new Date(profile.target_date), "yyyy")}</p>
             </div>
           </div>
         )}
 
         {/* Progress + Insight */}
         {profile && (
-          <div className="card-surface p-3 space-y-1.5">
-            <div className="flex justify-between text-[11px]">
-              <span className="text-muted-foreground">Progress to target</span>
-              <span className="font-medium">{getWeightProgress().toFixed(0)}%</span>
+          <div className="card-surface rounded-3xl p-4 space-y-2">
+            <div className="flex justify-between items-center text-[12px]">
+              <div className="flex items-center gap-1.5">
+                <insight.icon className={`h-3.5 w-3.5 ${insight.color}`} strokeWidth={2.4} />
+                <span className="text-muted-foreground/80 font-medium">Progress to target</span>
+              </div>
+              <span className="font-bold tabular-nums text-foreground">{getWeightProgress().toFixed(0)}%</span>
             </div>
-            <Progress value={getWeightProgress()} className="h-1" />
-            {insight.message && <p className="text-[11px] text-muted-foreground leading-relaxed">{insight.message}</p>}
+            <Progress value={getWeightProgress()} className="h-2 rounded-full" />
+            {insight.message && (
+              <p className="text-[12px] text-muted-foreground/85 leading-relaxed pt-1">{insight.message}</p>
+            )}
           </div>
         )}
 
         {/* AI Analysis Loading */}
         {analyzingWeight && (
-          <div className="card-surface p-5 flex flex-col items-center gap-3">
+          <div className="card-surface rounded-3xl p-6 flex flex-col items-center gap-3">
             <Loader2 className="h-6 w-6 text-primary animate-spin" />
             <div className="space-y-2 w-full max-w-xs">
-              <Skeleton className="h-3 w-full" />
-              <Skeleton className="h-3 w-3/4 mx-auto" />
+              <Skeleton className="h-3 w-full rounded-full" />
+              <Skeleton className="h-3 w-3/4 mx-auto rounded-full" />
             </div>
-            <p className="text-xs text-muted-foreground">Analyzing your weight loss strategy...</p>
+            <p className="text-[12px] text-muted-foreground/80">Analyzing your weight loss strategy…</p>
           </div>
         )}
 
@@ -477,7 +531,7 @@ export default function WeightTracker() {
           const weightDiff = aiAnalysisWeight !== null && aiAnalysisTarget !== null ? aiAnalysisTarget - aiAnalysisWeight : 0;
 
           return (
-            <div className="card-surface p-4 space-y-4 animate-fade-in">
+            <div className="card-surface rounded-3xl p-4 space-y-4 animate-fade-in">
               {/* Header */}
               <div className="flex items-center justify-between">
                 <div>
@@ -713,8 +767,28 @@ export default function WeightTracker() {
 
         {/* Get AI Button */}
         {!aiAnalysis && profile && (
-          <Button onClick={getAIAnalysis} disabled={analyzingWeight} variant="outline" className="w-full rounded-2xl h-11">
-            {analyzingWeight ? "Analyzing..." : <>Get AI Weight Loss Strategy{!gemsIsPremium && <span className="inline-flex items-center gap-0.5 ml-1.5 text-muted-foreground"><Gem className="h-3 w-3" /><span className="text-[10px] font-medium tabular-nums">{gems}</span></span>}</>}
+          <Button
+            onClick={getAIAnalysis}
+            disabled={analyzingWeight}
+            className="w-full rounded-3xl h-12 text-[14px] font-semibold bg-muted/40 dark:bg-white/[0.06] border border-border/30 text-foreground hover:bg-muted/60 active:scale-[0.98] transition-all"
+          >
+            {analyzingWeight ? (
+              <span className="inline-flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Analyzing…
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-2">
+                <Activity className="h-4 w-4 text-primary" strokeWidth={2.4} />
+                Get AI weight strategy
+                {!gemsIsPremium && (
+                  <span className="inline-flex items-center gap-0.5 ml-0.5 text-muted-foreground">
+                    <Gem className="h-3 w-3" />
+                    <span className="text-[11px] font-medium tabular-nums">{gems}</span>
+                  </span>
+                )}
+              </span>
+            )}
           </Button>
         )}
 

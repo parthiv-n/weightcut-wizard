@@ -19,6 +19,8 @@ export function mapMealsWithTotalsToMeal(row: MealWithTotals): Meal {
     notes: row.notes ?? null,
     item_count: row.item_count ?? null,
     date: (row.date ?? "") as string,
+    created_at: row.created_at,
+    photo_url: row.photo_url ?? null,
   };
 }
 

@@ -1,3 +1,4 @@
+import { Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -5,6 +6,17 @@ type Props = {
   label: "sharp" | "sharpening" | "off_pace" | "at_risk";
   state: "ok" | "calibrating" | "no_camp" | "paused";
   calibratingDays?: { current: number; needed: number };
+  // Used to render the ghost arc beyond the cap when a soft ceiling fires —
+  // the displayed `score` is the clamped value, while `rawScore` is what the
+  // engine would have shown without the cap.
+  rawScore?: number;
+  appliedCeiling?: { ruleId: string; cap: number } | null;
+  // Phase shows up as an outer ring treatment (dashed for peak, glowing for
+  // fight week). `null` or `"build"` renders no extra border.
+  phase?: "build" | "peak" | "fightWeek" | null;
+  // One-shot bloom + glow when the user first crosses into Sharp on a
+  // given day. Parent is responsible for setting + clearing this flag.
+  celebrateSharp?: boolean;
   onTap?: () => void;
   size?: number;
 };
@@ -42,22 +54,30 @@ const HALO_DURATION = {
 };
 
 // Peak halo intensity at each label — narrower range at At Risk so the
-// halo recedes when the score isn't earned.
+// halo recedes when the score isn't earned. Values were ~40% lower before;
+// bumped so the ring reads as alive on iOS Capacitor where Tailwind's color
+// stack tends to wash out blur'd radial gradients.
 const HALO_PEAK = {
-  sharp: 0.55,
-  sharpening: 0.38,
-  off_pace: 0.22,
-  at_risk: 0.14,
+  sharp: 0.78,
+  sharpening: 0.55,
+  off_pace: 0.32,
+  at_risk: 0.2,
 };
 
-// Eight particles is enough to feel alive without becoming noisy on iOS.
-const PARTICLE_COUNT = 8;
+// Twelve particles populates the orbit densely enough to read as "alive"
+// without overwhelming the score readout. Previously eight, which left
+// gaps that read as static rather than orbital.
+const PARTICLE_COUNT = 12;
 
 export function FightFormRing({
   score,
   label,
   state,
   calibratingDays,
+  rawScore,
+  appliedCeiling,
+  phase,
+  celebrateSharp,
   onTap,
   size = 220,
 }: Props) {
@@ -71,8 +91,25 @@ export function FightFormRing({
         : 0;
   const dash = circumference * progress;
 
+  // Ghost arc: drawn between the clamped score and the raw score the engine
+  // would have produced without the soft ceiling. Communicates "you're being
+  // capped here" without alarmism — replaces the bottom-sheet-only banner.
+  const rawProgress =
+    state === "ok" && appliedCeiling != null && rawScore != null
+      ? Math.max(progress, Math.min(1, rawScore / 100))
+      : progress;
+  const ghostLen = (rawProgress - progress) * circumference;
+  const showGhost = state === "ok" && appliedCeiling != null && ghostLen > 0.5;
+
+  // Lock marker position at the cap boundary on the ring's perimeter. SVG
+  // is `-rotate-90` so progress 0 is at 12 o'clock and grows clockwise.
+  const lockAngleRad = (progress * 360 * Math.PI) / 180;
+  const lockX = size / 2 + radius * Math.sin(lockAngleRad);
+  const lockY = size / 2 - radius * Math.cos(lockAngleRad);
+
   const showHalo = state === "ok";
-  // Particles are "earned" — only when the user is actually peaking.
+  // Particles remain "earned" — only when the user is actually peaking.
+  // Brightened in CSS rather than expanded here so we don't dilute the signal.
   const showParticles = state === "ok" && score >= 80;
   const showCalibSweep = state === "calibrating";
 
@@ -80,11 +117,22 @@ export function FightFormRing({
   const haloDuration = state === "ok" ? HALO_DURATION[label] : "10s";
   const haloPeak = state === "ok" ? HALO_PEAK[label] : 0.1;
 
+  // Outer ring treatment per camp phase. Build gets no extra border so the
+  // hero ring stays clean during the bulk of camp; Peak adds a dashed orbit;
+  // Fight Week pulses a faint colored outline so the user sees the weeks-to-
+  // fight transition in the dashboard itself, not buried in copy.
+  const showPhasePeak = state === "ok" && phase === "peak";
+  const showPhaseFightWeek = state === "ok" && phase === "fightWeek";
+  const phaseRadius = radius + 5;
+
   return (
     <button
       type="button"
       onClick={onTap}
-      className="relative flex flex-col items-center justify-center"
+      className={cn(
+        "relative flex flex-col items-center justify-center",
+        celebrateSharp && "ff-ring-sharp-bloom",
+      )}
       aria-label="Open Fight Form Score details"
       style={{ width: size, height: size }}
     >
@@ -130,6 +178,33 @@ export function FightFormRing({
       )}
 
       <svg width={size} height={size} className="-rotate-90 relative">
+        {/* Phase border (outer). Build = none. Peak = dashed orbit. Fight
+            Week = colored pulse. Sits outside the main track so it never
+            competes with the score arc for the eye. */}
+        {showPhasePeak && (
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={phaseRadius}
+            stroke="hsl(var(--muted-foreground))"
+            strokeOpacity={0.4}
+            strokeWidth={1.5}
+            fill="none"
+            strokeDasharray="5 5"
+          />
+        )}
+        {showPhaseFightWeek && (
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={phaseRadius}
+            stroke={`rgb(${labelRgb})`}
+            strokeWidth={1.5}
+            fill="none"
+            className="ff-ring-phase-pulse"
+          />
+        )}
+
         {/* Track */}
         <circle
           cx={size / 2}
@@ -139,6 +214,22 @@ export function FightFormRing({
           strokeWidth={10}
           fill="none"
         />
+        {/* Ghost arc — what the user WOULD have scored without the cap.
+            Rendered first so the score arc + lock paint on top of it. */}
+        {showGhost && (
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke={`rgb(${labelRgb})`}
+            strokeOpacity={0.22}
+            strokeWidth={10}
+            fill="none"
+            strokeLinecap="butt"
+            strokeDasharray={`${ghostLen} ${circumference}`}
+            strokeDashoffset={`${-dash}`}
+          />
+        )}
         {/* Score arc */}
         <circle
           cx={size / 2}
@@ -171,6 +262,24 @@ export function FightFormRing({
         )}
       </svg>
 
+      {/* Lock glyph at the cap boundary. Lives outside the rotated SVG so
+          its orientation stays upright regardless of the cap position. */}
+      {showGhost && (
+        <div
+          aria-hidden
+          className="absolute pointer-events-none"
+          style={{
+            left: lockX,
+            top: lockY,
+            transform: "translate(-50%, -50%)",
+          }}
+        >
+          <div className="rounded-full bg-background border border-amber-400/70 p-0.5 shadow-sm">
+            <Lock className="size-2.5 text-amber-400" />
+          </div>
+        </div>
+      )}
+
       {/* Center content */}
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         {state === "ok" && (
@@ -179,13 +288,20 @@ export function FightFormRing({
             <span className="section-header mt-1">{LABEL_COPY[label]}</span>
           </>
         )}
-        {state === "calibrating" && calibratingDays && (
-          <>
-            <span className="display-number text-3xl">
-              {calibratingDays.current}/{calibratingDays.needed}
-            </span>
-            <span className="section-header mt-1">Calibrating</span>
-          </>
+        {state === "calibrating" && (
+          calibratingDays && calibratingDays.current < calibratingDays.needed ? (
+            <>
+              <span className="display-number text-3xl">
+                {calibratingDays.current}/{calibratingDays.needed}
+              </span>
+              <span className="section-header mt-1">Calibrating</span>
+            </>
+          ) : (
+            <>
+              <span className="section-header">Calibrating</span>
+              <span className="text-xs text-muted-foreground mt-1.5">computing…</span>
+            </>
+          )
         )}
         {state === "no_camp" && (
           <>

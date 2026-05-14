@@ -722,15 +722,20 @@ export default function TrainingCalendar() {
                                     <Plus className="h-5 w-5" />
                                 </Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-[340px] rounded-2xl p-0 border border-border/20 bg-background shadow-2xl gap-0 max-h-[calc(100vh-6rem)] overflow-y-auto">
-                                <div className="px-4 pt-5 pb-2">
+                            <DialogContent
+                                className="w-[calc(100vw-1.5rem)] max-w-[420px] max-h-[calc(100dvh-3rem)] flex flex-col rounded-[28px] p-0 border-0 bg-card/95 backdrop-blur-xl shadow-2xl gap-0 overflow-hidden"
+                            >
+                                <div className="px-5 pt-5 pb-3 shrink-0">
                                     <DialogHeader>
-                                        <DialogTitle className="text-[15px] font-semibold text-center">
-                                            {editingSession ? 'Edit Session' : 'Log Session'}
+                                        <DialogTitle className="text-[17px] font-semibold tracking-tight text-center">
+                                            {editingSession ? 'Edit session' : 'Log session'}
                                         </DialogTitle>
                                     </DialogHeader>
                                 </div>
-                                <div className="px-4 pb-4">
+                                <div
+                                    className="px-5 overflow-y-auto flex-1 min-h-0 [-webkit-overflow-scrolling:touch]"
+                                    style={{ paddingBottom: "max(1.25rem, env(safe-area-inset-bottom))" }}
+                                >
                                 <FightCampLogForm
                                     isEditing={!!editingSession}
                                     userId={userId}

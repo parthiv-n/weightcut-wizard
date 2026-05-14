@@ -1,7 +1,8 @@
-import { memo, useEffect, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { format, startOfWeek, endOfWeek } from "date-fns";
 import { ChevronRight } from "lucide-react";
+import { useQuery } from "convex/react";
 import { convex } from "@/integrations/convex/client";
 import { api } from "@/../convex/_generated/api";
 import { localCache } from "@/lib/localCache";
@@ -113,6 +114,37 @@ export const TrainingWeekWidget = memo(function TrainingWeekWidget({ userId, com
     })();
     return () => { cancelled = true; };
   }, [userId]);
+
+  // Live reactivity bridge: subscribes to the same Convex query, so any
+  // create/update/delete from TrainingCalendar (or anywhere else) propagates
+  // here without a manual refetch.
+  const { fromStr, toStr } = useMemo(() => {
+    const now = new Date();
+    return {
+      fromStr: format(startOfWeek(now, { weekStartsOn: 1 }), "yyyy-MM-dd"),
+      toStr: format(endOfWeek(now, { weekStartsOn: 1 }), "yyyy-MM-dd"),
+    };
+  }, []);
+  const liveCalendar = useQuery(
+    api.fight_camp.listCalendar,
+    userId ? { from: fromStr, to: toStr } : "skip",
+  );
+  useEffect(() => {
+    if (!userId || liveCalendar == null) return;
+    const result: WeekSession[] = (liveCalendar as any[])
+      .filter((r) => r.sessionType !== "Rest")
+      .map((r) => ({
+        id: r._id,
+        date: r.date,
+        session_type: r.sessionType,
+        duration_minutes: r.durationMinutes,
+        rpe: r.rpe,
+      }));
+    setSessions(result);
+    memCache.set(userId, { data: result, fetchedAt: Date.now() });
+    localCache.set(userId, CACHE_KEY, result);
+    setLoading(false);
+  }, [userId, liveCalendar]);
 
   // Build day-of-week map (Mon=0..Sun=6)
   const dayMap = new Map<number, WeekSession[]>();

@@ -1,10 +1,13 @@
 import { useEffect, useState, useCallback, useRef, useMemo, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAction, useConvex, useQuery } from "convex/react";
+import { useAction, useConvex, useMutation, useQuery } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { FEATURE_FLAGS } from "@/lib/featureFlags";
 import { FightFormRing } from "@/components/dashboard/FightFormRing";
 import { FightFormStatChips } from "@/components/dashboard/FightFormStatChips";
+import { FightFormInsightStrip } from "@/components/dashboard/FightFormInsightStrip";
+import { FightFormDeltaBanner } from "@/components/dashboard/FightFormDeltaBanner";
+import { FightFormCalibrationTour } from "@/components/dashboard/FightFormCalibrationTour";
 import { TodayPanel } from "@/components/dashboard/TodayPanel";
 import { FightFormScoreSheet } from "@/components/dashboard/FightFormScoreSheet";
 // Lazy-load recharts wrapper so the ~100KB charts bundle defers until first paint.
@@ -44,6 +47,14 @@ import { isFighter } from "@/lib/goalType";
 const dashboardInflight = new Map<string, Promise<unknown>>();
 const DASHBOARD_FRESH_WINDOW_MS = 30 * 1000;
 const dashboardLastFetchedAt = new Map<string, number>();
+
+// Cross-mount cooldown for the Fight Form recompute fallback. Without this,
+// every dashboard navigation re-fires the action when the engine row is
+// stale, which thrashes the recompute lane if a data-quality issue keeps
+// producing `state: calibrating`. 30 s matches the dashboard freshness
+// window so it's effectively "at most once per page-visibility cycle."
+const FF_RECOMPUTE_COOLDOWN_MS = 30 * 1000;
+const ffLastRecomputeAt = new Map<string, number>();
 
 interface DailyWisdom {
   summary: string;
@@ -90,11 +101,78 @@ export default function Dashboard() {
     api.fightFormScore.loggedTodayBundle,
     FEATURE_FLAGS.enableFightFormScore ? {} : "skip",
   );
+  const ffCalibration = useQuery(
+    api.fightFormScore.calibrationProgress,
+    FEATURE_FLAGS.enableFightFormScore ? {} : "skip",
+  );
+  const ffDelta = useQuery(
+    api.fightFormScore.getDeltaInfo,
+    FEATURE_FLAGS.enableFightFormScore ? {} : "skip",
+  );
+  const ffTrend = useQuery(
+    api.fightFormScore.getRecentScores,
+    FEATURE_FLAGS.enableFightFormScore ? { days: 14 } : "skip",
+  );
+  const ffRecompute = useMutation(api.fightFormScore.recomputeNow);
+  // Calibration tour fires the first time the user lands on the dashboard
+  // in `state: "ok"` with real sub-scores (i.e. right after their first
+  // unlock). Gated by a localStorage flag so it never re-appears.
+  const [tourOpen, setTourOpen] = useState(false);
+  // One-shot Sharp crossing celebration. Fires once per calendar date when
+  // the user transitions from below 80 to 80+; expires automatically after
+  // the animation runs so it doesn't loop on re-renders.
+  const [celebrateSharp, setCelebrateSharp] = useState(false);
+  // Once-per-mount guard: if the engine still says `calibrating` but our live
+  // per-source query says the cold-start threshold is already met, the score
+  // row for today simply hasn't been computed yet. Fire one recompute so the
+  // ring flips from "calibrating · computing…" to a real score without the
+  // user having to write a fresh log to trigger it.
+  const recomputeFiredRef = useRef(false);
   const navigate = useNavigate();
   const { safeAsync, isMounted } = useSafeAsync();
   const { streak, streakIncludesToday, weeklyConsistency, badges, badgesLoading, allAchievements } = useGamification(userId, weightLogs, todayCalories, profile);
 
   const lastFetchRef = useRef(0);
+
+  // ── Live reactivity bridge ──
+  // The imperative `loadDashboardData()` below handles cold-start + cache, but
+  // does NOT auto-update when the user logs data on a separate page. These
+  // `useQuery` subscriptions piggyback on the same Convex queries so mutations
+  // from WeightTracker / Nutrition / Hydration / TrainingCalendar invalidate
+  // these reads → the useEffects below copy fresh data into the existing
+  // state setters → widgets re-render without any cache-bust dance.
+  const liveTodayStr = useMemo(() => new Date().toISOString().split("T")[0], []);
+  const liveWeightLogs = useQuery(
+    api.weight_logs.listForUser,
+    userId ? { limit: 30 } : "skip",
+  );
+  const liveTodayMeals = useQuery(
+    api.meals.listWithTotals,
+    userId ? { date: liveTodayStr } : "skip",
+  );
+  const liveTodayHydration = useQuery(
+    api.hydration_logs.listForUser,
+    userId ? { from: liveTodayStr, to: liveTodayStr, limit: 50 } : "skip",
+  );
+
+  useEffect(() => {
+    if (!userId || liveWeightLogs == null) return;
+    const data = liveWeightLogs.map((r: any) => ({ date: r.date, weight_kg: String(r.weight_kg) }));
+    setWeightLogs(data);
+    localCache.set(userId, "dashboard_weight_logs", data);
+  }, [userId, liveWeightLogs]);
+
+  useEffect(() => {
+    if (!userId || liveTodayMeals == null) return;
+    const total = liveTodayMeals.reduce((sum: number, r: any) => sum + (r.total_calories ?? 0), 0);
+    setTodayCalories(total);
+  }, [userId, liveTodayMeals]);
+
+  useEffect(() => {
+    if (!userId || liveTodayHydration == null) return;
+    const total = liveTodayHydration.reduce((sum: number, r: any) => sum + (r.amount_ml ?? 0), 0);
+    setTodayHydration(total);
+  }, [userId, liveTodayHydration]);
 
   // Redirect to cut plan if it hasn't been seen yet. Same plan blob is used
   // for both fight-camp and weight-loss flows — route by planType so the
@@ -139,6 +217,38 @@ export default function Dashboard() {
   }, [userId, hasCutPlan, loadCutPlan]);
 
   useEffect(() => { trackInstallDate(); }, []);
+
+  // Fire the one-time calibration tour the first time we see the score
+  // unlocked with real sub-scores. The 600ms delay lets the ring's score
+  // arc settle visually before the modal pops on top of it. localStorage
+  // flag is keyed by version so we can re-run the tour on future redesigns.
+  useEffect(() => {
+    if (!ffScoreData || ffScoreData.state !== "ok" || !ffScoreData.subScores) return;
+    if (localStorage.getItem("wcw_ff_tour_seen_v1")) return;
+    const t = setTimeout(() => setTourOpen(true), 600);
+    return () => clearTimeout(t);
+  }, [ffScoreData]);
+
+  // Sharp crossing celebration. Conditions for firing:
+  //   1. State is "ok" and the displayed score is in Sharp territory (>=80).
+  //   2. Yesterday's score (from the delta query) was below 80, or unknown
+  //      (e.g. first day after calibration unlocks).
+  //   3. We haven't already celebrated today on this device.
+  // The localStorage flag is keyed by date so the celebration can re-fire on
+  // a new crossing event after a dip below Sharp.
+  useEffect(() => {
+    if (!ffScoreData || ffScoreData.state !== "ok") return;
+    if (ffScoreData.displayedScore < 80) return;
+    const today = new Date().toISOString().slice(0, 10);
+    if (localStorage.getItem("wcw_ff_last_sharp_date") === today) return;
+    const yesterdayLow = !ffDelta?.yesterdayScore || ffDelta.yesterdayScore < 80;
+    if (!yesterdayLow) return;
+    localStorage.setItem("wcw_ff_last_sharp_date", today);
+    setCelebrateSharp(true);
+    triggerHaptic(ImpactStyle.Heavy);
+    const t = setTimeout(() => setCelebrateSharp(false), 2400);
+    return () => clearTimeout(t);
+  }, [ffScoreData, ffDelta]);
 
   // Persist weight-unit preference asynchronously — synchronous localStorage
   // writes in click handlers block the main thread 20-50ms on iOS WebView.
@@ -578,8 +688,40 @@ export default function Dashboard() {
     const weightChip = profile
       ? { current: currentWeightValue, goal: goalWeight, pctComplete }
       : null;
-    // Distinct days a weight was logged (used to drive the calibrating ring).
-    const distinctDaysLoggedCount = new Set(weightLogs.map((l: any) => l.date)).size;
+    // Ring's calibrating mini-counter mirrors the union-of-sources progress
+    // surfaced by `calibrationProgress` (which matches the scoring engine's
+    // own cold-start gate). We only pass the fraction while the user is
+    // genuinely short of the threshold — once met, the ring center swaps
+    // to "Calibrating · computing…" while the recompute below fires.
+    const ringCalibratingDays =
+      ffScore.state === "calibrating"
+        && ffCalibration
+        && ffCalibration.daysWithAnyLog < ffCalibration.daysNeeded
+        ? { current: ffCalibration.daysWithAnyLog, needed: ffCalibration.daysNeeded }
+        : undefined;
+
+    // Auto-recompute when the engine row is stale (state still calibrating
+    // but we have enough data). Layered guards: a per-mount ref AND a
+    // cross-mount 30 s cooldown so navigating away and back to /dashboard
+    // doesn't re-fire the action if a data-quality issue keeps the engine
+    // returning `state: calibrating` post-recompute.
+    if (
+      !recomputeFiredRef.current
+      && ffScore.state === "calibrating"
+      && ffCalibration?.unlocked
+      && userId
+    ) {
+      const lastAt = ffLastRecomputeAt.get(userId) ?? 0;
+      if (Date.now() - lastAt >= FF_RECOMPUTE_COOLDOWN_MS) {
+        recomputeFiredRef.current = true;
+        ffLastRecomputeAt.set(userId, Date.now());
+        ffRecompute({}).catch((err) => {
+          recomputeFiredRef.current = false;
+          ffLastRecomputeAt.delete(userId);
+          logger.error("Fight Form recompute failed", err);
+        });
+      }
+    }
     // Today-adherence booleans. Sourced from `loggedTodayBundle` (one Convex
     // round-trip for all four checks). Falls back to the locally-derived
     // `hasTodayLog` while the query is still loading on first render so the
@@ -611,34 +753,46 @@ export default function Dashboard() {
                   <p className="text-[9px] uppercase tracking-wider text-muted-foreground mt-0.5">Days left</p>
                 </div>
               )}
-              {streak > 0 && <StreakBadge streak={streak} isActive={streakIncludesToday} />}
             </div>
           </header>
 
-          {/* Fight Form Score ring */}
+          {/* Fight Form Score ring + educational insight strip */}
           <div className="flex flex-col items-center pt-1">
             <FightFormRing
               score={ffScore.displayedScore}
               label={ffScore.label}
               state={ffScore.state}
-              calibratingDays={
-                ffScore.state === "calibrating"
-                  ? { current: distinctDaysLoggedCount, needed: 7 }
-                  : undefined
-              }
+              calibratingDays={ringCalibratingDays}
+              rawScore={ffScore.rawScore}
+              appliedCeiling={ffScore.appliedCeiling}
+              phase={ffScore.phase}
+              celebrateSharp={celebrateSharp}
               onTap={() =>
                 ffScore.state === "no_camp"
                   ? navigate("/goals")
                   : setScoreSheetOpen(true)
               }
             />
-            {ffScore.state === "no_camp" && (
-              <p className="text-[12px] text-muted-foreground text-center mt-2 px-6 max-w-xs leading-snug">
-                Set a target date and goal weight in Goals to start scoring your camp.
-              </p>
+            <FightFormInsightStrip
+              state={ffScore.state}
+              label={ffScore.label}
+              phase={ffScore.phase}
+              topDriver={ffScore.topDriver}
+              topLimiter={ffScore.topLimiter}
+              appliedCeiling={ffScore.appliedCeiling}
+              adherence={adherence}
+              calibration={ffCalibration ?? null}
+            />
+            {ffScore.state === "ok" && (
+              <FightFormDeltaBanner
+                delta={ffDelta?.delta ?? null}
+                topDriver={ffScore.topDriver}
+                topLimiter={ffScore.topLimiter}
+                onTap={() => setScoreSheetOpen(true)}
+              />
             )}
             {ffScore.campAge && (
-              <p className="text-[12px] text-muted-foreground mt-1.5">
+              <p className="text-[11px] text-muted-foreground/80 mt-2">
                 {ffScore.campAge.weeksAhead === 0
                   ? "Camp pace: on schedule"
                   : `Camp pace: ${ffScore.campAge.weeksAhead > 0 ? "+" : ""}${ffScore.campAge.weeksAhead.toFixed(0)} ${Math.abs(ffScore.campAge.weeksAhead) === 1 ? "week" : "weeks"} ${ffScore.campAge.weeksAhead > 0 ? "ahead of" : "behind"} schedule`}
@@ -647,7 +801,12 @@ export default function Dashboard() {
           </div>
 
           {/* Stat chips */}
-          <FightFormStatChips weight={weightChip} campAge={ffScore.campAge} />
+          <FightFormStatChips
+            weight={weightChip}
+            trend={ffTrend ?? null}
+            latestScore={ffScore.state === "ok" ? ffScore.displayedScore : null}
+            latestLabel={ffScore.state === "ok" ? ffScore.label : null}
+          />
 
           {/* Today panel */}
           <TodayPanel adherence={adherence} nextWorkout={null} />
@@ -722,6 +881,15 @@ export default function Dashboard() {
           appliedCeiling={ffScore.appliedCeiling}
           coachNarrative={wisdom?.summary ?? null}
           actionItems={wisdom?.actionItems ?? []}
+        />
+
+        <FightFormCalibrationTour
+          open={tourOpen}
+          onClose={() => {
+            localStorage.setItem("wcw_ff_tour_seen_v1", "1");
+            setTourOpen(false);
+          }}
+          subScores={ffScore.subScores}
         />
 
         <AchievementSheet

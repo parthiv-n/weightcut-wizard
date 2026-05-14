@@ -1,11 +1,10 @@
-import { Button } from "@/components/ui/button";
-import { Edit2, Trash2, Star } from "lucide-react";
+import { Edit2, Trash2, Star, Flame, Zap, Wheat, Droplet } from "lucide-react";
 import { useState, useRef, useEffect, memo } from "react";
 import { coerceMealName } from "@/lib/mealName";
 import { motion, useMotionValue, useReducedMotion } from "motion/react";
 import { springs } from "@/lib/motion";
 import { MacroDonut } from "./MacroDonut";
-import { triggerHaptic, triggerHapticWarning, triggerHapticSelection } from "@/lib/haptics";
+import { triggerHaptic, triggerHapticSelection } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { VisuallyHidden } from "@radix-ui/react-visually-hidden";
@@ -33,11 +32,24 @@ interface MealCardProps {
     recipe_notes?: string;
     is_ai_generated?: boolean;
     ingredients?: Ingredient[];
+    created_at?: string;
+    photo_url?: string | null;
   };
   onEdit?: () => void;
   onDelete?: () => void;
   onFavorite?: () => void;
   isFavorited?: boolean;
+}
+
+function formatMealTime(iso?: string): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  let h = d.getHours();
+  const m = d.getMinutes();
+  const ampm = h >= 12 ? "pm" : "am";
+  h = h % 12 || 12;
+  return `${h}:${m.toString().padStart(2, "0")}${ampm}`;
 }
 
 const DELETE_THRESHOLD = -80;
@@ -93,18 +105,21 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete, onFavor
     WebkitMask: wheelMask,
   });
 
+  const mealTypeLabel = meal.meal_type ? meal.meal_type.charAt(0).toUpperCase() + meal.meal_type.slice(1).toLowerCase() : null;
+  const timeLabel = formatMealTime(meal.created_at);
+
   return (
-    <div className="relative mb-1 overflow-hidden rounded-2xl">
+    <div className="relative overflow-hidden rounded-3xl">
       {/* Delete background (only visible while dragging) */}
       {canSwipe && isDragging && (
-        <div className="absolute inset-0 flex items-center justify-end bg-destructive/90 rounded-2xl px-5">
-          <Trash2 className="h-4 w-4 text-destructive-foreground" />
+        <div className="absolute inset-0 flex items-center justify-end bg-destructive/90 rounded-3xl px-6">
+          <Trash2 className="h-5 w-5 text-destructive-foreground" />
         </div>
       )}
 
-      {/* Draggable foreground card */}
+      {/* Draggable foreground card — standalone, no parent wrapper */}
       <motion.div
-        className="relative rounded-2xl"
+        className="relative rounded-3xl card-surface"
         style={{ x: canSwipe ? dragX : undefined }}
         drag={canSwipe ? "x" : false}
         dragConstraints={{ left: -120, right: 0 }}
@@ -128,46 +143,89 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete, onFavor
             onDelete?.();
           }
         }}
-        whileTap={prefersReducedMotion ? undefined : { scale: 0.98 }}
+        whileTap={prefersReducedMotion ? undefined : { scale: 0.985 }}
         transition={springs.snappy}
       >
-        {/* Main row */}
         <div
-          className="flex items-center gap-2.5 px-2.5 py-2 cursor-pointer"
+          className="flex items-stretch gap-3.5 p-3 cursor-pointer"
           onClick={handleOpenDetails}
           role="button"
           aria-label={`Open details for ${coerceMealName(meal.meal_name, meal.meal_type)}`}
         >
-          {/* Mini donut */}
-          <MacroDonut protein={p} carbs={c} fat={f} calories={meal.calories} size={30} />
-
-          {/* Name + colored macro labels */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1">
-              <span className="text-[11px] font-semibold leading-tight text-foreground truncate">{coerceMealName(meal.meal_name, meal.meal_type)}</span>
-            </div>
-            {(p > 0 || c > 0 || f > 0) && (
-              <div className="flex items-center gap-2 mt-0.5">
-                <div className="flex items-center gap-0.5"><div className="w-1 h-1 rounded-full bg-blue-500" /><span className="text-[9px] tabular-nums font-medium text-muted-foreground">{Math.round(p)}g</span></div>
-                <div className="flex items-center gap-0.5"><div className="w-1 h-1 rounded-full bg-orange-500" /><span className="text-[9px] tabular-nums font-medium text-muted-foreground">{Math.round(c)}g</span></div>
-                <div className="flex items-center gap-0.5"><div className="w-1 h-1 rounded-full bg-purple-500" /><span className="text-[9px] tabular-nums font-medium text-muted-foreground">{Math.round(f)}g</span></div>
-              </div>
+          {/* Photo slot — when the meal has an AI-scanner photo, render the
+              actual image; otherwise fall back to the macro donut. */}
+          <div className="flex-shrink-0 w-[78px] h-[78px] rounded-2xl bg-muted/40 flex items-center justify-center overflow-hidden">
+            {meal.photo_url ? (
+              <img
+                src={meal.photo_url}
+                alt={coerceMealName(meal.meal_name, meal.meal_type)}
+                className="w-full h-full object-cover"
+                loading="lazy"
+              />
+            ) : (
+              <MacroDonut protein={p} carbs={c} fat={f} calories={meal.calories} size={64} />
             )}
           </div>
 
-          {/* Calorie badge */}
-          <span className="text-[10px] font-semibold tabular-nums text-muted-foreground flex-shrink-0">{meal.calories}</span>
+          {/* Body */}
+          <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+            {/* Name + time */}
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <span className="text-[15px] font-semibold leading-snug text-foreground line-clamp-1">
+                  {coerceMealName(meal.meal_name, meal.meal_type)}
+                </span>
+                {mealTypeLabel && (
+                  <p className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground/60 mt-0.5">
+                    {mealTypeLabel}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                {onFavorite && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); triggerHapticSelection(); onFavorite(); }}
+                    className="h-6 w-6 flex items-center justify-center rounded-full"
+                    aria-label={isFavorited ? "Remove from favorites" : "Add to favorites"}
+                  >
+                    <Star className={`h-4 w-4 transition-colors ${isFavorited ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"}`} />
+                  </button>
+                )}
+                {timeLabel && (
+                  <span className="text-[11px] font-medium text-muted-foreground/70 tabular-nums whitespace-nowrap bg-muted/50 px-2 py-0.5 rounded-full">
+                    {timeLabel}
+                  </span>
+                )}
+              </div>
+            </div>
 
-          {/* Favorite star */}
-          {onFavorite && (
-            <button
-              onClick={(e) => { e.stopPropagation(); triggerHapticSelection(); onFavorite(); }}
-              className="h-6 w-6 flex-shrink-0 flex items-center justify-center"
-              aria-label={isFavorited ? "Remove from favorites" : "Add to favorites"}
-            >
-              <Star className={`h-3 w-3 transition-colors ${isFavorited ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40"}`} />
-            </button>
-          )}
+            {/* kcal */}
+            <div className="flex items-center gap-1.5 mt-1">
+              <Flame className="h-3.5 w-3.5 text-orange-500" strokeWidth={2.4} />
+              <span className="text-[13px] font-semibold tabular-nums text-foreground">
+                {meal.calories}
+                <span className="text-[11px] font-medium text-muted-foreground/70 ml-0.5">kcal</span>
+              </span>
+            </div>
+
+            {/* Macro chips with iconography (Cal-AI style) */}
+            {(p > 0 || c > 0 || f > 0) && (
+              <div className="flex items-center gap-3 mt-1.5">
+                <div className="flex items-center gap-1">
+                  <Zap className="h-3 w-3 text-blue-500" strokeWidth={2.4} fill="currentColor" />
+                  <span className="text-[11px] tabular-nums font-semibold text-foreground/85">{Math.round(p)}g</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Wheat className="h-3 w-3 text-orange-500" strokeWidth={2.2} />
+                  <span className="text-[11px] tabular-nums font-semibold text-foreground/85">{Math.round(c)}g</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <Droplet className="h-3 w-3 text-purple-500" strokeWidth={2.4} fill="currentColor" />
+                  <span className="text-[11px] tabular-nums font-semibold text-foreground/85">{Math.round(f)}g</span>
+                </div>
+              </div>
+            )}
+          </div>
 
         </div>
       </motion.div>
@@ -185,9 +243,9 @@ export const MealCard = memo(function MealCard({ meal, onEdit, onDelete, onFavor
             </div>
 
             {/* Calories */}
-            <div className="text-center p-2 rounded-lg bg-primary/10 border border-primary/20">
-              <div className="text-[22px] font-black tabular-nums text-primary display-number leading-none tracking-tight">{meal.calories}</div>
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mt-1">kcal</div>
+            <div className="text-center py-1">
+              <div className="text-[28px] font-bold tabular-nums text-foreground leading-none tracking-tight">{meal.calories}</div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60 mt-1">kcal</div>
             </div>
 
             {/* Macro wheels */}

@@ -60,7 +60,6 @@ export default function NutritionPage() {
   // ── UI state ──
   const [isQuickAddSheetOpen, setIsQuickAddSheetOpen] = useState(false);
   const [quickAddTab, setQuickAddTab] = useState<"ai" | "manual">("ai");
-  const [expandedMealActions, setExpandedMealActions] = useState<string | null>(null);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
   const [expandedMealIdeas, setExpandedMealIdeas] = useState<Set<string>>(new Set());
   const [isEditTargetsDialogOpen, setIsEditTargetsDialogOpen] = useState(false);
@@ -133,15 +132,16 @@ export default function NutritionPage() {
     };
   }, [aiMacroGoals, dailyCalorieTarget]);
 
-  const groupedMeals = useMemo(() => {
-    const groups: Record<string, Meal[]> = { breakfast: [], lunch: [], dinner: [], snack: [] };
-    for (const m of meals) {
-      const type = (m.meal_type || "snack").toLowerCase();
-      if (type in groups) groups[type].push(m);
-      else groups["snack"].push(m);
-    }
-    return groups;
-  }, [meals]);
+  // Meals come pre-sorted by `_creationTime asc` from `meals.listWithTotals`,
+  // so the flat array is already chronological. No client-side grouping.
+  // Per-meal type still ships down as a small chip on `MealCard`.
+
+  // Time-of-day → default meal_type. Used when the log button is tapped from
+  // the chronological list (no section context exists post-refactor).
+  const inferDefaultMealType = (): "breakfast" | "lunch" | "dinner" | "snack" => {
+    const h = new Date().getHours();
+    return h < 10 ? "breakfast" : h < 15 ? "lunch" : h < 21 ? "dinner" : "snack";
+  };
 
   const { tasks, dismissTask } = useAITask();
 
@@ -214,20 +214,20 @@ export default function NutritionPage() {
     nutritionData.setDietAnalysisLoading(false);
   };
 
-  const openFoodSearch = useCallback((mealType: string) => {
-    setFoodSearchMealType(mealType);
+  const openFoodSearch = useCallback(() => {
+    setFoodSearchMealType(inferDefaultMealType());
     setIsFoodSearchOpen(true);
   }, []);
 
-  const openQuickAdd = useCallback((mealType: "breakfast" | "lunch" | "dinner" | "snack") => {
-    setManualMeal((prev) => ({ ...prev, meal_type: mealType }));
+  const openQuickAdd = useCallback(() => {
+    setManualMeal((prev) => ({ ...prev, meal_type: inferDefaultMealType() }));
     setQuickAddTab("ai");
     setIsQuickAddSheetOpen(true);
   }, []);
 
-  const openManualAdd = useCallback((mealType: "breakfast" | "lunch" | "dinner" | "snack") => {
+  const openManualAdd = useCallback(() => {
     setManualMeal((prev) => ({
-      ...prev, meal_type: mealType, meal_name: "", calories: "",
+      ...prev, meal_type: inferDefaultMealType(), meal_name: "", calories: "",
       protein_g: "", carbs_g: "", fats_g: "", portion_size: "", recipe_notes: "", ingredients: [],
     }));
     aiMeal.setAiMealDescription("");
@@ -253,7 +253,10 @@ export default function NutritionPage() {
   }, [userId, selectedDate, nutritionData.setDietAnalysis]);
 
   const handleFoodSearchSelected = useCallback((food: any) => {
-    mealOps.handleFoodSearchSelected(food, foodSearchMealType);
+    // Prefer the meal_type the user picked inside the dialog; fall back to
+    // the time-of-day default the page seeded on open.
+    const effectiveMealType = (typeof food?.meal_type === "string" && food.meal_type) || foodSearchMealType;
+    mealOps.handleFoodSearchSelected(food, effectiveMealType);
   }, [mealOps.handleFoodSearchSelected, foodSearchMealType]);
 
   const handleSheetOpenChange = useCallback((open: boolean) => {
@@ -293,6 +296,7 @@ export default function NutritionPage() {
         photoBase64={aiMeal.photoBase64}
         onCancel={cancelAI}
         onDismiss={dismissTask}
+        suppressMealAnalysis={isQuickAddSheetOpen}
       />
       <div className="animate-page-in space-y-2.5 px-5 py-3 sm:p-5 md:p-6 max-w-7xl mx-auto overflow-x-hidden">
         <NutritionHero
@@ -339,11 +343,7 @@ export default function NutritionPage() {
 
         <MealSections
           mealsLoading={nutritionData.mealsLoading}
-          groupedMeals={groupedMeals}
-          collapsedSections={collapsedSections}
-          setCollapsedSections={setCollapsedSections}
-          expandedMealActions={expandedMealActions}
-          setExpandedMealActions={setExpandedMealActions}
+          meals={meals}
           quickActions={quickActions}
           aiMealHandlers={{ handleBarcodeScanned: aiMeal.handleBarcodeScanned }}
           generatingPlan={mealPlan.generatingPlan}
@@ -361,8 +361,9 @@ export default function NutritionPage() {
           onLogFavorite={quickActions.logFavorite}
         />
 
-        {/* Diet Analysis Section */}
-        <div data-tutorial="analyse-diet">
+        {/* Diet Analysis Section — extra top margin so it visually
+            separates from the chronological meal list above. */}
+        <div data-tutorial="analyse-diet" className="mt-6">
           {nutritionData.dietAnalysis ? (
             <Suspense fallback={null}>
               <DietAnalysisCard

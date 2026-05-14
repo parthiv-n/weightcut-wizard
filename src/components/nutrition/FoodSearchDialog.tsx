@@ -30,6 +30,7 @@ interface FoodSearchDialogProps {
         fats_g: number;
         serving_size: string;
         portion_size: string;
+        meal_type?: string;
     }) => void;
     mealType?: string;
 }
@@ -37,6 +38,20 @@ interface FoodSearchDialogProps {
 const SERVING_PRESETS = [50, 100, 150, 200, 250];
 const SWIPE_THRESHOLD = 70;
 const HIDDEN_RECENTS_KEY = "wcw_hidden_recent_meals";
+
+const MEAL_TYPE_OPTIONS = [
+    { value: "breakfast", label: "Breakfast" },
+    { value: "lunch", label: "Lunch" },
+    { value: "dinner", label: "Dinner" },
+    { value: "snack", label: "Snack" },
+] as const;
+
+type MealTypeValue = (typeof MEAL_TYPE_OPTIONS)[number]["value"];
+
+function normalizeMealType(v: string | undefined): MealTypeValue {
+    const lower = (v || "").toLowerCase();
+    return MEAL_TYPE_OPTIONS.some((o) => o.value === lower) ? (lower as MealTypeValue) : "snack";
+}
 
 /**
  * Compact stat panel for a food row. Calories sit prominently on the left;
@@ -65,15 +80,20 @@ function FoodStatPanel({
         <span className="display-number text-[14px] text-primary leading-none tabular-nums">{calories}</span>
         <span className="text-[9px] text-muted-foreground uppercase tracking-wider font-semibold">kcal</span>
       </div>
-      <div className="flex items-center gap-1 text-[10px] font-semibold tabular-nums flex-shrink-0 ml-auto">
-        <span className="w-[44px] text-center px-1 py-0.5 rounded-md bg-blue-500/15 text-blue-400">
-          {protein}<span className="opacity-70 ml-0.5">P</span>
+      <div className="flex items-center gap-2.5 text-[11px] font-semibold flex-shrink-0 ml-auto">
+        {/* Each macro gets a fixed-width right-aligned number slot so the
+            digits line up across rows regardless of value (1g vs 100g). */}
+        <span className="text-blue-400 inline-flex items-baseline">
+          <span className="tabular-nums w-[22px] text-right">{protein}</span>
+          <span className="opacity-60 ml-0.5">P</span>
         </span>
-        <span className="w-[44px] text-center px-1 py-0.5 rounded-md bg-orange-500/15 text-orange-400">
-          {carbs}<span className="opacity-70 ml-0.5">C</span>
+        <span className="text-orange-400 inline-flex items-baseline">
+          <span className="tabular-nums w-[22px] text-right">{carbs}</span>
+          <span className="opacity-60 ml-0.5">C</span>
         </span>
-        <span className="w-[44px] text-center px-1 py-0.5 rounded-md bg-purple-500/15 text-purple-400">
-          {fats}<span className="opacity-70 ml-0.5">F</span>
+        <span className="text-purple-400 inline-flex items-baseline">
+          <span className="tabular-nums w-[22px] text-right">{fats}</span>
+          <span className="opacity-60 ml-0.5">F</span>
         </span>
       </div>
     </div>
@@ -140,10 +160,17 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
     const [selectedFood, setSelectedFood] = useState<FoodSearchResult | null>(null);
     const [servingGrams, setServingGrams] = useState(100);
     const [recentMeals, setRecentMeals] = useState<(FoodSearchResult & { lastPortionGrams: number })[]>([]);
+    const [chosenMealType, setChosenMealType] = useState<MealTypeValue>(() => normalizeMealType(mealType));
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const abortRef = useRef<AbortController | null>(null);
     const { toast } = useToast();
     const foodSearchAction = useAction(api.actions.foodSearch.run);
+
+    // Re-sync the meal-type chooser to the caller's hint when the dialog
+    // opens. After that point the user's pick stands until close.
+    useEffect(() => {
+        if (open) setChosenMealType(normalizeMealType(mealType));
+    }, [open, mealType]);
 
     // Recents list temporarily disabled — the legacy `meals_with_totals` view
     // is gone in the Convex backend and the per-day equivalent didn't make the
@@ -235,6 +262,7 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
             fats_g: scaledFats,
             serving_size: `${servingGrams}g`,
             portion_size: `${servingGrams}g`,
+            meal_type: chosenMealType,
         });
         onOpenChange(false);
         requestAnimationFrame(() => { if (mainEl) mainEl.scrollTop = scrollY; });
@@ -246,10 +274,10 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                 {!selectedFood ? (
                     <>
                         {/* Search header */}
-                        <div className="px-4 pt-4 pb-3 border-b border-border/30">
-                            <DialogHeader className="mb-2.5">
+                        <div className="px-4 pt-4 pb-3 border-b border-border/30 space-y-2.5">
+                            <DialogHeader>
                                 <DialogTitle className="text-[15px] font-semibold text-center">
-                                    Search Food {mealType ? `· ${mealType.charAt(0).toUpperCase() + mealType.slice(1)}` : ""}
+                                    Search Food
                                 </DialogTitle>
                             </DialogHeader>
                             <div className="relative">
@@ -269,6 +297,32 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                                         <X className="h-3 w-3" />
                                     </button>
                                 )}
+                            </div>
+                            {/* Meal-type chooser — applies to every "log" path below */}
+                            <div>
+                                <p className="text-[10px] uppercase tracking-[0.12em] font-semibold text-muted-foreground/60 mb-1.5">
+                                    Log to
+                                </p>
+                                <div className="grid grid-cols-4 gap-1">
+                                    {MEAL_TYPE_OPTIONS.map((opt) => {
+                                        const active = chosenMealType === opt.value;
+                                        return (
+                                            <button
+                                                key={opt.value}
+                                                type="button"
+                                                onClick={() => setChosenMealType(opt.value)}
+                                                aria-pressed={active}
+                                                className={`py-1.5 rounded-lg text-[12px] font-semibold transition-colors ${
+                                                    active
+                                                        ? "bg-primary text-primary-foreground"
+                                                        : "bg-muted/40 text-muted-foreground/80 active:bg-muted/60"
+                                                }`}
+                                            >
+                                                {opt.label}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         </div>
 
@@ -347,6 +401,7 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                                                                 fats_g: Math.round(food.fats_per_100g * scale * 10) / 10,
                                                                 serving_size: `${food.lastPortionGrams}g`,
                                                                 portion_size: `${food.lastPortionGrams}g`,
+                                                                meal_type: chosenMealType,
                                                             });
                                                             onOpenChange(false);
                                                             requestAnimationFrame(() => { if (mainEl) mainEl.scrollTop = scrollY; });

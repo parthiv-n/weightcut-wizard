@@ -124,12 +124,65 @@ export default function Hydration() {
           />
         </div>
       )}
-      <div className="space-y-2.5">
+      <div className="space-y-3">
         {/* Header */}
-        <div className="mb-2">
-          <h1 className="text-lg font-semibold tracking-tight">Post-Weigh-In Rehydration</h1>
-          <p className="text-[11px] text-muted-foreground mt-0.5">Science-based recovery protocol</p>
+        <div>
+          <p className="text-[10px] uppercase tracking-[0.15em] font-semibold text-primary/80">
+            Rehydration
+          </p>
+          <h1 className="text-[26px] font-bold tracking-tight leading-tight mt-0.5">
+            Post-weigh-in protocol
+          </h1>
+          <p className="text-[13px] text-muted-foreground/85 mt-1 leading-snug max-w-[32ch]">
+            Hour-by-hour fluid, sodium and carb plan to refill the tank before bell.
+          </p>
         </div>
+
+        {/* Onboarding hero — first-time users only */}
+        {!protocol && !loading && (
+          <div className="card-surface rounded-3xl p-5 space-y-4">
+            <div>
+              <h2 className="text-[16px] font-semibold tracking-tight">How it works</h2>
+              <p className="text-[13px] text-muted-foreground/85 leading-relaxed mt-1">
+                An evidence-based plan that replenishes fluid, sodium, potassium and glycogen across the hours between weigh-in and bell so you step in rehydrated and powered.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3 px-1">
+              {[
+                { n: 1, title: "Enter cut + times", body: "Weight lost, weigh-in &amp; fight times" },
+                { n: 2, title: "Build protocol", body: "AI maps fluids and refuel hour-by-hour" },
+                { n: 3, title: "Drink to plan", body: "Follow the timeline with food and drink prompts" },
+              ].map((s) => (
+                <div key={s.n}>
+                  <div className="h-6 w-6 rounded-full bg-primary/15 text-primary text-[12px] font-bold flex items-center justify-center mb-2 tabular-nums">
+                    {s.n}
+                  </div>
+                  <p className="text-[12px] font-semibold leading-tight text-foreground">{s.title}</p>
+                  <p
+                    className="text-[11px] text-muted-foreground/70 leading-snug mt-1"
+                    dangerouslySetInnerHTML={{ __html: s.body }}
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-2 px-1">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-500 mt-0.5 flex-shrink-0" strokeWidth={2.4} />
+                <p className="text-[11px] text-muted-foreground/70 leading-snug">
+                  Rehydrating too fast can dilute sodium and trigger cramps or nausea. The protocol paces fluid and electrolyte intake to avoid this.
+                </p>
+              </div>
+              <div className="flex items-start gap-2">
+                <Info className="h-3.5 w-3.5 text-muted-foreground/60 mt-0.5 flex-shrink-0" strokeWidth={2.2} />
+                <p className="text-[11px] text-muted-foreground/70 leading-snug">
+                  Science-backed but not perfectly accurate. For a high-stakes cut, working with a sports nutritionist is still the gold standard.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Compact "Inputs used" chip row when a protocol is already on screen.
             The full form re-expands via the Edit button. */}

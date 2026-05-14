@@ -73,6 +73,8 @@ export interface MealWithTotalsRow {
   total_carbs_g: number;
   total_fats_g: number;
   item_count: number;
+  created_at?: string;
+  photo_url?: string | null;
 }
 
 /** Foods catalog row (USDA / OFF / user / AI sourced). */
@@ -113,6 +115,8 @@ export interface Meal {
   // absent on older optimistic payloads. Treat as optional.
   notes?: string | null;
   item_count?: number | null;
+  created_at?: string;
+  photo_url?: string | null;
 }
 
 export interface TrainingFoodTip {

@@ -18,6 +18,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 function mealToClient(
   meal: Doc<"meals">,
   items: Doc<"meal_items">[],
+  photoUrl?: string | null,
 ) {
   const totals = items.reduce(
     (acc, i) => ({
@@ -46,6 +47,7 @@ function mealToClient(
     fats_g: totals.fats_g,
     item_count: items.length,
     created_at: new Date(meal._creationTime).toISOString(),
+    photo_url: photoUrl ?? null,
   };
 }
 
@@ -102,8 +104,11 @@ export const listWithTotals = query({
         .query("meal_items")
         .withIndex("by_meal", (q) => q.eq("mealId", m._id))
         .collect();
+      const photoUrl = m.photoStorageId
+        ? await ctx.storage.getUrl(m.photoStorageId)
+        : null;
       result.push({
-        ...mealToClient(m, items),
+        ...mealToClient(m, items, photoUrl),
         items: items
           .sort((a, b) => a.position - b.position)
           .map(itemToClient),
@@ -124,8 +129,11 @@ export const getById = query({
       .query("meal_items")
       .withIndex("by_meal", (q) => q.eq("mealId", id))
       .collect();
+    const photoUrl = meal.photoStorageId
+      ? await ctx.storage.getUrl(meal.photoStorageId)
+      : null;
     return {
-      ...mealToClient(meal, items),
+      ...mealToClient(meal, items, photoUrl),
       items: items
         .sort((a, b) => a.position - b.position)
         .map(itemToClient),
@@ -147,6 +155,19 @@ const itemValidator = v.object({
   fatsG: v.number(),
 });
 
+/**
+ * Auth-gated upload-URL generator for meal photos. Client uses this to
+ * upload the photo to Convex Storage directly, then passes the resulting
+ * `storageId` into `createMealWithItems` as `photoStorageId`.
+ */
+export const generatePhotoUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireUserId(ctx);
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
 export const createMealWithItems = mutation({
   args: {
     date: v.string(),
@@ -154,6 +175,7 @@ export const createMealWithItems = mutation({
     mealName: v.string(),
     isAiGenerated: v.optional(v.boolean()),
     notes: v.optional(v.string()),
+    photoStorageId: v.optional(v.id("_storage")),
     items: v.array(itemValidator),
   },
   handler: async (ctx, args) => {
@@ -165,6 +187,7 @@ export const createMealWithItems = mutation({
       mealName: args.mealName,
       isAiGenerated: args.isAiGenerated ?? false,
       notes: args.notes,
+      photoStorageId: args.photoStorageId,
     });
     let i = 0;
     for (const item of args.items) {

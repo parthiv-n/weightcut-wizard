@@ -108,6 +108,8 @@ export function useMealOperations(params: UseMealOperationsParams) {
     ingredients?: Ingredient[] | null;
     portion_size?: string | null;
     recipe_notes?: string | null;
+    photoStorageId?: string | null;
+    photoPreviewUrl?: string | null;
     successToast?: { title: string; description?: string };
   }) => {
     if (!userId) throw new Error("Not authenticated");
@@ -121,6 +123,11 @@ export function useMealOperations(params: UseMealOperationsParams) {
       portion_size: opts.portion_size,
       recipe_notes: opts.recipe_notes,
     });
+    // Render the freshly captured photo instantly via a data URL so the user
+    // sees their image in the meal list before the storage URL round-trips.
+    if (opts.photoPreviewUrl) {
+      optimisticMeal.photo_url = opts.photoPreviewUrl;
+    }
 
     setMeals((prev) => {
       const updated = [...prev, optimisticMeal];
@@ -137,6 +144,9 @@ export function useMealOperations(params: UseMealOperationsParams) {
         mealName: opts.args.p_meal_name,
         notes: opts.args.p_notes ?? undefined,
         isAiGenerated: opts.args.p_is_ai_generated,
+        photoStorageId: opts.photoStorageId
+          ? (opts.photoStorageId as unknown as Id<"_storage">)
+          : undefined,
         items: rpcItemsToConvexItems(opts.args.p_items),
       });
 
@@ -184,6 +194,8 @@ export function useMealOperations(params: UseMealOperationsParams) {
     recipe_notes: string | null;
     ingredients: Ingredient[] | null;
     is_ai_generated: boolean;
+    photo_storage_id?: string | null;
+    photo_preview_url?: string | null;
   }) => {
     if (!userId) throw new Error("Not authenticated");
 
@@ -211,6 +223,8 @@ export function useMealOperations(params: UseMealOperationsParams) {
       ingredients: mealData.ingredients,
       portion_size: mealData.portion_size,
       recipe_notes: mealData.recipe_notes,
+      photoStorageId: mealData.photo_storage_id ?? null,
+      photoPreviewUrl: mealData.photo_preview_url ?? null,
     });
   }, [userId, selectedDate, runInsertFlow]);
 

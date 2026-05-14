@@ -148,6 +148,10 @@ export default defineSchema({
     mealName: v.string(),
     isAiGenerated: v.boolean(),
     notes: v.optional(v.string()),
+    // Optional Convex Storage ID for the photo taken via the AI meal scanner.
+    // When present, `listWithTotals` resolves it to a URL (`photo_url`) so the
+    // MealCard renders the photo where the macro donut normally lives.
+    photoStorageId: v.optional(v.id("_storage")),
   })
     .index("by_user_date", ["userId", "date"])
     // by_user_created — _creationTime is appended automatically to every index
