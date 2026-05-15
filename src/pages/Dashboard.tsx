@@ -784,6 +784,11 @@ export default function Dashboard() {
             </div>
           </header>
 
+          {/* Gym announcement — pinned above the ring so a fresh
+              message from the user's coach is the first thing they
+              see when they open the app, not buried at the bottom. */}
+          {userId && <NewAnnouncementWidget userId={userId} />}
+
           {/* Fight Form Score ring + educational insight strip */}
           <div className="flex flex-col items-center pt-1">
             <FightFormRing
@@ -891,8 +896,6 @@ export default function Dashboard() {
           <div>
             <MilestoneBadges badges={badges} loading={badgesLoading} onTap={() => setAchievementSheetOpen(true)} />
           </div>
-
-          {userId && <NewAnnouncementWidget userId={userId} />}
         </div>
 
         <FightFormScoreSheet
@@ -952,6 +955,11 @@ export default function Dashboard() {
             {streak > 0 && <StreakBadge streak={streak} isActive={streakIncludesToday} />}
           </div>
         </header>
+
+        {/* Gym announcement — pinned above the rest of the dashboard so
+            a fresh message from the user's coach is the first thing
+            they see, not buried mid-page. */}
+        {userId && <NewAnnouncementWidget userId={userId} />}
 
         {weightLogs.length === 0 && (
           <button onClick={() => navigate('/weight')} className="w-full card-surface rounded-2xl border border-border/50 p-3 flex items-center gap-2.5 active:scale-[0.99] transition-all">
@@ -1037,8 +1045,6 @@ export default function Dashboard() {
         <div>
           <ConsistencyRing {...weeklyConsistency} />
         </div>
-
-        {userId && <NewAnnouncementWidget userId={userId} />}
 
         {/* Weight History + Training — side by side */}
         <div className="grid grid-cols-2 gap-2">

@@ -1,6 +1,9 @@
-import { useMemo, useState } from "react";
-import { Loader2, Send, Check } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import {
+  Loader2, Send, Check, Trophy, MessageSquare, ImagePlus, Video, X,
+} from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Input } from "@/components/ui/input";
 import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -10,6 +13,9 @@ import { ImpactStyle } from "@capacitor/haptics";
 import { logger } from "@/lib/logger";
 import { AthleteAvatar } from "./AthleteAvatar";
 import type { AthleteOverviewRow } from "@/hooks/coach/useCoachData";
+
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;   // 5MB
+const MAX_VIDEO_BYTES = 25 * 1024 * 1024;  // 25MB
 
 interface Props {
   open: boolean;
@@ -28,15 +34,46 @@ export function AnnouncementComposeSheet({ open, onOpenChange, gymId, gymName, a
   const [mode, setMode] = useState<"all" | "specific">("all");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState(false);
+  // Compose kind: regular text announcement or a structured fight offer.
+  // Polls and images are composed via separate flows (poll module + future
+  // media upload), so this control is intentionally just the two kinds the
+  // sheet supports today.
+  const [kind, setKind] = useState<"text" | "fight_offer">("text");
+  // Fight-offer structured fields. Date is held as the native input value
+  // (yyyy-mm-dd) for round-tripping; converted to epoch on send.
+  const [fightDate, setFightDate] = useState<string>("");
+  const [weightClassKg, setWeightClassKg] = useState<string>("");
+  const [eventName, setEventName] = useState<string>("");
+  const [opponentName, setOpponentName] = useState<string>("");
+  const [location, setLocation] = useState<string>("");
+  const [purseText, setPurseText] = useState<string>("");
+
   const createAnnouncement = useMutation(api.announcements.create);
+  const createOffer = useMutation(api.fight_offers.createOffer);
+  const generateMediaUploadUrl = useMutation(api.announcements.generateMediaUploadUrl);
+
+  // Media attachment state — the storage id is what gets sent on submit;
+  // previewUrl is a local ObjectURL the compose sheet shows immediately so
+  // the coach knows the upload landed. mediaKind drives the right preview
+  // element (img vs video) + tells the server which renderer to use.
+  const [mediaStorageId, setMediaStorageId] = useState<Id<"_storage"> | null>(null);
+  const [mediaKind, setMediaKind] = useState<"image" | "video" | null>(null);
+  const [mediaPreviewUrl, setMediaPreviewUrl] = useState<string | null>(null);
+  const [mediaUploading, setMediaUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const remaining = MAX_BODY - body.length;
   const canSend = useMemo(() => {
     if (sending) return false;
-    if (!body.trim()) return false;
+    if (mediaUploading) return false;
     if (mode === "specific" && selected.size === 0) return false;
+    if (kind === "text") return !!body.trim() || !!mediaStorageId;
+    // Fight offer: date + weight class are required; body is optional pitch.
+    if (!fightDate) return false;
+    const wc = parseFloat(weightClassKg);
+    if (!Number.isFinite(wc) || wc <= 0) return false;
     return true;
-  }, [body, mode, selected, sending]);
+  }, [body, mode, selected, sending, kind, fightDate, weightClassKg, mediaUploading, mediaStorageId]);
 
   const toggleSelected = (userId: string) => {
     triggerHaptic(ImpactStyle.Light);
@@ -52,6 +89,88 @@ export function AnnouncementComposeSheet({ open, onOpenChange, gymId, gymName, a
     setBody("");
     setMode("all");
     setSelected(new Set());
+    setKind("text");
+    setFightDate("");
+    setWeightClassKg("");
+    setEventName("");
+    setOpponentName("");
+    setLocation("");
+    setPurseText("");
+    if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl);
+    setMediaPreviewUrl(null);
+    setMediaStorageId(null);
+    setMediaKind(null);
+  };
+
+  const handleMediaPick = () => {
+    if (mediaUploading) return;
+    triggerHaptic(ImpactStyle.Light);
+    fileInputRef.current?.click();
+  };
+
+  const handleMediaRemove = () => {
+    triggerHaptic(ImpactStyle.Light);
+    if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl);
+    setMediaPreviewUrl(null);
+    setMediaStorageId(null);
+    setMediaKind(null);
+  };
+
+  const handleMediaChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-picking same file
+    if (!file) return;
+
+    // MIME sniff — file picker filter is a UX hint, not a guarantee.
+    const isImage = file.type.startsWith("image/");
+    const isVideo = file.type.startsWith("video/");
+    if (!isImage && !isVideo) {
+      toast({
+        title: "Unsupported file",
+        description: "Pick a photo or video.",
+        variant: "destructive",
+      });
+      return;
+    }
+    const cap = isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+    if (file.size > cap) {
+      toast({
+        title: isVideo ? "Video too large" : "Image too large",
+        description: isVideo ? "Keep videos under 25 MB." : "Keep images under 5 MB.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setMediaUploading(true);
+    try {
+      const uploadUrl = await generateMediaUploadUrl({ gymId: gymId as Id<"gyms"> });
+      const uploadRes = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!uploadRes.ok) {
+        throw new Error(`Upload failed (${uploadRes.status})`);
+      }
+      const { storageId } = (await uploadRes.json()) as {
+        storageId: Id<"_storage">;
+      };
+      // Revoke any previous preview before swapping in the new one.
+      if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl);
+      setMediaPreviewUrl(URL.createObjectURL(file));
+      setMediaStorageId(storageId);
+      setMediaKind(isVideo ? "video" : "image");
+    } catch (err: any) {
+      logger.error("AnnouncementComposeSheet: media upload failed", err);
+      toast({
+        title: "Couldn't attach media",
+        description: err?.message ?? "Try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setMediaUploading(false);
+    }
   };
 
   const handleSend = async () => {
@@ -63,19 +182,47 @@ export function AnnouncementComposeSheet({ open, onOpenChange, gymId, gymName, a
         mode === "specific"
           ? Array.from(selected).map((id) => id as Id<"users">)
           : undefined;
-      await createAnnouncement({
-        gymId: gymId as Id<"gyms">,
-        body: body.trim(),
-        kind: "text",
-        targetUserIds: targets,
-      });
-      celebrateSuccess();
-      toast({
-        title: "Announcement sent",
-        description: mode === "all"
-          ? `Broadcast to all athletes in ${gymName}`
-          : `Sent to ${selected.size} athlete${selected.size === 1 ? "" : "s"}`,
-      });
+      if (kind === "fight_offer") {
+        // Local-midnight epoch from the yyyy-mm-dd value so timezone drift
+        // doesn't shift the date the fighter sees in their feed.
+        const epoch = new Date(`${fightDate}T12:00:00`).getTime();
+        await createOffer({
+          gymId: gymId as Id<"gyms">,
+          body: body.trim() || undefined,
+          targetUserIds: targets,
+          mediaStorageId: mediaStorageId ?? undefined,
+          mediaKind: mediaKind ?? undefined,
+          fightDate: epoch,
+          weightClassKg: parseFloat(weightClassKg),
+          eventName: eventName.trim() || undefined,
+          opponentName: opponentName.trim() || undefined,
+          location: location.trim() || undefined,
+          purseText: purseText.trim() || undefined,
+        });
+        celebrateSuccess();
+        toast({
+          title: "Fight offer posted",
+          description: mode === "all"
+            ? `Sent to every fighter in ${gymName}`
+            : `Sent to ${selected.size} fighter${selected.size === 1 ? "" : "s"}`,
+        });
+      } else {
+        await createAnnouncement({
+          gymId: gymId as Id<"gyms">,
+          body: body.trim(),
+          kind: "text",
+          targetUserIds: targets,
+          mediaStorageId: mediaStorageId ?? undefined,
+          mediaKind: mediaKind ?? undefined,
+        });
+        celebrateSuccess();
+        toast({
+          title: "Announcement sent",
+          description: mode === "all"
+            ? `Broadcast to all athletes in ${gymName}`
+            : `Sent to ${selected.size} athlete${selected.size === 1 ? "" : "s"}`,
+        });
+      }
       reset();
       onOpenChange(false);
       onSent?.();
@@ -117,6 +264,30 @@ export function AnnouncementComposeSheet({ open, onOpenChange, gymId, gymName, a
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto space-y-3 px-1">
+          {/* Kind segmented control — pick what we're posting. Polls and
+              images compose elsewhere; this sheet handles plain text
+              announcements and structured fight offers. */}
+          <div className="flex bg-muted/40 dark:bg-white/[0.06] rounded-2xl p-1 border border-border/40">
+            <button
+              type="button"
+              onClick={() => setKind("text")}
+              className={`flex-1 h-9 rounded-xl text-[12px] font-semibold transition-all inline-flex items-center justify-center gap-1.5 ${
+                kind === "text" ? "bg-background text-foreground shadow-sm" : "text-muted-foreground"
+              }`}
+            >
+              <MessageSquare className="h-3.5 w-3.5" /> Announcement
+            </button>
+            <button
+              type="button"
+              onClick={() => setKind("fight_offer")}
+              className={`flex-1 h-9 rounded-xl text-[12px] font-semibold transition-all inline-flex items-center justify-center gap-1.5 ${
+                kind === "fight_offer" ? "bg-background text-primary shadow-sm" : "text-muted-foreground"
+              }`}
+            >
+              <Trophy className="h-3.5 w-3.5" /> Fight offer
+            </button>
+          </div>
+
           {/* Audience segmented control */}
           <div className="flex bg-muted/40 dark:bg-white/[0.06] rounded-2xl p-1 border border-border/40">
             <button
@@ -172,15 +343,172 @@ export function AnnouncementComposeSheet({ open, onOpenChange, gymId, gymName, a
             </div>
           )}
 
+          {/* Media attach — shared by text and fight_offer kinds. Hidden file
+              input fires the picker; once uploaded the preview lives in the
+              same card so the coach can see what's been attached. */}
+          <div className="card-surface rounded-2xl border border-border p-3">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold">
+                Attach media
+              </p>
+              {mediaPreviewUrl ? (
+                <button
+                  type="button"
+                  onClick={handleMediaRemove}
+                  disabled={mediaUploading}
+                  className="h-7 px-2 rounded-full text-muted-foreground text-[10px] font-semibold inline-flex items-center gap-1 active:text-foreground"
+                >
+                  <X className="h-3 w-3" /> Remove
+                </button>
+              ) : (
+                <span className="text-[10px] text-muted-foreground/60">
+                  optional · 5 MB image · 25 MB video
+                </span>
+              )}
+            </div>
+
+            {mediaPreviewUrl ? (
+              <div className="relative w-full rounded-xl overflow-hidden bg-muted/30 border border-border/40">
+                {mediaKind === "video" ? (
+                  <video
+                    src={mediaPreviewUrl}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="w-full max-h-[260px] object-contain bg-black"
+                  />
+                ) : (
+                  <img
+                    src={mediaPreviewUrl}
+                    alt="Attachment preview"
+                    className="w-full max-h-[260px] object-contain"
+                  />
+                )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={handleMediaPick}
+                disabled={mediaUploading}
+                className="w-full h-12 rounded-xl border border-dashed border-border/60 bg-muted/20 text-foreground/80 text-[13px] font-medium inline-flex items-center justify-center gap-2 active:bg-muted/40 transition-colors disabled:opacity-60"
+              >
+                {mediaUploading ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Uploading…
+                  </>
+                ) : (
+                  <>
+                    <ImagePlus className="h-4 w-4" />
+                    <span>Add photo</span>
+                    <span className="text-muted-foreground/60">or</span>
+                    <Video className="h-4 w-4" />
+                    <span>video</span>
+                  </>
+                )}
+              </button>
+            )}
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/heic,video/mp4,video/quicktime"
+              className="hidden"
+              onChange={handleMediaChange}
+            />
+          </div>
+
+          {/* Fight-offer fields */}
+          {kind === "fight_offer" && (
+            <div className="card-surface rounded-2xl border border-border p-3 space-y-2.5">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold mb-1">
+                    Fight date
+                  </p>
+                  <Input
+                    type="date"
+                    value={fightDate}
+                    onChange={(e) => setFightDate(e.target.value)}
+                    className="h-10 rounded-xl bg-muted/40 dark:bg-white/[0.06] border-border/40 text-[14px]"
+                  />
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold mb-1">
+                    Weight class (kg)
+                  </p>
+                  <Input
+                    type="number"
+                    inputMode="decimal"
+                    step="0.5"
+                    value={weightClassKg}
+                    onChange={(e) => setWeightClassKg(e.target.value)}
+                    placeholder="70.0"
+                    className="h-10 rounded-xl bg-muted/40 dark:bg-white/[0.06] border-border/40 text-[14px] tabular-nums"
+                  />
+                </div>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold mb-1">
+                  Event
+                </p>
+                <Input
+                  value={eventName}
+                  onChange={(e) => setEventName(e.target.value)}
+                  placeholder="Cage Warriors 162"
+                  className="h-10 rounded-xl bg-muted/40 dark:bg-white/[0.06] border-border/40 text-[14px]"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold mb-1">
+                    Opponent
+                  </p>
+                  <Input
+                    value={opponentName}
+                    onChange={(e) => setOpponentName(e.target.value)}
+                    placeholder="TBA"
+                    className="h-10 rounded-xl bg-muted/40 dark:bg-white/[0.06] border-border/40 text-[14px]"
+                  />
+                </div>
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold mb-1">
+                    Location
+                  </p>
+                  <Input
+                    value={location}
+                    onChange={(e) => setLocation(e.target.value)}
+                    placeholder="London, UK"
+                    className="h-10 rounded-xl bg-muted/40 dark:bg-white/[0.06] border-border/40 text-[14px]"
+                  />
+                </div>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold mb-1">
+                  Purse
+                </p>
+                <Input
+                  value={purseText}
+                  onChange={(e) => setPurseText(e.target.value)}
+                  placeholder="$1,500 / TBD"
+                  className="h-10 rounded-xl bg-muted/40 dark:bg-white/[0.06] border-border/40 text-[14px]"
+                />
+              </div>
+            </div>
+          )}
+
           {/* Body */}
           <div className="card-surface rounded-2xl border border-border p-3">
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value.slice(0, MAX_BODY))}
-              placeholder="Share a tip, schedule change, or shoutout…"
-              rows={5}
+              placeholder={
+                kind === "fight_offer"
+                  ? "Add a short pitch (optional) — context, expectations, anything fighters should know…"
+                  : "Share a tip, schedule change, or shoutout…"
+              }
+              rows={kind === "fight_offer" ? 3 : 5}
               className="w-full bg-transparent text-[14px] leading-relaxed resize-none placeholder:text-muted-foreground/60 focus:outline-none"
-              autoFocus
+              autoFocus={kind === "text"}
             />
             <div className="flex justify-end pt-1">
               <span className={`text-[10px] tabular-nums ${remaining < 100 ? "text-amber-500" : "text-muted-foreground/60"}`}>
@@ -201,7 +529,7 @@ export function AnnouncementComposeSheet({ open, onOpenChange, gymId, gymName, a
           {sending ? (
             <><Loader2 className="h-4 w-4 animate-spin" /> Sending…</>
           ) : (
-            <><Send className="h-3.5 w-3.5" /> Send announcement</>
+            <><Send className="h-3.5 w-3.5" /> {kind === "fight_offer" ? "Post fight offer" : "Send announcement"}</>
           )}
         </button>
       </SheetContent>

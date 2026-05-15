@@ -63,6 +63,7 @@ import type * as exercises from "../exercises.js";
 import type * as fightFormScore from "../fightFormScore.js";
 import type * as fightFormScore_internal from "../fightFormScore_internal.js";
 import type * as fight_camp from "../fight_camp.js";
+import type * as fight_offers from "../fight_offers.js";
 import type * as foods from "../foods.js";
 import type * as gym_members from "../gym_members.js";
 import type * as gym_sessions from "../gym_sessions.js";
@@ -144,6 +145,7 @@ declare const fullApi: ApiFromModules<{
   fightFormScore: typeof fightFormScore;
   fightFormScore_internal: typeof fightFormScore_internal;
   fight_camp: typeof fight_camp;
+  fight_offers: typeof fight_offers;
   foods: typeof foods;
   gym_members: typeof gym_members;
   gym_sessions: typeof gym_sessions;

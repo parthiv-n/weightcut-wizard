@@ -19,6 +19,21 @@ import { triggerHapticWarning } from "@/lib/haptics";
 import { useToast } from "@/hooks/use-toast";
 import { logger } from "@/lib/logger";
 
+export interface FightOfferPayload {
+  id: string;
+  fight_date: number;
+  weight_class_kg: number;
+  event_name: string | null;
+  opponent_name: string | null;
+  location: string | null;
+  purse_text: string | null;
+  status: "open" | "filled" | "withdrawn";
+  selected_fighter_user_id: string | null;
+  fight_camp_id: string | null;
+  my_signal: "yes" | "maybe" | "pass" | null;
+  counts: { yes: number; maybe: number; pass: number };
+}
+
 export interface GymAnnouncement {
   id: string;
   gym_id: string;
@@ -27,7 +42,12 @@ export interface GymAnnouncement {
   sender_name: string;
   body: string;
   is_broadcast: boolean;
+  kind: "text" | "image" | "poll" | "fight_offer";
   created_at: string;
+  fight_offer: FightOfferPayload | null;
+  /** Attached media URL (image or video) — null when no media. */
+  media_url: string | null;
+  media_kind: "image" | "video" | null;
 }
 
 export function useGymAnnouncements(
@@ -43,7 +63,7 @@ export function useGymAnnouncements(
   );
   const dismissMutation = useMutation(api.announcements.dismiss);
 
-  const announcements: GymAnnouncement[] = (data ?? []).map((a) => ({
+  const announcements: GymAnnouncement[] = (data ?? []).map((a: any) => ({
     id: a.id,
     gym_id: a.gym_id,
     gym_name: a.gym_name,
@@ -51,7 +71,11 @@ export function useGymAnnouncements(
     sender_name: a.sender_name,
     body: a.body,
     is_broadcast: a.is_broadcast,
+    kind: a.kind,
     created_at: a.created_at,
+    fight_offer: a.fight_offer ?? null,
+    media_url: a.media_url ?? null,
+    media_kind: a.media_kind ?? null,
   }));
 
   const loading = data === undefined;

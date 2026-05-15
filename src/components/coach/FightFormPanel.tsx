@@ -107,11 +107,9 @@ function MiniRing({
 
 function TrendLine({
   trend,
-  width = 220,
   height = 36,
 }: {
   trend: { date: string; score: number; state: string }[];
-  width?: number;
   height?: number;
 }) {
   const points = trend.filter((t) => t.state === "ok");
@@ -122,9 +120,16 @@ function TrendLine({
       </p>
     );
   }
+  // Use an internal viewBox coordinate system and let the SVG scale to its
+  // parent's width via `width="100%"`. A hardcoded pixel width was breaking
+  // out of the FightFormPanel hero card on narrow viewports — the SVG sat
+  // next to a 96px ring inside a flex row, and 220px + ring + gaps exceeded
+  // the card's content width on smaller phones, so the chart overflowed
+  // the card's right edge.
+  const VB_WIDTH = 220;
   const min = 0;
   const max = 100;
-  const stepX = width / (points.length - 1);
+  const stepX = VB_WIDTH / (points.length - 1);
   const path = points
     .map((p, i) => {
       const x = i * stepX;
@@ -136,7 +141,14 @@ function TrendLine({
     height -
     ((points[points.length - 1].score - min) / (max - min)) * height;
   return (
-    <svg width={width} height={height} aria-hidden>
+    <svg
+      viewBox={`0 0 ${VB_WIDTH} ${height}`}
+      width="100%"
+      height={height}
+      preserveAspectRatio="none"
+      aria-hidden
+      style={{ display: "block", maxWidth: "100%" }}
+    >
       <path
         d={path}
         stroke="hsl(var(--primary))"
@@ -144,12 +156,18 @@ function TrendLine({
         fill="none"
         strokeLinejoin="round"
         strokeLinecap="round"
+        // Stroke width is in viewBox units; once the SVG stretches non-
+        // uniformly via preserveAspectRatio="none" the visible stroke
+        // would distort. `vector-effect: non-scaling-stroke` keeps the
+        // line a consistent 2px regardless of horizontal scale.
+        vectorEffect="non-scaling-stroke"
       />
       <circle
         cx={(points.length - 1) * stepX}
         cy={lastY}
         r={3}
         fill="hsl(var(--primary))"
+        vectorEffect="non-scaling-stroke"
       />
     </svg>
   );
@@ -193,7 +211,7 @@ export function FightFormPanel({ fightForm, trend }: Props) {
             >
               {state === "ok" ? LABEL_DISPLAY[label] : "Calibrating"}
             </p>
-            <div className="mt-2">
+            <div className="mt-2 w-full overflow-hidden">
               <TrendLine trend={trend ?? []} />
             </div>
           </div>

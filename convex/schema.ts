@@ -519,18 +519,71 @@ export default defineSchema({
     senderUserId: v.id("users"),
     body: v.optional(v.string()), // optional after rich-announcements migration
     isBroadcast: v.boolean(),
-    // CHECK ('text','image','poll')
+    // CHECK ('text','image','poll','fight_offer')
     kind: v.union(
       v.literal("text"),
       v.literal("image"),
       v.literal("poll"),
+      v.literal("fight_offer"),
     ),
     imageUrl: v.optional(v.string()),
+    // Attached media uploaded to Convex File Storage. Supersedes `imageUrl`
+    // for net-new posts (it stays for back-compat with any rows created
+    // before the upload flow existed). `mediaKind` lets the feed render
+    // <img> vs <video> without sniffing the URL.
+    mediaStorageId: v.optional(v.id("_storage")),
+    mediaKind: v.optional(v.union(v.literal("image"), v.literal("video"))),
     expiresAt: v.optional(v.number()),
   })
     // by_gym_created — _creationTime is appended automatically to every index
     .index("by_gym_created", ["gymId"])
     .index("by_sender", ["senderUserId"]),
+
+  /**
+   * Fight offers — coach posts a fight opportunity, fighters express interest.
+   * 1:1 with a `gym_announcements` row (kind: "fight_offer") which owns the
+   * common feed metadata (sender, body pitch, target audience, media).
+   * gymId is denormalised so coach-side queries don't need to dereference
+   * the announcement to filter by gym.
+   */
+  fight_offers: defineTable({
+    announcementId: v.id("gym_announcements"),
+    gymId: v.id("gyms"),
+    fightDate: v.number(),        // epoch ms
+    weightClassKg: v.number(),
+    eventName: v.optional(v.string()),
+    opponentName: v.optional(v.string()),
+    location: v.optional(v.string()),
+    purseText: v.optional(v.string()),
+    status: v.union(
+      v.literal("open"),
+      v.literal("filled"),
+      v.literal("withdrawn"),
+    ),
+    selectedFighterUserId: v.optional(v.id("users")),
+    fightCampId: v.optional(v.id("fight_camps")),
+    filledAt: v.optional(v.number()),
+  })
+    .index("by_announcement", ["announcementId"])
+    .index("by_gym_status", ["gymId", "status"]),
+
+  /**
+   * One row per fighter who tapped a signal on a fight offer. Upsert on
+   * (offerId, userId) so changing your mind is just overwriting the row;
+   * we never accumulate signal history. Kept post-fill for audit/coach view.
+   */
+  fight_offer_interests: defineTable({
+    offerId: v.id("fight_offers"),
+    userId: v.id("users"),
+    signal: v.union(
+      v.literal("yes"),
+      v.literal("maybe"),
+      v.literal("pass"),
+    ),
+    createdAt: v.number(),
+  })
+    .index("by_offer", ["offerId"])
+    .index("by_offer_user", ["offerId", "userId"]),
 
   gym_announcement_targets: defineTable({
     announcementId: v.id("gym_announcements"),

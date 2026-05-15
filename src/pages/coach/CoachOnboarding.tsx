@@ -14,7 +14,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader2, Check } from "lucide-react";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { useUser } from "@/contexts/UserContext";
@@ -54,13 +54,21 @@ export default function CoachOnboarding() {
   const [disciplines, setDisciplines] = useState<string[]>([]);
   const [fighterCount, setFighterCount] = useState<string>("");
   const [about, setAbout] = useState("");
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [gymId, setGymId] = useState<Id<"gyms"> | null>(null);
   const [creating, setCreating] = useState(false);
   const [finishing, setFinishing] = useState(false);
 
   const createGym = useMutation(api.gyms.create);
   const updateGym = useMutation(api.gyms.update);
+
+  // Reactive subscription to the gym row once it's created. We rely on this
+  // (not local state) for the logo URL because `GymLogoUpload` signals
+  // success by calling `onUploaded(null)` and expects the parent to surface
+  // the fresh URL via a Convex query — without this subscription the new
+  // logo would never appear on the onboarding screen even after a
+  // successful upload.
+  const gymRow = useQuery(api.gyms.getById, gymId ? { gymId } : "skip");
+  const logoUrl = gymRow?.logo_url ?? null;
 
   // Pre-warm CoachDashboard so the post-finish navigation is instant.
   useEffect(() => {
@@ -226,7 +234,11 @@ export default function CoachOnboarding() {
                       gymName={gymName.trim() || "Gym"}
                       currentLogoUrl={logoUrl}
                       size={64}
-                      onUploaded={(url) => setLogoUrl(url)}
+                      // The component calls onUploaded(null) on success — by
+                      // design, it expects the parent to read the new URL
+                      // from a reactive Convex query (we do that above via
+                      // `useQuery(api.gyms.getById)`). No-op here.
+                      onUploaded={() => { /* reactive — see gymRow */ }}
                       hideRemove
                     />
                   )}

@@ -22,6 +22,7 @@ import { presentPaywallIfNeeded } from "@/lib/purchases";
 import { Capacitor } from "@capacitor/core";
 import { AnimatePresence, motion } from "motion/react";
 import { springs } from "@/lib/motion";
+import { XPProgressBar, CuttingNowChip, OnboardingMascot, DaysToFightSlam, WeightLossSlam, LossFrameCard, SilentAchievement, DeclarationButton, TaleOfTheTapeCard, MathWhisper, WittyValidation, sportVocab } from "@/components/onboarding/Gamification";
 
 const ACTIVITY_MULTIPLIERS: Record<string, number> = {
   sedentary: 1.2,
@@ -81,15 +82,61 @@ function MultiCard({ selected, label, onClick }: {
   );
 }
 
-// ── Screen layout wrapper ──
-function StepLayout({ step, title, subtitle, children, footer }: {
-  step: number; title: string; subtitle: string; children: React.ReactNode; footer?: React.ReactNode;
+/**
+ * PlanRetryCard — appears on the final onboarding step ONLY when the AI
+ * cut-plan generation fails. Replaces the previous misfire where the
+ * app silently auto-navigated to /dashboard, stranding the user with
+ * no plan and no tutorial. Both buttons are user-initiated, so the
+ * navigation never happens behind their back.
+ */
+function PlanRetryCard({
+  onRetry,
+  onSkip,
+}: {
+  onRetry: () => void;
+  onSkip: () => void;
 }) {
   return (
-    <div className="flex flex-col min-h-[calc(100dvh-56px)] px-5 pb-6">
+    <div className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.06] p-4 space-y-3">
+      <div>
+        <p className="text-[12px] uppercase tracking-wider font-bold text-amber-400/90">
+          Plan didn't generate
+        </p>
+        <p className="text-[13px] text-foreground/85 leading-snug mt-1">
+          The wizard couldn't put your plan together just now. Tap Retry, or
+          skip to the dashboard and generate it later from Settings.
+        </p>
+      </div>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={onRetry}
+          className="flex-1 h-11 rounded-2xl bg-primary text-primary-foreground text-[14px] font-semibold active:scale-[0.98] transition-transform"
+        >
+          Retry
+        </button>
+        <button
+          type="button"
+          onClick={onSkip}
+          className="flex-1 h-11 rounded-2xl bg-muted/40 text-foreground text-[14px] font-medium active:scale-[0.98] transition-transform"
+        >
+          Skip
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Screen layout wrapper ──
+function StepLayout({ step, title, subtitle, children, footer, mascotBump }: {
+  step: number; title: string; subtitle: string; children: React.ReactNode; footer?: React.ReactNode; mascotBump?: number;
+}) {
+  return (
+    <div className="relative flex flex-col min-h-[calc(100dvh-56px)] px-5 pb-6">
+      <OnboardingMascot bumpCount={mascotBump ?? step} />
       <div className="pt-8 pb-5">
         <p className="text-[10px] uppercase tracking-[0.15em] text-primary/60 font-bold mb-2">
-          Step {step} of {TOTAL_STEPS}
+          Round {step} of {TOTAL_STEPS}
         </p>
         <h1 className="text-[22px] font-bold leading-tight text-foreground">{title}</h1>
         <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">{subtitle}</p>
@@ -109,10 +156,25 @@ export default function Onboarding() {
   // chart on the final step instead of navigating to /cut-plan or /weight-plan.
   const [generatedPlan, setGeneratedPlan] = useState<any>(null);
   const [generatedPlanType, setGeneratedPlanType] = useState<"cut" | "weight_loss">("cut");
+  // True when the AI plan call returned null / threw. Surfaces a Retry +
+  // Skip card on the final step instead of the misfiring auto-redirect
+  // that previously dumped the user on an empty dashboard.
+  const [planGenerationFailed, setPlanGenerationFailed] = useState(false);
+  // Flips true the instant the user taps "Generate Plan" and stays true
+  // until they explicitly click Continue. Suppresses the
+  // hasProfile-watching redirect (line ~219) AND the early null-return
+  // guard (line ~663) — both of which would otherwise fire the moment
+  // `updateGoalsMut` writes the profile mid-handleSubmit and Convex's
+  // reactive `profiles.getMine` query flips `hasProfile` to true. This
+  // is THE bug that kept dumping users on the dashboard before the plan
+  // had a chance to resolve.
+  const [stayOnOnboarding, setStayOnOnboarding] = useState(false);
+  const stayOnOnboardingRef = useRef(false);
+  useEffect(() => { stayOnOnboardingRef.current = stayOnOnboarding; }, [stayOnOnboarding]);
   const navigate = useNavigate();
   const { refreshProfile } = useProfile();
   const { hasProfile, isLoading: authLoading, isCoach } = useAuth();
-  const { userId } = useUser();
+  const { userId, userName } = useUser();
   const { toast } = useToast();
   const generateCutPlanAction = useAction(api.actions.generateCutPlan.run);
   const generateWeightPlanAction = useAction(api.actions.generateWeightPlan.run);
@@ -165,8 +227,13 @@ export default function Onboarding() {
       navigate("/coach", { replace: true });
       return;
     }
-    if (hasProfile) navigate("/dashboard", { replace: true });
-  }, [authLoading, hasProfile, isCoach, navigate]);
+    // Suppress the hasProfile-bounce while the user is mid-final-step
+    // (plan generating or already showing). Without this, the reactive
+    // Convex query flips `hasProfile` true the moment we save the
+    // profile and the user gets yanked to the dashboard before the
+    // plan even starts.
+    if (hasProfile && !stayOnOnboarding) navigate("/dashboard", { replace: true });
+  }, [authLoading, hasProfile, isCoach, navigate, stayOnOnboarding]);
 
   // Step 13 (plan_aggressiveness — "how aggressive / how fast") only applies
   // to non-fighters. Fighters' pace is determined by the fight date alone, so
@@ -301,8 +368,58 @@ export default function Onboarding() {
     ? Math.max(1, Math.ceil((new Date(formData.target_date).getTime() - Date.now()) / (7 * 24 * 60 * 60 * 1000)))
     : null;
 
+  // Days remaining until the user's fight date — drives DaysToFightSlam.
+  const daysToFight = formData.target_date
+    ? Math.max(1, Math.ceil((new Date(formData.target_date).getTime() - Date.now()) / 86400000))
+    : null;
+
+  // ── WeightLossSlam inputs ─────────────────────────────────────────
+  // Fires once when the user has all three pieces locked (current
+  // weight, goal weight, and a timeframe). Cutting flow uses the
+  // computed `weeksToFight` from the target date; losing flow uses the
+  // explicit `target_weeks` field. Slam dedupes internally on
+  // (totalKg, weeks) so editing the weight by 0.1 kg won't re-fire.
+  const totalKgToLose =
+    formData.current_weight_kg && formData.goal_weight_kg
+      ? Math.max(
+          0,
+          parseFloat(formData.current_weight_kg) - parseFloat(formData.goal_weight_kg),
+        )
+      : null;
+  const slamWeeks = isFighterFlow
+    ? weeksToFight
+    : formData.target_weeks
+      ? Math.max(1, parseInt(formData.target_weeks))
+      : null;
+  const perWeekKg =
+    totalKgToLose != null && slamWeeks != null && slamWeeks > 0
+      ? totalKgToLose / slamWeeks
+      : null;
+
+  // Sport vocabulary — derive once, reused in copy below.
+  const vocab = sportVocab(formData.athlete_type || formData.athlete_types[0] || "");
+
+  // Silent achievement toast — milestone fires keyed on `step`.
+  const [achievementLabel, setAchievementLabel] = useState<string | null>(null);
+  useEffect(() => {
+    if (step === 4) setAchievementLabel("Goal Locked");
+    else if (step === 8) setAchievementLabel("Discipline Declared");
+    else if (step === 13) setAchievementLabel("Camp Sealed");
+  }, [step]);
+
+  // Final-step declaration gate — before showing chart + Generate, ask the
+  // user to hold-to-commit. Once declared, normal final-step content renders.
+  const [declared, setDeclared] = useState(false);
+
   // ── Submit ──
   const handleSubmit = async () => {
+    // Pin the user on the onboarding screen for the entire submit run
+    // (and until they explicitly tap Continue on the inline plan or
+    // Skip on the retry card). MUST be set BEFORE the first
+    // updateGoalsMut call below — that mutation triggers Convex to
+    // flip `hasProfile` true, which would otherwise yank the user to
+    // the dashboard mid-flight.
+    setStayOnOnboarding(true);
     // Quick age/sex prompt — we collect these minimally at submit time
     // since they don't need their own screen (low friction)
     if (!formData.age || !formData.sex) {
@@ -505,15 +622,19 @@ export default function Onboarding() {
         setGeneratedPlanType(isFighterFlow ? "cut" : "weight_loss");
         setGeneratedPlan(planPayload);
         setGeneratingPlan(false);
+        setPlanGenerationFailed(false);
       } else {
-        // Plan generation failed entirely. Surface the failure and let the
-        // user retry or skip ahead to the dashboard.
+        // Plan generation failed. Stay on the onboarding screen and
+        // surface inline retry / skip controls — never auto-navigate to
+        // the dashboard, because that strands the user with no plan, no
+        // tutorial, and no path forward.
         setGeneratingPlan(false);
+        setPlanGenerationFailed(true);
         toast({
-          title: "Plan unavailable",
-          description: "We couldn't build your plan right now. You can regenerate it from Settings.",
+          title: "Couldn't build your plan",
+          description: "Tap Retry to try again, or skip to the dashboard.",
+          variant: "destructive",
         });
-        setTimeout(() => navigate("/dashboard"), 800);
       }
     } catch (error: any) {
       logger.error("Onboarding failed", error);
@@ -528,13 +649,48 @@ export default function Onboarding() {
   submitRef.current = handleSubmit;
 
   // Continue handler for the in-page plan view. Sets the flag the
-  // TutorialContext watches for the first-run tutorial flow.
+  // TutorialContext watches for the first-run tutorial flow. Releases
+  // the stayOnOnboarding pin LAST so any re-render between setState
+  // and navigate doesn't trigger the hasProfile-bounce useEffect.
   const handleContinueToDashboard = useCallback(() => {
     localStorage.setItem("wcw_onboarding_just_completed", "1");
+    setStayOnOnboarding(false);
     navigate("/dashboard");
   }, [navigate]);
 
-  if (authLoading || hasProfile || isCoach) return null;
+  // Retry handler when plan generation failed inline. Resets the
+  // failure flag and re-runs handleSubmit so the user doesn't have to
+  // re-enter any data — they stay on the final step throughout.
+  const handleRetryPlan = useCallback(() => {
+    setPlanGenerationFailed(false);
+    submitRef.current();
+  }, []);
+
+  // Skip handler — only available after a failed plan generation. Marks
+  // onboarding complete (so we don't loop) and routes to the dashboard
+  // without a plan. The tutorial still fires there.
+  const handleSkipPlan = useCallback(() => {
+    setPlanGenerationFailed(false);
+    handleContinueToDashboard();
+  }, [handleContinueToDashboard]);
+
+  // ── Slam re-arm booleans ──────────────────────────────────────────
+  // Each slam shows on the rising edge of (armed && data-valid). The
+  // booleans below are true while the user is on the screen that owns
+  // the data — so leaving and re-entering the step naturally re-arms
+  // the slam.
+  // - DaysToFightSlam: cutting flow only, fires on the date sub-step.
+  // - WeightLossSlam: cutting → step 6 (current weight, last piece);
+  //                   losing  → step 4 (goal weight, last piece).
+  const daysSlamArmed = isFighterFlow && step === 3 && fightSubStep === 1;
+  const weightSlamArmed =
+    (isFighterFlow && step === 6) || (!isFighterFlow && step === 4);
+
+  // Same gate as the redirect useEffect — when stayOnOnboarding is true
+  // we MUST keep the page mounted even if `hasProfile` has flipped, or
+  // the in-flight plan generation tears down with no UI to land in.
+  if (authLoading || isCoach) return null;
+  if (hasProfile && !stayOnOnboarding) return null;
 
   const progress = (step / TOTAL_STEPS) * 100;
 
@@ -554,6 +710,23 @@ export default function Onboarding() {
           <div className="h-full rounded-full bg-gradient-to-r from-primary to-secondary transition-all duration-500 ease-out" style={{ width: `${progress}%` }} />
         </div>
         <div className="w-8 flex-shrink-0" />
+      </div>
+
+      {/* Persistent gamification header — XP bar + social-proof chip
+          stay PINNED at the top of the viewport like a normal progress
+          bar, regardless of scroll. Sticky (rather than fixed) so the
+          surrounding flow doesn't need an extra offset to compensate.
+          The blurred background means body content scrolling underneath
+          still reads as motion without bleeding through the bar.
+          z-[10005] keeps the bar above the slams' z-[10003] backdrop
+          so the XP bar stays sharp + readable while the slam dims the
+          rest of the screen. */}
+      <div
+        className="sticky z-[10005] bg-background/85 backdrop-blur-md pb-2 border-b border-border/30"
+        style={{ top: "env(safe-area-inset-top, 0px)" }}
+      >
+        <XPProgressBar step={step} totalSteps={13} />
+        <CuttingNowChip />
       </div>
 
       <AnimatePresence mode="wait" initial={false}>
@@ -585,7 +758,7 @@ export default function Onboarding() {
 
         {/* ── Screen 2: Branching ── */}
         {step === 2 && formData.goal_type === "cutting" && (
-          <StepLayout step={2} title="What's your discipline?" subtitle="Select all that apply — we'll tailor everything to your sport(s)."
+          <StepLayout step={2} title="What's your discipline?" subtitle={`Pick your sport${userName ? `, ${userName}` : ""} — we'll tailor everything to it.`}
             footer={<Button onClick={goNext} disabled={formData.athlete_types.length === 0}
               className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
           >
@@ -750,6 +923,7 @@ export default function Onboarding() {
             (fightSubStep === 3 && !formData.fight_week_target_kg);
           return (
             <StepLayout step={3} title={t.title} subtitle={t.subtitle}
+              mascotBump={step * 10 + fightSubStep}
               footer={
                 <Button onClick={goNext} disabled={continueDisabled}
                   className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>
@@ -821,6 +995,21 @@ export default function Onboarding() {
                         onChange={e => setFormData(prev => ({ ...prev, goal_weight_kg: e.target.value }))}
                         className="h-14 rounded-2xl bg-card border-border/50 text-center text-xl font-semibold max-w-[200px]"
                         autoFocus />
+                      {/* Live arithmetic + loss-frame — only show when current
+                          weight is also on file (user revisited via back nav). */}
+                      {weeksToFight && weightDiff && (
+                        <div className="w-full max-w-[300px] space-y-2">
+                          <MathWhisper>
+                            That's {(parseFloat(weightDiff) / weeksToFight).toFixed(1)} kg/week — {(parseFloat(weightDiff) / weeksToFight) < 1.0 ? "safe and steady." : "aggressive but doable."}
+                          </MathWhisper>
+                          {weeksToFight > 1 && (
+                            <LossFrameCard
+                              baseWeeklyKg={parseFloat(weightDiff) / weeksToFight}
+                              remainingKgPerWeekIfSkipped={parseFloat(weightDiff) / Math.max(1, weeksToFight - 1)}
+                            />
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -972,6 +1161,10 @@ export default function Onboarding() {
                 onChange={e => setFormData(prev => ({ ...prev, height_cm: e.target.value }))}
                 className="h-14 rounded-2xl bg-card border-border/50 text-center text-xl font-semibold max-w-[200px]"
                 autoFocus />
+              {/* Tall fighters get a single coaching nod — silence is feedback for everyone else. */}
+              {formData.height_cm && parseFloat(formData.height_cm) >= 188 && (
+                <WittyValidation>{formData.height_cm} cm — long levers, good for jab range.</WittyValidation>
+              )}
             </div>
           </StepLayout>
         )}
@@ -1238,6 +1431,9 @@ export default function Onboarding() {
                 <OptionCard key={opt.value} selected={formData.sleep_hours === opt.value} icon={opt.icon}
                   label={opt.label} onClick={() => selectAndAdvance("sleep_hours", opt.value)} />
               ))}
+              {(formData.sleep_hours === "less_than_6" || formData.sleep_hours === "6_to_7") && (
+                <WittyValidation>We'll fix that in week one.</WittyValidation>
+              )}
             </div>
           </StepLayout>
         )}
@@ -1263,7 +1459,19 @@ export default function Onboarding() {
         )}
 
         {/* ── Screen 13: Aggressiveness (losing flow only) ── */}
-        {step === 13 && formData.goal_type === "losing" && (
+        {step === 13 && formData.goal_type === "losing" && !declared && (
+          <StepLayout step={13} title={`${vocab.campNoun} — last call.`} subtitle="One commitment, then we build the plan.">
+            <div className="space-y-4 px-1 pt-4">
+              <h2 className="text-[28px] font-black leading-tight text-center">{userName ? userName + ", " : ""}lock it in.</h2>
+              <p className="text-[14px] text-center text-muted-foreground">
+                I will weigh <span className="font-bold text-foreground tabular-nums">{formData.goal_weight_kg} kg</span>
+                {formData.target_weeks ? ` in ${formData.target_weeks} weeks` : ""}.
+              </p>
+              <DeclarationButton label="Hold to commit" onCommit={() => setDeclared(true)} />
+            </div>
+          </StepLayout>
+        )}
+        {step === 13 && formData.goal_type === "losing" && declared && (
           <StepLayout step={13} title="How aggressive do you want to go?" subtitle="This controls how fast we push your weight cut and plan intensity."
             footer={
               generatedPlan ? null : generatingPlan ? (
@@ -1280,6 +1488,18 @@ export default function Onboarding() {
             }
           >
             <div className="space-y-2.5">
+              {/* Tale-of-the-Tape — fighter intro reveal at the top of the finale. */}
+              <TaleOfTheTapeCard
+                name={userName || "Fighter"}
+                sport={(formData.athlete_type || formData.athlete_types[0] || vocab.campNoun).toString()}
+                stats={[
+                  { label: "Height", value: formData.height_cm ? `${formData.height_cm} cm` : "—" },
+                  { label: "Weight", value: formData.current_weight_kg ? `${formData.current_weight_kg} kg` : "—" },
+                  { label: "Goal", value: formData.goal_weight_kg ? `${formData.goal_weight_kg} kg` : "—" },
+                  { label: "Days to fight", value: daysToFight ? String(daysToFight) : "—" },
+                  { label: "Experience", value: formData.experience_level || "—" },
+                ]}
+              />
               {[
                 { value: "safe", label: "Safe & Steady", description: "Slow, sustainable. Best if you have 8+ weeks.", icon: <Shield className="h-5 w-5 text-green-400" /> },
                 { value: "balanced", label: "Balanced", description: "Standard fight camp pace. 4-8 weeks out.", icon: <Gauge className="h-5 w-5 text-yellow-400" /> },
@@ -1310,6 +1530,9 @@ export default function Onboarding() {
                   </motion.div>
                 )}
               </AnimatePresence>
+              {planGenerationFailed && !generatedPlan && (
+                <PlanRetryCard onRetry={handleRetryPlan} onSkip={handleSkipPlan} />
+              )}
             </div>
           </StepLayout>
         )}
@@ -1403,8 +1626,26 @@ export default function Onboarding() {
             );
           }
 
+          // Pre-final declaration gate — user must hold-to-commit before
+          // the chart + Generate button render. Once declared, the rest of
+          // the existing final-step content remains intact.
+          if (!declared) {
+            return (
+              <StepLayout step={13} title={`${vocab.campNoun} — last call.`} subtitle="One commitment, then we build the plan.">
+                <div className="space-y-4 px-1 pt-4">
+                  <h2 className="text-[28px] font-black leading-tight text-center">{userName ? userName + ", " : ""}lock it in.</h2>
+                  <p className="text-[14px] text-center text-muted-foreground">
+                    I will weigh <span className="font-bold text-foreground tabular-nums">{formData.goal_weight_kg} kg</span>
+                    {formData.target_date ? ` by ${new Date(formData.target_date).toLocaleDateString()}` : ""}.
+                  </p>
+                  <DeclarationButton label="Hold to commit" onCommit={() => setDeclared(true)} />
+                </div>
+              </StepLayout>
+            );
+          }
+
           return (
-            <StepLayout step={13} title="Your projected cut" subtitle="Review before we generate your plan."
+            <StepLayout step={13} title={`Your projected ${vocab.campNoun.toLowerCase()}`} subtitle="Review before we generate your plan."
               footer={
                 generatedPlan ? null : generatingPlan ? (
                   <div className="w-full flex justify-center">
@@ -1422,6 +1663,18 @@ export default function Onboarding() {
               }
             >
               <div className="space-y-3">
+                {/* Tale-of-the-Tape — fighter intro reveal at the top of the finale. */}
+                <TaleOfTheTapeCard
+                  name={userName || "Fighter"}
+                  sport={(formData.athlete_type || formData.athlete_types[0] || vocab.campNoun).toString()}
+                  stats={[
+                    { label: "Height", value: formData.height_cm ? `${formData.height_cm} cm` : "—" },
+                    { label: "Weight", value: formData.current_weight_kg ? `${formData.current_weight_kg} kg` : "—" },
+                    { label: "Goal", value: formData.goal_weight_kg ? `${formData.goal_weight_kg} kg` : "—" },
+                    { label: "Days to fight", value: daysToFight ? String(daysToFight) : "—" },
+                    { label: "Experience", value: formData.experience_level || "—" },
+                  ]}
+                />
                 {validInputs && stats ? (
                   <>
                     {chartContent}
@@ -1473,6 +1726,9 @@ export default function Onboarding() {
                     </motion.div>
                   )}
                 </AnimatePresence>
+                {planGenerationFailed && !generatedPlan && (
+                  <PlanRetryCard onRetry={handleRetryPlan} onSkip={handleSkipPlan} />
+                )}
               </div>
             </StepLayout>
           );
@@ -1480,6 +1736,21 @@ export default function Onboarding() {
 
         </motion.div>
       </AnimatePresence>
+
+      {/* Overlay layer — fires once when fight date first lands. */}
+      <DaysToFightSlam days={daysToFight} armed={daysSlamArmed} />
+      <WeightLossSlam
+        totalKg={totalKgToLose}
+        weeks={slamWeeks}
+        perWeekKg={perWeekKg}
+        armed={weightSlamArmed}
+      />
+      {/* Milestone toast — pops on step 4 / 8 / 13 transitions. */}
+      <SilentAchievement
+        label={achievementLabel}
+        open={achievementLabel !== null}
+        onClose={() => setAchievementLabel(null)}
+      />
 
     </div>
   );

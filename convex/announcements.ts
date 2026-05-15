@@ -137,6 +137,68 @@ export const listForUser = query({
             }));
         }
 
+        // Fight-offer kind: join the structured offer row + the caller's
+        // own interest signal. Renders the feed card without a follow-up
+        // round trip per offer.
+        let fightOffer:
+          | {
+              id: Id<"fight_offers">;
+              fight_date: number;
+              weight_class_kg: number;
+              event_name: string | null;
+              opponent_name: string | null;
+              location: string | null;
+              purse_text: string | null;
+              status: "open" | "filled" | "withdrawn";
+              selected_fighter_user_id: Id<"users"> | null;
+              fight_camp_id: Id<"fight_camps"> | null;
+              my_signal: "yes" | "maybe" | "pass" | null;
+              counts: { yes: number; maybe: number; pass: number };
+            }
+          | null = null;
+        if (a.kind === "fight_offer") {
+          const offer = await ctx.db
+            .query("fight_offers")
+            .withIndex("by_announcement", (q) => q.eq("announcementId", a._id))
+            .unique();
+          if (offer) {
+            const interests = await ctx.db
+              .query("fight_offer_interests")
+              .withIndex("by_offer", (q) => q.eq("offerId", offer._id))
+              .collect();
+            const counts = { yes: 0, maybe: 0, pass: 0 };
+            let mine: "yes" | "maybe" | "pass" | null = null;
+            for (const row of interests) {
+              counts[row.signal] += 1;
+              if (row.userId === userId) mine = row.signal;
+            }
+            fightOffer = {
+              id: offer._id,
+              fight_date: offer.fightDate,
+              weight_class_kg: offer.weightClassKg,
+              event_name: offer.eventName ?? null,
+              opponent_name: offer.opponentName ?? null,
+              location: offer.location ?? null,
+              purse_text: offer.purseText ?? null,
+              status: offer.status,
+              selected_fighter_user_id: offer.selectedFighterUserId ?? null,
+              fight_camp_id: offer.fightCampId ?? null,
+              my_signal: mine,
+              counts,
+            };
+          }
+        }
+
+        // Resolve attached media (image or video) into a URL the client
+        // can drop into <img>/<video> directly. Falls back to the legacy
+        // `imageUrl` column for rows created before the upload flow
+        // existed.
+        const mediaUrl = a.mediaStorageId
+          ? await ctx.storage.getUrl(a.mediaStorageId)
+          : null;
+        const mediaKind = a.mediaKind ?? (a.imageUrl ? "image" : null);
+        const resolvedMediaUrl = mediaUrl ?? a.imageUrl ?? null;
+
         return {
           id: a._id,
           gym_id: a.gymId,
@@ -147,9 +209,12 @@ export const listForUser = query({
           is_broadcast: a.isBroadcast,
           kind: a.kind,
           image_url: a.imageUrl ?? null,
+          media_url: resolvedMediaUrl,
+          media_kind: mediaKind,
           expires_at: a.expiresAt ?? null,
           created_at: new Date(a._creationTime).toISOString(),
           poll_options: pollOptions,
+          fight_offer: fightOffer,
         };
       }),
     );
@@ -192,6 +257,21 @@ export const listForGym = query({
  *
  * Replaces the `create_announcement` Postgres RPC.
  */
+/**
+ * Coach-only: mint a one-time POST URL for uploading a media attachment
+ * (image or video) for an announcement. The caller posts the blob to the
+ * URL, then passes the returned `storageId` into `create` (or
+ * `fight_offers.createOffer`) as `mediaStorageId`.
+ */
+export const generateMediaUploadUrl = mutation({
+  args: { gymId: v.id("gyms") },
+  handler: async (ctx, { gymId }) => {
+    const userId = await requireUserId(ctx);
+    await assertGymOwner(ctx, gymId, userId);
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
 export const create = mutation({
   args: {
     gymId: v.id("gyms"),
@@ -200,13 +280,15 @@ export const create = mutation({
       v.union(v.literal("text"), v.literal("image"), v.literal("poll")),
     ),
     imageUrl: v.optional(v.string()),
+    mediaStorageId: v.optional(v.id("_storage")),
+    mediaKind: v.optional(v.union(v.literal("image"), v.literal("video"))),
     targetUserIds: v.optional(v.array(v.id("users"))),
     pollOptions: v.optional(v.array(v.string())),
     expiresAt: v.optional(v.number()),
   },
   handler: async (
     ctx,
-    { gymId, body, kind, imageUrl, targetUserIds, pollOptions, expiresAt },
+    { gymId, body, kind, imageUrl, mediaStorageId, mediaKind, targetUserIds, pollOptions, expiresAt },
   ) => {
     const userId = await requireUserId(ctx);
     await assertGymOwner(ctx, gymId, userId);
@@ -214,11 +296,11 @@ export const create = mutation({
     const resolvedKind = kind ?? "text";
     const trimmedBody = body?.trim() || undefined;
 
-    if (resolvedKind === "text" && !trimmedBody) {
-      throw new Error("Text announcement requires a body");
+    if (resolvedKind === "text" && !trimmedBody && !mediaStorageId) {
+      throw new Error("Text announcement requires a body or media");
     }
-    if (resolvedKind === "image" && !imageUrl) {
-      throw new Error("Image announcement requires an image url");
+    if (resolvedKind === "image" && !imageUrl && !mediaStorageId) {
+      throw new Error("Image announcement requires an image");
     }
     if (resolvedKind === "poll") {
       if (!trimmedBody) throw new Error("Poll requires a question/body");
@@ -236,6 +318,8 @@ export const create = mutation({
       isBroadcast,
       kind: resolvedKind,
       imageUrl,
+      mediaStorageId,
+      mediaKind,
       expiresAt,
     });
 

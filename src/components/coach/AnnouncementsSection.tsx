@@ -3,6 +3,7 @@ import { Trash2 } from "lucide-react";
 import { motion, useMotionValue, useReducedMotion } from "motion/react";
 import { useUser } from "@/contexts/UserContext";
 import { useGymAnnouncements, type GymAnnouncement } from "@/hooks/coach/useGymAnnouncements";
+import { FightOfferCard } from "@/components/coach/FightOfferCard";
 
 interface Props {
   /** Gym ids the user is a member of — used to scope realtime channels. */
@@ -45,7 +46,7 @@ const AnnouncementCard = memo(function AnnouncementCard({
         </div>
       )}
       <motion.div
-        className="relative card-surface rounded-2xl border border-border p-3"
+        className="relative"
         style={{ x: canSwipe ? dragX : undefined }}
         drag={canSwipe ? "x" : false}
         dragConstraints={{ left: -120, right: 0 }}
@@ -64,23 +65,50 @@ const AnnouncementCard = memo(function AnnouncementCard({
         }}
         transition={{ type: "spring", damping: 28, stiffness: 320 }}
       >
-        <div className="flex items-baseline justify-between gap-2 mb-1">
-          <p className="text-[12px] font-semibold truncate">{a.sender_name}</p>
-          <span className="text-[10px] text-muted-foreground tabular-nums flex-shrink-0">
-            {relativeTime(a.created_at)}
-          </span>
-        </div>
-        <p className="text-[11px] text-muted-foreground/80 mb-1.5">
-          {a.gym_name}
-          {!a.is_broadcast && (
-            <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[9px] uppercase tracking-wider font-semibold">
-              For you
-            </span>
-          )}
-        </p>
-        <p className="text-[13px] text-foreground/90 leading-snug whitespace-pre-wrap break-words">
-          {a.body}
-        </p>
+        {a.kind === "fight_offer" && a.fight_offer ? (
+          <FightOfferCard announcement={a} offer={a.fight_offer} />
+        ) : (
+          <div className="card-surface rounded-2xl border border-border p-3">
+            <div className="flex items-baseline justify-between gap-2 mb-1">
+              <p className="text-[12px] font-semibold truncate">{a.sender_name}</p>
+              <span className="text-[10px] text-muted-foreground tabular-nums flex-shrink-0">
+                {relativeTime(a.created_at)}
+              </span>
+            </div>
+            <p className="text-[11px] text-muted-foreground/80 mb-1.5">
+              {a.gym_name}
+              {!a.is_broadcast && (
+                <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[9px] uppercase tracking-wider font-semibold">
+                  For you
+                </span>
+              )}
+            </p>
+            {a.body && (
+              <p className="text-[13px] text-foreground/90 leading-snug whitespace-pre-wrap break-words">
+                {a.body}
+              </p>
+            )}
+            {a.media_url && (
+              <div className="mt-2 rounded-xl overflow-hidden bg-muted/30 border border-border/40">
+                {a.media_kind === "video" ? (
+                  <video
+                    src={a.media_url}
+                    controls
+                    playsInline
+                    preload="metadata"
+                    className="w-full max-h-[320px] object-contain bg-black"
+                  />
+                ) : (
+                  <img
+                    src={a.media_url}
+                    alt=""
+                    className="w-full max-h-[320px] object-contain"
+                  />
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </motion.div>
     </div>
   );

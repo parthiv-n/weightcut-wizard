@@ -14,6 +14,7 @@ import { AthleteAvatar } from "@/components/coach/AthleteAvatar";
 import { StrainSparkline } from "@/components/coach/StrainSparkline";
 import { FightTargetBadge } from "@/components/coach/FightTargetBadge";
 import { AnnouncementComposeSheet } from "@/components/coach/AnnouncementComposeSheet";
+import { CoachFightOffersTile } from "@/components/coach/CoachFightOffersTile";
 import { localCache } from "@/lib/localCache";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { registerPullRefresh } from "@/lib/pullRefreshRegistry";
@@ -151,7 +152,7 @@ export default function CoachDashboard() {
   return (
     <ErrorBoundary>
       <div
-        className="animate-page-in space-y-4 px-5 py-3 sm:p-5 md:p-6 w-full max-w-3xl mx-auto"
+        className="animate-page-in space-y-5 px-5 py-3 sm:p-5 md:p-6 w-full max-w-3xl mx-auto"
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 5rem)" }}
       >
         {/* Header */}
@@ -206,7 +207,7 @@ export default function CoachDashboard() {
         {gyms.map((gym) => {
           const gymAthletes = grouped.get(gym.id) ?? [];
           return (
-            <section key={gym.id} className="space-y-2">
+            <section key={gym.id} className="space-y-3">
               {/* Gym header + share/copy controls */}
               <div className="card-surface rounded-2xl border border-border p-3">
                 <div className="flex items-center justify-between gap-3">
@@ -259,6 +260,10 @@ export default function CoachDashboard() {
                 <Megaphone className="h-4 w-4" /> New announcement
               </button>
 
+              {/* Fight offers — only renders when there's at least one offer
+                  in the gym. Self-renders the detail sheet on tap. */}
+              <CoachFightOffersTile gymId={gym.id} />
+
               {/* Athletes for this gym */}
               {gymAthletes.length === 0 ? (
                 <div className="card-surface rounded-2xl border border-border p-5 text-center">
@@ -274,7 +279,7 @@ export default function CoachDashboard() {
                   </button>
                 </div>
               ) : (
-                <div className="card-surface rounded-2xl border border-border overflow-hidden divide-y divide-border/40">
+                <div className="space-y-2">
                   {gymAthletes.map((a) => {
                     const sev = flagSeverity(a);
                     const { delta, target } = relativeWeight(a);
@@ -283,7 +288,7 @@ export default function CoachDashboard() {
                       <button
                         key={a.user_id}
                         onClick={() => navigate(`/coach/athletes/${a.user_id}`)}
-                        className="w-full flex items-center gap-3 px-3 py-3 min-h-[56px] active:bg-muted/30 transition-colors text-left"
+                        className="w-full flex items-center gap-3 px-3 py-3 min-h-[56px] card-surface rounded-2xl border border-border active:bg-muted/30 transition-colors text-left"
                       >
                         <AthleteAvatar avatarUrl={a.avatar_url} name={a.display_name} size={36} />
 
@@ -300,12 +305,12 @@ export default function CoachDashboard() {
                             {target != null && delta != null && (
                               <>
                                 <span
-                                  className={`px-1 py-px rounded text-[10px] font-semibold leading-none ${
+                                  className={`text-[10px] font-semibold leading-none ${
                                     Math.abs(delta) < 0.1
-                                      ? "bg-emerald-500/10 text-emerald-400"
+                                      ? "text-emerald-400"
                                       : delta > 0
-                                      ? "bg-amber-500/10 text-amber-500"
-                                      : "bg-emerald-500/10 text-emerald-400"
+                                      ? "text-amber-500"
+                                      : "text-emerald-400"
                                   }`}
                                 >
                                   {Math.abs(delta) < 0.1
@@ -314,7 +319,7 @@ export default function CoachDashboard() {
                                     ? `−${delta.toFixed(1)}`
                                     : `+${Math.abs(delta).toFixed(1)}`}
                                 </span>
-                                <span className="text-[10px] text-muted-foreground/70">
+                                <span className="text-[10px] leading-none text-muted-foreground/70">
                                   to {target.toFixed(1)}
                                 </span>
                               </>

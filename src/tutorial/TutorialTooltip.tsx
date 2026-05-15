@@ -1,5 +1,6 @@
 import { useRef, useCallback } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "motion/react";
+import { Sparkles, X } from "lucide-react";
 import type { TutorialStep } from "./types";
 
 interface TooltipProps {
@@ -13,6 +14,20 @@ interface TooltipProps {
 
 const EDGE_INSET = 16;
 
+/**
+ * App tutorial tooltip — visual template ported from the Fight Form
+ * calibration `TutorialDialog` so both flows feel like one product:
+ *  - Tiny eyebrow "X of Y · Tutorial" instead of an inline counter.
+ *  - Icon squircle on the left of the title (uses Sparkles fallback
+ *    since `TutorialStep` doesn't carry a per-step icon — easy to wire
+ *    one in later if any flow wants per-step iconography).
+ *  - Larger title + relaxed body copy at 13.5px/leading-relaxed.
+ *  - Centered dot pager (animated active dot) at the bottom.
+ *  - Footer: ghost "Back" + filled "Next/Got it" — same word the
+ *    Fight Form tour uses on the last step.
+ *  - Skip lives as a discreet X in the top-right (mirrors the Dialog's
+ *    built-in close affordance) so the bottom row is just navigation.
+ */
 export function TutorialTooltip({
   step,
   stepIndex,
@@ -31,10 +46,10 @@ export function TutorialTooltip({
   const motionProps = prefersReduced
     ? {}
     : {
-        initial: { opacity: 0 },
-        animate: { opacity: 1 },
-        exit: { opacity: 0 },
-        transition: { duration: 0.1 },
+        initial: { opacity: 0, scale: 0.97 },
+        animate: { opacity: 1, scale: 1 },
+        exit: { opacity: 0, scale: 0.97 },
+        transition: { duration: 0.16, ease: [0.32, 0.72, 0, 1] as [number, number, number, number] },
       };
 
   return (
@@ -42,10 +57,7 @@ export function TutorialTooltip({
       <motion.div
         key={step.id}
         ref={setTooltipRef}
-        className="fixed max-w-[340px] rounded-3xl p-5
-          bg-white/[0.97] dark:bg-[rgba(18,18,20,0.97)]
-          border border-border/30 dark:border-[rgba(255,255,255,0.08)]
-          shadow-[0_12px_48px_rgba(0,0,0,0.15)] dark:shadow-[0_12px_48px_rgba(0,0,0,0.6)]"
+        className="fixed max-w-sm w-auto rounded-3xl bg-card border border-border shadow-[0_12px_48px_rgba(0,0,0,0.18)] dark:shadow-[0_12px_48px_rgba(0,0,0,0.6)] overflow-hidden"
         style={{
           pointerEvents: "auto",
           zIndex: 10004,
@@ -60,69 +72,68 @@ export function TutorialTooltip({
         }}
         {...motionProps}
       >
-        {/* Header row */}
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-[11px] text-muted-foreground/60 font-medium tabular-nums tracking-wide">
-            {stepIndex + 1} / {totalSteps}
+        {/* Discreet skip — mirrors the Dialog's built-in close X. */}
+        <button
+          onClick={onSkip}
+          aria-label="Skip tutorial"
+          className="absolute top-3 right-3 z-10 h-9 w-9 rounded-full bg-muted/40 flex items-center justify-center text-muted-foreground active:bg-muted/60 transition-colors"
+          style={{ WebkitTapHighlightColor: "transparent" }}
+        >
+          <X className="h-4 w-4" strokeWidth={2.4} />
+        </button>
+
+        <div className="p-6 pr-12 space-y-5">
+          {/* Eyebrow — same shape as the Fight Form tour. */}
+          <span className="block text-[10px] uppercase tracking-[0.18em] text-muted-foreground/80 font-bold">
+            {stepIndex + 1} of {totalSteps} · Tutorial
           </span>
-          <button
-            onClick={onSkip}
-            className="min-h-[44px] min-w-[44px] flex items-center justify-end
-              text-xs text-muted-foreground/60 active:text-foreground transition-colors font-medium
-              touch-manipulation"
-            style={{ WebkitTapHighlightColor: "transparent" }}
-          >
-            Skip
-          </button>
-        </div>
 
-        {/* Content */}
-        <h3 className="text-base font-bold text-foreground mb-1.5 leading-snug">
-          {step.title}
-        </h3>
-        <p className="text-[13px] text-muted-foreground/80 leading-relaxed mb-4">
-          {step.description}
-        </p>
+          {/* Title row with icon squircle. */}
+          <div className="flex items-start gap-3">
+            <div className="size-10 rounded-2xl bg-muted/40 border border-border/50 flex items-center justify-center shrink-0">
+              <Sparkles className="size-5 text-foreground/80" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="text-lg font-semibold leading-tight">{step.title}</h3>
+            </div>
+          </div>
 
-        {/* Navigation */}
-        <div className="flex items-center justify-between">
-          {!isFirstStep ? (
+          {/* Body */}
+          <p className="text-[13.5px] text-muted-foreground leading-relaxed">
+            {step.description}
+          </p>
+
+          {/* Dot pager — centered, animated active dot. */}
+          <div className="flex justify-center gap-1.5 pt-1">
+            {Array.from({ length: totalSteps }, (_, i) => (
+              <span
+                key={i}
+                className={
+                  i === stepIndex
+                    ? "h-1.5 w-5 rounded-full bg-foreground transition-all"
+                    : "h-1.5 w-1.5 rounded-full bg-muted-foreground/30 transition-all"
+                }
+              />
+            ))}
+          </div>
+
+          {/* Footer — ghost Back + filled Next/Got it. */}
+          <div className="flex gap-2 pt-1">
+            {!isFirstStep && (
+              <button
+                onClick={onPrev}
+                className="flex-1 h-11 rounded-xl text-[14px] font-medium text-muted-foreground active:bg-muted/40 transition-colors"
+              >
+                Back
+              </button>
+            )}
             <button
-              onClick={onPrev}
-              className="min-h-[44px] min-w-[44px] flex items-center justify-start
-                text-sm text-muted-foreground active:text-foreground transition-colors font-medium
-                touch-manipulation"
+              onClick={onNext}
+              className="flex-1 h-11 rounded-xl text-[14px] font-bold text-primary-foreground bg-primary active:scale-[0.98] transition-transform"
             >
-              Back
+              {isLastStep ? "Got it" : "Next"}
             </button>
-          ) : (
-            <span />
-          )}
-          <button
-            onClick={onNext}
-            className="min-h-[44px] px-7 rounded-2xl text-sm font-bold text-primary-foreground
-              bg-gradient-to-r from-primary to-secondary
-              shadow-lg shadow-primary/20
-              active:scale-95 transition-transform touch-manipulation"
-          >
-            {isLastStep ? "Done" : "Next"}
-          </button>
-        </div>
-
-        {/* Progress dots */}
-        <div className="flex items-center justify-center gap-1.5 mt-4 flex-wrap">
-          {Array.from({ length: totalSteps }, (_, i) => (
-            <div
-              key={i}
-              className={`h-1.5 rounded-full transition-all duration-200 ${
-                i === stepIndex
-                  ? "w-5 bg-primary"
-                  : i < stepIndex
-                    ? "w-1.5 bg-primary/50"
-                    : "w-1.5 bg-muted-foreground/20"
-              }`}
-            />
-          ))}
+          </div>
         </div>
       </motion.div>
     </AnimatePresence>
