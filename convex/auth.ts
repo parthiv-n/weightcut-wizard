@@ -27,16 +27,23 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
     // Email + password. Reset/verification email senders are stubbed for
     // now — see `auth.config.ts`. Phase 3 will wire up Resend (or similar).
     Password({
-      // Custom profile shape: pull `role` out of the params so the user
-      // doc records it. The 1:1 `profiles` row is created in
-      // `createOrUpdateUser` below.
+      // Custom profile shape: pull `role` out of the signIn params and
+      // pass it through so `createOrUpdateUser` can persist it on the
+      // freshly-created `profiles` row in the SAME transaction. Without
+      // this the bootstrap row always defaults to `role: "fighter"` and
+      // a coach signup races the client-side `profiles.setRole` patch.
       profile(params) {
         const email = params.email as string;
+        const rawRole = (params as Record<string, unknown>).role;
+        const role: "fighter" | "coach" =
+          rawRole === "coach" ? "coach" : "fighter";
         return {
           email,
-          // `name` is optional on the Convex Auth users table; we leave
-          // it undefined here and let the profile row hold display_name.
-        };
+          // Stash on the user doc so `createOrUpdateUser` can read it via
+          // `args.profile.role`. Convex Auth carries unknown keys through
+          // the profile object verbatim.
+          role,
+        } as { email: string; role: "fighter" | "coach" };
       },
     }),
 
@@ -70,8 +77,14 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
 
       // Bootstrap a placeholder `profiles` row. Required fields are filled
       // with sensible defaults so the row is valid; the onboarding flow
-      // will overwrite these. TODO(phase-3): move this into
-      // `internal.profiles.ensureExists` and call that instead.
+      // will overwrite these. The `role` is sourced from the signIn
+      // params (see `Password.profile` above) so a coach signup lands
+      // `role: "coach"` atomically — the client never has to chase it
+      // with a follow-up `profiles.setRole` patch.
+      const profileRole: "fighter" | "coach" =
+        (args.profile as Record<string, unknown>).role === "coach"
+          ? "coach"
+          : "fighter";
       try {
         await ctx.db.insert("profiles", {
           userId,
@@ -83,7 +96,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
           targetDate: "",
           activityLevel: "",
           goalType: "",
-          role: "fighter",
+          role: profileRole,
           gems: 0,
           adsWatchedToday: 0,
           subscriptionTier: "free",

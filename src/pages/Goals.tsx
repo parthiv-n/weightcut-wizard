@@ -2,40 +2,16 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation } from "convex/react";
 import { api } from "@/../convex/_generated/api";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { AlertTriangle, Loader2, Target } from "lucide-react";
+import { AlertTriangle, Target } from "lucide-react";
 import { profileSchema } from "@/lib/validation";
 import { useUser } from "@/contexts/UserContext";
 import { celebrateSuccess, triggerHapticSelection } from "@/lib/haptics";
 import { GoalsSkeleton } from "@/components/ui/skeleton-loader";
-
-/** Inline chip selector — replaces dropdown selects with tappable pills */
-function ChipSelect({ value, options, onChange, columns = 3 }: {
-  value: string;
-  options: { value: string; label: string }[];
-  onChange: (v: string) => void;
-  columns?: number;
-}) {
-  return (
-    <div className={`grid gap-1 ${columns === 2 ? 'grid-cols-2' : columns === 4 ? 'grid-cols-4' : columns === 5 ? 'grid-cols-5' : 'grid-cols-3'}`}>
-      {options.map(opt => (
-        <button key={opt.value} type="button"
-          onClick={() => { triggerHapticSelection(); onChange(opt.value); }}
-          className={`h-7 rounded-lg text-[13px] font-semibold transition-all active:scale-[0.97] ${
-            value === opt.value
-              ? "bg-primary/15 text-foreground shadow-sm"
-              : "bg-muted/30 text-muted-foreground active:bg-muted/50"
-          }`}
-        >
-          {opt.label}
-        </button>
-      ))}
-    </div>
-  );
-}
+import { SwipeDial } from "@/components/ui/SwipeDial";
+import { ProfilePictureUpload } from "@/components/ProfilePictureUpload";
 
 const ACTIVITY_MULTIPLIERS = {
   sedentary: 1.2,
@@ -55,10 +31,6 @@ const EXPERIENCE_LABELS: Record<string, string> = {
   beginner: "Beginner", amateur: "Amateur Fighter", pro: "Experienced / Pro",
 };
 
-const COMPETITION_LABELS: Record<string, string> = {
-  hobbyist: "Hobbyist", amateur: "Amateur", pro: "Pro",
-};
-
 const AGGRESSIVENESS_LABELS: Record<string, string> = {
   conservative: "Conservative", balanced: "Balanced", aggressive: "Aggressive",
 };
@@ -68,8 +40,41 @@ export default function Goals() {
   const [saving, setSaving] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { userId, currentWeight, profile: contextProfile, refreshProfile } = useUser();
+  const {
+    userId,
+    currentWeight,
+    profile: contextProfile,
+    refreshProfile,
+    userName,
+    setUserName,
+    avatarUrl,
+    setAvatarUrl,
+  } = useUser();
   const updateGoals = useMutation(api.profiles.updateGoals);
+  const setUserNameMut = useMutation(api.profiles.setUserName);
+
+  // Local mirror of the editable display name. Kept separate from the
+  // context value so typing doesn't immediately mutate the cache, then
+  // flushed via `setUserNameMut` on blur (mirrors the Settings panel).
+  const [editedName, setEditedName] = useState<string>(userName ?? "");
+  const [savingName, setSavingName] = useState(false);
+  useEffect(() => { setEditedName(userName ?? ""); }, [userName]);
+
+  const flushName = async () => {
+    const next = editedName.trim();
+    if (!userId || !next || next === userName) return;
+    setSavingName(true);
+    try {
+      await setUserNameMut({ displayName: next });
+      setUserName(next);
+    } catch (err) {
+      // The mutation also runs from UserContext.setUserName as a side-
+      // effect; surfacing here would double-toast. Just log and move on.
+      console.warn("Goals: setUserName failed", err);
+    } finally {
+      setSavingName(false);
+    }
+  };
 
   const [formData, setFormData] = useState({
     age: "",
@@ -224,231 +229,420 @@ export default function Goals() {
     ? assessTargetSafety(parseFloat(formData.goal_weight_kg), parseFloat(formData.fight_week_target_kg))
     : null;
 
+  // Multi-select sport list — kept as a comma-separated string in the
+  // DB column to avoid a schema migration. The UI uses a single primary
+  // sport via the SwipeDial; if the user previously selected multiple,
+  // we honour the first as the active one and keep the rest in storage.
+  const selectedSports = formData.athlete_type
+    ? formData.athlete_type.split(",").map((s) => s.trim()).filter(Boolean)
+    : [];
+  const primarySport = selectedSports[0] ?? "";
+  const setPrimarySport = (v: string) => {
+    setFormData((prev) => ({ ...prev, athlete_type: v }));
+  };
+
   return (
-    <div className="animate-page-in space-y-2 px-5 py-3 sm:p-5 max-w-7xl mx-auto pb-16 md:pb-6">
+    <div className="animate-page-in space-y-3 px-5 py-3 sm:p-5 max-w-2xl mx-auto pb-20 md:pb-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-[15px] font-bold tracking-tight">Goals</h1>
-        <p className="text-muted-foreground text-[13px]">Profile & targets</p>
+        <h1 className="text-[20px] font-bold tracking-tight">Profile</h1>
+        <p className="text-muted-foreground text-[12px]">Tap to edit</p>
       </div>
 
       {!contextProfile?.goal_weight_kg && (
-        <div className="rounded-lg bg-muted/20 p-2.5 flex items-start gap-2">
-          <Target className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
-          <p className="text-[13px] text-muted-foreground leading-snug">
-            Fill in your details so the Wizard can calculate targets and guide your cut.
+        <div className="rounded-2xl bg-primary/5 border border-primary/15 p-3 flex items-start gap-2">
+          <Target className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+          <p className="text-[13px] text-foreground/80 leading-snug">
+            Finish your profile so the Wizard can calculate targets and guide your cut.
           </p>
         </div>
       )}
 
       <div className="space-y-4">
-        {/* Section: Athlete Profile */}
-        <div className="card-surface rounded-2xl border-2 border-border overflow-hidden">
-          <h2 className="text-[11px] font-bold uppercase tracking-widest text-primary px-3 pt-3 pb-2">Athlete Profile</h2>
-          <div className="divide-y divide-border/40 border-t border-border/40">
-            <div className="px-2.5 py-2 space-y-1">
-              <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Sports</Label>
-              {(() => {
-                const selected = formData.athlete_type
-                  ? formData.athlete_type.split(",").map(s => s.trim()).filter(Boolean)
-                  : [];
-                const toggle = (v: string) => {
-                  const next = selected.includes(v)
-                    ? selected.filter(x => x !== v)
-                    : [...selected, v];
-                  setFormData(prev => ({ ...prev, athlete_type: next.join(",") }));
-                };
-                return (
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {Object.entries(ATHLETE_TYPES).map(([k, v]) => {
-                      const isSelected = selected.includes(k);
-                      return (
-                        <button key={k} type="button" onClick={() => toggle(k)}
-                          className={`h-9 rounded-xl text-[12px] font-medium border transition-all active:scale-[0.97] ${
-                            isSelected
-                              ? "border-primary bg-primary/15 text-foreground ring-1 ring-primary/30"
-                              : "border-border/50 bg-card text-muted-foreground hover:bg-muted/30"
-                          }`}>
-                          {v}
-                        </button>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-            </div>
-            <div className="px-2.5 py-2 space-y-1">
-              <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Goal</Label>
-              <ChipSelect value={formData.goal_type} columns={4}
-                options={[
-                  { value: "cutting", label: "Cut" },
-                  { value: "losing", label: "Lose" },
-                  { value: "maintaining", label: "Maintain" },
-                  { value: "gaining", label: "Gain" },
-                ]}
-                onChange={(v) => setFormData(prev => ({ ...prev, goal_type: v }))} />
-            </div>
-            <div className="px-2.5 py-2 space-y-1">
-              <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Experience</Label>
-              <ChipSelect value={formData.experience_level}
-                options={Object.entries(EXPERIENCE_LABELS).map(([k, v]) => ({ value: k, label: v }))}
-                onChange={(v) => setFormData(prev => ({ ...prev, experience_level: v }))} />
-            </div>
-            <div className="px-2.5 py-2 space-y-1">
-              <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Plan Style</Label>
-              <ChipSelect value={formData.plan_aggressiveness}
-                options={Object.entries(AGGRESSIVENESS_LABELS).map(([k, v]) => ({ value: k, label: v }))}
-                onChange={(v) => setFormData(prev => ({ ...prev, plan_aggressiveness: v }))} />
+        {/* ── Profile (top) ──────────────────────────────────────────── */}
+        {/* Picture + display name. Moved here from the Settings panel so
+            the most personal fields live with the rest of the profile. */}
+        <Section title="You">
+          <div className="flex items-center gap-3 px-3 py-3">
+            <ProfilePictureUpload
+              currentAvatarUrl={avatarUrl}
+              onUploadSuccess={(url) => setAvatarUrl(url)}
+              size="lg"
+              showRemove={false}
+            />
+            <div className="flex-1 min-w-0">
+              <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Display name
+              </Label>
+              <Input
+                value={editedName}
+                onChange={(e) => setEditedName(e.target.value)}
+                onBlur={() => void flushName()}
+                placeholder="Your name"
+                className="mt-1 h-10 rounded-xl bg-muted/40 border-border/30 text-[15px]"
+                disabled={savingName}
+              />
             </div>
           </div>
-        </div>
+        </Section>
 
-        {/* Section: Personal Details */}
-        <div className="card-surface rounded-2xl border-2 border-border overflow-hidden">
-          <h2 className="text-[11px] font-bold uppercase tracking-widest text-primary px-3 pt-3 pb-2">Personal Details</h2>
-          <div className="divide-y divide-border/40 border-t border-border/40">
-            <div className="flex items-center justify-between px-2.5 py-1.5">
-              <Label className="text-[13px] font-medium">Age</Label>
-              <Input type="number" value={formData.age} onChange={(e) => setFormData(prev => ({ ...prev, age: e.target.value }))}
-                className="w-16 text-right h-7 border-transparent focus-visible:ring-0 bg-transparent p-0 text-[13px]" placeholder="-" />
-            </div>
-            <div className="px-2.5 py-2 space-y-1">
-              <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Sex</Label>
-              <ChipSelect value={formData.sex} columns={2}
-                options={[{ value: "male", label: "Male" }, { value: "female", label: "Female" }]}
-                onChange={(v) => setFormData(prev => ({ ...prev, sex: v }))} />
-            </div>
-            <div className="flex items-center justify-between px-2.5 py-1.5">
-              <Label className="text-[13px] font-medium">Height</Label>
-              <div className="flex items-center gap-0.5">
-                <Input type="number" value={formData.height_cm} onChange={(e) => setFormData(prev => ({ ...prev, height_cm: e.target.value }))}
-                  className="w-16 text-right h-7 border-transparent focus-visible:ring-0 bg-transparent p-0 text-[13px]" placeholder="-" />
-                <span className="text-muted-foreground text-[13px]">cm</span>
-              </div>
-            </div>
-            <div className="flex items-center justify-between px-2.5 py-1.5">
-              <Label className="text-[13px] font-medium">Weight</Label>
-              <div className="flex items-center gap-0.5">
-                <Input type="number" step="0.1" value={formData.current_weight_kg} onChange={(e) => setFormData(prev => ({ ...prev, current_weight_kg: e.target.value }))}
-                  className="w-16 text-right h-7 border-transparent focus-visible:ring-0 bg-transparent p-0 text-[13px]" placeholder="-" />
-                <span className="text-muted-foreground text-[13px]">kg</span>
-              </div>
-            </div>
-            {formData.body_fat_pct !== undefined && (
-              <div className="flex items-center justify-between px-2.5 py-1.5">
-                <Label className="text-[13px] font-medium">Body Fat</Label>
-                <div className="flex items-center gap-0.5">
-                  <Input type="number" step="0.1" value={formData.body_fat_pct} onChange={(e) => setFormData(prev => ({ ...prev, body_fat_pct: e.target.value }))}
-                    className="w-16 text-right h-7 border-transparent focus-visible:ring-0 bg-transparent p-0 text-[13px]" placeholder="-" />
-                  <span className="text-muted-foreground text-[13px]">%</span>
+        {/* ── Personal Details (above Athlete Profile) ───────────────── */}
+        <Section title="Personal Details">
+          <Row label="Age">
+            <NumericInput
+              value={formData.age}
+              onChange={(v) => setFormData((p) => ({ ...p, age: v }))}
+            />
+          </Row>
+          <Row label="Sex">
+            <SegmentedTwo
+              value={formData.sex}
+              options={[
+                { value: "male", label: "Male" },
+                { value: "female", label: "Female" },
+              ]}
+              onChange={(v) => setFormData((p) => ({ ...p, sex: v }))}
+            />
+          </Row>
+          <Row label="Height">
+            <NumericInput
+              value={formData.height_cm}
+              onChange={(v) => setFormData((p) => ({ ...p, height_cm: v }))}
+              suffix="cm"
+            />
+          </Row>
+          <Row label="Weight">
+            <NumericInput
+              step="0.1"
+              value={formData.current_weight_kg}
+              onChange={(v) => setFormData((p) => ({ ...p, current_weight_kg: v }))}
+              suffix="kg"
+            />
+          </Row>
+          {formData.body_fat_pct !== undefined && (
+            <Row label="Body Fat">
+              <NumericInput
+                step="0.1"
+                value={formData.body_fat_pct}
+                onChange={(v) => setFormData((p) => ({ ...p, body_fat_pct: v }))}
+                suffix="%"
+              />
+            </Row>
+          )}
+          <DialRow label="Sleep">
+            <SwipeDial
+              value={formData.sleep_hours}
+              cellWidth={88}
+              ariaLabel="Sleep hours per night"
+              options={[
+                { value: "<5", label: "<5h" },
+                { value: "5-6", label: "5–6h" },
+                { value: "6-7", label: "6–7h" },
+                { value: "7-8", label: "7–8h" },
+                { value: "8+", label: "8h+" },
+              ]}
+              onChange={(v) => setFormData((p) => ({ ...p, sleep_hours: v }))}
+            />
+          </DialRow>
+        </Section>
+
+        {/* ── Targets (below Personal Details) ──────────────────────── */}
+        <Section title="Targets">
+          <Row label={isFighter ? "Weight Class" : "Goal Weight"}>
+            <NumericInput
+              step="0.1"
+              value={formData.goal_weight_kg}
+              onChange={(v) => setFormData((p) => ({ ...p, goal_weight_kg: v }))}
+              suffix="kg"
+              accent
+            />
+          </Row>
+
+          {isFighter && (
+            <div className="px-3 py-2.5 bg-muted/15 space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Label className="text-[14px] font-medium truncate">Diet Target</Label>
+                  <button
+                    type="button"
+                    onClick={() => setUseAutoTarget(!useAutoTarget)}
+                    className={`text-[9px] px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider shrink-0 transition-colors ${
+                      useAutoTarget
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted/40 text-muted-foreground"
+                    }`}
+                  >
+                    {useAutoTarget ? "Auto" : "Manual"}
+                  </button>
                 </div>
+                <NumericInput
+                  step="0.1"
+                  value={formData.fight_week_target_kg}
+                  onChange={(v) => {
+                    setFormData((p) => ({ ...p, fight_week_target_kg: v }));
+                    setUseAutoTarget(false);
+                  }}
+                  suffix="kg"
+                  disabled={useAutoTarget}
+                />
               </div>
-            )}
-            <div className="px-2.5 py-2 space-y-1">
-              <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Sleep</Label>
-              <ChipSelect value={formData.sleep_hours} columns={5}
-                options={[
-                  { value: "<5", label: "<5h" },
-                  { value: "5-6", label: "5-6h" },
-                  { value: "6-7", label: "6-7h" },
-                  { value: "7-8", label: "7-8h" },
-                  { value: "8+", label: "8+" },
-                ]}
-                onChange={(v) => setFormData(prev => ({ ...prev, sleep_hours: v }))} />
-            </div>
-          </div>
-        </div>
-
-        {/* Section: Targets */}
-        <div className="card-surface rounded-2xl border-2 border-border overflow-hidden">
-          <h2 className="text-[11px] font-bold uppercase tracking-widest text-primary px-3 pt-3 pb-2">Targets</h2>
-          <div className="divide-y divide-border/40 border-t border-border/40">
-            <div className="flex items-center justify-between px-2.5 py-1.5">
-              <Label className="text-[13px] font-medium">{isFighter ? 'Weight Class' : 'Goal Weight'}</Label>
-              <div className="flex items-center gap-0.5">
-                <Input type="number" step="0.1" value={formData.goal_weight_kg} onChange={(e) => setFormData(prev => ({ ...prev, goal_weight_kg: e.target.value }))}
-                  className="w-16 text-right h-7 border-transparent focus-visible:ring-0 bg-transparent p-0 text-[13px] font-semibold text-primary" placeholder="-" />
-                <span className="text-muted-foreground text-[13px]">kg</span>
-              </div>
-            </div>
-
-            {isFighter && (
-              <div className="px-2.5 py-1.5 space-y-1.5 bg-muted/10">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1.5">
-                    <Label className="text-[13px] font-medium">Diet Target</Label>
-                    <button type="button" onClick={() => setUseAutoTarget(!useAutoTarget)}
-                      className={`text-[8px] px-1.5 py-0.5 rounded-full transition-colors ${useAutoTarget ? "bg-primary text-primary-foreground" : "bg-muted/40 text-muted-foreground"}`}>
-                      {useAutoTarget ? "AUTO" : "MANUAL"}
-                    </button>
+              {useAutoTarget ? (
+                <p className="text-[12px] text-muted-foreground leading-snug">
+                  Safe pre-cut weight (5.5% buffer)
+                </p>
+              ) : (
+                safetyFeedback && (
+                  <div
+                    className={`flex items-center gap-1.5 text-[12px] font-medium leading-snug ${
+                      targetSafetyLevel === "safe"
+                        ? "text-emerald-500"
+                        : targetSafetyLevel === "moderate"
+                        ? "text-amber-500"
+                        : "text-rose-500"
+                    }`}
+                  >
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{safetyFeedback.message}</span>
                   </div>
-                  <div className="flex items-center gap-0.5">
-                    <Input type="number" step="0.1" value={formData.fight_week_target_kg}
-                      onChange={(e) => { setFormData(prev => ({ ...prev, fight_week_target_kg: e.target.value })); setUseAutoTarget(false); }}
-                      disabled={useAutoTarget}
-                      className="w-16 text-right h-7 border-transparent focus-visible:ring-0 bg-transparent p-0 text-[13px] disabled:opacity-60" placeholder="-" />
-                    <span className="text-muted-foreground text-[13px]">kg</span>
-                  </div>
-                </div>
-                {useAutoTarget ? (
-                  <div className="flex items-center gap-1.5 text-[13px] text-muted-foreground">
-                    <span>Safe pre-cut weight (5.5% buffer)</span>
-                  </div>
-                ) : safetyFeedback && (
-                  <div className={`flex items-center gap-1.5 text-[13px] font-medium ${
-                    targetSafetyLevel === "safe" ? "text-green-500" :
-                    targetSafetyLevel === "moderate" ? "text-yellow-500" :
-                    "text-red-500"
-                  }`}>
-                    <AlertTriangle className="h-3 w-3 shrink-0" />
-                    <span>{safetyFeedback.message}</span>
-                  </div>
-                )}
-              </div>
-            )}
+                )
+              )}
+            </div>
+          )}
 
-            <div className="flex items-center justify-between px-2.5 py-1.5">
-              <Label className="text-[13px] font-medium">Target Date</Label>
-              <Input type="date" value={formData.target_date} onChange={(e) => setFormData(prev => ({ ...prev, target_date: e.target.value }))}
-                className="w-auto h-7 border-transparent focus-visible:ring-0 bg-transparent p-0 text-[13px] text-right" />
-            </div>
-          </div>
-        </div>
+          <Row label="Target Date">
+            <Input
+              type="date"
+              value={formData.target_date}
+              onChange={(e) => setFormData((p) => ({ ...p, target_date: e.target.value }))}
+              className="w-auto h-7 border-transparent focus-visible:ring-0 bg-transparent p-0 text-[14px] text-right"
+            />
+          </Row>
+        </Section>
 
-        {/* Section: Activity & Training */}
-        <div className="card-surface rounded-2xl border-2 border-border overflow-hidden">
-          <h2 className="text-[11px] font-bold uppercase tracking-widest text-primary px-3 pt-3 pb-2">Activity & Training</h2>
-          <div className="divide-y divide-border/40 border-t border-border/40">
-            <div className="px-2.5 py-2 space-y-1">
-              <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Activity Level</Label>
-              <ChipSelect value={formData.activity_level} columns={3}
-                options={[
-                  { value: "sedentary", label: "Sedentary" },
-                  { value: "lightly_active", label: "Light" },
-                  { value: "moderately_active", label: "Moderate" },
-                  { value: "very_active", label: "Active" },
-                  { value: "extra_active", label: "Extreme" },
-                ]}
-                onChange={(v) => setFormData(prev => ({ ...prev, activity_level: v }))} />
-            </div>
-            <div className="flex items-center justify-between px-2.5 py-1.5">
-              <Label className="text-[13px] font-medium">Training</Label>
-              <div className="flex items-center gap-0.5">
-                <Input type="number" value={formData.training_frequency} onChange={(e) => setFormData(prev => ({ ...prev, training_frequency: e.target.value }))}
-                  className="w-12 text-right h-7 border-transparent focus-visible:ring-0 bg-transparent p-0 text-[13px]" placeholder="-" />
-                <span className="text-muted-foreground text-[13px]">/wk</span>
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* ── Activity & Training (below Targets) ────────────────────── */}
+        <Section title="Activity & Training">
+          <DialRow label="Activity Level">
+            <SwipeDial
+              value={formData.activity_level}
+              cellWidth={120}
+              ariaLabel="Daily activity level"
+              options={[
+                { value: "sedentary", label: "Sedentary" },
+                { value: "lightly_active", label: "Light" },
+                { value: "moderately_active", label: "Moderate" },
+                { value: "very_active", label: "Active" },
+                { value: "extra_active", label: "Extreme" },
+              ]}
+              onChange={(v) => setFormData((p) => ({ ...p, activity_level: v }))}
+            />
+          </DialRow>
+          <Row label="Training">
+            <NumericInput
+              value={formData.training_frequency}
+              onChange={(v) => setFormData((p) => ({ ...p, training_frequency: v }))}
+              suffix="/wk"
+            />
+          </Row>
+        </Section>
+
+        {/* ── Athlete Profile (bottom) — swipe dials replace the chip
+              grids that used to dominate the page ────────────────────── */}
+        <Section title="Athlete Profile">
+          <DialRow label="Sport">
+            <SwipeDial
+              value={primarySport}
+              cellWidth={100}
+              ariaLabel="Primary sport"
+              options={Object.entries(ATHLETE_TYPES).map(([k, v]) => ({
+                value: k,
+                label: v,
+              }))}
+              onChange={(v) => setPrimarySport(v)}
+            />
+          </DialRow>
+          <DialRow label="Goal">
+            <SwipeDial
+              value={formData.goal_type}
+              cellWidth={120}
+              ariaLabel="Primary goal"
+              options={[
+                { value: "cutting", label: "Cut" },
+                { value: "losing", label: "Lose" },
+                { value: "maintaining", label: "Maintain" },
+                { value: "gaining", label: "Gain" },
+              ]}
+              onChange={(v) => setFormData((p) => ({ ...p, goal_type: v }))}
+            />
+          </DialRow>
+          <DialRow label="Experience">
+            <SwipeDial
+              value={formData.experience_level}
+              cellWidth={150}
+              ariaLabel="Experience level"
+              options={Object.entries(EXPERIENCE_LABELS).map(([k, v]) => ({
+                value: k,
+                label: v,
+              }))}
+              onChange={(v) => setFormData((p) => ({ ...p, experience_level: v }))}
+            />
+          </DialRow>
+          <DialRow label="Plan Style">
+            <SwipeDial
+              value={formData.plan_aggressiveness}
+              cellWidth={130}
+              ariaLabel="Plan aggressiveness"
+              options={Object.entries(AGGRESSIVENESS_LABELS).map(([k, v]) => ({
+                value: k,
+                label: v,
+              }))}
+              onChange={(v) => setFormData((p) => ({ ...p, plan_aggressiveness: v }))}
+            />
+          </DialRow>
+        </Section>
 
         {/* Save */}
-        <div className="pt-1 pb-4">
-          <button onClick={handleSubmit} disabled={saving}
-            className="w-full py-2.5 text-[13px] font-semibold text-primary-foreground bg-primary rounded-2xl active:opacity-90 transition-opacity disabled:opacity-40">
-            {saving ? "Saving..." : "Save Updates"}
+        <div className="pt-2 pb-4">
+          <button
+            onClick={handleSubmit}
+            disabled={saving}
+            className="w-full h-12 rounded-2xl text-[15px] font-semibold text-primary-foreground bg-primary active:scale-[0.98] transition-transform disabled:opacity-40"
+          >
+            {saving ? "Saving…" : "Save Profile"}
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Layout primitives — kept inline so the page reads top-to-bottom and
+// each row's structure is obvious without jumping files. They share one
+// styling vocabulary so the page reads as a single coherent settings
+// surface rather than a stack of bespoke cards.
+// ──────────────────────────────────────────────────────────────────────
+
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="card-surface rounded-2xl border border-border overflow-hidden">
+      <h2 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/80 px-3 pt-3 pb-2">
+        {title}
+      </h2>
+      <div className="divide-y divide-border/40 border-t border-border/40">
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function Row({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-3 py-2.5 min-h-[44px]">
+      <Label className="text-[14px] font-medium truncate">{label}</Label>
+      <div className="flex items-center gap-0.5 max-w-[60%] justify-end">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function DialRow({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="px-3 py-2.5 space-y-1.5">
+      <Label className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </Label>
+      {children}
+    </div>
+  );
+}
+
+function NumericInput({
+  value,
+  onChange,
+  suffix,
+  step,
+  disabled,
+  accent,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  suffix?: string;
+  step?: string;
+  disabled?: boolean;
+  accent?: boolean;
+}) {
+  return (
+    <>
+      <Input
+        type="number"
+        step={step}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+        className={`w-16 text-right h-8 border-transparent focus-visible:ring-0 bg-transparent p-0 text-[15px] tabular-nums disabled:opacity-60 ${
+          accent ? "font-semibold text-primary" : ""
+        }`}
+        placeholder="–"
+        inputMode="decimal"
+      />
+      {suffix && (
+        <span className="text-muted-foreground text-[13px] tabular-nums">
+          {suffix}
+        </span>
+      )}
+    </>
+  );
+}
+
+function SegmentedTwo({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1 bg-muted/30 rounded-xl p-0.5">
+      {options.map((o) => {
+        const active = value === o.value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            onClick={() => {
+              triggerHapticSelection();
+              onChange(o.value);
+            }}
+            className={`min-w-[60px] h-8 px-3 rounded-lg text-[13px] font-medium transition-all ${
+              active
+                ? "bg-background text-foreground shadow-sm"
+                : "text-muted-foreground"
+            }`}
+          >
+            {o.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

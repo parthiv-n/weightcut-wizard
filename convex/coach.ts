@@ -183,7 +183,7 @@ export const athletesOverview = query({
 
         return Promise.all(
           athletes.map(async (m) => {
-            const [profile, latestWeight, todayMeals, recent7dSessions] =
+            const [profile, latestWeight, todayMeals, recent7dSessions, latestFightForm] =
               await Promise.all([
                 ctx.db
                   .query("profiles")
@@ -206,6 +206,14 @@ export const athletesOverview = query({
                     q.eq("userId", m.userId).gte("date", sevenDaysAgo),
                   )
                   .collect(),
+                // Newest fight-form score so the coach list can show each
+                // athlete's current readiness number at a glance. Indexed
+                // read; cheap.
+                ctx.db
+                  .query("fight_form_scores")
+                  .withIndex("by_user_date", (q) => q.eq("userId", m.userId))
+                  .order("desc")
+                  .first(),
               ]);
 
             // Last meal across any date — used for the "last_meal_at"
@@ -265,6 +273,14 @@ export const athletesOverview = query({
                   durationMinutes: s.durationMinutes,
                 })),
               ),
+              fight_form: latestFightForm
+                ? {
+                    date: latestFightForm.date,
+                    score: latestFightForm.displayedScore,
+                    label: latestFightForm.label,
+                    state: latestFightForm.state,
+                  }
+                : null,
             };
           }),
         );
@@ -305,6 +321,7 @@ export const athleteDetail = query({
       weight14d,
       todayMeals,
       recentSessions,
+      fightForm14d,
     ] = await Promise.all([
       ctx.db
         .query("profiles")
@@ -326,6 +343,14 @@ export const athleteDetail = query({
         .query("fight_camp_calendar")
         .withIndex("by_user_date", (q) =>
           q.eq("userId", athleteUserId).gte("date", sevenDaysAgo),
+        )
+        .collect(),
+      // 14-day fight-form history powers both the latest score readout and
+      // the trend sparkline on the coach's athlete-detail page.
+      ctx.db
+        .query("fight_form_scores")
+        .withIndex("by_user_date", (q) =>
+          q.eq("userId", athleteUserId).gte("date", fourteenDaysAgo),
         )
         .collect(),
     ]);
@@ -380,6 +405,15 @@ export const athleteDetail = query({
       ctx,
       profile?.avatarStorageId,
     );
+
+    // Sort the fight-form rows ascending so the trend sparkline renders
+    // oldest → newest without re-sorting on the client; pluck the latest
+    // row for the hero readout.
+    const sortedFightForm = [...fightForm14d].sort((a, b) =>
+      a.date.localeCompare(b.date),
+    );
+    const latestFightForm = sortedFightForm[sortedFightForm.length - 1] ?? null;
+
     return {
       profile: profile
         ? {
@@ -416,6 +450,40 @@ export const athleteDetail = query({
         fats_g: fatsG,
       },
       recent_sessions: recentWithSoreness,
+      // Fight-form snapshot + trend so the coach can see how an athlete
+      // is tracking against their fight readiness without leaving the
+      // detail page. Mirrors the athlete's own dashboard ring.
+      fight_form: latestFightForm
+        ? {
+            date: latestFightForm.date,
+            score: latestFightForm.displayedScore,
+            raw_score: latestFightForm.rawScore,
+            label: latestFightForm.label,
+            state: latestFightForm.state,
+            phase: latestFightForm.phase ?? null,
+            top_driver: latestFightForm.topDriver,
+            top_limiter: latestFightForm.topLimiter,
+            applied_ceiling: latestFightForm.appliedCeiling
+              ? {
+                  rule_id: latestFightForm.appliedCeiling.ruleId,
+                  cap: latestFightForm.appliedCeiling.cap,
+                }
+              : null,
+            sub_scores: {
+              training_load: latestFightForm.subScores.trainingLoad,
+              sleep: latestFightForm.subScores.sleep,
+              weight_cut: latestFightForm.subScores.weightCut,
+              wellness: latestFightForm.subScores.wellness,
+              nutrition_adherence:
+                latestFightForm.subScores.nutritionAdherence,
+            },
+          }
+        : null,
+      fight_form_trend: sortedFightForm.map((r) => ({
+        date: r.date,
+        score: r.displayedScore,
+        state: r.state,
+      })),
       membership: {
         share_data: athleteMember.shareData,
         status: athleteMember.status,
@@ -469,6 +537,9 @@ export const myGymsOverview = query({
             invite_code: gym.inviteCode,
             location: gym.location ?? null,
             logo_url: logoUrl,
+            disciplines: gym.disciplines ?? null,
+            fighter_count: gym.fighterCount ?? null,
+            about: gym.about ?? null,
             athlete_count: activeAthletes,
             recent_announcement_count: recentAnnouncementCount,
             created_at: new Date(gym._creationTime).toISOString(),

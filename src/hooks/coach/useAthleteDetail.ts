@@ -11,6 +11,32 @@ import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 
+export type FightFormSubKey =
+  | "training_load"
+  | "sleep"
+  | "weight_cut"
+  | "wellness"
+  | "nutrition_adherence";
+
+export interface FightFormSub {
+  value: number;
+  weight: number;
+  reason: string;
+}
+
+export interface FightFormDetail {
+  date: string;
+  score: number;
+  raw_score: number;
+  label: "sharp" | "sharpening" | "off_pace" | "at_risk";
+  state: "ok" | "calibrating" | "no_camp" | "paused";
+  phase: "build" | "peak" | "fightWeek" | null;
+  top_driver: string;
+  top_limiter: string;
+  applied_ceiling: { rule_id: string; cap: number } | null;
+  sub_scores: Record<FightFormSubKey, FightFormSub>;
+}
+
 export interface AthleteDetailData {
   profile: {
     id: string;
@@ -32,6 +58,11 @@ export interface AthleteDetailData {
   strain_7d: number[] | null;
   today_macros: { calories: number; protein_g: number; carbs_g: number; fats_g: number } | null;
   recent_sessions: { date: string; session_type: string; rpe: number; soreness_level: number | null; duration_minutes: number }[] | null;
+  /** Latest fight-form snapshot + sub-score breakdown. `null` until the
+   *  athlete has generated at least one score. */
+  fight_form: FightFormDetail | null;
+  /** 14-day score history, oldest → newest. */
+  fight_form_trend: { date: string; score: number; state: string }[] | null;
   membership: { share_data: boolean; status: string; joined_at: string; gym_name: string } | null;
 }
 

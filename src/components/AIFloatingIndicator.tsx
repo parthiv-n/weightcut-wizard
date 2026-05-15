@@ -53,7 +53,7 @@ function IndicatorPill({
     },
   }[task.status];
 
-  const bottomOffset = 5.5 * 16 + index * (PILL_HEIGHT + PILL_GAP); // 5.5rem base + stacking
+  const bottomOffset = 4.5 * 16 + index * (PILL_HEIGHT + PILL_GAP); // 4.5rem base (matches bottom-nav size, ~23% smaller than original) + stacking
 
   return (
     <button

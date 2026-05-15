@@ -13,6 +13,7 @@ import { useAuth } from "@/contexts/UserContext";
 import { triggerHaptic } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import { routeAfterAuth } from "@/lib/roleRouter";
+import { mapAuthError } from "@/lib/authErrors";
 import { logger } from "@/lib/logger";
 
 const inputClass =
@@ -56,22 +57,37 @@ export default function CoachLogin() {
     setErrorMsg("");
     try {
       if (isLogin) {
-        await signIn("password", { email, password, flow: "signIn" });
+        try {
+          await signIn("password", { email, password, flow: "signIn" });
+        } catch (err) {
+          logger.warn("CoachLogin: signIn failed", { err });
+          setErrorMsg(mapAuthError(err, "signIn"));
+          return;
+        }
         // routeAfterAuth fires from the useEffect once userId resolves.
       } else {
-        if (password !== confirmPassword) { setErrorMsg("Passwords do not match"); setLoading(false); return; }
-        if (password.length < 6) { setErrorMsg("Password must be at least 6 characters"); setLoading(false); return; }
+        if (password !== confirmPassword) { setErrorMsg("Passwords do not match"); return; }
+        // Convex Auth's default validator requires 8+ characters; matching
+        // here keeps the client + server rules in sync so users don't get
+        // the cryptic "Invalid password" round-trip.
+        if (password.length < 8) { setErrorMsg("Password must be at least 8 characters"); return; }
         try { localStorage.setItem("wcw_intended_role", "coach"); } catch {}
-        await signIn("password", { email, password, flow: "signUp", role: "coach" });
-        // Persist the role on the freshly-created profile row.
+        try {
+          await signIn("password", { email, password, flow: "signUp", role: "coach" });
+        } catch (err) {
+          logger.warn("CoachLogin: signUp failed", { err });
+          setErrorMsg(mapAuthError(err, "signUp"));
+          return;
+        }
+        // Belt-and-braces: convex/auth.ts now persists `role: "coach"` on
+        // the bootstrap row directly from the signUp params, so this is a
+        // no-op for fresh accounts. We keep the call to cover the edge
+        // case where the profile row was created before that wiring.
         try { await setRoleMut({ role: "coach" }); } catch (err) {
           logger.warn("CoachLogin: setRole failed", { err });
         }
-        navigate("/coach/setup", { replace: true });
+        navigate("/coach/onboarding", { replace: true });
       }
-    } catch (err: any) {
-      logger.warn("CoachLogin: auth failed", { err });
-      setErrorMsg(err?.message || "Authentication failed");
     } finally {
       setLoading(false);
     }
@@ -205,9 +221,9 @@ export default function CoachLogin() {
               <>
                 <form onSubmit={handleAuth} className="space-y-3">
                   <Input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required className={inputClass} autoFocus />
-                  <Input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} className={inputClass} />
+                  <Input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={isLogin ? 1 : 8} className={inputClass} />
                   {!isLogin && (
-                    <Input type="password" placeholder="Confirm password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={6} className={inputClass} />
+                    <Input type="password" placeholder="Confirm password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={8} className={inputClass} />
                   )}
                   {errorMsg && <p className="text-xs text-red-500 text-center">{errorMsg}</p>}
                   <Button type="submit" disabled={loading} className="w-full h-[50px] rounded-2xl bg-primary text-primary-foreground font-semibold text-[16px] active:scale-[0.98] transition-transform disabled:opacity-50">

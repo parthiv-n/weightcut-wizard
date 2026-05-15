@@ -27,6 +27,7 @@ import {
 import { AthleteAvatar } from "@/components/coach/AthleteAvatar";
 import { StrainSparkline } from "@/components/coach/StrainSparkline";
 import { FightTargetBadge } from "@/components/coach/FightTargetBadge";
+import { FightFormPanel } from "@/components/coach/FightFormPanel";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { registerPullRefresh } from "@/lib/pullRefreshRegistry";
 import { getSessionColor } from "@/lib/sessionColors";
@@ -80,7 +81,7 @@ export default function AthleteDetail() {
     );
   }
 
-  const { profile: ath, weight_7d, strain_7d, today_macros, recent_sessions, membership } = data;
+  const { profile: ath, weight_7d, strain_7d, today_macros, recent_sessions, membership, fight_form, fight_form_trend } = data;
   const strainTotal = (strain_7d ?? []).reduce((s, v) => s + (v || 0), 0);
   const target = ath.fight_week_target_kg ?? ath.goal_weight_kg ?? null;
   const delta = target != null && ath.current_weight_kg != null
@@ -115,23 +116,29 @@ export default function AthleteDetail() {
         className="animate-page-in space-y-3 px-5 py-3 sm:p-5 md:p-6 w-full max-w-2xl mx-auto"
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 5rem)" }}
       >
-        {/* Header */}
-        <div className="flex items-center gap-2">
+        {/* Header — bigger avatar + name so the page reads as a person, not a row */}
+        <div className="flex items-center gap-3">
           <button
             onClick={() => navigate("/coach")}
             className="-ml-2 p-2 rounded-lg active:bg-muted/50 transition-colors"
             aria-label="Back to coach dashboard"
           >
-            <ChevronLeft className="h-4 w-4 text-muted-foreground" />
+            <ChevronLeft className="h-5 w-5 text-muted-foreground" />
           </button>
-          <AthleteAvatar avatarUrl={ath.avatar_url} name={ath.display_name} size={36} />
+          <AthleteAvatar avatarUrl={ath.avatar_url} name={ath.display_name} size={48} />
           <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-semibold truncate">{ath.display_name || "Athlete"}</p>
+            <p className="text-[18px] font-semibold leading-tight truncate">{ath.display_name || "Athlete"}</p>
             {membership && (
-              <p className="text-[11px] text-muted-foreground truncate">{membership.gym_name}</p>
+              <p className="text-[12px] text-muted-foreground truncate">{membership.gym_name}</p>
             )}
           </div>
         </div>
+
+        {/* Fight form — coach's primary readout. Renders only once we have
+            a score row; never blocks the page on athletes without scoring. */}
+        {fight_form && (
+          <FightFormPanel fightForm={fight_form} trend={fight_form_trend} />
+        )}
 
         {/* Weight summary + 7d chart */}
         <div className="card-surface rounded-2xl border border-border p-3">

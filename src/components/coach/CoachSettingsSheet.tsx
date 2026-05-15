@@ -5,6 +5,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useAuth, useUser, useProfile } from "@/contexts/UserContext";
+import { useCoachData, type GymRow } from "@/hooks/coach/useCoachData";
+import { GymLogoUpload } from "@/components/coach/GymLogoUpload";
 import { useToast } from "@/hooks/use-toast";
 import { useAction, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
@@ -42,6 +44,14 @@ export function CoachSettingsSheet({ open, onOpenChange }: Props) {
   const [deleting, setDeleting] = useState(false);
   const deleteAccount = useAction(api.actions.deleteAccount.run);
   const setUserNameMut = useMutation(api.profiles.setUserName);
+
+  // Pull the coach's primary gym so the settings sheet can show the
+  // logo + brand-fields editor. Uses the same hook the dashboard does
+  // — Convex caches the query so this is effectively free.
+  const { gyms } = useCoachData(userId);
+  const primaryGym: GymRow | undefined = gyms[0];
+  const [refreshTick, setRefreshTick] = useState(0);
+  void refreshTick; // re-render after a logo upload completes
 
   const handleSaveName = async () => {
     if (!userId || !editedName.trim() || editedName === userName) return;
@@ -91,7 +101,11 @@ export function CoachSettingsSheet({ open, onOpenChange }: Props) {
     } catch (err: any) {
       logger.error("CoachSettings: delete failed", err);
       globalLoading.hide();
-      toast({ title: "Could not delete account", variant: "destructive" });
+      toast({
+        title: "Could not delete account",
+        description: err?.message ?? "Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setDeleting(false);
     }
@@ -112,6 +126,31 @@ export function CoachSettingsSheet({ open, onOpenChange }: Props) {
           </SheetHeader>
 
           <div className="space-y-3 px-1">
+            {/* Gym brand — logo upload + headline gym fields. Renders only
+                when the coach has at least one gym (every signed-up coach
+                does, since onboarding creates one before reaching here). */}
+            {primaryGym && (
+              <div className="card-surface rounded-2xl border border-border p-3 flex items-center gap-3">
+                <GymLogoUpload
+                  gymId={primaryGym.id}
+                  gymName={primaryGym.name}
+                  currentLogoUrl={primaryGym.logo_url}
+                  size={56}
+                  onUploaded={() => setRefreshTick((t) => t + 1)}
+                  hideRemove
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[14px] font-semibold truncate">{primaryGym.name}</p>
+                  {primaryGym.location && (
+                    <p className="text-[11px] text-muted-foreground truncate">{primaryGym.location}</p>
+                  )}
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground/70 font-semibold mt-0.5">
+                    Code · {primaryGym.invite_code}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {/* Name */}
             <div className="card-surface rounded-2xl border border-border p-3 space-y-2">
               <p className="text-[11px] uppercase tracking-wider text-muted-foreground/70 font-semibold">Name</p>

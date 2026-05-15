@@ -667,6 +667,9 @@ All colors MUST be HSL.
     }
 
     .ff-ring-halo,
+    .ff-ring-aurora,
+    .ff-ring-wisp,
+    .ff-ring-core,
     .ff-ring-particle,
     .ff-ring-calib-sweep,
     .ff-ring-phase-pulse,
@@ -720,6 +723,120 @@ All colors MUST be HSL.
     animation-timing-function: linear, ease-in-out;
     animation-iteration-count: infinite, infinite;
     will-change: transform, opacity;
+  }
+
+  /* Size variants — picked round-robin in the React component so the swarm
+     has visual variety instead of a uniform dotted ring. */
+  .ff-ring-particle-lg {
+    width: 7px;
+    height: 7px;
+    margin: -3.5px 0 0 -3.5px;
+    box-shadow:
+      0 0 8px rgba(var(--ff-halo-rgb), 1),
+      0 0 18px rgba(var(--ff-halo-rgb), 0.75);
+  }
+  .ff-ring-particle-sm {
+    width: 3px;
+    height: 3px;
+    margin: -1.5px 0 0 -1.5px;
+    box-shadow:
+      0 0 5px rgba(var(--ff-halo-rgb), 0.9),
+      0 0 10px rgba(var(--ff-halo-rgb), 0.55);
+  }
+
+  /* Aurora sheen — slow rotating conic gradient sits behind the SVG ring
+     and reads as a trailing comet tail of light. Rotates once every ~16s. */
+  .ff-ring-aurora {
+    background: conic-gradient(
+      from 0deg,
+      rgba(var(--ff-halo-rgb), 0) 0deg,
+      rgba(var(--ff-halo-rgb), 0) 200deg,
+      rgba(var(--ff-halo-rgb), 0.18) 280deg,
+      rgba(var(--ff-halo-rgb), 0.42) 340deg,
+      rgba(var(--ff-halo-rgb), 0) 360deg
+    );
+    filter: blur(24px);
+    animation: ffRingAurora 16s linear infinite;
+    will-change: transform;
+  }
+
+  @keyframes ffRingAurora {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  /* Wind wisps — large blurred ellipses drifting around the ring on long
+     elliptical paths. Each `.ff-ring-wisp-N` uses a distinct keyframe so
+     the wisps don't fall into phase. */
+  .ff-ring-wisp {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 60px;
+    height: 28px;
+    margin: -14px 0 0 -30px;
+    border-radius: 9999px;
+    background: rgba(var(--ff-halo-rgb), 0.35);
+    filter: blur(18px);
+    animation-timing-function: ease-in-out;
+    animation-iteration-count: infinite;
+    will-change: transform, opacity;
+    opacity: 0;
+  }
+  .ff-ring-wisp-0 { animation-name: ffRingWisp0; }
+  .ff-ring-wisp-1 { animation-name: ffRingWisp1; }
+  .ff-ring-wisp-2 { animation-name: ffRingWisp2; }
+  .ff-ring-wisp-3 { animation-name: ffRingWisp3; }
+  .ff-ring-wisp-4 { animation-name: ffRingWisp4; }
+
+  @keyframes ffRingWisp0 {
+    0%   { transform: rotate(0deg)   translateX(78px) rotate(0deg);   opacity: 0; }
+    20%  { opacity: 0.9; }
+    80%  { opacity: 0.8; }
+    100% { transform: rotate(360deg) translateX(78px) rotate(-360deg); opacity: 0; }
+  }
+  @keyframes ffRingWisp1 {
+    0%   { transform: rotate(72deg)  translateX(94px) rotate(-72deg);  opacity: 0; }
+    20%  { opacity: 0.7; }
+    80%  { opacity: 0.6; }
+    100% { transform: rotate(432deg) translateX(94px) rotate(-432deg); opacity: 0; }
+  }
+  @keyframes ffRingWisp2 {
+    0%   { transform: rotate(144deg) translateX(70px) rotate(-144deg); opacity: 0; }
+    20%  { opacity: 0.95; }
+    80%  { opacity: 0.7; }
+    100% { transform: rotate(504deg) translateX(70px) rotate(-504deg); opacity: 0; }
+  }
+  @keyframes ffRingWisp3 {
+    0%   { transform: rotate(216deg) translateX(102px) rotate(-216deg); opacity: 0; }
+    20%  { opacity: 0.6; }
+    80%  { opacity: 0.55; }
+    100% { transform: rotate(576deg) translateX(102px) rotate(-576deg); opacity: 0; }
+  }
+  @keyframes ffRingWisp4 {
+    0%   { transform: rotate(288deg) translateX(88px) rotate(-288deg); opacity: 0; }
+    20%  { opacity: 0.85; }
+    80%  { opacity: 0.65; }
+    100% { transform: rotate(648deg) translateX(88px) rotate(-648deg); opacity: 0; }
+  }
+
+  /* Inner core glow — a soft breathing highlight inside the ring centre.
+     Lower opacity than the halo so it adds depth without obscuring the
+     numeric score. */
+  .ff-ring-core {
+    background: radial-gradient(
+      circle,
+      rgba(var(--ff-halo-rgb), 0.32) 0%,
+      rgba(var(--ff-halo-rgb), 0) 48%
+    );
+    filter: blur(10px);
+    animation: ffRingCorePulse 4.6s ease-in-out infinite;
+    will-change: opacity, transform;
+  }
+
+  @keyframes ffRingCorePulse {
+    0%, 100% { opacity: 0.55; transform: scale(0.92); }
+    50%      { opacity: 1;    transform: scale(1.04); }
   }
 
   @keyframes ffParticleOrbit {

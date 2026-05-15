@@ -464,6 +464,14 @@ export default defineSchema({
     location: v.optional(v.string()),
     // Convex Storage ID for the gym logo image. URL is resolved server-side.
     logoStorageId: v.optional(v.id("_storage")),
+    // Coach-onboarding extras. Optional so legacy gym rows stay valid.
+    // `disciplines` is a free-form list of styles taught (BJJ, MMA, Boxing,
+    // Muay Thai, Wrestling, etc); `fighterCount` is the rough roster size
+    // captured at onboarding (a coarse self-reported number, not a live
+    // member count).
+    disciplines: v.optional(v.array(v.string())),
+    fighterCount: v.optional(v.number()),
+    about: v.optional(v.string()),
     updatedAt: v.number(),
   })
     .index("by_owner", ["ownerUserId"])

@@ -51,6 +51,9 @@ function toClientGym(row: Doc<"gyms">, logoUrl: string | null = null) {
     invite_code: row.inviteCode,
     location: row.location ?? null,
     logo_url: logoUrl,
+    disciplines: row.disciplines ?? null,
+    fighter_count: row.fighterCount ?? null,
+    about: row.about ?? null,
     updated_at: row.updatedAt ? new Date(row.updatedAt).toISOString() : null,
     created_at: new Date(row._creationTime).toISOString(),
   };
@@ -180,31 +183,55 @@ export const create = mutation({
   args: {
     name: v.string(),
     location: v.optional(v.string()),
+    disciplines: v.optional(v.array(v.string())),
+    fighterCount: v.optional(v.number()),
+    about: v.optional(v.string()),
+    coachDisplayName: v.optional(v.string()),
   },
-  handler: async (ctx, { name, location }) => {
+  handler: async (
+    ctx,
+    { name, location, disciplines, fighterCount, about, coachDisplayName },
+  ) => {
     const userId = await requireUserId(ctx);
     const trimmedName = name.trim();
     if (!trimmedName) throw new Error("Gym name is required");
 
-    // 1. Promote the calling user to `coach` role (idempotent).
+    // 1. Promote the calling user to `coach` role (idempotent) and stash
+    //    a display name if one was supplied (coach onboarding collects
+    //    both gym + coach details on the same screen).
     const profile = await ctx.db
       .query("profiles")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .unique();
-    if (profile && profile.role !== "coach") {
-      await ctx.db.patch(profile._id, {
-        role: "coach",
-        updatedAt: Date.now(),
-      });
+    const profilePatch: Record<string, unknown> = { updatedAt: Date.now() };
+    if (profile && profile.role !== "coach") profilePatch.role = "coach";
+    const trimmedDisplay = coachDisplayName?.trim();
+    if (trimmedDisplay && profile && profile.displayName !== trimmedDisplay) {
+      profilePatch.displayName = trimmedDisplay;
+    }
+    if (profile && Object.keys(profilePatch).length > 1) {
+      await ctx.db.patch(profile._id, profilePatch as any);
     }
 
     // 2. Insert the gym with a unique invite code.
     const inviteCode = await generateUniqueInviteCode(ctx);
+    const cleanDisciplines = disciplines
+      ?.map((d) => d.trim())
+      .filter((d) => d.length > 0);
     const gymId = await ctx.db.insert("gyms", {
       name: trimmedName,
       ownerUserId: userId,
       inviteCode,
       location: location?.trim() || undefined,
+      disciplines:
+        cleanDisciplines && cleanDisciplines.length > 0
+          ? cleanDisciplines
+          : undefined,
+      fighterCount:
+        typeof fighterCount === "number" && fighterCount >= 0
+          ? Math.floor(fighterCount)
+          : undefined,
+      about: about?.trim() || undefined,
       updatedAt: Date.now(),
     });
 
@@ -224,15 +251,22 @@ export const create = mutation({
   },
 });
 
-/** Coach-only: update gym fields (name / location only — logo goes through
- *  the dedicated `setLogo` storage mutation below). */
+/** Coach-only: update gym fields (name / location / disciplines / fighter
+ *  count / about — logo goes through the dedicated `setLogo` storage
+ *  mutation below). Pass `null` to any optional field to clear it. */
 export const update = mutation({
   args: {
     gymId: v.id("gyms"),
     name: v.optional(v.string()),
     location: v.optional(v.union(v.string(), v.null())),
+    disciplines: v.optional(v.union(v.array(v.string()), v.null())),
+    fighterCount: v.optional(v.union(v.number(), v.null())),
+    about: v.optional(v.union(v.string(), v.null())),
   },
-  handler: async (ctx, { gymId, name, location }) => {
+  handler: async (
+    ctx,
+    { gymId, name, location, disciplines, fighterCount, about },
+  ) => {
     const userId = await requireUserId(ctx);
     const gym = await ctx.db.get(gymId);
     if (!gym) throw new Error("Gym not found");
@@ -247,6 +281,23 @@ export const update = mutation({
     }
     if (location !== undefined) {
       patch.location = location === null ? undefined : location.trim() || undefined;
+    }
+    if (disciplines !== undefined) {
+      if (disciplines === null) {
+        patch.disciplines = undefined;
+      } else {
+        const cleaned = disciplines.map((d) => d.trim()).filter((d) => d);
+        patch.disciplines = cleaned.length > 0 ? cleaned : undefined;
+      }
+    }
+    if (fighterCount !== undefined) {
+      patch.fighterCount =
+        fighterCount === null || fighterCount < 0
+          ? undefined
+          : Math.floor(fighterCount);
+    }
+    if (about !== undefined) {
+      patch.about = about === null ? undefined : about.trim() || undefined;
     }
     await ctx.db.patch(gymId, patch as any);
   },

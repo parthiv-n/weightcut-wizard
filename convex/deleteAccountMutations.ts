@@ -128,6 +128,10 @@ export const cascadeWellness = internalMutation({
     );
     await deleteByUserIndex(ctx, "personal_baselines", userId, "by_user_date");
     await deleteByUserIndex(ctx, "user_insights", userId, "by_user_type");
+    // Fight-form scores were missing from the original cascade — they
+    // are written daily by the scoring cron, so a long-time user can
+    // accumulate hundreds of rows that would otherwise dangle forever.
+    await deleteByUserIndex(ctx, "fight_form_scores", userId, "by_user_date");
   },
 });
 
@@ -144,12 +148,55 @@ export const cascadeMisc = internalMutation({
       .collect();
     await Promise.all(polls.map((p) => ctx.db.delete(p._id)));
 
+    // Announcement targets — when this user was an explicit recipient of
+    // an announcement in another coach's gym. Indexed by user.
+    const announcementTargets = await ctx.db
+      .query("gym_announcement_targets")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    await Promise.all(announcementTargets.map((t) => ctx.db.delete(t._id)));
+
     // Gym memberships (membership rows, not gyms they own — see next step).
     const memberships = await ctx.db
       .query("gym_members")
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
     await Promise.all(memberships.map((m) => ctx.db.delete(m._id)));
+
+    // Announcements posted BY this user in gyms they do NOT own (e.g. a
+    // coach-role member of someone else's gym). Indexed by sender so the
+    // lookup is cheap regardless of how many gyms the announcement set
+    // spans. Each announcement's child rows (targets, poll_options,
+    // poll_votes, dismissals) get cleaned up alongside.
+    const sentAnnouncements = await ctx.db
+      .query("gym_announcements")
+      .withIndex("by_sender", (q) => q.eq("senderUserId", userId))
+      .collect();
+    for (const a of sentAnnouncements) {
+      const targets = await ctx.db
+        .query("gym_announcement_targets")
+        .withIndex("by_announcement", (q) => q.eq("announcementId", a._id))
+        .collect();
+      await Promise.all(targets.map((t) => ctx.db.delete(t._id)));
+      const options = await ctx.db
+        .query("announcement_poll_options")
+        .withIndex("by_announcement", (q) => q.eq("announcementId", a._id))
+        .collect();
+      await Promise.all(options.map((o) => ctx.db.delete(o._id)));
+      const votes = await ctx.db
+        .query("announcement_poll_votes")
+        .withIndex("by_announcement", (q) => q.eq("announcementId", a._id))
+        .collect();
+      await Promise.all(votes.map((v) => ctx.db.delete(v._id)));
+      const dismissals = await ctx.db
+        .query("announcement_dismissals")
+        .withIndex("by_announcement_user", (q) =>
+          q.eq("announcementId", a._id),
+        )
+        .collect();
+      await Promise.all(dismissals.map((d) => ctx.db.delete(d._id)));
+      await ctx.db.delete(a._id);
+    }
 
     // Rate-limit + ai_decisions audit rows.
     const rates = await ctx.db
@@ -253,18 +300,52 @@ export const cascadeProfile = internalMutation({
       await ctx.db.delete(profile._id);
     }
 
-    // Convex Auth keeps its own session / account rows referencing this id.
-    const accounts = await ctx.db
-      .query("authAccounts")
-      .filter((q) => q.eq(q.field("userId"), userId))
-      .collect();
-    await Promise.all(accounts.map((a) => ctx.db.delete(a._id)));
+    // ── Convex Auth cleanup ────────────────────────────────────────────
+    // The original cascade only touched `authAccounts` + `authSessions`,
+    // leaving `authRefreshTokens`, `authVerifiers`, and
+    // `authVerificationCodes` dangling. Convex doesn't enforce FKs so
+    // those orphans never blocked the delete, but they did pile up
+    // forever and could cause the app's auth provider to misbehave for
+    // a re-registered email address. We now walk the auth-table graph
+    // properly: sessions → refresh tokens + verifiers, then accounts →
+    // verification codes, then the user row itself.
+    //
+    // Indexes used here are the canonical ones declared by
+    // `@convex-dev/auth` in `authTables` (see node_modules → server/
+    // implementation/types.js): `userId` on authSessions / authAccounts,
+    // `sessionId` on authRefreshTokens / authVerifiers, `accountId`
+    // on authVerificationCodes.
 
     const sessions = await ctx.db
       .query("authSessions")
-      .filter((q) => q.eq(q.field("userId"), userId))
+      .withIndex("userId", (q) => q.eq("userId", userId))
       .collect();
-    await Promise.all(sessions.map((s) => ctx.db.delete(s._id)));
+    for (const s of sessions) {
+      const refreshTokens = await ctx.db
+        .query("authRefreshTokens")
+        .withIndex("sessionId", (q) => q.eq("sessionId", s._id))
+        .collect();
+      await Promise.all(refreshTokens.map((r) => ctx.db.delete(r._id)));
+      const verifiers = await ctx.db
+        .query("authVerifiers")
+        .filter((q) => q.eq(q.field("sessionId"), s._id))
+        .collect();
+      await Promise.all(verifiers.map((v) => ctx.db.delete(v._id)));
+      await ctx.db.delete(s._id);
+    }
+
+    const accounts = await ctx.db
+      .query("authAccounts")
+      .withIndex("userIdAndProvider", (q) => q.eq("userId", userId))
+      .collect();
+    for (const a of accounts) {
+      const codes = await ctx.db
+        .query("authVerificationCodes")
+        .withIndex("accountId", (q) => q.eq("accountId", a._id))
+        .collect();
+      await Promise.all(codes.map((c) => ctx.db.delete(c._id)));
+      await ctx.db.delete(a._id);
+    }
 
     await ctx.db.delete(userId);
   },

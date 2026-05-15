@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { ChevronRight, Copy, Check, Share2, Megaphone, RefreshCw } from "lucide-react";
 import { useUser } from "@/contexts/UserContext";
 import { useCoachData, type AthleteOverviewRow, type GymRow } from "@/hooks/coach/useCoachData";
@@ -10,7 +10,6 @@ import { ImpactStyle } from "@capacitor/haptics";
 import { shareGymInvite } from "@/lib/shareInvite";
 import { CoachSettingsSheet } from "@/components/coach/CoachSettingsSheet";
 import { GymLogoUpload } from "@/components/coach/GymLogoUpload";
-import { GymLogoAvatar } from "@/components/coach/GymLogoAvatar";
 import { AthleteAvatar } from "@/components/coach/AthleteAvatar";
 import { StrainSparkline } from "@/components/coach/StrainSparkline";
 import { FightTargetBadge } from "@/components/coach/FightTargetBadge";
@@ -32,6 +31,13 @@ function relativeWeight(a: AthleteOverviewRow): { delta: number | null; target: 
 }
 
 function flagSeverity(a: AthleteOverviewRow): "ok" | "warn" | "alert" {
+  // Fight-form label is the strongest single signal — promote it to the
+  // headline severity when present so the dashboard surfaces athletes who
+  // are at-risk on the readiness model itself, not just on log staleness.
+  if (a.fight_form && a.fight_form.state === "ok") {
+    if (a.fight_form.label === "at_risk") return "alert";
+    if (a.fight_form.label === "off_pace") return "warn";
+  }
   const wDays = daysSince(a.last_weight_at);
   if (wDays != null && wDays >= 3) return "alert";
   const cals = a.todays_calories || 0;
@@ -47,8 +53,22 @@ const flagDot: Record<"ok" | "warn" | "alert", string> = {
   alert: "bg-red-500/80",
 };
 
+const FIGHT_FORM_LABEL: Record<string, string> = {
+  sharp: "Sharp",
+  sharpening: "Sharpening",
+  off_pace: "Off Pace",
+  at_risk: "At Risk",
+};
+
+const FIGHT_FORM_COLOR: Record<string, string> = {
+  sharp: "text-emerald-400",
+  sharpening: "text-amber-400",
+  off_pace: "text-orange-500",
+  at_risk: "text-rose-500",
+};
+
 export default function CoachDashboard() {
-  const { userId, profile, userName } = useUser();
+  const { userId, userName } = useUser();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { gyms, athletes, loading, refresh } = useCoachData(userId);
@@ -121,38 +141,11 @@ export default function CoachDashboard() {
 
   if (loading && athletes.length === 0) return <DashboardSkeleton />;
 
-  if (gyms.length === 0) {
-    return (
-      <>
-        <div className="animate-page-in space-y-3 px-5 py-4 max-w-3xl mx-auto">
-          <div className="flex items-center justify-between">
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground/70 font-semibold">Coach</p>
-            <button
-              onClick={() => setSettingsOpen(true)}
-              className="h-9 w-9 rounded-full bg-muted/60 flex items-center justify-center active:bg-muted/80 transition-colors"
-              aria-label="Settings"
-            >
-              <span className="text-[12px] font-semibold text-muted-foreground">
-                {(userName || "C").charAt(0).toUpperCase()}
-              </span>
-            </button>
-          </div>
-          <div className="card-surface rounded-2xl border border-border p-6 text-center space-y-3">
-            <h1 className="text-base font-semibold">Set up your gym</h1>
-            <p className="text-[13px] text-muted-foreground leading-snug">
-              Create a gym to start inviting athletes.
-            </p>
-            <button
-              onClick={() => navigate("/coach/setup")}
-              className="h-10 px-4 rounded-xl bg-primary text-primary-foreground text-[13px] font-semibold active:scale-[0.98] transition-transform"
-            >
-              Create gym
-            </button>
-          </div>
-        </div>
-        <CoachSettingsSheet open={settingsOpen} onOpenChange={setSettingsOpen} />
-      </>
-    );
+  // Coach signed up but hasn't created a gym yet — punt them straight into
+  // the onboarding flow. This also catches the post-signup race where
+  // routeAfterAuth lands here before CoachLogin's explicit navigate fires.
+  if (!loading && gyms.length === 0) {
+    return <Navigate to="/coach/onboarding" replace />;
   }
 
   return (
@@ -350,11 +343,33 @@ export default function CoachDashboard() {
                           className="flex-shrink-0 sm:hidden"
                         />
 
-                        {/* Fight date + target — visible whenever the
-                            athlete has set a target_date in Goals. Convex
-                            re-runs coach.athletesOverview whenever the
-                            profile changes, so updates are live. */}
-                        {a.target_date ? (
+                        {/* Right rail priority:
+                            1. Fight form score (the headline readiness number)
+                            2. Fight target badge (if no score yet)
+                            3. kcal today (last resort) */}
+                        {a.fight_form && a.fight_form.state === "ok" ? (
+                          <div className="text-right flex-shrink-0 min-w-[44px]">
+                            <p
+                              className={`text-[20px] font-semibold tabular-nums leading-none ${
+                                FIGHT_FORM_COLOR[a.fight_form.label] ?? "text-foreground"
+                              }`}
+                            >
+                              {a.fight_form.score}
+                            </p>
+                            <p className="text-[9px] uppercase tracking-wider text-muted-foreground mt-0.5">
+                              {FIGHT_FORM_LABEL[a.fight_form.label] ?? "Form"}
+                            </p>
+                          </div>
+                        ) : a.fight_form && a.fight_form.state === "calibrating" ? (
+                          <div className="text-right flex-shrink-0 min-w-[44px]">
+                            <p className="text-[12px] font-semibold tabular-nums leading-none text-muted-foreground">
+                              —
+                            </p>
+                            <p className="text-[9px] uppercase tracking-wider text-muted-foreground mt-0.5">
+                              Calibrating
+                            </p>
+                          </div>
+                        ) : a.target_date ? (
                           <FightTargetBadge
                             targetDate={a.target_date}
                             fightWeekTargetKg={a.fight_week_target_kg}

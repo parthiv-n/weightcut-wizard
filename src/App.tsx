@@ -48,7 +48,7 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 const CutPlanReview = lazy(() => import("./pages/CutPlanReview"));
 const Legal = lazy(() => import("./pages/Legal"));
 const CoachDashboard = lazy(() => import("./pages/coach/CoachDashboard"));
-const CoachSetup = lazy(() => import("./pages/coach/CoachSetup"));
+const CoachOnboarding = lazy(() => import("./pages/coach/CoachOnboarding"));
 const CoachLogin = lazy(() => import("./pages/coach/CoachLogin"));
 const AthleteDetail = lazy(() => import("./pages/coach/AthleteDetail"));
 const JoinGym = lazy(() => import("./pages/JoinGym"));
@@ -184,7 +184,7 @@ const AppLayoutContent = () => {
           </header>
           <OfflineBanner />
           {/* Main content with mobile-first responsive padding - bottom padding for bottom nav */}
-          <main className="flex-1 overflow-auto overflow-x-hidden overscroll-y-contain relative min-h-0 w-full pt-2 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right animate-app-content-in" style={{ paddingBottom: "calc(5.5rem + env(safe-area-inset-bottom, 0px))", WebkitOverflowScrolling: "touch" }}>
+          <main className="flex-1 overflow-auto overflow-x-hidden overscroll-y-contain relative min-h-0 w-full pt-2 md:pb-0 safe-area-inset-top safe-area-inset-left safe-area-inset-right animate-app-content-in" style={{ paddingBottom: "calc(4.5rem + env(safe-area-inset-bottom, 0px))", WebkitOverflowScrolling: "touch" }}>
             <PullToRefresh />
             <PageTransition>
               <Suspense fallback={<DashboardSkeleton />}>
@@ -268,11 +268,15 @@ const App = () => (
 
                 {/* Coach Mode routes — outside the ProfileCompletionGuard,
                     coaches don't go through fighter onboarding. */}
-                <Route path="/coach/setup" element={
+                <Route path="/coach/onboarding" element={
                   <ProtectedRoute>
-                    <Suspense fallback={null}><CoachSetup /></Suspense>
+                    <Suspense fallback={null}><CoachOnboarding /></Suspense>
                   </ProtectedRoute>
                 } />
+                {/* Legacy alias — older builds and cached `lastRoute`
+                    entries point at /coach/setup. Forward them to the new
+                    onboarding flow so no one lands on a 404. */}
+                <Route path="/coach/setup" element={<Navigate to="/coach/onboarding" replace />} />
                 <Route path="/coach" element={
                   <ProtectedRoute>
                     <Suspense fallback={<DashboardSkeleton />}><CoachDashboard /></Suspense>

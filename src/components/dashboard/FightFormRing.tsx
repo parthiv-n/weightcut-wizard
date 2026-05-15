@@ -64,10 +64,21 @@ const HALO_PEAK = {
   at_risk: 0.2,
 };
 
-// Twelve particles populates the orbit densely enough to read as "alive"
-// without overwhelming the score readout. Previously eight, which left
-// gaps that read as static rather than orbital.
-const PARTICLE_COUNT = 12;
+// Density tuned per label so the orbit feels alive without overwhelming
+// the score readout. Sharp + Sharpening earn the densest swarm; Off Pace
+// and At Risk get a thinner, more subdued field so the visual celebrates
+// good form rather than every state.
+const PARTICLE_COUNT_BY_LABEL = {
+  sharp: 84,
+  sharpening: 64,
+  off_pace: 40,
+  at_risk: 20,
+} as const;
+
+// Soft drifting "wind wisps" — larger blurred ellipses that float around
+// the ring at slow speeds. Layered behind the orbiting particles to give
+// Whoop-style atmospheric depth.
+const WISP_COUNT = 5;
 
 export function FightFormRing({
   score,
@@ -108,9 +119,11 @@ export function FightFormRing({
   const lockY = size / 2 - radius * Math.cos(lockAngleRad);
 
   const showHalo = state === "ok";
-  // Particles remain "earned" — only when the user is actually peaking.
-  // Brightened in CSS rather than expanded here so we don't dilute the signal.
-  const showParticles = state === "ok" && score >= 80;
+  // Show the orbital swarm at every "ok" score now (not gated to >= 80).
+  // Density scales with the label so weaker form gets a thinner field
+  // instead of a sudden cut-off.
+  const showParticles = state === "ok";
+  const particleCount = state === "ok" ? PARTICLE_COUNT_BY_LABEL[label] : 0;
   const showCalibSweep = state === "calibrating";
 
   const labelRgb = state === "ok" ? LABEL_RGB[label] : "148, 163, 184"; // slate-400 fallback
@@ -136,6 +149,19 @@ export function FightFormRing({
       aria-label="Open Fight Form Score details"
       style={{ width: size, height: size }}
     >
+      {/* Aurora sheen — slow rotating conic gradient sweep behind the ring.
+          Reads as a trailing "comet tail" of light that rotates once every
+          12-20s depending on label. Whoop's hero-ring move. */}
+      {showHalo && (
+        <div
+          aria-hidden
+          className="ff-ring-aurora absolute inset-0 rounded-full pointer-events-none"
+          style={{
+            ["--ff-halo-rgb" as any]: labelRgb,
+          }}
+        />
+      )}
+
       {/* Aurora halo. Sits behind everything via z-index. Color, intensity
           and speed are state-reactive via inline CSS vars consumed by the
           ff-ring-halo keyframe in index.css. */}
@@ -151,20 +177,57 @@ export function FightFormRing({
         />
       )}
 
-      {/* Particles — only when state is "ok" AND score >= 80 (Sharp). Each
-          particle gets a different orbit radius and orbit duration so the
-          motion doesn't feel mechanical. */}
-      {showParticles && (
-        <div aria-hidden className="absolute inset-0 pointer-events-none">
-          {Array.from({ length: PARTICLE_COUNT }).map((_, i) => {
-            const orbitRadius = radius - 4 + ((i % 3) - 1) * 10; // -14, -4, +6 px offsets
-            const orbitDuration = 12 + (i % 4) * 1.3;             // 12s..16.9s
-            const twinkleDuration = 2 + (i % 3) * 0.6;            // 2s..3.2s
-            const startOffset = -((orbitDuration * i) / PARTICLE_COUNT);
+      {/* Drifting wind wisps — large soft blurred ellipses that float around
+          the ring on long, varied timelines. Layered behind the particles
+          for atmospheric depth. */}
+      {showHalo && (
+        <div aria-hidden className="absolute inset-0 pointer-events-none overflow-hidden rounded-full">
+          {Array.from({ length: WISP_COUNT }).map((_, i) => {
+            const wispDuration = 18 + (i * 3.5); // 18s, 21.5s, 25s, 28.5s, 32s
+            const startOffset = -((wispDuration * i) / WISP_COUNT);
             return (
               <span
                 key={i}
-                className="ff-ring-particle"
+                className={`ff-ring-wisp ff-ring-wisp-${i}`}
+                style={{
+                  ["--ff-halo-rgb" as any]: labelRgb,
+                  animationDuration: `${wispDuration}s`,
+                  animationDelay: `${startOffset}s`,
+                }}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* Inner core glow — a soft breathing inner highlight that pulses
+          gently regardless of state. Sells the "alive" feel even at low
+          scores where the halo opacity is muted. */}
+      {showHalo && (
+        <div
+          aria-hidden
+          className="ff-ring-core absolute inset-0 rounded-full pointer-events-none"
+          style={{ ["--ff-halo-rgb" as any]: labelRgb }}
+        />
+      )}
+
+      {/* Particles — visible at every "ok" score, density scales by label.
+          Mixed sizes (every 3rd particle is bigger, every 5th is a small
+          sparkle) keep the orbit from reading as mechanical. */}
+      {showParticles && (
+        <div aria-hidden className="absolute inset-0 pointer-events-none">
+          {Array.from({ length: particleCount }).map((_, i) => {
+            // Spread across 9 concentric orbits so the heavy swarm fans
+            // into a thick atmospheric halo instead of stacking on one ring.
+            const orbitRadius = radius - 4 + ((i % 9) - 4) * 6; // -28..+26 px
+            const orbitDuration = 9 + (i % 11) * 0.95;            // 9s..18.5s
+            const twinkleDuration = 1.2 + (i % 7) * 0.45;         // 1.2s..3.9s
+            const startOffset = -((orbitDuration * i) / particleCount);
+            const sizeVariant = i % 4 === 0 ? "lg" : i % 6 === 0 ? "sm" : "md";
+            return (
+              <span
+                key={i}
+                className={`ff-ring-particle ff-ring-particle-${sizeVariant}`}
                 style={{
                   ["--ff-halo-rgb" as any]: labelRgb,
                   ["--ff-orbit-r" as any]: `${orbitRadius}px`,

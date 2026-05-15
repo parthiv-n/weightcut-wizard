@@ -12,6 +12,16 @@
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 
+export type FightFormLabel = "sharp" | "sharpening" | "off_pace" | "at_risk";
+export type FightFormState = "ok" | "calibrating" | "no_camp" | "paused";
+
+export interface FightFormSnapshot {
+  date: string;
+  score: number;
+  label: FightFormLabel;
+  state: FightFormState;
+}
+
 export interface AthleteOverviewRow {
   user_id: string;
   gym_id: string;
@@ -32,6 +42,9 @@ export interface AthleteOverviewRow {
   joined_at: string;
   /** 7-day strain (RPE-hours per day), oldest → newest. Always length 7. */
   strain_7d: number[] | null;
+  /** Latest fight-form score for this athlete; `null` until they've
+   *  generated at least one. `state` distinguishes calibrating vs ok. */
+  fight_form: FightFormSnapshot | null;
 }
 
 export interface GymRow {
@@ -40,6 +53,12 @@ export interface GymRow {
   invite_code: string;
   location: string | null;
   logo_url: string | null;
+  /** Optional roster context captured during coach onboarding. */
+  disciplines: string[] | null;
+  fighter_count: number | null;
+  about: string | null;
+  athlete_count?: number;
+  recent_announcement_count?: number;
 }
 
 export function useCoachData(coachId: string | null) {
@@ -58,6 +77,11 @@ export function useCoachData(coachId: string | null) {
     invite_code: g.invite_code,
     location: g.location,
     logo_url: g.logo_url,
+    disciplines: (g as any).disciplines ?? null,
+    fighter_count: (g as any).fighter_count ?? null,
+    about: (g as any).about ?? null,
+    athlete_count: (g as any).athlete_count,
+    recent_announcement_count: (g as any).recent_announcement_count,
   }));
 
   const athletes: AthleteOverviewRow[] = (athletesData ?? []).map((a) => ({
@@ -79,6 +103,7 @@ export function useCoachData(coachId: string | null) {
     share_data: a.share_data,
     joined_at: a.joined_at,
     strain_7d: a.strain_7d,
+    fight_form: (a as any).fight_form ?? null,
   }));
 
   const loading = gymsData === undefined || athletesData === undefined;

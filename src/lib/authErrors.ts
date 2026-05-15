@@ -56,6 +56,10 @@ export function mapAuthError(err: unknown, flow: AuthFlow): string {
   const hasInvalidAccount = lower.includes("invalidaccountid");
   const hasInvalidSecret = lower.includes("invalidsecret");
   const hasAccountExists = lower.includes("account already exists");
+  // Convex Auth's default `validateDefaultPasswordRequirements` throws a
+  // terse `Error("Invalid password")` when the new password is shorter than
+  // 8 characters. Without mapping this we'd surface the raw string to users.
+  const hasInvalidPassword = lower.includes("invalid password");
 
   switch (flow) {
     case "signIn":
@@ -69,6 +73,9 @@ export function mapAuthError(err: unknown, flow: AuthFlow): string {
     case "signUp":
       if (hasAccountExists) {
         return "An account with this email already exists. Try signing in.";
+      }
+      if (hasInvalidPassword) {
+        return "Password must be at least 8 characters.";
       }
       return "Couldn't create your account. Please try again.";
 
@@ -85,6 +92,9 @@ export function mapAuthError(err: unknown, flow: AuthFlow): string {
       }
       if (hasInvalidAccount) {
         return "That code is incorrect or expired.";
+      }
+      if (hasInvalidPassword) {
+        return "Password must be at least 8 characters.";
       }
       return "Couldn't update your password. Please try again.";
 

@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/UserContext";
 import { routeAfterAuth } from "@/lib/roleRouter";
+import { mapAuthError } from "@/lib/authErrors";
 import wizardLogo from "@/assets/wizard-logo.webp";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { ChevronLeft } from "lucide-react";
@@ -55,17 +56,23 @@ export default function Auth() {
     setPasswordError("");
     try {
       if (isLogin) {
-        // Convex Auth Password provider: flow "signIn" verifies existing credentials.
-        await signIn("password", { email, password, flow: "signIn" });
+        try {
+          // Convex Auth Password provider: flow "signIn" verifies existing credentials.
+          await signIn("password", { email, password, flow: "signIn" });
+        } catch (error) {
+          toast({ variant: "destructive", title: "Sign in failed", description: mapAuthError(error, "signIn") });
+          return;
+        }
       } else {
         if (password !== confirmPassword) {
           setPasswordError("Passwords do not match");
-          setLoading(false);
           return;
         }
-        if (password.length < 6) {
-          setPasswordError("Password must be at least 6 characters");
-          setLoading(false);
+        // Convex Auth's default validator requires 8+ characters; matching
+        // here keeps the client + server rules in sync so users don't get
+        // the cryptic "Invalid password" round-trip.
+        if (password.length < 8) {
+          setPasswordError("Password must be at least 8 characters");
           return;
         }
         // Stash intended role so the profile bootstrap / onboarding flow picks it up.
@@ -74,16 +81,21 @@ export default function Auth() {
         // the profile row's `role` field to match).
         try { localStorage.setItem("wcw_intended_role", selectedRole); } catch {}
 
-        await signIn("password", { email, password, flow: "signUp", role: selectedRole });
+        try {
+          await signIn("password", { email, password, flow: "signUp", role: selectedRole });
+        } catch (error) {
+          toast({ variant: "destructive", title: "Sign up failed", description: mapAuthError(error, "signUp") });
+          return;
+        }
 
-        // Coaches go to setup; fighters fall through to the post-auth router.
+        // Coaches go to the dedicated onboarding flow (gym name, location,
+        // logo, disciplines, etc); fighters fall through to the post-auth
+        // router which lands on /onboarding via ProfileCompletionGuard.
         if (selectedRole === "coach") {
-          navigate("/coach/setup");
+          navigate("/coach/onboarding", { replace: true });
           return;
         }
       }
-    } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message || "Authentication failed" });
     } finally {
       setLoading(false);
     }
@@ -102,7 +114,7 @@ export default function Auth() {
       setShowForgotPassword(false);
       setEmail("");
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to send reset email" });
+      toast({ variant: "destructive", title: "Error", description: mapAuthError(error, "reset") });
     } finally {
       setLoading(false);
     }
@@ -112,7 +124,7 @@ export default function Auth() {
     e.preventDefault();
     setPasswordError("");
     if (password !== confirmPassword) { setPasswordError("Passwords do not match"); return; }
-    if (password.length < 6) { setPasswordError("Must be at least 6 characters"); return; }
+    if (password.length < 8) { setPasswordError("Must be at least 8 characters"); return; }
     setLoading(true);
     try {
       // Convex Auth's password reset is a two-step flow: the email contains
@@ -131,7 +143,7 @@ export default function Auth() {
       setSearchParams({});
       navigate("/dashboard");
     } catch (error: any) {
-      toast({ variant: "destructive", title: "Error", description: error.message || "Failed to update password" });
+      toast({ variant: "destructive", title: "Error", description: mapAuthError(error, "reset-verification") });
     } finally {
       setLoading(false);
     }
@@ -271,8 +283,8 @@ export default function Auth() {
           <div className="space-y-4">
             {isPasswordReset ? (
               <form onSubmit={handlePasswordUpdate} className="space-y-3">
-                <Input type="password" placeholder="New password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} className={`${inputClass} ${passwordError ? errorInputClass : ""}`} />
-                <Input type="password" placeholder="Confirm password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={6} className={`${inputClass} ${passwordError ? errorInputClass : ""}`} />
+                <Input type="password" placeholder="New password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} className={`${inputClass} ${passwordError ? errorInputClass : ""}`} />
+                <Input type="password" placeholder="Confirm password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={8} className={`${inputClass} ${passwordError ? errorInputClass : ""}`} />
                 {passwordError && <p className="text-xs text-red-500 text-center">{passwordError}</p>}
                 <Button type="submit" disabled={loading} className="w-full h-[50px] rounded-2xl text-[16px] font-semibold bg-primary text-primary-foreground active:scale-[0.98] transition-transform">
                   {loading ? "Updating..." : "Update Password"}
@@ -334,9 +346,9 @@ export default function Auth() {
                   </div>
                 </LayoutGroup>
                 <Input type="email" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} required className={inputClass} autoFocus />
-                <Input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} className={`${inputClass} ${passwordError ? errorInputClass : ""}`} />
+                <Input type="password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={isLogin ? 1 : 8} className={`${inputClass} ${passwordError ? errorInputClass : ""}`} />
                 {!isLogin && (
-                  <Input type="password" placeholder="Confirm password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={6} className={`${inputClass} ${passwordError ? errorInputClass : ""}`} />
+                  <Input type="password" placeholder="Confirm password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={8} className={`${inputClass} ${passwordError ? errorInputClass : ""}`} />
                 )}
                 {passwordError && <p className="text-xs text-red-500 text-center">{passwordError}</p>}
                 <Button type="submit" disabled={loading} className="w-full h-[50px] rounded-2xl text-[16px] font-semibold bg-primary text-primary-foreground active:scale-[0.98] transition-transform">
