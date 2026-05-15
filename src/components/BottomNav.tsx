@@ -101,7 +101,9 @@ export const BottomNav = memo(function BottomNav() {
 
   const handleLogFood = () => {
     setQuickLogOpen(false);
-    navigate("/nutrition?openAddMeal=true");
+    // `aiPhoto=1` tells the Nutrition page to immediately trigger the
+    // camera-capture flow once the QuickAdd dialog has mounted.
+    navigate("/nutrition?openAddMeal=true&aiPhoto=1");
   };
 
   const handleLogWeight = () => {
@@ -232,17 +234,14 @@ export const BottomNav = memo(function BottomNav() {
               tutorial="nav-nutrition"
             />
 
-            {/* Log button — raised primary circle */}
-            <motion.button
-              whileTap={{ scale: 0.88 }}
-              transition={{ type: "spring", damping: 18, stiffness: 420 }}
-              onClick={() => { triggerHaptic(ImpactStyle.Medium); setQuickLogOpen(true); }}
-              data-tutorial="nav-quick-log"
-              className="relative mx-0.5 h-11 w-11 rounded-full bg-primary flex items-center justify-center shadow-[0_6px_16px_-4px_hsl(var(--primary)/0.55),0_1px_0_rgba(255,255,255,0.2)_inset]"
-              aria-label="Quick Log"
-            >
-              <Plus className="h-5 w-5 text-primary-foreground" strokeWidth={2.75} />
-            </motion.button>
+            {/* More — moved to the centre slot for one-thumb reachability */}
+            <NavButton
+              onClick={() => { setMoreMenuOpen(true); triggerHapticSelection(); }}
+              icon={MoreHorizontal}
+              label="More"
+              isActive={filteredMoreMenuItems.some(i => i.url === location.pathname)}
+              tutorial="nav-more"
+            />
 
             <NavItem
               to={mainNavItems[2].url}
@@ -252,14 +251,20 @@ export const BottomNav = memo(function BottomNav() {
               tutorial="nav-weight"
             />
 
-            {/* More */}
-            <NavButton
-              onClick={() => { setMoreMenuOpen(true); triggerHapticSelection(); }}
-              icon={MoreHorizontal}
-              label="More"
-              isActive={filteredMoreMenuItems.some(i => i.url === location.pathname)}
-              tutorial="nav-more"
-            />
+            {/* Log button — raised primary circle, anchored to the right
+                edge so a right-handed thumb falls naturally onto it. The
+                button is sized bigger than the rest and shifted up so it
+                visually breaks the top edge of the nav pill (iOS-FAB feel). */}
+            <motion.button
+              whileTap={{ scale: 0.88 }}
+              transition={{ type: "spring", damping: 18, stiffness: 420 }}
+              onClick={() => { triggerHaptic(ImpactStyle.Medium); setQuickLogOpen(true); }}
+              data-tutorial="nav-quick-log"
+              className="relative ml-1 z-10 h-14 w-14 -translate-y-2.5 rounded-full bg-primary flex items-center justify-center shadow-[0_10px_24px_-6px_hsl(var(--primary)/0.6),0_2px_0_rgba(255,255,255,0.22)_inset,0_-2px_0_rgba(0,0,0,0.18)_inset] ring-4 ring-background/40"
+              aria-label="Quick Log"
+            >
+              <Plus className="h-6 w-6 text-primary-foreground" strokeWidth={2.75} />
+            </motion.button>
           </div>
         </LayoutGroup>
       </motion.nav>

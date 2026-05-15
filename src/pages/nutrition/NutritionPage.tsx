@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CheckCircle } from "lucide-react";
 import { format } from "date-fns";
@@ -159,6 +159,23 @@ export default function NutritionPage() {
     dismissTask,
     setDietAnalysis: nutritionData.setDietAnalysis,
   });
+
+  // QuickLog → Food deep-link: when the URL carries `?aiPhoto=1`, fire the
+  // camera capture as soon as the QuickAdd sheet is on screen so the user
+  // lands directly in the photo-AI flow instead of having to tap "Snap
+  // photo" themselves. Param is consumed on first trigger so revisits to
+  // the route don't re-fire the camera.
+  useEffect(() => {
+    if (searchParams.get("aiPhoto") !== "1") return;
+    if (!isQuickAddSheetOpen) return;
+    const t = setTimeout(() => {
+      void aiMeal.capturePhoto();
+      const next = new URLSearchParams(searchParams);
+      next.delete("aiPhoto");
+      setSearchParams(next, { replace: true });
+    }, 220);
+    return () => clearTimeout(t);
+  }, [searchParams, isQuickAddSheetOpen, aiMeal, setSearchParams]);
 
   const handleAddManualMeal = async () => {
     const validationResult = nutritionLogSchema.safeParse({

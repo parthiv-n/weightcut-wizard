@@ -97,7 +97,9 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
           const input = document.createElement("input");
           input.type = "file";
           input.accept = "image/*";
-          input.capture = "user";
+          // `environment` = rear camera on mobile browsers (better for food
+          // shots). Desktop browsers ignore this and show the file picker.
+          input.capture = "environment";
           input.onchange = async () => {
             const file = input.files?.[0];
             if (!file) { resolve(null); return; }
