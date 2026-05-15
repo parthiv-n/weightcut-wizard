@@ -6,7 +6,7 @@ import { action } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { callGroqText, GroqError } from "../_shared/groq";
 import { parseJSON } from "../_shared/parseResponse";
-import { requireUserIdFromAction, logDecision } from "./_helpers";
+import { requireUserIdFromAction, logDecision, SECOND_PERSON_DIRECTIVE } from "./_helpers";
 import { enforceGemGate } from "../_shared/subscriptionGuard";
 import {
   computeFightWeekProjection,
@@ -184,13 +184,15 @@ export const run = action({
   "timelineNotes": [{ "day": -3, "note": "string max 18 words" }],
   "medicalRedFlags": ["string", "string", "string"] }
 
-Numbers are already computed; do NOT alter them. Provide concise athlete-friendly commentary.`;
+${SECOND_PERSON_DIRECTIVE}
+
+Numbers are already computed; do NOT alter them. Address the user directly ("your weigh-in", "you'll need...") in every string. Concise, no fluff.`;
 
     const campLine = camp
-      ? `Camp: ${camp.name}. Fight ${camp.fight_date} (${daysOut} days out).`
-      : `${daysOut} days until weigh-in (no camp record).`;
+      ? `Your camp: ${camp.name}. Fight ${camp.fight_date} (${daysOut} days out).`
+      : `${daysOut} days until your weigh-in (no camp record).`;
     const carbLine = args.normalDailyCarbsG
-      ? `Athlete normal daily carbs: ${args.normalDailyCarbsG}g.`
+      ? `Your normal daily carbs: ${args.normalDailyCarbsG}g.`
       : "";
     const userPrompt = `${campLine}
 Start ${currentWeight}kg, target ${targetWeighIn}kg, cut ${projection.breakdown.totalToCut.toFixed(1)}kg (${projection.breakdown.percentBW.toFixed(1)}% BW).

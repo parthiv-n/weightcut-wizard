@@ -11,6 +11,7 @@ import {
   loadAthleteSnapshot,
   logDecision,
   requireUserIdFromAction,
+  SECOND_PERSON_DIRECTIVE,
 } from "./_helpers";
 
 export const run = action({
@@ -51,7 +52,10 @@ export const run = action({
 
     const systemPrompt = `You are an evidence-based combat-sports nutritionist. Output ONLY valid JSON matching this schema:
 { "weeklyPlan": [{ "week": n, "targetWeight": n, "calories": n, "protein_g": n, "carbs_g": n, "fats_g": n, "focus": "..." }], "summary": "...", "totalWeeks": n, "weeklyLossTarget": "...", "maintenanceCalories": n, "deficit": n, "targetCalories": n, "safetyNotes": "...", "keyPrinciples": ["..."], "fightWeek": { "lowCarb": "...", "sodium": "...", "waterLoading": "...", "nutrition": "..." } }
-Use the deterministic numbers below. Never invent calories or macros that contradict them.
+
+${SECOND_PERSON_DIRECTIVE}
+
+Every narrative string (summary, focus, safetyNotes, keyPrinciples, fightWeek.*) MUST address the user as "you" / "your" - this is YOUR cut plan being handed to YOU. Use the deterministic numbers below. Never invent calories or macros that contradict them.
 
 DETERMINISTIC FACTS:
 - BMR: ${bmr}, maintenance: ${maintenanceCal}, target: ${targetCal} kcal

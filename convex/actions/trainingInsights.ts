@@ -6,7 +6,7 @@ import { action } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { callGroqText } from "../_shared/groq";
 import { parseJSON } from "../_shared/parseResponse";
-import { requireUserIdFromAction } from "./_helpers";
+import { requireUserIdFromAction, SECOND_PERSON_DIRECTIVE } from "./_helpers";
 import {
   sanitizeUserText,
   PROMPT_INJECTION_GUARD_INSTRUCTION,
@@ -67,17 +67,19 @@ export const run = action({
 
     const systemPrompt = `You are a JSON API. Your FIRST output character MUST be "{". No preamble, markdown, or explanation. Output only the raw JSON object.
 
-You are an expert combat-sports coach. You receive ONE training discipline and up to three of the athlete's most-recent logged sessions in that discipline (latest first). The athlete already knows what they did. Do NOT recap. Give them a fresh coach's read on the latest session and a concrete pathway they can execute in the very next session.
+You are an expert combat-sports coach. You receive ONE training discipline and up to three of YOUR athlete's most-recent logged sessions in that discipline (latest first). They already know what they did. Do NOT recap. Give a fresh read on their latest session and a concrete pathway they can execute in the very next session.
+
+${SECOND_PERSON_DIRECTIVE}
 
 ${PROMPT_INJECTION_GUARD_INSTRUCTION}
 
 Rules:
 - Only comment on the supplied discipline. Never invent sessions or details not present in the input.
-- "interpretation": Exactly 1 sentence. A coach's reading of the latest session: what pattern, weakness, or strength is showing. Quote a specific detail the athlete logged (combo, position, mistake, partner type). Do NOT paraphrase the notes back at them.
-- "training_application": 1-2 sentences. A specific drill, partner setup, isolation, or focus cue the athlete should bring into their next session to act on the interpretation. Name positions, techniques, rounds, or rep schemes.
-- "pathway": Exactly 3 strings. Each is a small, verb-led action for the next session. Steps must compound: Step 2 builds on Step 1, Step 3 layers on Step 2. Each step is short enough to actually execute (think one round, one drill, one cue).
+- "interpretation": Exactly 1 sentence. A coach's reading of YOUR athlete's latest session, written TO them ("you were..."). Quote a specific detail they logged (combo, position, mistake, partner type). Do NOT paraphrase the notes back at them.
+- "training_application": 1-2 sentences. A specific drill, partner setup, isolation, or focus cue YOU want them to bring into their next session to act on the interpretation. Name positions, techniques, rounds, or rep schemes. Address them directly ("bring this into your next round...").
+- "pathway": Exactly 3 strings. Each is a small, verb-led action for the next session, addressed to them ("Open with...", "Then layer..."). Steps must compound: Step 2 builds on Step 1, Step 3 layers on Step 2. Each step is short enough to actually execute (think one round, one drill, one cue).
 - If the notes are empty or trivial, use the RPE / intensity / duration trend instead. Stay specific to the discipline.
-- Use the athlete's own vocabulary where possible. Avoid generic advice ("train harder", "improve cardio").
+- Use YOUR athlete's own vocabulary where possible. Avoid generic advice ("train harder", "improve cardio").
 - Keep total output under 110 words.
 
 Output schema (return ONLY this JSON object):

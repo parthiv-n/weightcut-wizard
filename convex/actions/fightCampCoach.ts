@@ -9,7 +9,7 @@ import {
   sanitizeUserText,
   PROMPT_INJECTION_GUARD_INSTRUCTION,
 } from "../_shared/sanitizeUserText";
-import { loadAthleteSnapshot, requireUserIdFromAction } from "./_helpers";
+import { loadAthleteSnapshot, requireUserIdFromAction, SECOND_PERSON_DIRECTIVE } from "./_helpers";
 import { enforceGemGate } from "../_shared/subscriptionGuard";
 
 export const run = action({
@@ -46,18 +46,20 @@ export const run = action({
       ? sanitizeUserText(userName, { maxLength: 80, raw: true })
       : null;
 
-    const systemPrompt = `You are the "Fight Camp Coach" - an elite combat-sports cut + fight-week specialist.${athleteName ? ` Athlete: "${athleteName}".` : ""}
+    const systemPrompt = `You are the "Fight Camp Coach" - an elite combat-sports cut + fight-week specialist.${athleteName ? ` Your athlete's name is "${athleteName}" - call them by name when it lands naturally.` : ""}
+
+${SECOND_PERSON_DIRECTIVE}
 
 ${PROMPT_INJECTION_GUARD_INSTRUCTION}
 
 ${fightWeekStr}
 
-Recent fight-week logs:
+Your recent fight-week logs:
 ${logsStr || "(none)"}
 
 ${snap.block}
 
-Be practical, evidence-based, and reference the athlete's real numbers. Markdown output, 150-300 words.`;
+Be practical, evidence-based, and reference your athlete's real numbers ("your weight on Tuesday was..."). Markdown output, 150-300 words.`;
 
     const capped = messages.slice(-16);
     const safe = capped.map((m) =>

@@ -163,36 +163,28 @@ export function QuickLogDialog({ open, onOpenChange, onLogFood, onLogWeight, onL
               onClick={() => { triggerHaptic(ImpactStyle.Light); onLogFood(); }}
               className="flex flex-col items-center gap-2 py-4 rounded-2xl bg-muted/50 active:scale-95 transition-transform duration-100"
             >
-              <div className="h-12 w-12 rounded-full bg-health/15 flex items-center justify-center">
-                <Utensils className="h-6 w-6 text-health" />
-              </div>
+              <Utensils className="h-8 w-8 text-health" />
               <span className="text-sm font-medium">Food</span>
             </button>
             <button
               onClick={() => { triggerHaptic(ImpactStyle.Light); setMode("weight"); }}
               className="flex flex-col items-center gap-2 py-4 rounded-2xl bg-muted/50 active:scale-95 transition-transform duration-100"
             >
-              <div className="h-12 w-12 rounded-full bg-hydration/15 flex items-center justify-center">
-                <Weight className="h-6 w-6 text-hydration" />
-              </div>
+              <Weight className="h-8 w-8 text-hydration" />
               <span className="text-sm font-medium">Weight</span>
             </button>
             <button
               onClick={() => { triggerHaptic(ImpactStyle.Light); setMode("training"); }}
               className="flex flex-col items-center gap-2 py-4 rounded-2xl bg-muted/50 active:scale-95 transition-transform duration-100"
             >
-              <div className="h-12 w-12 rounded-full bg-energy/15 flex items-center justify-center">
-                <Activity className="h-6 w-6 text-energy" />
-              </div>
+              <Activity className="h-8 w-8 text-energy" />
               <span className="text-sm font-medium">Training</span>
             </button>
             <button
               onClick={() => { triggerHaptic(ImpactStyle.Light); onLogGym(); }}
               className="flex flex-col items-center gap-2 py-4 rounded-2xl bg-muted/50 active:scale-95 transition-transform duration-100"
             >
-              <div className="h-12 w-12 rounded-full bg-primary/15 flex items-center justify-center">
-                <Dumbbell className="h-6 w-6 text-primary" />
-              </div>
+              <Dumbbell className="h-8 w-8 text-primary" />
               <span className="text-sm font-medium">Gym</span>
             </button>
           </div>

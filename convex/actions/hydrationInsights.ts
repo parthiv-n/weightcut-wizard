@@ -5,7 +5,7 @@ import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { callGroqText } from "../_shared/groq";
 import { parseJSON } from "../_shared/parseResponse";
-import { requireUserIdFromAction } from "./_helpers";
+import { requireUserIdFromAction, SECOND_PERSON_DIRECTIVE } from "./_helpers";
 import { enforceGemGate } from "../_shared/subscriptionGuard";
 
 export const run = action({
@@ -28,14 +28,18 @@ export const run = action({
     const target = bodyweight ? Math.round(bodyweight * 35) : 2500;
     const systemPrompt = `You are a JSON API. Return ONLY this JSON:
 { "summary": "string", "status": "green|yellow|red", "tips": ["..."] }
+
+${SECOND_PERSON_DIRECTIVE}
+
 Rules:
-- Compare avg intake (${avgMl}ml/day) against target (${target}ml/day).
+- Compare YOUR athlete's avg intake (${avgMl}ml/day) against their target (${target}ml/day).
 - green: >=95% target, yellow 75-95%, red <75%
-- 2-3 short tips, prioritise sodium balance for combat athletes.`;
-    const userPrompt = `Last 7 days hydration:
+- summary: address the user directly ("You're hitting ${avgMl}ml...").
+- tips: 2-3 short tips written TO the user ("Add a pinch of salt to..."), prioritise sodium balance for combat athletes.`;
+    const userPrompt = `Your last 7 days of hydration:
 ${last7Days.map((l) => `${l.date}: ${l.amount_ml}ml${l.sodium_mg ? `, ${l.sodium_mg}mg sodium` : ""}`).join("\n")}
 
-Athlete bodyweight: ${bodyweight ?? "unknown"}kg.`;
+Your bodyweight: ${bodyweight ?? "unknown"}kg.`;
     const content = await callGroqText({
       model: "llama-3.1-8b-instant",
       messages: [

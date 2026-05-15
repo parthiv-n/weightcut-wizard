@@ -6,7 +6,7 @@ import { action } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { callGroqText } from "../_shared/groq";
 import { parseJSON } from "../_shared/parseResponse";
-import { requireUserIdFromAction } from "./_helpers";
+import { requireUserIdFromAction, SECOND_PERSON_DIRECTIVE } from "./_helpers";
 import { enforceGemGate } from "../_shared/subscriptionGuard";
 import {
   sanitizeUserText,
@@ -42,13 +42,15 @@ export const run = action({
       })
       .join("\n");
 
-    const systemPrompt = `You are a combat sports training analyst. Organize weekly session notes by sport.
+    const systemPrompt = `You are a combat sports training analyst. Organize the user's weekly session notes by sport. Speak directly to them in every string field.
+
+${SECOND_PERSON_DIRECTIVE}
 
 ${PROMPT_INJECTION_GUARD_INSTRUCTION}
 
-For each technique/problem in notes:
-- 3-5 step execution guide
-- 1 sparring tip
+For each technique/problem in YOUR notes:
+- 3-5 step execution guide written to you ("Step into the angle...", "Drop your hips...")
+- 1 sparring tip ("In sparring, look for...")
 - "drillFlow": ALWAYS include a 3-4 step improvement progression from solo/bag → partner/positional → live sparring
 
 Group by the EXACT session_type provided in the data. Valid types: BJJ, Muay Thai, Boxing, Wrestling, Sparring, Strength, Conditioning, Run.

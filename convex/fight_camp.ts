@@ -244,7 +244,188 @@ export const deleteCalendarEntry = mutation({
         /* already gone */
       }
     }
+    // Cascade-delete every multi-attachment media row for this session,
+    // freeing the storage objects too. Without this, deleting a session
+    // leaks the photo/video bytes forever.
+    const attachments = await ctx.db
+      .query("session_media")
+      .withIndex("by_session", (q) => q.eq("sessionId", id))
+      .collect();
+    for (const a of attachments) {
+      try {
+        await ctx.storage.delete(a.storageId);
+      } catch {
+        /* already gone */
+      }
+      await ctx.db.delete(a._id);
+    }
     await ctx.db.delete(id);
+  },
+});
+
+// ───────────────────────────────────────────────────────────────────────
+// session_media — multi-attachment photo/video on a logged session
+// ───────────────────────────────────────────────────────────────────────
+
+/**
+ * Persist a freshly uploaded media file against a session. Caller already
+ * minted a one-time URL via `generateMediaUploadUrl` and POSTed the bytes
+ * — they pass the resulting storageId here together with the session id
+ * and the kind (photo|video, derived from the file's MIME type).
+ */
+export const addSessionMedia = mutation({
+  args: {
+    sessionId: v.id("fight_camp_calendar"),
+    storageId: v.id("_storage"),
+    kind: v.union(v.literal("photo"), v.literal("video")),
+    capturedAt: v.optional(v.string()),
+    caption: v.optional(v.string()),
+  },
+  handler: async (ctx, { sessionId, storageId, kind, capturedAt, caption }) => {
+    const userId = await requireUserId(ctx);
+    const session = await ctx.db.get(sessionId);
+    if (!session) throw new Error("Session not found");
+    if (session.userId !== userId) throw new Error("Not authorized");
+    return await ctx.db.insert("session_media", {
+      sessionId,
+      userId,
+      storageId,
+      kind,
+      capturedAt: capturedAt ?? session.date,
+      caption: caption?.trim() || undefined,
+    });
+  },
+});
+
+/**
+ * Remove one media attachment. Deletes the underlying storage object
+ * before the row so an aborted call can't leave a row pointing at a
+ * dead storage id.
+ */
+export const removeSessionMedia = mutation({
+  args: { mediaId: v.id("session_media") },
+  handler: async (ctx, { mediaId }) => {
+    const userId = await requireUserId(ctx);
+    const row = await ctx.db.get(mediaId);
+    if (!row) return;
+    if (row.userId !== userId) throw new Error("Not authorized");
+    try {
+      await ctx.storage.delete(row.storageId);
+    } catch {
+      /* already gone */
+    }
+    await ctx.db.delete(mediaId);
+  },
+});
+
+/**
+ * All media rows for one session, oldest → newest. Each row resolves its
+ * storage id to a long-lived URL so the client renders <img>/<video>
+ * directly without an extra round-trip.
+ */
+export const listSessionMedia = query({
+  args: { sessionId: v.id("fight_camp_calendar") },
+  handler: async (ctx, { sessionId }) => {
+    const userId = await requireUserId(ctx);
+    const session = await ctx.db.get(sessionId);
+    if (!session || session.userId !== userId) return [];
+    const rows = await ctx.db
+      .query("session_media")
+      .withIndex("by_session", (q) => q.eq("sessionId", sessionId))
+      .order("asc")
+      .collect();
+    return Promise.all(
+      rows.map(async (r) => ({
+        id: r._id,
+        sessionId: r.sessionId,
+        kind: r.kind,
+        capturedAt: r.capturedAt,
+        caption: r.caption ?? null,
+        url: await ctx.storage.getUrl(r.storageId),
+        createdAt: r._creationTime,
+      })),
+    );
+  },
+});
+
+/**
+ * Library view: every media attachment the user owns, newest first, with
+ * the parent session's discipline + date joined in. Optional
+ * `disciplineFilter` scopes to one session_type ("BJJ", "Boxing", ...).
+ *
+ * Pagination is intentionally simple (offset-style via `limit`) — we
+ * expect typical libraries < 1000 items in the first year and the
+ * library page renders the full list with virtualisation handled by
+ * `content-visibility: auto`. Switch to a cursor pattern if libraries
+ * grow large enough that this becomes a hot path.
+ */
+export const listMyMediaLibrary = query({
+  args: {
+    limit: v.optional(v.number()),
+    disciplineFilter: v.optional(v.string()),
+  },
+  handler: async (ctx, { limit, disciplineFilter }) => {
+    const userId = await requireUserId(ctx);
+    const cap = Math.min(Math.max(limit ?? 200, 10), 500);
+    const rows = await ctx.db
+      .query("session_media")
+      .withIndex("by_user_captured", (q) => q.eq("userId", userId))
+      .order("desc")
+      .take(cap);
+    // Pull each unique session for the discipline label. Cheap because
+    // Convex caches table reads within the query.
+    const sessions = new Map<string, any>();
+    for (const r of rows) {
+      if (!sessions.has(r.sessionId as unknown as string)) {
+        const s = await ctx.db.get(r.sessionId);
+        if (s) sessions.set(r.sessionId as unknown as string, s);
+      }
+    }
+    const results = await Promise.all(
+      rows.map(async (r) => {
+        const s = sessions.get(r.sessionId as unknown as string);
+        return {
+          id: r._id,
+          sessionId: r.sessionId,
+          kind: r.kind,
+          capturedAt: r.capturedAt,
+          caption: r.caption ?? null,
+          url: await ctx.storage.getUrl(r.storageId),
+          sessionType: (s?.sessionType as string) ?? null,
+          sessionDate: (s?.date as string) ?? r.capturedAt,
+          sessionNotes: (s?.notes as string | undefined) ?? null,
+        };
+      }),
+    );
+    if (disciplineFilter && disciplineFilter !== "all") {
+      return results.filter((r) => r.sessionType === disciplineFilter);
+    }
+    return results;
+  },
+});
+
+/**
+ * Distinct discipline labels (session_type) the user has at least one
+ * media attachment for. Powers the filter chip row on the library page
+ * — only shows chips that actually have media behind them.
+ */
+export const listMediaDisciplines = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireUserId(ctx);
+    const rows = await ctx.db
+      .query("session_media")
+      .withIndex("by_user_captured", (q) => q.eq("userId", userId))
+      .take(500);
+    const sessionIds = new Set(rows.map((r) => r.sessionId as unknown as string));
+    const disciplines = new Set<string>();
+    for (const sid of sessionIds) {
+      const s = await ctx.db.get(sid as any);
+      if (s && (s as any).sessionType) {
+        disciplines.add((s as any).sessionType as string);
+      }
+    }
+    return Array.from(disciplines).sort();
   },
 });
 

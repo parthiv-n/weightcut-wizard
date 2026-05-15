@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, subMonths, addMonths, subDays, startOfWeek } from "date-fns";
-import { ChevronLeft, ChevronRight, Plus, Activity, BookOpen } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Activity, BookOpen, Images } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import type { Id } from "@/../convex/_generated/dataModel";
@@ -18,7 +18,8 @@ import { CalendarMonthGrid } from "@/components/fightcamp/CalendarMonthGrid";
 import { SessionCard } from "@/components/fightcamp/SessionCard";
 import { SessionDetailDrawer } from "@/components/fightcamp/SessionDetailDrawer";
 import { FightCampLogForm, SESSION_TYPES } from "@/components/fightcamp/FightCampLogForm";
-import { uploadSessionMedia, deleteSessionMedia } from "@/lib/uploadSessionMedia";
+import { uploadSessionMediaV2 } from "@/lib/uploadSessionMediaV2";
+import type { PendingSessionMedia } from "@/components/fightcamp/FightCampLogForm";
 import { triggerHapticSelection, confirmDelete } from "@/lib/haptics";
 import { ShareButton } from "@/components/share/ShareButton";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
@@ -70,6 +71,7 @@ const FRESH_WINDOW_MS = 30 * 1000; // dedupe identical requests inside 30s
 export default function TrainingCalendar() {
     const { userId, profile } = useUser();
     void profile;
+    const navigate = useNavigate();
     const { toast } = useToast();
     const { safeAsync, isMounted } = useSafeAsync();
     const [searchParams, setSearchParams] = useSearchParams();
@@ -113,10 +115,14 @@ export default function TrainingCalendar() {
     const [cardVariant, setCardVariant] = useState<"dark" | "transparent">("dark");
     // Custom session colors
     const [customColors, setCustomColors] = useState<Record<string, string>>({});
-    // Media state
-    const [mediaFile, setMediaFile] = useState<File | null>(null);
-    const [mediaPreviewUrl, setMediaPreviewUrl] = useState<string | null>(null);
-    const [existingMediaUrl, setExistingMediaUrl] = useState<string | null>(null);
+    // Multi-attach pending media — uploaded after the session is inserted
+    // so we always have a real `sessionId` to associate with each row in
+    // `session_media`. Files are held in memory; preview URLs are tracked
+    // here so we can revoke them when entries are removed (object URLs
+    // leak memory until revoked).
+    const [pendingMedia, setPendingMedia] = useState<PendingSessionMedia[]>([]);
+    const pendingMediaRef = useRef<PendingSessionMedia[]>([]);
+    useEffect(() => { pendingMediaRef.current = pendingMedia; }, [pendingMedia]);
     // Detail drawer state
     const [viewingSession, setViewingSession] = useState<TrainingCalendarRow | null>(null);
     const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false);
@@ -343,10 +349,30 @@ export default function TrainingCalendar() {
         setRunTime("");
         setRunDistanceUnit("km");
         setEditingSession(null);
-        setMediaFile(null);
-        setMediaPreviewUrl(null);
-        setExistingMediaUrl(null);
+        // Revoke any in-flight object URLs so the browser releases the
+        // underlying blob memory before we drop the references.
+        for (const m of pendingMediaRef.current) {
+          try { URL.revokeObjectURL(m.previewUrl); } catch { /* ignore */ }
+        }
+        setPendingMedia([]);
     };
+
+    const handleAddPendingMedia = useCallback((file: File) => {
+        const previewUrl = URL.createObjectURL(file);
+        const kind: "photo" | "video" = file.type.startsWith("video/") ? "video" : "photo";
+        const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        setPendingMedia(prev => [...prev, { id, file, previewUrl, kind }]);
+    }, []);
+
+    const handleRemovePendingMedia = useCallback((id: string) => {
+        setPendingMedia(prev => {
+            const removed = prev.find(m => m.id === id);
+            if (removed) {
+              try { URL.revokeObjectURL(removed.previewUrl); } catch { /* ignore */ }
+            }
+            return prev.filter(m => m.id !== id);
+        });
+    }, []);
 
     const handleViewSession = (session: TrainingCalendarRow) => {
         setViewingSession(session);
@@ -377,9 +403,11 @@ export default function TrainingCalendar() {
             setRunTime("");
             setRunDistanceUnit("km");
         }
-        setExistingMediaUrl(session.media_url ?? null);
-        setMediaFile(null);
-        setMediaPreviewUrl(null);
+        // Editing path: legacy `media_url` (single attachment) is managed by
+        // the SessionDetailDrawer's media grid + multi-attachment uploads
+        // happen against the existing session id. The form opens with no
+        // staged pendingMedia so edits don't accidentally re-attach files.
+        setPendingMedia([]);
         setIsAddModalOpen(true);
     };
 
@@ -441,7 +469,9 @@ export default function TrainingCalendar() {
             fatigue_level: null,
             sleep_quality: null,
             mobility_done: null,
-            media_url: mediaPreviewUrl ?? existingMediaUrl ?? null,
+            // Legacy single-media URL stays nullable; the new flow attaches
+            // media via `session_media` after the row is created.
+            media_url: editingSession?.media_url ?? null,
         };
 
         // OPTIMISTIC: update state + caches + close dialog immediately.
@@ -464,29 +494,15 @@ export default function TrainingCalendar() {
 
         // Hoisted so the catch block can enqueue the failed write
         let payload: TrainingCalendarInsert | null = null;
-        let resolvedMediaUrl: string | null = existingMediaUrl ?? null;
+        // Legacy single-media value preserved on edits; new attachments
+        // ride the multi-attachment table instead.
+        const resolvedMediaUrl: string | null = editingSession?.media_url ?? null;
         let mediaUploadFailed = false;
+        // Snapshot the in-flight pending media so a concurrent reset (e.g.
+        // user opens dialog again before uploads finish) doesn't drop them.
+        const queuedMedia = pendingMediaRef.current;
 
         try {
-            // Upload media in background (with timeout fence so it can't hang forever)
-            if (mediaFile) {
-                try {
-                    resolvedMediaUrl = await Promise.race([
-                        uploadSessionMedia(uid, sessionId, mediaFile, existingMediaUrl),
-                        new Promise<string>((_, reject) =>
-                            setTimeout(() => reject(new Error("Media upload timed out")), 30000)
-                        ),
-                    ]);
-                } catch (mediaError) {
-                    logger.error("Failed to upload session media", mediaError);
-                    mediaUploadFailed = true;
-                    resolvedMediaUrl = existingMediaUrl ?? null;
-                }
-            } else if (!mediaPreviewUrl && !mediaFile && existingMediaUrl) {
-                deleteSessionMedia(existingMediaUrl).catch(() => {});
-                resolvedMediaUrl = null;
-            }
-
             payload = {
                 id: sessionId,
                 user_id: uid,
@@ -504,9 +520,14 @@ export default function TrainingCalendar() {
                 media_url: resolvedMediaUrl,
             };
 
+            // Capture the real Convex id so the multi-attachment uploads
+            // below can associate with the correct row. On edit we already
+            // have it; on create the mutation returns the new id.
+            let realSessionId: Id<"fight_camp_calendar">;
             if (editingSession) {
+                realSessionId = editingSession.id as unknown as Id<"fight_camp_calendar">;
                 await updateCalendarMut({
-                    id: editingSession.id as unknown as Id<"fight_camp_calendar">,
+                    id: realSessionId,
                     sessionType: payload!.session_type,
                     intensity: payload!.intensity,
                     intensityLevel: payload!.intensity_level ?? undefined,
@@ -516,7 +537,7 @@ export default function TrainingCalendar() {
                     notes: payload!.notes ?? undefined,
                 });
             } else {
-                await createCalendarMut({
+                realSessionId = (await createCalendarMut({
                     date: payload!.date,
                     sessionType: payload!.session_type,
                     intensity: payload!.intensity,
@@ -525,8 +546,37 @@ export default function TrainingCalendar() {
                     rpe: payload!.rpe,
                     sorenessLevel: payload!.soreness_level ?? undefined,
                     notes: payload!.notes ?? undefined,
-                });
+                })) as Id<"fight_camp_calendar">;
             }
+
+            // Multi-attachment upload pass. Run in parallel because each
+            // media file does its own POST + storage round-trip; serialising
+            // would make a 5-clip save feel slow. allSettled so one bad
+            // file (e.g. corrupt video header) doesn't block the others.
+            let mediaSucceeded = 0;
+            let mediaFailed = 0;
+            if (queuedMedia.length > 0) {
+                const results = await Promise.allSettled(
+                    queuedMedia.map((m) =>
+                        uploadSessionMediaV2(realSessionId, m.file, {
+                            capturedAt: payload!.date,
+                        }),
+                    ),
+                );
+                for (const r of results) {
+                    if (r.status === "fulfilled") mediaSucceeded++;
+                    else {
+                        mediaFailed++;
+                        logger.warn("session media upload failed", { reason: (r as PromiseRejectedResult).reason });
+                    }
+                }
+                if (mediaFailed > 0) mediaUploadFailed = true;
+                // Either way, free the preview blob URLs so we don't leak.
+                for (const m of queuedMedia) {
+                    try { URL.revokeObjectURL(m.previewUrl); } catch { /* ignore */ }
+                }
+            }
+            void mediaSucceeded;
 
             // Patch the optimistic row with the resolved media URL using a
             // functional update; mirror to caches via the live cache snapshot
@@ -685,6 +735,15 @@ export default function TrainingCalendar() {
                             <Button
                                 variant="ghost"
                                 size="icon"
+                                onClick={() => { triggerHapticSelection(); navigate("/training-library"); }}
+                                aria-label="Open media library"
+                                className="rounded-full h-8 w-8"
+                            >
+                                <Images className="h-4 w-4" />
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="icon"
                                 onClick={() => { triggerHapticSelection(); setLibraryOpen(true); }}
                                 aria-label="Open coaching library"
                                 className="rounded-full h-8 w-8"
@@ -750,17 +809,15 @@ export default function TrainingCalendar() {
                                     runTime={runTime} setRunTime={setRunTime}
                                     runDistanceUnit={runDistanceUnit} setRunDistanceUnit={setRunDistanceUnit}
                                     runPace={runPace}
-                                    mediaPreviewUrl={mediaPreviewUrl}
-                                    existingMediaUrl={existingMediaUrl}
-                                    onMediaSelected={(file, previewUrl) => {
-                                        setMediaFile(file);
-                                        setMediaPreviewUrl(previewUrl);
-                                    }}
-                                    onMediaRemoved={() => {
-                                        setMediaFile(null);
-                                        setMediaPreviewUrl(null);
-                                        setExistingMediaUrl(null);
-                                    }}
+                                    pendingMedia={pendingMedia}
+                                    onAddMedia={handleAddPendingMedia}
+                                    onRemoveMedia={handleRemovePendingMedia}
+                                    existingSessionId={
+                                      editingSession
+                                        ? (editingSession.id as unknown as Id<"fight_camp_calendar">)
+                                        : null
+                                    }
+                                    legacyMediaUrl={editingSession?.media_url ?? null}
                                     onSave={handleSaveSession}
                                     saving={isSaving}
                                     canSave={!!userId}

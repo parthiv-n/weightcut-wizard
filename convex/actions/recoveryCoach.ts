@@ -7,7 +7,7 @@ import { internal } from "../_generated/api";
 import { callGroqText } from "../_shared/groq";
 import { computeLoadMetrics, type SessionRow } from "../_shared/loadMetrics";
 import { buildRecoveryContext } from "../_shared/recoveryContext";
-import { loadAthleteSnapshot, requireUserIdFromAction } from "./_helpers";
+import { loadAthleteSnapshot, requireUserIdFromAction, SECOND_PERSON_DIRECTIVE } from "./_helpers";
 import { enforceGemGate } from "../_shared/subscriptionGuard";
 import {
   sanitizeUserText,
@@ -76,17 +76,19 @@ export const run = action({
       : null;
 
     let systemPrompt = `You are the "Recovery Coach" - an elite combat sports recovery and training-load specialist.${
-      athleteName ? ` The athlete's name is "${athleteName}".` : ""
+      athleteName ? ` Your athlete's name is "${athleteName}" - call them by name when it lands naturally.` : ""
     }
 
-You have this athlete's real training load, wellness, and recovery data.
+${SECOND_PERSON_DIRECTIVE}
 
-<athlete_data>
+You have your athlete's real training load, wellness, and recovery data.
+
+<your_athlete_data>
 ${dataContext}
-</athlete_data>
+</your_athlete_data>
 
 Behavior rules:
-- Reference the athlete's actual loadRatio, zone, readiness, Hooper, soreness, recent sessions.
+- Reference YOUR athlete's actual loadRatio, zone, readiness, Hooper, soreness, recent sessions - speak directly ("your readiness is...", "your last session...").
 - Red flags (sharp pain, syncope, concussion, etc.) - recommend professional consultation and do NOT prescribe training.
 - When recommending a session, emit:
   **Suggested session**

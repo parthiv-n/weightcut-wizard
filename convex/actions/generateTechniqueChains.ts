@@ -6,7 +6,7 @@ import { action } from "../_generated/server";
 import { callGroqText } from "../_shared/groq";
 import { parseJSON } from "../_shared/parseResponse";
 import { sanitizeUserText } from "../_shared/sanitizeUserText";
-import { requireUserIdFromAction } from "./_helpers";
+import { requireUserIdFromAction, SECOND_PERSON_DIRECTIVE } from "./_helpers";
 import { enforceGemGate } from "../_shared/subscriptionGuard";
 
 export const run = action({
@@ -28,7 +28,10 @@ export const run = action({
       : "";
     const systemPrompt = `You are a JSON API. Return ONLY:
 { "chains": [{ "name": "string", "sequence": [{ "technique": "string", "rationale": "string" }] }] }
-Each chain is 3-5 techniques. Generate 3 distinct chains.`;
+
+${SECOND_PERSON_DIRECTIVE}
+
+Each chain is 3-5 techniques. Generate 3 distinct chains. Write every "rationale" string TO the user as a coach would: "When you land the jab, your opponent's hands come up - that's your opening for...".`;
     const userPrompt = `Sport: ${args.sport}. Starting from <user_input>${startSafe}</user_input>. Skill: ${args.skillLevel ?? "intermediate"}. Goal: <user_input>${desiredSafe || "score a finish"}</user_input>.`;
     const content = await callGroqText({
       model: "openai/gpt-oss-120b",

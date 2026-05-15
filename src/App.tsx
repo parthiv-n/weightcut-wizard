@@ -40,6 +40,7 @@ const WeightCut = lazy(() => import("./pages/WeightCut"));
 const FightCamps = lazy(() => import("./pages/FightCamps"));
 const FightCampDetail = lazy(() => import("./pages/FightCampDetail"));
 const TrainingCalendar = lazy(() => import("./pages/TrainingCalendar"));
+const TrainingLibrary = lazy(() => import("./pages/TrainingLibrary"));
 const Recovery = lazy(() => import("./pages/Recovery"));
 const Sleep = lazy(() => import("./pages/Sleep"));
 // const SkillTree = lazy(() => import("./pages/SkillTree"));
@@ -305,6 +306,7 @@ const App = () => (
                   <Route path="/fight-camps" element={<ErrorBoundary><Suspense fallback={<DashboardSkeleton />}><FightCamps /></Suspense></ErrorBoundary>} />
                   <Route path="/fight-camps/:id" element={<ErrorBoundary><Suspense fallback={<DashboardSkeleton />}><FightCampDetail /></Suspense></ErrorBoundary>} />
                   <Route path="/training-calendar" element={<ErrorBoundary><Suspense fallback={<DashboardSkeleton />}><TrainingCalendar /></Suspense></ErrorBoundary>} />
+                  <Route path="/training-library" element={<ErrorBoundary><Suspense fallback={<DashboardSkeleton />}><TrainingLibrary /></Suspense></ErrorBoundary>} />
                   <Route path="/fight-camp-calendar" element={<Navigate to="/training-calendar" replace />} />
                   <Route path="/recovery" element={<ErrorBoundary><Suspense fallback={<DashboardSkeleton />}><Recovery /></Suspense></ErrorBoundary>} />
                   <Route path="/sleep" element={<ErrorBoundary><Suspense fallback={<DashboardSkeleton />}><Sleep /></Suspense></ErrorBoundary>} />

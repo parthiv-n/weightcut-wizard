@@ -7,7 +7,19 @@
  * - `loadAthleteSnapshot` fans out internal queries to build the
  *   AthleteSnapshot prompt block used by most AI features.
  * - `logDecision` is fire-and-forget audit logging into ai_decisions.
+ * - `SECOND_PERSON_DIRECTIVE` keeps every AI feature's voice consistent.
  */
+
+/**
+ * Inserted into every AI system prompt that produces user-facing copy
+ * so the wizard always addresses the user as "you" / "your" rather
+ * than "the athlete" / "they". One place to tweak the tone for the
+ * whole app.
+ */
+export const SECOND_PERSON_DIRECTIVE =
+  `VOICE: Speak directly to the user as "you" / "your". Never refer to ` +
+  `them in the third person ("the athlete", "the fighter", "they", ` +
+  `"the user"). Write as if you are sitting across from them.`;
 
 import type { ActionCtx } from "../_generated/server";
 import { internal } from "../_generated/api";

@@ -1,12 +1,18 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { format, parseISO } from "date-fns";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, Plus, Loader2, Play, Image as ImageIcon } from "lucide-react";
 import { decodeRunMeta } from "@/lib/runMeta";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { getSessionColor } from "@/lib/sessionColors";
 import { triggerHapticSelection } from "@/lib/haptics";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "@/../convex/_generated/api";
+import type { Id } from "@/../convex/_generated/dataModel";
+import { uploadSessionMediaV2 } from "@/lib/uploadSessionMediaV2";
+import { MediaLightbox, type LightboxItem } from "@/components/training/MediaLightbox";
+import { useToast } from "@/hooks/use-toast";
 // Local row type — mirrors the snake_case shape produced by TrainingCalendar.
 interface TrainingCalendarRow {
   id: string;
@@ -59,12 +65,120 @@ export function SessionDetailDrawer({
   customColors,
 }: SessionDetailDrawerProps) {
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const { toast } = useToast();
+
+  // Multi-media: pull every attachment for this session. Skips when the
+  // drawer is closed OR while the session row is still optimistic — newly
+  // logged sessions hold a UUID local id (`crypto.randomUUID()` from
+  // TrainingCalendar) until Convex round-trips back the real id, and
+  // sending a UUID to a `v.id("fight_camp_calendar")` validator throws.
+  // Real Convex ids are alphanumeric and never contain dashes.
+  const sessionIdForQuery = session?.id;
+  const isConvexId =
+    typeof sessionIdForQuery === "string" && !sessionIdForQuery.includes("-");
+  const mediaList = useQuery(
+    api.fight_camp.listSessionMedia,
+    open && sessionIdForQuery && isConvexId
+      ? { sessionId: sessionIdForQuery as Id<"fight_camp_calendar"> }
+      : "skip",
+  );
+  const removeMediaMut = useMutation(api.fight_camp.removeSessionMedia);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
 
   const isRun = session?.session_type === "Run";
   const { meta: runMeta, notes: cleanNotes } = useMemo(
     () => isRun && session ? decodeRunMeta(session.notes) : { meta: null, notes: session?.notes ?? "" },
     [isRun, session?.notes]
   );
+
+  // Build the unified list the lightbox renders. Combines (a) the legacy
+  // single `media_url` from the row when no multi-attachments exist, with
+  // (b) the new session_media rows. The legacy entry is suppressed once
+  // the user adds new media so we don't double-count it.
+  const lightboxItems: LightboxItem[] = useMemo(() => {
+    const items: LightboxItem[] = [];
+    const legacyOnly = (mediaList?.length ?? 0) === 0 && !!session?.media_url;
+    if (legacyOnly && session) {
+      items.push({
+        id: `legacy-${session.id}`,
+        url: session.media_url,
+        kind: isVideo(session.media_url ?? "") ? "video" : "photo",
+        caption: null,
+        capturedAt: session.date,
+        sessionType: session.session_type,
+      });
+    }
+    for (const m of mediaList ?? []) {
+      items.push({
+        id: m.id as unknown as string,
+        url: m.url ?? null,
+        kind: m.kind,
+        caption: m.caption,
+        capturedAt: m.capturedAt,
+        sessionType: session?.session_type ?? null,
+      });
+    }
+    return items;
+  }, [mediaList, session]);
+
+  const handleFile = async (file: File | undefined) => {
+    if (!file || !session) return;
+    // Optimistic rows haven't been persisted yet, so there's no Convex id
+    // to attach media to. Tell the user to wait a moment instead of
+    // tripping the same validator error from the upload mutation.
+    if (!isConvexId) {
+      toast({
+        title: "Saving session…",
+        description: "Try adding media again in a second.",
+      });
+      return;
+    }
+    setUploading(true);
+    try {
+      await uploadSessionMediaV2(
+        session.id as Id<"fight_camp_calendar">,
+        file,
+        { capturedAt: session.date },
+      );
+      triggerHapticSelection();
+    } catch (err: any) {
+      toast({
+        title: "Couldn't upload media",
+        description: err?.message ?? "Try again with a smaller file.",
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDeleteMedia = async (item: LightboxItem) => {
+    if (item.id.startsWith("legacy-")) {
+      // Legacy media still lives on `fight_camp_calendar.mediaStorageId`.
+      // The dedicated edit flow is the right place to clear it; surface a
+      // toast so the user knows to use Edit for now.
+      toast({
+        title: "Edit the session to remove this media",
+        description: "Tap Edit, then save without a photo to clear it.",
+      });
+      return;
+    }
+    try {
+      await removeMediaMut({ mediaId: item.id as Id<"session_media"> });
+      // Keep the lightbox open if there are still items left; otherwise close.
+      if (lightboxItems.length <= 1) setLightboxIndex(null);
+    } catch (err: any) {
+      toast({
+        title: "Couldn't delete media",
+        description: err?.message ?? "Try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   if (!session) return null;
 
@@ -86,25 +200,124 @@ export function SessionDetailDrawer({
             </p>
           </DialogHeader>
 
-          {/* Media */}
-          {session.media_url && (
-            <div className="rounded-2xl overflow-hidden border border-border/20">
-              {isVideo(session.media_url) ? (
-                <video
-                  src={session.media_url}
-                  className="w-full max-h-64 object-cover"
-                  controls
-                  playsInline
-                />
-              ) : (
-                <img
-                  src={session.media_url}
-                  alt="Session media"
-                  className="w-full max-h-64 object-cover"
-                />
-              )}
+          {/* Media — multi-attachment grid. Tap a tile to open the
+              fullscreen swipeable lightbox. The "+" tile picks from the
+              gallery; the camera tile opens the device camera (iOS uses
+              `capture="environment"` to launch the rear camera). */}
+          <div className="space-y-2">
+            <div className="grid grid-cols-3 gap-2">
+              {lightboxItems.map((item, i) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => {
+                    triggerHapticSelection();
+                    setLightboxIndex(i);
+                  }}
+                  className="relative aspect-square rounded-xl overflow-hidden bg-muted/40 border border-border/30 active:scale-[0.98] transition-transform"
+                >
+                  {item.url ? (
+                    item.kind === "video" ? (
+                      <>
+                        <video
+                          src={item.url}
+                          className="w-full h-full object-cover"
+                          muted
+                          playsInline
+                          preload="metadata"
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center bg-black/15">
+                          <div className="h-8 w-8 rounded-full bg-black/50 backdrop-blur flex items-center justify-center">
+                            <Play className="h-3.5 w-3.5 text-white fill-white" />
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <img
+                        src={item.url}
+                        alt={item.caption ?? "Session media"}
+                        className="w-full h-full object-cover"
+                      />
+                    )
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-muted-foreground/40">
+                      <ImageIcon className="h-5 w-5" />
+                    </div>
+                  )}
+                </button>
+              ))}
+
+              {/* Add from gallery */}
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHapticSelection();
+                  fileInputRef.current?.click();
+                }}
+                disabled={uploading}
+                className="aspect-square rounded-xl border-2 border-dashed border-border/50 bg-muted/20 flex flex-col items-center justify-center text-muted-foreground active:bg-muted/40 transition-colors disabled:opacity-50"
+                aria-label="Add photo or video from gallery"
+              >
+                {uploading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <>
+                    <Plus className="h-5 w-5" />
+                    <span className="text-[9px] font-semibold uppercase tracking-wider mt-1">Gallery</span>
+                  </>
+                )}
+              </button>
+
+              {/* Take a new photo / video */}
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHapticSelection();
+                  cameraInputRef.current?.click();
+                }}
+                disabled={uploading}
+                className="aspect-square rounded-xl border-2 border-dashed border-border/50 bg-muted/20 flex flex-col items-center justify-center text-muted-foreground active:bg-muted/40 transition-colors disabled:opacity-50"
+                aria-label="Take a new photo or video"
+              >
+                {uploading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <>
+                    <Plus className="h-5 w-5" />
+                    <span className="text-[9px] font-semibold uppercase tracking-wider mt-1">Camera</span>
+                  </>
+                )}
+              </button>
             </div>
-          )}
+
+            {/* Hidden inputs — Capacitor on iOS opens the native picker /
+                camera UI when these are clicked. `capture="environment"`
+                hints the rear camera; without it the user gets the
+                full picker including selfie cam. */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,video/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                void handleFile(f);
+              }}
+            />
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*,video/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                void handleFile(f);
+              }}
+            />
+          </div>
 
           {/* Notes — prominent, first thing the user sees */}
           {(isRun ? cleanNotes : session.notes) && (
@@ -179,6 +392,14 @@ export function SessionDetailDrawer({
         }}
         title="Delete Session"
         description={`Delete this ${session.session_type} session?`}
+      />
+
+      <MediaLightbox
+        items={lightboxItems}
+        startIndex={lightboxIndex ?? 0}
+        open={lightboxIndex !== null}
+        onClose={() => setLightboxIndex(null)}
+        onDelete={handleDeleteMedia}
       />
     </>
   );

@@ -6,7 +6,7 @@ import { action } from "../_generated/server";
 import { callGroqText } from "../_shared/groq";
 import { parseJSON } from "../_shared/parseResponse";
 import { sanitizeUserText } from "../_shared/sanitizeUserText";
-import { requireUserIdFromAction, loadAthleteSnapshot } from "./_helpers";
+import { requireUserIdFromAction, loadAthleteSnapshot, SECOND_PERSON_DIRECTIVE } from "./_helpers";
 
 const VALID_GOALS = new Set([
   "hypertrophy",
@@ -104,9 +104,11 @@ export const run = action({
         ? args.equipment
         : ["bodyweight"];
 
-    const systemPrompt = `You are an expert strength & conditioning coach for combat sports athletes. Your job is to design a gym program that COMPLEMENTS their martial arts training without causing overtraining.
+    const systemPrompt = `You are an expert strength & conditioning coach for combat sports athletes. Your job is to design a gym program that COMPLEMENTS YOUR athlete's martial arts training without causing overtraining. Speak directly to them ("you", "your") in every "notes" string.
 
-The athlete trains their combat sport ${sportTrainingDays} days per week. Based on this, you MUST first determine how many gym sessions per week they should do and include it as "recommended_gym_days" in your response. Guidelines:
+${SECOND_PERSON_DIRECTIVE}
+
+You train your combat sport ${sportTrainingDays} days per week. Based on this, you MUST first determine how many gym sessions per week to do and include it as "recommended_gym_days" in the response. Guidelines:
 - 6-7 sport days → 2 gym sessions max
 - 4-5 sport days → 2-3 gym sessions
 - 2-3 sport days → 3-4 gym sessions
@@ -146,12 +148,12 @@ Return ONLY valid JSON. IMPORTANT: Each exercise MUST include a "day" field that
       "notes": "technique cue or why this exercise"
     }
   ],
-  "notes": "Explain programming decisions, how this avoids overtraining, and how it complements their ${sport} training ${sportTrainingDays}x/week"
+  "notes": "Explain YOUR programming decisions to the user, how this avoids overtraining, and how it complements your ${sport} training ${sportTrainingDays}x/week (address them as 'you')."
 }
 
 ${snap.block}`;
 
-    const userPrompt = `Generate a gym workout routine for a ${sport.replace("_", " ")} athlete who trains their sport ${sportTrainingDays} days per week. Goals: ${goalsStr}. Focus areas: ${focusStr}. Split preference: ${splitStr}. Session length: ${sessionDurationMinutes} minutes. Equipment: ${equipmentList.join(", ")}.`;
+    const userPrompt = `Generate a gym workout routine for me. I'm a ${sport.replace("_", " ")} athlete training my sport ${sportTrainingDays} days per week. Goals: ${goalsStr}. Focus areas: ${focusStr}. Split preference: ${splitStr}. Session length: ${sessionDurationMinutes} minutes. Equipment: ${equipmentList.join(", ")}. Address me directly in every notes field.`;
 
     const content = await callGroqText({
       model: "llama-3.1-8b-instant",

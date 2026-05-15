@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetFooter } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Clock, Dumbbell, TrendingUp, Brain, Trash2, Pencil, Check } from "lucide-react";
+import { Clock, Dumbbell, TrendingUp, Brain, Trash2, Pencil, Check, Share2 } from "lucide-react";
 import { motion } from "motion/react";
 import { staggerContainer, staggerItem } from "@/lib/motion";
 import { formatWeight, formatVolume } from "@/lib/gymCalculations";
@@ -16,6 +16,10 @@ interface SessionDetailSheetProps {
   onDelete: (sessionId: string) => void;
   onUpdateSet?: (setId: string, updates: Partial<{ weight_kg: number | null; reps: number; is_warmup: boolean }>) => Promise<void>;
   onDeleteSet?: (setId: string) => Promise<void>;
+  /** Fires when the user taps the share icon in the sheet header. The page
+   *  is expected to own the ShareCardDialog and pass back through the
+   *  currently-viewed session. */
+  onShare?: (session: SessionWithSets) => void;
 }
 
 interface EditableSetRowProps {
@@ -81,7 +85,7 @@ function EditableSetRow({ set, label, onUpdateSet, onDeleteSet }: EditableSetRow
   );
 }
 
-export function SessionDetailSheet({ session, open, onOpenChange, onDelete, onUpdateSet, onDeleteSet }: SessionDetailSheetProps) {
+export function SessionDetailSheet({ session, open, onOpenChange, onDelete, onUpdateSet, onDeleteSet, onShare }: SessionDetailSheetProps) {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const canEdit = Boolean(onUpdateSet && onDeleteSet);
@@ -106,6 +110,16 @@ export function SessionDetailSheet({ session, open, onOpenChange, onDelete, onUp
               <span className="text-sm text-muted-foreground font-normal">
                 {new Date(session.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
               </span>
+              {onShare && (
+                <button
+                  type="button"
+                  onClick={() => onShare(session)}
+                  className="ml-auto h-9 w-9 inline-flex items-center justify-center rounded-full text-muted-foreground active:text-foreground active:bg-muted/40 transition-colors"
+                  aria-label="Share session"
+                >
+                  <Share2 className="h-4 w-4" />
+                </button>
+              )}
             </SheetTitle>
           </SheetHeader>
 

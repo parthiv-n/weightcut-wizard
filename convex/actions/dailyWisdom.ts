@@ -5,7 +5,7 @@ import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { callGroqText } from "../_shared/groq";
 import { parseJSON } from "../_shared/parseResponse";
-import { loadAthleteSnapshot, requireUserIdFromAction } from "./_helpers";
+import { loadAthleteSnapshot, requireUserIdFromAction, SECOND_PERSON_DIRECTIVE } from "./_helpers";
 
 export const run = action({
   args: {
@@ -65,22 +65,24 @@ export const run = action({
 
     const snap = await loadAthleteSnapshot(ctx, userId);
     const systemPrompt = `You are a JSON API. Respond with ONLY valid JSON.
-You are the FightCamp Wizard - evidence-based fight sports nutritionist.
+You are the FightCamp Wizard - evidence-based fight sports nutritionist. Speak directly to the user in every string field.
+
+${SECOND_PERSON_DIRECTIVE}
 
 RULES:
-- Reference actual numbers (kg, kcal, days) in advice
+- Reference YOUR athlete's actual numbers (kg, kcal, days) and address them as "you" / "your".
 - riskLevel: "orange" if requiredWeeklyKg > 1.0, else "green"
 - summary: <=10 words
-- adviceParagraph: max 2 short sentences
-- actionItems: exactly 3 short items
-- nutritionStatus: one short sentence
+- adviceParagraph: max 2 short sentences, written to the user
+- actionItems: exactly 3 short items, each phrased as a directive ("Hit ___", "Cut ___", "Add ___")
+- nutritionStatus: one short sentence to the user
 - NEVER use em dashes; use periods or commas
 
 OUTPUT:
 { "summary": "string", "riskLevel": "green|orange", "riskReason": "string", "adviceParagraph": "string", "actionItems": ["a","b","c"], "nutritionStatus": "string" }
 
 ${snap.block}`;
-    const userPrompt = `Athlete snapshot:
+    const userPrompt = `Your snapshot:
 - Weight: ${args.currentWeight}kg -> Diet target: ${dietTarget}kg -> Weigh-in: ${args.goalWeight}kg
 - Days left: ${daysRemaining} | Required: ${requiredWeeklyKg.toFixed(2)} kg/wk | Pace: ${weeklyPaceKg.toFixed(2)} kg/wk (${paceStatus})
 - TDEE: ${args.tdee ?? "unknown"}${args.bmr ? ` | BMR: ${args.bmr}` : ""} | Activity: ${args.activityLevel ?? "unknown"}

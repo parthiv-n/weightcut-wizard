@@ -20,19 +20,89 @@ export const run = action({
       throw new Error("At least one meal is required");
     }
     const snap = await loadAthleteSnapshot(ctx, userId);
+    // The system prompt MUST spell out every field shape — the previous
+    // version only sketched the top-level keys (`{ mealBreakdown: [...] }`)
+    // and the model would happily drift to `meal_name`, `key_nutrients`,
+    // `percent_rda`, etc. The React card then read those camelCase fields
+    // as undefined and rendered the Per Meal / Gaps sections empty.
+    //
+    // The example below pins every field name AND uses non-trivial values
+    // so the model can't shortcut by echoing the schema (Groq tends to
+    // return placeholder values when the example uses "...").
     const systemPrompt = `You are a JSON API. Respond with ONLY the JSON object. NEVER use em dashes.
-You are a professional combat sports nutritionist. Analyse the athlete's full day of eating and estimate micronutrient intake.
+You are the athlete's personal nutrition coach. Speak DIRECTLY to the user using "you" and "your" — never "the athlete", "they", or "the user". The user is reading this themself; address them like you're in the room.
 
-Return JSON:
-{ "summary": "...", "mealBreakdown": [...], "micronutrients": [...], "gaps": [...], "suggestions": [...] }
+Return JSON in EXACTLY this shape (camelCase keys, do NOT rename or omit):
+{
+  "summary": "Short paragraph summarising the day.",
+  "mealBreakdown": [
+    {
+      "mealType": "breakfast",
+      "mealName": "Oats with berries",
+      "keyNutrients": [
+        { "name": "Iron", "amount": "3.2 mg" },
+        { "name": "Fiber", "amount": "8 g" }
+      ]
+    }
+  ],
+  "micronutrients": [
+    { "name": "Iron", "percentRDA": 62, "amount": "11 mg", "rdaTarget": "18 mg" }
+  ],
+  "gaps": [
+    {
+      "nutrient": "Vitamin D",
+      "percentRDA": 28,
+      "severity": "critical",
+      "reason": "Only fortified milk and no oily fish today."
+    }
+  ],
+  "suggestions": [
+    {
+      "food": "Salmon (100g)",
+      "reason": "Closes the vitamin D and omega-3 gap.",
+      "nutrients": ["Vitamin D", "Omega-3"]
+    }
+  ],
+  "mealAdditions": [
+    {
+      "mealType": "breakfast",
+      "mealName": "Oats with berries",
+      "additions": [
+        {
+          "item": "Add a tablespoon of ground flaxseed",
+          "benefit": "Bumps your omega-3s and fiber without changing the texture much.",
+          "nutrients": ["Omega-3", "Fiber"]
+        },
+        {
+          "item": "Swap the milk for fortified soy milk",
+          "benefit": "Adds vitamin D and B12 that your breakfast is missing.",
+          "nutrients": ["Vitamin D", "B12"]
+        }
+      ]
+    }
+  ],
+  "vitaminRounders": [
+    {
+      "food": "Eggs",
+      "vitamins": ["Vitamin D", "B12", "Choline", "Selenium"],
+      "reason": "Covers four of your weaker micros in one cheap ingredient you can drop into any meal."
+    }
+  ]
+}
 
 Rules:
-- mealBreakdown: one entry per meal, top 3-4 micronutrients (highest amounts).
-- Estimate from USDA food composition data
-- RDA targets adjusted for an active combat sport athlete (${profile?.sex === "female" ? "female" : "male"}, ${profile?.age || 25} years)
-- Only include gaps where percentRDA < 70
-- Severity: critical < 30%, moderate 30-50%, low 50-70%
-- percentRDA integers, capped at 100
+- Use the EXACT field names shown above (mealType, mealName, keyNutrients, percentRDA, rdaTarget, mealAdditions, vitaminRounders). NEVER use snake_case (no meal_name, no key_nutrients, no percent_rda, no meal_additions, no vitamin_rounders).
+- mealBreakdown: ONE entry per input meal, in the same order as the user listed them. keyNutrients = top 3-4 micronutrients by amount.
+- micronutrients: 6-10 of the most important micronutrients for combat sport athletes.
+- gaps: ONLY include nutrients where percentRDA < 70. Severity: critical < 30, moderate 30-50, low 50-70.
+- suggestions: 3-5 whole foods that close the biggest gaps. Each must list which "nutrients" it provides.
+- mealAdditions: ONE entry for EACH meal the user logged, in the same order. Each entry has 2-3 specific items the user could ADD or SWAP into THAT meal to raise its nutrient density — keep additions realistic for the meal's flavour profile (don't suggest salmon on porridge). Use imperative phrasing ("Add ...", "Top with ...", "Swap ... for ..."). Each addition must list the nutrients it boosts.
+- vitaminRounders: 2-4 "all-rounder" foods or simple pairings that cover MULTIPLE vitamins/minerals at once, with priority on closing the user's gaps. List every vitamin/mineral each food rounds out.
+- Estimate from USDA food composition data.
+- RDA targets adjusted for an active combat sport athlete (${profile?.sex === "female" ? "female" : "male"}, ${profile?.age || 25} years).
+- percentRDA must be an INTEGER, capped at 100.
+- ALL string fields must be present (use "" if you have nothing meaningful).
+- Return arrays even if empty (e.g. "gaps": []).
 
 ${snap.block}`;
 
@@ -46,15 +116,17 @@ ${snap.block}`;
           }`,
       )
       .join("\n");
-    const userPrompt = `Analyse this athlete's full day of eating for ${date}:
+    const userPrompt = `Analyse my full day of eating for ${date}:
 
 ${mealSummary}
 
 Daily totals: ${meals.reduce((s, m: any) => s + (m.calories || 0), 0)} kcal, ${meals.reduce((s, m: any) => s + (m.protein_g || 0), 0)}g protein, ${meals.reduce((s, m: any) => s + (m.carbs_g || 0), 0)}g carbs, ${meals.reduce((s, m: any) => s + (m.fats_g || 0), 0)}g fats
 
-Macro targets: ${macroGoals?.calorieTarget || "not set"} kcal, ${macroGoals?.proteinGrams || "?"} P, ${macroGoals?.carbsGrams || "?"} C, ${macroGoals?.fatsGrams || "?"} F
+My macro targets: ${macroGoals?.calorieTarget || "not set"} kcal, ${macroGoals?.proteinGrams || "?"} P, ${macroGoals?.carbsGrams || "?"} C, ${macroGoals?.fatsGrams || "?"} F
 
-Athlete profile: ${profile?.age || "?"} years, ${profile?.sex || "?"}, ${profile?.current_weight_kg || "?"}kg, training ${profile?.training_frequency || "?"}/week`;
+My profile: ${profile?.age || "?"} years, ${profile?.sex || "?"}, ${profile?.current_weight_kg || "?"}kg, training ${profile?.training_frequency || "?"}/week.
+
+Address me directly ("you", "your") in every string field — summary, gap reasons, suggestion reasons.`;
 
     const content = await callGroqText({
       model: "openai/gpt-oss-120b",
@@ -63,10 +135,110 @@ Athlete profile: ${profile?.age || "?"} years, ${profile?.sex || "?"}, ${profile
         { role: "user", content: userPrompt },
       ],
       temperature: 0.1,
-      max_tokens: 2500,
+      max_tokens: 3500,
       response_format: { type: "json_object" },
     });
-    const analysisData = parseJSON(content);
+    const raw = parseJSON<Record<string, any>>(content);
+    const analysisData = normaliseAnalysis(raw);
     return { analysisData };
   },
 });
+
+/**
+ * Map common snake_case / aliased keys back to the canonical camelCase
+ * shape the React `DietAnalysisCard` expects. Even with a fully-shaped
+ * system prompt Groq sometimes returns `meal_name`, `key_nutrients`, or
+ * `percent_rda` — without this normaliser the Per Meal / Gaps sections
+ * silently render empty.
+ */
+function normaliseAnalysis(raw: Record<string, any> | null | undefined) {
+  const r = raw ?? {};
+  const pick = <T,>(...keys: string[]): T | undefined => {
+    for (const k of keys) if (r[k] != null) return r[k] as T;
+    return undefined;
+  };
+  const arr = <T,>(...keys: string[]): T[] => {
+    for (const k of keys) {
+      const v = r[k];
+      if (Array.isArray(v)) return v as T[];
+    }
+    return [];
+  };
+  const num = (v: unknown): number => {
+    const n = typeof v === "number" ? v : parseFloat(String(v ?? ""));
+    return Number.isFinite(n) ? Math.min(100, Math.max(0, Math.round(n))) : 0;
+  };
+  const str = (v: unknown): string => (typeof v === "string" ? v : v == null ? "" : String(v));
+
+  return {
+    summary: str(pick("summary", "overview", "analysis")),
+    mealBreakdown: arr<any>("mealBreakdown", "meal_breakdown", "meals", "perMeal", "per_meal").map((m) => ({
+      mealType: str(m?.mealType ?? m?.meal_type ?? m?.type),
+      mealName: str(m?.mealName ?? m?.meal_name ?? m?.name),
+      keyNutrients: (
+        Array.isArray(m?.keyNutrients) ? m.keyNutrients :
+        Array.isArray(m?.key_nutrients) ? m.key_nutrients :
+        Array.isArray(m?.nutrients) ? m.nutrients : []
+      ).map((n: any) => ({
+        name: str(n?.name ?? n?.nutrient),
+        amount: str(n?.amount ?? n?.value ?? n?.qty),
+      })),
+    })),
+    micronutrients: arr<any>("micronutrients", "micros", "nutrients").map((n) => ({
+      name: str(n?.name ?? n?.nutrient),
+      percentRDA: num(n?.percentRDA ?? n?.percent_rda ?? n?.percent ?? n?.pctRDA),
+      amount: str(n?.amount ?? n?.value),
+      rdaTarget: str(n?.rdaTarget ?? n?.rda_target ?? n?.target ?? n?.rda),
+    })),
+    gaps: arr<any>("gaps", "deficiencies", "lowNutrients").map((g) => {
+      const sev = str(g?.severity).toLowerCase();
+      const severity =
+        sev === "critical" || sev === "moderate" || sev === "low"
+          ? sev
+          : "low";
+      return {
+        nutrient: str(g?.nutrient ?? g?.name),
+        percentRDA: num(g?.percentRDA ?? g?.percent_rda ?? g?.percent),
+        severity: severity as "low" | "moderate" | "critical",
+        reason: str(g?.reason ?? g?.why ?? g?.note),
+      };
+    }),
+    suggestions: arr<any>("suggestions", "recommendations", "addToYourDiet").map((s) => ({
+      food: str(s?.food ?? s?.name ?? s?.item),
+      reason: str(s?.reason ?? s?.why ?? s?.note),
+      nutrients: Array.isArray(s?.nutrients)
+        ? s.nutrients.map((n: any) => str(n))
+        : Array.isArray(s?.targets)
+        ? s.targets.map((n: any) => str(n))
+        : [],
+    })),
+    mealAdditions: arr<any>("mealAdditions", "meal_additions", "perMealAdditions", "mealUpgrades").map((m) => ({
+      mealType: str(m?.mealType ?? m?.meal_type ?? m?.type),
+      mealName: str(m?.mealName ?? m?.meal_name ?? m?.name),
+      additions: (
+        Array.isArray(m?.additions) ? m.additions :
+        Array.isArray(m?.adds) ? m.adds :
+        Array.isArray(m?.suggestions) ? m.suggestions : []
+      ).map((a: any) => ({
+        item: str(a?.item ?? a?.food ?? a?.name ?? a?.addition),
+        benefit: str(a?.benefit ?? a?.reason ?? a?.why ?? a?.note),
+        nutrients: Array.isArray(a?.nutrients)
+          ? a.nutrients.map((n: any) => str(n))
+          : Array.isArray(a?.boosts)
+          ? a.boosts.map((n: any) => str(n))
+          : [],
+      })),
+    })),
+    vitaminRounders: arr<any>("vitaminRounders", "vitamin_rounders", "allRounders", "all_rounders", "rounders").map((v) => ({
+      food: str(v?.food ?? v?.name ?? v?.item),
+      vitamins: Array.isArray(v?.vitamins)
+        ? v.vitamins.map((n: any) => str(n))
+        : Array.isArray(v?.nutrients)
+        ? v.nutrients.map((n: any) => str(n))
+        : Array.isArray(v?.covers)
+        ? v.covers.map((n: any) => str(n))
+        : [],
+      reason: str(v?.reason ?? v?.why ?? v?.note),
+    })),
+  };
+}

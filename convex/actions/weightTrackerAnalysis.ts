@@ -6,7 +6,7 @@ import { action } from "../_generated/server";
 import { callGroqText } from "../_shared/groq";
 import { parseJSON } from "../_shared/parseResponse";
 import { projectWeight } from "../_shared/math";
-import { loadAthleteSnapshot, requireUserIdFromAction } from "./_helpers";
+import { loadAthleteSnapshot, requireUserIdFromAction, SECOND_PERSON_DIRECTIVE } from "./_helpers";
 import { enforceGemGate } from "../_shared/subscriptionGuard";
 
 export const run = action({
@@ -91,7 +91,9 @@ export const run = action({
     const projected = projectWeight(numeric, daysRemaining);
 
     const systemPrompt = `You are a JSON API. Respond with ONLY the JSON object. NEVER use em dashes in any text, use commas, periods, or regular hyphens instead.
-You are the FightCamp Wizard - evidence-based sports nutrition specialist for combat athletes.
+You are the FightCamp Wizard - evidence-based sports nutrition specialist for combat athletes. Every narrative string MUST address the user as "you" / "your".
+
+${SECOND_PERSON_DIRECTIVE}
 
 RULES:
 - fightWeekTarget = diet-only target (fat loss). These are bodyweight numbers in kg.
@@ -104,7 +106,7 @@ RULES:
 - If requiredWeeklyLoss > 1.5: set riskLevel="red" and include a strong medical warning inside strategicGuidance, but still provide complete calorie/macro recommendations
 
 STYLE - be a sports nutritionist writing a personalised protocol. Be specific with numbers. No filler.
-- reasoningExplanation: 3-4 sentences. Explain WHY these calorie and macro numbers were chosen for THIS athlete. Derive the deficit from their TDEE and the required weekly loss rate. Justify protein in g/kg bodyweight. Justify the carb/fat split relative to training demands. Connect the numbers to reaching goal weight by the target date.
+- reasoningExplanation: 3-4 sentences. Explain WHY these calorie and macro numbers were chosen for YOU. Derive YOUR deficit from YOUR TDEE and the required weekly loss rate. Justify protein in g/kg of YOUR bodyweight. Justify the carb/fat split relative to YOUR training demands. Connect the numbers to YOU reaching YOUR goal weight by the target date.
 - strategicGuidance: 4-5 sentences. Explain calorie strategy with training-day vs rest-day cycling. Explain how to structure the deficit, when to refeed (every 7-10 days if deficit >500 kcal), and hydration target (e.g., 40ml/kg bodyweight minimum).
 - mealTiming: distribute recommendedCalories and proteinGrams across 4-5 meal slots. Each slot MUST include name, time, caloriePercent (integer, all slots sum to 100), calories, proteinGrams, and focus (ONE sentence). Include a pre-training and post-training slot. mealTiming.notes = 1-2 sentences on overall distribution. DO NOT name specific foods.
 - weeklyWorkflow: 3-4 steps for the weekly check-in process (when/how to weigh, comparing 3-day average to target, adjustments if stalled, diet break trigger). Each step 2-3 sentences with specific numbers.

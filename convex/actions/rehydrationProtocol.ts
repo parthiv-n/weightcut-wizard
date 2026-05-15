@@ -5,7 +5,7 @@ import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { callGroqText, GroqError } from "../_shared/groq";
 import { parseJSON } from "../_shared/parseResponse";
-import { requireUserIdFromAction, logDecision } from "./_helpers";
+import { requireUserIdFromAction, logDecision, SECOND_PERSON_DIRECTIVE } from "./_helpers";
 import {
   buildDeterministicRehydration,
   DEFAULT_WARNINGS,
@@ -109,9 +109,13 @@ export const run = action({
   "hourlyNotes": [{ "hour": 1, "drinkRecipe": "string max 20 words", "notes": "string max 25 words", "foods": ["string", "string"] }],
   "carbRefuelStrategy": "string max 30 words",
   "extraWarnings": ["string"]
-}`;
+}
 
-    const userPrompt = `Athlete: ${args.sex}, weighed in at ${args.weighInWeightKg}kg, ${args.hoursUntilFight}h until fight.
+${SECOND_PERSON_DIRECTIVE}
+
+Address the user directly in every string ("Sip 500ml...", "Your sodium target...", "Avoid fibre right now"). This is THEIR rehydration protocol.`;
+
+    const userPrompt = `You: ${args.sex}, just weighed in at ${args.weighInWeightKg}kg, ${args.hoursUntilFight}h until fight.
 Totals to distribute: ${det.totals.totalFluidLitres}L fluid, ${det.totals.totalSodiumMg}mg Na, ${det.totals.totalCarbsG}g carbs.
 Hourly phases (hour, phase, fluid_ml, carbs_g):
 ${det.hourlyProtocol.map((h) => `${h.hour} ${h.phase} ${h.fluidML}ml ${h.carbsG}g`).join("\n")}

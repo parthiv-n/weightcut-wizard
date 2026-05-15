@@ -148,18 +148,24 @@ export const TrainingCalendarCard = forwardRef<HTMLDivElement, TrainingCalendarC
 
     return (
       <CardShell ref={ref} aspect={aspect} isPremium={isPremium} transparent={transparent}>
-        {/* Strava-style layout: stats on top (vertical, bold white), chart on bottom. */}
+        {/* Layout: period label stays at top under FightCamp Wizard, stats are
+            vertically centred between the brand area and the bar chart, chart
+            sits at the bottom. Equal flex spacers above and below the stats
+            keep them sitting roughly halfway between header and chart. */}
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
           <StravaPeriodLabel text={TIME_LABELS[timeRange] ?? timeRange} s={s} transparent={transparent} />
 
-          {/* Top vertical stats — bold white, Strava-style, horizontally centred */}
+          {/* Top spacer — pushes the stats down so they sit centred between
+              the FightCamp Wizard header above and the bar chart below. */}
+          <div style={{ flex: 1, minHeight: s ? 24 : 8 }} />
+
+          {/* Vertical stats — bold white, Strava-style, horizontally centred */}
           <div
             style={{
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
               gap: s ? 28 : 12,
-              marginBottom: s ? 48 : 18,
             }}
           >
             <StravaStat
@@ -183,7 +189,8 @@ export const TrainingCalendarCard = forwardRef<HTMLDivElement, TrainingCalendarC
             />
           </div>
 
-          {/* Spacer pushes the graph to the bottom of the card */}
+          {/* Bottom spacer — mirrors the top spacer so the stats group is
+              centred between header and chart. */}
           <div style={{ flex: 1, minHeight: s ? 24 : 8 }} />
 
           {/* Bottom: graph showing all training sessions for the period */}

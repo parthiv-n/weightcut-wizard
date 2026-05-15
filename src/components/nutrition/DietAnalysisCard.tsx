@@ -1,4 +1,4 @@
-import { X, RefreshCw } from "lucide-react";
+import { X, RefreshCw, Plus, Sparkles } from "lucide-react";
 import type { DietAnalysisResult } from "@/types/dietAnalysis";
 
 const NUTRIENT_COLORS: Record<string, string> = {
@@ -40,7 +40,13 @@ function NutrientRing({ name, percentRDA, color }: { name: string; percentRDA: n
   );
 }
 
-const clean = (t: string) => t.replace(/\u2014/g, ' - ').replace(/\u2013/g, '-');
+// Defensive: the AI sometimes returns rows with missing string fields
+// (summary / reason). Coerce to "" so a sparse response can't crash the
+// page on `t.replace(...)` \u2014 the empty cells just render blank.
+const clean = (t: string | null | undefined) =>
+  typeof t === "string"
+    ? t.replace(/\u2014/g, " - ").replace(/\u2013/g, "-")
+    : "";
 
 interface DietAnalysisCardProps {
   analysis: DietAnalysisResult;
@@ -95,7 +101,7 @@ export function DietAnalysisCard({ analysis, onDismiss, onRefresh, refreshing }:
                   <span className="text-[13px] font-medium text-foreground truncate">{meal.mealName}</span>
                 </div>
                 <div className="flex flex-wrap gap-1">
-                  {meal.keyNutrients.map((n, j) => (
+                  {(meal.keyNutrients ?? []).map((n, j) => (
                     <span key={j} className="text-[10px] text-foreground/80">
                       <span className="font-medium text-foreground">{n.name}</span> {n.amount}
                     </span>
@@ -139,10 +145,78 @@ export function DietAnalysisCard({ analysis, onDismiss, onRefresh, refreshing }:
                 <p className="text-[13px] font-semibold text-foreground">{s.food}</p>
                 <p className="text-[12px] text-foreground/80 leading-relaxed mt-0.5">{clean(s.reason)}</p>
                 <div className="flex flex-wrap gap-1 mt-1.5">
-                  {s.nutrients.map((n) => (
+                  {(s.nutrients ?? []).map((n) => (
                     <span key={n} className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/15 text-primary font-medium">{n}</span>
                   ))}
                 </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Per-Meal Upgrades — what to add to each meal the user actually ate */}
+      {analysis.mealAdditions && analysis.mealAdditions.length > 0 && (
+        <div>
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2">Upgrade Each Meal</p>
+          <div className="space-y-1.5">
+            {analysis.mealAdditions.map((meal, i) => (
+              (meal.additions ?? []).length > 0 && (
+                <div key={i} className="rounded-2xl bg-muted/20 px-3.5 py-2.5 border-2 border-border">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-[10px] uppercase tracking-wider font-semibold text-primary">{meal.mealType}</span>
+                    <span className="text-[13px] font-medium text-foreground truncate">{meal.mealName}</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {(meal.additions ?? []).map((a, j) => (
+                      <div key={j} className="flex items-start gap-2">
+                        <div className="h-4 w-4 rounded-full bg-primary/15 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <Plus className="h-2.5 w-2.5 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12.5px] font-medium text-foreground leading-snug">{clean(a.item)}</p>
+                          {a.benefit && (
+                            <p className="text-[11.5px] text-foreground/75 leading-relaxed mt-0.5">{clean(a.benefit)}</p>
+                          )}
+                          {(a.nutrients ?? []).length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {a.nutrients.map((n) => (
+                                <span key={n} className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/15 text-primary font-medium">{n}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Vitamin All-Rounders — single foods that close multiple gaps at once */}
+      {analysis.vitaminRounders && analysis.vitaminRounders.length > 0 && (
+        <div>
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold mb-2">Vitamin All-Rounders</p>
+          <div className="space-y-1.5">
+            {analysis.vitaminRounders.map((v, i) => (
+              <div key={i} className="rounded-2xl bg-primary/5 px-3.5 py-2.5 border-2 border-primary/20">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-3.5 w-3.5 text-primary flex-shrink-0" />
+                  <p className="text-[13px] font-semibold text-foreground">{v.food}</p>
+                </div>
+                {v.reason && (
+                  <p className="text-[12px] text-foreground/80 leading-relaxed mt-1">{clean(v.reason)}</p>
+                )}
+                {(v.vitamins ?? []).length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {v.vitamins.map((n) => (
+                      <span key={n} className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/15 text-primary font-medium">{n}</span>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>

@@ -5,13 +5,15 @@ import { api } from "@/../convex/_generated/api";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { AlertTriangle, Target } from "lucide-react";
+import { AlertTriangle, Target, TrendingDown, ChevronRight } from "lucide-react";
+import { ImpactStyle } from "@capacitor/haptics";
 import { profileSchema } from "@/lib/validation";
 import { useUser } from "@/contexts/UserContext";
-import { celebrateSuccess, triggerHapticSelection } from "@/lib/haptics";
+import { celebrateSuccess, triggerHaptic, triggerHapticSelection } from "@/lib/haptics";
 import { GoalsSkeleton } from "@/components/ui/skeleton-loader";
 import { SwipeDial } from "@/components/ui/SwipeDial";
 import { ProfilePictureUpload } from "@/components/ProfilePictureUpload";
+import { CutPlanDialog } from "@/components/dashboard/CutPlanDialog";
 
 const ACTIVITY_MULTIPLIERS = {
   sedentary: 1.2,
@@ -49,6 +51,7 @@ export default function Goals() {
     setUserName,
     avatarUrl,
     setAvatarUrl,
+    loadCutPlan,
   } = useUser();
   const updateGoals = useMutation(api.profiles.updateGoals);
   const setUserNameMut = useMutation(api.profiles.setUserName);
@@ -75,6 +78,52 @@ export default function Goals() {
       setSavingName(false);
     }
   };
+
+  // Cut plan — surfaces the onboarding-generated plan here so users can
+  // re-open it from the profile without hunting through Dashboard. Mirrors
+  // Dashboard's lazy-rehydrate: trust localStorage first, fall back to the
+  // profile row (cut_plan_json) which iOS WebView occasionally wipes.
+  const [cutPlanOpen, setCutPlanOpen] = useState(false);
+  const [cutPlanSummary, setCutPlanSummary] = useState<{
+    totalWeeks: number;
+    weeklyLossTarget: string;
+    goalWeight: number;
+    planType: "weight_loss" | "weight_cut";
+  } | null>(null);
+
+  useEffect(() => {
+    const readSummaryFromRaw = (raw: string | null) => {
+      if (!raw) return null;
+      try {
+        const parsed = JSON.parse(raw);
+        const last = parsed?.weeklyPlan?.[parsed.weeklyPlan.length - 1];
+        if (!parsed?.totalWeeks || !parsed?.weeklyLossTarget) return null;
+        return {
+          totalWeeks: parsed.totalWeeks,
+          weeklyLossTarget: parsed.weeklyLossTarget,
+          goalWeight: parsed.goalWeight ?? last?.targetWeight ?? 0,
+          planType: parsed.planType === "weight_loss" ? "weight_loss" : "weight_cut",
+        } as const;
+      } catch {
+        return null;
+      }
+    };
+
+    const local = readSummaryFromRaw(localStorage.getItem("wcw_cut_plan"));
+    if (local) {
+      setCutPlanSummary(local);
+      return;
+    }
+    if (!userId) return;
+    let cancelled = false;
+    (async () => {
+      const dbPlan = await loadCutPlan();
+      if (cancelled || !dbPlan?.weeklyPlan) return;
+      localStorage.setItem("wcw_cut_plan", JSON.stringify(dbPlan));
+      setCutPlanSummary(readSummaryFromRaw(JSON.stringify(dbPlan)));
+    })();
+    return () => { cancelled = true; };
+  }, [userId, loadCutPlan]);
 
   const [formData, setFormData] = useState({
     age: "",
@@ -284,6 +333,35 @@ export default function Goals() {
             </div>
           </div>
         </Section>
+
+        {/* ── Your Plan ─────────────────────────────────────────────────
+            Opens the same bottom-sheet view of the generated plan that the
+            dashboard surfaces, so users can revisit week-by-week targets
+            without leaving the profile. */}
+        {cutPlanSummary && (
+          <Section title={cutPlanSummary.planType === "weight_loss" ? "Your Weight Loss Plan" : "Your Cut Plan"}>
+            <button
+              type="button"
+              onClick={() => {
+                triggerHaptic(ImpactStyle.Light);
+                setCutPlanOpen(true);
+              }}
+              className="w-full flex items-center gap-3 px-3 py-3 min-h-[44px] active:bg-muted/30 transition-colors text-left"
+            >
+              <div className="h-10 w-10 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
+                <TrendingDown className="h-5 w-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-[14px] font-medium leading-tight">View full plan</p>
+                <p className="text-[12px] text-muted-foreground mt-0.5 leading-snug truncate">
+                  {cutPlanSummary.totalWeeks} weeks · {cutPlanSummary.weeklyLossTarget}
+                  {cutPlanSummary.goalWeight ? ` · target ${cutPlanSummary.goalWeight}kg` : ""}
+                </p>
+              </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+            </button>
+          </Section>
+        )}
 
         {/* ── Personal Details (above Athlete Profile) ───────────────── */}
         <Section title="Personal Details">
@@ -510,6 +588,8 @@ export default function Goals() {
           </button>
         </div>
       </div>
+
+      <CutPlanDialog open={cutPlanOpen} onOpenChange={setCutPlanOpen} />
     </div>
   );
 }

@@ -315,11 +315,32 @@ export default defineSchema({
     sleepHours: v.optional(v.number()),
     sleepQuality: v.optional(v.string()),
     mobilityDone: v.optional(v.boolean()),
-    // Convex Storage ID for an optional training-media attachment (photo or
-    // short video) captured at the gym. URL is resolved server-side.
+    // Legacy single-media attachment. Kept so existing rows still render.
+    // New uploads go into the `session_media` table (multi-attachment).
     mediaStorageId: v.optional(v.id("_storage")),
     notes: v.optional(v.string()),
   }).index("by_user_date", ["userId", "date"]),
+
+  // Multi-attachment media for a logged training session. Each row is one
+  // photo or video. Indexed by session for the detail drawer + by user
+  // ordered for the chronological library page.
+  session_media: defineTable({
+    sessionId: v.id("fight_camp_calendar"),
+    userId: v.id("users"),
+    storageId: v.id("_storage"),
+    // "photo" | "video" — derived from the upload's MIME type so the
+    // library and lightbox can pick the right element without sniffing.
+    kind: v.union(v.literal("photo"), v.literal("video")),
+    // Caller-supplied capture date (YYYY-MM-DD). Falls back to the
+    // session's date when omitted. Used to group library tiles even when
+    // a clip is uploaded weeks after the session it belongs to.
+    capturedAt: v.string(),
+    // Optional per-clip caption — short user note ("guillotine entry",
+    // "left-hook timing"). Surfaces in the lightbox + library tile.
+    caption: v.optional(v.string()),
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_user_captured", ["userId", "capturedAt"]),
 
   fight_week_logs: defineTable({
     userId: v.id("users"),

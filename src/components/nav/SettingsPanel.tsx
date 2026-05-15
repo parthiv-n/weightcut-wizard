@@ -126,6 +126,11 @@ interface SettingsPanelProps {
   onAvatarChange: (url: string) => void;
   onSave: () => void;
   onReplayTutorial: () => void;
+  /** Optional companion to `onReplayTutorial` — clears the Fight Form
+   *  calibration tour flag so it re-fires next time the dashboard
+   *  renders with an unlocked score. Hidden when not provided so
+   *  consumers (coach Settings, etc.) can opt out. */
+  onReplayFightScoreTutorial?: () => void;
   onDeleteAccount: () => void;
   goalType?: 'cutting' | 'losing';
   onToggleGoalType?: (fighterMode: boolean) => void;
@@ -138,6 +143,7 @@ export function SettingsPanel({
   theme, onToggleTheme,
   onAvatarChange, onSave,
   onReplayTutorial,
+  onReplayFightScoreTutorial,
   onDeleteAccount,
   goalType,
   onToggleGoalType,
@@ -291,6 +297,16 @@ export function SettingsPanel({
               </div>
               <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
             </button>
+            {onReplayFightScoreTutorial && (
+              <button type="button" onClick={onReplayFightScoreTutorial}
+                className="w-full flex items-center justify-between px-3 py-2 active:bg-muted/40 transition-colors text-left">
+                <div className="flex items-center gap-2">
+                  <BookOpen className="h-4 w-4 text-primary shrink-0" />
+                  <p className="text-[13px] font-medium">Replay Fight Score Tutorial</p>
+                </div>
+                <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
+              </button>
+            )}
             <Link to="/legal?tab=privacy" className="flex items-center justify-between px-3 py-2 active:bg-muted/40 transition-colors">
               <div className="flex items-center gap-2">
                 <Shield className="h-4 w-4 text-muted-foreground shrink-0" />

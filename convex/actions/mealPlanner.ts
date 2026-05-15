@@ -9,6 +9,7 @@ import {
   loadAthleteSnapshot,
   logDecision,
   requireUserIdFromAction,
+  SECOND_PERSON_DIRECTIVE,
 } from "./_helpers";
 import { enforceGemGate } from "../_shared/subscriptionGuard";
 
@@ -73,8 +74,12 @@ export const run = action({
 
     const systemPrompt = `Nutrition AI for fighters. Output ONLY raw JSON.
 
-Athlete: ${profile?.sex ?? "unspecified"}${profile?.age ? `, ${profile.age}y` : ""}
-Target: ${Math.round(dailyCalorieTarget)} cal/day (${currentWeight}kg→${goalWeight}kg, ${daysToGoal} days)
+${SECOND_PERSON_DIRECTIVE}
+
+Every narrative string (safetyMessage, tips, recipe) MUST address the user as "you" / "your". This is YOUR meal plan being handed to YOU.
+
+You: ${profile?.sex ?? "unspecified"}${profile?.age ? `, ${profile.age}y` : ""}
+Your target: ${Math.round(dailyCalorieTarget)} cal/day (${currentWeight}kg→${goalWeight}kg, ${daysToGoal} days)
 Safety: ${safetyIndicator} - ${safetyMessage}
 
 MACRO TARGETS: ${targetProtein}g protein, ${targetCarbs}g carbs, ${targetFats}g fat

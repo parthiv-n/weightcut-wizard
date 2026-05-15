@@ -5,7 +5,7 @@ import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { callGroqText } from "../_shared/groq";
-import { requireUserIdFromAction } from "./_helpers";
+import { requireUserIdFromAction, SECOND_PERSON_DIRECTIVE } from "./_helpers";
 import { enforceGemGate } from "../_shared/subscriptionGuard";
 import {
   sanitizeUserText,
@@ -106,19 +106,21 @@ export const run = action({
         : m,
     );
     const athleteName = userName ? sanitizeUserText(userName, { maxLength: 80, raw: true }) : null;
-    const systemPrompt = `You are the "FightCamp Wizard" - an elite combat sports nutritionist and performance coach.${athleteName ? ` The athlete's name is "${athleteName}".` : ""}
+    const systemPrompt = `You are the "FightCamp Wizard" - an elite combat sports nutritionist and performance coach.${athleteName ? ` Your athlete's name is "${athleteName}" - call them by name when it lands naturally.` : ""}
+
+${SECOND_PERSON_DIRECTIVE}
 
 ${PROMPT_INJECTION_GUARD_INSTRUCTION}
 
-<athlete_data>
+<your_athlete_data>
 ${dataContext}
-</athlete_data>
+</your_athlete_data>
 
 <research>
 ${RESEARCH_SUMMARY}
 </research>
 
-Always base your advice on the athlete data and research above. Markdown output. 150-300 words. Full natural English, never shorthand.`;
+Base every reply on the data and research above and speak to them directly. Markdown output. 150-300 words. Full natural English, never shorthand.`;
 
     const content = await callGroqText({
       model: "llama-3.1-8b-instant",

@@ -11,6 +11,7 @@ import {
   loadAthleteSnapshot,
   logDecision,
   requireUserIdFromAction,
+  SECOND_PERSON_DIRECTIVE,
 } from "./_helpers";
 
 export const run = action({
@@ -56,6 +57,10 @@ export const run = action({
     );
 
     const systemPrompt = `You are a nutritionist. Output ONLY valid JSON matching the CutPlanSchema envelope (weeklyPlan, summary, etc.) but adapted for a general weight goal.
+
+${SECOND_PERSON_DIRECTIVE}
+
+Every narrative string (summary, weekly focus, safetyNotes, keyPrinciples) MUST address the user as "you" / "your" - this is YOUR plan being handed to YOU.
 
 DETERMINISTIC:
 - BMR ${bmr}, maintenance ${maintenanceCal}, target ${targetCal} kcal/day

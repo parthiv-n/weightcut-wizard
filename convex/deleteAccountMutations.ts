@@ -77,6 +77,22 @@ export const cascadeTraining = internalMutation({
       }
     }
 
+    // session_media — multi-attachment photos/videos on logged sessions.
+    // Each row owns a Convex Storage object; delete those FIRST so storage
+    // can't leak if the row delete fails. Indexed by user so this is cheap.
+    const mediaRows = await ctx.db
+      .query("session_media")
+      .withIndex("by_user_captured", (q) => q.eq("userId", userId))
+      .collect();
+    for (const m of mediaRows) {
+      try {
+        await ctx.storage.delete(m.storageId);
+      } catch {
+        /* already gone */
+      }
+      await ctx.db.delete(m._id);
+    }
+
     // exercise_prs — by user.
     const prs = await ctx.db
       .query("exercise_prs")

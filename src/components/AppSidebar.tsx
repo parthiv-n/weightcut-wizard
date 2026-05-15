@@ -24,7 +24,7 @@ import { FIGHT_ONLY_PATHS, isFighter } from "@/lib/goalType";
 
 const menuItems = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
-  { title: "Goals", url: "/goals", icon: Target },
+  { title: "Profile", url: "/goals", icon: Target },
   { title: "Fight Camps", url: "/fight-camps", icon: Trophy },
   { title: "Training Calendar", url: "/training-calendar", icon: Calendar },
   { title: "Recovery", url: "/recovery", icon: HeartPulse },

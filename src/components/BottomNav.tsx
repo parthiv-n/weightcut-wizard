@@ -30,7 +30,7 @@ const mainNavItems = [
 ];
 
 const moreMenuItems = [
-  { title: "Goals", url: "/goals", icon: Target },
+  { title: "Profile", url: "/goals", icon: Target },
   { title: "Fight Camps", url: "/fight-camps", icon: Trophy },
   { title: "Training Calendar", url: "/training-calendar", icon: Calendar },
   { title: "Recovery", url: "/recovery", icon: HeartPulse },
@@ -163,6 +163,19 @@ export const BottomNav = memo(function BottomNav() {
     setMoreMenuOpen(false);
     navigate("/dashboard");
     setTimeout(() => replayTutorial("onboarding"), 600);
+  };
+
+  // Replay just the Fight Form calibration tour. Clears the localStorage
+  // gate the dashboard reads, then dispatches a window event that
+  // Dashboard listens to so the tour pops without a reload.
+  const handleReplayFightScoreTutorial = () => {
+    setSettingsDialogOpen(false);
+    setMoreMenuOpen(false);
+    try { localStorage.removeItem("wcw_ff_tour_seen_v1"); } catch {}
+    navigate("/dashboard");
+    setTimeout(() => {
+      window.dispatchEvent(new Event("wcw:replay-ff-tour"));
+    }, 600);
   };
 
   const handleUpdateProfile = async () => {
@@ -315,6 +328,7 @@ export const BottomNav = memo(function BottomNav() {
         }}
         onSave={handleUpdateProfile}
         onReplayTutorial={handleReplayTutorial}
+        onReplayFightScoreTutorial={handleReplayFightScoreTutorial}
         onDeleteAccount={() => { setSettingsDialogOpen(false); setDeleteAccountDialogOpen(true); }}
         goalType={goalType}
         onToggleGoalType={handleToggleGoalType}
