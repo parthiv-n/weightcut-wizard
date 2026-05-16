@@ -122,14 +122,23 @@ export const weekly = query({
     const ranks = hydrated.filter((e) => e.rank > 3);
 
     // 8. Compute caller's own rank entry (may be outside top 50).
+    //    Zero-state: if the caller is entitled to see the board (active +
+    //    shareData=true) but logged no qualifying sessions this week, return
+    //    `{ rank: null, totalMinutes: 0, topDiscipline: null }` so the UI can
+    //    distinguish "haven't trained yet" from "can't see leaderboard"
+    //    (the latter is signalled by a top-level `null` return earlier).
     const callerRanked = ranked.find((e) => e.userId === userId);
-    const myRank = callerRanked
+    const myRank: {
+      rank: number | null;
+      totalMinutes: number;
+      topDiscipline: string | null;
+    } = callerRanked
       ? {
           rank: callerRanked.rank,
           totalMinutes: callerRanked.totalMinutes,
           topDiscipline: callerRanked.topDiscipline,
         }
-      : null;
+      : { rank: null, totalMinutes: 0, topDiscipline: null };
 
     return {
       podium,
@@ -138,6 +147,10 @@ export const weekly = query({
       asOf: Date.now(),
       windowStart,
       windowEnd,
+      // Privacy: counts only fighters who are active + shareData=true AND
+      // have >=1 qualifying session in the window. Opt-out + inactive members
+      // are excluded. UI must NOT pair this with a published gym roster size
+      // (subtraction would leak opt-out status as a side channel).
       totalRankedFighters: ranked.length,
     };
   },
