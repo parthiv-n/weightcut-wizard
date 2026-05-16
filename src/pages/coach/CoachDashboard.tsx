@@ -16,9 +16,11 @@ import { FightTargetBadge } from "@/components/coach/FightTargetBadge";
 import { AnnouncementComposeSheet } from "@/components/coach/AnnouncementComposeSheet";
 import { CoachFightOffersTile } from "@/components/coach/CoachFightOffersTile";
 import { InviteAthletePanel } from "@/components/coach/InviteAthletePanel";
+import { LeaderboardSection } from "@/components/leaderboard/LeaderboardSection";
 import { localCache } from "@/lib/localCache";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { registerPullRefresh } from "@/lib/pullRefreshRegistry";
+import type { Id } from "../../../convex/_generated/dataModel";
 
 function daysSince(iso: string | null): number | null {
   if (!iso) return null;
@@ -264,6 +266,13 @@ export default function CoachDashboard() {
               {/* Fight offers — only renders when there's at least one offer
                   in the gym. Self-renders the detail sheet on tap. */}
               <CoachFightOffersTile gymId={gym.id} />
+
+              {/* Weekly training-volume leaderboard for this gym */}
+              <LeaderboardSection
+                gymId={gym.id as Id<"gyms">}
+                viewer="coach"
+                onRowClick={(userId) => navigate(`/coach/athletes/${userId}`)}
+              />
 
               {/* Athletes for this gym */}
               {gymAthletes.length === 0 ? (
