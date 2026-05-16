@@ -74,6 +74,7 @@ import type * as lib_auth from "../lib/auth.js";
 import type * as lib_revenuecat from "../lib/revenuecat.js";
 import type * as meal_plans from "../meal_plans.js";
 import type * as meals from "../meals.js";
+import type * as migrations from "../migrations.js";
 import type * as profiles from "../profiles.js";
 import type * as profiles_internal from "../profiles_internal.js";
 import type * as pushFanout from "../pushFanout.js";
@@ -157,6 +158,7 @@ declare const fullApi: ApiFromModules<{
   "lib/revenuecat": typeof lib_revenuecat;
   meal_plans: typeof meal_plans;
   meals: typeof meals;
+  migrations: typeof migrations;
   profiles: typeof profiles;
   profiles_internal: typeof profiles_internal;
   pushFanout: typeof pushFanout;
