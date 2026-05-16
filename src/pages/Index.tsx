@@ -139,12 +139,27 @@ const Index = () => {
         navigate("/coach", { replace: true });
         return;
       }
-      // Fighters always land on /dashboard from cold start.
-      // RouteTracker still writes lastRoute for in-app navigation, but the
-      // splash explicitly resolves to /dashboard so users land on a known
-      // surface every launch.
       if (hasProfile) {
-        navigate("/dashboard", { replace: true });
+        // Restore the last protected route the user was on if RouteTracker
+        // persisted one. Falls back to /dashboard for first-ever launches or
+        // when the stored value is unsafe (must start with `/` and not point
+        // back at the splash itself, which would loop).
+        let target = "/dashboard";
+        try {
+          const stored = localStorage.getItem("lastRoute");
+          if (
+            stored &&
+            stored.startsWith("/") &&
+            stored !== "/" &&
+            stored !== "/auth" &&
+            !stored.startsWith("/onboarding")
+          ) {
+            target = stored;
+          }
+        } catch {
+          /* privacy mode — silently fall back to /dashboard */
+        }
+        navigate(target, { replace: true });
       } else {
         navigate("/onboarding", { replace: true });
       }

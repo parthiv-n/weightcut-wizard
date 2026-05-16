@@ -41,8 +41,12 @@ export function AILimitTimer() {
   if (isPremium || gems > 0) return null;
 
   return (
+    // BottomNav itself sits at `safe-area-inset-bottom + 0.5rem` and the
+    // raised FAB pokes another ~2rem above it (`-translate-y-2` on a 50px
+    // circle). Stack this float above that so the gem timer never overlaps
+    // the FAB on devices with tall safe-area insets.
     <div
-      className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+5rem)] left-1/2 -translate-x-1/2 z-[9999] md:hidden animate-in slide-in-from-bottom duration-300"
+      className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+7rem)] left-1/2 -translate-x-1/2 z-[9999] md:hidden animate-in slide-in-from-bottom duration-300"
     >
       <div className="flex items-center gap-2.5 rounded-2xl card-surface border border-primary/20 bg-background/95 px-3.5 py-2.5 shadow-lg shadow-black/20">
         <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">

@@ -85,7 +85,12 @@ function whyLine(metrics: AllMetrics, checkedInToday: boolean): string {
 }
 
 export const DailyVerdictCard = memo(function DailyVerdictCard({ metrics, checkedInToday }: DailyVerdictProps) {
-  const verdict = deriveVerdict(metrics);
+  const rawVerdict = deriveVerdict(metrics);
+  // When load confidence is too low, the why-line falls back to a cautious
+  // "still learning your normal training pattern" message. The headline must
+  // match — claiming "Push today" or "Recover today" alongside that copy is
+  // jarring. Force the neutral "Steady session" headline so they line up.
+  const verdict: Verdict = !metrics.loadConfidence.isReliable ? "steady" : rawVerdict;
   const copy = VERDICT_COPY[verdict];
   const Icon = copy.icon;
   const why = whyLine(metrics, checkedInToday);

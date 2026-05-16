@@ -196,8 +196,16 @@ export const listMessages = query({
   },
 });
 
+// NOTE: `role` previously accepted any v.string() (including "system"),
+// which let a client inject a forged system message into the chat history
+// that gets replayed back into the LLM context. Restricting to user/
+// assistant blocks future writes; legacy rows with other roles still read
+// fine (the validator only applies on insert).
 export const appendMessage = mutation({
-  args: { role: v.string(), content: v.string() },
+  args: {
+    role: v.union(v.literal("user"), v.literal("assistant")),
+    content: v.string(),
+  },
   handler: async (ctx, { role, content }) => {
     const userId = await requireUserId(ctx);
     return await ctx.db.insert("chat_messages", { userId, role, content });

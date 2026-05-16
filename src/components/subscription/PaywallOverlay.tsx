@@ -28,23 +28,21 @@ import { isNativePlatform } from "@/hooks/useIsNative";
  */
 async function syncPremiumToDb(
   customerInfo: any,
-  activatePremium: (args: { tier: string; expiresAt: string | null }) => Promise<unknown>,
+  _activatePremium: (args: { tier: string; expiresAt: string | null }) => Promise<unknown>,
 ): Promise<{ tier: string; expiresAt: string | null } | null> {
+  // SECURITY: the client-callable `activatePremium` action now intentionally
+  // throws to block forged tier upgrades. The RevenueCat webhook is the only
+  // authoritative path that flips `profiles.subscriptionTier`. We still
+  // return the locally-derived `sub` so the UI can call `forcePremium` for
+  // an optimistic unlock; the reactive `profiles.getMine` query will then
+  // reconcile from the webhook write (usually within seconds).
   const sub = getSubscriptionFromCustomerInfo(customerInfo);
   if (!sub) {
     logger.warn("syncPremiumToDb: could not extract subscription from customerInfo");
     return null;
   }
-  logger.info("syncPremiumToDb: attempting to write via Convex action", sub);
-
-  try {
-    await activatePremium({ tier: sub.tier, expiresAt: sub.expiresAt });
-    logger.info("syncPremiumToDb: Convex action success", sub);
-    return sub;
-  } catch (err) {
-    logger.error("syncPremiumToDb: Convex action exception", err);
-    return null;
-  }
+  void _activatePremium;
+  return sub;
 }
 
 // ─── Activating Pro Loading Screen ───

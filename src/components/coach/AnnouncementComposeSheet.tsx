@@ -244,7 +244,7 @@ export function AnnouncementComposeSheet({ open, onOpenChange, gymId, gymName, a
           <div className="w-10 h-1 rounded-full bg-muted-foreground/25" aria-hidden />
         </div>
         {/* Header with always-visible Send button (iOS compose pattern) */}
-        <div className="flex items-center justify-between px-1 pb-3 shrink-0 gap-3">
+        <div className="flex items-center justify-between px-1 pb-3 shrink-0 gap-2">
           <SheetHeader className="text-left flex-1 min-w-0">
             <SheetTitle className="text-base font-semibold">New announcement</SheetTitle>
             <p className="text-[12px] text-muted-foreground truncate">{gymName}</p>
@@ -260,6 +260,17 @@ export function AnnouncementComposeSheet({ open, onOpenChange, gymId, gymName, a
             ) : (
               <><Send className="h-3 w-3" /> Send</>
             )}
+          </button>
+          {/* Explicit close — Radix's X is suppressed via `[&>button]:hidden`
+              on SheetContent. Without this the only exit is the drag handle
+              or backdrop tap, neither of which is obvious mid-compose. */}
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            aria-label="Close compose"
+            className="h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground/80 bg-muted/40 dark:bg-white/[0.06] border border-border/30 active:text-foreground active:bg-muted/60 transition-colors flex-shrink-0"
+          >
+            <X className="h-4 w-4" strokeWidth={2.4} />
           </button>
         </div>
 

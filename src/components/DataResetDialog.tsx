@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { useConvex } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { useNavigate } from "react-router-dom";
 import {
@@ -28,25 +29,33 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
   const [resetting, setResetting] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const convex = useConvex();
 
-  // Convex-backed reads & writes — see `profiles.resetTrackingData` below.
+  // Cheap counter queries — show "you have N entries" without ever shipping
+  // the full row payload on dialog open. The heavy rows are only fetched
+  // when the user actually clicks "Export" (see `exportAllData`).
   const profile = useQuery(api.profiles.getMine, {});
-  const weightLogsQ = useQuery(api.weight_logs.listForUser, { limit: 10000 });
-  const hydrationLogsQ = useQuery(api.hydration_logs.listForUser, { limit: 10000 });
-  const fightCampsQ = useQuery(api.fight_camp.listCamps, {});
-  const fightWeekLogsQ = useQuery(api.fight_camp.listWeekLogs, {});
+  const weightCountsQ = useQuery(api.weight_logs.getCounts, {});
+  const mealCountsQ = useQuery(api.meals.getCounts, {});
+
   const resetTrackingData = useMutation(api.profiles.resetTrackingData);
 
   const exportAllData = async () => {
     setExporting(true);
     try {
-      const weightLogs = weightLogsQ ?? [];
+      // Fetch the full row payloads lazily so the dialog itself stays cheap.
+      const [weightLogs, hydrationLogs, fightCampsRaw, fightWeekLogsRaw] =
+        await Promise.all([
+          convex.query(api.weight_logs.listForUser, { limit: 10000 }),
+          convex.query(api.hydration_logs.listForUser, { limit: 10000 }),
+          convex.query(api.fight_camp.listCamps, {}),
+          convex.query(api.fight_camp.listWeekLogs, {}),
+        ]);
       // Nutrition export was historically a flat `nutrition_logs` rollup; the
       // v2 model is meals + items. Skip the heavy join — only the totals
       // mattered for export, and the meals page is the source of truth now.
       const nutritionLogs: Array<any> = [];
-      const hydrationLogs = hydrationLogsQ ?? [];
-      const fightCamps = (fightCampsQ ?? []).map((c: any) => ({
+      const fightCamps = (fightCampsRaw ?? []).map((c: any) => ({
         ...c,
         event_name: c.eventName ?? null,
         fight_date: c.fightDate,
@@ -62,7 +71,7 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
       }));
       const fightWeekPlans: Array<any> = []; // not surfaced in the export CSV
       void fightWeekPlans;
-      const fightWeekLogs = (fightWeekLogsQ ?? []).map((l: any) => ({
+      const fightWeekLogs = (fightWeekLogsRaw ?? []).map((l: any) => ({
         log_date: l.logDate,
         weight_kg: l.weightKg ?? null,
         carbs_g: l.carbsG ?? null,
@@ -305,7 +314,10 @@ export function DataResetDialog({ open, onOpenChange }: DataResetDialogProps) {
               <p>This will permanently delete your tracking data:</p>
               <div className="rounded-2xl bg-destructive/5 dark:bg-destructive/10 border border-destructive/10 dark:border-destructive/15 p-4 text-left text-xs space-y-1.5 text-muted-foreground/80">
                 <p>Profile information (age, height, targets)</p>
-                <p>All weight, nutrition & hydration logs</p>
+                <p>
+                  All weight ({weightCountsQ?.count ?? "…"}), nutrition (
+                  {mealCountsQ?.count ?? "…"}) & hydration logs
+                </p>
                 <p>Fight week plans, logs & AI chat history</p>
               </div>
               <div className="flex items-center justify-center gap-2 text-xs font-medium text-primary">

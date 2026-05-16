@@ -69,19 +69,52 @@ function buildOptimisticMeal(args: {
   };
 }
 
+/**
+ * Heuristic: a Convex Id is a base32-ish string roughly 24-36 chars long
+ * containing only [a-z0-9]. Legacy UUIDs include hyphens. We use this only
+ * to decide whether to forward `food_id` to the Convex mutation (which
+ * requires a real `v.id("foods")`) vs. dropping it and logging a warning.
+ */
+const CONVEX_ID_PATTERN = /^[a-z0-9]{20,40}$/;
+
+// Module-level guard so we only log the "dropping legacy food_id" warning
+// once per call site rather than spamming the console for every item.
+let warnedAboutDroppedFoodId = false;
+
 /** Map the RPC payload shape (snake_case) → Convex mutation arg shape (camelCase). */
 function rpcItemsToConvexItems(items: RpcItemPayload[]) {
-  return items.map((it) => ({
-    name: it.name,
-    grams: it.grams,
-    calories: it.calories,
-    proteinG: it.protein_g,
-    carbsG: it.carbs_g,
-    fatsG: it.fats_g,
-    // food_id is currently a UUID string from legacy code; Convex Ids are
-    // branded strings, so we deliberately drop it for now — Phase-4 will
-    // route through `foods.upsertFood` to get real Convex Ids before insert.
-  }));
+  let droppedThisCall = 0;
+  const mapped = items.map((it) => {
+    const raw = it.food_id;
+    let foodId: string | undefined;
+    if (raw && typeof raw === "string") {
+      if (CONVEX_ID_PATTERN.test(raw)) {
+        foodId = raw;
+      } else {
+        droppedThisCall += 1;
+      }
+    }
+    return {
+      name: it.name,
+      grams: it.grams,
+      calories: it.calories,
+      proteinG: it.protein_g,
+      carbsG: it.carbs_g,
+      fatsG: it.fats_g,
+      // TODO: backend support — once `foods.upsertFood` is wired into the
+      // insert path, legacy UUIDs can be resolved to Convex Ids before
+      // hitting this layer instead of being dropped.
+      ...(foodId ? { foodId: foodId as unknown as Id<"foods"> } : {}),
+    };
+  });
+  if (droppedThisCall > 0 && !warnedAboutDroppedFoodId) {
+    logger.warn(
+      `rpcItemsToConvexItems: dropped ${droppedThisCall} legacy food_id value(s) ` +
+      `that didn't match the Convex Id pattern. Will not warn again this session.`,
+    );
+    warnedAboutDroppedFoodId = true;
+  }
+  return mapped;
 }
 
 export function useMealOperations(params: UseMealOperationsParams) {
@@ -279,38 +312,81 @@ export function useMealOperations(params: UseMealOperationsParams) {
     try {
       if (!userId) throw new Error("Not authenticated");
 
-      for (const meal of mealIdeas) {
-        const recalcCal = (meal.protein_g || 0) * 4 + (meal.carbs_g || 0) * 4 + (meal.fats_g || 0) * 9;
-        const mealType = resolveMealType(meal.meal_type);
-        const items = ingredientsToRpcItems((meal.ingredients as Ingredient[] | null | undefined));
-        const args = buildCreateMealRpcArgs({
-          header: {
-            meal_name: meal.meal_name,
-            meal_type: mealType,
-            date: selectedDate,
-            notes: meal.recipe_notes ?? null,
-            is_ai_generated: true,
-          },
-          items,
-          fallbackTotals: {
-            calories: recalcCal || meal.calories,
-            protein_g: meal.protein_g ?? null,
-            carbs_g: meal.carbs_g ?? null,
-            fats_g: meal.fats_g ?? null,
-            name: coerceMealName(meal.meal_name, mealType),
-          },
-        });
-        await runInsertFlow({
-          args,
-          ingredients: meal.ingredients,
-          portion_size: meal.portion_size,
-          recipe_notes: meal.recipe_notes,
-        });
-      }
+      // Fire all inserts in parallel. `runInsertFlow` already swallows its
+      // own errors and returns `null` on failure, but we still wrap each
+      // call in a tiny adapter so a thrown error inside the orchestration
+      // layer (e.g. buildCreateMealRpcArgs validation) is captured per-meal
+      // rather than aborting the whole batch.
+      const results = await Promise.allSettled(
+        mealIdeas.map(async (meal) => {
+          const recalcCal = (meal.protein_g || 0) * 4 + (meal.carbs_g || 0) * 4 + (meal.fats_g || 0) * 9;
+          const mealType = resolveMealType(meal.meal_type);
+          const items = ingredientsToRpcItems((meal.ingredients as Ingredient[] | null | undefined));
+          const args = buildCreateMealRpcArgs({
+            header: {
+              meal_name: meal.meal_name,
+              meal_type: mealType,
+              date: selectedDate,
+              notes: meal.recipe_notes ?? null,
+              is_ai_generated: true,
+            },
+            items,
+            fallbackTotals: {
+              calories: recalcCal || meal.calories,
+              protein_g: meal.protein_g ?? null,
+              carbs_g: meal.carbs_g ?? null,
+              fats_g: meal.fats_g ?? null,
+              name: coerceMealName(meal.meal_name, mealType),
+            },
+          });
+          const canonicalId = await runInsertFlow({
+            args,
+            ingredients: meal.ingredients,
+            portion_size: meal.portion_size,
+            recipe_notes: meal.recipe_notes,
+          });
+          // `runInsertFlow` returns null on a swallowed failure — treat that
+          // as a failure for the purpose of partial-success accounting.
+          if (canonicalId == null) {
+            throw new Error(`Failed to save "${meal.meal_name}"`);
+          }
+          return { id: meal.id, name: meal.meal_name };
+        }),
+      );
 
-      setMealPlanIdeas([]);
-      AIPersistence.remove(userId, "meal_plans");
-      toast({ title: "All meals saved!", description: `${mealIdeas.length} meals added to your day` });
+      const fulfilled = results.filter(
+        (r): r is PromiseFulfilledResult<{ id: string; name: string }> => r.status === "fulfilled",
+      );
+      const rejected = results.filter((r): r is PromiseRejectedResult => r.status === "rejected");
+      const successfulIds = new Set(fulfilled.map((r) => r.value.id));
+
+      // Only clear the successful subset from the meal-plan ideas list; the
+      // failed ones stay so the user can retry individually.
+      setMealPlanIdeas((prev) => prev.filter((m) => !successfulIds.has(m.id)));
+
+      if (rejected.length === 0) {
+        AIPersistence.remove(userId, "meal_plans");
+        toast({
+          title: "All meals saved!",
+          description: `${fulfilled.length} meal${fulfilled.length === 1 ? "" : "s"} added to your day`,
+        });
+      } else if (fulfilled.length === 0) {
+        toast({
+          title: "Couldn't save meals",
+          description: `All ${rejected.length} meal${rejected.length === 1 ? "" : "s"} failed to save. Please try again.`,
+          variant: "destructive",
+        });
+      } else {
+        // Partial success — leave the persisted plan in place so the user
+        // can retry the failed ones; only the fulfilled ones were stripped
+        // from local state above.
+        toast({
+          title: "Some meals didn't save",
+          description: `Saved ${fulfilled.length}, failed ${rejected.length}. Tap a failed meal to retry.`,
+          variant: "destructive",
+        });
+        rejected.forEach((r) => logger.warn("saveMealIdeasToDatabase item failed", { reason: String(r.reason) }));
+      }
     } catch (error: any) {
       logger.error("Error saving meal ideas", error);
       toast({ title: "Error saving meals", description: error.message || "Failed to save meals", variant: "destructive" });

@@ -153,6 +153,15 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
     setSleepLogs(filtered);
   }, [sleepRows, from28dStr]);
 
+  // Stable fingerprint for sessions28d so the metrics effect doesn't re-fire
+  // every Convex tick when the parent re-renders with a fresh-but-equivalent
+  // array reference. Joining id+date+updatedAt is enough: any meaningful
+  // session change touches one of those fields.
+  const sessions28dFingerprint = useMemo(
+    () => sessions28d.map((s: any) => `${s.id ?? s._id ?? ''}:${s.date ?? ''}:${s.updatedAt ?? s.updated_at ?? ''}`).join('|'),
+    [sessions28d],
+  );
+
   // Compute metrics whenever sessions or wellness data changes
   useEffect(() => {
     const prevReadiness: number | null = AIPersistence.load(userId, 'prev_readiness');
@@ -178,7 +187,10 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
         sleepLogs,
       ));
     }
-  }, [sessions28d, athleteProfile?.trainingFrequency, athleteProfile?.activityLevel, wellnessCheckIn, baseline, userId, sleepLogs]);
+    // sessions28d intentionally excluded — sessions28dFingerprint is the
+    // stable proxy. Same for sleepLogs (driven by sleepRows query).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessions28dFingerprint, athleteProfile?.trainingFrequency, athleteProfile?.activityLevel, wellnessCheckIn, baseline, userId, sleepLogs]);
 
   // Store readiness for autoregressive smoothing when it changes (deduplicated)
   const lastStoredScoreRef = useRef<number | null>(null);

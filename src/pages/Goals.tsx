@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,6 +55,12 @@ export default function Goals() {
   } = useUser();
   const updateGoals = useMutation(api.profiles.updateGoals);
   const setUserNameMut = useMutation(api.profiles.setUserName);
+  // Active camp — used to keep `fight_camps.fightDate` in sync when the
+  // user edits their target_date on this page. Without this, the profile
+  // points at one date and the camp points at another and the rest of the
+  // app gets two conflicting answers depending on which it reads.
+  const updateCampMut = useMutation(api.fight_camp.updateCamp);
+  const activeCamp = useQuery(api.fight_camp.getActiveCamp, userId ? {} : "skip");
 
   // Local mirror of the editable display name. Kept separate from the
   // context value so typing doesn't immediately mutate the cache, then
@@ -261,6 +267,29 @@ export default function Goals() {
         planAggressiveness: formData.plan_aggressiveness || undefined,
         bodyFatPct: formData.body_fat_pct ? parseFloat(formData.body_fat_pct) : undefined,
       });
+
+      // Keep the active fight_camp's fightDate aligned with the profile's
+      // target_date so dashboard / camp views don't disagree. We only touch
+      // a non-completed active camp; completed camps are historical and must
+      // stay anchored to their actual fight date.
+      // NOTE: the camp schema does not currently store an end-weight target
+      // separate from the retrospective endWeightKg, so we do NOT mirror
+      // goalWeightKg → camp here. (See prompt fix #7.)
+      const newTargetDate = formData.target_date;
+      if (
+        activeCamp &&
+        !activeCamp.isCompleted &&
+        newTargetDate &&
+        newTargetDate !== activeCamp.fightDate
+      ) {
+        try {
+          await updateCampMut({ id: activeCamp._id, fightDate: newTargetDate });
+        } catch (campErr) {
+          // Don't block the navigation — the profile save already succeeded.
+          console.warn("Goals: failed to sync active camp fightDate", campErr);
+        }
+      }
+
       await refreshProfile();
       celebrateSuccess();
       navigate("/dashboard");

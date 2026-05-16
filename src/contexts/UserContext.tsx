@@ -8,7 +8,7 @@ import { nutritionCache, startCacheCleanup, stopCacheCleanup } from "@/lib/nutri
 import { AIPersistence } from "@/lib/aiPersistence";
 import { logger } from "@/lib/logger";
 import { usePushRegistration } from "@/hooks/usePushRegistration";
-import { clearLocalSubscriptionState } from "@/contexts/SubscriptionContext";
+import { clearLocalSubscriptionState, clearAllSubscriptionState } from "@/contexts/SubscriptionContext";
 import { logOutPurchases } from "@/lib/purchases";
 import { api } from "../../convex/_generated/api";
 
@@ -315,6 +315,11 @@ export function UserProvider({ children }: { children: ReactNode }) {
     if (uid && uid !== "pending") {
       clearLocalSubscriptionState(uid);
     }
+    // Belt-and-suspenders: also scrub any per-uid subscription/gem state
+    // belonging to PRIOR accounts on this device (covers the case where the
+    // current uid is null/"pending" mid-switch and `clearLocalSubscriptionState`
+    // can't target a specific user).
+    clearAllSubscriptionState();
     // Clear local state immediately so the UI updates without waiting.
     setUserName("");
     setAvatarUrl("");

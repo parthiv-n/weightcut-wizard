@@ -37,10 +37,13 @@ import { internal } from "./_generated/api";
  * with their current vote counts and whether the caller has voted.
  */
 export const listForUser = query({
-  args: { limit: v.optional(v.number()) },
-  handler: async (ctx, { limit }) => {
+  args: {
+    limit: v.optional(v.number()),
+    cursor: v.optional(v.union(v.string(), v.null())),
+  },
+  handler: async (ctx, { limit, cursor }) => {
     const userId = await requireUserId(ctx);
-    const cap = Math.min(limit ?? 50, 200);
+    const cap = Math.min(Math.max(limit ?? 30, 5), 100);
 
     // 1. Memberships → list of gym ids for broadcast feed.
     const memberships = await ctx.db
@@ -90,20 +93,54 @@ export const listForUser = query({
       .withIndex("by_user", (q) => q.eq("userId", userId))
       .collect();
     const dismissedIds = new Set(dismissals.map((d) => d.announcementId));
-    const visible = combined.filter((a) => !dismissedIds.has(a._id)).slice(0, cap);
 
     // 6. Drop expired (expiresAt < now) — soft-hidden.
     const now = Date.now();
-    const live = visible.filter((a) => !a.expiresAt || a.expiresAt > now);
+    const filtered = combined.filter(
+      (a) => !dismissedIds.has(a._id) && (!a.expiresAt || a.expiresAt > now),
+    );
 
-    // 7. Resolve sender + gym names; for poll kind, join options + vote stats.
+    // 7. Cursor-style pagination: cursor is the _creationTime of the last
+    //    item returned to the client; we skip everything <= that. Simpler
+    //    than ctx.db.paginate here because the feed is a union of two
+    //    indexed queries, not a single query stream.
+    const cursorTs = cursor ? Number(cursor) : null;
+    const sliced = (cursorTs != null
+      ? filtered.filter((a) => a._creationTime < cursorTs)
+      : filtered
+    ).slice(0, cap);
+
+    // 8. Batch-preload gyms + sender profiles via parallel `Promise.all`
+    //    instead of awaiting one-at-a-time inside the response map.
+    const uniqueGymIds = Array.from(new Set(sliced.map((a) => a.gymId as unknown as string)));
+    const uniqueSenderIds = Array.from(
+      new Set(sliced.map((a) => a.senderUserId as unknown as string)),
+    );
+    const [gymDocs, senderDocs] = await Promise.all([
+      Promise.all(uniqueGymIds.map((gid) => ctx.db.get(gid as any))),
+      Promise.all(
+        uniqueSenderIds.map((sid) =>
+          ctx.db
+            .query("profiles")
+            .withIndex("by_user", (q) => q.eq("userId", sid as any))
+            .unique(),
+        ),
+      ),
+    ]);
+    const gymMap = new Map<string, any>();
+    uniqueGymIds.forEach((gid, i) => {
+      if (gymDocs[i]) gymMap.set(gid, gymDocs[i]);
+    });
+    const senderMap = new Map<string, any>();
+    uniqueSenderIds.forEach((sid, i) => {
+      if (senderDocs[i]) senderMap.set(sid, senderDocs[i]);
+    });
+
+    // 9. Resolve sender + gym names; for poll kind, join options + vote stats.
     return Promise.all(
-      live.map(async (a) => {
-        const gym = await ctx.db.get(a.gymId);
-        const senderProfile = await ctx.db
-          .query("profiles")
-          .withIndex("by_user", (q) => q.eq("userId", a.senderUserId))
-          .unique();
+      sliced.map(async (a) => {
+        const gym = gymMap.get(a.gymId as unknown as string);
+        const senderProfile = senderMap.get(a.senderUserId as unknown as string);
 
         let pollOptions: {
           id: Id<"announcement_poll_options">;
@@ -295,6 +332,9 @@ export const create = mutation({
 
     const resolvedKind = kind ?? "text";
     const trimmedBody = body?.trim() || undefined;
+    if (trimmedBody && trimmedBody.length > 5000) {
+      throw new Error("Announcement body cannot exceed 5000 characters");
+    }
 
     if (resolvedKind === "text" && !trimmedBody && !mediaStorageId) {
       throw new Error("Text announcement requires a body or media");
@@ -373,7 +413,13 @@ export const update = mutation({
     await assertGymOwner(ctx, a.gymId, userId);
 
     const patch: Record<string, unknown> = {};
-    if (body !== undefined) patch.body = body.trim() || undefined;
+    if (body !== undefined) {
+      const trimmed = body.trim() || undefined;
+      if (trimmed && trimmed.length > 5000) {
+        throw new Error("Announcement body cannot exceed 5000 characters");
+      }
+      patch.body = trimmed;
+    }
     if (expiresAt !== undefined) {
       patch.expiresAt = expiresAt === null ? undefined : expiresAt;
     }

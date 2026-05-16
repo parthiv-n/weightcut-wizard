@@ -34,7 +34,7 @@ interface FightCamp {
 }
 
 export default function FightCamps() {
-  const { userId } = useAuth();
+  const { userId, hasProfile } = useAuth();
   const rawCamps = useQuery(api.fight_camp.listCamps, userId ? {} : "skip");
   const activeCamp = useQuery(api.fight_camp.getActiveCamp, userId ? {} : "skip");
   const createCampMut = useMutation(api.fight_camp.createCamp);
@@ -257,15 +257,14 @@ export default function FightCamps() {
           </div>
         </div>
 
-        {/* Primary CTA — routes to full onboarding when the user has zero
-            camps (covers both brand-new-but-already-has-profile and "deleted
-            everything, starting fresh" cases), otherwise opens the slim
-            wrap-up + 5-step wizard. The legacy + icon top-right (name+date
-            +event only) stays for power users who want a stripped-down add. */}
+        {/* Primary CTA — only brand-new users (no profile yet) get routed to
+            the full 13-step onboarding. Returning users who deleted their
+            camps already have a profile, so the slim NextCampFlow is enough
+            and avoids re-asking the questions they've already answered. */}
         {!compareMode && !selectMode && (
           <Button
             onClick={() => {
-              if (camps.length === 0) navigate("/onboarding?startCamp=1");
+              if (camps.length === 0 && !hasProfile) navigate("/onboarding?startCamp=1");
               else setNextCampOpen(true);
             }}
             className="w-full h-12 rounded-2xl gap-2"
@@ -301,17 +300,20 @@ export default function FightCamps() {
               <h3 className="text-sm font-bold">No Camps Yet</h3>
               <p className="text-muted-foreground text-xs mt-0.5">Start tracking your first preparation.</p>
             </div>
-            {/* Routes the user through the full onboarding so the new camp
-                inherits all the rich fight-specific data (target weight,
-                weigh-in style, athlete type). When the user already has a
-                profile from a previous camp, the startCamp query param
-                suppresses the usual "already onboarded → /dashboard" bounce. */}
+            {/* Brand-new users go through full onboarding so we capture all
+                the fight-specific data (target weight, weigh-in style,
+                athlete type). Returning users who deleted their camps but
+                still have a profile get the slim NextCampFlow instead so we
+                don't re-ask the 13-step onboarding they already completed. */}
             <Button
-              onClick={() => navigate("/onboarding?startCamp=1")}
+              onClick={() => {
+                if (hasProfile) setNextCampOpen(true);
+                else navigate("/onboarding?startCamp=1");
+              }}
               variant="outline"
               className="rounded-2xl mt-2 border-border hover:bg-muted"
             >
-              Start camp onboarding
+              {hasProfile ? "Start a new fight camp" : "Start camp onboarding"}
             </Button>
           </div>
         ) : (

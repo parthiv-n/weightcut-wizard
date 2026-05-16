@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { CheckCircle } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -44,6 +44,8 @@ const DietAnalysisCard = lazy(() => import("@/components/nutrition/DietAnalysisC
 export default function NutritionPage() {
   const { toast } = useToast();
   const [searchParams, setSearchParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { userId } = useUser();
 
   // ── Shared state ──
@@ -160,22 +162,54 @@ export default function NutritionPage() {
     setDietAnalysis: nutritionData.setDietAnalysis,
   });
 
-  // QuickLog → Food deep-link: when the URL carries `?aiPhoto=1`, fire the
-  // camera capture as soon as the QuickAdd sheet is on screen so the user
-  // lands directly in the photo-AI flow instead of having to tap "Snap
-  // photo" themselves. Param is consumed on first trigger so revisits to
-  // the route don't re-fire the camera.
+  // QuickLog → Food deep-link.
+  //
+  // The photo is captured in BottomNav's click handler (where the iOS
+  // user-gesture token is alive) and arrives here via `location.state`.
+  // All we do is open the QuickAdd sheet on the AI tab, seed the captured
+  // base64 into `useAIMealAnalysis`, and kick off the analyze step — which
+  // is a Convex action call, not a camera call, so it doesn't need a
+  // gesture token. The state is cleared via `navigate(..., { state: {} })`
+  // so a refresh / back-nav doesn't accidentally replay the analyze.
+  const aiPhotoStateHandledRef = useRef(false);
+  const setPhotoBase64 = aiMeal.setPhotoBase64;
+  const handlePhotoAnalyze = aiMeal.handlePhotoAnalyze;
   useEffect(() => {
-    if (searchParams.get("aiPhoto") !== "1") return;
-    if (!isQuickAddSheetOpen) return;
-    const t = setTimeout(() => {
-      void aiMeal.capturePhoto();
-      const next = new URLSearchParams(searchParams);
-      next.delete("aiPhoto");
-      setSearchParams(next, { replace: true });
-    }, 220);
-    return () => clearTimeout(t);
-  }, [searchParams, isQuickAddSheetOpen, aiMeal, setSearchParams]);
+    const st = (location.state ?? null) as
+      | { aiPhoto?: string | null; captureFailed?: string | null }
+      | null;
+    if (!st || (!("aiPhoto" in st) && !("captureFailed" in st))) {
+      // No relevant state — re-arm so the NEXT QuickLog → Food tap (same
+      // session, same page) can run the flow again. Without this reset the
+      // ref stays `true` forever and the second tap silently no-ops.
+      aiPhotoStateHandledRef.current = false;
+      return;
+    }
+    if (aiPhotoStateHandledRef.current) return;
+    aiPhotoStateHandledRef.current = true;
+
+    // Always open the AI tab — even on cancel/deny the user lands on the
+    // dialog they expected, with "Snap photo" available to retry.
+    setQuickAddTab("ai");
+    setIsQuickAddSheetOpen(true);
+
+    if (st.aiPhoto) {
+      setPhotoBase64(st.aiPhoto);
+      // Defer analyze one microtask so the dialog has mounted; analyze is
+      // a network call (no gesture token needed) so this is safe.
+      queueMicrotask(() => {
+        void handlePhotoAnalyze(st.aiPhoto!);
+      });
+    } else if (st.captureFailed === "denied") {
+      toast({
+        title: "Camera access denied",
+        description: "Enable Camera in Settings → FightCamp Wizard to log meals with a photo.",
+        variant: "destructive",
+      });
+    }
+    // Clear state so it can't replay on refresh / back navigation.
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.state, location.pathname, navigate, setPhotoBase64, handlePhotoAnalyze, toast]);
 
   const handleAddManualMeal = async () => {
     const validationResult = nutritionLogSchema.safeParse({

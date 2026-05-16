@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useState } from "react";
-import { Moon, ChevronRight, Check, Minus, Plus } from "lucide-react";
+import { Moon, ChevronRight, Check, Minus, Plus, X } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { localCache } from "@/lib/localCache";
@@ -145,7 +145,7 @@ export const SleepLogger = memo(function SleepLogger({ userId, compact }: SleepL
             <div className="w-10 h-1 rounded-full bg-muted-foreground/25" aria-hidden />
           </div>
           {/* Header with always-visible Save pill on the right */}
-          <div className="flex items-center justify-between px-1 pb-3 shrink-0 gap-3">
+          <div className="flex items-center justify-between px-1 pb-3 shrink-0 gap-2">
             <SheetHeader className="text-left flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <Moon className="w-4 h-4 text-primary" />
@@ -162,6 +162,17 @@ export const SleepLogger = memo(function SleepLogger({ userId, compact }: SleepL
               className="h-9 px-4 rounded-full bg-primary text-primary-foreground text-[13px] font-semibold active:scale-[0.95] transition-transform disabled:opacity-40 flex-shrink-0"
             >
               {saving ? "Saving…" : "Save"}
+            </button>
+            {/* Explicit close — Radix's X is suppressed via `[&>button]:hidden`,
+                so without this the only dismiss is the drag handle. Matches
+                CutPlanDialog's close-button pattern. */}
+            <button
+              type="button"
+              onClick={() => setIsOpen(false)}
+              aria-label="Close sleep logger"
+              className="h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground/80 bg-muted/40 dark:bg-white/[0.06] border border-border/30 active:text-foreground active:bg-muted/60 transition-colors flex-shrink-0"
+            >
+              <X className="h-4 w-4" strokeWidth={2.4} />
             </button>
           </div>
 

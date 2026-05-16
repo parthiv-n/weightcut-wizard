@@ -180,6 +180,28 @@ export const createMealWithItems = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
+    // Validate item count + per-item macros at the boundary. Negative or
+    // non-finite macros leak into TDEE / deficit calcs downstream, so reject
+    // them up front instead of clamping silently.
+    if (args.items.length > 50) {
+      throw new Error("Cannot create a meal with more than 50 items");
+    }
+    for (const item of args.items) {
+      for (const [k, val] of [
+        ["calories", item.calories],
+        ["proteinG", item.proteinG],
+        ["carbsG", item.carbsG],
+        ["fatsG", item.fatsG],
+        ["grams", item.grams],
+      ] as const) {
+        if (!Number.isFinite(val)) {
+          throw new Error(`Item field ${k} must be a finite number`);
+        }
+        if (val < 0) {
+          throw new Error(`Item field ${k} cannot be negative`);
+        }
+      }
+    }
     const mealId: Id<"meals"> = await ctx.db.insert("meals", {
       userId,
       date: args.date,
@@ -230,6 +252,63 @@ export const updateMeal = mutation({
       if (val !== undefined) clean[k] = val;
     }
     await ctx.db.patch(id, clean as any);
+  },
+});
+
+/**
+ * Lightweight integer count of meals belonging to the user. Used by the
+ * data reset dialog to avoid pulling every row just to display a number.
+ */
+export const getCounts = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireUserId(ctx);
+    const rows = await ctx.db
+      .query("meals")
+      .withIndex("by_user_created", (q) => q.eq("userId", userId))
+      .collect();
+    return { count: rows.length };
+  },
+});
+
+/**
+ * Returns `[{ date, calories }]` aggregated server-side for every day in
+ * [from, to] inclusive (ISO YYYY-MM-DD). Used by the baseline computer to
+ * replace 90 sequential per-date queries with one call. Days with no meals
+ * are omitted from the result.
+ */
+export const sumCaloriesByDateRange = query({
+  args: { from: v.string(), to: v.string() },
+  handler: async (ctx, { from, to }) => {
+    const userId = await requireUserId(ctx);
+    // One indexed range scan over the (userId, date) compound index.
+    const meals = await ctx.db
+      .query("meals")
+      .withIndex("by_user_date", (q) =>
+        q.eq("userId", userId).gte("date", from).lte("date", to),
+      )
+      .collect();
+
+    // Fan-out item loads in parallel — bounded by number of meals in range.
+    const itemArrays = await Promise.all(
+      meals.map((m) =>
+        ctx.db
+          .query("meal_items")
+          .withIndex("by_meal", (q) => q.eq("mealId", m._id))
+          .collect(),
+      ),
+    );
+
+    const totalsByDate = new Map<string, number>();
+    meals.forEach((m, idx) => {
+      const items = itemArrays[idx];
+      const dayCalories = items.reduce((sum, it) => sum + (it.calories ?? 0), 0);
+      totalsByDate.set(m.date, (totalsByDate.get(m.date) ?? 0) + dayCalories);
+    });
+
+    return Array.from(totalsByDate.entries())
+      .map(([date, calories]) => ({ date, calories: Math.round(calories) }))
+      .sort((a, b) => a.date.localeCompare(b.date));
   },
 });
 

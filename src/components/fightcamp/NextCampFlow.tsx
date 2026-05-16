@@ -190,13 +190,37 @@ export function NextCampFlow({ open, onOpenChange, activeCamp, onCreated }: Next
   };
 
   const submitWizard = async () => {
+    // Guard against NaN coercion before doing any writes — an empty or
+    // non-numeric input here would silently propagate to the cut plan
+    // generator and the profile mutation as NaN, polluting both.
+    const currentWeight = parseFloat(wizardData.currentWeightKg);
+    const targetWeight = parseFloat(wizardData.targetWeightKg);
+    const walkAroundWeightRaw = parseFloat(wizardData.walkAroundWeightKg);
+    if (!Number.isFinite(currentWeight) || !Number.isFinite(targetWeight)) {
+      toast({
+        title: "Missing weights",
+        description: "Please enter both your current weight and your fight-day target before continuing.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // If walk-around is empty/non-numeric or somehow lower than the target,
+    // fall back to the 5.5% buffer so plan generation has a meaningful
+    // pre-cut number rather than the goal weight (which would skip the
+    // dehydration/carb phase entirely).
+    const safeWalkAround = Number.isFinite(walkAroundWeightRaw) && walkAroundWeightRaw >= targetWeight
+      ? walkAroundWeightRaw
+      : Math.round(targetWeight * 1.055 * 10) / 10;
+
     setCreating(true);
     try {
+      // (a) Create the camp first — cheap, transactional.
       const newId = await createCampMut({
         name: wizardData.name.trim(),
         fightDate: wizardData.fightDate,
         weighInTiming: wizardData.weighInTiming || undefined,
-        startingWeightKg: wizardData.currentWeightKg ? parseFloat(wizardData.currentWeightKg) : undefined,
+        startingWeightKg: wizardData.currentWeightKg ? currentWeight : undefined,
       });
       celebrateSuccess();
       onCreated?.(newId as Id<"fight_camps">);
@@ -208,35 +232,15 @@ export function NextCampFlow({ open, onOpenChange, activeCamp, onCreated }: Next
       setStage("generating");
       setCreating(false);
 
-      const currentWeight = parseFloat(wizardData.currentWeightKg);
-      const targetWeight = parseFloat(wizardData.targetWeightKg);
-      const walkAroundWeight = parseFloat(wizardData.walkAroundWeightKg);
-      // If for any reason the walk-around input is empty, fall back to the
-      // 5.5% buffer so plan generation still has a meaningful pre-cut number
-      // to work with rather than the goal weight (which would skip the
-      // dehydration/carb phase entirely).
-      const safeWalkAround = Number.isFinite(walkAroundWeight) && walkAroundWeight >= targetWeight
-        ? walkAroundWeight
-        : Math.round(targetWeight * 1.055 * 10) / 10;
-
       const age = profile?.age ?? 25;
       const sex: "male" | "female" = (profile?.sex === "female" ? "female" : "male");
       const heightCm = profile?.height_cm ?? 175;
       const activityLevel = profile?.activity_level ?? "moderately_active";
 
-      // Push the new targets to the profile FIRST so the rest of the app
-      // (dashboard targets, recovery, fight form score) immediately reads
-      // the new fight rather than staying anchored to the previous camp.
-      try {
-        await updateGoalsMut({
-          goalWeightKg: targetWeight,
-          fightWeekTargetKg: safeWalkAround,
-          targetDate: wizardData.fightDate,
-        });
-      } catch (profileErr) {
-        logger.warn("Update profile targets from NextCampFlow failed", { error: profileErr });
-      }
-
+      // (b) Generate the cut plan BEFORE writing new targets to the profile.
+      // If this fails, we don't want the profile to be left pointing at the
+      // new fight while still carrying the old plan — better to keep the
+      // profile in sync with the data the rest of the app will read.
       let planData: any = null;
       try {
         planData = await generateCutPlanAction({
@@ -254,34 +258,52 @@ export function NextCampFlow({ open, onOpenChange, activeCamp, onCreated }: Next
       }
 
       const plan = planData?.plan || planData;
-      if (plan?.weeklyPlan) {
-        const planPayload = {
-          ...plan,
-          currentWeight,
-          goalWeight: targetWeight,
-          targetDate: wizardData.fightDate,
-        };
+      const planPayload = plan?.weeklyPlan
+        ? {
+            ...plan,
+            currentWeight,
+            goalWeight: targetWeight,
+            targetDate: wizardData.fightDate,
+          }
+        : null;
+
+      if (planPayload) {
         try {
           localStorage.setItem("wcw_cut_plan", JSON.stringify(planPayload));
         } catch { /* iOS WebView may block; non-fatal */ }
-        const week1 = plan.weeklyPlan[0];
-        try {
-          await updateGoalsMut({
-            cutPlanJson: planPayload,
-            ...(week1 ? {
-              aiRecommendedCalories: week1.calories,
-              aiRecommendedProteinG: week1.protein_g,
-              aiRecommendedCarbsG: week1.carbs_g,
-              aiRecommendedFatsG: week1.fats_g,
-            } : {}),
-          });
+      }
+
+      // (c) ONE consolidated profile write — targets AND plan together so
+      // they can never end up in a "new targets, stale plan" state. If the
+      // plan failed we still write the new targets (camp already exists),
+      // but we DON'T clobber `cutPlanJson` with null.
+      const week1 = planPayload?.weeklyPlan?.[0];
+      try {
+        await updateGoalsMut({
+          goalWeightKg: targetWeight,
+          fightWeekTargetKg: safeWalkAround,
+          targetDate: wizardData.fightDate,
+          ...(planPayload ? { cutPlanJson: planPayload } : {}),
+          ...(week1
+            ? {
+                aiRecommendedCalories: week1.calories,
+                aiRecommendedProteinG: week1.protein_g,
+                aiRecommendedCarbsG: week1.carbs_g,
+                aiRecommendedFatsG: week1.fats_g,
+              }
+            : {}),
+        });
+        if (planPayload) {
           toast({
             title: "Targets and cut plan saved",
             description: "Your new fight weights and plan are on your profile.",
           });
-        } catch (saveErr) {
-          logger.warn("Save cut plan to profile failed", { error: saveErr });
         }
+      } catch (saveErr) {
+        logger.warn("Save targets + cut plan to profile failed", { error: saveErr });
+      }
+
+      if (planPayload) {
         setStage("done");
         // Close the dialog and drop the user on /cut-plan so they actually
         // see the freshly-generated plan. A brief delay lets the success
@@ -291,9 +313,8 @@ export function NextCampFlow({ open, onOpenChange, activeCamp, onCreated }: Next
           navigate("/cut-plan");
         }, 800);
       } else {
-        // Plan generation failed silently — still report the camp creation
-        // as a win so the user isn't blocked. They can re-run generation
-        // from the Goals page.
+        // Plan generation failed — camp + targets are saved, user can re-run
+        // generation from the Goals page.
         toast({
           title: "New camp started",
           description: `${wizardData.name} — ${wizardData.fightDate}`,

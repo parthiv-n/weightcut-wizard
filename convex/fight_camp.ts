@@ -10,6 +10,43 @@ import { query, mutation } from "./_generated/server";
 import { requireUserId } from "./lib/auth";
 
 // ───────────────────────────────────────────────────────────────────────
+// Validation helpers
+// ───────────────────────────────────────────────────────────────────────
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const FIVE_YEARS_MS = 5 * 365 * 24 * 60 * 60 * 1000;
+
+function assertValidFightDate(fightDate: string) {
+  if (!ISO_DATE.test(fightDate)) {
+    throw new Error("fightDate must be ISO YYYY-MM-DD");
+  }
+  const ts = Date.parse(fightDate);
+  if (Number.isNaN(ts)) {
+    throw new Error("fightDate is not a valid date");
+  }
+  const now = Date.now();
+  // Allow today (subtract one day's worth of ms to permit same-day creation).
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  if (ts < todayStart.getTime()) {
+    throw new Error("fightDate must be today or later");
+  }
+  if (ts > now + FIVE_YEARS_MS) {
+    throw new Error("fightDate must be within 5 years");
+  }
+}
+
+function assertValidStartingWeight(startingWeightKg: number | undefined) {
+  if (startingWeightKg === undefined) return;
+  if (!Number.isFinite(startingWeightKg)) {
+    throw new Error("startingWeightKg must be a finite number");
+  }
+  if (startingWeightKg < 30 || startingWeightKg > 250) {
+    throw new Error("startingWeightKg must be between 30 and 250 kg");
+  }
+}
+
+// ───────────────────────────────────────────────────────────────────────
 // fight_camps
 // ───────────────────────────────────────────────────────────────────────
 
@@ -48,6 +85,8 @@ export const createCamp = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
+    assertValidFightDate(args.fightDate);
+    assertValidStartingWeight(args.startingWeightKg);
     return await ctx.db.insert("fight_camps", {
       userId,
       ...args,
@@ -110,10 +149,13 @@ export const getActiveCamp = query({
   args: {},
   handler: async (ctx) => {
     const userId = await requireUserId(ctx);
+    // Bounded scan: most users have <50 camps; the index returns insertion
+    // order so we sort/filter in-memory from this slice.
     const rows = await ctx.db
       .query("fight_camps")
       .withIndex("by_user", (q) => q.eq("userId", userId))
-      .collect();
+      .order("desc")
+      .take(50);
     if (rows.length === 0) return null;
 
     const todayIso = new Date().toISOString().slice(0, 10);
@@ -177,6 +219,8 @@ export const createCampFromOnboarding = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
+    assertValidFightDate(args.fightDate);
+    assertValidStartingWeight(args.startingWeightKg);
     const existing = await ctx.db
       .query("fight_camps")
       .withIndex("by_user", (q) => q.eq("userId", userId))
@@ -214,16 +258,25 @@ export const listCalendar = query({
         return base;
       })
       .collect();
-    // Resolve any media storage ids to long-lived URLs so the client can
-    // render <img src> directly without an extra round-trip.
-    return Promise.all(
-      rows.map(async (r) => ({
-        ...r,
-        mediaUrl: r.mediaStorageId
-          ? await ctx.storage.getUrl(r.mediaStorageId)
-          : null,
-      })),
+    // Resolve mediaUrl ONLY for rows that have a mediaStorageId.
+    // Perf model: bounded by media-having-rows, not total rows. A typical
+    // 28-day calendar has ~3-5 sessions with media → 3-5 storage.getUrl
+    // calls per tick instead of 28. Agent B previously stripped this
+    // resolution entirely to fix the O(N) hot path; this restores
+    // thumbnails for Recovery + TrainingCalendar while keeping the win.
+    const mediaRowIndexes: number[] = [];
+    rows.forEach((r, i) => {
+      if (r.mediaStorageId) mediaRowIndexes.push(i);
+    });
+    const resolvedUrls = await Promise.all(
+      mediaRowIndexes.map((i) => ctx.storage.getUrl(rows[i].mediaStorageId!)),
     );
+    const urlByIndex = new Map<number, string | null>();
+    mediaRowIndexes.forEach((i, k) => urlByIndex.set(i, resolvedUrls[k]));
+    return rows.map((r, i) => ({
+      ...r,
+      mediaUrl: urlByIndex.get(i) ?? null,
+    }));
   },
 });
 
@@ -329,20 +382,41 @@ export const updateCalendarEntry = mutation({
 export const deleteCalendarEntry = mutation({
   args: { id: v.id("fight_camp_calendar") },
   handler: async (ctx, { id }) => {
+    // Auth: surface a stable, client-distinguishable message. Anything else
+    // thrown by this mutation should be a true bug — every transient/missing
+    // dependency is swallowed below so the user-visible delete is idempotent.
     const userId = await requireUserId(ctx);
+
+    // Idempotent: deleting an already-deleted row is a no-op, not an error.
+    // The client may retry (network blip, double-tap) and must not see a
+    // "Couldn't delete" toast just because the row already went.
     const row = await ctx.db.get(id);
     if (!row) return;
-    if (row.userId !== userId) throw new Error("Not authorized");
+    if (row.userId !== userId) {
+      // Distinct from auth — caller is signed in but doesn't own this row.
+      throw new Error("Not authorized to delete this session");
+    }
+
+    // Legacy single-media attachment. Storage object may already be gone if
+    // the row was edited via updateCalendarEntry(mediaStorageId: null) and
+    // the file was reaped — swallow that specific error and continue.
     if (row.mediaStorageId) {
       try {
         await ctx.storage.delete(row.mediaStorageId);
       } catch {
-        /* already gone */
+        /* already gone — fine */
       }
     }
+
     // Cascade-delete every multi-attachment media row for this session,
     // freeing the storage objects too. Without this, deleting a session
     // leaks the photo/video bytes forever.
+    //
+    // EVERY step here is wrapped: a concurrent `removeSessionMedia` from
+    // another tab can race us between `.collect()` and `.delete(a._id)`,
+    // and an unwrapped throw there used to abort the whole transactional
+    // mutation — surfacing as the "Couldn't delete session — Check your
+    // connection" toast even though nothing was wrong with the network.
     const attachments = await ctx.db
       .query("session_media")
       .withIndex("by_session", (q) => q.eq("sessionId", id))
@@ -351,11 +425,22 @@ export const deleteCalendarEntry = mutation({
       try {
         await ctx.storage.delete(a.storageId);
       } catch {
-        /* already gone */
+        /* storage object already gone — fine */
       }
-      await ctx.db.delete(a._id);
+      try {
+        await ctx.db.delete(a._id);
+      } catch {
+        /* row already deleted by a concurrent mutation — fine */
+      }
     }
-    await ctx.db.delete(id);
+
+    // Final delete of the session row itself. Wrapped for the same race —
+    // if a parallel call already removed it, treat as success.
+    try {
+      await ctx.db.delete(id);
+    } catch {
+      /* already gone — fine */
+    }
   },
 });
 
@@ -458,25 +543,32 @@ export const listSessionMedia = query({
 export const listMyMediaLibrary = query({
   args: {
     limit: v.optional(v.number()),
+    cursor: v.optional(v.union(v.string(), v.null())),
     disciplineFilter: v.optional(v.string()),
   },
-  handler: async (ctx, { limit, disciplineFilter }) => {
+  handler: async (ctx, { limit, cursor, disciplineFilter }) => {
     const userId = await requireUserId(ctx);
-    const cap = Math.min(Math.max(limit ?? 200, 10), 500);
-    const rows = await ctx.db
+    const cap = Math.min(Math.max(limit ?? 60, 10), 100);
+    const page = await ctx.db
       .query("session_media")
       .withIndex("by_user_captured", (q) => q.eq("userId", userId))
       .order("desc")
-      .take(cap);
-    // Pull each unique session for the discipline label. Cheap because
-    // Convex caches table reads within the query.
+      .paginate({ numItems: cap, cursor: cursor ?? null });
+    const rows = page.page;
+
+    // Batch-load all unique sessions in one parallel pass instead of N awaits.
+    const uniqueSessionIds = Array.from(
+      new Set(rows.map((r) => r.sessionId as unknown as string)),
+    );
+    const sessionDocs = await Promise.all(
+      uniqueSessionIds.map((sid) => ctx.db.get(sid as any)),
+    );
     const sessions = new Map<string, any>();
-    for (const r of rows) {
-      if (!sessions.has(r.sessionId as unknown as string)) {
-        const s = await ctx.db.get(r.sessionId);
-        if (s) sessions.set(r.sessionId as unknown as string, s);
-      }
-    }
+    uniqueSessionIds.forEach((sid, i) => {
+      const doc = sessionDocs[i];
+      if (doc) sessions.set(sid, doc);
+    });
+
     const results = await Promise.all(
       rows.map(async (r) => {
         const s = sessions.get(r.sessionId as unknown as string);
@@ -493,10 +585,15 @@ export const listMyMediaLibrary = query({
         };
       }),
     );
-    if (disciplineFilter && disciplineFilter !== "all") {
-      return results.filter((r) => r.sessionType === disciplineFilter);
-    }
-    return results;
+    const filtered =
+      disciplineFilter && disciplineFilter !== "all"
+        ? results.filter((r) => r.sessionType === disciplineFilter)
+        : results;
+    return {
+      page: filtered,
+      isDone: page.isDone,
+      continueCursor: page.continueCursor,
+    };
   },
 });
 
@@ -533,11 +630,12 @@ export const listWeekLogs = query({
   args: {},
   handler: async (ctx) => {
     const userId = await requireUserId(ctx);
+    // Bounded — fight-week is at most ~10 days; 60 is generous.
     const rows = await ctx.db
       .query("fight_week_logs")
       .withIndex("by_user_date", (q) => q.eq("userId", userId))
-      .order("asc")
-      .collect();
+      .order("desc")
+      .take(60);
     return rows;
   },
 });
@@ -684,12 +782,13 @@ export const listAllSummaries = query({
   args: { limit: v.optional(v.number()) },
   handler: async (ctx, { limit }) => {
     const userId = await requireUserId(ctx);
+    const cap = Math.min(Math.max(limit ?? 20, 1), 100);
     const rows = await ctx.db
       .query("training_summaries")
       .withIndex("by_user_week", (q) => q.eq("userId", userId))
-      .collect();
-    rows.sort((a, b) => b.weekStart.localeCompare(a.weekStart));
-    return rows.slice(0, limit ?? 20);
+      .order("desc")
+      .take(cap);
+    return rows;
   },
 });
 

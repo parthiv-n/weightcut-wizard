@@ -53,6 +53,13 @@ export const logWeight = mutation({
   args: { date: v.string(), weightKg: v.number() },
   handler: async (ctx, { date, weightKg }) => {
     const userId = await requireUserId(ctx);
+    // Match the Zod range used by the frontend form: 30–250 kg, finite only.
+    if (!Number.isFinite(weightKg)) {
+      throw new Error("weightKg must be a finite number");
+    }
+    if (weightKg < 30 || weightKg > 250) {
+      throw new Error("weightKg must be between 30 and 250 kg");
+    }
     const existing = await ctx.db
       .query("weight_logs")
       .withIndex("by_user_date", (q) =>
@@ -71,6 +78,23 @@ export const logWeight = mutation({
       date,
     });
     return resultId;
+  },
+});
+
+/**
+ * Lightweight integer count of the user's weight logs. Used by the data
+ * reset dialog and any UI that needs to show "you have N entries" without
+ * paying to ship the full row set.
+ */
+export const getCounts = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireUserId(ctx);
+    const rows = await ctx.db
+      .query("weight_logs")
+      .withIndex("by_user_date", (q) => q.eq("userId", userId))
+      .collect();
+    return { count: rows.length };
   },
 });
 

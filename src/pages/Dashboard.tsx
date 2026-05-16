@@ -42,6 +42,7 @@ import { CutPlanDialog } from "@/components/dashboard/CutPlanDialog";
 import { SleepLogger } from "@/components/dashboard/SleepLogger";
 import { TrainingInsightsWidget } from "@/components/dashboard/TrainingInsightsWidget";
 import NewAnnouncementWidget from "@/components/dashboard/NewAnnouncementWidget";
+import { GymInvitesBanner } from "@/components/dashboard/GymInvitesBanner";
 import { NextCampFlow } from "@/components/fightcamp/NextCampFlow";
 import { isFighter } from "@/lib/goalType";
 
@@ -789,6 +790,11 @@ export default function Dashboard() {
             </div>
           </header>
 
+          {/* Gym invites — pending invites must be accepted before the
+              athlete can interact with that gym's coach. Sits above the
+              announcement widget so action items are surfaced first. */}
+          {userId && <GymInvitesBanner />}
+
           {/* Gym announcement — pinned above the ring so a fresh
               message from the user's coach is the first thing they
               see when they open the app, not buried at the bottom. */}
@@ -798,7 +804,7 @@ export default function Dashboard() {
               and start the next one once the fight date has passed. The
               wrap-up is part of the NextCampFlow so the user moves through
               reflection → new camp in one stream. */}
-          {activeCamp && !activeCamp.isCompleted && activeCamp.fightDate < new Date().toISOString().slice(0, 10) && (
+          {activeCamp && !activeCamp.isCompleted && activeCamp.fightDate.slice(0, 10) < new Date().toISOString().slice(0, 10) && (
             <button
               type="button"
               onClick={() => setNextCampOpen(true)}
@@ -995,6 +1001,10 @@ export default function Dashboard() {
             {streak > 0 && <StreakBadge streak={streak} isActive={streakIncludesToday} />}
           </div>
         </header>
+
+        {/* Gym invites — surfaced above the announcement widget so the
+            athlete acts on pending invites before reading messages. */}
+        {userId && <GymInvitesBanner />}
 
         {/* Gym announcement — pinned above the rest of the dashboard so
             a fresh message from the user's coach is the first thing

@@ -64,6 +64,39 @@ export function clearLocalSubscriptionState(userId: string): void {
   } catch { /* privacy mode — silently ignore */ }
 }
 
+/**
+ * Nuke every per-user subscription key in localStorage regardless of which
+ * userId owns it. Use on full logout flows where the active uid may already
+ * have been cleared by the time signOut runs (or when switching accounts on
+ * the same device and you want to guarantee no bleedover).
+ *
+ * Note: the active-user-only `clearLocalSubscriptionState(uid)` should still
+ * be preferred when the uid is known; this is the belt-and-braces variant.
+ *
+ * TODO: wire into the BottomNav logout path once we can do so without
+ * touching files owned by other agents in this swarm.
+ */
+export function clearAllSubscriptionState(): void {
+  try {
+    const toRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      if (
+        key.startsWith(GEMS_KEY_PREFIX) ||
+        key.startsWith(PREMIUM_KEY_PREFIX) ||
+        key.startsWith("wcw_welcome_pro_shown_")
+      ) {
+        toRemove.push(key);
+      }
+    }
+    toRemove.forEach((k) => localStorage.removeItem(k));
+    // Legacy global keys too, in case the one-time cleanup hasn't run yet.
+    localStorage.removeItem(LEGACY_PREMIUM_KEY);
+    localStorage.removeItem(LEGACY_GEMS_KEY);
+  } catch { /* privacy mode — silently ignore */ }
+}
+
 /** One-time cleanup of legacy GLOBAL keys that bled state across users */
 function cleanupLegacyKeys(): void {
   try {
@@ -107,7 +140,9 @@ const SubscriptionContext = createContext<SubscriptionContextType | undefined>(u
 export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const { profile, refreshProfile } = useProfile();
   const { userId } = useAuth();
-  const activatePremium = useAction(api.actions.activatePremium.run);
+  // Kept as a no-op reference for now; the action is server-internal after
+  // the security refactor. RevenueCat webhook owns the DB tier write.
+  void useAction(api.actions.activatePremium.run);
   const [isPaywallOpen, setIsPaywallOpen] = useState(false);
   const [isNoGemsOpen, setIsNoGemsOpen] = useState(false);
   const [showWelcomePro, setShowWelcomePro] = useState(false);
@@ -291,15 +326,11 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
             logger.info("RevenueCat listener: skipping forcePremium while paywall is open");
             return;
           }
-          // Sync premium to DB via edge function (bypasses RLS trigger)
+          // Local force + reactive profile refresh. The client-callable
+          // `activatePremium` action is locked down for security; the
+          // RevenueCat webhook is the only authoritative DB writer.
           const sub = getSubscriptionFromCustomerInfo(customerInfo);
-          if (sub) {
-            forcePremium(sub.tier, sub.expiresAt);
-            try {
-              await activatePremium({ tier: sub.tier, expiresAt: sub.expiresAt });
-              logger.info("RevenueCat listener: synced premium via Convex action", sub);
-            } catch (err) { logger.warn("Failed to sync premium in listener", err); }
-          }
+          if (sub) forcePremium(sub.tier, sub.expiresAt);
           await refreshProfile();
         } else {
           // RC reports not-premium. Only clear local override if Convex profile
@@ -328,15 +359,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       if (info && isPremiumFromCustomerInfo(info)) {
         const sub = getSubscriptionFromCustomerInfo(info);
         if (sub) {
-          // Always force premium locally (instant, cheap)
+          // Force premium locally (instant). DB tier is owned by the
+          // RevenueCat webhook now; `refreshProfile` picks up the
+          // server-side write the moment the webhook fires.
           forcePremium(sub.tier, sub.expiresAt);
-          // Always sync to DB via Convex action (idempotent, ensures DB is correct)
-          try {
-            await activatePremium({ tier: sub.tier, expiresAt: sub.expiresAt });
-            logger.info("Startup: premium synced to DB", sub);
-          } catch (err) {
-            logger.warn("Startup: failed to sync premium to DB (will retry on next launch)", err);
-          }
           await refreshProfile();
         }
       } else if (info && !isPremiumFromCustomerInfo(info)) {
@@ -372,7 +398,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       removeListener?.();
     };
-  }, [userId, refreshProfile, forcePremium, activatePremium]);
+  // activatePremium is no longer in the dep array — see the security
+  // refactor: the action is locked to the webhook and not called from here.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, refreshProfile, forcePremium]);
 
   // On app resume: re-validate premium via RevenueCat (catches expiry/cancellation)
   useEffect(() => {

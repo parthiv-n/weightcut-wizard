@@ -70,22 +70,20 @@ export async function computeAndStoreBaseline(userId: string, tdee?: number | nu
 
     if (wellness.length < 3) return null;
 
-    // Nutrition: aggregate per-day calories from `meals.listForUserByDate`.
-    // The legacy nutrition_logs table is gone — we sum each day's meal items
-    // by reading the per-date `listWithTotals` rollup.
+    // Nutrition: one indexed range scan server-side aggregates the last 90
+    // days into `[{ date, calories }]`. Replaces 90 sequential per-date
+    // `listWithTotals` calls that each shipped full item arrays + photo URLs.
     const nutritionByDay = new Map<string, number>();
-    for (let i = 0; i < 90; i++) {
-      const d = daysAgo(i);
-      try {
-        const meals = await convex.query(api.meals.listWithTotals, { date: d });
-        const total = (meals ?? []).reduce(
-          (sum: number, m: any) => sum + (m?.total_calories ?? m?.calories ?? 0),
-          0,
-        );
-        if (total > 0) nutritionByDay.set(d, total);
-      } catch {
-        // Skip days where the query fails — baselines tolerate gaps.
+    try {
+      const dailyTotals = await convex.query(
+        api.meals.sumCaloriesByDateRange,
+        { from: ninetyDaysAgo, to: today },
+      );
+      for (const row of (dailyTotals ?? []) as Array<{ date: string; calories: number }>) {
+        if (row.calories > 0) nutritionByDay.set(row.date, row.calories);
       }
+    } catch {
+      // Tolerate failure — baselines handle gaps gracefully.
     }
 
     // Training-load via fight_camp_calendar (Convex).

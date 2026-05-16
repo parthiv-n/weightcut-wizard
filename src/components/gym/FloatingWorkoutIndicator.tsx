@@ -31,7 +31,10 @@ export function FloatingWorkoutIndicator() {
     <button
       onClick={() => { triggerHapticSelection(); navigate("/gym"); }}
       className="fixed z-[9998] left-4 flex items-center gap-2 px-3.5 py-2 rounded-full bg-green-500 text-white shadow-lg shadow-green-500/30 active:scale-95 transition-transform md:hidden animate-in slide-in-from-left duration-300"
-      style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 5.5rem)" }}
+      // BottomNav baseline = `safe-area-inset-bottom + 0.5rem`; raised FAB
+      // pokes ~2rem above that. 7.5rem here keeps the workout pill clear of
+      // the FAB on devices with large safe-area insets (notch iPhones).
+      style={{ bottom: "calc(env(safe-area-inset-bottom, 0px) + 7.5rem)" }}
     >
       <Dumbbell className="h-4 w-4" />
       <span className="text-xs font-bold tabular-nums">{elapsed}</span>

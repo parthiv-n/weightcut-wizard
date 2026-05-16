@@ -1,4 +1,4 @@
-import { Settings, LogOut, ChevronRight, Users } from "lucide-react";
+import { Settings, LogOut, ChevronRight, Users, X } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { triggerHapticWarning } from "@/lib/haptics";
 import { GymLogoAvatar } from "@/components/coach/GymLogoAvatar";
@@ -29,11 +29,26 @@ export function MoreMenuSheet({ open, onOpenChange, menuItems, onItemClick, onSe
         side="bottom"
         className="h-[70vh] max-h-[85vh] rounded-t-2xl flex flex-col p-0 gap-0 bg-background border-t border-border [&>button]:hidden"
       >
+        {/* Close button — pinned to the top-right corner of the sheet itself
+            so it sits above the menu list rather than sharing a horizontal
+            lane with the "Profile" row's chevron below. `modal={false}` +
+            `[&>button]:hidden` strips the Radix-provided X and the backdrop
+            dismiss, so this is the canonical exit affordance on iOS where
+            drag-down isn't obvious. */}
+        <button
+          type="button"
+          onClick={() => onOpenChange(false)}
+          aria-label="Close menu"
+          className="absolute right-3 top-3 z-10 h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground/80 bg-muted/40 dark:bg-white/[0.06] border border-border/30 active:text-foreground active:bg-muted/60 transition-colors"
+        >
+          <X className="h-4 w-4" strokeWidth={2.4} />
+        </button>
+
         {/* Drag handle */}
         <div className="flex justify-center pt-3 pb-1 shrink-0">
           <div className="w-10 h-1 rounded-full bg-muted-foreground/25" aria-hidden />
         </div>
-        <SheetHeader className="px-5 pb-2 pt-1 text-left shrink-0">
+        <SheetHeader className="px-5 pb-2 pt-1 text-left shrink-0 pr-14">
           <SheetTitle className="text-lg font-semibold text-foreground">More</SheetTitle>
         </SheetHeader>
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 scrollbar-hide scroll-touch overscroll-contain" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 6rem)" }}>

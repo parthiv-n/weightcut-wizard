@@ -493,23 +493,28 @@ export const spendGem = mutation({
   },
 });
 
-/** Apple IAP / RevenueCat client-side activation. Called by an authenticated
- *  user immediately after a successful purchase to flip their tier locally
- *  while the RevenueCat webhook catches up. Idempotent.
+/** Apple IAP / RevenueCat activation — INTERNAL ONLY. Must be invoked from a
+ *  server-side context (the RevenueCat webhook or the validated post-purchase
+ *  receipt-check action). Direct client calls are blocked because the prior
+ *  public surface let any authenticated user forge a `tier:premium_*` payload
+ *  and grant themselves premium. The legitimate post-purchase path is the
+ *  RevenueCat webhook → `updateSubscriptionFromRevenueCat` (below); this
+ *  internalMutation is retained for receipt-validation callers that need the
+ *  legacy "optimistic 36h grant" semantics.
  *
  *  Out-of-order guard: if the server already knows about a *later* renewal
  *  (existing.subscriptionExpiresAt > incoming) and the existing tier is not
- *  "free", we keep the server's expiry — the client RevenueCat snapshot is
- *  stale and we don't want to downgrade a user with a fresher renewal on
- *  file. The tier from the client is still honoured (it never flips you
- *  to "free"; the webhook does that). */
-export const activatePremium = mutation({
+ *  "free", we keep the server's expiry — the caller snapshot is stale and we
+ *  don't want to downgrade a user with a fresher renewal on file. The tier
+ *  from the caller is still honoured (it never flips you to "free"; the
+ *  webhook does that). */
+export const activatePremium = internalMutation({
   args: {
+    userId: v.id("users"),
     tier: v.string(),
     expiresAt: v.optional(v.union(v.string(), v.null())),
   },
-  handler: async (ctx, { tier, expiresAt }) => {
-    const userId = await requireUserId(ctx);
+  handler: async (ctx, { userId, tier, expiresAt }) => {
     const existing = await findByUser(ctx, userId);
     if (!existing) throw new Error("Profile not found");
 

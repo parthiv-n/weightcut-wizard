@@ -6,6 +6,10 @@ import { action } from "../_generated/server";
 import { callGroqText } from "../_shared/groq";
 import { parseJSON } from "../_shared/parseResponse";
 import {
+  sanitizeUserText,
+  PROMPT_INJECTION_GUARD_INSTRUCTION,
+} from "../_shared/sanitizeUserText";
+import {
   loadAthleteSnapshot,
   logDecision,
   requireUserIdFromAction,
@@ -22,6 +26,10 @@ export const run = action({
   handler: async (ctx, { prompt }) => {
     const userId = await requireUserIdFromAction(ctx);
     await enforceGemGate(ctx, userId);
+    // Strip control chars, bidi overrides, zero-width chars, and known
+    // injection patterns ("ignore previous instructions", role headers,
+    // chat-template tokens) before the prompt ever reaches Groq.
+    const cleanPrompt = sanitizeUserText(prompt, { maxLength: 1000, raw: true });
     const snap = await loadAthleteSnapshot(ctx, userId);
     const profile = snap.profile;
     const currentWeight = profile?.current_weight_kg ?? 70;
@@ -76,6 +84,8 @@ export const run = action({
 
 ${SECOND_PERSON_DIRECTIVE}
 
+${PROMPT_INJECTION_GUARD_INSTRUCTION}
+
 Every narrative string (safetyMessage, tips, recipe) MUST address the user as "you" / "your". This is YOUR meal plan being handed to YOU.
 
 You: ${profile?.sex ?? "unspecified"}${profile?.age ? `, ${profile.age}y` : ""}
@@ -107,7 +117,10 @@ ${snap.block}`;
       model: "openai/gpt-oss-120b",
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: `User Request: ${prompt}` },
+        {
+          role: "user",
+          content: `User Request: <user_input>${cleanPrompt}</user_input>`,
+        },
       ],
       temperature: 0.3,
       max_tokens: 4096,

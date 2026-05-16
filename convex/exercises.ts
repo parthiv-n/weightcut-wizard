@@ -27,13 +27,19 @@ export const listForUser = query({
   args: {},
   handler: async (ctx) => {
     const userId = await requireUserId(ctx);
-    // Built-ins: userId === undefined. Note we can't filter `eq("userId", undefined)`
-    // on the by_user index in a strict-typed way — fall back to a full scan, then
-    // partition. The table is small (≤ a few hundred rows) so this is fine.
-    const all = await ctx.db.query("exercises").collect();
-    return all
-      .filter((e) => e.userId === undefined || e.userId === userId)
-      .map(toClient);
+    // Two indexed reads — built-ins (userId === undefined) and the user's
+    // own custom rows. Avoids a full-table scan as the catalog grows.
+    const [builtIns, custom] = await Promise.all([
+      ctx.db
+        .query("exercises")
+        .withIndex("by_user", (q) => q.eq("userId", undefined))
+        .collect(),
+      ctx.db
+        .query("exercises")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .collect(),
+    ]);
+    return [...builtIns, ...custom].map(toClient);
   },
 });
 

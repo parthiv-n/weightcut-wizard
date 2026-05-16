@@ -15,6 +15,7 @@ import { StrainSparkline } from "@/components/coach/StrainSparkline";
 import { FightTargetBadge } from "@/components/coach/FightTargetBadge";
 import { AnnouncementComposeSheet } from "@/components/coach/AnnouncementComposeSheet";
 import { CoachFightOffersTile } from "@/components/coach/CoachFightOffersTile";
+import { InviteAthletePanel } from "@/components/coach/InviteAthletePanel";
 import { localCache } from "@/lib/localCache";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { registerPullRefresh } from "@/lib/pullRefreshRegistry";
@@ -399,6 +400,10 @@ export default function CoachDashboard() {
                   })}
                 </div>
               )}
+
+              {/* Invite-by-user-id panel — creates a pending gym_invite row
+                  that the target athlete must accept on their dashboard. */}
+              <InviteAthletePanel gymId={gym.id} />
             </section>
           );
         })}

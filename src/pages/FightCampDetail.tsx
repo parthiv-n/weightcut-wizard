@@ -177,7 +177,34 @@ export default function FightCampDetail() {
     );
   }
 
-  if (!camp) return null;
+  if (!camp) {
+    // Convex resolved the query but found no row — id is invalid, deleted, or
+    // not owned by this user. Render an explicit error card with a back
+    // affordance so the user isn't staring at a blank screen.
+    return (
+      <div className="animate-page-in space-y-3 px-5 py-3 sm:p-5 md:p-6 max-w-2xl mx-auto">
+        <div className="card-surface rounded-2xl p-6 text-center space-y-3">
+          <div className="h-12 w-12 bg-muted rounded-full flex items-center justify-center mx-auto">
+            <Trophy className="w-5 h-5 text-muted-foreground" />
+          </div>
+          <div>
+            <h2 className="text-sm font-bold">Camp not found</h2>
+            <p className="text-muted-foreground text-xs mt-1">
+              This fight camp may have been deleted or the link is invalid.
+            </p>
+          </div>
+          <Button
+            onClick={() => navigate("/fight-camps")}
+            variant="outline"
+            className="rounded-2xl mt-2"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to camps
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   const weightCut = camp.starting_weight_kg && camp.end_weight_kg
     ? (camp.starting_weight_kg - camp.end_weight_kg).toFixed(1)

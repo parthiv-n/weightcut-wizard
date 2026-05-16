@@ -19,7 +19,10 @@ import { useToast as useToastSub } from "@/hooks/use-toast";
 function SubscriptionSection() {
   const { isPremium, tier, expiresAt, openPaywall } = useSubscription();
   const { refreshProfile } = useProfile();
-  const activatePremium = useAction(api.actions.activatePremium.run);
+  // Action retained for type compatibility; intentionally not invoked. The
+  // RevenueCat webhook is the only authoritative writer of the DB tier
+  // since the security refactor (see convex/profiles.ts activatePremium).
+  void useAction(api.actions.activatePremium.run);
   const { toast } = useToastSub();
   const [restoringPurchases, setRestoringPurchases] = useState(false);
 
@@ -34,20 +37,10 @@ function SubscriptionSection() {
     try {
       const info = await restorePurchases();
       if (info && isPremiumFromCustomerInfo(info)) {
-        // Push the restored entitlement straight into Convex via the action
-        // so the user doesn't have to wait for the RC webhook to re-fire.
-        // The action is idempotent and out-of-order-guarded server-side, so
-        // a duplicate webhook arriving moments later is harmless.
-        const sub = getSubscriptionFromCustomerInfo(info);
-        if (sub) {
-          try {
-            await activatePremium({ tier: sub.tier, expiresAt: sub.expiresAt });
-          } catch (err) {
-            // Non-fatal — the webhook will reconcile within seconds. Still
-            // surface so we don't pretend everything's fine.
-            console.warn("[SettingsPanel] activatePremium after restore failed", err);
-          }
-        }
+        // Refresh from the server — the RevenueCat webhook does the
+        // authoritative DB write the moment `restorePurchases` resolves on
+        // their backend. `refreshProfile` picks up the new tier within a
+        // second; we don't need the (now blocked) client-side action.
         await refreshProfile();
         toast({ title: "Purchases restored!", description: "Premium access has been restored." });
       } else {

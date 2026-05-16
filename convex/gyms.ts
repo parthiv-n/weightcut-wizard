@@ -128,9 +128,41 @@ export const listMine = query({
 export const getById = query({
   args: { gymId: v.id("gyms") },
   handler: async (ctx, { gymId }) => {
-    await requireUserId(ctx);
+    const userId = await requireUserId(ctx);
     const gym = await ctx.db.get(gymId);
     if (!gym) return null;
+
+    // Only the owner OR an active member may see the full gym record
+    // (including the invite code, location, about copy, etc.). Any other
+    // signed-in user gets a public-safe stub so the UI can still render a
+    // gym name in shared contexts (e.g. fight-offer recipient list) without
+    // leaking the invite code that would let them silently join.
+    const isOwner = gym.ownerUserId === userId;
+    let isMember = false;
+    if (!isOwner) {
+      const membership = await ctx.db
+        .query("gym_members")
+        .withIndex("by_gym_user", (q) =>
+          q.eq("gymId", gymId).eq("userId", userId),
+        )
+        .unique();
+      isMember = !!membership && membership.status === "active";
+    }
+    if (!isOwner && !isMember) {
+      return {
+        id: gym._id,
+        name: gym.name,
+        owner_user_id: null,
+        invite_code: null,
+        location: null,
+        logo_url: null,
+        disciplines: null,
+        fighter_count: null,
+        about: null,
+        updated_at: null,
+        created_at: new Date(gym._creationTime).toISOString(),
+      };
+    }
     return toClientGym(gym, await getGymLogoUrl(ctx, gym));
   },
 });

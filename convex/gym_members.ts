@@ -78,9 +78,15 @@ export const getMineForGym = query({
 // ─────────────────────────────────────────────────────────────────────────
 
 /**
- * Coach-only: directly add a member to a gym. Most flows use
- * `gyms.joinByInviteCode` instead, but this lets the coach onboard an
- * athlete by user-id (e.g. internal admin tooling).
+ * Coach-only: invite an athlete (or coach) to join a gym. Creates a pending
+ * `gym_invites` row that the TARGET user must explicitly accept via
+ * `acceptGymInvite` — replaces the prior direct-insert flow that silently
+ * added a member with `shareData: true` (i.e. forced data-sharing without
+ * consent). The target user retains full control over whether they join AND
+ * whether they share data once they accept.
+ *
+ * If an existing active membership already exists, this is a no-op (returns
+ * null) — re-inviting an active member doesn't escalate any state.
  */
 export const addMember = mutation({
   args: {
@@ -92,28 +98,158 @@ export const addMember = mutation({
     const userId = await requireUserId(ctx);
     await assertGymOwner(ctx, gymId, userId);
 
-    const existing = await ctx.db
+    const existingMember = await ctx.db
       .query("gym_members")
       .withIndex("by_gym_user", (q) =>
         q.eq("gymId", gymId).eq("userId", targetUserId),
       )
       .unique();
-    if (existing) {
-      await ctx.db.patch(existing._id, {
-        memberRole,
-        status: "active",
-        joinedAt: Date.now(),
-      });
-      return existing._id;
+    if (existingMember && existingMember.status === "active") {
+      return null; // already a member, nothing to do
     }
-    return await ctx.db.insert("gym_members", {
+
+    const existingInvite = await ctx.db
+      .query("gym_invites")
+      .withIndex("by_gym_user", (q) =>
+        q.eq("gymId", gymId).eq("userId", targetUserId),
+      )
+      .unique();
+    if (existingInvite && existingInvite.status === "pending") {
+      return existingInvite._id; // already pending
+    }
+    if (existingInvite) {
+      await ctx.db.patch(existingInvite._id, {
+        invitedByUserId: userId,
+        memberRole,
+        status: "pending",
+        createdAt: Date.now(),
+      });
+      return existingInvite._id;
+    }
+    return await ctx.db.insert("gym_invites", {
       gymId,
       userId: targetUserId,
+      invitedByUserId: userId,
       memberRole,
-      status: "active",
-      shareData: true,
-      joinedAt: Date.now(),
+      status: "pending",
+      createdAt: Date.now(),
     });
+  },
+});
+
+/**
+ * Target-user only: accept a pending gym invite. Creates an `active`
+ * membership with `shareData: false` (opt-in via `updateMyMembership`) and
+ * deletes the invite row. Throws if the caller isn't the invite's target.
+ */
+export const acceptGymInvite = mutation({
+  args: { inviteId: v.id("gym_invites") },
+  handler: async (ctx, { inviteId }) => {
+    const userId = await requireUserId(ctx);
+    const invite = await ctx.db.get(inviteId);
+    if (!invite) throw new Error("Invite not found");
+    if (invite.userId !== userId) {
+      throw new Error("Only the invited user can accept this invite");
+    }
+    if (invite.status !== "pending") {
+      throw new Error("Invite is no longer pending");
+    }
+
+    const existing = await ctx.db
+      .query("gym_members")
+      .withIndex("by_gym_user", (q) =>
+        q.eq("gymId", invite.gymId).eq("userId", userId),
+      )
+      .unique();
+    let memberId;
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        memberRole: invite.memberRole,
+        status: "active",
+        shareData: false, // explicit opt-in required
+        joinedAt: Date.now(),
+      });
+      memberId = existing._id;
+    } else {
+      memberId = await ctx.db.insert("gym_members", {
+        gymId: invite.gymId,
+        userId,
+        memberRole: invite.memberRole,
+        status: "active",
+        shareData: false, // explicit opt-in required
+        joinedAt: Date.now(),
+      });
+    }
+    await ctx.db.delete(invite._id);
+    return memberId;
+  },
+});
+
+/**
+ * Target-user only: decline a pending gym invite. Deletes the invite row;
+ * no membership is created.
+ */
+export const declineGymInvite = mutation({
+  args: { inviteId: v.id("gym_invites") },
+  handler: async (ctx, { inviteId }) => {
+    const userId = await requireUserId(ctx);
+    const invite = await ctx.db.get(inviteId);
+    if (!invite) return;
+    if (invite.userId !== userId) {
+      throw new Error("Only the invited user can decline this invite");
+    }
+    await ctx.db.delete(invite._id);
+  },
+});
+
+/**
+ * Member-only self-service patch over their own gym_members row. Currently
+ * just flips `shareData`, but designed as the single mutation a member uses
+ * to control their privacy/role state on a gym they belong to. Enforces
+ * `auth.userId === row.userId` so a coach can never force a member's
+ * privacy toggle.
+ */
+export const updateMyMembership = mutation({
+  args: {
+    memberId: v.id("gym_members"),
+    shareData: v.optional(v.boolean()),
+  },
+  handler: async (ctx, { memberId, shareData }) => {
+    const userId = await requireUserId(ctx);
+    const member = await ctx.db.get(memberId);
+    if (!member) throw new Error("Membership not found");
+    if (member.userId !== userId) {
+      throw new Error("Only the member can update their own membership");
+    }
+    const patch: Record<string, unknown> = {};
+    if (shareData !== undefined) patch.shareData = shareData;
+    if (Object.keys(patch).length === 0) return;
+    await ctx.db.patch(memberId, patch as any);
+  },
+});
+
+/** List pending invites for the calling user (target). */
+export const listMyInvites = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireUserId(ctx);
+    const invites = await ctx.db
+      .query("gym_invites")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .filter((q) => q.eq(q.field("status"), "pending"))
+      .collect();
+    return Promise.all(
+      invites.map(async (i) => {
+        const gym = await ctx.db.get(i.gymId);
+        return {
+          id: i._id,
+          gym_id: i.gymId,
+          gym_name: gym?.name ?? null,
+          member_role: i.memberRole,
+          created_at: new Date(i.createdAt).toISOString(),
+        };
+      }),
+    );
   },
 });
 

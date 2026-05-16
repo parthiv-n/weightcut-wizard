@@ -12,6 +12,7 @@ import { useProfile, useUser, useAuth } from "@/contexts/UserContext";
 import { useMyGyms } from "@/hooks/coach/useMyGyms";
 import { useTutorial } from "@/tutorial/useTutorial";
 import { FIGHT_ONLY_PATHS, isFighter } from "@/lib/goalType";
+import { capturePhotoBase64 } from "@/lib/capturePhoto";
 import {
   AlertDialog,
   AlertDialogContent,
@@ -99,11 +100,19 @@ export const BottomNav = memo(function BottomNav() {
     triggerHapticSelection();
   };
 
-  const handleLogFood = () => {
+  const handleLogFood = async () => {
     setQuickLogOpen(false);
-    // `aiPhoto=1` tells the Nutrition page to immediately trigger the
-    // camera-capture flow once the QuickAdd dialog has mounted.
-    navigate("/nutrition?openAddMeal=true&aiPhoto=1");
+    // Fire the camera FROM THIS TAP — iOS WKWebView requires the gesture
+    // token to be live when `Camera.getPhoto({ source: Camera })` runs, and
+    // any post-navigation `setTimeout` loses it (the plugin then silently
+    // no-ops). The Capacitor plugin grabs the token in its first sync
+    // instruction, so the small `await` for the lazy import is safe.
+    const { base64, reason } = await capturePhotoBase64();
+    // Always open the Nutrition page on the AI tab — even on cancel/deny —
+    // so the user lands somewhere actionable rather than being stranded.
+    // The base64 (if any) rides as router state; NutritionPage detects it
+    // and runs the existing analyze flow with no further camera calls.
+    navigate("/nutrition", { state: { aiPhoto: base64 ?? null, captureFailed: reason ?? null } });
   };
 
   const handleLogWeight = () => {

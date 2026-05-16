@@ -533,6 +533,28 @@ export default defineSchema({
     .index("by_user", ["userId"])
     .index("by_gym_user", ["gymId", "userId"]),
 
+  /**
+   * Pending gym invites — a coach proposes adding an athlete (or vice-versa)
+   * and the target user must explicitly accept. Replaces the prior
+   * `addMember` flow that silently inserted an active membership without
+   * the target's consent (a privacy/data-sharing regression).
+   *
+   * Lifecycle: row inserted in `pending` state, target user accepts → row
+   * deleted + `gym_members` row created with `shareData: false` (opt-in
+   * later via `updateMyMembership`). Decline → row deleted, no membership.
+   */
+  gym_invites: defineTable({
+    gymId: v.id("gyms"),
+    userId: v.id("users"),         // target athlete/coach being invited
+    invitedByUserId: v.id("users"),
+    memberRole: v.union(v.literal("coach"), v.literal("athlete")),
+    status: v.union(v.literal("pending"), v.literal("declined")),
+    createdAt: v.number(),
+  })
+    .index("by_gym", ["gymId"])
+    .index("by_user", ["userId"])
+    .index("by_gym_user", ["gymId", "userId"]),
+
   gym_announcements: defineTable({
     gymId: v.id("gyms"),
     senderUserId: v.id("users"),

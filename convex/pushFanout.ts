@@ -45,17 +45,22 @@ export const resolveTargets = internalQuery({
       (id) => id !== ann.senderUserId,
     );
 
-    // Pull device tokens for every recipient.
+    // Pull device tokens for every recipient — parallel fan-out so we don't
+    // serialize N round trips when an announcement targets hundreds of users.
+    const tokenRowsPerUser = (await Promise.all(
+      recipientUserIds.map((uid) =>
+        ctx.db
+          .query("device_tokens")
+          .withIndex("by_user", (q) => q.eq("userId", uid as any))
+          .collect(),
+      ),
+    )) as Doc<"device_tokens">[][];
     const tokens: {
       userId: string;
       token: string;
       platform: "ios" | "android" | "web";
     }[] = [];
-    for (const uid of recipientUserIds) {
-      const rows = (await ctx.db
-        .query("device_tokens")
-        .withIndex("by_user", (q) => q.eq("userId", uid as any))
-        .collect()) as Doc<"device_tokens">[];
+    for (const rows of tokenRowsPerUser) {
       for (const r of rows) {
         tokens.push({ userId: r.userId, token: r.token, platform: r.platform });
       }

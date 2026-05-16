@@ -81,10 +81,16 @@ export default function TrainingLibrary() {
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const tiles = useQuery(
+  // listMyMediaLibrary now returns a paginated envelope `{ page, isDone,
+  // continueCursor }` after the perf refactor. We only consume the first
+  // page for now; the rest of this file iterates `tiles` so we unwrap to
+  // keep the existing rendering code unchanged. Future enhancement: load
+  // more on scroll via continueCursor.
+  const mediaPage = useQuery(
     api.fight_camp.listMyMediaLibrary,
     userId ? { disciplineFilter: filter === ALL_FILTER ? undefined : filter } : "skip",
-  ) as Tile[] | undefined;
+  ) as { page: Tile[]; isDone: boolean; continueCursor: string | null } | undefined;
+  const tiles: Tile[] | undefined = mediaPage ? mediaPage.page : undefined;
   const disciplines = useQuery(
     api.fight_camp.listMediaDisciplines,
     userId ? {} : "skip",

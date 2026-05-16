@@ -98,12 +98,41 @@ export const WeeklyLoadPlan = memo(function WeeklyLoadPlan({ metrics }: WeeklyLo
   const today = new Date();
   const dayOfWeek = (today.getDay() + 6) % 7; // 0..6, where 0 = Monday
 
-  const recent = useMemo(() => {
-    const tail = metrics.strainHistory.slice(-7);
-    return tail.map((entry) => entry.strain);
+  // Build a date-keyed map of historical strain so each calendar day pulls
+  // the load that ACTUALLY occurred on that ISO date — previously we sliced
+  // the last 7 entries and rendered them positionally, which misattributed
+  // load to wrong weekdays whenever the user skipped a day.
+  const strainByDate = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const entry of metrics.strainHistory) {
+      map.set(entry.date, entry.strain);
+    }
+    return map;
   }, [metrics.strainHistory]);
 
-  const maxLoad = useMemo(() => Math.max(21, ...recent), [recent]);
+  // Compute Monday-of-this-week as the anchor for the 7-day strip.
+  const mondayOfWeek = useMemo(() => {
+    const d = new Date(today);
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() - dayOfWeek);
+    return d;
+  }, [today, dayOfWeek]);
+
+  const isoForOffset = (offset: number): string => {
+    const d = new Date(mondayOfWeek);
+    d.setDate(d.getDate() + offset);
+    return d.toISOString().slice(0, 10);
+  };
+
+  // maxLoad spans both this week's actual loads AND any recent history so
+  // the bars stay on a stable scale even on light days.
+  const maxLoad = useMemo(() => {
+    const candidates: number[] = [21];
+    for (const entry of metrics.strainHistory) candidates.push(entry.strain);
+    candidates.push(metrics.strain);
+    return Math.max(...candidates);
+  }, [metrics.strainHistory, metrics.strain]);
+
   const daysRemaining = 6 - dayOfWeek;
   const futureIntents = useMemo(
     () => planRemainingDays(metrics.loadRatio, daysRemaining, metrics.forecast.predictedStrain),
@@ -113,14 +142,11 @@ export const WeeklyLoadPlan = memo(function WeeklyLoadPlan({ metrics }: WeeklyLo
   const days: DayPlan[] = [];
   const SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-  const recentPast = recent.slice(0, Math.max(0, recent.length - 1));
-  const pastCount = dayOfWeek;
-  const paddedPast = Array(Math.max(0, pastCount - recentPast.length))
-    .fill(0)
-    .concat(recentPast.slice(-pastCount));
-
-  for (let i = 0; i < pastCount; i++) {
-    const load = paddedPast[i] ?? 0;
+  // Past days: Mon..(today-1). Look up real load by ISO date; default to 0
+  // for any day where no training was logged.
+  for (let i = 0; i < dayOfWeek; i++) {
+    const iso = isoForOffset(i);
+    const load = strainByDate.get(iso) ?? 0;
     days.push({
       shortName: SHORT[i],
       isToday: false,
@@ -130,7 +156,10 @@ export const WeeklyLoadPlan = memo(function WeeklyLoadPlan({ metrics }: WeeklyLo
     });
   }
 
-  const todayLoad = metrics.strain;
+  // Today: prefer the live `metrics.strain` (which reflects in-progress
+  // sessions today) over whatever made it into strainHistory.
+  const todayIso = isoForOffset(dayOfWeek);
+  const todayLoad = metrics.strain || strainByDate.get(todayIso) || 0;
   days.push({
     shortName: SHORT[dayOfWeek],
     isToday: true,
@@ -139,6 +168,7 @@ export const WeeklyLoadPlan = memo(function WeeklyLoadPlan({ metrics }: WeeklyLo
     intent: loadIntent(todayLoad, maxLoad),
   });
 
+  // Future days: suggested intent only — no real data yet.
   for (let i = 0; i < daysRemaining; i++) {
     const intent = futureIntents[i] ?? "easy";
     const pct = INTENT_STYLE[intent].pct;

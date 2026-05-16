@@ -61,10 +61,21 @@ export function useWeightData({ profile }: UseWeightDataParams) {
     }
   };
 
-  const handleAddWeight = async (e: React.FormEvent) => {
+  /**
+   * Submit a new or edited weight log.
+   *
+   * Contract:
+   *  - Returns the logged `number` on success.
+   *  - Returns `null` when the submission was rejected before any mutation
+   *    fired (validation failure, no auth, double-submit guard).
+   *  - Returns `null` on backend failure — the optimistic update is rolled
+   *    back and a toast is shown. Callers MUST handle the null case rather
+   *    than treating any falsy return as "in flight".
+   */
+  const handleAddWeight = async (e: React.FormEvent): Promise<number | null> => {
     e.preventDefault();
 
-    if (submittingRef.current) return;
+    if (submittingRef.current) return null;
 
     const validationResult = weightLogSchema.safeParse({
       weight_kg: parseFloat(newWeight),
@@ -77,7 +88,7 @@ export function useWeightData({ profile }: UseWeightDataParams) {
         description: validationResult.error.errors[0].message,
         variant: "destructive",
       });
-      return;
+      return null;
     }
 
     if (!userId) {
@@ -86,7 +97,7 @@ export function useWeightData({ profile }: UseWeightDataParams) {
         description: "Please sign in again to log your weight.",
         variant: "destructive",
       });
-      return;
+      return null;
     }
 
     submittingRef.current = true;
@@ -94,12 +105,32 @@ export function useWeightData({ profile }: UseWeightDataParams) {
 
     const loggedWeight = parseFloat(newWeight);
 
-    // Optimistic update — show weight in list immediately
+    // Optimistic update — show weight in list immediately.
+    // For an edit where the date moved, the server-side upsert key is
+    // (userId, date) so the row on `originalDate` is NOT updated server-
+    // side. Mirror that on the optimistic side: drop the original-date row
+    // and append a fresh optimistic row on `newDate`. A subsequent fetchData
+    // reconciles either way.
     const prevLogs = [...weightLogs];
     if (editingLogId) {
-      setWeightLogs(prev => prev.map(log =>
-        log.id === editingLogId ? { ...log, weight_kg: loggedWeight, date: newDate } : log
-      ));
+      const editingLog = prevLogs.find((l) => l.id === editingLogId);
+      const dateChanged = editingLog ? editingLog.date !== newDate : false;
+      setWeightLogs((prev) => {
+        if (dateChanged) {
+          // Remove the row on the original date; add a fresh optimistic row
+          // on the new date (the existing row at newDate, if any, will be
+          // replaced after fetchData picks up the upserted server state).
+          const withoutOriginal = prev.filter((l) => l.id !== editingLogId);
+          const withoutDup = withoutOriginal.filter((l) => l.date !== newDate);
+          return [
+            ...withoutDup,
+            { id: `optimistic-${Date.now()}`, date: newDate, weight_kg: loggedWeight },
+          ].sort((a, b) => a.date.localeCompare(b.date));
+        }
+        return prev.map((log) =>
+          log.id === editingLogId ? { ...log, weight_kg: loggedWeight, date: newDate } : log,
+        );
+      });
     } else {
       setWeightLogs(prev => {
         const updated = [...prev, { id: `optimistic-${Date.now()}`, date: newDate, weight_kg: loggedWeight }]
@@ -110,15 +141,23 @@ export function useWeightData({ profile }: UseWeightDataParams) {
 
     try {
       // `logWeight` upserts by (userId, date) — covers both insert and edit
-      // paths. If the user changed the date during edit, the old row stays
-      // and a new one is added; users who care can delete the orphan via UI.
+      // paths. If the user changed the date during edit, the server keeps
+      // the old row; the optimistic state above already mirrors that.
       await logWeightMut({ date: newDate, weightKg: loggedWeight });
 
       // Mirror to the profile so the rest of the app sees the latest weight.
+      // If THIS fails, the log write already succeeded — don't roll back the
+      // optimistic state but DO surface the failure so the user knows their
+      // profile current_weight_kg may be stale until next sync.
       try {
         await updateCurrentWeight(loggedWeight);
       } catch (profileErr) {
-        logger.warn("Profile weight update failed (weight log succeeded)", profileErr);
+        logger.warn("Profile current_weight_kg update failed (weight log succeeded)", profileErr);
+        toast({
+          title: "Saved, but profile didn't update",
+          description: "Your weight log was saved. The profile current weight may take a moment to sync.",
+          variant: "destructive",
+        });
       }
 
       if (userId) {
@@ -143,19 +182,20 @@ export function useWeightData({ profile }: UseWeightDataParams) {
       setNewWeight("");
       setEditingLogId(null);
       setTimeout(() => fetchData(), 500);
+      return loggedWeight;
     } catch (err) {
+      // Backend failure on the weight-log write itself — fully revert.
       setWeightLogs(prevLogs);
       toast({
         title: "Error",
         description: `Failed to ${editingLogId ? 'update' : 'log'} weight`,
         variant: "destructive",
       });
+      return null;
     } finally {
       setLoading(false);
       submittingRef.current = false;
     }
-
-    return loggedWeight;
   };
 
   const handleDeleteLog = async () => {

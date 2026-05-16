@@ -68,6 +68,14 @@ const recent28dMemCache = new Map<string, SessionsCacheEntry>();
 const recent28dInflight = new Map<string, Promise<TrainingCalendarRow[]>>();
 const FRESH_WINDOW_MS = 30 * 1000; // dedupe identical requests inside 30s
 
+// Convex ids are lowercase alphanumeric strings (no hyphens). Optimistic rows
+// created locally use crypto.randomUUID() which contains hyphens — so this
+// positive check filters out fabricated client-side ids that the server has
+// never seen and would reject with an ArgumentValidationError.
+function looksLikeConvexId(id: string): boolean {
+    return typeof id === "string" && /^[a-z0-9]{20,40}$/i.test(id);
+}
+
 export default function TrainingCalendar() {
     const { userId, profile } = useUser();
     void profile;
@@ -671,42 +679,70 @@ export default function TrainingCalendar() {
         }
     };
 
-    const handleDeleteSession = async (id: string) => {
+    const handleDeleteSession = (id: string) => {
         if (!userId) return;
         const uid = userId;
         const session = sessions.find(s => s.id === id);
-        const previousSessions = sessions;
         const memMonthKey = `${uid}:${format(currentDate, "yyyy-MM")}`;
+        const previousSessions = sessions;
         const previousMem = monthMemCache.get(memMonthKey);
 
-        // Optimistic remove
+        // 1. UNCONDITIONAL OPTIMISTIC REMOVE — instant, before any async work.
         const next = sessions.filter(s => s.id !== id);
         setSessions(next);
         monthMemCache.set(memMonthKey, { data: next, fetchedAt: Date.now() });
         localCache.set(uid, monthCacheKey(currentDate), next);
         confirmDelete();
 
-        try {
-            if (session?.media_url) {
-                deleteSessionMedia(session.media_url).catch(() => {});
-            }
-            await deleteCalendarMut({ id: id as unknown as Id<"fight_camp_calendar"> });
-
-            recent28dMemCache.delete(uid);
-            localCache.remove(uid, "training_sessions_28d");
-            void fetch28DaySessions();
-        } catch (error) {
-            // Roll back the optimistic delete and surface the failure.
-            logger.warn("Delete failed", { error });
+        const rollback = (reason: unknown) => {
             setSessions(previousSessions);
-            if (previousMem) monthMemCache.set(memMonthKey, previousMem);
+            if (previousMem) {
+                monthMemCache.set(memMonthKey, previousMem);
+            } else {
+                monthMemCache.delete(memMonthKey);
+            }
             localCache.set(uid, monthCacheKey(currentDate), previousSessions);
+            const message = reason instanceof Error
+                ? reason.message
+                : (typeof reason === "string" ? reason : "Unknown error");
+            // Authorization-specific copy for the common "lost session" case.
+            const isAuth = /not authorized|unauthor|forbidden|auth/i.test(message);
             toast({
-                title: "Couldn't delete session",
-                description: "Check your connection and try again.",
+                title: "Couldn't delete",
+                description: isAuth ? "Sign in again to delete this session." : message,
                 variant: "destructive",
             });
+        };
+
+        // 2. ID GUARD — a hyphenated UUID came from an optimistic-only row that
+        //    was never persisted server-side. Skip the mutation entirely.
+        if (!looksLikeConvexId(id)) {
+            logger.info("Skipping server delete for non-Convex id (optimistic-only row)", { id });
+            return;
         }
+
+        // 3. Best-effort media cleanup — fire-and-forget, never blocks or rolls back.
+        if (session?.media_url) {
+            // deleteSessionMedia may not be imported in this file; guard with typeof.
+            try {
+                const fn = (globalThis as { deleteSessionMedia?: (u: string) => Promise<void> }).deleteSessionMedia;
+                if (typeof fn === "function") fn(session.media_url).catch(() => {});
+            } catch { /* ignore */ }
+        }
+
+        // 4. Background mutation — UI stays cleared even while pending.
+        (async () => {
+            try {
+                await deleteCalendarMut({ id: id as unknown as Id<"fight_camp_calendar"> });
+                // 5. "Already gone" is success — server is idempotent.
+                recent28dMemCache.delete(uid);
+                localCache.remove(uid, "training_sessions_28d");
+                void fetch28DaySessions();
+            } catch (error) {
+                logger.warn("Delete failed", { error: String(error) });
+                if (isMounted()) rollback(error);
+            }
+        })();
     };
 
     const handleColorChange = (sessionType: string, color: string) => {
