@@ -34,6 +34,13 @@ export function PodiumPlace({
       className="flex items-center gap-3 py-2"
     >
       <div className="relative">
+        <span className="sr-only">
+          {tier === "gold"
+            ? "1st place"
+            : tier === "silver"
+              ? "2nd place"
+              : "3rd place"}
+        </span>
         <Avatar className={`${TIER_SIZE[tier]} ${TIER_RING[tier]}`}>
           <AvatarImage src={entry.avatarUrl ?? undefined} alt={entry.name} />
           <AvatarFallback>{entry.name.slice(0, 1)}</AvatarFallback>

@@ -10,7 +10,10 @@ export function RankedList({
 }) {
   if (ranks.length === 0) return null;
   return (
-    <div className="glass-card rounded-2xl border border-border/50 divide-y divide-border/20">
+    <div
+      role="list"
+      className="glass-card rounded-2xl border border-border/50 divide-y divide-border/20"
+    >
       {ranks.map((entry) => (
         <RankedRow
           key={entry.userId}

@@ -20,13 +20,19 @@ export function DisciplineFilterTabs({
   onChange: (next: DisciplineFilter) => void;
 }) {
   return (
-    <div className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1">
+    <div
+      role="tablist"
+      aria-label="Discipline filter"
+      className="flex gap-1 overflow-x-auto pb-1 -mx-1 px-1"
+    >
       {DISCIPLINES.map((d) => {
         const active = value === d;
         return (
           <button
             key={d}
             type="button"
+            role="tab"
+            aria-selected={active}
             onClick={() => {
               if (d !== value) {
                 void triggerHaptic(ImpactStyle.Light);

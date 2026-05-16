@@ -9,7 +9,6 @@ import {
 import { PodiumHero } from "./PodiumHero";
 import { RankedList } from "./RankedList";
 import { MyRankFooter } from "./MyRankFooter";
-import type { LeaderboardData } from "./types";
 
 const FILTER_TO_DISCIPLINE: Record<DisciplineFilter, string | undefined> = {
   All: undefined,
@@ -38,7 +37,7 @@ export function LeaderboardSection({
   const data = useQuery(api.gymLeaderboard.weekly, {
     gymId,
     discipline: FILTER_TO_DISCIPLINE[filter],
-  }) as LeaderboardData | null | undefined;
+  });
 
   // Loading state
   if (data === undefined) {
