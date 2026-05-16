@@ -15,14 +15,15 @@ import {
 } from "lucide-react";
 import { InlinePlanDisplay } from "@/components/onboarding/InlinePlanDisplay";
 import { profileSchema } from "@/lib/validation";
-import { celebrateSuccess, triggerHapticSelection } from "@/lib/haptics";
+import { celebrateSuccess, triggerHaptic, triggerHapticSelection } from "@/lib/haptics";
+import { ImpactStyle } from "@capacitor/haptics";
 import { logger } from "@/lib/logger";
 import { seedDemoData } from "@/lib/demoData";
 import { presentPaywallIfNeeded } from "@/lib/purchases";
 import { Capacitor } from "@capacitor/core";
 import { AnimatePresence, motion } from "motion/react";
 import { springs } from "@/lib/motion";
-import { XPProgressBar, CuttingNowChip, OnboardingMascot, DaysToFightSlam, WeightLossSlam, LossFrameCard, SilentAchievement, DeclarationButton, TaleOfTheTapeCard, MathWhisper, WittyValidation, sportVocab } from "@/components/onboarding/Gamification";
+import { XPProgressBar, CuttingNowChip, OnboardingMascot, DaysToFightSlam, WeightLossSlam, LossFrameCard, DeclarationButton, TaleOfTheTapeCard, MathWhisper, WittyValidation, sportVocab } from "@/components/onboarding/Gamification";
 
 const ACTIVITY_MULTIPLIERS: Record<string, number> = {
   sedentary: 1.2,
@@ -122,6 +123,90 @@ function PlanRetryCard({
         >
           Skip
         </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * LosingProjectionChart — inline SVG that previews the user's projected
+ * weight loss curve on the final onboarding step. Mirrors the visual
+ * language of the cutting flow's chart (same card-surface, same line
+ * weight, same dot styling) but is intentionally simpler: a single
+ * steady line from `currentKg` → `goalKg` across the chosen `weeks`,
+ * with a per-week-rate readout underneath so the user can see the
+ * pace at a glance. Renders nothing if any input is missing or the
+ * user is trying to *gain* weight (handled separately).
+ */
+function LosingProjectionChart({
+  currentKg,
+  goalKg,
+  weeks,
+}: {
+  currentKg: number;
+  goalKg: number;
+  weeks: number;
+}) {
+  if (currentKg <= 0 || goalKg <= 0 || weeks <= 0) return null;
+  if (currentKg <= goalKg) return null; // user wants to maintain or gain
+  const totalKg = +(currentKg - goalKg).toFixed(1);
+  const perWeek = +(totalKg / weeks).toFixed(2);
+
+  // Same dimensions as the cutting chart so they read as one family.
+  const W = 320, H = 170;
+  const padL = 14, padR = 14, padT = 32, padB = 30;
+  const innerW = W - padL - padR;
+  const innerH = H - padT - padB;
+  const minW = goalKg;
+  const maxW = currentKg;
+  const wRange = Math.max(0.5, maxW - minW);
+  const xFor = (week: number) => padL + (week / weeks) * innerW;
+  const yFor = (w: number) => padT + (1 - (w - minW) / wRange) * innerH;
+  const x1 = xFor(0), y1 = yFor(currentKg);
+  const x2 = xFor(weeks), y2 = yFor(goalKg);
+  const areaPath = `M ${x1} ${H - padB} L ${x1} ${y1} L ${x2} ${y2} L ${x2} ${H - padB} Z`;
+
+  // Same safety palette the rest of the app uses for weekly rates.
+  const rateClass =
+    perWeek <= 1.0
+      ? "text-emerald-400"
+      : perWeek <= 1.5
+        ? "text-amber-400"
+        : "text-rose-400";
+  const rateLabel =
+    perWeek <= 1.0 ? "Safe" : perWeek <= 1.5 ? "Moderate" : "Aggressive";
+
+  return (
+    <div className="card-surface rounded-2xl border border-border/40 p-3">
+      <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70 font-bold mb-1">
+        Projected weight loss
+      </p>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ overflow: "visible" }} aria-label="Projected weight chart">
+        <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke="hsl(var(--border))" strokeWidth="1" strokeDasharray="2 3" opacity="0.5" />
+        <path d={areaPath} fill="hsl(var(--primary))" opacity="0.10" />
+        <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="hsl(var(--primary))" strokeWidth="2.5" strokeLinecap="round" />
+        <circle cx={x1} cy={y1} r="4" fill="hsl(var(--primary))" stroke="hsl(var(--background))" strokeWidth="1.5" />
+        <circle cx={x2} cy={y2} r="4.5" fill="hsl(var(--primary))" stroke="hsl(var(--background))" strokeWidth="1.5" />
+        <text x={x1} y={y1 - 10} fontSize="10" fontWeight="600" textAnchor="start" fill="hsl(var(--foreground))">
+          {currentKg.toFixed(1)}
+        </text>
+        <text x={x2} y={y2 - 10} fontSize="10" fontWeight="700" textAnchor="end" fill="hsl(var(--primary))">
+          {goalKg.toFixed(1)}
+        </text>
+        <text x={x1} y={H - 10} fontSize="9" textAnchor="start" fill="hsl(var(--muted-foreground))">Now</text>
+        <text x={x2} y={H - 10} fontSize="9" textAnchor="end" fill="hsl(var(--muted-foreground))">
+          Week {weeks}
+        </text>
+      </svg>
+      <div className="flex items-center justify-between mt-2 text-[11px]">
+        <span className="text-muted-foreground">
+          <span className="text-foreground font-semibold tabular-nums">{totalKg.toFixed(1)}</span> kg over{" "}
+          <span className="text-foreground font-semibold tabular-nums">{weeks}</span>{" "}
+          {weeks === 1 ? "week" : "weeks"}
+        </span>
+        <span className={`font-semibold tabular-nums ${rateClass}`}>
+          {perWeek.toFixed(2)} kg/wk · {rateLabel}
+        </span>
       </div>
     </div>
   );
@@ -399,12 +484,22 @@ export default function Onboarding() {
   // Sport vocabulary — derive once, reused in copy below.
   const vocab = sportVocab(formData.athlete_type || formData.athlete_types[0] || "");
 
-  // Silent achievement toast — milestone fires keyed on `step`.
+  // Inline achievement chip — milestone fires keyed on `step`. Renders
+  // beside the social-proof chip in the sticky header (see
+  // `CuttingNowChip` consumption below). Haptic + auto-clear used to
+  // live in the standalone `SilentAchievement` overlay; lifted here so
+  // a single source of truth handles both the visual + the timer.
   const [achievementLabel, setAchievementLabel] = useState<string | null>(null);
   useEffect(() => {
-    if (step === 4) setAchievementLabel("Goal Locked");
-    else if (step === 8) setAchievementLabel("Discipline Declared");
-    else if (step === 13) setAchievementLabel("Camp Sealed");
+    let label: string | null = null;
+    if (step === 4) label = "Goal Locked";
+    else if (step === 8) label = "Discipline Declared";
+    else if (step === 13) label = "Camp Sealed";
+    if (!label) return;
+    setAchievementLabel(label);
+    triggerHaptic(ImpactStyle.Medium);
+    const t = setTimeout(() => setAchievementLabel(null), 2400);
+    return () => clearTimeout(t);
   }, [step]);
 
   // Final-step declaration gate — before showing chart + Generate, ask the
@@ -692,41 +787,43 @@ export default function Onboarding() {
   if (authLoading || isCoach) return null;
   if (hasProfile && !stayOnOnboarding) return null;
 
-  const progress = (step / TOTAL_STEPS) * 100;
-
   // ── Render screens ──
   return (
     <div className="min-h-screen bg-background dark:bg-[#020204]">
-      {/* Top bar: back arrow + progress bar */}
-      <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-sm px-4 pb-2 flex items-center gap-3" style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)" }}>
-        {step > 1 ? (
-          <button onClick={goBack} className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-muted/50 active:scale-95 transition-all flex-shrink-0">
-            <ChevronLeft className="h-5 w-5 text-foreground" />
-          </button>
-        ) : (
-          <div className="w-8 flex-shrink-0" />
-        )}
-        <div className="flex-1 h-1 rounded-full bg-muted/30 overflow-hidden">
-          <div className="h-full rounded-full bg-gradient-to-r from-primary to-secondary transition-all duration-500 ease-out" style={{ width: `${progress}%` }} />
-        </div>
-        <div className="w-8 flex-shrink-0" />
-      </div>
-
       {/* Persistent gamification header — XP bar + social-proof chip
           stay PINNED at the top of the viewport like a normal progress
-          bar, regardless of scroll. Sticky (rather than fixed) so the
-          surrounding flow doesn't need an extra offset to compensate.
-          The blurred background means body content scrolling underneath
-          still reads as motion without bleeding through the bar.
-          z-[10005] keeps the bar above the slams' z-[10003] backdrop
-          so the XP bar stays sharp + readable while the slam dims the
-          rest of the screen. */}
+          bar, regardless of scroll. The old thin gradient progress bar
+          + separate back-arrow row above this got removed once the XP
+          bar took over: it was redundant feedback eating vertical
+          space. The back arrow now lives inside this same sticky
+          wrapper, top-left, so the user keeps the gesture without the
+          extra header row. z-[10005] keeps the bar above the slams'
+          z-[10003] backdrop so the XP bar stays sharp + readable while
+          the slam dims the rest of the screen. */}
       <div
         className="sticky z-[10005] bg-background/85 backdrop-blur-md pb-2 border-b border-border/30"
         style={{ top: "env(safe-area-inset-top, 0px)" }}
       >
+        {/* Compact back-arrow row — sits flush above the XP bar so we
+            don't lose the gesture, but takes only the minimal height
+            an icon button needs (no duplicate progress track). */}
+        <div className="px-3 pt-2 h-8 flex items-center">
+          {step > 1 ? (
+            <button
+              onClick={goBack}
+              aria-label="Back"
+              className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-muted/50 active:scale-95 transition-all"
+            >
+              <ChevronLeft className="h-5 w-5 text-foreground" />
+            </button>
+          ) : (
+            // Reserve the same 32px so the XP bar's vertical position
+            // doesn't jump on step 1 → step 2.
+            <div className="h-8 w-8" />
+          )}
+        </div>
         <XPProgressBar step={step} totalSteps={13} />
-        <CuttingNowChip />
+        <CuttingNowChip achievementLabel={achievementLabel} />
       </div>
 
       <AnimatePresence mode="wait" initial={false}>
@@ -1438,8 +1535,12 @@ export default function Onboarding() {
           </StepLayout>
         )}
 
-        {/* ── Screen 12: Struggles ── */}
-        {step === 12 && (
+        {/* ── Screen 12: Struggles (cutting flow) ──
+            Fighters get the "what holds you back" picker — feeds the
+            cut-plan AI's framing. Losing flow takes a different
+            question on this step (see below) so the shared step 13
+            stays a clean declaration + generate-plan finale. */}
+        {step === 12 && formData.goal_type !== "losing" && (
           <StepLayout step={12} title="What do you struggle with most?" subtitle="Be real. We'll build around your weak spots."
             footer={<Button onClick={goNext} disabled={!formData.primary_struggle}
               className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
@@ -1453,6 +1554,29 @@ export default function Onboarding() {
               ].map(opt => (
                 <OptionCard key={opt.value} selected={formData.primary_struggle === opt.value} icon={opt.icon}
                   label={opt.label} onClick={() => selectAndAdvance("primary_struggle", opt.value)} />
+              ))}
+            </div>
+          </StepLayout>
+        )}
+
+        {/* ── Screen 12: Plan style (losing flow only) ──
+            Promoted up from the previous step-13 finale so the LAST
+            step is purely declaration → tale-of-the-tape → generate.
+            Was the source of "round 13 asks me how aggressive when it
+            should just be Generate" — this fixes that. */}
+        {step === 12 && formData.goal_type === "losing" && (
+          <StepLayout step={12} title="How aggressive do you want to go?" subtitle="Picks the pace of your cut. You can change it later in Settings."
+            footer={<Button onClick={goNext} disabled={!formData.plan_aggressiveness}
+              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+          >
+            <div className="space-y-2.5">
+              {[
+                { value: "safe", label: "Safe & Steady", description: "Slow, sustainable. Best for 8+ week runways.", icon: <Shield className="h-5 w-5 text-green-400" /> },
+                { value: "balanced", label: "Balanced", description: "Standard pace. Works for most timelines.", icon: <Gauge className="h-5 w-5 text-yellow-400" /> },
+                { value: "aggressive", label: "Aggressive", description: "Hard push. Use when the timeline is tight.", icon: <Flame className="h-5 w-5 text-red-400" /> },
+              ].map(opt => (
+                <OptionCard key={opt.value} selected={formData.plan_aggressiveness === opt.value} icon={opt.icon}
+                  label={opt.label} description={opt.description} onClick={() => selectAndAdvance("plan_aggressiveness", opt.value)} />
               ))}
             </div>
           </StepLayout>
@@ -1472,7 +1596,7 @@ export default function Onboarding() {
           </StepLayout>
         )}
         {step === 13 && formData.goal_type === "losing" && declared && (
-          <StepLayout step={13} title="How aggressive do you want to go?" subtitle="This controls how fast we push your weight cut and plan intensity."
+          <StepLayout step={13} title="Here's your plan." subtitle="Review the snapshot, then tap Generate to lock it in."
             footer={
               generatedPlan ? null : generatingPlan ? (
                 <div className="w-full flex justify-center">
@@ -1482,13 +1606,16 @@ export default function Onboarding() {
                   </div>
                 </div>
               ) : (
-                <Button onClick={goNext} disabled={loading || !formData.plan_aggressiveness}
-                  className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>
+                <Button onClick={goNext} disabled={loading}
+                  className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Generate plan</Button>
               )
             }
           >
-            <div className="space-y-2.5">
-              {/* Tale-of-the-Tape — fighter intro reveal at the top of the finale. */}
+            <div className="space-y-3">
+              {/* Tale-of-the-Tape — fighter intro reveal at the top of
+                  the finale. Aggressiveness now appears here as a stat
+                  (read-only) so the user can see what they picked
+                  without us asking the question again. */}
               <TaleOfTheTapeCard
                 name={userName || "Fighter"}
                 sport={(formData.athlete_type || formData.athlete_types[0] || vocab.campNoun).toString()}
@@ -1496,22 +1623,25 @@ export default function Onboarding() {
                   { label: "Height", value: formData.height_cm ? `${formData.height_cm} cm` : "—" },
                   { label: "Weight", value: formData.current_weight_kg ? `${formData.current_weight_kg} kg` : "—" },
                   { label: "Goal", value: formData.goal_weight_kg ? `${formData.goal_weight_kg} kg` : "—" },
-                  { label: "Days to fight", value: daysToFight ? String(daysToFight) : "—" },
-                  { label: "Experience", value: formData.experience_level || "—" },
+                  { label: "Timeline", value: formData.target_weeks ? `${formData.target_weeks} weeks` : "—" },
+                  { label: "Pace", value: formData.plan_aggressiveness || "balanced" },
                 ]}
               />
-              {[
-                { value: "safe", label: "Safe & Steady", description: "Slow, sustainable. Best if you have 8+ weeks.", icon: <Shield className="h-5 w-5 text-green-400" /> },
-                { value: "balanced", label: "Balanced", description: "Standard fight camp pace. 4-8 weeks out.", icon: <Gauge className="h-5 w-5 text-yellow-400" /> },
-                { value: "aggressive", label: "Aggressive", description: "Hard cuts. Less than 4 weeks to fight.", icon: <Flame className="h-5 w-5 text-red-400" /> },
-              ].map(opt => (
-                <OptionCard key={opt.value} selected={formData.plan_aggressiveness === opt.value} icon={opt.icon}
-                  label={opt.label} description={opt.description} onClick={() => selectAndAdvance("plan_aggressiveness", opt.value)} />
-              ))}
 
-              {/* In-page plan display — slides in below the cards once the
-                  AI plan resolves. The Continue button inside this component
-                  handles the dashboard handoff + tutorial trigger. */}
+              {/* Projected weight-loss chart — same visual language as
+                  the cutting flow's chart but simpler: linear current →
+                  goal over the user's chosen timeline. Renders only
+                  when we have enough data to be meaningful (current,
+                  goal, weeks all set and current > goal). */}
+              <LosingProjectionChart
+                currentKg={parseFloat(formData.current_weight_kg) || 0}
+                goalKg={parseFloat(formData.goal_weight_kg) || 0}
+                weeks={parseInt(formData.target_weeks) || 0}
+              />
+
+              {/* In-page plan display — slides in below the card once the
+                  AI plan resolves. The Continue button inside this
+                  component handles the dashboard handoff + tutorial. */}
               <AnimatePresence>
                 {generatedPlan && (
                   <motion.div
@@ -1520,7 +1650,7 @@ export default function Onboarding() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 10 }}
                     transition={{ duration: 0.45, ease: "easeOut" }}
-                    className="pt-3"
+                    className="pt-2"
                   >
                     <InlinePlanDisplay
                       plan={generatedPlan}
@@ -1745,12 +1875,10 @@ export default function Onboarding() {
         perWeekKg={perWeekKg}
         armed={weightSlamArmed}
       />
-      {/* Milestone toast — pops on step 4 / 8 / 13 transitions. */}
-      <SilentAchievement
-        label={achievementLabel}
-        open={achievementLabel !== null}
-        onClose={() => setAchievementLabel(null)}
-      />
+      {/* Milestone achievement now renders INLINE next to the
+          social-proof chip in the sticky header (see CuttingNowChip
+          above). The standalone floating toast was removed so the two
+          surfaces don't compete for the eye. */}
 
     </div>
   );

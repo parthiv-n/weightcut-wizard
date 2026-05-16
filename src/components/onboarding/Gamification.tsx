@@ -93,18 +93,34 @@ export function XPProgressBar({
 // the current hour so it never lies (no backend), but rotates so a
 // returning user sees a different value on every session.
 // ─────────────────────────────────────────────────────────────────────
-export function CuttingNowChip() {
+export function CuttingNowChip({
+  achievementLabel,
+}: {
+  /** When set, renders a same-sized achievement pill INLINE next to the
+   *  social-proof chip (so "Goal Locked" sits beside "X fighters cutting
+   *  weight right now" instead of floating above the screen). */
+  achievementLabel?: string | null;
+} = {}) {
+  // 1-100 range, randomised per user (per session). Picked once on
+  // first mount and cached in localStorage so a returning user keeps
+  // their number — feels less like a slot machine that way. Stays in
+  // the believable range for a niche fight-camp app.
   const count = useMemo(() => {
-    // 60-220 range, hour-stable. Sized to feel believable for a niche
-    // fight-camp app — high enough to register as social proof, low
-    // enough not to read as obviously fake to a returning user who
-    // notices the same number doesn't shift much. Cheap hash so the
-    // value rotates each hour without a backend round-trip.
-    const h = new Date().getHours();
-    return 60 + ((h * 17 + 31) % 161);
+    try {
+      const stored = localStorage.getItem("wcw_cutting_now_count");
+      if (stored) {
+        const n = parseInt(stored, 10);
+        if (Number.isFinite(n) && n >= 1 && n <= 100) return n;
+      }
+      const fresh = 1 + Math.floor(Math.random() * 100);
+      try { localStorage.setItem("wcw_cutting_now_count", String(fresh)); } catch { /* ignore */ }
+      return fresh;
+    } catch {
+      return 1 + Math.floor(Math.random() * 100);
+    }
   }, []);
   return (
-    <div className="mx-5 mt-2">
+    <div className="mx-5 mt-2 flex items-center gap-1.5 flex-wrap">
       <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25">
         <span className="relative flex h-1.5 w-1.5">
           <span className="absolute inset-0 rounded-full bg-emerald-400 animate-ping opacity-60" />
@@ -114,6 +130,26 @@ export function CuttingNowChip() {
           {count.toLocaleString()} fighters cutting weight right now
         </p>
       </div>
+      {/* Inline achievement pill — same dimensions / type-scale as the
+          social-proof chip so they read as a paired row rather than two
+          competing surfaces. AnimatePresence handles the in/out fade. */}
+      <AnimatePresence>
+        {achievementLabel && (
+          <motion.div
+            key={achievementLabel}
+            initial={{ opacity: 0, scale: 0.85 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.85 }}
+            transition={{ type: "spring", stiffness: 380, damping: 24 }}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/15 border border-primary/35"
+          >
+            <Trophy className="h-2.5 w-2.5 text-primary" strokeWidth={2.6} />
+            <p className="text-[10px] font-semibold text-primary uppercase tracking-[0.06em]">
+              {achievementLabel}
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -414,7 +450,7 @@ export function SilentAchievement({
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: reduced ? 0 : -40, opacity: 0 }}
           transition={{ type: "spring", stiffness: 300, damping: 24 }}
-          className="fixed top-[calc(env(safe-area-inset-top,0px)+72px)] left-1/2 -translate-x-1/2 z-[10004] pointer-events-none"
+          className="fixed top-[calc(env(safe-area-inset-top,0px)+72px)] left-1/2 -translate-x-1/2 z-[10006] pointer-events-none"
           style={{ willChange: "transform, opacity" }}
         >
           <div className="flex items-center gap-2 px-3.5 py-2 rounded-full bg-primary text-primary-foreground shadow-[0_10px_30px_-6px_rgba(0,0,0,0.45)]">
@@ -444,22 +480,50 @@ export function DeclarationButton({
   holdMs?: number;
 }) {
   const reduced = useReducedMotion();
-  const [progress, setProgress] = useState(0);
+  // Smoothness model:
+  //  - The fill arc's width is animated by writing directly to the
+  //    DOM node's `transform: scaleX()` from inside `requestAnimation
+  //    Frame`. NO React re-render per tick — the previous version
+  //    setState'd `progress` 60×/s which forced a full button reflow
+  //    each frame and fought the CSS `transition: width` simultaneously.
+  //  - `transform: scaleX` lives on the GPU compositor (vs `width`
+  //    which forces layout). transform-origin: left so the bar
+  //    grows from the left edge.
+  //  - One React state flag for "committed" so we can swap label
+  //    text once at the end. That's the only render the button does
+  //    during a hold.
+  const fillRef = useRef<HTMLDivElement | null>(null);
+  const [committed, setCommitted] = useState(false);
   const startedAt = useRef<number | null>(null);
   const rafId = useRef<number | null>(null);
   const committedRef = useRef(false);
+  const haptic33Fired = useRef(false);
+  const haptic66Fired = useRef(false);
+
+  const writeFill = (p: number) => {
+    const el = fillRef.current;
+    if (!el) return;
+    el.style.transform = `scaleX(${p})`;
+  };
 
   const tick = (ts: number) => {
-    if (!startedAt.current) startedAt.current = ts;
+    if (startedAt.current == null) startedAt.current = ts;
     const elapsed = ts - startedAt.current;
     const p = Math.min(1, elapsed / holdMs);
-    setProgress(p);
+    writeFill(p);
     // Haptic ramp at 33% / 66% — feels like the lock is engaging.
-    if (p >= 0.33 && p < 0.36) triggerHapticSelection();
-    if (p >= 0.66 && p < 0.69) triggerHaptic(ImpactStyle.Light);
+    if (!haptic33Fired.current && p >= 0.33) {
+      haptic33Fired.current = true;
+      triggerHapticSelection();
+    }
+    if (!haptic66Fired.current && p >= 0.66) {
+      haptic66Fired.current = true;
+      triggerHaptic(ImpactStyle.Light);
+    }
     if (p >= 1 && !committedRef.current) {
       committedRef.current = true;
       triggerHaptic(ImpactStyle.Heavy);
+      setCommitted(true);
       onCommit();
       return;
     }
@@ -468,7 +532,19 @@ export function DeclarationButton({
 
   const begin = () => {
     if (committedRef.current) return;
+    if (reduced) {
+      // Skip the hold animation entirely for accessibility users —
+      // commit immediately on press.
+      committedRef.current = true;
+      writeFill(1);
+      triggerHaptic(ImpactStyle.Heavy);
+      setCommitted(true);
+      onCommit();
+      return;
+    }
     startedAt.current = null;
+    haptic33Fired.current = false;
+    haptic66Fired.current = false;
     rafId.current = requestAnimationFrame(tick);
   };
   const end = () => {
@@ -476,7 +552,22 @@ export function DeclarationButton({
     rafId.current = null;
     if (!committedRef.current) {
       startedAt.current = null;
-      setProgress(0);
+      haptic33Fired.current = false;
+      haptic66Fired.current = false;
+      // Smooth retreat — let the browser ease the cancelled fill back
+      // to 0 with a short CSS transition, then strip the transition so
+      // the next press starts crisp via rAF again.
+      const el = fillRef.current;
+      if (el) {
+        el.style.transition = "transform 220ms cubic-bezier(0.32, 0.72, 0, 1)";
+        el.style.transform = "scaleX(0)";
+        const handle = window.setTimeout(() => {
+          if (fillRef.current) fillRef.current.style.transition = "none";
+        }, 240);
+        // No state cleanup needed — committedRef is the source of truth
+        // and the timeout is fire-and-forget.
+        void handle;
+      }
     }
   };
 
@@ -496,19 +587,24 @@ export function DeclarationButton({
       className="relative w-full h-14 rounded-2xl bg-primary text-primary-foreground text-[15px] font-bold tracking-wide active:scale-[0.99] transition-transform overflow-hidden"
       style={{ touchAction: "none" }}
     >
-      {/* Fill arc — width-driven so it stays GPU-cheap. */}
+      {/* Fill arc — `transform: scaleX` driven by rAF so the animation
+          lives on the compositor and never blocks the main thread. */}
       <div
+        ref={fillRef}
         aria-hidden
-        className="absolute inset-y-0 left-0 bg-amber-300"
+        className="absolute inset-y-0 left-0 right-0 bg-amber-300"
         style={{
-          width: `${progress * 100}%`,
-          transition: reduced ? "none" : "width 80ms linear",
+          transform: "scaleX(0)",
+          transformOrigin: "left center",
+          transition: "none",
+          willChange: "transform",
           mixBlendMode: "overlay",
+          backfaceVisibility: "hidden",
         }}
       />
       <span className="relative flex items-center justify-center gap-2">
         <Lock className="h-4 w-4" strokeWidth={2.4} />
-        {progress >= 1 ? "Locked in" : label}
+        {committed ? "Locked in" : label}
       </span>
     </button>
   );

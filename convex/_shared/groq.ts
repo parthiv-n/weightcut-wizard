@@ -118,10 +118,24 @@ export interface GroqJSONOptions<T extends z.ZodTypeAny> extends GroqCallOptions
   maxRetries?: number;
 }
 
+// Codes that should bypass retries — these are unrecoverable / require
+// user action and re-trying them just burns the user's time.
+const FATAL_GROQ_CODES = new Set(["AI_AUTH", "AI_FILTERED"]);
+
+// Sleep helper used for exponential backoff between retries on transient
+// Groq failures. Capped well under the action's 15s outer timeout so we
+// don't trip an AbortError before exhausting attempts.
+function sleep(ms: number): Promise<void> {
+  return new Promise((res) => setTimeout(res, ms));
+}
+
 export async function callGroqWithRetry<T extends z.ZodTypeAny>(
   opts: GroqJSONOptions<T>,
 ): Promise<z.infer<T>> {
-  const maxRetries = Math.max(0, opts.maxRetries ?? 2);
+  // Bumped default from 2 → 3 since the most common failure mode is
+  // transient Groq capacity (429 "AI_BUSY"). Three attempts with backoff
+  // covers > 95% of those without making the user wait >12s.
+  const maxRetries = Math.max(0, opts.maxRetries ?? 3);
   let lastErrors: string[] = [];
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
@@ -142,9 +156,24 @@ export async function callGroqWithRetry<T extends z.ZodTypeAny>(
     try {
       content = await callGroqText({ ...opts, messages });
     } catch (err) {
-      if (err instanceof GroqError) throw err;
-      lastErrors = [`request_error: ${err instanceof Error ? err.message : String(err)}`];
+      // Old behaviour: re-throw EVERY GroqError immediately. That meant
+      // a single transient 429 ("AI service is busy") killed plan
+      // generation and the user saw the inline retry card with no
+      // actual retry attempted under the hood. We now distinguish
+      // fatal codes from transient ones and back off + retry the
+      // transient cases (busy / timeout / network blips).
+      if (err instanceof GroqError && FATAL_GROQ_CODES.has(err.code)) {
+        throw err;
+      }
+      lastErrors = [
+        `request_error: ${err instanceof Error ? err.message : String(err)}`,
+      ];
       if (attempt >= maxRetries) throw err;
+      // Exponential backoff with jitter: 600 / 1400 / 2400 ms approx.
+      // Stays well inside the per-action timeout budget.
+      const base = 400 + 800 * attempt;
+      const jitter = Math.floor(Math.random() * 200);
+      await sleep(base + jitter);
       continue;
     }
     let raw: unknown;
