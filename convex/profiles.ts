@@ -433,21 +433,40 @@ export const spendGem = mutation({
  *  stale and we don't want to downgrade a user with a fresher renewal on
  *  file. The tier from the client is still honoured (it never flips you
  *  to "free"; the webhook does that). */
-export const activatePremium = mutation({
+/**
+ * INTERNAL — only callable from `convex/actions/activatePremium.ts` AFTER
+ * the action has verified the user's entitlement against the RevenueCat
+ * REST API, or from the RC webhook handler. There is no client-trusted
+ * tier/expiry surface anymore.
+ *
+ * The previous PUBLIC `activatePremium` mutation accepted client-supplied
+ * `tier` + `expiresAt` and was a forgeable write path. It has been
+ * removed. Any client code path that needs to flip premium must go
+ * through `api.actions.activatePremium.run` (no args; verifies with RC
+ * server-side every time).
+ */
+export const activatePremiumVerified = internalMutation({
   args: {
-    tier: v.string(),
-    expiresAt: v.optional(v.union(v.string(), v.null())),
+    userId: v.id("users"),
+    tier: v.union(
+      v.literal("premium_lifetime"),
+      v.literal("premium_annual"),
+      v.literal("premium_monthly"),
+    ),
+    /** Epoch ms expiry, or `undefined` for lifetime. */
+    expiresAtMs: v.optional(v.number()),
   },
-  handler: async (ctx, { tier, expiresAt }) => {
-    const userId = await requireUserId(ctx);
+  handler: async (ctx, { userId, tier, expiresAtMs }) => {
     const existing = await findByUser(ctx, userId);
     if (!existing) throw new Error("Profile not found");
 
-    // Lifetime guard — a stale client snapshot must never downgrade an
-    // already-lifetime user back to monthly/annual. The webhook is the
-    // only path allowed to change a lifetime entitlement.
+    // Lifetime guard — RC says they paid for lifetime; a later RC reply
+    // changing them to monthly/annual must not silently downgrade.
     if (existing.subscriptionTier === "premium_lifetime" && tier !== "premium_lifetime") {
-      console.info("[activatePremium] refusing to downgrade lifetime user", { userId, incomingTier: tier });
+      console.info("[activatePremiumVerified] refusing to downgrade lifetime user", {
+        userId,
+        incomingTier: tier,
+      });
       await ctx.db.patch(existing._id, {
         subscriptionUpdatedAt: Date.now(),
         updatedAt: Date.now(),
@@ -457,44 +476,33 @@ export const activatePremium = mutation({
         expiresAt: existing.subscriptionExpiresAt
           ? new Date(existing.subscriptionExpiresAt).toISOString()
           : null,
-        source: "client-activation" as const,
         skipped: "lifetime-preserved" as const,
       };
     }
 
-    const parsed =
-      expiresAt && expiresAt.length > 0 ? Date.parse(expiresAt) : NaN;
-    const incomingExpiresAtMs = Number.isFinite(parsed) ? parsed : undefined;
-
-    // Out-of-order guard — preserve a later server-side expiry over a
-    // stale client-supplied one, AND also preserve the existing tier in
-    // that case (a stale snapshot shouldn't be allowed to silently change
-    // tier either; e.g. premium_annual → premium_monthly).
-    let effectiveTier = tier;
-    let effectiveExpiresAtMs = incomingExpiresAtMs;
+    // Out-of-order guard — if we already hold a LATER expiry on file for a
+    // paid tier, RC's response is a stale snapshot and we keep the server
+    // value rather than shortening the user's premium window.
+    let effectiveTier: string = tier;
+    let effectiveExpiresAtMs = expiresAtMs;
     if (
       existing.subscriptionExpiresAt &&
-      incomingExpiresAtMs &&
-      incomingExpiresAtMs < existing.subscriptionExpiresAt &&
+      expiresAtMs &&
+      expiresAtMs < existing.subscriptionExpiresAt &&
       existing.subscriptionTier &&
       existing.subscriptionTier !== "free"
     ) {
-      console.info(
-        "[activatePremium] ignoring stale client snapshot",
-        {
-          userId,
-          incomingTier: tier,
-          incomingExpiresAtMs,
-          existingTier: existing.subscriptionTier,
-          existingExpiresAtMs: existing.subscriptionExpiresAt,
-        },
-      );
+      console.info("[activatePremiumVerified] ignoring stale RC snapshot", {
+        userId,
+        incomingTier: tier,
+        incomingExpiresAtMs: expiresAtMs,
+        existingTier: existing.subscriptionTier,
+        existingExpiresAtMs: existing.subscriptionExpiresAt,
+      });
       effectiveTier = existing.subscriptionTier;
       effectiveExpiresAtMs = existing.subscriptionExpiresAt;
     }
 
-    // Only overwrite the stored expiry when we actually have a value —
-    // never clobber an existing expiry with `undefined`.
     const patch: Partial<Doc<"profiles">> = {
       subscriptionTier: effectiveTier,
       subscriptionUpdatedAt: Date.now(),
@@ -510,7 +518,6 @@ export const activatePremium = mutation({
         effectiveExpiresAtMs !== undefined
           ? new Date(effectiveExpiresAtMs).toISOString()
           : null,
-      source: "client-activation" as const,
     };
   },
 });

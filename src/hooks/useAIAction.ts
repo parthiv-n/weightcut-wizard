@@ -41,7 +41,9 @@ export function useAIAction<TRef extends AnyActionRef>(actionRef: TRef): ReturnT
         rawAction as (a: unknown) => Promise<unknown>,
         args,
         {
-          activatePremium: activatePremium as (a: { tier: string; expiresAt?: string | null }) => Promise<unknown>,
+          // `activatePremium` is the server-verified RC REST action — it
+          // takes no args and reads the caller's userId from Convex auth.
+          activatePremium: activatePremium as unknown as () => Promise<unknown>,
         },
         { onRecovered: async () => { await refreshProfile(); } },
       )) as unknown as ReturnType<typeof useAction<TRef>>,

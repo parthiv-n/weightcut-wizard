@@ -1,29 +1,64 @@
 "use node";
 
 /**
- * Activate-premium — thin client-callable wrapper around the privileged
- * profile mutation. Mirrors the Supabase edge function's shape so the
- * RevenueCat sync path on the client can swap to `useAction` with no other
- * changes.
+ * Activate-premium — strict, server-verified premium activation.
  *
- * The actual write is the `profiles.activatePremium` mutation (privileged,
- * not internal — authenticated callers may flip their own tier after a
- * successful Apple IAP). Webhook-driven updates use a separate internal
- * mutation that does not require auth context.
+ * The ONLY path that flips a user's `profile.subscriptionTier` from "free"
+ * to a paid tier (other than the RevenueCat webhook, which is server-to-
+ * server and equally trusted). The flow:
+ *
+ *   1. Read the caller's `userId` from Convex auth. This is also the RC
+ *      `app_user_id` we configured at sign-in.
+ *   2. Call `verifyEntitlement(userId)` which hits the RC REST API with a
+ *      server-held `REVENUECAT_API_KEY`. RC validated the underlying
+ *      StoreKit receipt against Apple, so a positive answer means Apple
+ *      confirmed payment.
+ *   3. If the user is NOT entitled → throw. The client never flips premium
+ *      based on a client-supplied tier or expiry. There is no fallback,
+ *      no grace period, no client trust.
+ *   4. If verified → call the internal `profiles.activatePremiumVerified`
+ *      mutation with the RC-derived tier and expiry. The mutation has
+ *      lifetime / out-of-order guards but no client-trust path of its own.
+ *
+ * This action takes NO arguments. The previous design accepted `tier` and
+ * `expiresAt` from the client — that surface was forgeable and is gone.
+ *
+ * Errors surface as user-facing toasts in the paywall handler:
+ *   - `CONFIG_MISSING_REVENUECAT_API_KEY` — deploy misconfig, fail loud.
+ *   - `RC_VERIFY_NETWORK_FAILED` / `RC_VERIFY_HTTP_*` — transient; user retries.
+ *   - `RC_NOT_ENTITLED` — user genuinely hasn't paid.
  */
-import { v } from "convex/values";
 import { action } from "../_generated/server";
-import { api } from "../_generated/api";
+import { internal } from "../_generated/api";
+import type { Id } from "../_generated/dataModel";
+import { verifyEntitlement } from "../lib/revenuecat";
 
 export const run = action({
-  args: {
-    tier: v.string(),
-    expiresAt: v.optional(v.union(v.string(), v.null())),
-  },
-  handler: async (ctx, { tier, expiresAt }): Promise<unknown> => {
-    return await ctx.runMutation(api.profiles.activatePremium, {
-      tier,
-      expiresAt: expiresAt ?? undefined,
+  args: {},
+  handler: async (ctx): Promise<{
+    tier: string;
+    expiresAt: string | null;
+    source: "rc-verified";
+  }> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    const userId = identity.subject as Id<"users">;
+
+    const verified = await verifyEntitlement(userId as unknown as string);
+    if (!verified) {
+      throw new Error("RC_NOT_ENTITLED");
+    }
+
+    await ctx.runMutation(internal.profiles.activatePremiumVerified, {
+      userId,
+      tier: verified.tier,
+      expiresAtMs: verified.expiresAtMs,
     });
+
+    return {
+      tier: verified.tier,
+      expiresAt: verified.expiresAtMs ? new Date(verified.expiresAtMs).toISOString() : null,
+      source: "rc-verified",
+    };
   },
 });

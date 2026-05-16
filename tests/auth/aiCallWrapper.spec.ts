@@ -90,10 +90,11 @@ describe("callWithGemRecovery", () => {
     expect(out).toEqual({ ok: 42 });
     expect(fn).toHaveBeenCalledTimes(2);
     expect(activatePremium).toHaveBeenCalledTimes(1);
-    expect(activatePremium).toHaveBeenCalledWith({
-      tier: PREMIUM_SUB.tier,
-      expiresAt: PREMIUM_SUB.expiresAt,
-    });
+    // The verified-purchase action takes no client-trusted args — it
+    // derives userId from auth and verifies entitlement against the
+    // RevenueCat REST API server-side. Anything the test mock used to
+    // pass (tier/expiresAt) is now ignored by design.
+    expect(activatePremium).toHaveBeenCalledWith();
     expect(onRecovered).toHaveBeenCalledTimes(1);
   });
 

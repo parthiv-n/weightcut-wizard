@@ -44,10 +44,8 @@ export const triggerHapticSelection = async () => {
 
 export const celebrateSuccess = () => {
     triggerHapticSuccess();
-    import('./sounds').then(m => m.playSuccessSound()).catch(() => {});
 };
 
 export const confirmDelete = () => {
     triggerHapticWarning();
-    import('./sounds').then(m => m.playDeleteSound()).catch(() => {});
 };

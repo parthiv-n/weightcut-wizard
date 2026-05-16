@@ -188,77 +188,55 @@ export async function getCustomerInfo(): Promise<any | null> {
   }
 }
 
+/**
+ * Strict client-side entitlement check. Returns true ONLY when:
+ *   - `entitlements.active[ENTITLEMENT_ID]` exists (exact match)
+ *   - `purchaseDate` is set (the user actually paid at some point)
+ *   - either `expirationDate` is null (lifetime) OR strictly > now
+ *
+ * This is intentionally lenient compared to a server-side RC REST check —
+ * it's local-only and exists purely as a defence-in-depth gate before the
+ * paywall handler calls the `activatePremium` action. The action ALSO
+ * hits the RC REST API and is the actual source of truth.
+ *
+ * Previous versions had two fallback branches (any-active-entitlement +
+ * fuzzy `activeSubscriptions` match) that flipped premium true on sandbox
+ * residue and sibling-RC-project entitlements. Both removed deliberately.
+ */
 export function isPremiumFromCustomerInfo(customerInfo: any): boolean {
   if (!customerInfo) return false;
 
-  // Primary check: exact entitlement ID
   const entitlement = customerInfo?.entitlements?.active?.[ENTITLEMENT_ID];
-  if (entitlement) {
-    if (entitlement.isActive === false) return false;
-    if (entitlement.expirationDate && new Date(entitlement.expirationDate) <= new Date()) return false;
-    return true;
+  if (!entitlement) return false;
+  if (entitlement.isActive === false) return false;
+  // `purchaseDate` must be present — guarantees there was a real StoreKit
+  // transaction (RC populates this from the receipt).
+  if (!entitlement.purchaseDate) return false;
+  if (entitlement.expirationDate) {
+    if (new Date(entitlement.expirationDate) <= new Date()) return false;
   }
-
-  // Fallback: any active entitlement (handles entitlement ID mismatches in sandbox)
-  const activeEntitlements = customerInfo?.entitlements?.active;
-  if (activeEntitlements && Object.keys(activeEntitlements).length > 0) {
-    const hasValid = Object.values(activeEntitlements).some((ent: any) => {
-      if (ent.isActive === false) return false;
-      if (ent.expirationDate && new Date(ent.expirationDate) <= new Date()) return false;
-      return true;
-    });
-    if (hasValid) {
-      logger.info("isPremium: entitlement ID mismatch, but has valid active entitlements", {
-        expected: ENTITLEMENT_ID,
-        found: Object.keys(activeEntitlements),
-      });
-      return true;
-    }
-  }
-
-  // Fallback: activeSubscriptions — only trust if it matches known product IDs
-  const subs = customerInfo?.activeSubscriptions;
-  if (Array.isArray(subs) && subs.length > 0) {
-    const knownIds = Object.values(PRODUCT_IDS);
-    const hasKnown = subs.some((sub: string) =>
-      knownIds.some(id => sub.includes(id) || id.includes(sub))
-    );
-    if (hasKnown) {
-      logger.info("isPremium: no entitlement found, but known activeSubscription present", { subs });
-      return true;
-    }
-    logger.warn("isPremium: activeSubscriptions present but none match known product IDs", { subs });
-  }
-
-  return false;
+  return true;
 }
 
-/** Extract subscription tier and expiry from RevenueCat CustomerInfo */
+/**
+ * Strict client-side read of the configured entitlement (display only).
+ * Returns null unless the EXACT `ENTITLEMENT_ID` is in `entitlements.active`
+ * — matching the strictness of `isPremiumFromCustomerInfo`. Used for the
+ * Settings "Renews on..." copy. The Convex profile (written by the
+ * server-verified `activatePremium` action and the webhook) is the
+ * authoritative tier + expiry.
+ */
 export function getSubscriptionFromCustomerInfo(customerInfo: any): { tier: string; expiresAt: string | null } | null {
-  // Try exact entitlement first
-  let entitlement = customerInfo?.entitlements?.active?.[ENTITLEMENT_ID];
-  // Fallback: grab first active entitlement (sandbox/mismatch)
-  if (!entitlement && customerInfo?.entitlements?.active) {
-    const keys = Object.keys(customerInfo.entitlements.active);
-    if (keys.length > 0) entitlement = customerInfo.entitlements.active[keys[0]];
-  }
-  // Fallback: derive from activeSubscriptions
-  if (!entitlement) {
-    const subs = customerInfo?.activeSubscriptions;
-    if (Array.isArray(subs) && subs.length > 0) {
-      const productId = subs[0] || "";
-      const tier = productId.includes("yearly") || productId.includes("annual")
-        ? "premium_annual" : "premium_monthly";
-      return { tier, expiresAt: null };
-    }
-    return null;
-  }
-  const productId = entitlement.productIdentifier || "";
-  const tier = productId.includes("yearly") || productId.includes("annual")
-    ? "premium_annual"
-    : "premium_monthly";
-  const expiresAt = entitlement.expirationDate || null;
-  return { tier, expiresAt };
+  const entitlement = customerInfo?.entitlements?.active?.[ENTITLEMENT_ID];
+  if (!entitlement) return null;
+  const productId: string = entitlement.productIdentifier || "";
+  const lower = productId.toLowerCase();
+  const tier = lower.includes("lifetime")
+    ? "premium_lifetime"
+    : lower.includes("yearly") || lower.includes("annual")
+      ? "premium_annual"
+      : "premium_monthly";
+  return { tier, expiresAt: entitlement.expirationDate || null };
 }
 
 // ─── RevenueCat Native Paywall ───

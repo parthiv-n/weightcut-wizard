@@ -71,6 +71,7 @@ import type * as gyms from "../gyms.js";
 import type * as http from "../http.js";
 import type * as hydration_logs from "../hydration_logs.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_revenuecat from "../lib/revenuecat.js";
 import type * as meal_plans from "../meal_plans.js";
 import type * as meals from "../meals.js";
 import type * as profiles from "../profiles.js";
@@ -153,6 +154,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   hydration_logs: typeof hydration_logs;
   "lib/auth": typeof lib_auth;
+  "lib/revenuecat": typeof lib_revenuecat;
   meal_plans: typeof meal_plans;
   meals: typeof meals;
   profiles: typeof profiles;

@@ -37,7 +37,6 @@ import { Capacitor } from "@capacitor/core";
 import { logger } from "@/lib/logger";
 import {
   getCustomerInfo,
-  getSubscriptionFromCustomerInfo,
   isPremiumFromCustomerInfo,
 } from "@/lib/purchases";
 
@@ -50,8 +49,12 @@ function isInsufficientGemsError(err: unknown): boolean {
 }
 
 export interface CallWithGemRecoveryDeps {
-  /** The `useAction(api.actions.activatePremium.run)` reference from the caller. */
-  activatePremium: (args: { tier: string; expiresAt?: string | null }) => Promise<unknown>;
+  /** The `useAction(api.actions.activatePremium.run)` reference. The action
+   *  now takes no client-trusted args — it derives `userId` from the
+   *  Convex auth context and verifies entitlement against RC's REST API
+   *  server-side. Calling it cannot grant premium unless RC confirms a
+   *  real paid entitlement. */
+  activatePremium: () => Promise<unknown>;
 }
 
 export interface CallWithGemRecoveryOptions {
@@ -99,12 +102,11 @@ export async function callWithGemRecovery<Args, R>(
       throw err;
     }
 
-    const sub = getSubscriptionFromCustomerInfo(info);
+    // `activatePremium` is the server-verified RC REST action — it ignores
+    // any client claims and looks up entitlement from RC by the user's
+    // Convex auth identity. We don't pass `tier`/`expiresAt` anymore.
     try {
-      await deps.activatePremium({
-        tier: sub?.tier ?? "premium_monthly",
-        expiresAt: sub?.expiresAt ?? null,
-      });
+      await deps.activatePremium();
       logger.info("AI call self-heal: activatePremium succeeded");
     } catch (activateErr) {
       logger.warn("AI call self-heal: activatePremium threw — retrying anyway", {
