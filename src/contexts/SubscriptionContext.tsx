@@ -262,9 +262,13 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     isNativePaywallActiveRef.current = isPaywallOpen && Capacitor.isNativePlatform();
   }, [isPaywallOpen]);
 
-  // Initialize RevenueCat when userId becomes available
+  // Initialize RevenueCat when userId becomes available.
+  // Guard against the literal "pending" sentinel `UserContext` emits while the
+  // Convex profile query is still hydrating — configuring RC with that string
+  // would attribute the next purchase to a fake user-id until the effect
+  // re-runs with the real Convex id.
   useEffect(() => {
-    if (!userId || !Capacitor.isNativePlatform()) return;
+    if (!userId || userId === "pending" || !Capacitor.isNativePlatform()) return;
 
     let removeListener: (() => void) | null = null;
 

@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { TrendingDown, Shield, Zap, Download, Droplets, Flame, Utensils, Wheat } from "lucide-react";
+import { TrendingDown, Shield, Zap, Download, Droplets, Flame, Utensils, Wheat, X } from "lucide-react";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { CutPlanCard } from "@/components/share/cards/CutPlanCard";
 
@@ -73,9 +73,21 @@ export function CutPlanDialog({ open, onOpenChange }: CutPlanDialogProps) {
             <div className="w-10 h-1 rounded-full bg-muted-foreground/25" aria-hidden />
           </div>
 
-          <SheetHeader className="px-5 pb-3 pt-1 text-left shrink-0">
+          <SheetHeader className="px-5 pb-3 pt-1 text-left shrink-0 relative pr-12">
             <SheetTitle className="text-lg font-bold">Your Weight Cut Plan</SheetTitle>
             <p className="text-xs text-muted-foreground">Personalised · Science-backed · Adaptive</p>
+            {/* Explicit close — Radix's built-in X is suppressed via the
+                SheetContent class so this button is the only exit. Without
+                it the sheet has no visible dismiss on mobile (the drag-down
+                handle isn't an obvious affordance to every user). */}
+            <button
+              type="button"
+              onClick={() => onOpenChange(false)}
+              aria-label="Close cut plan"
+              className="absolute right-3 top-1 h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground/80 bg-muted/40 dark:bg-white/[0.06] border border-border/30 active:text-foreground active:bg-muted/60 transition-colors"
+            >
+              <X className="h-4 w-4" strokeWidth={2.4} />
+            </button>
           </SheetHeader>
 
           <div

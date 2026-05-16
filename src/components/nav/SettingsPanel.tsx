@@ -9,23 +9,45 @@ import { useState } from "react";
 import { getSettings, saveSettings, scheduleReminder, cancelReminder, type ReminderSettings } from "@/lib/weightReminder";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useGems } from "@/hooks/useGems";
-import { restorePurchases, isPremiumFromCustomerInfo, presentCustomerCenter } from "@/lib/purchases";
+import { restorePurchases, isPremiumFromCustomerInfo, getSubscriptionFromCustomerInfo, presentCustomerCenter } from "@/lib/purchases";
 import { PremiumBadge } from "@/components/subscription/PremiumBadge";
 import { useProfile } from "@/contexts/UserContext";
+import { useAction } from "convex/react";
+import { api } from "@/../convex/_generated/api";
 import { useToast as useToastSub } from "@/hooks/use-toast";
 
 function SubscriptionSection() {
   const { isPremium, tier, expiresAt, openPaywall } = useSubscription();
   const { refreshProfile } = useProfile();
+  const activatePremium = useAction(api.actions.activatePremium.run);
   const { toast } = useToastSub();
   const [restoringPurchases, setRestoringPurchases] = useState(false);
 
   const handleRestore = async () => {
+    if (!Capacitor.isNativePlatform()) {
+      // RC isn't loaded on web — sending the user to "No active subscription
+      // found" is misleading. Tell them where to actually restore.
+      toast({ title: "Restore is iOS-only", description: "Open the app on your iPhone to restore your subscription." });
+      return;
+    }
     setRestoringPurchases(true);
     try {
       const info = await restorePurchases();
       if (info && isPremiumFromCustomerInfo(info)) {
-        await new Promise((r) => setTimeout(r, 2000));
+        // Push the restored entitlement straight into Convex via the action
+        // so the user doesn't have to wait for the RC webhook to re-fire.
+        // The action is idempotent and out-of-order-guarded server-side, so
+        // a duplicate webhook arriving moments later is harmless.
+        const sub = getSubscriptionFromCustomerInfo(info);
+        if (sub) {
+          try {
+            await activatePremium({ tier: sub.tier, expiresAt: sub.expiresAt });
+          } catch (err) {
+            // Non-fatal — the webhook will reconcile within seconds. Still
+            // surface so we don't pretend everything's fine.
+            console.warn("[SettingsPanel] activatePremium after restore failed", err);
+          }
+        }
         await refreshProfile();
         toast({ title: "Purchases restored!", description: "Premium access has been restored." });
       } else {

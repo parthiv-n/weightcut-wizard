@@ -17,6 +17,7 @@ export default defineConfig({
     include: [
       "tests/**/*.{spec,test}.{ts,tsx}",
       "src/**/__tests__/**/*.{spec,test}.{ts,tsx}",
+      "src/**/*.{spec,test}.{ts,tsx}",
     ],
     // Security RLS suite hits a live Supabase test project; skipped cleanly
     // when env vars are absent, so default testTimeout stays conservative.

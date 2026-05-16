@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
-import { AlertTriangle, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { FightFormHowItWorksTour } from "./FightFormHowItWorksTour";
 import { ShareButton } from "@/components/share/ShareButton";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
@@ -22,8 +22,6 @@ type Props = {
   topDriver: string | null;
   topLimiter: string | null;
   appliedCeiling: { ruleId: string; cap: number } | null;
-  coachNarrative?: string | null;
-  actionItems?: string[];
 };
 
 const SUBSCORE_LABEL: Record<string, string> = {
@@ -41,19 +39,54 @@ const LABEL_DISPLAY: Record<string, string> = {
   at_risk: "At Risk",
 };
 
-const CEILING_COPY: Record<string, string> = {
-  weight_cut_dangerous: "Weight loss rate is over 2%/week. Score is capped until the rate slows.",
-  sleep_debt: "Sleep debt is over 10 hours. Score is capped until sleep recovers.",
-  training_spike: "Training spike (ACWR over 1.8). Score is capped until load normalizes.",
-};
+/**
+ * One plain sentence per metric explaining what the current score means.
+ * Tiers: 80+ strong, 60-79 okay, 40-59 light, <40 dragging it down.
+ * No symbols, no jargon, no em-dashes.
+ */
+function summarizeSubScore(key: string, value: number): string {
+  const tier = value >= 80 ? "high" : value >= 60 ? "mid" : value >= 40 ? "low" : "vlow";
+  switch (key) {
+    case "trainingLoad":
+      if (tier === "high") return "Your training is dialed in for this phase of camp.";
+      if (tier === "mid") return "Training is on track but could use a bit more consistency.";
+      if (tier === "low") return "Training is lighter than expected for this phase.";
+      return "Training has dropped off and is dragging your score down.";
+    case "sleep":
+      if (tier === "high") return "You are well rested and recovering properly.";
+      if (tier === "mid") return "Sleep is decent but there is still room to improve.";
+      if (tier === "low") return "Sleep is short and recovery is taking a hit.";
+      return "Sleep debt is pulling your score down. Earlier nights this week.";
+    case "weightCut":
+      if (tier === "high") return "Weight is moving at a safe, fight ready pace.";
+      if (tier === "mid") return "Weight pace is okay but watch the trend this week.";
+      if (tier === "low") return "Weight is moving too slow or too fast for this stage.";
+      return "Weight pace is off plan and needs adjusting.";
+    case "wellness":
+      if (tier === "high") return "You feel strong, fresh, and ready to train.";
+      if (tier === "mid") return "Wellness is steady. Keep logging your daily check in.";
+      if (tier === "low") return "You feel beaten up. A real recovery day will help.";
+      return "Wellness is low. Stress, soreness, or mood is bringing it down.";
+    case "nutritionAdherence":
+      if (tier === "high") return "Meals are matching your targets consistently.";
+      if (tier === "mid") return "Nutrition is on track most days. Tighten up a few.";
+      if (tier === "low") return "Meals are drifting from your targets.";
+      return "Nutrition is well off target. Hitting calories and macros will lift this fast.";
+    default:
+      if (tier === "high") return "Looking strong.";
+      if (tier === "mid") return "Holding steady.";
+      if (tier === "low") return "Needs some attention.";
+      return "Pulling your score down.";
+  }
+}
 
 function campPaceCopy(weeksAhead: number): string {
   if (weeksAhead === 0) return "On schedule";
   const n = Math.abs(weeksAhead);
   const unit = n === 1 ? "week" : "weeks";
   return weeksAhead > 0
-    ? `${weeksAhead.toFixed(0)} ${unit} ahead of schedule`
-    : `${weeksAhead.toFixed(0)} ${unit} behind schedule`;
+    ? `${n.toFixed(0)} ${unit} ahead of schedule`
+    : `${n.toFixed(0)} ${unit} behind schedule`;
 }
 
 function phaseCopy(phase: string | null): string | null {
@@ -70,12 +103,13 @@ export function FightFormScoreSheet(p: Props) {
   return (
     <Sheet open={p.open} onOpenChange={(v) => !v && p.onClose()}>
       <SheetContent side="bottom" className="max-h-[90vh] overflow-y-auto">
-        <SheetHeader className="relative">
-          <SheetTitle className="text-3xl text-center">Fight Form Score</SheetTitle>
-          {/* Absolute-positioned so the title stays optically centered; the
-              built-in close X already lives in the top-right of the Sheet so
-              we mirror its position with the share button on the top-left. */}
-          <div className="absolute left-0 top-0">
+        {/* Title is absolutely centered on the sheet itself; share button
+            floats over the left edge and the Sheet's built-in close X floats
+            over the right. Centering is independent of either button's width
+            so the title sits dead-center in the dialog. */}
+        <SheetHeader className="relative flex items-center justify-center min-h-9 space-y-0">
+          <SheetTitle className="text-2xl text-center">Fight Form Score</SheetTitle>
+          <div className="absolute left-0 top-1/2 -translate-y-1/2">
             <ShareButton onClick={() => { setShareVariant("dark"); setShareOpen(true); }} />
           </div>
         </SheetHeader>
@@ -100,47 +134,34 @@ export function FightFormScoreSheet(p: Props) {
             <div className="section-header">What's driving your score</div>
             {Object.entries(p.subScores)
               .sort(([, a], [, b]) => b.value * b.weight - a.value * a.weight)
-              .map(([key, sub]) => (
-                <div key={key}>
-                  <div className="flex justify-between text-sm">
-                    <span>
-                      {SUBSCORE_LABEL[key]}
-                      {key === p.topLimiter ? " · limiter" : ""}
-                      {key === p.topDriver ? " · driver" : ""}
-                    </span>
-                    <span className="display-number text-sm">{sub.value}</span>
+              .map(([key, sub]) => {
+                const isLimiter = key === p.topLimiter;
+                const isDriver = key === p.topDriver;
+                return (
+                  <div key={key}>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="inline-flex items-center gap-1.5">
+                        <span>{SUBSCORE_LABEL[key] ?? key}</span>
+                        {isDriver && (
+                          <span className="text-[10px] uppercase tracking-wide font-semibold text-emerald-400">
+                            Driver
+                          </span>
+                        )}
+                        {isLimiter && (
+                          <span className="text-[10px] uppercase tracking-wide font-semibold text-amber-400">
+                            Limiter
+                          </span>
+                        )}
+                      </span>
+                      <span className="display-number text-sm">{sub.value}</span>
+                    </div>
+                    <Progress value={sub.value} className="h-1.5 mt-1" />
+                    <p className="text-xs text-muted-foreground mt-1 leading-snug">
+                      {summarizeSubScore(key, sub.value)}
+                    </p>
                   </div>
-                  <Progress value={sub.value} className="h-1.5 mt-1" />
-                  <div className="text-xs font-semibold text-foreground/90 mt-1 truncate">
-                    {sub.reason.replace(/\s*—\s*/g, ", ")}
-                  </div>
-                </div>
-              ))}
-          </div>
-        )}
-
-        {p.appliedCeiling && (
-          <div className="mt-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 flex gap-2">
-            <AlertTriangle className="size-4 text-amber-400 shrink-0" />
-            <div className="text-sm">
-              {CEILING_COPY[p.appliedCeiling.ruleId] ?? "Score capped"} (cap: {p.appliedCeiling.cap})
-            </div>
-          </div>
-        )}
-
-        {p.coachNarrative && (
-          <div className="mt-5">
-            <div className="section-header mb-2">Coach's Take</div>
-            <p className="text-sm leading-relaxed">{p.coachNarrative}</p>
-          </div>
-        )}
-
-        {p.actionItems && p.actionItems.length > 0 && (
-          <div className="mt-5">
-            <div className="section-header mb-2">Action Items</div>
-            <ol className="space-y-1 list-decimal list-inside text-sm">
-              {p.actionItems.map((it, i) => <li key={i}>{it}</li>)}
-            </ol>
+                );
+              })}
           </div>
         )}
 
@@ -154,7 +175,7 @@ export function FightFormScoreSheet(p: Props) {
         showSwipeHint
         title="Share Fight Form Score"
         shareTitle="Fight Form Score"
-        shareText={`My Fight Form Score is ${p.score} — ${LABEL_DISPLAY[p.label] ?? p.label}`}
+        shareText={`My Fight Form Score is ${p.score}: ${LABEL_DISPLAY[p.label] ?? p.label}`}
       >
         {({ cardRef, aspect, transparent }) => {
           let touchStartX = 0;

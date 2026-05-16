@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Save, Trophy, Scale, Droplets, Camera, CheckCircle2, FileText, Zap, Share2, TrendingDown } from "lucide-react";
+import { ArrowLeft, Save, Trophy, Scale, Camera, CheckCircle2, FileText, Zap, Share2 } from "lucide-react";
+import { triggerHapticSelection } from "@/lib/haptics";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
 import { logger } from "@/lib/logger";
@@ -257,121 +257,11 @@ export default function FightCampDetail() {
         )}
       </div>
 
-      {/* Weight Cut Summary */}
-      <div className="card-surface overflow-hidden">
-        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-          <Scale className="w-4 h-4 text-primary" />
-          <h2 className="text-sm font-bold">Weight Cut Summary</h2>
-        </div>
-        <div className="p-4 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground pl-1">Starting Weight (kg)</Label>
-              <Input
-                type="number"
-                step="0.1"
-                value={camp.starting_weight_kg || ""}
-                onChange={(e) => setCamp({ ...camp, starting_weight_kg: parseFloat(e.target.value) || null })}
-                className="h-11 rounded-2xl px-4"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground pl-1">End Weight (kg)</Label>
-              <Input
-                type="number"
-                step="0.1"
-                value={camp.end_weight_kg || ""}
-                onChange={(e) => setCamp({ ...camp, end_weight_kg: parseFloat(e.target.value) || null })}
-                className="h-11 rounded-2xl px-4"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground pl-1">Total Weight Cut (kg)</Label>
-              <Input
-                type="number"
-                step="0.1"
-                value={camp.total_weight_cut || ""}
-                onChange={(e) => setCamp({ ...camp, total_weight_cut: parseFloat(e.target.value) || null })}
-                className="h-11 rounded-2xl px-4"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground pl-1">Weigh-In Timing</Label>
-              <Select
-                value={camp.weigh_in_timing || ""}
-                onValueChange={(value: "day_before" | "day_of") => setCamp({ ...camp, weigh_in_timing: value })}
-              >
-                <SelectTrigger className="h-11 rounded-2xl px-4">
-                  <SelectValue placeholder="Select timing" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="day_before">Day Before Fight</SelectItem>
-                  <SelectItem value="day_of">Day of Fight</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Weight Cut Breakdown */}
-      <div className="card-surface overflow-hidden">
-        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-          <TrendingDown className="w-4 h-4 text-primary" />
-          <h2 className="text-sm font-bold">Cut Breakdown</h2>
-        </div>
-        <div className="p-4 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground pl-1 flex items-center gap-1.5">
-                <Droplets className="w-3 h-3 text-blue-500" />
-                Via Dehydration (kg)
-              </Label>
-              <Input
-                type="number"
-                step="0.1"
-                value={camp.weight_via_dehydration || ""}
-                onChange={(e) => setCamp({ ...camp, weight_via_dehydration: parseFloat(e.target.value) || null })}
-                className="h-11 rounded-2xl px-4"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground pl-1">Via Carb Reduction (kg)</Label>
-              <Input
-                type="number"
-                step="0.1"
-                value={camp.weight_via_carb_reduction || ""}
-                onChange={(e) => setCamp({ ...camp, weight_via_carb_reduction: parseFloat(e.target.value) || null })}
-                className="h-11 rounded-2xl px-4"
-              />
-            </div>
-          </div>
-
-          {/* Visual breakdown bar */}
-          {(camp.weight_via_dehydration || camp.weight_via_carb_reduction) && (
-            <div className="space-y-2 pt-1">
-              <div className="flex gap-1 h-3 rounded-full overflow-hidden bg-muted/30 border border-border">
-                {camp.weight_via_dehydration && camp.weight_via_dehydration > 0 && (
-                  <div
-                    className="bg-blue-500/80 rounded-l-full transition-all duration-500"
-                    style={{ width: `${(camp.weight_via_dehydration / ((camp.weight_via_dehydration || 0) + (camp.weight_via_carb_reduction || 0))) * 100}%` }}
-                  />
-                )}
-                {camp.weight_via_carb_reduction && camp.weight_via_carb_reduction > 0 && (
-                  <div
-                    className="bg-primary/70 rounded-r-full transition-all duration-500"
-                    style={{ width: `${(camp.weight_via_carb_reduction / ((camp.weight_via_dehydration || 0) + (camp.weight_via_carb_reduction || 0))) * 100}%` }}
-                  />
-                )}
-              </div>
-              <div className="flex justify-between text-[10px] text-muted-foreground">
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-blue-500/80 inline-block" /> Dehydration</span>
-                <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-primary/70 inline-block" /> Carb Reduction</span>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      {/* Unified Weight Cut card — single piece of chrome that holds the
+          before/after weights, the auto-computed total, the breakdown split,
+          the proportional bar, and the weigh-in chip row. Inputs share one
+          common label style (no per-row icons) so columns line up cleanly. */}
+      <WeightCutCard camp={camp} setCamp={setCamp} />
 
       {/* Notes */}
       <div className="card-surface overflow-hidden">
@@ -440,6 +330,261 @@ export default function FightCampDetail() {
           <FightCampSummaryCard ref={cardRef} camp={camp} aspect={aspect} />
         )}
       </ShareCardDialog>
+    </div>
+  );
+}
+
+const INPUT_CLASS =
+  "h-11 rounded-2xl bg-muted/40 dark:bg-white/[0.06] border-border/30 text-[15px] text-foreground placeholder:text-muted-foreground/50 px-4 focus:ring-2 focus:ring-primary/40 focus:border-primary/40 transition-all text-right tabular-nums";
+
+const LABEL_CLASS =
+  "text-[10px] uppercase tracking-[0.12em] font-semibold text-muted-foreground/70";
+
+/**
+ * Single unified weight-cut card.
+ *
+ * Design goals:
+ *   - One piece of chrome, no nested cards.
+ *   - Inputs in matched 2-col grids with identical label structure so the
+ *     columns never visually shift (the old "Via Dehydration" label had a
+ *     droplet icon and "Via Carb Reduction" didn't, which pushed the inputs
+ *     out of alignment).
+ *   - Total Weight Cut is auto-computed from Start − End and shown as a
+ *     read-only badge; we still keep the underlying field in state so the
+ *     existing save mutation continues to receive it.
+ *   - Cut breakdown auto-fills Carb Reduction = Total − Dehydration the
+ *     first time the user types in Dehydration, but a subsequent edit to
+ *     Carb releases the auto-link so the user keeps full control.
+ *   - Visual breakdown bar is always present; reads "Enter values below"
+ *     when empty so the column heights don't jump when the user fills it.
+ *   - Weigh-in is a 2-chip row matching the chip pattern used by the
+ *     nutrition page, wellness check-in, and the next-camp wizard.
+ */
+function WeightCutCard({
+  camp,
+  setCamp,
+}: {
+  camp: FightCamp;
+  setCamp: (c: FightCamp) => void;
+}) {
+  const [carbAuto, setCarbAuto] = useState(true);
+
+  const start = camp.starting_weight_kg ?? null;
+  const end = camp.end_weight_kg ?? null;
+  const computedTotal =
+    start != null && end != null && start > end
+      ? Math.round((start - end) * 10) / 10
+      : null;
+
+  // Keep the persisted total_weight_cut in sync with the live Start − End so
+  // downstream consumers (share cards, comparison view) get the right number
+  // without an extra "save and refresh" trip.
+  useEffect(() => {
+    if (computedTotal !== camp.total_weight_cut) {
+      setCamp({ ...camp, total_weight_cut: computedTotal });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [computedTotal]);
+
+  const dehydration = camp.weight_via_dehydration;
+  const carbs = camp.weight_via_carb_reduction;
+  const breakdownTotal = (dehydration ?? 0) + (carbs ?? 0);
+  const dehydrationPct = breakdownTotal > 0 ? ((dehydration ?? 0) / breakdownTotal) * 100 : 0;
+  const carbsPct = breakdownTotal > 0 ? ((carbs ?? 0) / breakdownTotal) * 100 : 0;
+
+  const handleStart = (v: string) => {
+    const n = parseFloat(v);
+    setCamp({ ...camp, starting_weight_kg: Number.isFinite(n) ? n : null });
+  };
+  const handleEnd = (v: string) => {
+    const n = parseFloat(v);
+    setCamp({ ...camp, end_weight_kg: Number.isFinite(n) ? n : null });
+  };
+
+  const handleDehydration = (v: string) => {
+    const n = parseFloat(v);
+    const next = Number.isFinite(n) ? n : null;
+    const patch: Partial<FightCamp> = { weight_via_dehydration: next };
+    if (carbAuto && computedTotal != null && next != null) {
+      const auto = Math.max(0, Math.round((computedTotal - next) * 10) / 10);
+      patch.weight_via_carb_reduction = auto;
+    }
+    setCamp({ ...camp, ...patch });
+  };
+
+  const handleCarb = (v: string) => {
+    const n = parseFloat(v);
+    setCarbAuto(false); // user took manual control
+    setCamp({ ...camp, weight_via_carb_reduction: Number.isFinite(n) ? n : null });
+  };
+
+  const setWeighIn = (value: "day_before" | "day_of") => {
+    triggerHapticSelection();
+    setCamp({ ...camp, weigh_in_timing: value });
+  };
+
+  return (
+    <div className="card-surface overflow-hidden">
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+        <Scale className="w-4 h-4 text-primary" />
+        <h2 className="text-sm font-bold">Weight Cut</h2>
+      </div>
+
+      <div className="p-4 space-y-5">
+        {/* Start + End in matched columns */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <Label className={LABEL_CLASS}>Start (kg)</Label>
+            <Input
+              type="number"
+              inputMode="decimal"
+              step="0.1"
+              value={start ?? ""}
+              onChange={(e) => handleStart(e.target.value)}
+              placeholder="0"
+              className={INPUT_CLASS}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className={LABEL_CLASS}>End (kg)</Label>
+            <Input
+              type="number"
+              inputMode="decimal"
+              step="0.1"
+              value={end ?? ""}
+              onChange={(e) => handleEnd(e.target.value)}
+              placeholder="0"
+              className={INPUT_CLASS}
+            />
+          </div>
+        </div>
+
+        {/* Total — auto-computed badge */}
+        <div className="flex items-center justify-between px-3 py-2.5 rounded-2xl bg-primary/10 border border-primary/20">
+          <span className="text-[12px] font-semibold uppercase tracking-[0.12em] text-primary/80">
+            Total weight cut
+          </span>
+          <span className="text-[15px] font-bold tabular-nums text-primary">
+            {computedTotal != null ? `${computedTotal} kg` : "—"}
+          </span>
+        </div>
+
+        {/* Breakdown — matched columns, identical label structure */}
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className={LABEL_CLASS}>Breakdown</span>
+            {!carbAuto && computedTotal != null && (
+              <button
+                type="button"
+                onClick={() => {
+                  triggerHapticSelection();
+                  setCarbAuto(true);
+                  if (dehydration != null) {
+                    const auto = Math.max(0, Math.round((computedTotal - dehydration) * 10) / 10);
+                    setCamp({ ...camp, weight_via_carb_reduction: auto });
+                  }
+                }}
+                className="text-[10px] font-semibold text-primary/80 active:text-primary uppercase tracking-wider"
+              >
+                Reset auto
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className={LABEL_CLASS}>Dehydration</Label>
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="0.1"
+                value={dehydration ?? ""}
+                onChange={(e) => handleDehydration(e.target.value)}
+                placeholder="kg"
+                className={INPUT_CLASS}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className={LABEL_CLASS}>Carb reduction</Label>
+              <Input
+                type="number"
+                inputMode="decimal"
+                step="0.1"
+                value={carbs ?? ""}
+                onChange={(e) => handleCarb(e.target.value)}
+                placeholder={carbAuto && computedTotal != null && dehydration != null ? "auto" : "kg"}
+                className={INPUT_CLASS}
+              />
+            </div>
+          </div>
+
+          {/* Proportional bar — always present so heights don't jump */}
+          <div className="space-y-1.5">
+            <div className="flex h-2.5 rounded-full overflow-hidden bg-muted/40 border border-border/40">
+              {breakdownTotal > 0 ? (
+                <>
+                  <div
+                    className="bg-blue-500/85 transition-all duration-500"
+                    style={{ width: `${dehydrationPct}%` }}
+                  />
+                  <div
+                    className="bg-primary/80 transition-all duration-500"
+                    style={{ width: `${carbsPct}%` }}
+                  />
+                </>
+              ) : (
+                <div className="flex-1 bg-muted-foreground/10" />
+              )}
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground/80">
+              <span className="inline-flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-blue-500/85" />
+                Dehydration
+                {breakdownTotal > 0 && (
+                  <span className="tabular-nums ml-0.5 text-muted-foreground/60">
+                    {Math.round(dehydrationPct)}%
+                  </span>
+                )}
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="h-2 w-2 rounded-full bg-primary/80" />
+                Carb reduction
+                {breakdownTotal > 0 && (
+                  <span className="tabular-nums ml-0.5 text-muted-foreground/60">
+                    {Math.round(carbsPct)}%
+                  </span>
+                )}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Weigh-in — two-chip row matches the rest of the app */}
+        <div className="space-y-1.5">
+          <Label className={LABEL_CLASS}>Weigh-in timing</Label>
+          <div className="grid grid-cols-2 gap-2">
+            {(["day_before", "day_of"] as const).map((value) => {
+              const active = camp.weigh_in_timing === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setWeighIn(value)}
+                  aria-pressed={active}
+                  className={`h-11 rounded-2xl text-[13px] font-semibold transition-colors ${
+                    active
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted/40 text-muted-foreground/85 active:bg-muted/60 border border-border/30"
+                  }`}
+                >
+                  {value === "day_before" ? "Day before" : "Day of"}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

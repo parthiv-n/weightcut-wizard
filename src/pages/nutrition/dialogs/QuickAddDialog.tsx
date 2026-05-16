@@ -319,9 +319,7 @@ export function QuickAddDialog({
                   disabled={aiMeal.aiAnalyzing}
                   className="card-surface rounded-2xl h-[88px] flex flex-col items-center justify-center gap-1.5 active:scale-[0.98] transition-transform disabled:opacity-40"
                 >
-                  <div className="h-9 w-9 rounded-full bg-primary/15 flex items-center justify-center">
-                    <Camera className="h-4 w-4 text-primary" strokeWidth={2.4} />
-                  </div>
+                  <Camera className="h-5 w-5 text-primary" strokeWidth={2.4} />
                   <span className="text-[13px] font-semibold text-foreground">Snap photo</span>
                 </button>
                 <button
@@ -329,9 +327,7 @@ export function QuickAddDialog({
                   onClick={() => { const ta = document.querySelector<HTMLTextAreaElement>("#ai-meal-description"); if (ta) ta.focus(); }}
                   className="card-surface rounded-2xl h-[88px] flex flex-col items-center justify-center gap-1.5 active:scale-[0.98] transition-transform"
                 >
-                  <div className="h-9 w-9 rounded-full bg-muted/60 flex items-center justify-center">
-                    <Edit2 className="h-4 w-4 text-muted-foreground" strokeWidth={2.4} />
-                  </div>
+                  <Edit2 className="h-5 w-5 text-muted-foreground" strokeWidth={2.4} />
                   <span className="text-[13px] font-semibold text-foreground">Describe</span>
                 </button>
               </div>
@@ -485,13 +481,31 @@ export function QuickAddDialog({
                   </div>
                 )}
 
-                {/* Meal-type cap + name + servings stepper */}
-                <div className="space-y-1.5">
-                  <p className="text-[10px] uppercase tracking-[0.12em] font-semibold text-muted-foreground/60">
-                    {manualMeal.meal_type
-                      ? manualMeal.meal_type.charAt(0).toUpperCase() + manualMeal.meal_type.slice(1)
-                      : "Meal"}
-                  </p>
+                {/* Meal-type chip row + AI-generated name (editable) */}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-1.5">
+                    {MEAL_TYPES.map((t) => {
+                      const active = manualMeal.meal_type === t.value;
+                      return (
+                        <button
+                          key={t.value}
+                          type="button"
+                          onClick={() => {
+                            triggerHapticSelection();
+                            setManualMeal((prev) => ({ ...prev, meal_type: t.value }));
+                          }}
+                          aria-pressed={active}
+                          className={`h-7 px-3 rounded-full text-[11px] font-semibold tracking-tight transition-colors ${
+                            active
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted/40 text-muted-foreground/80 active:bg-muted/60"
+                          }`}
+                        >
+                          {t.label}
+                        </button>
+                      );
+                    })}
+                  </div>
                   <Input
                     value={manualMeal.meal_name}
                     onChange={(e) => setManualMeal((prev) => ({ ...prev, meal_name: e.target.value }))}

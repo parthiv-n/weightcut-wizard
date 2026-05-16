@@ -88,9 +88,10 @@ CRITICAL MATH:
 - Each meal cal = (P*4)+(C*4)+(F*9), within ±20
 - Sum meal P/C/F equals daily targets
 - AT LEAST 3 meals
+- Each ingredient MUST include calories/protein/carbs/fats in grams. Sum of ingredient macros = meal macros (within ±5g).
 
 {
-  "meals": [{ "name": "...", "calories": n, "protein": n, "carbs": n, "fats": n, "portion": "...", "recipe": "...", "type": "breakfast|lunch|dinner|snack", "ingredients": [{ "name": "...", "grams": n }] }],
+  "meals": [{ "name": "...", "calories": n, "protein": n, "carbs": n, "fats": n, "portion": "...", "recipe": "...", "type": "breakfast|lunch|dinner|snack", "ingredients": [{ "name": "...", "grams": n, "calories": n, "protein": n, "carbs": n, "fats": n }] }],
   "totalCalories": ${Math.round(dailyCalorieTarget)},
   "totalProtein": ${targetProtein},
   "totalCarbs": ${targetCarbs},
@@ -114,13 +115,71 @@ ${snap.block}`;
     });
     const mealPlanData = parseJSON(content);
 
-    // Server-side macro reconciliation
+    // Server-side macro reconciliation. Two passes:
+    //   1. Meal-level: recompute calories from P/C/F so the headline numbers
+    //      always satisfy 4/4/9 (the model often drifts within its ±20 band).
+    //   2. Ingredient-level: normalise each ingredient to the snake_case shape
+    //      the client `Ingredient` type expects (`protein_g`/`carbs_g`/`fats_g`/
+    //      `calories`) and distribute meal macros across ingredients by gram-
+    //      ratio when the model omitted per-ingredient macros. Without this
+    //      step, `ingredientsToRpcItems` builds meal_items rows with zero
+    //      macros and `meals.listWithTotals` returns 0 cal for the meal.
     if (Array.isArray(mealPlanData?.meals) && mealPlanData.meals.length > 0) {
       for (const meal of mealPlanData.meals) {
-        const p = meal.protein || 0;
-        const c = meal.carbs || 0;
-        const f = meal.fats || 0;
+        const p = Number(meal.protein) || 0;
+        const c = Number(meal.carbs) || 0;
+        const f = Number(meal.fats) || 0;
+        meal.protein = p;
+        meal.carbs = c;
+        meal.fats = f;
         meal.calories = p * 4 + c * 4 + f * 9;
+
+        if (Array.isArray(meal.ingredients) && meal.ingredients.length > 0) {
+          // Sum per-ingredient macros (accepting either the AI's `protein/
+          // carbs/fats/calories` shape or our `_g` shape). Treat 0 as "missing"
+          // for the proportional fallback — the AI returning a literal 0 for
+          // every ingredient is equivalent to omitting them, and any real
+          // ingredient has at least trace macros.
+          const ingSums = meal.ingredients.reduce(
+            (acc: { p: number; c: number; f: number; g: number }, ing: any) => {
+              acc.p += Number(ing.protein ?? ing.protein_g ?? 0) || 0;
+              acc.c += Number(ing.carbs ?? ing.carbs_g ?? 0) || 0;
+              acc.f += Number(ing.fats ?? ing.fats_g ?? 0) || 0;
+              acc.g += Number(ing.grams) || 0;
+              return acc;
+            },
+            { p: 0, c: 0, f: 0, g: 0 },
+          );
+          const hasMacros = ingSums.p > 0 || ingSums.c > 0 || ingSums.f > 0;
+
+          meal.ingredients = meal.ingredients.map((ing: any) => {
+            const grams = Number(ing.grams) || 0;
+            let ingP = Number(ing.protein ?? ing.protein_g ?? 0) || 0;
+            let ingC = Number(ing.carbs ?? ing.carbs_g ?? 0) || 0;
+            let ingF = Number(ing.fats ?? ing.fats_g ?? 0) || 0;
+
+            // Fall back to gram-weighted distribution when the AI skipped
+            // per-ingredient macros, so the totals still match the meal.
+            if (!hasMacros && ingSums.g > 0) {
+              const ratio = grams / ingSums.g;
+              ingP = p * ratio;
+              ingC = c * ratio;
+              ingF = f * ratio;
+            }
+
+            const ingCal =
+              Number(ing.calories) > 0 ? Number(ing.calories) : ingP * 4 + ingC * 4 + ingF * 9;
+
+            return {
+              name: typeof ing.name === "string" && ing.name.trim() ? ing.name.trim() : "Ingredient",
+              grams,
+              calories: Math.round(ingCal),
+              protein_g: Math.round(ingP * 10) / 10,
+              carbs_g: Math.round(ingC * 10) / 10,
+              fats_g: Math.round(ingF * 10) / 10,
+            };
+          });
+        }
       }
       const totals = {
         p: mealPlanData.meals.reduce((s: number, m: any) => s + (m.protein || 0), 0),

@@ -1,9 +1,10 @@
-import { useState } from "react";
-import { Brain, ChevronDown, ChevronUp } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Brain, ChevronDown, ChevronUp, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Slider } from "@/components/ui/slider";
+import { motion, AnimatePresence } from "motion/react";
 import { useMutation } from "convex/react";
 import { api } from "@/../convex/_generated/api";
+import { triggerHapticSelection, celebrateSuccess } from "@/lib/haptics";
 import type { WellnessCheckIn as WellnessCheckInData } from "@/utils/performanceEngine";
 import { logger } from "@/lib/logger";
 
@@ -13,63 +14,87 @@ interface WellnessCheckInProps {
   isSubmitting?: boolean;
 }
 
-const HOOPER_DIMENSIONS = [
-  {
-    key: 'sleep_quality' as const,
-    label: 'Sleep Quality',
-    leftLabel: 'Slept great',
-    rightLabel: 'Barely slept',
-    defaultValue: 2,
-  },
-  {
-    key: 'stress_level' as const,
-    label: 'Stress',
-    leftLabel: 'Very calm',
-    rightLabel: 'Extremely stressed',
-    defaultValue: 3,
-  },
-  {
-    key: 'fatigue_level' as const,
-    label: 'Fatigue',
-    leftLabel: 'Fresh',
-    rightLabel: 'Exhausted',
-    defaultValue: 3,
-  },
-  {
-    key: 'soreness_level' as const,
-    label: 'Soreness',
-    leftLabel: 'No soreness',
-    rightLabel: 'Can barely move',
-    defaultValue: 3,
-  },
+/**
+ * Five-step labelled scale per question, one card at a time. Tap a chip and
+ * the card auto-advances. Numeric values map 1:1 to the original Hooper 1-7
+ * scale (with the middle chip landing on 4) so the performanceEngine still
+ * receives the shape it always has.
+ *
+ * Convention: SLEEP is "higher = better" (matches the survey wording). The
+ * other three are "higher = worse" — we keep the raw direction so the
+ * existing math doesn't change. The colour ramp is *always* green→red from
+ * good to bad regardless of value direction.
+ */
+type Chip = { label: string; value: number; tone: "good" | "okay" | "warn" | "bad" | "verybad" };
+
+// Sleep: 1 (worst) → 7 (best). Five chips left→right run worst→best.
+const SLEEP_CHIPS: Chip[] = [
+  { label: "Barely",  value: 1, tone: "verybad" },
+  { label: "Poor",    value: 3, tone: "bad" },
+  { label: "OK",      value: 4, tone: "okay" },
+  { label: "Good",    value: 6, tone: "warn" },
+  { label: "Great",   value: 7, tone: "good" },
+];
+
+// Fatigue, soreness, stress: 1 = best (fresh/none/calm), 7 = worst.
+// Five chips left→right run best→worst so layout matches sleep visually.
+const FATIGUE_CHIPS: Chip[] = [
+  { label: "Fresh",   value: 1, tone: "good" },
+  { label: "Good",    value: 3, tone: "warn" },
+  { label: "OK",      value: 4, tone: "okay" },
+  { label: "Tired",   value: 5, tone: "bad" },
+  { label: "Drained", value: 7, tone: "verybad" },
+];
+
+const SORENESS_CHIPS: Chip[] = [
+  { label: "None",    value: 1, tone: "good" },
+  { label: "Mild",    value: 3, tone: "warn" },
+  { label: "Some",    value: 4, tone: "okay" },
+  { label: "Sore",    value: 5, tone: "bad" },
+  { label: "Wrecked", value: 7, tone: "verybad" },
+];
+
+const STRESS_CHIPS: Chip[] = [
+  { label: "Calm",     value: 1, tone: "good" },
+  { label: "Easy",     value: 3, tone: "warn" },
+  { label: "OK",       value: 4, tone: "okay" },
+  { label: "Tense",    value: 5, tone: "bad" },
+  { label: "Frazzled", value: 7, tone: "verybad" },
+];
+
+const QUESTIONS = [
+  { key: "sleep_quality" as const,  prompt: "How did you sleep?",      chips: SLEEP_CHIPS,    short: "Sleep" },
+  { key: "fatigue_level" as const,  prompt: "How does your body feel?", chips: FATIGUE_CHIPS, short: "Body" },
+  { key: "soreness_level" as const, prompt: "How sore are you?",        chips: SORENESS_CHIPS, short: "Sore" },
+  { key: "stress_level" as const,   prompt: "How's your stress?",       chips: STRESS_CHIPS,  short: "Stress" },
 ] as const;
 
-function getSliderColor(value: number): string {
-  if (value <= 2) return 'bg-green-500';
-  if (value <= 4) return 'bg-yellow-500';
-  if (value <= 5) return 'bg-orange-500';
-  return 'bg-red-500';
-}
-
-function getThumbColor(value: number): string {
-  if (value <= 2) return 'border-green-500';
-  if (value <= 4) return 'border-yellow-500';
-  if (value <= 5) return 'border-orange-500';
-  return 'border-red-500';
+function toneClasses(tone: Chip["tone"], active: boolean): string {
+  if (!active) {
+    return "bg-muted/40 text-foreground/75 active:bg-muted/60 border-transparent";
+  }
+  switch (tone) {
+    case "good":    return "bg-emerald-500/20 text-emerald-300 border-emerald-500/40";
+    case "warn":    return "bg-lime-500/20 text-lime-300 border-lime-500/40";
+    case "okay":    return "bg-amber-500/20 text-amber-300 border-amber-500/40";
+    case "bad":     return "bg-orange-500/20 text-orange-300 border-orange-500/40";
+    case "verybad": return "bg-red-500/20 text-red-300 border-red-500/40";
+  }
 }
 
 export function WellnessCheckIn({ userId, onSubmit, isSubmitting }: WellnessCheckInProps) {
-  void userId; // userId is now derived from Convex auth; keep prop for backward compat.
+  void userId; // userId is now derived from Convex auth; kept for backward compat.
   const upsertCheckin = useMutation(api.wellness.upsertCheckin);
-  const [values, setValues] = useState({
-    sleep_quality: 2,
-    stress_level: 3,
-    fatigue_level: 3,
-    soreness_level: 3,
-  });
 
+  const [step, setStep] = useState(0);
+  const [answers, setAnswers] = useState<Record<string, number>>({
+    sleep_quality: 4,
+    fatigue_level: 4,
+    soreness_level: 4,
+    stress_level: 4,
+  });
   const [showOptional, setShowOptional] = useState(false);
-  const [optionalValues, setOptionalValues] = useState({
+  const [optional, setOptional] = useState({
     sleep_hours: null as number | null,
     hydration_feeling: null as number | null,
     appetite_level: null as number | null,
@@ -77,223 +102,328 @@ export function WellnessCheckIn({ userId, onSubmit, isSubmitting }: WellnessChec
     motivation_level: null as number | null,
   });
 
-  const hooperIndex = values.sleep_quality + (8 - values.stress_level) + (8 - values.fatigue_level) + (8 - values.soreness_level);
+  const onSummary = step >= QUESTIONS.length;
+  const currentQ = onSummary ? null : QUESTIONS[step];
+
+  const hooperIndex = useMemo(
+    () => answers.sleep_quality + (8 - answers.stress_level) + (8 - answers.fatigue_level) + (8 - answers.soreness_level),
+    [answers],
+  );
+  const hooperLabel = hooperIndex >= 22 ? "Great" : hooperIndex >= 16 ? "Good" : hooperIndex >= 10 ? "Fair" : "Poor";
+  const hooperColor = hooperIndex >= 22 ? "text-green-400" : hooperIndex >= 16 ? "text-blue-400" : hooperIndex >= 10 ? "text-yellow-400" : "text-red-400";
+
+  const pickChip = (key: string, value: number) => {
+    triggerHapticSelection();
+    setAnswers((prev) => ({ ...prev, [key]: value }));
+    setTimeout(() => setStep((s) => s + 1), 180);
+  };
+
+  const handleBack = () => {
+    triggerHapticSelection();
+    setStep((s) => Math.max(0, s - 1));
+  };
 
   const handleSubmit = async () => {
     const checkInData: WellnessCheckInData = {
-      sleep_quality: values.sleep_quality,
-      stress_level: values.stress_level,
-      fatigue_level: values.fatigue_level,
-      soreness_level: values.soreness_level,
-      energy_level: optionalValues.energy_level,
-      motivation_level: optionalValues.motivation_level,
-      sleep_hours: optionalValues.sleep_hours,
-      hydration_feeling: optionalValues.hydration_feeling,
-      appetite_level: optionalValues.appetite_level,
+      sleep_quality: answers.sleep_quality,
+      stress_level: answers.stress_level,
+      fatigue_level: answers.fatigue_level,
+      soreness_level: answers.soreness_level,
+      energy_level: optional.energy_level,
+      motivation_level: optional.motivation_level,
+      sleep_hours: optional.sleep_hours,
+      hydration_feeling: optional.hydration_feeling,
+      appetite_level: optional.appetite_level,
       hooper_index: hooperIndex,
     };
 
-    const today = new Date().toISOString().split('T')[0];
-
-    // Persist to database
+    const today = new Date().toISOString().split("T")[0];
     try {
       await upsertCheckin({
         date: today,
-        sleepQuality: values.sleep_quality,
-        fatigueLevel: values.fatigue_level,
-        sorenessLevel: values.soreness_level,
-        stressLevel: values.stress_level,
-        energyLevel: optionalValues.energy_level ?? undefined,
-        motivationLevel: optionalValues.motivation_level ?? undefined,
-        sleepHours: optionalValues.sleep_hours ?? undefined,
-        hydrationFeeling: optionalValues.hydration_feeling ?? undefined,
-        appetiteLevel: optionalValues.appetite_level ?? undefined,
+        sleepQuality: answers.sleep_quality,
+        fatigueLevel: answers.fatigue_level,
+        sorenessLevel: answers.soreness_level,
+        stressLevel: answers.stress_level,
+        energyLevel: optional.energy_level ?? undefined,
+        motivationLevel: optional.motivation_level ?? undefined,
+        sleepHours: optional.sleep_hours ?? undefined,
+        hydrationFeeling: optional.hydration_feeling ?? undefined,
+        appetiteLevel: optional.appetite_level ?? undefined,
         hooperIndex,
       });
+      celebrateSuccess();
     } catch (err) {
       logger.error("Failed to persist wellness check-in", err);
     }
-
     onSubmit(checkInData);
   };
 
-  const hooperLabel = hooperIndex >= 22 ? 'Great' : hooperIndex >= 16 ? 'Good' : hooperIndex >= 10 ? 'Fair' : 'Poor';
-  const hooperColor = hooperIndex >= 22 ? 'text-green-400' : hooperIndex >= 16 ? 'text-blue-400' : hooperIndex >= 10 ? 'text-yellow-400' : 'text-red-400';
-
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-muted-foreground">Morning wellness check-in (Hooper Index)</p>
-        <div className={`text-xs font-bold ${hooperColor}`}>
-          {hooperIndex}/28 · {hooperLabel}
-        </div>
+    <div className="space-y-3 select-none">
+      {/* Progress dots */}
+      <div className="flex items-center justify-center gap-1.5">
+        {QUESTIONS.map((_, i) => (
+          <div
+            key={i}
+            className={`h-1.5 rounded-full transition-all duration-300 ${
+              i < step ? "w-6 bg-primary" : i === step ? "w-6 bg-primary" : "w-1.5 bg-muted-foreground/25"
+            }`}
+          />
+        ))}
+        <div
+          className={`h-1.5 rounded-full transition-all duration-300 ${
+            onSummary ? "w-6 bg-primary" : "w-1.5 bg-muted-foreground/25"
+          }`}
+        />
       </div>
 
-      {/* Core Hooper dimensions */}
-      {HOOPER_DIMENSIONS.map((dim) => {
-        const value = values[dim.key];
-        return (
-          <div key={dim.key} className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-foreground/80">{dim.label}</span>
-              <span className="text-xs font-bold text-foreground/60 tabular-nums w-4 text-right">{value}</span>
-            </div>
-            <div className="relative">
-              <Slider
-                value={[value]}
-                onValueChange={([v]) => setValues(prev => ({ ...prev, [dim.key]: v }))}
-                min={1}
-                max={7}
-                step={1}
-                className="w-full [&_[data-radix-slider-range]]:transition-colors"
-                style={{
-                  // @ts-expect-error CSS custom properties
-                  '--slider-range-bg': value <= 2 ? '#22c55e' : value <= 4 ? '#eab308' : value <= 5 ? '#f97316' : '#ef4444',
-                  '--slider-thumb-border': value <= 2 ? '#22c55e' : value <= 4 ? '#eab308' : value <= 5 ? '#f97316' : '#ef4444',
-                }}
-              />
-              <div className="flex justify-between mt-0.5">
-                <span className="text-[9px] text-muted-foreground/60">{dim.leftLabel}</span>
-                <span className="text-[9px] text-muted-foreground/60">{dim.rightLabel}</span>
+      <div className="relative min-h-[210px]">
+        <AnimatePresence mode="wait" initial={false}>
+          {currentQ && (
+            <motion.div
+              key={`q-${step}`}
+              initial={{ opacity: 0, x: 24 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -24 }}
+              transition={{ type: "spring", damping: 28, stiffness: 320 }}
+              className="absolute inset-0 flex flex-col items-center justify-center text-center gap-4 px-1"
+            >
+              <p className="text-[11px] uppercase tracking-[0.14em] font-semibold text-muted-foreground/70">
+                {step + 1} of {QUESTIONS.length}
+              </p>
+              <h3 className="text-[20px] font-bold tracking-tight text-foreground">
+                {currentQ.prompt}
+              </h3>
+              <div className="flex w-full gap-1.5 mt-1">
+                {currentQ.chips.map((c) => {
+                  const active = answers[currentQ.key] === c.value;
+                  return (
+                    <button
+                      key={c.value}
+                      type="button"
+                      onClick={() => pickChip(currentQ.key, c.value)}
+                      className={`flex-1 h-12 rounded-2xl text-[13px] font-semibold tracking-tight border transition-all active:scale-[0.97] ${toneClasses(c.tone, active)}`}
+                      aria-label={c.label}
+                      aria-pressed={active}
+                    >
+                      {c.label}
+                    </button>
+                  );
+                })}
               </div>
-            </div>
-          </div>
-        );
-      })}
+              {step > 0 && (
+                <button
+                  type="button"
+                  onClick={handleBack}
+                  className="text-[11px] text-muted-foreground/60 active:text-foreground transition-colors mt-1"
+                >
+                  Back
+                </button>
+              )}
+            </motion.div>
+          )}
 
-      {/* Optional fields toggle */}
-      <button
-        type="button"
-        onClick={() => setShowOptional(!showOptional)}
-        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground/80 transition-colors"
-      >
-        {showOptional ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-        More detail (optional)
-      </button>
+          {onSummary && (
+            <motion.div
+              key="summary"
+              initial={{ opacity: 0, x: 24 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -24 }}
+              transition={{ type: "spring", damping: 28, stiffness: 320 }}
+              className="absolute inset-0 flex flex-col gap-3 px-1"
+            >
+              <div className="flex items-center justify-between">
+                <p className="text-[12px] text-muted-foreground/80 inline-flex items-center gap-1.5">
+                  <Check className="h-3.5 w-3.5 text-emerald-400" /> Quick check-in complete
+                </p>
+                <span className={`text-[12px] font-bold ${hooperColor}`}>
+                  {hooperIndex}/28 · {hooperLabel}
+                </span>
+              </div>
 
-      {showOptional && (
-        <div className="space-y-3 pl-1 border-l-2 border-border/30 ml-1">
-          {/* Sleep hours */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-foreground/70">Sleep hours</span>
-              <span className="text-xs font-bold text-foreground/60 tabular-nums">
-                {optionalValues.sleep_hours != null ? `${optionalValues.sleep_hours}h` : '—'}
-              </span>
-            </div>
-            <Slider
-              value={[optionalValues.sleep_hours ?? 7]}
-              onValueChange={([v]) => setOptionalValues(prev => ({ ...prev, sleep_hours: v }))}
-              min={3}
-              max={12}
-              step={0.5}
-              className="w-full"
-            />
-            <div className="flex justify-between">
-              <span className="text-[9px] text-muted-foreground/60">3h</span>
-              <span className="text-[9px] text-muted-foreground/60">12h</span>
-            </div>
-          </div>
+              {/* Tap-to-edit recap row */}
+              <div className="grid grid-cols-4 gap-1.5">
+                {QUESTIONS.map((q, idx) => {
+                  const c = q.chips.find((chip) => chip.value === answers[q.key]);
+                  return (
+                    <button
+                      key={q.key}
+                      type="button"
+                      onClick={() => { triggerHapticSelection(); setStep(idx); }}
+                      className={`card-surface rounded-2xl py-2 flex flex-col items-center gap-0.5 active:scale-95 transition-transform border ${
+                        c ? toneClasses(c.tone, true) : "border-transparent"
+                      }`}
+                      aria-label={`Edit ${q.prompt}`}
+                    >
+                      <span className="text-[12px] font-bold tracking-tight">{c?.label ?? "—"}</span>
+                      <span className="text-[9px] uppercase tracking-wide text-foreground/60">
+                        {q.short}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
 
-          {/* Hydration */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-foreground/70">Hydration</span>
-              <span className="text-xs font-bold text-foreground/60 tabular-nums">
-                {optionalValues.hydration_feeling != null ? `${optionalValues.hydration_feeling}/5` : '—'}
-              </span>
-            </div>
-            <Slider
-              value={[optionalValues.hydration_feeling ?? 3]}
-              onValueChange={([v]) => setOptionalValues(prev => ({ ...prev, hydration_feeling: v }))}
-              min={1}
-              max={5}
-              step={1}
-              className="w-full"
-            />
-            <div className="flex justify-between">
-              <span className="text-[9px] text-muted-foreground/60">Dehydrated</span>
-              <span className="text-[9px] text-muted-foreground/60">Well hydrated</span>
-            </div>
-          </div>
+              <button
+                type="button"
+                onClick={() => setShowOptional((v) => !v)}
+                className="flex items-center justify-center gap-1 text-[11px] text-muted-foreground/80 active:text-foreground transition-colors mt-1"
+              >
+                {showOptional ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                {showOptional ? "Hide extra detail" : "Add extra detail (optional)"}
+              </button>
 
-          {/* Appetite */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-foreground/70">Appetite</span>
-              <span className="text-xs font-bold text-foreground/60 tabular-nums">
-                {optionalValues.appetite_level != null ? `${optionalValues.appetite_level}/5` : '—'}
-              </span>
-            </div>
-            <Slider
-              value={[optionalValues.appetite_level ?? 3]}
-              onValueChange={([v]) => setOptionalValues(prev => ({ ...prev, appetite_level: v }))}
-              min={1}
-              max={5}
-              step={1}
-              className="w-full"
-            />
-            <div className="flex justify-between">
-              <span className="text-[9px] text-muted-foreground/60">No appetite</span>
-              <span className="text-[9px] text-muted-foreground/60">Very hungry</span>
-            </div>
-          </div>
+              <AnimatePresence initial={false}>
+                {showOptional && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.22 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="space-y-2.5 pt-1">
+                      <OptionalRow
+                        label="Sleep hours"
+                        value={optional.sleep_hours}
+                        suffix="h"
+                        options={[5, 6, 7, 8, 9]}
+                        onPick={(v) => setOptional((p) => ({ ...p, sleep_hours: v }))}
+                      />
+                      <OptionalScaleRow
+                        label="Hydration"
+                        value={optional.hydration_feeling}
+                        leftHint="Dry"
+                        rightHint="Hydrated"
+                        onPick={(v) => setOptional((p) => ({ ...p, hydration_feeling: v }))}
+                      />
+                      <OptionalScaleRow
+                        label="Appetite"
+                        value={optional.appetite_level}
+                        leftHint="None"
+                        rightHint="Hungry"
+                        onPick={(v) => setOptional((p) => ({ ...p, appetite_level: v }))}
+                      />
+                      <OptionalScaleRow
+                        label="Energy"
+                        value={optional.energy_level}
+                        leftHint="Empty"
+                        rightHint="Full"
+                        onPick={(v) => setOptional((p) => ({ ...p, energy_level: v }))}
+                      />
+                      <OptionalScaleRow
+                        label="Motivation"
+                        value={optional.motivation_level}
+                        leftHint="Low"
+                        rightHint="High"
+                        onPick={(v) => setOptional((p) => ({ ...p, motivation_level: v }))}
+                      />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
-          {/* Energy */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-foreground/70">Energy</span>
-              <span className="text-xs font-bold text-foreground/60 tabular-nums">
-                {optionalValues.energy_level != null ? `${optionalValues.energy_level}/7` : '—'}
-              </span>
-            </div>
-            <Slider
-              value={[optionalValues.energy_level ?? 4]}
-              onValueChange={([v]) => setOptionalValues(prev => ({ ...prev, energy_level: v }))}
-              min={1}
-              max={7}
-              step={1}
-              className="w-full"
-            />
-            <div className="flex justify-between">
-              <span className="text-[9px] text-muted-foreground/60">Empty</span>
-              <span className="text-[9px] text-muted-foreground/60">Fired up</span>
-            </div>
-          </div>
+              <Button
+                onClick={handleSubmit}
+                disabled={isSubmitting}
+                className="w-full rounded-2xl h-12 font-semibold gap-2 mt-1"
+              >
+                <Brain className="h-4 w-4" />
+                {isSubmitting ? "Analyzing..." : "Get coach advice"}
+              </Button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
 
-          {/* Motivation */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-foreground/70">Motivation</span>
-              <span className="text-xs font-bold text-foreground/60 tabular-nums">
-                {optionalValues.motivation_level != null ? `${optionalValues.motivation_level}/7` : '—'}
-              </span>
-            </div>
-            <Slider
-              value={[optionalValues.motivation_level ?? 4]}
-              onValueChange={([v]) => setOptionalValues(prev => ({ ...prev, motivation_level: v }))}
-              min={1}
-              max={7}
-              step={1}
-              className="w-full"
-            />
-            <div className="flex justify-between">
-              <span className="text-[9px] text-muted-foreground/60">Need a break</span>
-              <span className="text-[9px] text-muted-foreground/60">Ready to go</span>
-            </div>
-          </div>
-        </div>
-      )}
+function OptionalRow({
+  label,
+  value,
+  suffix,
+  options,
+  onPick,
+}: {
+  label: string;
+  value: number | null;
+  suffix?: string;
+  options: number[];
+  onPick: (v: number) => void;
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[11px] font-medium text-foreground/75">{label}</span>
+        <span className="text-[11px] font-bold text-foreground/55 tabular-nums">
+          {value != null ? `${value}${suffix ?? ""}` : "—"}
+        </span>
+      </div>
+      <div className="flex gap-1">
+        {options.map((opt) => {
+          const active = value === opt;
+          return (
+            <button
+              key={opt}
+              type="button"
+              onClick={() => { triggerHapticSelection(); onPick(opt); }}
+              className={`flex-1 h-8 rounded-xl text-[12px] font-semibold tabular-nums transition-colors ${
+                active ? "bg-primary text-primary-foreground" : "bg-muted/40 text-muted-foreground/80 active:bg-muted/60"
+              }`}
+            >
+              {opt}{suffix ?? ""}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
-      <Button
-        onClick={handleSubmit}
-        disabled={isSubmitting}
-        className="w-full rounded-2xl h-12 font-semibold gap-2 mt-1"
-        variant="outline"
-      >
-        <Brain className="h-4 w-4" />
-        {isSubmitting ? 'Analyzing...' : 'Get Coach Advice'}
-      </Button>
+function OptionalScaleRow({
+  label,
+  value,
+  leftHint,
+  rightHint,
+  onPick,
+}: {
+  label: string;
+  value: number | null;
+  leftHint: string;
+  rightHint: string;
+  onPick: (v: number) => void;
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[11px] font-medium text-foreground/75">{label}</span>
+        <span className="text-[11px] font-bold text-foreground/55 tabular-nums">
+          {value != null ? `${value}/5` : "—"}
+        </span>
+      </div>
+      <div className="flex gap-1">
+        {[1, 2, 3, 4, 5].map((v) => {
+          const active = value === v;
+          return (
+            <button
+              key={v}
+              type="button"
+              onClick={() => { triggerHapticSelection(); onPick(v); }}
+              className={`flex-1 h-8 rounded-xl text-[12px] font-semibold tabular-nums transition-colors ${
+                active ? "bg-primary text-primary-foreground" : "bg-muted/40 text-muted-foreground/80 active:bg-muted/60"
+              }`}
+            >
+              {v}
+            </button>
+          );
+        })}
+      </div>
+      <div className="flex justify-between mt-0.5 px-0.5">
+        <span className="text-[9px] text-muted-foreground/60">{leftHint}</span>
+        <span className="text-[9px] text-muted-foreground/60">{rightHint}</span>
+      </div>
     </div>
   );
 }

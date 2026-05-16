@@ -354,12 +354,12 @@ export default function TrainingLibrary() {
               and your library. This can't be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+          <AlertDialogFooter className="justify-center sm:justify-center">
+            <AlertDialogCancel disabled={deleting} className="flex-1 sm:flex-none">Cancel</AlertDialogCancel>
             <AlertDialogAction
               disabled={deleting}
               onClick={handleDelete}
-              className="bg-destructive hover:bg-destructive/90"
+              className="bg-destructive hover:bg-destructive/90 flex-1 sm:flex-none"
             >
               {deleting ? "Deleting…" : "Delete"}
             </AlertDialogAction>

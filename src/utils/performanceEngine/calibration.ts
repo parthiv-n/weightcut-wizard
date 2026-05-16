@@ -25,7 +25,12 @@ const TIER_DEFAULTS: Record<AthleteTier, Omit<AthleteCalibration, 'tier'>> = {
     sessionFrequencyFlagThreshold: 4,
   },
   beginner: {
-    loadRatioThresholds: { caution: 1.1, danger: 1.3 },
+    // Beginners log infrequently; tight thresholds caused false 'Heavy week'
+    // calls from the very first session. Per sports-science recommendations
+    // for newer trainees we widen the spike window; the absolute-load floor
+    // applied in computeAdaptiveOvertrainingScore prevents tiny absolute
+    // loads from tripping a warning even when ratios look high.
+    loadRatioThresholds: { caution: 1.5, danger: 1.8 },
     rpeCeiling: 6,
     normalSessionsPerWeek: 1,
     strainDivisor: 700,

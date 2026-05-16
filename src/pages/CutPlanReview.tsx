@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { TrendingDown, Shield, Zap, ChevronRight, Download, Droplets, Flame, Utensils, Wheat } from "lucide-react";
+import { TrendingDown, Shield, Zap, ChevronRight, Download, Droplets, Flame, Utensils, Wheat, X } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
@@ -98,7 +98,24 @@ export default function CutPlanReview() {
 
   return (
     <div className="min-h-screen bg-background text-foreground safe-area-inset-top safe-area-inset-bottom">
-      <div className="max-w-lg mx-auto px-4 py-6 pb-[calc(env(safe-area-inset-bottom,0px)+6rem)]">
+      <div className="max-w-lg mx-auto px-4 py-6 pb-[calc(env(safe-area-inset-bottom,0px)+6rem)] relative">
+        {/* Close button — falls back to /dashboard when there's no browser
+            history (e.g. user opened /cut-plan directly from a deep link or
+            after a fresh app launch). Absolute-positioned so it doesn't
+            shift the centred header. */}
+        <button
+          type="button"
+          onClick={() => {
+            triggerHaptic(ImpactStyle.Light);
+            if (window.history.length > 1) navigate(-1);
+            else navigate("/dashboard", { replace: true });
+          }}
+          aria-label="Close cut plan"
+          className="absolute top-4 right-3 h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground/70 bg-muted/40 dark:bg-white/[0.06] border border-border/30 active:text-foreground active:bg-muted/60 transition-colors z-10"
+        >
+          <X className="h-4 w-4" strokeWidth={2.4} />
+        </button>
+
         {/* Header */}
         <div className="text-center mb-6">
           <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-primary/10 mb-4">

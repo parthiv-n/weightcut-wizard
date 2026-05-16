@@ -159,6 +159,7 @@ Rules:
 - Use USDA-standard values, account for cooking method + additions.
 - Each item's macros reflect ACTUAL quantity, not per-100g.
 - Totals equal sum of items.
+- "meal_name": copy verbatim from the vision observation's meal_name. If that field is missing or empty, generate a short (<=40 chars), specific descriptive name based on the visible items (e.g. "Grilled chicken & rice bowl"). Never use a generic placeholder like "Meal" or "Logged meal".
 
 { "meal_name": "...", "calories": n, "protein_g": n, "carbs_g": n, "fats_g": n, "items": [{ "name": "...", "quantity": "...", "calories": n, "protein_g": n, "carbs_g": n, "fats_g": n }] }`;
       const reasoningUser = `Vision observation:

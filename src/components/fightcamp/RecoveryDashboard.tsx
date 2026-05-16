@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo, memo, lazy, Suspense } from "react";
-import { Activity, Brain, AlertTriangle, TrendingUp, TrendingDown, Minus, BookOpen, ChevronDown, Heart, Flame, Shield, Moon, Dumbbell, Gauge, Zap, BarChart3 } from "lucide-react";
+import { Activity, Brain, AlertTriangle, HelpCircle } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { AIPersistence } from "@/lib/aiPersistence";
@@ -10,6 +10,9 @@ import { ReadinessBreakdownCard } from "./ReadinessBreakdownCard";
 import { BalanceMetricsCard } from "./BalanceMetricsCard";
 import { WellnessCheckIn } from "./WellnessCheckIn";
 import { RecoveryCoachChat } from "./RecoveryCoachChat";
+import { DailyVerdictCard, BaselineConfidencePill } from "./DailyVerdict";
+import { WeeklyLoadPlan } from "./WeeklyLoadPlan";
+import { RecoveryHelpSheet } from "./RecoveryHelpSheet";
 import { computeAllMetrics, type SessionRow, type AllMetrics, type ReadinessResult, type WellnessCheckIn as WellnessCheckInData, type PersonalBaseline } from "@/utils/performanceEngine";
 import { loadOrComputeBaseline, computeAndStoreBaseline, storeReadinessScore } from "@/utils/baselineComputer";
 import { useUser } from "@/contexts/UserContext";
@@ -65,19 +68,6 @@ function getReadinessColor(label: ReadinessResult['label']) {
   return { color: "#ef4444", glow: "#ef4444" }; // strained
 }
 
-function getDeterministicReadinessBadge(label: ReadinessResult['label']) {
-  switch (label) {
-    case 'peaked':
-      return { label: "PEAKED", className: "bg-green-500/20 text-green-400 border-green-500/30", icon: TrendingUp };
-    case 'ready':
-      return { label: "READY", className: "bg-blue-500/20 text-blue-400 border-blue-500/30", icon: Minus };
-    case 'recovering':
-      return { label: "RECOVERING", className: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30", icon: TrendingDown };
-    case 'strained':
-      return { label: "STRAINED", className: "bg-red-500/20 text-red-400 border-red-500/30", icon: TrendingDown };
-  }
-}
-
 export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, userId, athleteProfile, tdee }: RecoveryDashboardProps) {
   const { profile } = useUser();
   const [metrics, setMetrics] = useState<AllMetrics | null>(null);
@@ -88,6 +78,7 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
   const [todayCheckedIn, setTodayCheckedIn] = useState(false);
   const [checkInDaysCount, setCheckInDaysCount] = useState(0);
   const [sleepLogs, setSleepLogs] = useState<{ date: string; hours: number }[]>([]);
+  const [helpOpen, setHelpOpen] = useState(false);
   const baselineLoadedRef = useRef(false);
 
   const uniqueDays = new Set(sessions28d.map(s => s.date)).size;
@@ -227,14 +218,33 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
 
   return (
     <div className="space-y-4 mb-6">
-      {/* 1) Readiness Badge */}
-      <DeterministicReadinessBadge label={metrics.readiness.label} score={metrics.readiness.score} />
+      {/* 1) Daily Verdict — the single most important call to action: push,
+          steady, easy, or recover. Combines readiness, OT risk, and load
+          zone into one decisive line so the user knows what to do right now. */}
+      <DailyVerdictCard metrics={metrics} baseline={baseline} checkedInToday={todayCheckedIn} />
 
-      {/* 2) Readiness Ring (hero) + Strain Ring + OT Ring */}
+      {/* 2) Baseline confidence — tells the user how personalised the score is
+          today. Green when their personal baseline is fully active. */}
+      <BaselineConfidencePill baseline={baseline} totalCheckInDays={checkInDaysCount} />
+
+      {/* 3) Performance — Readiness, Strain, OT Risk rings + 4-cell stats */}
       <div className="card-surface rounded-2xl p-4 border border-border">
-        <div className="flex items-center gap-2 mb-4">
-          <Activity className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-bold">Performance</h2>
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Activity className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-bold">Performance</h2>
+          </div>
+          {/* Single ? button — opens the full explainer sheet. Replaces the
+              old bottom-of-page accordion so the help is one tap away from
+              the metric the user is actually looking at. */}
+          <button
+            type="button"
+            onClick={() => setHelpOpen(true)}
+            aria-label="How to read this page"
+            className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground/70 active:text-foreground active:bg-muted/40 transition-colors"
+          >
+            <HelpCircle className="h-4 w-4" strokeWidth={2.2} />
+          </button>
         </div>
 
         <div className="grid grid-cols-3 gap-2">
@@ -279,21 +289,28 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
           </div>
         </div>
 
-        {/* Stats bar — 4 columns */}
+        {/* Stats bar — 4 columns, just text, no background pills */}
         <div className="grid grid-cols-4 gap-1.5 mt-4">
-          <div className="text-center p-1.5 rounded-2xl bg-accent/20">
+          <div className="text-center">
             <div className="text-sm font-bold display-number text-foreground">{metrics.weeklySessionCount}</div>
             <div className="text-[8px] text-muted-foreground uppercase tracking-wider leading-tight">Sessions/wk</div>
           </div>
-          <div className={`text-center p-1.5 rounded-2xl overflow-hidden ${getLoadZoneStyle(metrics.loadZone.zone).bg}`}>
-            <div className={`text-sm font-bold display-number truncate ${getLoadZoneStyle(metrics.loadZone.zone).color}`}>{metrics.loadZone.label}</div>
+          <div className="text-center">
+            {/* Suppress the Heavy/Spike/Low label while the cold-start guard
+                says ACWR isn't meaningful yet; otherwise a single logged
+                session reads as "Spike" in red, which it isn't. */}
+            {metrics.loadConfidence.isReliable ? (
+              <div className={`text-sm font-bold display-number truncate ${getLoadZoneStyle(metrics.loadZone.zone).color}`}>{metrics.loadZone.label}</div>
+            ) : (
+              <div className="text-sm font-bold display-number truncate text-muted-foreground">Building</div>
+            )}
             <div className="text-[8px] text-muted-foreground uppercase tracking-wider leading-tight">Training Load</div>
           </div>
-          <div className="text-center p-1.5 rounded-2xl bg-accent/20">
+          <div className="text-center">
             <div className="text-sm font-bold display-number text-foreground">{metrics.sleepScore}</div>
             <div className="text-[8px] text-muted-foreground uppercase tracking-wider leading-tight">Sleep Score</div>
           </div>
-          <div className="text-center p-1.5 rounded-2xl bg-accent/20">
+          <div className="text-center">
             <div className="text-sm font-bold display-number text-foreground">
               {metrics.avgSleepLast3 > 0 ? `${metrics.avgSleepLast3.toFixed(1)}h` : "—"}
             </div>
@@ -308,9 +325,12 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
         totalCheckInDays={checkInDaysCount}
       />
 
-      {/* 2.6) Recovery Coach Chat */}
+      {/* 2.6) Wellness check-in (becomes Recovery Coach chat once submitted).
+          Pre-check-in title is "Daily check-in" since that's what's actually
+          on screen; the coach unlocks only after the user has fed it today's
+          signals so its advice has something to anchor on. */}
       {!hasEnoughData ? (
-        <div className="card-surface rounded-2xl p-4 border border-border">
+        <div className="card-surface rounded-3xl p-4 border border-border">
           <div className="flex items-center gap-2 mb-3">
             <Brain className="h-5 w-5 text-primary" />
             <h2 className="text-lg font-bold">Recovery Coach</h2>
@@ -320,10 +340,13 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
           </div>
         </div>
       ) : !todayCheckedIn ? (
-        <div className="card-surface rounded-2xl p-4 border border-border">
-          <div className="flex items-center gap-2 mb-3">
-            <Brain className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-bold">Recovery Coach</h2>
+        <div className="card-surface rounded-3xl p-4 border border-border">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <Brain className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-bold">Daily check-in</h2>
+            </div>
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground/60">~20 sec</span>
           </div>
           <WellnessCheckIn userId={userId} onSubmit={handleWellnessSubmit} isSubmitting={false} />
         </div>
@@ -331,7 +354,12 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
         <RecoveryCoachChat userId={userId} userName={profile?.full_name ?? null} />
       )}
 
-      {/* 3) 7-Day Strain Chart with forecast */}
+      {/* 4) Weekly load plan — past days are dimmed actuals, today is ringed,
+          remaining days are a suggested intent (rest/easy/steady/hard) chosen
+          to keep ACWR landing in the 0.8-1.3 sweet spot by Sunday. */}
+      <WeeklyLoadPlan metrics={metrics} />
+
+      {/* 5) 7-Day Strain Chart with forecast */}
       <div className="card-surface rounded-2xl p-4 border border-border">
         <div className="flex items-center gap-2 mb-3">
           <h2 className="text-lg font-bold">7-Day Strain Trend</h2>
@@ -350,7 +378,11 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
             <div className="text-[10px] text-muted-foreground">Strain</div>
           </div>
           <div className="text-center">
-            <div className={`text-lg font-bold ${getLoadZoneStyle(metrics.forecast.predictedLoadZone.zone).color}`}>{metrics.forecast.predictedLoadZone.label}</div>
+            {metrics.loadConfidence.isReliable ? (
+              <div className={`text-lg font-bold ${getLoadZoneStyle(metrics.forecast.predictedLoadZone.zone).color}`}>{metrics.forecast.predictedLoadZone.label}</div>
+            ) : (
+              <div className="text-lg font-bold text-muted-foreground">Building</div>
+            )}
             <div className="text-[10px] text-muted-foreground">Training Load</div>
           </div>
           <div className="text-center">
@@ -382,201 +414,9 @@ export const RecoveryDashboard = memo(function RecoveryDashboard({ sessions28d, 
         <BalanceMetricsCard balanceMetrics={metrics.balanceMetrics} />
       )}
 
-      {/* Metrics Guide */}
-      <MetricsGuide />
+      {/* Single help sheet — triggered from the ? on the Performance card. */}
+      <RecoveryHelpSheet open={helpOpen} onOpenChange={setHelpOpen} />
     </div>
   );
 });
 
-// ─── Metrics Guide ───────────────────────────────────────────
-const GUIDE_SECTIONS = [
-  {
-    icon: Heart,
-    color: "text-green-400",
-    bg: "bg-green-500/10",
-    title: "Readiness Score",
-    range: "0 – 100",
-    zones: [
-      { label: "Peaked", value: "80+", color: "text-green-400" },
-      { label: "Ready", value: "55–79", color: "text-blue-400" },
-      { label: "Recovering", value: "35–54", color: "text-amber-400" },
-      { label: "Strained", value: "< 35", color: "text-red-400" },
-    ],
-    description: "A composite score reflecting how prepared your body is for training. It factors in sleep quality, soreness, training load balance, recovery patterns, and consistency. Higher scores mean your body is primed for intense work.",
-  },
-  {
-    icon: Flame,
-    color: "text-orange-400",
-    bg: "bg-orange-500/10",
-    title: "Strain",
-    range: "0 – 21",
-    zones: [
-      { label: "Light", value: "0–7", color: "text-green-400" },
-      { label: "Moderate", value: "8–13", color: "text-blue-400" },
-      { label: "Hard", value: "14–17", color: "text-amber-400" },
-      { label: "All-Out", value: "18–21", color: "text-red-400" },
-    ],
-    description: "Measures the total cardiovascular and muscular load from your sessions using an exponential formula (RPE × duration × intensity). Diminishing returns mean it gets harder to push the score higher — just like real fatigue.",
-  },
-  {
-    icon: Shield,
-    color: "text-red-400",
-    bg: "bg-red-500/10",
-    title: "Overtraining Risk",
-    range: "0 – 100",
-    zones: [
-      { label: "Low", value: "0–30", color: "text-green-400" },
-      { label: "Moderate", value: "31–60", color: "text-amber-400" },
-      { label: "High", value: "61–80", color: "text-orange-400" },
-      { label: "Critical", value: "81+", color: "text-red-400" },
-    ],
-    description: "Tracks whether you're piling on too much stress too fast. Flags include spiked training loads, high average RPE, elevated soreness, consecutive high-strain days, and declining sleep. Multiple flags compound the score.",
-  },
-  {
-    icon: BarChart3,
-    color: "text-blue-400",
-    bg: "bg-blue-500/10",
-    title: "Training Load & ACWR",
-    range: null,
-    zones: [
-      { label: "Detraining", value: "< 0.8", color: "text-blue-400" },
-      { label: "Optimal", value: "0.8–1.3", color: "text-green-400" },
-      { label: "Pushing", value: "1.3–1.5", color: "text-amber-400" },
-      { label: "Overreaching", value: "> 1.5", color: "text-red-400" },
-    ],
-    description: "Acute:Chronic Workload Ratio (ACWR) compares your last 7 days of training to your 28-day baseline. A spike means you've suddenly ramped up — increasing injury and fatigue risk. The sweet spot is the optimal zone where fitness improves without excessive breakdown.",
-  },
-  {
-    icon: Moon,
-    color: "text-indigo-400",
-    bg: "bg-indigo-500/10",
-    title: "Sleep Score",
-    range: "0 – 100",
-    zones: null,
-    description: "Derived from a weighted average of your last 3 nights compared to your personal baseline. Sleep is the single biggest recovery lever — even small deficits compound over days. Tracks both duration and consistency.",
-  },
-  {
-    icon: Dumbbell,
-    color: "text-purple-400",
-    bg: "bg-purple-500/10",
-    title: "RPE & Soreness",
-    range: "1 – 10 scale",
-    zones: null,
-    description: "Rate of Perceived Exertion (RPE) measures how hard a session felt. Soreness tracks delayed muscle damage. When 7-day average RPE consistently exceeds your calibrated ceiling or soreness stays above 6, the system raises overtraining flags.",
-  },
-  {
-    icon: Gauge,
-    color: "text-cyan-400",
-    bg: "bg-cyan-500/10",
-    title: "Hooper Index",
-    range: "4 – 28",
-    zones: null,
-    description: "A validated sports science questionnaire combining sleep quality, stress, fatigue, and soreness into a single wellness number. Recorded via your daily check-in. Lower is better — rising values signal accumulating fatigue before it shows in performance.",
-  },
-  {
-    icon: Zap,
-    color: "text-yellow-400",
-    bg: "bg-yellow-500/10",
-    title: "Forecast",
-    range: null,
-    zones: null,
-    description: "Predicts tomorrow's strain, load zone, and overtraining risk based on your current trajectory. Use it to decide whether to push hard, go moderate, or take a recovery day. The forecast adapts as you log more sessions.",
-  },
-  {
-    icon: Brain,
-    color: "text-primary",
-    bg: "bg-primary/10",
-    title: "Recovery Coach Chat",
-    range: "1 gem per message",
-    zones: null,
-    description: "A conversational AI coach you can text or talk to. Tell it where you're sore, how you feel, or what session you're considering — it factors in your readiness, training load, recent sessions and a peer-reviewed combat-sports recovery library to suggest a session, flag red flags, or talk you out of overreaching. Tap the mic to dictate when supported. Free accounts get 1 message per day; Pro is unlimited.",
-  },
-];
-
-function MetricsGuide() {
-  const [open, setOpen] = useState(false);
-  const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
-
-  return (
-    <div className="card-surface rounded-2xl border border-border overflow-hidden">
-      <button
-        type="button"
-        onClick={() => { setOpen(prev => !prev); if (open) setExpandedIdx(null); }}
-        className="w-full flex items-center justify-between p-4"
-      >
-        <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center">
-            <BookOpen className="h-3.5 w-3.5 text-primary" />
-          </div>
-          <span className="text-sm font-semibold">Understanding Your Metrics</span>
-        </div>
-        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform duration-300 ${open ? "rotate-180" : ""}`} />
-      </button>
-
-      {open && (
-        <div className="px-4 pb-4 space-y-1.5">
-          <p className="text-[11px] text-muted-foreground/60 leading-relaxed pb-2">
-            Tap any metric to learn how it's calculated and what it means for your training.
-          </p>
-          {GUIDE_SECTIONS.map((section, idx) => {
-            const Icon = section.icon;
-            const isExpanded = expandedIdx === idx;
-            return (
-              <button
-                key={section.title}
-                type="button"
-                onClick={() => setExpandedIdx(isExpanded ? null : idx)}
-                className="w-full text-left rounded-2xl border border-border/20 overflow-hidden transition-colors hover:bg-accent/5"
-              >
-                <div className="flex items-center justify-between p-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className={`w-7 h-7 rounded-full ${section.bg} flex items-center justify-center`}>
-                      <Icon className={`h-3.5 w-3.5 ${section.color}`} />
-                    </div>
-                    <div>
-                      <span className="text-[13px] font-semibold">{section.title}</span>
-                      {section.range && (
-                        <span className="text-[10px] text-muted-foreground/50 ml-2">{section.range}</span>
-                      )}
-                    </div>
-                  </div>
-                  <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground/40 transition-transform duration-200 ${isExpanded ? "rotate-180" : ""}`} />
-                </div>
-
-                {isExpanded && (
-                  <div className="px-3 pb-3 space-y-2.5">
-                    <p className="text-[12px] text-muted-foreground leading-relaxed">{section.description}</p>
-                    {section.zones && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {section.zones.map((z) => (
-                          <div key={z.label} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-card/80 border border-border/20">
-                            <span className={`text-[10px] font-bold ${z.color}`}>{z.value}</span>
-                            <span className="text-[10px] text-muted-foreground">{z.label}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Deterministic Readiness Badge ───────────────────────────
-function DeterministicReadinessBadge({ label, score }: { label: ReadinessResult['label']; score: number }) {
-  const badge = getDeterministicReadinessBadge(label);
-  const Icon = badge.icon;
-
-  return (
-    <div className={`flex items-center justify-center gap-2 py-3 px-6 rounded-2xl border text-lg font-bold tracking-wide ${badge.className}`}>
-      <Icon className="h-5 w-5" />
-      {badge.label}
-      <span className="text-sm font-normal opacity-70">{score}/100</span>
-    </div>
-  );
-}

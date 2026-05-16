@@ -88,6 +88,16 @@ const revenueCatWebhook = httpAction(async (ctx, req) => {
     });
   }
 
+  // RevenueCat sends a stable `event.id` on every retry. Forwarding it lets
+  // the mutation ledger drop duplicates so an `INITIAL_PURCHASE` replay
+  // can't double-grant lifetime premium.
+  const rawEventId =
+    typeof event.id === "string"
+      ? event.id
+      : typeof event.event_id === "string"
+        ? event.event_id
+        : undefined;
+
   let result: { ok: boolean; reason?: string; skipped?: string };
   try {
     result = await ctx.runMutation(
@@ -101,6 +111,7 @@ const revenueCatWebhook = httpAction(async (ctx, req) => {
           typeof event.expiration_at_ms === "number"
             ? event.expiration_at_ms
             : undefined,
+        eventId: rawEventId,
       },
     );
   } catch (err) {

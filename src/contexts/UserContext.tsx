@@ -9,6 +9,7 @@ import { AIPersistence } from "@/lib/aiPersistence";
 import { logger } from "@/lib/logger";
 import { usePushRegistration } from "@/hooks/usePushRegistration";
 import { clearLocalSubscriptionState } from "@/contexts/SubscriptionContext";
+import { logOutPurchases } from "@/lib/purchases";
 import { api } from "../../convex/_generated/api";
 
 // Profile cache freshness — beyond this we serve cached data but flag it stale
@@ -139,6 +140,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   // Convex mutations used below.
   const updateCurrentWeightMut = useMutation(api.profiles.updateCurrentWeight);
   const setUserNameMut = useMutation(api.profiles.setUserName);
+  const syncDailyGemMut = useMutation(api.profiles.syncDailyGem);
 
   // Derive userId from the profile (Convex Auth identity is what binds the
   // query; once the query resolves, the user_id field gives us the truth).
@@ -238,10 +240,18 @@ export function UserProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const syncDailyGem = useCallback(async (): Promise<void> => {
-    // Phase 3 will replace this with a `mutations.gems.grantDaily` call.
-    // For now, no-op — the gem count comes through the reactive profile.
-    logger.info("syncDailyGem: noop pending Phase-3 mutation");
-  }, []);
+    // Lazy refill: top up the daily gem on app open / resume / midnight tick.
+    // Cap & idempotency are enforced server-side, so concurrent ticks across
+    // tabs collapse to one write per UTC day. Premium users short-circuit
+    // server-side and never accrue free gems.
+    try {
+      await syncDailyGemMut({});
+    } catch (err) {
+      // Non-fatal — the `enforceGemGate` lazy-refill still runs on the next
+      // AI call, so a missed sync just delays the visible balance update.
+      logger.warn("syncDailyGem failed", { err: String(err) });
+    }
+  }, [syncDailyGemMut]);
 
   const loadUserData = useCallback(async (): Promise<void> => {
     // Convex Auth bootstraps automatically on app mount. Keep this method
@@ -319,6 +329,15 @@ export function UserProvider({ children }: { children: ReactNode }) {
       await convexSignOut();
     } catch (err) {
       logger.warn("convex signOut failed", { err: String(err) });
+    }
+    // Detach the previous user from RevenueCat AFTER Convex sign-out so the
+    // next user signing in on this WebView doesn't briefly inherit the prior
+    // account's CustomerInfo. Failures are non-fatal (anonymous user, RC not
+    // loaded on web, etc.).
+    try {
+      await logOutPurchases();
+    } catch (err) {
+      logger.warn("purchases logOut failed", { err: String(err) });
     }
   }, [convexSignOut]);
 

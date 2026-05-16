@@ -1,12 +1,16 @@
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Trophy } from "lucide-react";
 import { motion } from "motion/react";
+import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import type { Id } from "@/../convex/_generated/dataModel";
 import { staggerContainer, staggerItem } from "@/lib/motion";
 import { ExercisePerformanceChart } from "./ExercisePerformanceChart";
 import { formatWeight, formatVolume } from "@/lib/gymCalculations";
+import { ShareButton } from "@/components/share/ShareButton";
+import { ShareCardDialog } from "@/components/share/ShareCardDialog";
+import { ExerciseProgressCard } from "@/components/share/cards/ExerciseProgressCard";
 import type { Exercise, ExercisePR, GymSet } from "@/pages/gym/types";
 
 interface ExerciseStatsSheetProps {
@@ -17,6 +21,11 @@ interface ExerciseStatsSheetProps {
 }
 
 export function ExerciseStatsSheet({ exercise, pr, open, onOpenChange }: ExerciseStatsSheetProps) {
+  // Share-card variant — `dark` (default solid background) or `transparent`
+  // (over-photo, no background fill). Mirrors the swipe-to-toggle pattern in
+  // GymTracker's session share dialog and the dashboard's fight-form sheet.
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareVariant, setShareVariant] = useState<"dark" | "transparent">("dark");
   // Reactive Convex query — chart and PRs auto-refresh as the user logs more
   // sets in any active session, including this one. No manual cache layer.
   const rows = useQuery(
@@ -28,14 +37,29 @@ export function ExerciseStatsSheet({ exercise, pr, open, onOpenChange }: Exercis
 
   if (!exercise) return null;
 
+  // Has anything worth sharing? We require at least one working set so the
+  // card doesn't render an empty PR strip and a "log more sessions" chart —
+  // that'd be the wrong screenshot to post.
+  const hasShareableData = sets.some((set) => !set.is_warmup);
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent side="bottom" className="h-[80vh] rounded-t-3xl overflow-y-auto" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)" }}>
-        <SheetHeader className="pb-1">
-          <SheetTitle className="text-lg font-bold tracking-tight">{exercise.name}</SheetTitle>
-          <p className="text-xs text-muted-foreground capitalize">
+        {/* Header is centred: share lives in the top-left (absolute), the
+            sheet's built-in close X stays in the top-right, and the title +
+            muscle-group subline sit dead-centre between them. Mirrors the
+            FightFormScoreSheet pattern so both share entry points feel the
+            same. */}
+        <SheetHeader className="relative flex flex-col items-center justify-center min-h-9 space-y-0 pb-1 px-9">
+          <SheetTitle className="text-lg font-bold tracking-tight text-center">{exercise.name}</SheetTitle>
+          <p className="text-xs text-muted-foreground capitalize text-center">
             {exercise.muscle_group.replace("_", " ")} · {exercise.equipment || "bodyweight"}
           </p>
+          {hasShareableData && (
+            <div className="absolute left-0 top-0">
+              <ShareButton onClick={() => { setShareVariant("dark"); setShareOpen(true); }} />
+            </div>
+          )}
         </SheetHeader>
 
         <motion.div
@@ -141,6 +165,51 @@ export function ExerciseStatsSheet({ exercise, pr, open, onOpenChange }: Exercis
           )}
         </motion.div>
       </SheetContent>
+
+      {/* Shareable Instagram-story card. Lives outside the bottom sheet so the
+          dialog overlay sits cleanly above it. Swipe horizontally on the
+          preview to toggle the transparent / dark variant — matches the
+          existing share dialogs in GymTracker and FightFormScoreSheet. */}
+      <ShareCardDialog
+        open={shareOpen}
+        onOpenChange={(v) => { setShareOpen(v); if (v) setShareVariant("dark"); }}
+        transparent={shareVariant === "transparent"}
+        showSwipeHint
+        title="Share Progress"
+        shareTitle={`${exercise.name} progress`}
+        shareText={`My ${exercise.name} progress on FightCamp Wizard`}
+      >
+        {({ cardRef, aspect, transparent }) => {
+          let touchStartX = 0;
+          const flashCardWrapper = (el: HTMLElement | null) => {
+            if (!el) return;
+            el.classList.remove("share-variant-flash");
+            void el.offsetWidth;
+            el.classList.add("share-variant-flash");
+          };
+          return (
+            <div
+              onTouchStart={(e) => { touchStartX = e.touches[0].clientX; }}
+              onTouchEnd={(e) => {
+                const delta = e.changedTouches[0].clientX - touchStartX;
+                if (Math.abs(delta) > 40) {
+                  setShareVariant((v) => (v === "dark" ? "transparent" : "dark"));
+                  flashCardWrapper(e.currentTarget as HTMLElement);
+                }
+              }}
+            >
+              <ExerciseProgressCard
+                ref={cardRef}
+                exerciseName={exercise.name}
+                muscleGroup={exercise.muscle_group}
+                sets={sets}
+                aspect={aspect}
+                transparent={transparent}
+              />
+            </div>
+          );
+        }}
+      </ShareCardDialog>
     </Sheet>
   );
 }

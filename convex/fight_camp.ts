@@ -97,6 +97,102 @@ export const deleteCamp = mutation({
   },
 });
 
+/**
+ * Derive the user's currently active camp. "Active" = the latest non-completed
+ * camp whose fightDate is in the future (or today). When nothing is upcoming
+ * we fall back to the most-recent camp regardless of state so the dashboard
+ * can offer a "wrap up + start next" prompt even after the fight date passes.
+ *
+ * Pure-read; no schema change. Keeps existing consumers (which still read
+ * profiles.target_date) backwards-compatible.
+ */
+export const getActiveCamp = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireUserId(ctx);
+    const rows = await ctx.db
+      .query("fight_camps")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    if (rows.length === 0) return null;
+
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const upcoming = rows
+      .filter((r) => !r.isCompleted && r.fightDate >= todayIso)
+      .sort((a, b) => a.fightDate.localeCompare(b.fightDate)); // soonest first
+
+    if (upcoming.length > 0) return upcoming[0];
+
+    // No upcoming non-completed camp — return the most-recent camp by
+    // fightDate so the UI can decide whether to offer a wrap-up prompt.
+    const sorted = [...rows].sort((a, b) => b.fightDate.localeCompare(a.fightDate));
+    return sorted[0];
+  },
+});
+
+/**
+ * Mark a camp complete and (optionally) write the retrospective fields the
+ * schema already supports. Used by WrapUpCampDialog before the user starts
+ * a new camp.
+ */
+export const completeCamp = mutation({
+  args: {
+    id: v.id("fight_camps"),
+    endWeightKg: v.optional(v.number()),
+    totalWeightCut: v.optional(v.number()),
+    weightViaDehydration: v.optional(v.number()),
+    weightViaCarbReduction: v.optional(v.number()),
+    rehydrationNotes: v.optional(v.string()),
+    performanceFeeling: v.optional(v.string()),
+  },
+  handler: async (ctx, { id, ...rest }) => {
+    const userId = await requireUserId(ctx);
+    const row = await ctx.db.get(id);
+    if (!row) throw new Error("Camp not found");
+    if (row.userId !== userId) throw new Error("Not authorized");
+    const patch: Record<string, unknown> = {
+      isCompleted: true,
+      updatedAt: Date.now(),
+    };
+    for (const [k, val] of Object.entries(rest)) {
+      if (val !== undefined) patch[k] = val;
+    }
+    await ctx.db.patch(id, patch as any);
+  },
+});
+
+/**
+ * Called from the initial onboarding flow and the NextCampWizard. Inserts a
+ * fight_camps row only when there's no active row that already covers the
+ * same fightDate; this keeps the call idempotent (re-running onboarding from
+ * a stale draft won't produce duplicate camps).
+ */
+export const createCampFromOnboarding = mutation({
+  args: {
+    name: v.string(),
+    fightDate: v.string(),
+    eventName: v.optional(v.string()),
+    weighInTiming: v.optional(v.string()),
+    startingWeightKg: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await requireUserId(ctx);
+    const existing = await ctx.db
+      .query("fight_camps")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .collect();
+    const dupe = existing.find(
+      (r) => !r.isCompleted && r.fightDate === args.fightDate,
+    );
+    if (dupe) return dupe._id;
+    return await ctx.db.insert("fight_camps", {
+      userId,
+      ...args,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 // ───────────────────────────────────────────────────────────────────────
 // fight_camp_calendar
 // ───────────────────────────────────────────────────────────────────────

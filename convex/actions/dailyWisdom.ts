@@ -1,4 +1,4 @@
-/** Daily wisdom — fast Groq call producing a small JSON envelope. NOT gem-gated. */
+/** Daily wisdom — fast Groq call producing a small JSON envelope. Gem-gated. */
 "use node";
 
 import { v } from "convex/values";
@@ -6,6 +6,7 @@ import { action } from "../_generated/server";
 import { callGroqText } from "../_shared/groq";
 import { parseJSON } from "../_shared/parseResponse";
 import { loadAthleteSnapshot, requireUserIdFromAction, SECOND_PERSON_DIRECTIVE } from "./_helpers";
+import { enforceGemGate } from "../_shared/subscriptionGuard";
 
 export const run = action({
   args: {
@@ -28,6 +29,7 @@ export const run = action({
   },
   handler: async (ctx, args) => {
     const userId = await requireUserIdFromAction(ctx);
+    await enforceGemGate(ctx, userId);
     const today = new Date();
     const target = new Date(args.targetDate);
     const daysRemaining = Math.ceil((target.getTime() - today.getTime()) / 86400000);

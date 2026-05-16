@@ -151,12 +151,24 @@ export interface PersonalBaseline {
   avg_deficit_14d: number | null;
 }
 
+/**
+ * How trustworthy is the user's load math right now? ACWR is meaningless
+ * without a chronic baseline, so we gate Heavy/Light/Balanced calls on having
+ * at least `required` training days in the last 28.
+ */
+export interface LoadConfidence {
+  trainingDaysIn28d: number;
+  required: number;          // 14 — sports-science standard
+  isReliable: boolean;       // trainingDaysIn28d >= required
+}
+
 export interface AllMetrics {
   strain: number;           // Today's 0-21 strain
   dailyLoad: number;        // Today's raw load
   acuteLoad: number;        // Sum of last 7 daily loads
   chronicLoad: number;      // Average of last 28 daily loads
   loadRatio: number;        // acuteLoad / (chronicLoad + 1)
+  loadConfidence: LoadConfidence;
   loadZone: LoadZoneInfo;   // User-friendly interpretation
   overtrainingRisk: OvertrainingRisk;
   weeklySessionCount: number;

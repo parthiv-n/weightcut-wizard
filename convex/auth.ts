@@ -97,7 +97,10 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
           activityLevel: "",
           goalType: "",
           role: profileRole,
-          gems: 0,
+          // Starter gem pack — free users get 3 gems at signup; daily refill
+          // tops the balance back up to 3 (cap) until they buy a subscription.
+          gems: 3,
+          lastFreeGemDate: new Date().toISOString().slice(0, 10),
           adsWatchedToday: 0,
           subscriptionTier: "free",
         });

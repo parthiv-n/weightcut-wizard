@@ -192,15 +192,24 @@ export function RecoveryCoachChat({ userId, userName }: RecoveryCoachChatProps) 
   }, [input, isListening, interimText]);
 
   return (
-    <div className="card-surface rounded-xl border border-border overflow-hidden">
-      {/* Header */}
+    <div className="card-surface rounded-3xl border border-border overflow-hidden">
+      {/* Header — matches the rounded-3xl rhythm of the verdict and load cards
+          and surfaces a small live status pill so the chat reads as a live
+          coach, not a static text box. */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-border/40">
-        <div className="flex items-center gap-2">
-          <Brain className="h-5 w-5 text-primary" />
-          <h2 className="text-lg font-bold">Recovery Coach</h2>
+        <div className="flex items-center gap-2.5">
+          <div className="h-9 w-9 rounded-2xl bg-primary/15 flex items-center justify-center">
+            <Brain className="h-4 w-4 text-primary" strokeWidth={2.4} />
+          </div>
+          <div className="leading-tight">
+            <h2 className="text-[15px] font-bold tracking-tight">Recovery Coach</h2>
+            <div className="flex items-center gap-1 text-[10px] text-muted-foreground/70">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Online · 1 gem per message
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-muted-foreground/70 hidden sm:inline">1 gem per message</span>
+        <div className="flex items-center gap-1">
           {messages.length > 0 && (
             <button
               type="button"

@@ -241,7 +241,7 @@ export const BottomNav = memo(function BottomNav() {
           {/* Bottom-nav pill — sized ~23% smaller than the original spec
               (30% shrink, then +10% bump per follow-up). Item / icon sizes
               and the FAB scale together so the visual rhythm is preserved. */}
-          <div className="flex items-center gap-1 p-1 rounded-full bg-card/70 backdrop-blur-2xl border border-white/10 shadow-[0_12px_30px_-8px_rgba(0,0,0,0.55),0_2px_0_rgba(255,255,255,0.04)_inset,0_-1px_0_rgba(0,0,0,0.35)_inset]">
+          <div className="flex items-center gap-1.5 p-1.5 rounded-full bg-card/70 backdrop-blur-2xl border border-white/10 shadow-[0_12px_30px_-8px_rgba(0,0,0,0.55),0_2px_0_rgba(255,255,255,0.04)_inset,0_-1px_0_rgba(0,0,0,0.35)_inset]">
             <NavItem
               to={mainNavItems[0].url}
               icon={DashboardIcon}
@@ -283,10 +283,10 @@ export const BottomNav = memo(function BottomNav() {
               transition={{ type: "spring", damping: 18, stiffness: 420 }}
               onClick={() => { triggerHaptic(ImpactStyle.Medium); setQuickLogOpen(true); }}
               data-tutorial="nav-quick-log"
-              className="relative ml-0.5 z-10 h-11 w-11 -translate-y-2 rounded-full bg-primary flex items-center justify-center shadow-[0_9px_20px_-5px_hsl(var(--primary)/0.6),0_2px_0_rgba(255,255,255,0.22)_inset,0_-1.5px_0_rgba(0,0,0,0.18)_inset] ring-2 ring-background/40"
+              className="relative ml-0.5 z-10 h-[50px] w-[50px] -translate-y-2 rounded-full bg-primary flex items-center justify-center shadow-[0_9px_20px_-5px_hsl(var(--primary)/0.6),0_2px_0_rgba(255,255,255,0.22)_inset,0_-1.5px_0_rgba(0,0,0,0.18)_inset] ring-2 ring-background/40"
               aria-label="Quick Log"
             >
-              <Plus className="h-5 w-5 text-primary-foreground" strokeWidth={2.75} />
+              <Plus className="h-6 w-6 text-primary-foreground" strokeWidth={2.75} />
             </motion.button>
           </div>
         </LayoutGroup>
@@ -408,7 +408,7 @@ function NavItem({ to, icon: Icon, label, isActive, tutorial }: NavItemProps) {
       data-tutorial={tutorial}
       onClick={() => triggerHaptic(ImpactStyle.Light)}
       aria-label={label}
-      className="relative flex h-9 w-9 items-center justify-center rounded-full"
+      className="relative flex h-11 w-11 items-center justify-center rounded-full"
     >
       {isActive && (
         <motion.div
@@ -418,7 +418,7 @@ function NavItem({ to, icon: Icon, label, isActive, tutorial }: NavItemProps) {
         />
       )}
       <Icon
-        className={`relative h-[18px] w-[18px] transition-colors duration-150 ${isActive ? "text-primary" : "text-muted-foreground/75"}`}
+        className={`relative h-[22px] w-[22px] transition-colors duration-150 ${isActive ? "text-primary" : "text-muted-foreground/75"}`}
         strokeWidth={isActive ? 2.4 : 1.9}
       />
     </NavLink>
@@ -439,7 +439,7 @@ function NavButton({ onClick, icon: Icon, label, isActive, tutorial }: NavButton
       onClick={onClick}
       data-tutorial={tutorial}
       aria-label={label}
-      className="relative flex h-9 w-9 items-center justify-center rounded-full"
+      className="relative flex h-11 w-11 items-center justify-center rounded-full"
     >
       {isActive && (
         <motion.div
@@ -449,7 +449,7 @@ function NavButton({ onClick, icon: Icon, label, isActive, tutorial }: NavButton
         />
       )}
       <Icon
-        className={`relative h-[18px] w-[18px] transition-colors duration-150 ${isActive ? "text-primary" : "text-muted-foreground/75"}`}
+        className={`relative h-[22px] w-[22px] transition-colors duration-150 ${isActive ? "text-primary" : "text-muted-foreground/75"}`}
         strokeWidth={isActive ? 2.4 : 1.9}
       />
     </button>

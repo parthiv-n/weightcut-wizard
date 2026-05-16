@@ -585,14 +585,24 @@ export function DeclarationButton({
       onPointerLeave={end}
       onPointerCancel={end}
       className="relative w-full h-14 rounded-2xl bg-primary text-primary-foreground text-[15px] font-bold tracking-wide active:scale-[0.99] transition-transform overflow-hidden"
-      style={{ touchAction: "none" }}
+      style={{
+        touchAction: "none",
+        // `isolation: isolate` forces a fresh stacking context on this button
+        // so the GPU-composited fill child below (transform + mixBlendMode)
+        // cannot escape the rounded-2xl clip on iOS WebView. Without it the
+        // amber fill bleeds past the corners during the hold animation.
+        isolation: "isolate",
+      }}
     >
       {/* Fill arc — `transform: scaleX` driven by rAF so the animation
-          lives on the compositor and never blocks the main thread. */}
+          lives on the compositor and never blocks the main thread.
+          `rounded-2xl` mirrors the parent radius as belt-and-braces: even
+          if the parent's overflow clip glitches under iOS's GPU paint, the
+          fill's own corners stay rounded so nothing visibly overflows. */}
       <div
         ref={fillRef}
         aria-hidden
-        className="absolute inset-y-0 left-0 right-0 bg-amber-300"
+        className="absolute inset-y-0 left-0 right-0 bg-amber-300 rounded-2xl"
         style={{
           transform: "scaleX(0)",
           transformOrigin: "left center",

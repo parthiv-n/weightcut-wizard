@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { CampComparisonCard } from "@/components/share/cards/CampComparisonCard";
+import { NextCampFlow } from "@/components/fightcamp/NextCampFlow";
 import { logger } from "@/lib/logger";
 
 interface FightCamp {
@@ -35,8 +36,10 @@ interface FightCamp {
 export default function FightCamps() {
   const { userId } = useAuth();
   const rawCamps = useQuery(api.fight_camp.listCamps, userId ? {} : "skip");
+  const activeCamp = useQuery(api.fight_camp.getActiveCamp, userId ? {} : "skip");
   const createCampMut = useMutation(api.fight_camp.createCamp);
   const deleteCampMut = useMutation(api.fight_camp.deleteCamp);
+  const [nextCampOpen, setNextCampOpen] = useState(false);
 
   // Map Convex camelCase rows → legacy snake_case shape used by share cards.
   const camps = useMemo<FightCamp[]>(() => {
@@ -254,6 +257,24 @@ export default function FightCamps() {
           </div>
         </div>
 
+        {/* Primary CTA — routes to full onboarding when the user has zero
+            camps (covers both brand-new-but-already-has-profile and "deleted
+            everything, starting fresh" cases), otherwise opens the slim
+            wrap-up + 5-step wizard. The legacy + icon top-right (name+date
+            +event only) stays for power users who want a stripped-down add. */}
+        {!compareMode && !selectMode && (
+          <Button
+            onClick={() => {
+              if (camps.length === 0) navigate("/onboarding?startCamp=1");
+              else setNextCampOpen(true);
+            }}
+            className="w-full h-12 rounded-2xl gap-2"
+          >
+            <Plus className="h-4 w-4" strokeWidth={2.6} />
+            {camps.length === 0 ? "Start your first camp" : "Start a new fight camp"}
+          </Button>
+        )}
+
         {/* Compare mode hint */}
         {compareMode && (
           <p className="text-sm text-muted-foreground">
@@ -280,8 +301,17 @@ export default function FightCamps() {
               <h3 className="text-sm font-bold">No Camps Yet</h3>
               <p className="text-muted-foreground text-xs mt-0.5">Start tracking your first preparation.</p>
             </div>
-            <Button onClick={() => setDialogOpen(true)} variant="outline" className="rounded-2xl mt-2 border-border hover:bg-muted">
-              Create First Camp
+            {/* Routes the user through the full onboarding so the new camp
+                inherits all the rich fight-specific data (target weight,
+                weigh-in style, athlete type). When the user already has a
+                profile from a previous camp, the startCamp query param
+                suppresses the usual "already onboarded → /dashboard" bounce. */}
+            <Button
+              onClick={() => navigate("/onboarding?startCamp=1")}
+              variant="outline"
+              className="rounded-2xl mt-2 border-border hover:bg-muted"
+            >
+              Start camp onboarding
             </Button>
           </div>
         ) : (
@@ -499,6 +529,15 @@ export default function FightCamps() {
           </ShareCardDialog>
         );
       })()}
+
+      {/* Slim next-camp flow — wraps up the current camp (if any) then runs
+          a 5-step wizard so the user can stack a new camp without revisiting
+          the full onboarding screens. */}
+      <NextCampFlow
+        open={nextCampOpen}
+        onOpenChange={setNextCampOpen}
+        activeCamp={activeCamp ?? null}
+      />
     </div>
   );
 }

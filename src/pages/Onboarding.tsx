@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAction, useMutation } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { useProfile, useAuth, useUser } from "@/contexts/UserContext";
@@ -257,6 +257,13 @@ export default function Onboarding() {
   const stayOnOnboardingRef = useRef(false);
   useEffect(() => { stayOnOnboardingRef.current = stayOnOnboarding; }, [stayOnOnboarding]);
   const navigate = useNavigate();
+  // `?startCamp=1` is passed by the FightCamps page when the user is
+  // re-running onboarding to start a brand-new camp (e.g. after deleting
+  // every previous camp). It (a) suppresses the hasProfile-bounce so the
+  // returning user actually sees the wizard, and (b) routes back to /camps
+  // on completion so the user lands on the page they started from.
+  const [searchParams] = useSearchParams();
+  const isRestartingCamp = searchParams.get("startCamp") === "1";
   const { refreshProfile } = useProfile();
   const { hasProfile, isLoading: authLoading, isCoach } = useAuth();
   const { userId, userName } = useUser();
@@ -264,6 +271,10 @@ export default function Onboarding() {
   const generateCutPlanAction = useAction(api.actions.generateCutPlan.run);
   const generateWeightPlanAction = useAction(api.actions.generateWeightPlan.run);
   const updateGoalsMut = useMutation(api.profiles.updateGoals);
+  // Auto-creates a fight_camps row when the fighter flow finishes so the user
+  // has a real camp record to reuse for future "Start next camp" flows
+  // without needing to re-enter their fight info anywhere else.
+  const createCampFromOnboardingMut = useMutation(api.fight_camp.createCampFromOnboarding);
 
   const [formData, setFormData] = useState({
     // Screen 1 — flow split
@@ -279,6 +290,10 @@ export default function Onboarding() {
     goal_weight_kg: "",
     fight_week_target_kg: "",
     target_date: "",
+    // Optional fight-camp display name. Blank → defaults to "Fight Camp"
+    // when the camp row is created so the list page never shows an empty
+    // string. Captured on its own sub-step inside the fighter setup.
+    camp_name: "",
     // Screen 4
     height_cm: "",
     // Screen 5
@@ -317,8 +332,11 @@ export default function Onboarding() {
     // Convex query flips `hasProfile` true the moment we save the
     // profile and the user gets yanked to the dashboard before the
     // plan even starts.
-    if (hasProfile && !stayOnOnboarding) navigate("/dashboard", { replace: true });
-  }, [authLoading, hasProfile, isCoach, navigate, stayOnOnboarding]);
+    // `isRestartingCamp` lets returning users re-enter onboarding to start a
+    // fresh camp after they've deleted everything. Without this clause they'd
+    // bounce straight back to /dashboard the moment the page mounted.
+    if (hasProfile && !stayOnOnboarding && !isRestartingCamp) navigate("/dashboard", { replace: true });
+  }, [authLoading, hasProfile, isCoach, navigate, stayOnOnboarding, isRestartingCamp]);
 
   // Step 13 (plan_aggressiveness — "how aggressive / how fast") only applies
   // to non-fighters. Fighters' pace is determined by the fight date alone, so
@@ -338,8 +356,11 @@ export default function Onboarding() {
 
   const goNext = useCallback(() => {
     triggerHapticSelection();
-    // Sub-step navigation within step 3 (cutting fight details)
-    if (isFighterFlow && step === 3 && fightSubStep < 3) {
+    // Sub-step navigation within step 3 (cutting fight details). 5 sub-steps
+    // now: 0 competition level, 1 fight date, 2 weight class, 3 pre-cut
+    // target, 4 optional camp name. The camp-name page is skippable so its
+    // Continue button is always enabled (falls back to "Fight Camp").
+    if (isFighterFlow && step === 3 && fightSubStep < 4) {
       setFightSubDirection(1);
       setFightSubStep(s => s + 1);
       return;
@@ -376,8 +397,9 @@ export default function Onboarding() {
     setStep(prev => {
       const next = Math.max(prev - 1, 1);
       // Entering step 3 cutting from step 4 (back nav) — land on last sub-page
+      // (now sub-step 4: optional camp name)
       if (isFighterFlow && next === 3) {
-        setFightSubStep(3);
+        setFightSubStep(4);
         setFightSubDirection(-1);
       }
       return next;
@@ -591,6 +613,34 @@ export default function Onboarding() {
         bodyFatPct: formData.body_fat_pct ? parseFloat(formData.body_fat_pct) : undefined,
       });
 
+      // 1b. Auto-create a fight_camps row for the fighter flow so the user
+      //     has a real camp object from day one. Idempotent on the Convex
+      //     side, so a re-run of onboarding won't duplicate. Non-blocking —
+      //     a failure here shouldn't block plan generation.
+      if (isFighterFlow && formData.target_date) {
+        try {
+          // User-entered name from the optional Sub-page 4 wins; otherwise
+          // we derive a label from athlete_type ("Boxing camp" etc.) so the
+          // list still reads naturally without the user picking anything.
+          // Empty input falls back to the literal "Fight Camp".
+          const typed = formData.camp_name.trim();
+          let campName: string;
+          if (typed) {
+            campName = typed;
+          } else {
+            const ath = formData.athlete_types[0] || formData.athlete_type;
+            campName = ath ? `${ath.charAt(0).toUpperCase()}${ath.slice(1)} camp` : "Fight Camp";
+          }
+          await createCampFromOnboardingMut({
+            name: campName,
+            fightDate: formData.target_date,
+            startingWeightKg: parseFloat(formData.current_weight_kg) || undefined,
+          });
+        } catch (campErr) {
+          logger.warn("Auto-create fight camp from onboarding failed", { error: campErr });
+        }
+      }
+
       // 2. Mark generation as in-flight — this drives the inline pill near
       //    the Generate button. The chart page stays visible behind it; we no
       //    longer route to a full-screen overlay or to /cut-plan|/weight-plan.
@@ -718,6 +768,13 @@ export default function Onboarding() {
         setGeneratedPlan(planPayload);
         setGeneratingPlan(false);
         setPlanGenerationFailed(false);
+        // Confirm to the user that the plan is persisted, not just shown.
+        // The InlinePlanDisplay is visually obvious; this toast adds the
+        // "and saved" half so they know they can find it later from /goals.
+        toast({
+          title: "Cut plan saved",
+          description: "Your plan is on your profile and ready to view.",
+        });
       } else {
         // Plan generation failed. Stay on the onboarding screen and
         // surface inline retry / skip controls — never auto-navigate to
@@ -750,8 +807,10 @@ export default function Onboarding() {
   const handleContinueToDashboard = useCallback(() => {
     localStorage.setItem("wcw_onboarding_just_completed", "1");
     setStayOnOnboarding(false);
-    navigate("/dashboard");
-  }, [navigate]);
+    // Returning users who re-ran onboarding to start a new camp land back
+    // on /fight-camps so they immediately see the new entry in their list.
+    navigate(isRestartingCamp ? "/fight-camps" : "/dashboard");
+  }, [navigate, isRestartingCamp]);
 
   // Retry handler when plan generation failed inline. Resets the
   // failure flag and re-runs handleSubmit so the user doesn't have to
@@ -784,8 +843,11 @@ export default function Onboarding() {
   // Same gate as the redirect useEffect — when stayOnOnboarding is true
   // we MUST keep the page mounted even if `hasProfile` has flipped, or
   // the in-flight plan generation tears down with no UI to land in.
+  // `isRestartingCamp` carries the same exemption so returning users hitting
+  // /onboarding?startCamp=1 to start a fresh fight camp don't fall into the
+  // "hasProfile → render nothing" black-screen trap.
   if (authLoading || isCoach) return null;
-  if (hasProfile && !stayOnOnboarding) return null;
+  if (hasProfile && !stayOnOnboarding && !isRestartingCamp) return null;
 
   // ── Render screens ──
   return (
@@ -1011,6 +1073,7 @@ export default function Onboarding() {
             { title: "When's the fight?", subtitle: "We'll plan backwards from your fight date." },
             { title: "What's your weight class?", subtitle: "The weight you'll weigh in at." },
             { title: "Pre-dehydration target", subtitle: "Your fight week target before the cut." },
+            { title: "Name your camp", subtitle: "Optional — gives the camp a label in your list. We'll call it 'Fight Camp' otherwise." },
           ];
           const t = subTitles[fightSubStep];
           const continueDisabled =
@@ -1018,6 +1081,8 @@ export default function Onboarding() {
             (fightSubStep === 1 && !formData.target_date) ||
             (fightSubStep === 2 && !formData.goal_weight_kg) ||
             (fightSubStep === 3 && !formData.fight_week_target_kg);
+            // fightSubStep === 4 is intentionally always allowed — see the
+            // inline Skip + default-fallback logic in the camp-name page.
           return (
             <StepLayout step={3} title={t.title} subtitle={t.subtitle}
               mascotBump={step * 10 + fightSubStep}
@@ -1184,6 +1249,46 @@ export default function Onboarding() {
                       </div>
                     );
                   })()}
+
+                  {/* Sub-page 4: Optional camp name — skippable, defaults
+                      to "Fight Camp" if left blank when the camp row is
+                      auto-created at the end of onboarding. */}
+                  {fightSubStep === 4 && (
+                    <div className="flex flex-col items-center pt-6 gap-4">
+                      <div className="text-center">
+                        <motion.span
+                          key={formData.camp_name || "empty-name"}
+                          initial={{ opacity: 0, y: 12, scale: 0.9 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          transition={{ duration: 0.2, ease: "easeOut" }}
+                          className="text-3xl font-bold tracking-tight text-foreground inline-block"
+                        >
+                          {formData.camp_name.trim() || "Fight Camp"}
+                        </motion.span>
+                      </div>
+                      <Input
+                        type="text"
+                        maxLength={48}
+                        value={formData.camp_name}
+                        onChange={(e) => setFormData(prev => ({ ...prev, camp_name: e.target.value }))}
+                        placeholder="e.g. Smith fight, World Title Camp"
+                        className="h-14 rounded-2xl bg-card border-border/50 text-center text-base font-semibold max-w-[300px]"
+                        autoFocus
+                        onKeyDown={(e) => { if (e.key === "Enter") goNext(); }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          triggerHapticSelection();
+                          setFormData(prev => ({ ...prev, camp_name: "" }));
+                          goNext();
+                        }}
+                        className="text-[12px] font-semibold text-muted-foreground/80 active:text-foreground transition-colors uppercase tracking-wider"
+                      >
+                        Skip · use default
+                      </button>
+                    </div>
+                  )}
                 </motion.div>
               </AnimatePresence>
             </StepLayout>

@@ -57,16 +57,20 @@ const MacroCard = ({ label, value, goal, color }: MacroCardProps) => {
     const pct = goal > 0 ? (value / goal) * 100 : 0;
     const left = Math.max(0, goal - value);
     return (
-        <div className="card-surface rounded-3xl px-3 py-4 flex flex-col items-center gap-2">
-            <Ring pct={pct} color={color} size={64} strokeWidth={8}>
-                <span className="text-[15px] font-bold tabular-nums" style={{ color }}>
+        // `aspect-square` locks each macro tile to a 1:1 ratio so Protein /
+        // Carbs / Fat read as a clean trio of square chips. Padding and the
+        // ring size are tuned so the content still fits comfortably inside
+        // the square at typical phone widths (~110px) without crowding.
+        <div className="card-surface rounded-3xl p-2.5 aspect-square flex flex-col items-center justify-center gap-1.5">
+            <Ring pct={pct} color={color} size={56} strokeWidth={7}>
+                <span className="text-[14px] font-bold tabular-nums" style={{ color }}>
                     {Math.round(value)}
-                    <span className="text-[10px] font-semibold ml-0.5" style={{ color }}>g</span>
+                    <span className="text-[9px] font-semibold ml-0.5" style={{ color }}>g</span>
                 </span>
             </Ring>
             <div className="text-center">
                 <p className="text-[12px] font-semibold text-foreground leading-none">{label}</p>
-                <p className="text-[10px] tabular-nums text-muted-foreground/60 mt-1">
+                <p className="text-[10px] tabular-nums text-muted-foreground/60 mt-0.5">
                     {goal > 0 ? `${Math.round(left)}g left` : "—"}
                 </p>
             </div>
@@ -111,7 +115,9 @@ export const MacroPieChart = memo(function MacroPieChart({
                         {Math.round(calories)}
                     </p>
                     <p className="text-[11px] text-muted-foreground/60 mt-2 tabular-nums font-medium">
-                        kcal today
+                        {calorieTarget > 0
+                            ? `of ${calorieTarget.toLocaleString()} kcal`
+                            : "kcal today"}
                     </p>
                 </div>
                 <Ring pct={calPct} color={calColor} size={88} strokeWidth={10}>

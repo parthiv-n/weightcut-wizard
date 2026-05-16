@@ -19,10 +19,13 @@
  *    container, so it doesn't fight the scroller's horizontal axis.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { Download, Loader2, X } from "lucide-react";
 import { format, parseISO } from "date-fns";
+import { Capacitor } from "@capacitor/core";
 import { triggerHaptic } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
+import { useToast } from "@/hooks/use-toast";
+import { logger } from "@/lib/logger";
 
 export interface LightboxItem {
   id: string;
@@ -55,6 +58,8 @@ export function MediaLightbox({
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
   const [activeIndex, setActiveIndex] = useState(startIndex);
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
   // Track vertical drag for swipe-to-dismiss. We only track touchstart.y
   // and translate the whole container so the dismiss feels physical.
   const dragStartY = useRef<number | null>(null);
@@ -145,6 +150,92 @@ export function MediaLightbox({
     dragStartY.current = null;
   };
 
+  // Save the active clip to the device. On iOS Capacitor we write to the
+  // Cache dir then hand it to the OS share sheet so the user can pick
+  // "Save Image" / "Save Video" — that's the only sanctioned route to
+  // Photos without the photo-library plugin. On the web we trigger a
+  // standard download.
+  const handleSave = useCallback(async (item: LightboxItem) => {
+    if (!item.url || saving) return;
+    setSaving(true);
+    triggerHaptic(ImpactStyle.Light);
+    try {
+      const ext = item.kind === "video" ? "mp4" : "jpg";
+      const fileName = `wcw-${item.kind}-${item.id}.${ext}`;
+
+      if (Capacitor.isNativePlatform()) {
+        const [{ Filesystem, Directory }, { Share }] = await Promise.all([
+          import("@capacitor/filesystem"),
+          import("@capacitor/share"),
+        ]);
+        const res = await fetch(item.url);
+        if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
+        const blob = await res.blob();
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const s = reader.result as string;
+            resolve(s.split(",")[1] ?? "");
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+        const written = await Filesystem.writeFile({
+          path: fileName,
+          data: base64,
+          directory: Directory.Cache,
+        });
+        await Share.share({
+          title: item.kind === "video" ? "Save video" : "Save photo",
+          url: written.uri,
+          dialogTitle: "Save to Photos",
+        });
+      } else if (typeof navigator !== "undefined" && navigator.share && navigator.canShare) {
+        const res = await fetch(item.url);
+        if (!res.ok) throw new Error(`Fetch failed (${res.status})`);
+        const blob = await res.blob();
+        const file = new File([blob], fileName, { type: blob.type || (item.kind === "video" ? "video/mp4" : "image/jpeg") });
+        const shareData: ShareData = { files: [file] };
+        if (navigator.canShare(shareData)) {
+          try {
+            await navigator.share(shareData);
+          } catch (e) {
+            if ((e as DOMException).name !== "AbortError") throw e;
+          }
+        } else {
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob);
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(a.href);
+        }
+      } else {
+        const a = document.createElement("a");
+        a.href = item.url;
+        a.download = fileName;
+        a.target = "_blank";
+        a.rel = "noopener";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+    } catch (err) {
+      logger.warn("MediaLightbox save failed", { error: err });
+      // User-cancelled share on iOS throws too; only toast on real failures
+      if (!(err instanceof Error && /cancel/i.test(err.message))) {
+        toast({
+          title: "Couldn't save",
+          description: "Try again in a moment.",
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setSaving(false);
+    }
+  }, [saving, toast]);
+
   if (!open || items.length === 0) return null;
 
   const active = items[activeIndex] ?? items[0];
@@ -178,18 +269,27 @@ export function MediaLightbox({
         <span className="text-[12px] font-medium text-white/80 tabular-nums">
           {activeIndex + 1} / {items.length}
         </span>
-        {onDelete ? (
+        <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => onDelete(active)}
-            aria-label="Delete media"
-            className="h-9 w-9 rounded-full bg-white/15 backdrop-blur-md flex items-center justify-center active:bg-white/25 transition-colors text-rose-300"
+            onClick={() => handleSave(active)}
+            disabled={saving || !active.url}
+            aria-label={active.kind === "video" ? "Save video" : "Save photo"}
+            className="h-9 w-9 rounded-full bg-white/15 backdrop-blur-md flex items-center justify-center active:bg-white/25 transition-colors text-white disabled:opacity-50"
           >
-            <span className="text-[12px] font-semibold">Del</span>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" strokeWidth={2.2} />}
           </button>
-        ) : (
-          <div className="h-9 w-9" />
-        )}
+          {onDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(active)}
+              aria-label="Delete media"
+              className="h-9 w-9 rounded-full bg-white/15 backdrop-blur-md flex items-center justify-center active:bg-white/25 transition-colors text-rose-300"
+            >
+              <span className="text-[12px] font-semibold">Del</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Pager */}

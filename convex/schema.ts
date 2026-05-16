@@ -86,7 +86,26 @@ export default defineSchema({
     updatedAt: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
-    .index("by_role", ["role"]),
+    .index("by_role", ["role"])
+    // Lets the RevenueCat webhook fall back to the customer-id when
+    // `app_user_id` doesn't resolve to a Convex `users._id` (e.g. RC
+    // anonymous → authed alias during onboarding).
+    .index("by_revenuecat_customer", ["revenuecatCustomerId"]),
+
+  /**
+   * RevenueCat webhook event ledger. Used purely for idempotency — we drop
+   * any inbound event whose `eventId` we've already processed so the same
+   * `INITIAL_PURCHASE` replay can't double-grant premium. The row records
+   * the outcome so support can audit a missed/duplicate event without
+   * trawling Convex logs.
+   */
+  revenuecat_webhook_events: defineTable({
+    eventId: v.string(),
+    eventType: v.string(),
+    appUserId: v.string(),
+    receivedAt: v.number(),
+    outcome: v.string(), // "applied" | "stale-expiry" | "profile-not-found" | "unknown-event" | "duplicate"
+  }).index("by_event", ["eventId"]),
 
   // ────────────────────────────────────────────────────────────────────
   // DAILY LOGS

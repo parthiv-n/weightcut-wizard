@@ -90,6 +90,44 @@ function computeAcwr(sessions: ScoringInputs["sessions"], asOfDate: string, cfg:
   return acute / chronic;
 }
 
+/**
+ * Cold-start guard inputs for the `training_spike` ceiling. Mirrors the
+ * recovery engine's signals so that one logged session against an empty
+ * 28-day window doesn't artificially cap the score.
+ */
+function computeAcuteLoadAbsolute(sessions: ScoringInputs["sessions"], asOfDate: string, cfg: ScoringConfig): number {
+  const end = new Date(asOfDate + "T00:00:00Z");
+  const start = new Date(end);
+  start.setUTCDate(start.getUTCDate() - (cfg.trainingLoad.acuteWindowDays - 1));
+  let total = 0;
+  for (const s of sessions) {
+    const t = new Date(s.date + "T00:00:00Z").getTime();
+    if (t >= start.getTime() && t <= end.getTime()) total += s.rpe * s.durationMinutes;
+  }
+  return total;
+}
+
+function countTrainingDaysIn28d(sessions: ScoringInputs["sessions"], asOfDate: string, cfg: ScoringConfig): number {
+  const end = new Date(asOfDate + "T00:00:00Z");
+  const start = new Date(end);
+  start.setUTCDate(start.getUTCDate() - (cfg.trainingLoad.chronicWindowDays - 1));
+  const days = new Set<string>();
+  for (const s of sessions) {
+    const t = new Date(s.date + "T00:00:00Z").getTime();
+    if (t >= start.getTime() && t <= end.getTime()) days.add(s.date);
+  }
+  return days.size;
+}
+
+function latestHooper(hooperByDate: ScoringInputs["hooperByDate"], asOfDate: string): number | null {
+  const sorted = [...hooperByDate].sort((a, b) => a.date.localeCompare(b.date));
+  let chosen: number | null = null;
+  for (const h of sorted) {
+    if (h.date <= asOfDate) chosen = h.hooper;
+  }
+  return chosen;
+}
+
 function emptySubScores(): FightFormScore["subScores"] {
   const empty = { value: 0, weight: 0, reason: "—" };
   return { trainingLoad: empty, sleep: empty, weightCut: empty, wellness: empty, nutritionAdherence: empty };
@@ -147,6 +185,9 @@ export function computeFightFormScore(inputs: ScoringInputs, cfg: ScoringConfig)
     weightCutDangerousDays: consecutiveDangerousDays(inputs.weights, inputs.startingWeightKg, inputs.campStartDate, cfg),
     sleepDebt7d: sleepDebt7d(inputs.sleepHours, inputs.date, cfg),
     acwr: computeAcwr(inputs.sessions, inputs.date, cfg),
+    trainingDaysIn28d: countTrainingDaysIn28d(inputs.sessions, inputs.date, cfg),
+    acuteLoad: computeAcuteLoadAbsolute(inputs.sessions, inputs.date, cfg),
+    latestHooper: latestHooper(inputs.hooperByDate, inputs.date),
   }, cfg);
 
   const displayed = emaSmooth(ceil.score, inputs.priorRawScores, cfg.smoothing.emaDays);

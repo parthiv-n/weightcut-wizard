@@ -1,4 +1,5 @@
-/** Workout generator — fast Groq, NOT gem-gated (subscription check on client). */
+/** Workout generator — fast Groq, gem-gated server-side (defense in depth — the
+ *  client UI also gates, but never trust the client). */
 "use node";
 
 import { v } from "convex/values";
@@ -7,6 +8,7 @@ import { callGroqText } from "../_shared/groq";
 import { parseJSON } from "../_shared/parseResponse";
 import { sanitizeUserText } from "../_shared/sanitizeUserText";
 import { requireUserIdFromAction, loadAthleteSnapshot, SECOND_PERSON_DIRECTIVE } from "./_helpers";
+import { enforceGemGate } from "../_shared/subscriptionGuard";
 
 const VALID_GOALS = new Set([
   "hypertrophy",
@@ -40,6 +42,7 @@ export const run = action({
   },
   handler: async (ctx, args) => {
     const userId = await requireUserIdFromAction(ctx);
+    await enforceGemGate(ctx, userId);
     const snap = await loadAthleteSnapshot(ctx, userId);
 
     // Sanitize and recover the rich generation context that the hook flattens

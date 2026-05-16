@@ -15,7 +15,7 @@ import { TodayPanel } from "@/components/dashboard/TodayPanel";
 import { FightFormScoreSheet } from "@/components/dashboard/FightFormScoreSheet";
 // Lazy-load recharts wrapper so the ~100KB charts bundle defers until first paint.
 const DashboardWeightChart = lazy(() => import("@/components/charts/DashboardWeightChart"));
-import { TrendingDown, Calendar, Lock, ChevronRight, Flame, Zap, CheckCircle2, Scale, Swords } from "lucide-react";
+import { TrendingDown, Calendar, Lock, ChevronRight, Flame, Zap, CheckCircle2, Scale, Swords, Sparkles, Trophy } from "lucide-react";
 import { TrainingWeekWidget, preloadTrainingWeek } from "@/components/dashboard/TrainingWeekWidget";
 import { WeightProgressRing } from "@/components/dashboard/WeightProgressRing";
 import { StreakBadge } from "@/components/dashboard/StreakBadge";
@@ -42,6 +42,7 @@ import { CutPlanDialog } from "@/components/dashboard/CutPlanDialog";
 import { SleepLogger } from "@/components/dashboard/SleepLogger";
 import { TrainingInsightsWidget } from "@/components/dashboard/TrainingInsightsWidget";
 import NewAnnouncementWidget from "@/components/dashboard/NewAnnouncementWidget";
+import { NextCampFlow } from "@/components/fightcamp/NextCampFlow";
 import { isFighter } from "@/lib/goalType";
 
 // Module-level dedupe so re-mounts within the session don't re-fire identical
@@ -99,6 +100,10 @@ export default function Dashboard() {
   const [expandedInfo, setExpandedInfo] = useState<'risk' | 'pace' | null>(null);
   const [frequentMeals, setFrequentMeals] = useState<Array<{ name: string; count: number; avgCalories: number }>>([]);
   const [scoreSheetOpen, setScoreSheetOpen] = useState(false);
+  const [nextCampOpen, setNextCampOpen] = useState(false);
+  // Active camp drives the post-fight "wrap up + start next camp" banner.
+  // Skip the query while userId is unresolved to avoid an extra round trip.
+  const activeCamp = useQuery(api.fight_camp.getActiveCamp, userId ? {} : "skip");
   const ffScoreData = useQuery(api.fightFormScore.getToday, FEATURE_FLAGS.enableFightFormScore ? {} : "skip");
   const ffAdherence = useQuery(
     api.fightFormScore.loggedTodayBundle,
@@ -770,7 +775,7 @@ export default function Dashboard() {
               <p className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground/70 font-bold">
                 {new Date().toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
               </p>
-              <h1 className="text-[22px] font-semibold leading-tight truncate">
+              <h1 className="text-[clamp(15px,4.6vw,22px)] font-semibold leading-tight break-words">
                 {userName ? `${getGreeting()}, ${userName}` : "Today"}
               </h1>
             </div>
@@ -788,6 +793,36 @@ export default function Dashboard() {
               message from the user's coach is the first thing they
               see when they open the app, not buried at the bottom. */}
           {userId && <NewAnnouncementWidget userId={userId} />}
+
+          {/* Post-fight banner — auto-prompts the user to wrap up the camp
+              and start the next one once the fight date has passed. The
+              wrap-up is part of the NextCampFlow so the user moves through
+              reflection → new camp in one stream. */}
+          {activeCamp && !activeCamp.isCompleted && activeCamp.fightDate < new Date().toISOString().slice(0, 10) && (
+            <button
+              type="button"
+              onClick={() => setNextCampOpen(true)}
+              className="w-full text-left rounded-2xl card-surface border border-primary/30 p-3 active:scale-[0.99] transition-transform"
+            >
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-2xl bg-primary/15 flex items-center justify-center shrink-0">
+                  <Trophy className="h-5 w-5 text-primary" strokeWidth={2.4} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[14px] font-bold tracking-tight text-foreground leading-tight">
+                    How did {activeCamp.name} go?
+                  </p>
+                  <p className="text-[12px] text-muted-foreground mt-0.5 leading-snug">
+                    Wrap it up and line up your next fight camp.
+                  </p>
+                </div>
+                <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary shrink-0">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Start next
+                </span>
+              </div>
+            </button>
+          )}
 
           {/* Fight Form Score ring + educational insight strip */}
           <div className="flex flex-col items-center pt-1">
@@ -815,6 +850,7 @@ export default function Dashboard() {
               appliedCeiling={ffScore.appliedCeiling}
               adherence={adherence}
               calibration={ffCalibration ?? null}
+              onHeadlineTap={() => setScoreSheetOpen(true)}
             />
             {ffScore.state === "ok" && (
               <FightFormDeltaBanner
@@ -828,7 +864,7 @@ export default function Dashboard() {
               <p className="text-[11px] text-muted-foreground/80 mt-2">
                 {ffScore.campAge.weeksAhead === 0
                   ? "Camp pace: on schedule"
-                  : `Camp pace: ${ffScore.campAge.weeksAhead > 0 ? "+" : ""}${ffScore.campAge.weeksAhead.toFixed(0)} ${Math.abs(ffScore.campAge.weeksAhead) === 1 ? "week" : "weeks"} ${ffScore.campAge.weeksAhead > 0 ? "ahead of" : "behind"} schedule`}
+                  : `Camp pace: ${Math.abs(ffScore.campAge.weeksAhead).toFixed(0)} ${Math.abs(ffScore.campAge.weeksAhead) === 1 ? "week" : "weeks"} ${ffScore.campAge.weeksAhead > 0 ? "ahead of" : "behind"} schedule`}
               </p>
             )}
           </div>
@@ -910,8 +946,6 @@ export default function Dashboard() {
           topDriver={ffScore.topDriver}
           topLimiter={ffScore.topLimiter}
           appliedCeiling={ffScore.appliedCeiling}
-          coachNarrative={wisdom?.summary ?? null}
-          actionItems={wisdom?.actionItems ?? []}
         />
 
         <FightFormCalibrationTour
@@ -927,6 +961,12 @@ export default function Dashboard() {
           open={achievementSheetOpen}
           onOpenChange={setAchievementSheetOpen}
           categories={allAchievements}
+        />
+
+        <NextCampFlow
+          open={nextCampOpen}
+          onOpenChange={setNextCampOpen}
+          activeCamp={activeCamp ?? null}
         />
       </ErrorBoundary>
     );

@@ -31,7 +31,7 @@ export function FightFormStatChips({ weight, trend, latestScore, latestLabel }: 
         <div className="section-header mb-1">Weight</div>
         {weight ? (
           <>
-            <div className="display-number text-base">
+            <div className="display-number text-sm whitespace-nowrap tabular-nums">
               {weight.current.toFixed(1)} → {weight.goal.toFixed(1)} kg
             </div>
             <div className="text-xs text-muted-foreground mt-0.5">

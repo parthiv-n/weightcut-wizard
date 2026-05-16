@@ -175,10 +175,15 @@ describe('calculateStrain', () => {
 // ─── Derive Calibration ─────────────────────────────────────
 
 describe('deriveCalibration', () => {
-  it('assigns beginner tier for low frequency', () => {
+  it('assigns beginner tier for low frequency with widened thresholds', () => {
+    // Beginner thresholds loosened (1.1/1.3 → 1.5/1.8) so that one or two
+    // sessions logged after a sparse week don't get flagged as spikes. The
+    // absolute-load floor in computeAdaptiveOvertrainingScore is the second
+    // gate that protects beginners from cold-start false positives.
     const cal = deriveCalibration(1, null, []);
     expect(cal.tier).toBe('beginner');
-    expect(cal.loadRatioThresholds.caution).toBe(1.1);
+    expect(cal.loadRatioThresholds.caution).toBe(1.5);
+    expect(cal.loadRatioThresholds.danger).toBe(1.8);
     expect(cal.strainDivisor).toBe(700);
   });
 
@@ -569,8 +574,10 @@ describe('computeAllMetrics', () => {
 
   it('flags high overtraining risk for extreme training', () => {
     const sessions: SessionRow[] = [];
-    // 7 days of double sessions at max intensity
-    for (let i = 0; i < 7; i++) {
+    // 14+ distinct training days so the cold-start gate is satisfied and
+    // the load-spike penalty can actually fire. Reflects an athlete deep
+    // into camp, not a brand-new user.
+    for (let i = 0; i < 14; i++) {
       sessions.push(makeSession({
         date: dateStr(i),
         rpe: 9,
@@ -587,6 +594,7 @@ describe('computeAllMetrics', () => {
       }));
     }
     const metrics = computeAllMetrics(sessions);
+    expect(metrics.loadConfidence.isReliable).toBe(true);
     expect(metrics.overtrainingRisk.score).toBeGreaterThan(50);
     expect(['high', 'critical']).toContain(metrics.overtrainingRisk.zone);
   });
@@ -634,5 +642,73 @@ describe('computeAllMetrics', () => {
     expect(metrics.readiness.score).toBeLessThanOrEqual(100);
     expect(metrics.trends).toBeDefined();
     expect(metrics.calibration.tier).toBe('intermediate');
+  });
+});
+
+// ─── Cold-start regression tests ───────────────────────────────
+// Reproduces the user-reported bug: a single logged session caused the
+// Training Load to read "Spike" in red AND capped the Fight Form Score.
+// These tests lock in the three-gate guard in computeAdaptiveOvertrainingScore.
+
+describe('cold-start load guards', () => {
+  it('emits loadConfidence on every metrics result', () => {
+    const metrics = computeAllMetrics([]);
+    expect(metrics.loadConfidence).toBeDefined();
+    expect(metrics.loadConfidence.required).toBe(14);
+    expect(metrics.loadConfidence.trainingDaysIn28d).toBe(0);
+    expect(metrics.loadConfidence.isReliable).toBe(false);
+  });
+
+  it('does NOT fire load-spike penalty with one session of history', () => {
+    // Exact user report: one Friday session against an otherwise empty
+    // 28-day window. Without the gate this used to score `40+` and read
+    // "Spike" in red.
+    const sessions = [
+      makeSession({ date: dateStr(0), rpe: 9, duration_minutes: 90, intensity_level: 5 }),
+    ];
+    const metrics = computeAllMetrics(sessions);
+    expect(metrics.loadConfidence.isReliable).toBe(false);
+    // No load-spike contribution to the OT score.
+    expect(metrics.overtrainingRisk.score).toBeLessThanOrEqual(30);
+    expect(metrics.overtrainingRisk.zone).toBe('low');
+    // No spike-related factor in the explanation breakdown.
+    expect(metrics.overtrainingRisk.factors.join(' ')).not.toMatch(/spike/i);
+  });
+
+  it('does NOT fire load-spike penalty when absolute weekly load is tiny', () => {
+    // 14+ distinct days clears the chronic-baseline gate but the total
+    // weekly load is well below the 500 floor.
+    const sessions: SessionRow[] = [];
+    for (let i = 0; i < 15; i++) {
+      sessions.push(makeSession({ date: dateStr(i), rpe: 2, duration_minutes: 10, intensity_level: 1 }));
+    }
+    const metrics = computeAllMetrics(sessions);
+    expect(metrics.loadConfidence.isReliable).toBe(true);
+    expect(metrics.overtrainingRisk.factors.join(' ')).not.toMatch(/spike/i);
+  });
+
+  it('softens overtraining warnings when wellness check-in is good', () => {
+    // 14+ training days + heavy load = score would normally be high.
+    // Adding a Hooper >= 16 (Good/Great wellness) should drop the score
+    // by ~25 so the zone steps down at least one tier.
+    const sessions: SessionRow[] = [];
+    for (let i = 0; i < 14; i++) {
+      sessions.push(makeSession({ date: dateStr(i), rpe: 9, duration_minutes: 90, intensity_level: 5, soreness_level: 8 }));
+    }
+    const withoutWellness = computeAllMetrics(sessions);
+    const withGoodWellness = computeAllMetrics(sessions, undefined, undefined, {
+      sleep_quality: 6,
+      stress_level: 2,
+      fatigue_level: 2,
+      soreness_level: 2,
+      energy_level: 6,
+      motivation_level: 6,
+      sleep_hours: 8,
+      hydration_feeling: 4,
+      appetite_level: 4,
+      hooper_index: 24, // Good
+    });
+    expect(withGoodWellness.overtrainingRisk.score).toBeLessThan(withoutWellness.overtrainingRisk.score);
+    expect(withGoodWellness.overtrainingRisk.factors.join(' ')).toMatch(/wellness check-in is good/i);
   });
 });

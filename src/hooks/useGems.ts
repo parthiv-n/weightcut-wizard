@@ -99,15 +99,31 @@ export function useGems() {
       }
 
       const data = await rewardAdGem({});
+      // Two failure modes returned by the mutation:
+      //   reason="gem-cap"  → user is already at the 3-gem cap, ads_watched
+      //                       still advances so they don't burn unlimited ads
+      //   no reason         → daily ad-watch ceiling (5/day) hit
+      // Both come back with `success: false` and a current gems/adsRemaining
+      // snapshot so the UI can refresh without a follow-up roundtrip.
       if (!data?.success) {
+        // @ts-ignore — `reason` is only set on the gem-cap branch
+        if (data?.reason === "gem-cap") {
+          setGems(data.gems);
+          setAdsRemaining(data.adsRemaining ?? adsRemaining);
+          await refreshProfile();
+          toast({ title: 'Gem cap reached', description: "You're already at the 3-gem cap. Spend one and come back." });
+          return false;
+        }
         toast({ title: 'Daily limit reached', description: 'You can watch more ads tomorrow.' });
         return false;
       }
 
       setGems(data.gems);
       setAdsRemaining(data.adsRemaining);
-      // Update localStorage gem count so SubscriptionContext stays in sync
-      localStorage.setItem('wcw_gems', String(data.gems));
+      // `SubscriptionContext` listens to the reactive `getMine` query for
+      // gem updates, so we just trigger a refresh — no parallel localStorage
+      // write. The legacy global `wcw_gems` key is cleaned up on mount by
+      // SubscriptionContext.cleanupLegacyKeys anyway.
       await refreshProfile();
       toast({ title: 'Gem earned!', description: `You now have ${data.gems} gems.` });
       return true;

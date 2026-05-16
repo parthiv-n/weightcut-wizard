@@ -19,6 +19,13 @@ import {
 import { requireUserId } from "./lib/auth";
 import type { Doc } from "./_generated/dataModel";
 
+/** Daily free-gem cap shared by the daily grant, ad reward, expiration-reset,
+ *  and user-callable `syncDailyGem` mutations. Balances above the cap are
+ *  NEVER topped up by automatic refills, but the floor (manual spend via
+ *  `deductGem`/`spendGem`) is honoured normally so a power user can still
+ *  drop to 0 without triggering an instant refill. */
+export const FREE_GEM_CAP = 3;
+
 // ───────────────────────────────────────────────────────────────────────
 // Shape helper — convert the Convex row (camelCase) into the snake_case
 // payload the React app currently consumes. Keeping a single mapper means
@@ -178,7 +185,10 @@ export const ensureExists = mutation({
       activityLevel: "",
       goalType: "",
       role: "fighter",
-      gems: 0,
+      // Starter gem pack — see `auth.ts` bootstrap. The daily refill caps
+      // at 3, so seeding 3 here matches "new users start with 3 gems".
+      gems: 3,
+      lastFreeGemDate: new Date().toISOString().slice(0, 10),
       adsWatchedToday: 0,
       subscriptionTier: "free",
     });
@@ -355,14 +365,33 @@ export const rewardAdGem = mutation({
     if (adsWatchedToday >= 5) {
       return { success: false, gems: profile.gems, adsRemaining: 0 };
     }
+    const current = typeof profile.gems === "number" ? profile.gems : 0;
+    // Hard cap at FREE_GEM_CAP — watching ads must never push the free-tier
+    // balance past the documented ceiling. The ads-watched counter still
+    // advances so the daily-5-ads ceiling is honoured.
+    if (current >= FREE_GEM_CAP) {
+      const nextAdsCapped = adsWatchedToday + 1;
+      await ctx.db.patch(profile._id, {
+        adsWatchedToday: nextAdsCapped,
+        adsWatchedDate: today,
+        updatedAt: Date.now(),
+      });
+      return {
+        success: false,
+        gems: current,
+        adsRemaining: 5 - nextAdsCapped,
+        reason: "gem-cap" as const,
+      };
+    }
     const nextAds = adsWatchedToday + 1;
+    const nextGems = Math.min(current + 1, FREE_GEM_CAP);
     await ctx.db.patch(profile._id, {
-      gems: profile.gems + 1,
+      gems: nextGems,
       adsWatchedToday: nextAds,
       adsWatchedDate: today,
       updatedAt: Date.now(),
     });
-    return { success: true, gems: profile.gems + 1, adsRemaining: 5 - nextAds };
+    return { success: true, gems: nextGems, adsRemaining: 5 - nextAds };
   },
 });
 
@@ -402,6 +431,47 @@ export const resetTrackingData = mutation({
     await drop("meal_plans", "by_user");
     await drop("fight_week_plans", "by_user");
     await drop("fight_week_logs", "by_user_date");
+  },
+});
+
+/**
+ * User-callable lazy refill. Invoked by the client on sign-in, app-resume,
+ * and local-midnight tick so a returning free user is topped up immediately
+ * without needing to first attempt (and fail) an AI call.
+ *
+ * Premium users short-circuit — they don't accumulate free gems.
+ * Re-uses the capped, idempotent internal grant so concurrent ticks across
+ * tabs collapse to one DB write per day.
+ *
+ * Returns the post-grant balance so the client can update local UI without
+ * waiting on the reactive `getMine` query round-trip.
+ */
+export const syncDailyGem = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await requireUserId(ctx);
+    const profile = await findByUser(ctx, userId);
+    if (!profile) return { gems: 0, granted: false, isPremium: false };
+    const now = Date.now();
+    const isPremium =
+      !!profile.subscriptionTier &&
+      profile.subscriptionTier !== "free" &&
+      (!profile.subscriptionExpiresAt || profile.subscriptionExpiresAt > now);
+    if (isPremium) {
+      return { gems: profile.gems, granted: false, isPremium: true };
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    if (profile.lastFreeGemDate === today) {
+      return { gems: profile.gems, granted: false, isPremium: false };
+    }
+    const current = typeof profile.gems === "number" ? profile.gems : 0;
+    const next = current >= FREE_GEM_CAP ? current : current + 1;
+    await ctx.db.patch(profile._id, {
+      gems: next,
+      lastFreeGemDate: today,
+      updatedAt: now,
+    });
+    return { gems: next, granted: next > current, isPremium: false };
   },
 });
 
@@ -464,7 +534,21 @@ export const activatePremium = mutation({
 
     const parsed =
       expiresAt && expiresAt.length > 0 ? Date.parse(expiresAt) : NaN;
-    const incomingExpiresAtMs = Number.isFinite(parsed) ? parsed : undefined;
+    let incomingExpiresAtMs = Number.isFinite(parsed) ? parsed : undefined;
+
+    // Hard ceiling on the client-supplied expiry. `activatePremium` is the
+    // optimistic post-purchase path — the RevenueCat webhook is the
+    // authoritative source of truth and arrives within seconds. Capping the
+    // client expiry at 36h means a forged call ("tier:premium_annual,
+    // expiresAt:2030-01-01") buys at most 36 hours of premium before the
+    // entitlement naturally lapses if no webhook ever confirms it. A real
+    // purchase's webhook hits before the cap and overwrites with the real
+    // expiry, so legitimate users never feel the ceiling.
+    const CLIENT_GRACE_MS = 36 * 60 * 60 * 1000;
+    const maxClientExpiryMs = Date.now() + CLIENT_GRACE_MS;
+    if (typeof incomingExpiresAtMs === "number" && incomingExpiresAtMs > maxClientExpiryMs) {
+      incomingExpiresAtMs = maxClientExpiryMs;
+    }
 
     // Out-of-order guard — preserve a later server-side expiry over a
     // stale client-supplied one, AND also preserve the existing tier in
@@ -540,15 +624,51 @@ export const updateSubscriptionFromRevenueCat = internalMutation({
     eventType: v.string(),
     productId: v.optional(v.string()),
     expirationAtMs: v.optional(v.number()),
+    // Optional — when present we use the ledger to drop duplicate retries.
+    // Older code paths that didn't pass this still work (no dedupe).
+    eventId: v.optional(v.string()),
   },
-  handler: async (ctx, { appUserId, eventType, productId, expirationAtMs }) => {
-    // RevenueCat's app_user_id is the Convex `users._id` we configured at
-    // login. Look up the profile by that user id.
-    const profile = await ctx.db
+  handler: async (ctx, { appUserId, eventType, productId, expirationAtMs, eventId }) => {
+    // Idempotency: drop replays of the same event id. RevenueCat retries on
+    // any non-2xx, and INITIAL_PURCHASE without an expirationAtMs has no
+    // out-of-order guard — so an unchecked replay would double-grant.
+    if (eventId) {
+      const seen = await ctx.db
+        .query("revenuecat_webhook_events")
+        .withIndex("by_event", (q) => q.eq("eventId", eventId))
+        .unique();
+      if (seen) {
+        return { ok: true, skipped: "duplicate" as const };
+      }
+    }
+
+    // RevenueCat's app_user_id should be the Convex `users._id` we configured
+    // at login. Try that first; if it's an alias from an anonymous device we
+    // fall back to the stored `revenuecatCustomerId` so we never silently
+    // drop a real purchase.
+    let profile = await ctx.db
       .query("profiles")
       .withIndex("by_user", (q) => q.eq("userId", appUserId as any))
-      .unique();
-    if (!profile) return { ok: false, reason: "profile-not-found" as const };
+      .unique()
+      .catch(() => null);
+    if (!profile) {
+      profile = await ctx.db
+        .query("profiles")
+        .withIndex("by_revenuecat_customer", (q) => q.eq("revenuecatCustomerId", appUserId))
+        .unique();
+    }
+    if (!profile) {
+      if (eventId) {
+        await ctx.db.insert("revenuecat_webhook_events", {
+          eventId,
+          eventType,
+          appUserId,
+          receivedAt: Date.now(),
+          outcome: "profile-not-found",
+        });
+      }
+      return { ok: false, reason: "profile-not-found" as const };
+    }
 
     const tierFromProduct = (pid?: string): string => {
       if (!pid) {
@@ -595,6 +715,15 @@ export const updateSubscriptionFromRevenueCat = internalMutation({
         subscriptionUpdatedAt: Date.now(),
         updatedAt: Date.now(),
       });
+      if (eventId) {
+        await ctx.db.insert("revenuecat_webhook_events", {
+          eventId,
+          eventType,
+          appUserId,
+          receivedAt: Date.now(),
+          outcome: "stale-expiry",
+        });
+      }
       return { ok: true, skipped: "stale-expiry" as const };
     }
 
@@ -603,6 +732,7 @@ export const updateSubscriptionFromRevenueCat = internalMutation({
       subscriptionUpdatedAt: Date.now(),
       updatedAt: Date.now(),
     };
+    let outcome: "applied" | "unknown-event" = "applied";
 
     switch (eventType) {
       case "INITIAL_PURCHASE":
@@ -619,6 +749,15 @@ export const updateSubscriptionFromRevenueCat = internalMutation({
       case "EXPIRATION":
         patch.subscriptionTier = "free";
         patch.subscriptionExpiresAt = undefined;
+        // Downgraded users should be able to use the app immediately rather
+        // than being stuck at 0 gems until UTC rollover. Top up to the cap
+        // but never reduce an existing balance (a power user might have
+        // bought ad-gems while premium).
+        {
+          const current = typeof profile.gems === "number" ? profile.gems : 0;
+          if (current < FREE_GEM_CAP) patch.gems = FREE_GEM_CAP;
+          patch.lastFreeGemDate = new Date().toISOString().slice(0, 10);
+        }
         break;
       case "CANCELLATION":
         // User cancelled but keeps access until expiry — DO NOT change
@@ -637,16 +776,32 @@ export const updateSubscriptionFromRevenueCat = internalMutation({
           "[revenuecat-webhook] unknown event type",
           { appUserId, eventType, productId },
         );
+        outcome = "unknown-event";
         break;
     }
 
     await ctx.db.patch(profile._id, patch as any);
+    if (eventId) {
+      await ctx.db.insert("revenuecat_webhook_events", {
+        eventId,
+        eventType,
+        appUserId,
+        receivedAt: Date.now(),
+        outcome,
+      });
+    }
     return { ok: true };
   },
 });
 
-/** Grants one free gem per UTC day. Idempotent — replays on the same day
- *  are no-ops. Callers should fire-and-forget at app mount. */
+/** Grants one free gem per UTC day, capped at `FREE_GEM_CAP`. Idempotent —
+ *  replays on the same day are no-ops, and a user already at or above the
+ *  cap is left untouched (their `lastFreeGemDate` still advances so we don't
+ *  burn a write on every AI call once they're full).
+ *
+ *  Premium users should NOT call this — `enforceGemGate` short-circuits
+ *  before invoking the daily grant for paid tiers so a downgraded premium
+ *  doesn't inherit a stockpile. */
 export const grantDailyFreeGem = internalMutation({
   args: { userId: v.id("users") },
   handler: async (ctx, { userId }) => {
@@ -657,8 +812,14 @@ export const grantDailyFreeGem = internalMutation({
     if (!profile) return;
     const today = new Date().toISOString().slice(0, 10);
     if (profile.lastFreeGemDate === today) return;
+    // Defensive: a legacy/migrated profile could leave `gems` undefined.
+    // Treat that as 0 so the +1 never produces NaN.
+    const current = typeof profile.gems === "number" ? profile.gems : 0;
+    // Only top up when below the cap — a user who has 3 gems and skips a
+    // day still has 3 the next day, not 4.
+    const next = current >= FREE_GEM_CAP ? current : current + 1;
     await ctx.db.patch(profile._id, {
-      gems: profile.gems + 1,
+      gems: next,
       lastFreeGemDate: today,
       updatedAt: Date.now(),
     });

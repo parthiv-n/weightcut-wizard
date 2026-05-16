@@ -3,7 +3,7 @@
 // LLM only interprets — never calculates
 
 import { logger } from "@/lib/logger";
-import type { SessionRow, AllMetrics, OvertrainingRisk, WellnessCheckIn, PersonalBaseline } from "./types";
+import type { SessionRow, AllMetrics, OvertrainingRisk, WellnessCheckIn, PersonalBaseline, LoadConfidence } from "./types";
 import { clamp, mapRange, groupByDate } from "./helpers";
 import { sessionLoad, dailyLoad, calculateStrain } from "./load";
 import { deriveCalibration } from "./calibration";
@@ -38,38 +38,79 @@ function buildDailyLoads(sessions28d: SessionRow[]): { date: string; load: numbe
   return result;
 }
 
+// Minimum days of training in the trailing 28 before ACWR is considered
+// meaningful. Sports-science consensus settles around 2 weeks of consistent
+// data; anything less and the chronic baseline is dominated by zeros which
+// makes the acute/chronic ratio explode on the first session logged.
+const LOAD_CONFIDENCE_REQUIRED_DAYS = 14;
+
+// Absolute floor on weekly load before ANY spike warning fires, regardless
+// of ratio. Roughly equivalent to one solid 60 min session at RPE 7. Stops
+// the engine from screaming "Heavy week" when the user has done one easy
+// run all week, even if the ratio math says otherwise.
+const MIN_ACUTE_LOAD_FOR_SPIKE_WARNING = 500;
+
+// Hooper index >= 16 = "Good" or "Great" wellness. When the body is
+// objectively saying it feels fine, downgrade load warnings by one severity
+// step so the model doesn't contradict what the user already told it.
+const WELLNESS_OK_HOOPER_THRESHOLD = 16;
+
 // ─── Load Monitoring ─────────────────────────────────────────
-function computeLoadMetrics(dailyLoads: { date: string; load: number }[]) {
+function computeLoadMetrics(dailyLoads: { date: string; load: number }[]): {
+  acuteLoad: number;
+  chronicLoad: number;
+  loadRatio: number;
+  loadConfidence: LoadConfidence;
+} {
   const acuteLoad = dailyLoads.slice(-7).reduce((sum, d) => sum + d.load, 0);
   const chronicLoad = dailyLoads.reduce((sum, d) => sum + d.load, 0) / 28;
   const loadRatio = acuteLoad / (chronicLoad + 1);
 
-  logger.info('[PE] loadMetrics', { acuteLoad, chronicLoad, loadRatio });
+  // Reliability gate: count distinct training days (any non-zero load) across
+  // the full 28-day window. ACWR is only meaningful with sustained data.
+  const trainingDaysIn28d = dailyLoads.filter((d) => d.load > 0).length;
+  const loadConfidence: LoadConfidence = {
+    trainingDaysIn28d,
+    required: LOAD_CONFIDENCE_REQUIRED_DAYS,
+    isReliable: trainingDaysIn28d >= LOAD_CONFIDENCE_REQUIRED_DAYS,
+  };
 
-  return { acuteLoad, chronicLoad, loadRatio };
+  logger.info('[PE] loadMetrics', { acuteLoad, chronicLoad, loadRatio, trainingDaysIn28d, isReliable: loadConfidence.isReliable });
+
+  return { acuteLoad, chronicLoad, loadRatio, loadConfidence };
 }
 
 // ─── Adaptive Overtraining Score ────────────────────────────
 
 function computeAdaptiveOvertrainingScore(
   loadRatio: number,
+  acuteLoad: number,
+  loadConfidence: LoadConfidence,
   avgRPE7d: number,
   avgSoreness7d: number,
   consecutiveHighDays: number,
   sessionsLast7d: number,
   calibration: import("./types").AthleteCalibration,
   trends: import("./types").TrendAlerts,
+  todayCheckIn: WellnessCheckIn | null | undefined,
 ): OvertrainingRisk {
   let score = 0;
   const factors: string[] = [];
 
+  // Load-spike penalty is gated on two things: (a) we have enough chronic
+  // history for the ratio to be meaningful at all, and (b) the absolute
+  // weekly load is large enough that a "spike" is plausibly real fatigue
+  // and not just one solid session on an otherwise empty week.
+  const loadSpikeAllowed = loadConfidence.isReliable && acuteLoad >= MIN_ACUTE_LOAD_FOR_SPIKE_WARNING;
   const { caution, danger } = calibration.loadRatioThresholds;
-  if (loadRatio > danger) {
-    score += 40;
-    factors.push(`Severe acute load spike (ratio ${loadRatio.toFixed(2)} > ${danger})`);
-  } else if (loadRatio > caution) {
-    score += Math.round(mapRange(loadRatio, caution, danger, 15, 40));
-    factors.push(`Elevated acute load (ratio ${loadRatio.toFixed(2)} > ${caution})`);
+  if (loadSpikeAllowed) {
+    if (loadRatio > danger) {
+      score += 40;
+      factors.push(`Severe acute load spike (ratio ${loadRatio.toFixed(2)} > ${danger})`);
+    } else if (loadRatio > caution) {
+      score += Math.round(mapRange(loadRatio, caution, danger, 15, 40));
+      factors.push(`Elevated acute load (ratio ${loadRatio.toFixed(2)} > ${caution})`);
+    }
   }
 
   if (avgRPE7d > calibration.rpeCeiling) {
@@ -110,13 +151,30 @@ function computeAdaptiveOvertrainingScore(
 
   score = clamp(0, 100, score);
 
+  // Wellness override: if the user said they feel Good or Great today, the
+  // body's signal beats a load-math edge case. Downgrade the score so the
+  // zone moves down one tier (Critical -> High, High -> Moderate, etc).
+  const hooper = todayCheckIn?.hooper_index;
+  let wellnessAdjusted = false;
+  if (typeof hooper === 'number' && hooper >= WELLNESS_OK_HOOPER_THRESHOLD && score >= 20) {
+    const reduced = Math.max(0, score - 25);
+    if (reduced < score) {
+      wellnessAdjusted = true;
+      factors.push(`Wellness check-in is good (Hooper ${hooper}/28), softening load warnings`);
+      score = reduced;
+    }
+  }
+
   let zone: OvertrainingRisk['zone'];
   if (score <= 30) zone = 'low';
   else if (score <= 60) zone = 'moderate';
   else if (score <= 80) zone = 'high';
   else zone = 'critical';
 
-  logger.info('[PE] adaptiveOvertrainingScore', { score, zone, factors, tier: calibration.tier });
+  logger.info('[PE] adaptiveOvertrainingScore', {
+    score, zone, factors, tier: calibration.tier,
+    loadSpikeAllowed, wellnessAdjusted,
+  });
 
   return { score, zone, factors };
 }
@@ -138,7 +196,7 @@ export function computeAllMetrics(
   );
 
   const dailyLoadsArr = buildDailyLoads(sessions28d);
-  const { acuteLoad, chronicLoad, loadRatio } = computeLoadMetrics(dailyLoadsArr);
+  const { acuteLoad, chronicLoad, loadRatio, loadConfidence } = computeLoadMetrics(dailyLoadsArr);
 
   const todayEntry = dailyLoadsArr[dailyLoadsArr.length - 1];
   const todayStrain = calculateStrain(todayEntry.load, calibration.strainDivisor);
@@ -154,12 +212,15 @@ export function computeAllMetrics(
 
   const overtrainingRisk = computeAdaptiveOvertrainingScore(
     loadRatio,
+    acuteLoad,
+    loadConfidence,
     avgRPE,
     avgSoreness,
     consecutiveHighDays,
     sessionsLast7d,
     calibration,
     trends,
+    todayCheckIn,
   );
 
   const todayRestSessions = todayEntry.sessions?.filter(s => s.session_type === 'Rest') || [];
@@ -227,6 +288,7 @@ export function computeAllMetrics(
     acuteLoad,
     chronicLoad,
     loadRatio,
+    loadConfidence,
     loadZone: getLoadZone(loadRatio, calibration),
     overtrainingRisk,
     weeklySessionCount: sessionsLast7d,

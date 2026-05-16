@@ -1,14 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
-import { Utensils, Weight, Dumbbell, Loader2, ChevronLeft, Activity, Zap } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Utensils, Weight, Dumbbell, Loader2, ChevronLeft, Activity, Zap, Camera as CameraIcon, X } from "lucide-react";
+import { Capacitor } from "@capacitor/core";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Input } from "@/components/ui/input";
 import { triggerHaptic, celebrateSuccess, triggerHapticSelection } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
-import { useMutation } from "convex/react";
+import { useConvex, useMutation } from "convex/react";
 import { api } from "@/../convex/_generated/api";
+import type { Id } from "@/../convex/_generated/dataModel";
 import { useUser } from "@/contexts/UserContext";
 import { useToast } from "@/hooks/use-toast";
 import { logger } from "@/lib/logger";
+import { uploadSessionMediaV2 } from "@/lib/uploadSessionMediaV2";
 
 interface QuickLogDialogProps {
   open: boolean;
@@ -40,9 +43,11 @@ const RECENT_SESSION_KEY = "wcw_quicklog_recent_session";
 export function QuickLogDialog({ open, onOpenChange, onLogFood, onLogWeight, onLogTraining, onLogGym }: QuickLogDialogProps) {
   const { userId, refreshProfile } = useUser();
   const { toast } = useToast();
+  const convex = useConvex();
   const logWeightMut = useMutation(api.weight_logs.logWeight);
   const updateCurrentWeightMut = useMutation(api.profiles.updateCurrentWeight);
   const createTrainingMut = useMutation(api.fight_camp.createCalendarEntry);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
 
   const [mode, setMode] = useState<Mode>("menu");
   // Weight panel state
@@ -60,14 +65,88 @@ export function QuickLogDialog({ open, onOpenChange, onLogFood, onLogWeight, onL
   const [selectedDuration, setSelectedDuration] = useState<number>(60);
   const [selectedIntensityIdx, setSelectedIntensityIdx] = useState<number>(1); // Steady
   const [savingTraining, setSavingTraining] = useState(false);
+  // Optional selfie attached to the quick-logged training session. The file
+  // is held in state until the session is created so we can link it via
+  // `uploadSessionMediaV2` once we have the new session id.
+  const [trainingPhoto, setTrainingPhoto] = useState<{ file: File; previewUrl: string } | null>(null);
 
   // Reset to menu whenever the sheet opens fresh.
   useEffect(() => {
     if (open) {
       setMode("menu");
       setQuickWeight("");
+      setTrainingPhoto((prev) => {
+        if (prev?.previewUrl) URL.revokeObjectURL(prev.previewUrl);
+        return null;
+      });
     }
   }, [open]);
+
+  // Release the preview URL when the dialog is unmounted or the photo
+  // changes — otherwise we leak the object URL on iOS WKWebView.
+  useEffect(() => {
+    return () => {
+      if (trainingPhoto?.previewUrl) URL.revokeObjectURL(trainingPhoto.previewUrl);
+    };
+  }, [trainingPhoto?.previewUrl]);
+
+  const handleTakeTrainingPhoto = async () => {
+    triggerHapticSelection();
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const { Camera, CameraResultType, CameraSource, CameraDirection } = await import("@capacitor/camera");
+        const perms = await Camera.checkPermissions();
+        if (perms.camera !== "granted") {
+          const requested = await Camera.requestPermissions({ permissions: ["camera"] });
+          if (requested.camera === "denied") {
+            toast({ title: "Camera access denied", description: "Enable it in Settings to attach photos.", variant: "destructive" });
+            return;
+          }
+        }
+        const photo = await Camera.getPhoto({
+          quality: 80,
+          allowEditing: false,
+          resultType: CameraResultType.Uri,
+          source: CameraSource.Camera,
+          direction: CameraDirection.Front,
+          width: 1600,
+          height: 1600,
+          promptLabelHeader: "Training selfie",
+          promptLabelPhoto: "Take Photo",
+        });
+        if (photo.webPath) {
+          const res = await fetch(photo.webPath);
+          const blob = await res.blob();
+          const file = new File([blob], `quicklog-${Date.now()}.jpg`, { type: blob.type || "image/jpeg" });
+          if (trainingPhoto?.previewUrl) URL.revokeObjectURL(trainingPhoto.previewUrl);
+          setTrainingPhoto({ file, previewUrl: photo.webPath });
+        }
+      } catch (err) {
+        // Camera "User cancelled photos app" surfaces as a thrown error on iOS
+        if (err instanceof Error && /cancel/i.test(err.message)) return;
+        logger.warn("QuickLog camera failed", { error: err });
+      }
+    } else {
+      // Web fallback: hidden file input with `capture=user` so mobile Safari
+      // opens the front camera directly. Desktop browsers ignore capture and
+      // fall back to the standard file picker.
+      photoInputRef.current?.click();
+    }
+  };
+
+  const handlePhotoInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-pick of the same file
+    if (!file) return;
+    if (trainingPhoto?.previewUrl) URL.revokeObjectURL(trainingPhoto.previewUrl);
+    setTrainingPhoto({ file, previewUrl: URL.createObjectURL(file) });
+  };
+
+  const clearTrainingPhoto = () => {
+    triggerHapticSelection();
+    if (trainingPhoto?.previewUrl) URL.revokeObjectURL(trainingPhoto.previewUrl);
+    setTrainingPhoto(null);
+  };
 
   // Promote the user's most-recently-logged session type to the top of the
   // chip grid so it's the natural one-tap default after first use.
@@ -111,14 +190,31 @@ export function QuickLogDialog({ open, onOpenChange, onLogFood, onLogWeight, onL
     const intensityPreset = INTENSITY_PRESETS[selectedIntensityIdx];
     setSavingTraining(true);
     try {
-      await createTrainingMut({
+      const sessionId = (await createTrainingMut({
         date: today,
         sessionType: selectedSessionType,
         intensity: intensityPreset.intensity,
         intensityLevel: intensityPreset.level,
         durationMinutes: selectedDuration,
         rpe: intensityPreset.rpe,
-      });
+      })) as Id<"fight_camp_calendar">;
+
+      // Attach the optional selfie after the session row exists. We fire-
+      // and-toast on upload failure rather than blocking the session-logged
+      // success path — the row is already saved.
+      if (trainingPhoto && sessionId) {
+        try {
+          await uploadSessionMediaV2(sessionId, trainingPhoto.file, undefined, convex);
+        } catch (uploadErr) {
+          logger.warn("QuickLog photo upload failed", { error: uploadErr });
+          toast({
+            title: "Session saved",
+            description: "Couldn't attach the photo — try adding it from the training calendar.",
+            variant: "destructive",
+          });
+        }
+      }
+
       try { localStorage.setItem(RECENT_SESSION_KEY, selectedSessionType); } catch { /* swallow */ }
       celebrateSuccess();
       toast({
@@ -163,28 +259,28 @@ export function QuickLogDialog({ open, onOpenChange, onLogFood, onLogWeight, onL
               onClick={() => { triggerHaptic(ImpactStyle.Light); onLogFood(); }}
               className="flex flex-col items-center gap-2 py-4 rounded-2xl bg-muted/50 active:scale-95 transition-transform duration-100"
             >
-              <Utensils className="h-8 w-8 text-health" />
+              <Utensils className="h-[1.6rem] w-[1.6rem] text-health" />
               <span className="text-sm font-medium">Food</span>
             </button>
             <button
               onClick={() => { triggerHaptic(ImpactStyle.Light); setMode("weight"); }}
               className="flex flex-col items-center gap-2 py-4 rounded-2xl bg-muted/50 active:scale-95 transition-transform duration-100"
             >
-              <Weight className="h-8 w-8 text-hydration" />
+              <Weight className="h-[1.6rem] w-[1.6rem] text-hydration" />
               <span className="text-sm font-medium">Weight</span>
             </button>
             <button
               onClick={() => { triggerHaptic(ImpactStyle.Light); setMode("training"); }}
               className="flex flex-col items-center gap-2 py-4 rounded-2xl bg-muted/50 active:scale-95 transition-transform duration-100"
             >
-              <Activity className="h-8 w-8 text-energy" />
+              <Activity className="h-[1.6rem] w-[1.6rem] text-energy" />
               <span className="text-sm font-medium">Training</span>
             </button>
             <button
               onClick={() => { triggerHaptic(ImpactStyle.Light); onLogGym(); }}
               className="flex flex-col items-center gap-2 py-4 rounded-2xl bg-muted/50 active:scale-95 transition-transform duration-100"
             >
-              <Dumbbell className="h-8 w-8 text-primary" />
+              <Dumbbell className="h-[1.6rem] w-[1.6rem] text-primary" />
               <span className="text-sm font-medium">Gym</span>
             </button>
           </div>
@@ -319,6 +415,50 @@ export function QuickLogDialog({ open, onOpenChange, onLogFood, onLogWeight, onL
                   );
                 })}
               </div>
+            </div>
+
+            {/* Optional selfie — opens the front camera so the user can
+                snap a post-session shot in one tap. The thumbnail row sits
+                above the primary CTA so it feels like an attachment, not
+                a blocking step. */}
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.12em] font-semibold text-muted-foreground/60 mb-1.5 px-1">
+                Photo (optional)
+              </p>
+              {trainingPhoto ? (
+                <div className="relative inline-block">
+                  <img
+                    src={trainingPhoto.previewUrl}
+                    alt="Training selfie"
+                    className="h-20 w-20 rounded-2xl object-cover border border-border/40"
+                  />
+                  <button
+                    type="button"
+                    onClick={clearTrainingPhoto}
+                    aria-label="Remove photo"
+                    className="absolute -top-1.5 -right-1.5 h-6 w-6 rounded-full bg-black/70 text-white flex items-center justify-center active:scale-90 transition-transform"
+                  >
+                    <X className="h-3.5 w-3.5" strokeWidth={2.5} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleTakeTrainingPhoto}
+                  className="h-20 w-20 rounded-2xl border border-dashed border-border/60 bg-muted/30 dark:bg-white/[0.04] flex flex-col items-center justify-center gap-1 text-muted-foreground/85 active:scale-[0.97] transition-transform"
+                >
+                  <CameraIcon className="h-5 w-5" strokeWidth={1.9} />
+                  <span className="text-[10px] font-semibold">Selfie</span>
+                </button>
+              )}
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                capture="user"
+                className="hidden"
+                onChange={handlePhotoInputChange}
+              />
             </div>
 
             <button
