@@ -234,23 +234,34 @@ export function QuickLogDialog({ open, onOpenChange, onLogFood, onLogWeight, onL
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="rounded-t-3xl pb-[calc(env(safe-area-inset-bottom,0px)+5rem)] [&>button]:hidden">
-        <div className="flex justify-center pt-1 pb-3">
-          <div className="w-10 h-1 rounded-full bg-muted-foreground/25" aria-hidden />
+      <SheetContent
+        side="bottom"
+        className="rounded-t-3xl p-0 max-h-[100dvh] flex flex-col [&>button]:hidden"
+      >
+        {/* Sticky header — drag handle + title stay visible even when the
+            body scrolls, so the back button is always reachable. */}
+        <div className="shrink-0 px-6 pt-6">
+          <div className="flex justify-center pt-1 pb-3">
+            <div className="w-10 h-1 rounded-full bg-muted-foreground/25" aria-hidden />
+          </div>
+          <SheetHeader className="px-1 pb-3 flex-row items-center gap-2 space-y-0">
+            {mode !== "menu" && (
+              <button
+                type="button"
+                onClick={() => { setMode("menu"); triggerHapticSelection(); }}
+                aria-label="Back"
+                className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground/80 active:text-foreground active:bg-muted/40 transition-colors -ml-1"
+              >
+                <ChevronLeft className="h-5 w-5" strokeWidth={2.4} />
+              </button>
+            )}
+            <SheetTitle className="text-[16px] font-semibold tracking-tight">{sheetTitle}</SheetTitle>
+          </SheetHeader>
         </div>
-        <SheetHeader className="px-1 pb-3 flex-row items-center gap-2 space-y-0">
-          {mode !== "menu" && (
-            <button
-              type="button"
-              onClick={() => { setMode("menu"); triggerHapticSelection(); }}
-              aria-label="Back"
-              className="h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground/80 active:text-foreground active:bg-muted/40 transition-colors -ml-1"
-            >
-              <ChevronLeft className="h-5 w-5" strokeWidth={2.4} />
-            </button>
-          )}
-          <SheetTitle className="text-[16px] font-semibold tracking-tight">{sheetTitle}</SheetTitle>
-        </SheetHeader>
+
+        {/* Scrollable body — keeps tall panels (training) within the viewport
+            and ensures the bottom-nav clearance is respected. */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 pb-[calc(env(safe-area-inset-bottom,0px)+5rem)]">
 
         {/* ── Menu ───────────────────────────────────────────────── */}
         {mode === "menu" && (
@@ -488,6 +499,7 @@ export function QuickLogDialog({ open, onOpenChange, onLogFood, onLogWeight, onL
             </button>
           </div>
         )}
+        </div>
       </SheetContent>
     </Sheet>
   );

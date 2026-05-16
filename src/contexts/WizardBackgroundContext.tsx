@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useCallback, useMemo, ReactNode, useEffect } from "react";
 import { useAction } from "convex/react";
+import { useAIAction } from "@/hooks/useAIAction";
 import { api } from "@/../convex/_generated/api";
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
@@ -27,7 +28,7 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
   const { userId } = useAuth();
   const { userName } = useUser();
   const { isPremium, openNoGemsDialog, onAICallSuccess, onAICallBlocked, gems } = useSubscriptionContext();
-  const wizardChatAction = useAction(api.actions.wizardChat.run);
+  const wizardChatAction = useAIAction(api.actions.wizardChat.run);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 

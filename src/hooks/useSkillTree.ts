@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useAction, useMutation, useQuery } from "convex/react";
+import { useAIAction } from "@/hooks/useAIAction";
 import { api } from "@/../convex/_generated/api";
 import type { Id } from "@/../convex/_generated/dataModel";
 import { useAuth } from "@/contexts/UserContext";
@@ -28,7 +29,7 @@ interface SkillTreeState {
 export function useSkillTree() {
   const { userId } = useAuth();
   const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
-  const generateTechniqueChainsAction = useAction(api.actions.generateTechniqueChains.run);
+  const generateTechniqueChainsAction = useAIAction(api.actions.generateTechniqueChains.run);
   const upsertTechnique = useMutation(api.techniques.upsertTechnique);
   const upsertEdges = useMutation(api.techniques.upsertEdges);
   const logTechniqueMut = useMutation(api.techniques.logTechnique);

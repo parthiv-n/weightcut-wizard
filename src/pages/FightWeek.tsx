@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAction, useMutation, useQuery } from "convex/react";
+import { useAIAction } from "@/hooks/useAIAction";
 import { api } from "@/../convex/_generated/api";
 import { useToast } from "@/hooks/use-toast";
 import { addDays, differenceInDays, format } from "date-fns";
@@ -125,7 +126,7 @@ export default function FightWeek() {
   const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
   const { tasks: aiTasks, dismissTask: aiDismiss, addTask, completeTask, failTask } = useAITask();
   const { safeAsync, isMounted } = useSafeAsync();
-  const fightWeekAnalysisAction = useAction(api.actions.fightWeekAnalysis.run);
+  const fightWeekAnalysisAction = useAIAction(api.actions.fightWeekAnalysis.run);
   const upsertFightWeekPlan = useMutation(api.fight_camp.upsertPlan);
   const updateProfileGoals = useMutation(api.profiles.updateGoals);
   const activePlan = useQuery(api.fight_camp.getActivePlan, userId ? {} : "skip");

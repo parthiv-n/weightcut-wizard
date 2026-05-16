@@ -9,38 +9,23 @@ import { useState } from "react";
 import { getSettings, saveSettings, scheduleReminder, cancelReminder, type ReminderSettings } from "@/lib/weightReminder";
 import { useSubscription } from "@/hooks/useSubscription";
 import { useGems } from "@/hooks/useGems";
-import { restorePurchases, isPremiumFromCustomerInfo, getSubscriptionFromCustomerInfo, presentCustomerCenter } from "@/lib/purchases";
+import { restorePurchases, isPremiumFromCustomerInfo, presentCustomerCenter } from "@/lib/purchases";
 import { PremiumBadge } from "@/components/subscription/PremiumBadge";
 import { useProfile } from "@/contexts/UserContext";
-import { useAction } from "convex/react";
-import { api } from "@/../convex/_generated/api";
 import { useToast as useToastSub } from "@/hooks/use-toast";
 
 function SubscriptionSection() {
   const { isPremium, tier, expiresAt, openPaywall } = useSubscription();
   const { refreshProfile } = useProfile();
-  // Action retained for type compatibility; intentionally not invoked. The
-  // RevenueCat webhook is the only authoritative writer of the DB tier
-  // since the security refactor (see convex/profiles.ts activatePremium).
-  void useAction(api.actions.activatePremium.run);
   const { toast } = useToastSub();
   const [restoringPurchases, setRestoringPurchases] = useState(false);
 
   const handleRestore = async () => {
-    if (!Capacitor.isNativePlatform()) {
-      // RC isn't loaded on web — sending the user to "No active subscription
-      // found" is misleading. Tell them where to actually restore.
-      toast({ title: "Restore is iOS-only", description: "Open the app on your iPhone to restore your subscription." });
-      return;
-    }
     setRestoringPurchases(true);
     try {
       const info = await restorePurchases();
       if (info && isPremiumFromCustomerInfo(info)) {
-        // Refresh from the server — the RevenueCat webhook does the
-        // authoritative DB write the moment `restorePurchases` resolves on
-        // their backend. `refreshProfile` picks up the new tier within a
-        // second; we don't need the (now blocked) client-side action.
+        await new Promise((r) => setTimeout(r, 2000));
         await refreshProfile();
         toast({ title: "Purchases restored!", description: "Premium access has been restored." });
       } else {

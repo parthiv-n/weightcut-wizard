@@ -3,6 +3,7 @@ import { X, Zap, Check, Loader2, RotateCcw, Clock, Crown } from "lucide-react";
 import { useNextGemCountdown } from "@/components/subscription/AILimitTimer";
 import { Button } from "@/components/ui/button";
 import { useSubscriptionContext } from "@/contexts/SubscriptionContext";
+import { useProfile } from "@/contexts/UserContext";
 import {
   isPremiumFromCustomerInfo,
   getSubscriptionFromCustomerInfo,
@@ -26,24 +27,13 @@ import { isNativePlatform } from "@/hooks/useIsNative";
  * pattern that existed under Supabase RLS — Convex has no RLS, the
  * mutation is the single source of truth.
  */
-async function syncPremiumToDb(
-  customerInfo: any,
-  _activatePremium: (args: { tier: string; expiresAt: string | null }) => Promise<unknown>,
-): Promise<{ tier: string; expiresAt: string | null } | null> {
-  // SECURITY: the client-callable `activatePremium` action now intentionally
-  // throws to block forged tier upgrades. The RevenueCat webhook is the only
-  // authoritative path that flips `profiles.subscriptionTier`. We still
-  // return the locally-derived `sub` so the UI can call `forcePremium` for
-  // an optimistic unlock; the reactive `profiles.getMine` query will then
-  // reconcile from the webhook write (usually within seconds).
-  const sub = getSubscriptionFromCustomerInfo(customerInfo);
-  if (!sub) {
-    logger.warn("syncPremiumToDb: could not extract subscription from customerInfo");
-    return null;
-  }
-  void _activatePremium;
-  return sub;
-}
+// The previous `syncPremiumToDb` helper was a no-op stub kept for backwards
+// compatibility. It has been replaced by a direct call to the server-
+// verified `api.actions.activatePremium.run` action from the paywall
+// handler (see `activatePro` below). The action takes no arguments, hits
+// the RevenueCat REST API server-side, and only flips the Convex profile
+// after a positive RC response — there is no client-trusted tier/expiry
+// surface anymore.
 
 // ─── Activating Pro Loading Screen ───
 
@@ -110,50 +100,57 @@ const FEATURES = [
 ];
 
 export function PaywallOverlay() {
-  const { isPaywallOpen, closePaywall, refreshGems, forcePremium } = useSubscriptionContext();
+  const { isPaywallOpen, closePaywall, refreshGems } = useSubscriptionContext();
+  const { refreshProfile } = useProfile();
   const [activating, setActivating] = useState(false);
   const activatePremium = useAction(api.actions.activatePremium.run);
+  const { toast } = useToast();
 
+  /**
+   * STRICT activation: caller must already have confirmed the paywall returned
+   * `PURCHASED` or `RESTORED` AND the local customerInfo passes
+   * `isPremiumFromCustomerInfo` (strict exact-entitlement match).
+   *
+   * Even after those checks pass locally, we DON'T trust the client state:
+   * we hit the server-verified `activatePremium` action, which calls RC's
+   * REST API with a server-held secret and only flips the Convex profile
+   * after a positive RC response. The Convex `useQuery(api.profiles.getMine)`
+   * then propagates the tier change reactively to every premium gate.
+   *
+   * There is no `forcePremium` / localStorage override anymore — bypassing
+   * the server-verify path was the security bug that allowed "dismiss
+   * paywall → get premium" in sandbox.
+   */
   const activatePro = useCallback(async (customerInfo: any) => {
+    // Local sanity check (defence in depth — the real check is server-side).
+    if (!isPremiumFromCustomerInfo(customerInfo)) {
+      logger.warn("activatePro: refusing — local customerInfo not strictly premium");
+      toast({ title: "Could not verify purchase", description: "Please try again or use Restore Purchases.", variant: "destructive" });
+      return;
+    }
     setActivating(true);
-    const startedAt = Date.now();
-
     try {
-      // Step 1: force premium in client state IMMEDIATELY so all premium gates
-      // unlock before the user even sees the animation finish.
-      const sub = getSubscriptionFromCustomerInfo(customerInfo);
-      if (sub) {
-        forcePremium(sub.tier, sub.expiresAt);
-        logger.info("activatePro: forced premium locally", sub);
-      }
-
-      // Step 2: write to Convex. Mutations are transactional — once this
-      // resolves, profiles.getMine will push the new tier to all consumers.
-      const dbResult = await syncPremiumToDb(customerInfo, activatePremium);
-      if (!dbResult) {
-        // DB write failed — surface a toast, but DON'T undo the local
-        // override. The startup check will re-sync via RevenueCat on next
-        // launch (RC remains the platform authority).
-        logger.warn("activatePro: DB sync failed, relying on RC startup re-sync");
-      }
-
+      // Server-side RC REST verification + profile patch. Throws on
+      // RC_NOT_ENTITLED / RC_VERIFY_NETWORK_FAILED / CONFIG_MISSING_*.
+      await activatePremium({});
+      await refreshProfile();
       await refreshGems();
-
-      // Ensure the activation animation plays through all 3 steps (~2000ms).
-      // The animation: step 0 -> 800ms -> step 1 -> 800ms -> step 2 -> done.
-      // We want the user to see step 2 land before we close.
-      const MIN_ANIMATION_MS = 2200;
-      const elapsed = Date.now() - startedAt;
-      if (elapsed < MIN_ANIMATION_MS) {
-        await new Promise(r => setTimeout(r, MIN_ANIMATION_MS - elapsed));
-      }
+      logger.info("activatePro: RC-verified premium activated");
     } catch (err) {
-      logger.error("Pro activation error", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      logger.error("Pro activation error", { error: msg });
+      toast({
+        title: "Could not verify purchase",
+        description: msg.includes("RC_NOT_ENTITLED")
+          ? "RevenueCat could not confirm payment. If you completed the purchase, please try Restore Purchases."
+          : "Please check your connection and try again.",
+        variant: "destructive",
+      });
     } finally {
       setActivating(false);
       closePaywall();
     }
-  }, [refreshGems, closePaywall, forcePremium, activatePremium]);
+  }, [activatePremium, refreshProfile, refreshGems, closePaywall, toast]);
 
   useEffect(() => {
     if (!isPaywallOpen || !isNativePlatform) return;
@@ -166,21 +163,28 @@ export function PaywallOverlay() {
 
         const paywallResult = result?.paywallResult;
 
-        // Only activate if the user actually purchased or restored
-        if (paywallResult === "PURCHASED" || paywallResult === "RESTORED") {
-          // Prefer customerInfo from presentPaywall result; fall back to fresh fetch
-          const info = result?.customerInfo ?? await getCustomerInfo();
-          if (info && isPremiumFromCustomerInfo(info)) {
-            await activatePro(info);
-            return;
-          }
+        // STRICT GATE: only `PURCHASED` or `RESTORED` proceed. CANCELLED /
+        // ERROR / NOT_PRESENTED → no state mutation whatsoever. This is the
+        // critical fix: the previous flow relied on `addCustomerInfoUpdate
+        // Listener` and a startup re-sync to flip premium, both of which
+        // fire on sandbox StoreKit echoes AFTER a dismissed paywall and
+        // mistakenly granted premium to non-paying users.
+        if (paywallResult !== "PURCHASED" && paywallResult !== "RESTORED") {
+          logger.info("Paywall dismissed without confirmed purchase", { paywallResult });
+          if (!cancelled) closePaywall();
+          return;
         }
 
-        logger.info("Paywall dismissed without purchase", { paywallResult });
+        // Prefer customerInfo from the paywall result; fall back to a fresh
+        // fetch (rare — the SDK usually populates it). The local check is
+        // defence in depth; the server-side RC REST call inside
+        // `activatePremium` is the real source of truth.
+        const info = result?.customerInfo ?? await getCustomerInfo();
+        await activatePro(info);
       } catch (err) {
         logger.error("Native paywall error", err);
+        if (!cancelled) closePaywall();
       }
-      if (!cancelled) closePaywall();
     })();
     return () => { cancelled = true; };
   }, [isPaywallOpen, closePaywall, activatePro]);

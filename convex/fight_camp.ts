@@ -326,8 +326,16 @@ export const createCalendarEntry = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await requireUserId(ctx);
+    // Find the user's primary active gym membership. First active row wins;
+    // multi-gym leaderboards are out of scope.
+    const membership = await ctx.db
+      .query("gym_members")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .filter((q) => q.eq(q.field("status"), "active"))
+      .first();
     return await ctx.db.insert("fight_camp_calendar", {
       userId,
+      gymId: membership?.gymId,
       ...args,
     });
   },

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { useAction } from "convex/react";
+import { useAIAction } from "@/hooks/useAIAction";
 import { api } from "@/../convex/_generated/api";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
@@ -30,7 +31,7 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
   const { toast } = useToast();
   const { safeAsync, isMounted } = useSafeAsync();
   const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
-  const mealPlannerAction = useAction(api.actions.mealPlanner.run);
+  const mealPlannerAction = useAIAction(api.actions.mealPlanner.run);
 
   const [trainingWisdom, setTrainingWisdom] = useState<TrainingFoodTip | null>(null);
   const [trainingWisdomLoading, setTrainingWisdomLoading] = useState(false);

@@ -2,7 +2,7 @@
 
 **Weightcut Wizard** is an AI-powered, science-backed companion app for combat sport athletes managing their weight cuts safely and effectively.
 
-Built with **React**, **Vite**, **TypeScript**, **Tailwind CSS**, **Supabase**, and **Gemini API**, it blends evidence-based nutrition science, personalized data tracking, and a touch of gamified magic to guide fighters through every phase of a weight cut — from off-camp prep to post-weigh-in recovery.
+Built with **React**, **Vite**, **TypeScript**, **Tailwind CSS**, **Convex** (backend + auth + realtime database), **Capacitor** (iOS native shell), and **Groq** (AI inference), it blends evidence-based nutrition science, personalized data tracking, and a touch of gamified magic to guide fighters through every phase of a weight cut — from off-camp prep to post-weigh-in recovery.
 
 ---
 
@@ -78,7 +78,7 @@ Weightcut Wizard is built upon current evidence and expert consensus, including:
 - Prevents unsafe plan configurations
 
 ### 🧙 AI Wizard Chat
-- Gemini-powered virtual coach
+- Groq-powered virtual coach
 - Personalized guidance based on weight data and calorie intake
 - Answers questions, reassures users, and gives diet advice
 - Always reinforces safe, evidence-based practices
@@ -97,7 +97,7 @@ Weightcut Wizard is built upon current evidence and expert consensus, including:
 
 ### 🥊 Fight Schedule
 - Phase-based timeline (off-camp → fight week → recovery)
-- Task and training planner with Supabase integration
+- Task and training planner backed by Convex realtime queries
 - Fight countdown and readiness metrics
 - Sync with weight tracker for dynamic adjustments
 
@@ -105,7 +105,7 @@ Weightcut Wizard is built upon current evidence and expert consensus, including:
 
 ## 🧠 AI Logic & Safety Enforcement
 
-The Wizard AI is trained (via Gemini API prompts) to:
+The Wizard AI is prompted (via Groq inference, server-side in Convex actions) to:
 - Recognize unsafe rates (>1 kg/week) and alert the user.
 - Recalculate timelines or calorie targets automatically.
 - Discourage dangerous dehydration methods.
@@ -124,9 +124,10 @@ All recommendations are clearly marked as **educational guidance only**, not med
 | Build Tool | Vite |
 | Routing | React Router v6 |
 | Styling | Tailwind CSS + shadcn/ui components |
-| Database & Auth | Supabase (PostgreSQL + Row-level Security) |
-| AI | Gemini API (via Supabase Edge Functions) |
-| State Management | React Query (TanStack Query) |
+| Database & Auth | Convex (realtime database + `@convex-dev/auth`) |
+| AI | Groq (via Convex Actions; vision + chat models) |
+| iOS | Capacitor 8 + RevenueCat (subscriptions) + Apple Sign-In |
+| State Management | Convex reactive `useQuery` + React Context |
 | Charts | Recharts |
 | Theming | next-themes (light/dark mode) |
 | Forms | React Hook Form + Zod validation |
@@ -137,84 +138,68 @@ All recommendations are clearly marked as **educational guidance only**, not med
 
 ### Prerequisites
 
-- **Node.js** 18+ and npm/yarn/pnpm
-- **Supabase Account** - [Sign up here](https://app.supabase.com)
-- **Git** (for cloning the repository)
+- **Node.js** 18+ and npm
+- **Convex account** — [sign up at convex.dev](https://www.convex.dev) (free tier is fine for dev)
+- **Xcode 15+** (only required for iOS native builds)
+- **Git**
 
-### Step 1: Clone the Repository
+### Step 1: Clone and install
 
 ```bash
 git clone <repository-url>
 cd weightcut-wizard
-```
-
-### Step 2: Install Dependencies
-
-Using npm:
-```bash
 npm install
 ```
 
-Or using yarn:
-```bash
-yarn install
-```
-
-Or using pnpm:
-```bash
-pnpm install
-```
-
-### Step 3: Set Up Environment Variables
-
-1. Create a `.env` file in the root directory:
+### Step 2: Bootstrap the Convex backend
 
 ```bash
-cp .env.example .env
+npx convex dev
 ```
 
-2. Get your Supabase credentials:
-   - Go to [Supabase Dashboard](https://app.supabase.com)
-   - Select your project (or create a new one)
-   - Go to **Settings** → **API**
-   - Copy the following values:
-     - **Project URL** → `VITE_SUPABASE_URL`
-     - **anon/public key** → `VITE_SUPABASE_PUBLISHABLE_KEY`
+The first run interactively links the repo to a Convex deployment, creates `.env.local` with `VITE_CONVEX_URL` and `CONVEX_DEPLOYMENT`, and pushes the schema + functions. Leave this command running — it auto-pushes changes to `convex/` as you edit.
 
-3. Update your `.env` file:
+### Step 3: Provide the AI / subscription secrets
 
-```env
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_PUBLISHABLE_KEY=your-anon-key-here
+The Convex *deployment* (not the local `.env`) holds runtime secrets. Set them via the Convex dashboard or CLI:
+
+```bash
+# Required for AI features (Groq inference)
+npx convex env set GROQ_API_KEY <your-key>
+
+# Required for RevenueCat → Convex webhook
+npx convex env set REVENUECAT_WEBHOOK_SECRET <shared-secret>
+
+# Optional: enables RC REST verification in activatePremium action
+npx convex env set REVENUECAT_API_KEY <rc-secret-api-key>
+
+# Optional: Google Cloud Speech for the voice-to-text mic in chat
+npx convex env set GOOGLE_SPEECH_API_KEY <your-key>
 ```
 
-### Step 4: Set Up Supabase Database
-
-1. **Run Migrations** (if you have local Supabase CLI):
-   ```bash
-   # If using Supabase CLI locally
-   supabase db reset
-   ```
-
-   Or manually run the SQL migrations from `supabase/migrations/` in your Supabase SQL Editor.
-
-2. **Set Up Edge Functions** (optional for local dev):
-   - The app uses Supabase Edge Functions for AI features
-   - These are deployed separately on Supabase
-   - For local development, you can test the frontend without them, but AI features won't work
-
-### Step 5: Start the Development Server
+### Step 4: Run the web dev server
 
 ```bash
 npm run dev
 ```
 
-The app will be available at `http://localhost:8080` (or the port specified in `vite.config.ts`).
+The app will be available at `http://localhost:8080`. Sign in with email + password (or Apple if configured) and Convex Auth bootstraps a profile row automatically.
 
-### Step 6: Build for Production
+### Step 5: iOS build (optional)
 
 ```bash
-npm run build
+npm run build            # produces dist/
+npx cap sync ios         # copies dist/ into ios/App + refreshes plugins
+open ios/App/App.xcodeproj
+```
+
+In Xcode: select your team in **Signing & Capabilities**, then **Product → Run** for the simulator or **Product → Archive** for a TestFlight build. Bundle id is `com.weightcutwizard.app`.
+
+### Step 6: Build for production
+
+```bash
+npm run build            # web bundle
+npx convex deploy        # promote local convex/ to the production deployment
 ```
 
 The production build will be in the `dist/` directory.
@@ -239,11 +224,16 @@ weightcut-wizard/
 │   ├── pages/               # Page components (routes)
 │   ├── contexts/            # React contexts (UserContext, etc.)
 │   ├── hooks/               # Custom React hooks
-│   ├── integrations/        # Third-party integrations (Supabase)
+│   ├── integrations/        # Third-party clients (Convex client)
 │   └── lib/                 # Utility functions
-├── supabase/
-│   ├── migrations/          # Database migrations
-│   └── functions/           # Supabase Edge Functions
+├── convex/
+│   ├── schema.ts            # Convex tables + indexes
+│   ├── auth.ts              # Convex Auth provider config
+│   ├── actions/             # Node-runtime actions (AI / external HTTP)
+│   ├── http.ts              # HTTP routes (RevenueCat webhook)
+│   ├── _shared/             # Cross-function helpers (Groq, gem gate)
+│   └── _generated/          # Auto-generated by `npx convex dev` — do not edit
+├── ios/                     # Capacitor iOS project
 ├── public/                  # Static assets
 └── dist/                    # Production build output
 ```
@@ -262,10 +252,23 @@ weightcut-wizard/
 
 ## 🌐 Environment Variables
 
+**Client (`.env.local`)** — written for you by `npx convex dev`:
+
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `VITE_SUPABASE_URL` | Your Supabase project URL | Yes |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Your Supabase anon/public key | Yes |
+| `VITE_CONVEX_URL` | Your Convex deployment URL (e.g. `https://my-app-123.convex.cloud`) | Yes |
+| `CONVEX_DEPLOYMENT` | Local dev deployment id, used by the `convex` CLI | Yes |
+| `VITE_SENTRY_DSN` | Optional Sentry DSN for client error reporting | No |
+
+**Server (Convex deployment env)** — set via `npx convex env set <KEY> <VALUE>`:
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `GROQ_API_KEY` | Groq inference key — powers every AI feature | Yes |
+| `REVENUECAT_WEBHOOK_SECRET` | Shared bearer secret RevenueCat sends in the `Authorization` header | Yes (for subscriptions) |
+| `REVENUECAT_API_KEY` | Optional RC REST API key — enables server-side entitlement verification in the `activatePremium` action | No |
+| `GOOGLE_SPEECH_API_KEY` | Google Cloud Speech-to-Text for the in-app mic | No |
+| `APPLE_PRIVATE_KEY` / `APPLE_TEAM_ID` / `APPLE_KEY_ID` / `APPLE_SERVICES_ID` | Apple Sign-In (web OAuth callback) | Required if Apple sign-in is enabled |
 
 ---
 
@@ -311,10 +314,14 @@ server: {
 }
 ```
 
-### Supabase Connection Issues
-- Verify your `.env` file has the correct values
-- Check that your Supabase project is active
-- Ensure your Supabase project has the necessary tables and RLS policies set up
+### Convex connection issues
+- Verify `.env.local` has `VITE_CONVEX_URL` set (auto-written by `npx convex dev`)
+- Make sure `npx convex dev` is running in a terminal — it's the auto-deploy + schema-validation loop
+- Schema validation errors block deploys; check the convex terminal output for the offending field / table
+
+### iOS build issues
+- After editing anything in `convex/` or `src/`, rebuild the web bundle and re-sync before Xcode: `npm run build && npx cap sync ios`
+- If RevenueCat / push notifications behave oddly in simulator, prefer testing on a real device — StoreKit Configuration files differ between simulator and TestFlight sandbox
 
 ### Build Errors
 - Clear `node_modules` and reinstall: `rm -rf node_modules && npm install`

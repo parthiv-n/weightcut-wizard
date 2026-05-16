@@ -106,7 +106,7 @@ function PrivacyPolicy() {
         "Email address (for authentication)",
         "Display name (optional, set by you)",
         "Profile photo (optional, uploaded by you)",
-        "Authentication tokens (managed by Supabase Auth)",
+        "Authentication tokens (managed by Convex Auth)",
       ]} />
 
       <SubTitle>Health & Fitness Data</SubTitle>
@@ -147,10 +147,11 @@ function PrivacyPolicy() {
       <SectionTitle>3. Third-Party Services</SectionTitle>
       <P>We use the following services to operate the app:</P>
 
-      <SubTitle>Supabase</SubTitle>
+      <SubTitle>Convex</SubTitle>
       <P>
-        Database hosting, user authentication, file storage, and serverless edge functions.
-        Your data is stored in Supabase's EU (Frankfurt) data centre with encryption at rest and in transit.
+        Database hosting, user authentication, realtime sync, file storage, and serverless functions
+        (including the AI inference orchestration layer). All data is encrypted in transit (TLS) and at
+        rest. Convex is operated by Convex, Inc. on US-based infrastructure.
       </P>
 
       <SubTitle>Groq (Llama API)</SubTitle>
@@ -186,10 +187,10 @@ function PrivacyPolicy() {
 
       <SectionTitle>4. Data Storage & Security</SectionTitle>
       <BulletList items={[
-        "All data is stored in Supabase with Row Level Security (RLS) — users can only access their own data",
+        "All data is stored in Convex — every function checks the caller's identity and only allows access to that user's own rows",
         "All connections use HTTPS/TLS encryption",
         "Authentication tokens are securely stored on-device",
-        "Profile photos and media are stored in encrypted Supabase Storage buckets",
+        "Profile photos and session media are stored in Convex File Storage and served over time-limited signed URLs",
         "We do not sell, rent, or share your personal data with advertisers or data brokers",
       ]} />
 
@@ -369,7 +370,7 @@ function TermsOfService() {
         "Health complications resulting from following app-generated protocols",
         "Data loss or service interruptions",
         "Inaccuracies in AI-generated content or nutritional data",
-        "Third-party service outages (Supabase, Groq, etc.)",
+        "Third-party service outages (Convex, Groq, RevenueCat, etc.)",
       ]} />
 
       <SectionTitle>11. Changes to Terms</SectionTitle>

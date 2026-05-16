@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { format, startOfWeek, endOfWeek } from "date-fns";
 import { Brain, Loader2, ChevronDown, Trash2, CheckCircle, X, Dumbbell, Activity, Gem } from "lucide-react";
 import { useAction, useConvex, useMutation, useQuery } from "convex/react";
+import { useAIAction } from "@/hooks/useAIAction";
 import { api } from "@/../convex/_generated/api";
 import type { Id } from "@/../convex/_generated/dataModel";
 import { useToast } from "@/hooks/use-toast";
@@ -87,7 +88,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
     const { gems, isPremium: gemsIsPremium } = useGems();
     const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
     const { tasks, addTask, completeTask, failTask, dismissTask } = useAITask();
-    const trainingSummaryAction = useAction(api.actions.trainingSummary.run);
+    const trainingSummaryAction = useAIAction(api.actions.trainingSummary.run);
     const upsertSummaryMut = useMutation(api.fight_camp.upsertSummary);
     const deleteSummaryMut = useMutation(api.fight_camp.deleteSummary);
     const summariesRaw = useQuery(api.fight_camp.listAllSummaries, userId ? { limit: 20 } : "skip");

@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback } from "react";
 import { useAction, useMutation } from "convex/react";
+import { useAIAction } from "@/hooks/useAIAction";
 import { api } from "@/../convex/_generated/api";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
@@ -29,8 +30,8 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
   const { isMounted } = useSafeAsync();
   const { checkAIAccess, openNoGemsDialog, onAICallSuccess, onAICallBlocked, handleAILimitError } = useSubscription();
   const { addTask, completeTask, failTask } = useAITask();
-  const analyzeMealAction = useAction(api.actions.analyzeMeal.run);
-  const lookupIngredientAction = useAction(api.actions.lookupIngredient.run);
+  const analyzeMealAction = useAIAction(api.actions.analyzeMeal.run);
+  const lookupIngredientAction = useAIAction(api.actions.lookupIngredient.run);
   const generatePhotoUploadUrl = useMutation(api.meals.generatePhotoUploadUrl);
   const aiAbortRef = useRef<AbortController | null>(null);
 

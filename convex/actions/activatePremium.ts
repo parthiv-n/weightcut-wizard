@@ -1,39 +1,64 @@
 "use node";
 
 /**
- * Activate-premium — formerly a thin client-callable wrapper that simply
- * forwarded the user's claimed tier/expiry to `profiles.activatePremium`.
- * That surface let any authenticated client forge a premium grant, so the
- * direct path is now BLOCKED.
+ * Activate-premium — strict, server-verified premium activation.
  *
- * Legitimate post-purchase flows must go through the RevenueCat webhook
- * (`http.ts` → `internal.profiles.updateSubscriptionFromRevenueCat`), which
- * is verified by RevenueCat's shared-secret header and is the only path
- * authorised to mutate subscription state.
+ * The ONLY path that flips a user's `profile.subscriptionTier` from "free"
+ * to a paid tier (other than the RevenueCat webhook, which is server-to-
+ * server and equally trusted). The flow:
  *
- * The action is kept callable so existing client code (`useAction(api
- * .actions.activatePremium.run)`) compiles, but it throws unconditionally
- * with a clear message. Callers must remove the call and rely on the
- * webhook + reactive `getMine` subscription to surface the updated tier.
+ *   1. Read the caller's `userId` from Convex auth. This is also the RC
+ *      `app_user_id` we configured at sign-in.
+ *   2. Call `verifyEntitlement(userId)` which hits the RC REST API with a
+ *      server-held `REVENUECAT_API_KEY`. RC validated the underlying
+ *      StoreKit receipt against Apple, so a positive answer means Apple
+ *      confirmed payment.
+ *   3. If the user is NOT entitled → throw. The client never flips premium
+ *      based on a client-supplied tier or expiry. There is no fallback,
+ *      no grace period, no client trust.
+ *   4. If verified → call the internal `profiles.activatePremiumVerified`
+ *      mutation with the RC-derived tier and expiry. The mutation has
+ *      lifetime / out-of-order guards but no client-trust path of its own.
  *
- * TODO(receipt-validation): once the Apple StoreKit receipt-validation
- * helper lands, this action can be re-enabled to:
- *   1. Validate the StoreKit receipt against Apple's server.
- *   2. Map verified `productId` → tier + expiry.
- *   3. Call `internal.profiles.activatePremium` with the validated values.
+ * This action takes NO arguments. The previous design accepted `tier` and
+ * `expiresAt` from the client — that surface was forgeable and is gone.
+ *
+ * Errors surface as user-facing toasts in the paywall handler:
+ *   - `CONFIG_MISSING_REVENUECAT_API_KEY` — deploy misconfig, fail loud.
+ *   - `RC_VERIFY_NETWORK_FAILED` / `RC_VERIFY_HTTP_*` — transient; user retries.
+ *   - `RC_NOT_ENTITLED` — user genuinely hasn't paid.
  */
-import { v } from "convex/values";
 import { action } from "../_generated/server";
+import { internal } from "../_generated/api";
+import type { Id } from "../_generated/dataModel";
+import { verifyEntitlement } from "../lib/revenuecat";
 
 export const run = action({
-  args: {
-    tier: v.string(),
-    expiresAt: v.optional(v.union(v.string(), v.null())),
-  },
-  handler: async (_ctx, _args): Promise<unknown> => {
-    // TODO: replace with receipt validation that calls
-    // internal.profiles.activatePremium after verifying the Apple/RevenueCat
-    // receipt server-side.
-    throw new Error("Not authorized");
+  args: {},
+  handler: async (ctx): Promise<{
+    tier: string;
+    expiresAt: string | null;
+    source: "rc-verified";
+  }> => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    const userId = identity.subject as Id<"users">;
+
+    const verified = await verifyEntitlement(userId as unknown as string);
+    if (!verified) {
+      throw new Error("RC_NOT_ENTITLED");
+    }
+
+    await ctx.runMutation(internal.profiles.activatePremiumVerified, {
+      userId,
+      tier: verified.tier,
+      expiresAtMs: verified.expiresAtMs,
+    });
+
+    return {
+      tier: verified.tier,
+      expiresAt: verified.expiresAtMs ? new Date(verified.expiresAtMs).toISOString() : null,
+      source: "rc-verified",
+    };
   },
 });

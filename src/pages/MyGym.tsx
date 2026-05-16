@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { GymLogoAvatar } from "@/components/coach/GymLogoAvatar";
 import { AnnouncementsSection } from "@/components/coach/AnnouncementsSection";
+import { LeaderboardSection } from "@/components/leaderboard/LeaderboardSection";
 import ErrorBoundary from "@/components/ErrorBoundary";
 
 export default function MyGym() {
@@ -157,6 +158,12 @@ export default function MyGym() {
                   Leave gym
                 </button>
               </div>
+
+              {/* Weekly training-volume leaderboard for this gym */}
+              <LeaderboardSection
+                gymId={gym.gym_id as Id<"gyms">}
+                viewer="athlete"
+              />
             </div>
           ))
         )}

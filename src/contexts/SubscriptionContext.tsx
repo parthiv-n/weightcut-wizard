@@ -7,37 +7,23 @@ import { api } from "../../convex/_generated/api";
 import { logger } from "@/lib/logger";
 
 // ─── localStorage persistence (per-user scoped) ───
+//
+// The premium override (`wcw_premium_<uid>`) that used to live here was the
+// surface attackers (and the sandbox StoreKit echo bug) used to fake
+// premium. It has been REMOVED. The Convex `profile.subscription_tier`
+// reactive query is the only source of truth for premium — written
+// exclusively by the RC webhook or by the server-verified
+// `api.actions.activatePremium.run` action that hits the RC REST API.
+//
+// We still keep a per-user gem cache because that's display-only and the
+// server enforces the actual gem balance via `enforceGemGate` server-side.
 
-const PREMIUM_KEY_PREFIX = "wcw_premium_";  // append userId
-const LEGACY_PREMIUM_KEY = "wcw_premium_override"; // for one-time cleanup
+const PREMIUM_KEY_PREFIX = "wcw_premium_"; // legacy — cleaned up on mount
+const LEGACY_PREMIUM_KEY = "wcw_premium_override"; // legacy GLOBAL key — cleaned up on mount
 const GEMS_KEY_PREFIX = "wcw_gems_"; // append userId
 const LEGACY_GEMS_KEY = "wcw_gems"; // for one-time cleanup
 
-function premiumKeyFor(userId: string): string { return `${PREMIUM_KEY_PREFIX}${userId}`; }
 function gemsKeyFor(userId: string): string { return `${GEMS_KEY_PREFIX}${userId}`; }
-
-/** Read persisted premium override from localStorage (survives WebView reloads) */
-function getLocalPremium(userId: string | null): { tier: string; expiresAt: string | null } | null {
-  if (!userId) return null;
-  try {
-    const raw = localStorage.getItem(premiumKeyFor(userId));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    // Validate expiry — don't serve expired overrides
-    if (parsed.expiresAt && new Date(parsed.expiresAt) <= new Date()) {
-      localStorage.removeItem(premiumKeyFor(userId));
-      return null;
-    }
-    return parsed;
-  } catch { return null; }
-}
-
-function setLocalPremium(userId: string, data: { tier: string; expiresAt: string | null } | null): void {
-  try {
-    if (data) localStorage.setItem(premiumKeyFor(userId), JSON.stringify(data));
-    else localStorage.removeItem(premiumKeyFor(userId));
-  } catch { /* quota / privacy mode — silently ignore */ }
-}
 
 /** Read persisted gem count from localStorage (per-user) */
 function getLocalGems(userId: string | null): number | null {
@@ -58,50 +44,32 @@ function setLocalGems(userId: string, count: number): void {
 /** Exported helper — called from UserContext signOut to scrub this user's local state */
 export function clearLocalSubscriptionState(userId: string): void {
   try {
-    localStorage.removeItem(premiumKeyFor(userId));
+    localStorage.removeItem(`${PREMIUM_KEY_PREFIX}${userId}`); // legacy
     localStorage.removeItem(gemsKeyFor(userId));
     localStorage.removeItem(`wcw_welcome_pro_shown_${userId}`);
   } catch { /* privacy mode — silently ignore */ }
 }
 
-/**
- * Nuke every per-user subscription key in localStorage regardless of which
- * userId owns it. Use on full logout flows where the active uid may already
- * have been cleared by the time signOut runs (or when switching accounts on
- * the same device and you want to guarantee no bleedover).
- *
- * Note: the active-user-only `clearLocalSubscriptionState(uid)` should still
- * be preferred when the uid is known; this is the belt-and-braces variant.
- *
- * TODO: wire into the BottomNav logout path once we can do so without
- * touching files owned by other agents in this swarm.
+/** One-time cleanup of legacy localStorage:
+ *   - GLOBAL keys (`wcw_premium_override`, `wcw_gems`) that bled state across users
+ *   - The removed per-user premium override (`wcw_premium_<uid>`) — installed by
+ *     earlier versions of the app, now obsolete since `forcePremium` is gone.
+ *     If we left them in place, an attacker (or a real user from before the
+ *     fix) would continue to see a stale `isPremium=true` client-side display
+ *     until the next sign-out. Sweep on every mount — cheap and idempotent.
  */
-export function clearAllSubscriptionState(): void {
-  try {
-    const toRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (!key) continue;
-      if (
-        key.startsWith(GEMS_KEY_PREFIX) ||
-        key.startsWith(PREMIUM_KEY_PREFIX) ||
-        key.startsWith("wcw_welcome_pro_shown_")
-      ) {
-        toRemove.push(key);
-      }
-    }
-    toRemove.forEach((k) => localStorage.removeItem(k));
-    // Legacy global keys too, in case the one-time cleanup hasn't run yet.
-    localStorage.removeItem(LEGACY_PREMIUM_KEY);
-    localStorage.removeItem(LEGACY_GEMS_KEY);
-  } catch { /* privacy mode — silently ignore */ }
-}
-
-/** One-time cleanup of legacy GLOBAL keys that bled state across users */
 function cleanupLegacyKeys(): void {
   try {
     localStorage.removeItem(LEGACY_PREMIUM_KEY);
     localStorage.removeItem(LEGACY_GEMS_KEY);
+    // Nuke every per-user premium override left behind by the old client.
+    // We don't know which userIds we wrote for, so scan the keys.
+    const toRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(PREMIUM_KEY_PREFIX)) toRemove.push(key);
+    }
+    for (const k of toRemove) localStorage.removeItem(k);
   } catch { /* privacy mode — silently ignore */ }
 }
 
@@ -130,7 +98,11 @@ interface SubscriptionContextType {
   refreshGems: () => Promise<void>;
   onAICallSuccess: () => void;
   onAICallBlocked: (serverGems?: number) => void;
-  forcePremium: (tier: string, expiresAt: string | null) => void;
+  // `forcePremium` is intentionally removed. The Convex `profile.subscription_tier`
+  // (written only by the server-verified `activatePremium` action or the RC
+  // webhook) is the single source of truth for premium. Any future
+  // contributor tempted to add an optimistic override here should remember
+  // this surface is exactly how non-paying users got upgraded in sandbox.
   showWelcomePro: boolean;
   dismissWelcomePro: () => void;
 }
@@ -140,47 +112,20 @@ const SubscriptionContext = createContext<SubscriptionContextType | undefined>(u
 export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const { profile, refreshProfile } = useProfile();
   const { userId } = useAuth();
-  // Kept as a no-op reference for now; the action is server-internal after
-  // the security refactor. RevenueCat webhook owns the DB tier write.
-  void useAction(api.actions.activatePremium.run);
+  const activatePremium = useAction(api.actions.activatePremium.run);
   const [isPaywallOpen, setIsPaywallOpen] = useState(false);
   const [isNoGemsOpen, setIsNoGemsOpen] = useState(false);
   const [showWelcomePro, setShowWelcomePro] = useState(false);
-  // Local override: forcePremium sets this immediately without waiting for DB/profile.
-  // Hydrated reactively from per-user localStorage once userId is known (see effect below).
-  const [tierOverride, setTierOverride] = useState<{ tier: string; expiresAt: string | null } | null>(null);
   // `false` until profile has resolved at least once (undefined = loading, null/obj = resolved)
   const [isSubscriptionResolved, setIsSubscriptionResolved] = useState(false);
 
-  // One-time cleanup of legacy GLOBAL localStorage keys (ran exactly once per mount)
+  // One-time cleanup of legacy localStorage on every mount. Sweeps the
+  // removed `wcw_premium_<uid>` keys from any pre-fix install so a stale
+  // override doesn't show non-paying users as premium until the next
+  // sign-out. Idempotent and cheap.
   useEffect(() => {
     cleanupLegacyKeys();
   }, []);
-
-  // Hydrate the override from per-user localStorage when userId becomes known.
-  // Skip the transient "pending" sentinel — UserContext emits it while the
-  // Convex profile is mid-load. Hydrating from `wcw_premium_pending` would
-  // be a no-op write/read on a fake key and means returning premium users
-  // would see a brief `isPremium=false` flash. Wait for the real id.
-  useEffect(() => {
-    if (!userId || userId === "pending") {
-      // Don't wipe React state during the "pending" window — the auth
-      // resolution will produce a real id in the next render.
-      return;
-    }
-    const cached = getLocalPremium(userId);
-    if (cached) setTierOverride(cached);
-    else setTierOverride(null);
-  }, [userId]);
-
-  // Clear the override + cached gems when userId truly clears (signOut).
-  // signOut already calls `clearLocalSubscriptionState(uid)` via UserContext,
-  // but we also reset React state here so the UI updates immediately.
-  useEffect(() => {
-    if (userId === null) {
-      setTierOverride(null);
-    }
-  }, [userId]);
 
   // Track whether profile has resolved (transitioned out of `undefined`) at least once
   useEffect(() => {
@@ -194,12 +139,15 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const profileRef = useRef(profile);
   useEffect(() => { profileRef.current = profile; }, [profile]);
 
-  const tier = (tierOverride?.tier || profile?.subscription_tier || "free") as SubscriptionContextType["tier"];
-  const expiresAt = tierOverride?.expiresAt
-    ? new Date(tierOverride.expiresAt)
-    : profile?.subscription_expires_at
-      ? new Date(profile.subscription_expires_at)
-      : null;
+  // Tier + expiry derive PURELY from the reactive Convex profile query.
+  // No client override, no localStorage hydration, no optimistic flip.
+  // The only writers to `profile.subscription_tier` are the server-verified
+  // `activatePremium` action and the RC webhook — both of which require
+  // a cryptographically-confirmed StoreKit payment via the RC platform.
+  const tier = (profile?.subscription_tier || "free") as SubscriptionContextType["tier"];
+  const expiresAt = profile?.subscription_expires_at
+    ? new Date(profile.subscription_expires_at)
+    : null;
   const isPremium =
     tier !== "free" && (expiresAt === null || expiresAt > new Date());
 
@@ -281,29 +229,14 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // Force premium state immediately — used after purchase before DB/profile syncs
-  // Persisted to per-user localStorage so it survives WebView reloads
-  const forcePremium = useCallback((newTier: string, newExpiresAt: string | null) => {
-    logger.info("[forcePremium] Setting tier override + persisting to localStorage", { newTier, newExpiresAt });
-    const data = { tier: newTier, expiresAt: newExpiresAt };
-    setTierOverride(data);
-    if (userId) setLocalPremium(userId, data);
-  }, [userId]);
+  // `forcePremium` and the `isNativePaywallActiveRef` paywall-guard were
+  // removed together. The listener (further down) no longer grants premium
+  // under any conditions, so there's nothing to guard. Keeping the ref
+  // around would just be dead code that hints at the old footgun.
 
-  // Track whether native paywall is currently open — prevents listener from
-  // granting premium from stale data while user is browsing the paywall
-  const isNativePaywallActiveRef = useRef(false);
+  // Initialize RevenueCat when userId becomes available
   useEffect(() => {
-    isNativePaywallActiveRef.current = isPaywallOpen && Capacitor.isNativePlatform();
-  }, [isPaywallOpen]);
-
-  // Initialize RevenueCat when userId becomes available.
-  // Guard against the literal "pending" sentinel `UserContext` emits while the
-  // Convex profile query is still hydrating — configuring RC with that string
-  // would attribute the next purchase to a fake user-id until the effect
-  // re-runs with the real Convex id.
-  useEffect(() => {
-    if (!userId || userId === "pending" || !Capacitor.isNativePlatform()) return;
+    if (!userId || !Capacitor.isNativePlatform()) return;
 
     let removeListener: (() => void) | null = null;
 
@@ -317,71 +250,64 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     const init = async () => {
       await initializePurchases(userId);
 
+      // STRICT POLICY (do not weaken):
+      //   - The `customerInfoUpdate` listener NEVER grants premium. Background
+      //     RC events on iOS sandbox fire transient "active" entitlement reads
+      //     right after the paywall is dismissed (compressed-time trial renews,
+      //     residual receipts from prior TestFlight testing). Trusting them
+      //     here is exactly how non-paying users were being upgraded.
+      //   - The startup re-sync NEVER grants premium client-side either. The
+      //     ONLY path that flips `profile.subscriptionTier` from "free" to a
+      //     paid tier is `api.actions.activatePremium.run()` (which hits the
+      //     RevenueCat REST API server-side with a project-scoped secret) or
+      //     the RC server-to-server webhook.
+      //   - This handler's only job is to call `refreshProfile()` so the
+      //     reactive `useQuery(api.profiles.getMine)` re-fetches the row.
+      //     Cleanup of the local optimistic override is also limited to the
+      //     "RC says not-premium AND Convex profile says not-premium" case.
       const cleanup = await addCustomerInfoUpdateListener(async (customerInfo) => {
         const isNowPremium = isPremiumFromCustomerInfo(customerInfo);
-        if (isNowPremium) {
-          // Skip if the native paywall is currently open — PaywallOverlay
-          // handles activation based on the actual paywallResult
-          if (isNativePaywallActiveRef.current) {
-            logger.info("RevenueCat listener: skipping forcePremium while paywall is open");
-            return;
-          }
-          // Local force + reactive profile refresh. The client-callable
-          // `activatePremium` action is locked down for security; the
-          // RevenueCat webhook is the only authoritative DB writer.
-          const sub = getSubscriptionFromCustomerInfo(customerInfo);
-          if (sub) forcePremium(sub.tier, sub.expiresAt);
-          await refreshProfile();
-        } else {
-          // RC reports not-premium. Only clear local override if Convex profile
-          // ALSO indicates not premium (defensive against transient RC fetch issues
-          // on cold start, network blips, or right after a purchase that hasn't fully synced).
+        if (!isNowPremium) {
+          // Clear local override only when RC AND Convex both say not-premium.
+          // (Keeping the "server is premium → trust server" branch as a
+          // defence against transient RC fetch failures.)
           const profileRefValue = profileRef.current as ProfileSubscriptionShape;
           const serverTier = profileRefValue?.subscription_tier ?? "free";
           const serverExpiresAt = profileRefValue?.subscription_expires_at;
-          const serverPremium =
-            serverTier !== "free" &&
-            (!serverExpiresAt || new Date(serverExpiresAt) > new Date());
-          if (!serverPremium) {
-            logger.info("RC + server both indicate not premium — clearing local override");
-            if (userId) setLocalPremium(userId, null);
-            setTierOverride(null);
-          } else {
-            logger.info("RC says not premium but server says premium — keeping local state, deferring to webhook");
-          }
-          await refreshProfile();
+          // Listener no longer writes premium under any condition — local
+          // override has been removed entirely. We only nudge the reactive
+          // profile query in case the webhook just landed.
+          void serverTier;
+          void serverExpiresAt;
         }
+        // Either branch: refresh profile so the reactive query catches any
+        // webhook-driven server state change. NEVER call activatePremium /
+        // any premium-write here — those would re-introduce the bug.
+        await refreshProfile();
       });
       removeListener = cleanup;
 
-      // Startup check: always verify RevenueCat status and sync to DB
+      // Cold-start reconcile: ask Convex to verify entitlement against RC
+      // REST server-side. The action is idempotent and the SOLE legitimate
+      // client-initiated write path. If the user is genuinely premium on RC
+      // but Convex hasn't seen the webhook yet, this catches them up in one
+      // round-trip. If RC says not-entitled, the action throws and we do
+      // nothing — no local state flip.
       const info = await getCustomerInfo();
       if (info && isPremiumFromCustomerInfo(info)) {
-        const sub = getSubscriptionFromCustomerInfo(info);
-        if (sub) {
-          // Force premium locally (instant). DB tier is owned by the
-          // RevenueCat webhook now; `refreshProfile` picks up the
-          // server-side write the moment the webhook fires.
-          forcePremium(sub.tier, sub.expiresAt);
+        try {
+          await activatePremium({});
           await refreshProfile();
+        } catch (err) {
+          // Expected: `RC_NOT_ENTITLED` for users who aren't actually paying,
+          // or transient network errors. Either way, refrain from granting.
+          logger.info("Startup: activatePremium did not confirm entitlement", {
+            error: err instanceof Error ? err.message : String(err),
+          });
         }
-      } else if (info && !isPremiumFromCustomerInfo(info)) {
-        // RC reports not-premium at startup. Same defensive rule as listener:
-        // only clear when Convex profile also indicates not-premium. The Convex
-        // webhook is authoritative — trust the server until it disagrees too.
-        const profileRefValue = profileRef.current as ProfileSubscriptionShape;
-        const serverTier = profileRefValue?.subscription_tier ?? "free";
-        const serverExpiresAt = profileRefValue?.subscription_expires_at;
-        const serverPremium =
-          serverTier !== "free" &&
-          (!serverExpiresAt || new Date(serverExpiresAt) > new Date());
-        if (!serverPremium) {
-          logger.info("Startup: RC + server both indicate not premium — clearing local override");
-          if (userId) setLocalPremium(userId, null);
-          setTierOverride(null);
-        } else {
-          logger.info("Startup: RC says not premium but server says premium — keeping local state, deferring to webhook");
-        }
+      } else if (info) {
+        // RC says not premium. Nothing to clear locally — the reactive
+        // profile query is the source of truth and updates on its own.
         await refreshProfile();
       }
     };
@@ -398,39 +324,21 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       removeListener?.();
     };
-  // activatePremium is no longer in the dep array — see the security
-  // refactor: the action is locked to the webhook and not called from here.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, refreshProfile, forcePremium]);
+  }, [userId, refreshProfile, activatePremium]);
 
-  // On app resume: re-validate premium via RevenueCat (catches expiry/cancellation)
+  // On app resume: nudge the reactive profile query so the UI catches any
+  // webhook-driven tier change that arrived while the app was backgrounded.
+  // Critically — we do NOT call `getCustomerInfo()` here to grant premium.
+  // The Convex profile is the source of truth; webhook delivers expiry /
+  // cancellation events server-side within seconds.
   useEffect(() => {
     if (!userId || !Capacitor.isNativePlatform()) return;
-    const handler = async () => {
-      const info = await getCustomerInfo();
-      if (!info) return;
-      if (!isPremiumFromCustomerInfo(info) && tierOverride) {
-        // Same conservative rule: only clear when Convex profile also agrees
-        const profileRefValue = profileRef.current as ProfileSubscriptionShape;
-        const serverTier = profileRefValue?.subscription_tier ?? "free";
-        const serverExpiresAt = profileRefValue?.subscription_expires_at;
-        const serverPremium =
-          serverTier !== "free" &&
-          (!serverExpiresAt || new Date(serverExpiresAt) > new Date());
-        if (!serverPremium) {
-          logger.info("App resume: RC + server both indicate not premium, clearing override");
-          setTierOverride(null);
-          setLocalPremium(userId, null);
-        } else {
-          logger.info("App resume: RC says not premium but server says premium — keeping local state");
-        }
-        await refreshProfile();
-      }
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") refreshProfile();
     };
-    const onVisibility = () => { if (document.visibilityState === "visible") handler(); };
     document.addEventListener("visibilitychange", onVisibility);
     return () => document.removeEventListener("visibilitychange", onVisibility);
-  }, [userId, tierOverride, refreshProfile]);
+  }, [userId, refreshProfile]);
 
   // Refresh gems from profile (DB is source of truth)
   const refreshGems = useCallback(async () => {
@@ -485,7 +393,6 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         refreshGems,
         onAICallSuccess,
         onAICallBlocked,
-        forcePremium,
         showWelcomePro,
         dismissWelcomePro,
       }}
