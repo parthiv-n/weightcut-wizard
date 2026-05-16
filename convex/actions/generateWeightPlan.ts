@@ -1,4 +1,4 @@
-/** Generate weight plan — same envelope as cut plan but for general weight goals. Gem-gated. */
+/** Generate weight plan — same envelope as cut plan but for general weight goals. */
 "use node";
 
 import { v } from "convex/values";
@@ -13,7 +13,6 @@ import {
   requireUserIdFromAction,
   SECOND_PERSON_DIRECTIVE,
 } from "./_helpers";
-import { enforceGemGate } from "../_shared/subscriptionGuard";
 
 export const run = action({
   args: {
@@ -28,7 +27,6 @@ export const run = action({
   },
   handler: async (ctx, args) => {
     const userId = await requireUserIdFromAction(ctx);
-    await enforceGemGate(ctx, userId);
     const snap = await loadAthleteSnapshot(ctx, userId);
     const days = Math.max(
       1,

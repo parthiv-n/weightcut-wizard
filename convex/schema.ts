@@ -82,6 +82,10 @@ export default defineSchema({
     subscriptionExpiresAt: v.optional(v.number()),
     subscriptionUpdatedAt: v.optional(v.number()),
     revenuecatCustomerId: v.optional(v.string()),
+    // Legacy field — used to drive a cross-deployment premium fallback that
+    // was rolled back. Left as `v.optional` so existing rows with this field
+    // still validate against the schema. Nothing currently writes to it.
+    emailLower: v.optional(v.string()),
 
     updatedAt: v.optional(v.number()),
   })

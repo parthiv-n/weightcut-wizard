@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Brain, Loader2, Mic, MicOff, Send, Trash2 } from "lucide-react";
 import { useAction } from "convex/react";
+import { useAIAction } from "@/hooks/useAIAction";
 import { api } from "@/../convex/_generated/api";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useSubscription } from "@/hooks/useSubscription";
@@ -38,7 +39,7 @@ function newId() {
 export function RecoveryCoachChat({ userId, userName }: RecoveryCoachChatProps) {
   const { checkAIAccess, openNoGemsDialog, handleAILimitError, onAICallSuccess } = useSubscription();
   const { toast } = useToast();
-  const recoveryCoachAction = useAction(api.actions.recoveryCoach.run);
+  const recoveryCoachAction = useAIAction(api.actions.recoveryCoach.run);
 
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");

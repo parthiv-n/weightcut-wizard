@@ -69,26 +69,6 @@ export async function initializePurchases(userId: string): Promise<void> {
   }
 }
 
-/**
- * Detach the current user from RevenueCat. Called on sign-out so the next
- * user signing in on the same WebView doesn't briefly read the previous
- * account's CustomerInfo on cold-start. Safe to call when RC isn't loaded
- * (web) — falls through quietly.
- */
-export async function logOutPurchases(): Promise<void> {
-  await loadRC();
-  if (!Purchases) return;
-  try {
-    await Purchases.logOut();
-    logger.info("RevenueCat logOut");
-  } catch (err) {
-    // Anonymous users throw "current user is anonymous" — that's fine.
-    logger.warn("RevenueCat logOut failed (likely already anonymous)", {
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
-}
-
 // ─── Offerings & Packages ───
 
 export async function getOfferings(): Promise<any | null> {

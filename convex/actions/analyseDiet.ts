@@ -1,4 +1,4 @@
-/** Analyse diet — micronutrient gaps. Gem-gated (1 gem / call on free tier). */
+/** Analyse diet — micronutrient gaps. NOT gem-gated. */
 "use node";
 
 import { v } from "convex/values";
@@ -6,7 +6,6 @@ import { action } from "../_generated/server";
 import { callGroqText } from "../_shared/groq";
 import { parseJSON } from "../_shared/parseResponse";
 import { loadAthleteSnapshot, requireUserIdFromAction } from "./_helpers";
-import { enforceGemGate } from "../_shared/subscriptionGuard";
 
 export const run = action({
   args: {
@@ -17,7 +16,6 @@ export const run = action({
   },
   handler: async (ctx, { meals, profile, macroGoals, date }) => {
     const userId = await requireUserIdFromAction(ctx);
-    await enforceGemGate(ctx, userId);
     if (!Array.isArray(meals) || meals.length === 0) {
       throw new Error("At least one meal is required");
     }

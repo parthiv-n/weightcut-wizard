@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { useMutation, useAction } from "convex/react";
+import { useAIAction } from "@/hooks/useAIAction";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { useAITask } from "@/contexts/AITaskContext";
@@ -22,7 +23,7 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
   const { addTask, completeTask, failTask } = useAITask();
   const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
   const updateGoalsMut = useMutation(api.profiles.updateGoals);
-  const weightTrackerAnalysisAction = useAction(api.actions.weightTrackerAnalysis.run);
+  const weightTrackerAnalysisAction = useAIAction(api.actions.weightTrackerAnalysis.run);
   const aiAbortRef = useRef<AbortController | null>(null);
 
   const [analyzingWeight, setAnalyzingWeight] = useState(false);

@@ -217,17 +217,17 @@ function StepLayout({ step, title, subtitle, children, footer, mascotBump }: {
   step: number; title: string; subtitle: string; children: React.ReactNode; footer?: React.ReactNode; mascotBump?: number;
 }) {
   return (
-    <div className="relative flex flex-col min-h-[calc(100dvh-56px)] px-5 pb-6">
+    <div className="relative flex flex-col h-[calc(100dvh-56px)] px-5 pb-4">
       <OnboardingMascot bumpCount={mascotBump ?? step} />
-      <div className="pt-8 pb-5">
+      <div className="pt-4 pb-3">
         <p className="text-[10px] uppercase tracking-[0.15em] text-primary/60 font-bold mb-2">
           Round {step} of {TOTAL_STEPS}
         </p>
         <h1 className="text-[22px] font-bold leading-tight text-foreground">{title}</h1>
         <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">{subtitle}</p>
       </div>
-      <div className="flex-1">{children}</div>
-      {footer && <div className="pt-4">{footer}</div>}
+      <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1">{children}</div>
+      {footer && <div className="pt-3">{footer}</div>}
     </div>
   );
 }
@@ -349,6 +349,13 @@ export default function Onboarding() {
   // direction-aware spring slide as the outer step transitions.
   const [fightSubStep, setFightSubStep] = useState(0);
   const [fightSubDirection, setFightSubDirection] = useState(1);
+
+  // Gate for the DaysToFightSlam: only arm once the user has explicitly
+  // picked a fight date. Prevents iOS WKWebView's native date picker from
+  // auto-committing today's date on autoFocus and tripping the slam before
+  // any real interaction. Sticky — once true, stays true (re-entering the
+  // sub-step naturally re-arms via the rising-edge guard in the slam).
+  const [fightDateUserChanged, setFightDateUserChanged] = useState(false);
 
   // submitRef lets goNext call handleSubmit (defined later) when the user
   // finishes the last step of either flow without forcing a code reorder.
@@ -836,7 +843,7 @@ export default function Onboarding() {
   // - DaysToFightSlam: cutting flow only, fires on the date sub-step.
   // - WeightLossSlam: cutting → step 6 (current weight, last piece);
   //                   losing  → step 4 (goal weight, last piece).
-  const daysSlamArmed = isFighterFlow && step === 3 && fightSubStep === 1;
+  const daysSlamArmed = isFighterFlow && step === 3 && fightSubStep === 1 && fightDateUserChanged;
   const weightSlamArmed =
     (isFighterFlow && step === 6) || (!isFighterFlow && step === 4);
 
@@ -1131,9 +1138,11 @@ export default function Onboarding() {
                         </motion.span>
                       </div>
                       <Input type="date" value={formData.target_date}
-                        onChange={e => setFormData(prev => ({ ...prev, target_date: e.target.value, has_fight: "yes" }))}
-                        className="h-14 rounded-2xl bg-card border-border/50 text-center text-base font-semibold max-w-[260px]"
-                        autoFocus />
+                        onChange={e => {
+                          setFormData(prev => ({ ...prev, target_date: e.target.value, has_fight: "yes" }));
+                          if (e.target.value) setFightDateUserChanged(true);
+                        }}
+                        className="h-14 rounded-2xl bg-card border-border/50 text-center text-base font-semibold max-w-[260px]" />
                     </div>
                   )}
 

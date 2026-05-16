@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import { useAction } from "convex/react";
+import { useAIAction } from "@/hooks/useAIAction";
 import { api } from "@/../convex/_generated/api";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
@@ -36,7 +37,7 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
   const { toast } = useToast();
   const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
   const { addTask, completeTask, failTask } = useAITask();
-  const mealPlannerAction = useAction(api.actions.mealPlanner.run);
+  const mealPlannerAction = useAIAction(api.actions.mealPlanner.run);
 
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
