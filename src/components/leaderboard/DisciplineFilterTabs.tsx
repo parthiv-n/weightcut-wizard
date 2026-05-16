@@ -9,6 +9,7 @@ export const DISCIPLINES = [
   "Wrestling",
   "Sparring",
   "Strength",
+  "Run",
 ] as const;
 export type DisciplineFilter = (typeof DISCIPLINES)[number];
 
