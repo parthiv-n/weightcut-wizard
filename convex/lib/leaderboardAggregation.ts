@@ -76,3 +76,29 @@ export function aggregateLeaderboard(input: {
   }
   return result;
 }
+
+export type RankedLeaderboardEntry = AggregatedLeaderboardEntry & {
+  rank: number;
+};
+
+/**
+ * Sort by totalMinutes desc and assign ranks preserving ties: identical
+ * totals share a rank, and the next distinct total skips ahead by the
+ * size of the tie group (e.g. 1, 1, 3).
+ */
+export function assignRanks(
+  entries: AggregatedLeaderboardEntry[],
+): RankedLeaderboardEntry[] {
+  const sorted = [...entries].sort((a, b) => b.totalMinutes - a.totalMinutes);
+  const ranked: RankedLeaderboardEntry[] = [];
+  let previousMinutes = Number.POSITIVE_INFINITY;
+  let previousRank = 0;
+  sorted.forEach((entry, index) => {
+    const rank =
+      entry.totalMinutes === previousMinutes ? previousRank : index + 1;
+    ranked.push({ ...entry, rank });
+    previousMinutes = entry.totalMinutes;
+    previousRank = rank;
+  });
+  return ranked;
+}
