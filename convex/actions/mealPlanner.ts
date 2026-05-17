@@ -3,7 +3,7 @@
 
 import { v } from "convex/values";
 import { action } from "../_generated/server";
-import { callGroqText } from "../_shared/groq";
+import { callGroqText, GroqError } from "../_shared/groq";
 import { parseJSON } from "../_shared/parseResponse";
 import {
   sanitizeUserText,
@@ -113,19 +113,45 @@ CRITICAL MATH:
 
 ${snap.block}`;
 
-    const content = await callGroqText({
+    // Token-budget tuning. Two competing failure modes:
+    //   - 4096 truncates mid-JSON → Groq returns "Failed to validate JSON".
+    //   - 8192 + a fat athlete snapshot blows past the on-demand TPM cap
+    //     (8000 tokens/min) → Groq returns "Request too large".
+    // 5500 is the sweet spot: comfortable headroom for 4 meals with
+    // detailed ingredient breakdowns, while leaving room for prompt
+    // (system + sanitized user input + snapshot block ≈ 2-3k tokens).
+    const callOpts = {
       model: "openai/gpt-oss-120b",
       messages: [
-        { role: "system", content: systemPrompt },
+        { role: "system" as const, content: systemPrompt },
         {
-          role: "user",
+          role: "user" as const,
           content: `User Request: <user_input>${cleanPrompt}</user_input>`,
         },
       ],
       temperature: 0.3,
-      max_tokens: 4096,
-      response_format: { type: "json_object" },
-    });
+      max_tokens: 5500,
+    };
+
+    // First attempt uses Groq's strict json_object mode. On its
+    // "Failed to validate JSON" 400, retry once WITHOUT the strict
+    // response_format — the model still emits JSON because the system
+    // prompt commands "Output ONLY raw JSON", and our `parseJSON` helper
+    // tolerates a stray prefix/suffix where Groq's validator wouldn't.
+    let content: string;
+    try {
+      content = await callGroqText({
+        ...callOpts,
+        response_format: { type: "json_object" },
+      });
+    } catch (err) {
+      const isJsonValidationFail =
+        err instanceof GroqError &&
+        err.httpStatus === 400 &&
+        /validate json/i.test(err.message);
+      if (!isJsonValidationFail) throw err;
+      content = await callGroqText(callOpts);
+    }
     const mealPlanData = parseJSON(content);
 
     // Server-side macro reconciliation. Two passes:

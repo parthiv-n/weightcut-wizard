@@ -213,8 +213,14 @@ export const updateMyMembership = mutation({
   args: {
     memberId: v.id("gym_members"),
     shareData: v.optional(v.boolean()),
+    /** Coach-only flag: surface the gym social feed on the coach dashboard.
+     *  Allowed for any member to toggle on their own row, but only meaningful
+     *  for `memberRole: "coach"` (athletes' dashboard doesn't render the
+     *  widget). Defaulted to undefined / false; the coach explicitly opts
+     *  in from gym settings. */
+    feedVisibleOnDashboard: v.optional(v.boolean()),
   },
-  handler: async (ctx, { memberId, shareData }) => {
+  handler: async (ctx, { memberId, shareData, feedVisibleOnDashboard }) => {
     const userId = await requireUserId(ctx);
     const member = await ctx.db.get(memberId);
     if (!member) throw new Error("Membership not found");
@@ -223,6 +229,7 @@ export const updateMyMembership = mutation({
     }
     const patch: Record<string, unknown> = {};
     if (shareData !== undefined) patch.shareData = shareData;
+    if (feedVisibleOnDashboard !== undefined) patch.feedVisibleOnDashboard = feedVisibleOnDashboard;
     if (Object.keys(patch).length === 0) return;
     await ctx.db.patch(memberId, patch as any);
   },

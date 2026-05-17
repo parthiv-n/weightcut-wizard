@@ -166,7 +166,7 @@ export default function Auth() {
           clientId: "com.weightcutwizard.app",
           // Convex Auth's Apple callback. Must be registered as a Return
           // URL on the Sign-In-With-Apple Services ID configuration.
-          redirectURI: "https://fast-koala-318.eu-west-1.convex.site/api/auth/callback/apple",
+          redirectURI: "https://warmhearted-koala-322.eu-west-1.convex.site/api/auth/callback/apple",
           scopes: "email",
           nonce: hashedNonce,
         });

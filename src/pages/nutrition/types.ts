@@ -20,6 +20,11 @@ export interface AiLineItem {
   protein_g: number;
   carbs_g: number;
   fats_g: number;
+  // Normalized [0,1] bounding box from the vision model, used to anchor
+  // floating macro bubbles over the actual food in the photo. Optional —
+  // text-only analyses don't have one, and the UI falls back to scattered
+  // positions when missing or invalid.
+  bbox?: { x: number; y: number; w: number; h: number };
 }
 
 // ── DB-backed type aliases. Hand-written snake_case shape that the

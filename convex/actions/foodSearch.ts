@@ -22,12 +22,26 @@ interface USDANutrient {
   unitName: string;
 }
 
+interface USDAFoodPortion {
+  gramWeight?: number;
+  portionDescription?: string;
+  modifier?: string;
+  amount?: number;
+  measureUnit?: { name?: string };
+}
+
 interface USDAFood {
   fdcId: number;
   description: string;
   dataType: string;
   brandOwner?: string;
   brandName?: string;
+  // Branded foods: explicit serving size on the row.
+  servingSize?: number;
+  servingSizeUnit?: string;
+  householdServingFullText?: string;
+  // Foundation / SR Legacy: a list of common portions (e.g. "1 cup, 240g").
+  foodPortions?: USDAFoodPortion[];
   foodNutrients: USDANutrient[];
 }
 
@@ -35,11 +49,45 @@ function getNutrient(nutrients: USDANutrient[], num: string): number {
   return nutrients.find((n) => n.nutrientNumber === num)?.value ?? 0;
 }
 
+/**
+ * Pull a typical serving size in grams out of the USDA payload, if one is
+ * declared. Branded foods carry an explicit `servingSize` + unit; Foundation
+ * and SR Legacy rows have a `foodPortions` array — we use the first portion
+ * with a gram weight. Returns null when the row only ships per-100g data.
+ */
+function extractServingGrams(food: USDAFood): { grams: number; label: string } | null {
+  if (
+    typeof food.servingSize === "number" &&
+    food.servingSize > 0 &&
+    food.servingSizeUnit?.toLowerCase() === "g"
+  ) {
+    const grams = Math.round(food.servingSize);
+    const household = food.householdServingFullText?.trim();
+    return {
+      grams,
+      label: household ? `${grams}g · ${household}` : `${grams}g`,
+    };
+  }
+  const portion = food.foodPortions?.find(
+    (p) => typeof p.gramWeight === "number" && p.gramWeight! > 0,
+  );
+  if (portion) {
+    const grams = Math.round(portion.gramWeight!);
+    const desc = (portion.portionDescription || portion.modifier || "").trim();
+    return {
+      grams,
+      label: desc ? `${grams}g · ${desc}` : `${grams}g`,
+    };
+  }
+  return null;
+}
+
 function normalizeFood(food: USDAFood) {
   const cal = getNutrient(food.foodNutrients, "208");
   const protein = getNutrient(food.foodNutrients, "203");
   const carbs = getNutrient(food.foodNutrients, "205");
   const fat = getNutrient(food.foodNutrients, "204");
+  const serving = extractServingGrams(food);
   return {
     id: String(food.fdcId),
     name: food.description,
@@ -49,7 +97,8 @@ function normalizeFood(food: USDAFood) {
     protein_per_100g: Math.round(protein * 10) / 10,
     carbs_per_100g: Math.round(carbs * 10) / 10,
     fats_per_100g: Math.round(fat * 10) / 10,
-    serving_size: "100g",
+    serving_size: serving?.label ?? "100g",
+    serving_grams: serving?.grams ?? null,
   };
 }
 
@@ -104,6 +153,13 @@ export const run = action({
       clearTimeout(timer);
     }
 
+    // USDA returns 404 when the query genuinely has zero hits in their
+    // catalog. Surface that to the client as an empty result set rather
+    // than an error toast — same UX as "no results found".
+    if (usdaResponse.status === 404) {
+      searchCache.set(cacheKey, { results: [], ts: Date.now() });
+      return { results: [] };
+    }
     if (!usdaResponse.ok) {
       throw new Error(`USDA API returned ${usdaResponse.status}`);
     }

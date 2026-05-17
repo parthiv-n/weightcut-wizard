@@ -118,7 +118,7 @@ export default function CoachLogin() {
         const result = await SignInWithApple.authorize({
           clientId: "com.weightcutwizard.app",
           // Convex Auth's Apple callback (same as Auth.tsx).
-          redirectURI: "https://fast-koala-318.eu-west-1.convex.site/api/auth/callback/apple",
+          redirectURI: "https://warmhearted-koala-322.eu-west-1.convex.site/api/auth/callback/apple",
           scopes: "email",
           nonce: hashedNonce,
         });

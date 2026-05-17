@@ -34,4 +34,34 @@ describe("computeSleep", () => {
     expect(r.value).toBe(0);
     expect(r.reason).toMatch(/no sleep/i);
   });
+
+  describe("assumedSleepDates", () => {
+    it("treats a 7h assumed entry like a real log so the target day isn't penalised", () => {
+      // 6 prior nights at 8h + assumed 7h today → total 55h vs 56h target = 1h debt.
+      const real = week("2026-05-01", 8).filter((s) => s.date !== "2026-05-01");
+      const withAssumed = [...real, { date: "2026-05-01", hours: 7 }];
+      const r = computeSleep(withAssumed, "2026-05-01", cfg, ["2026-05-01"]);
+      expect(r.value).toBe(92); // 100 - 1*8
+    });
+
+    it("appends an 'assumed' annotation to the reason when an in-window date matches", () => {
+      const real = week("2026-05-01", 8).filter((s) => s.date !== "2026-05-01");
+      const withAssumed = [...real, { date: "2026-05-01", hours: 7 }];
+      const r = computeSleep(withAssumed, "2026-05-01", cfg, ["2026-05-01"]);
+      expect(r.reason).toMatch(/assumed 7h on 1 day/);
+    });
+
+    it("doesn't annotate when the assumed date is outside the 7-day window", () => {
+      // Assumed date is 30 days ago — outside the 7-day window so it shouldn't bleed into reason text.
+      const r = computeSleep(week("2026-05-01", 8), "2026-05-01", cfg, ["2026-04-01"]);
+      expect(r.reason).not.toMatch(/assumed/);
+      expect(r.value).toBe(100);
+    });
+
+    it("is a no-op when assumedSleepDates is omitted (back-compat)", () => {
+      const r = computeSleep(week("2026-05-01", 8), "2026-05-01", cfg);
+      expect(r.value).toBe(100);
+      expect(r.reason).not.toMatch(/assumed/);
+    });
+  });
 });

@@ -1,6 +1,12 @@
 import { Lock } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// Captured at module load. Survives unmount→remount of <FightFormRing/>
+// because the module stays in the JS heap while the SPA is alive — so
+// looping atmospheric animations resume from where they "would have been"
+// instead of restarting from frame 0.
+const RING_EPOCH_MS = Date.now();
+
 type Props = {
   score: number;
   label: "sharp" | "sharpening" | "off_pace" | "at_risk";
@@ -138,6 +144,8 @@ export function FightFormRing({
   const showPhaseFightWeek = state === "ok" && phase === "fightWeek";
   const phaseRadius = radius + 5;
 
+  const elapsedSec = (Date.now() - RING_EPOCH_MS) / 1000;
+
   return (
     <button
       type="button"
@@ -158,6 +166,7 @@ export function FightFormRing({
           className="ff-ring-aurora absolute inset-0 rounded-full pointer-events-none"
           style={{
             ["--ff-halo-rgb" as any]: labelRgb,
+            animationDelay: `${-elapsedSec}s`,
           }}
         />
       )}
@@ -173,6 +182,7 @@ export function FightFormRing({
             ["--ff-halo-rgb" as any]: labelRgb,
             ["--ff-halo-peak" as any]: haloPeak,
             animationDuration: haloDuration,
+            animationDelay: `${-elapsedSec}s`,
           }}
         />
       )}
@@ -192,7 +202,7 @@ export function FightFormRing({
                 style={{
                   ["--ff-halo-rgb" as any]: labelRgb,
                   animationDuration: `${wispDuration}s`,
-                  animationDelay: `${startOffset}s`,
+                  animationDelay: `${startOffset - elapsedSec}s`,
                 }}
               />
             );
@@ -207,7 +217,10 @@ export function FightFormRing({
         <div
           aria-hidden
           className="ff-ring-core absolute inset-0 rounded-full pointer-events-none"
-          style={{ ["--ff-halo-rgb" as any]: labelRgb }}
+          style={{
+            ["--ff-halo-rgb" as any]: labelRgb,
+            animationDelay: `${-elapsedSec}s`,
+          }}
         />
       )}
 
@@ -232,7 +245,7 @@ export function FightFormRing({
                   ["--ff-halo-rgb" as any]: labelRgb,
                   ["--ff-orbit-r" as any]: `${orbitRadius}px`,
                   animationDuration: `${orbitDuration}s, ${twinkleDuration}s`,
-                  animationDelay: `${startOffset}s, ${-(i * 0.4)}s`,
+                  animationDelay: `${startOffset - elapsedSec}s, ${-(i * 0.4) - elapsedSec}s`,
                 }}
               />
             );

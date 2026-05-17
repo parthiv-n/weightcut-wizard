@@ -17,6 +17,7 @@ import { AnnouncementComposeSheet } from "@/components/coach/AnnouncementCompose
 import { CoachFightOffersTile } from "@/components/coach/CoachFightOffersTile";
 import { InviteAthletePanel } from "@/components/coach/InviteAthletePanel";
 import { LeaderboardSection } from "@/components/leaderboard/LeaderboardSection";
+import { GymFeedWidget } from "@/components/coach/GymFeedWidget";
 import { localCache } from "@/lib/localCache";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import { registerPullRefresh } from "@/lib/pullRefreshRegistry";
@@ -273,6 +274,13 @@ export default function CoachDashboard() {
                 viewer="coach"
                 onRowClick={(userId) => navigate(`/coach/athletes/${userId}`)}
               />
+
+              {/* Gym social feed — horizontal preview row of the most recent
+                  training-media posts from this gym's members. Tapping any
+                  thumbnail (or "See all") opens the full TikTok-style swiper.
+                  Gated server-side via `requireGymViewer` so the widget only
+                  renders content for gyms the coach is an active member of. */}
+              <GymFeedWidget gymId={gym.id as Id<"gyms">} gymName={gym.name} />
 
               {/* Athletes for this gym */}
               {gymAthletes.length === 0 ? (

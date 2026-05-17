@@ -54,6 +54,7 @@ const CoachLogin = lazy(() => import("./pages/coach/CoachLogin"));
 const AthleteDetail = lazy(() => import("./pages/coach/AthleteDetail"));
 const JoinGym = lazy(() => import("./pages/JoinGym"));
 const MyGym = lazy(() => import("./pages/MyGym"));
+const GymFeed = lazy(() => import("./pages/GymFeed"));
 
 // Prioritized idle preloading — critical routes first, rest deferred
 const _idle = window.requestIdleCallback || ((cb: IdleRequestCallback) => setTimeout(cb, 50));
@@ -313,6 +314,7 @@ const App = () => (
                   {/* Skill Tree temporarily hidden from UI */}
                   <Route path="/gym" element={<ErrorBoundary><Suspense fallback={<DashboardSkeleton />}><GymTracker /></Suspense></ErrorBoundary>} />
                   <Route path="/my-gym" element={<ErrorBoundary><Suspense fallback={<DashboardSkeleton />}><MyGym /></Suspense></ErrorBoundary>} />
+                  <Route path="/gym-feed" element={<ErrorBoundary><Suspense fallback={<DashboardSkeleton />}><GymFeed /></Suspense></ErrorBoundary>} />
                 </Route>
 
                 <Route path="*" element={<NotFound />} />

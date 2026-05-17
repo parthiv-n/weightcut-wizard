@@ -156,8 +156,8 @@ export function useGymSessions() {
     durationMinutes?: number;
     notes?: string;
     perceivedFatigue?: number;
-  }) => {
-    if (!userId || !activeSession) return false;
+  }): Promise<{ ok: true; calendarEntryId: Id<"fight_camp_calendar"> | null } | { ok: false }> => {
+    if (!userId || !activeSession) return { ok: false };
 
     try {
       const elapsed = Math.round((Date.now() - activeSession.startedAt) / 60000);
@@ -172,26 +172,32 @@ export function useGymSessions() {
 
       invalidateGymAnalytics(userId);
 
-      // Also log to training calendar (best-effort).
+      // Also log to training calendar so the workout appears alongside
+      // fight-camp sessions. We capture the new row's id and return it
+      // so the GymTracker UI can immediately offer "Add photo/video" —
+      // that's the entry point that lands media in the gym social feed
+      // via `session_media + gymId` (stamped server-side in
+      // `addSessionMedia`).
+      let calendarEntryId: Id<"fight_camp_calendar"> | null = null;
       try {
-        await createCalendarEntryMut({
+        calendarEntryId = (await createCalendarEntryMut({
           date: new Date().toISOString().split("T")[0],
           sessionType: activeSession.sessionType,
           durationMinutes: durationMin,
           rpe: opts.perceivedFatigue ?? 5,
           intensity: durationMin >= 60 ? "high" : durationMin >= 30 ? "moderate" : "low",
           notes: opts.notes ?? undefined,
-        });
+        })) as unknown as Id<"fight_camp_calendar">;
       } catch (calErr) {
         logger.warn("Failed to log gym session to training calendar", { error: String(calErr) });
       }
 
       setActiveSession(null);
       celebrateSuccess();
-      return true;
+      return { ok: true, calendarEntryId };
     } catch (err) {
       toast({ description: "Failed to finish workout", variant: "destructive" });
-      return false;
+      return { ok: false };
     }
   }, [userId, activeSession, toast, completeSessionMut, createCalendarEntryMut]);
 

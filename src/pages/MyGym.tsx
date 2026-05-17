@@ -88,7 +88,7 @@ export default function MyGym() {
   return (
     <ErrorBoundary>
       <div
-        className="animate-page-in space-y-3 px-5 py-3 sm:p-5 md:p-6 w-full max-w-2xl mx-auto"
+        className="space-y-3 px-5 py-3 sm:p-5 md:p-6 w-full max-w-2xl mx-auto"
         style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 5rem)" }}
       >
         <div>
@@ -149,6 +149,22 @@ export default function MyGym() {
                   aria-label="Share data with coach"
                 />
               </div>
+
+              {/* Gym social feed — full-screen TikTok-style swiper. Lives
+                  on a separate route so the immersive viewer can take over
+                  the whole viewport without conflicting with the gym
+                  settings UI on this page. */}
+              <button
+                type="button"
+                onClick={() => navigate(`/gym-feed?gym=${gym.gym_id}`)}
+                className="w-full flex items-center justify-between gap-3 py-2.5 px-3 -mx-1 rounded-xl bg-muted/40 dark:bg-white/[0.04] border border-border/30 active:scale-[0.99] transition-transform"
+              >
+                <div className="text-left">
+                  <p className="text-[13px] font-semibold">Gym feed</p>
+                  <p className="text-[11px] text-muted-foreground">See what your gym is training</p>
+                </div>
+                <span className="text-[11px] font-semibold text-primary">Open →</span>
+              </button>
 
               <div className="flex justify-end pt-1">
                 <button
