@@ -55,6 +55,15 @@ export const BottomNav = memo(function BottomNav() {
   const deleteAccount = useAction(api.actions.deleteAccount.run);
   const updateGoalsMut = useMutation(api.profiles.updateGoals);
   const authUser = useQuery(api.profiles.getMyAuthUser, userId ? {} : "skip");
+  // Gym-feed engagement badge. Reactive — `useQuery` auto-updates whenever
+  // a like/comment lands on one of the user's posts. We render a red dot
+  // on the More icon when the count is > 0 (cleared when the user opens
+  // `/gym-feed`, which marks `lastSeenEngagementAt = now`).
+  const unreadEngagement = useQuery(
+    api.feedSocial.unreadEngagementCount,
+    userId && userId !== "pending" ? {} : "skip",
+  );
+  const hasUnreadFeedEngagement = (unreadEngagement?.count ?? 0) > 0;
   const { replayTutorial } = useTutorial();
   const goalType = (profile?.goal_type as 'cutting' | 'losing') ?? 'cutting';
   const filteredMoreMenuItems = isFighter(goalType)
@@ -273,6 +282,7 @@ export const BottomNav = memo(function BottomNav() {
               label="More"
               isActive={filteredMoreMenuItems.some(i => i.url === location.pathname)}
               tutorial="nav-more"
+              badge={hasUnreadFeedEngagement}
             />
 
             <NavItem
@@ -440,9 +450,13 @@ interface NavButtonProps {
   label: string;
   isActive: boolean;
   tutorial?: string;
+  /** When true, render a small red dot on the top-right of the icon to
+   *  signal unread activity (e.g. gym-feed engagement). Doesn't affect
+   *  the click target. */
+  badge?: boolean;
 }
 
-function NavButton({ onClick, icon: Icon, label, isActive, tutorial }: NavButtonProps) {
+function NavButton({ onClick, icon: Icon, label, isActive, tutorial, badge }: NavButtonProps) {
   return (
     <button
       onClick={onClick}
@@ -461,6 +475,12 @@ function NavButton({ onClick, icon: Icon, label, isActive, tutorial }: NavButton
         className={`relative h-[22px] w-[22px] transition-colors duration-150 ${isActive ? "text-primary" : "text-muted-foreground/75"}`}
         strokeWidth={isActive ? 2.4 : 1.9}
       />
+      {badge && (
+        <span
+          aria-hidden
+          className="absolute top-1.5 right-2 h-2 w-2 rounded-full bg-destructive ring-2 ring-background"
+        />
+      )}
     </button>
   );
 }

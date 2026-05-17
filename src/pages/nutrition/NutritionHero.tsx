@@ -1,5 +1,5 @@
 import { format, subDays, addDays } from "date-fns";
-import { Loader2, ChevronRight, Calendar as CalendarIcon, ChevronLeft } from "lucide-react";
+import { Loader2, ChevronRight, ChevronLeft } from "lucide-react";
 import wizardLogo from "@/assets/wizard-logo.webp";
 import { MacroPieChart } from "@/components/nutrition/MacroPieChart";
 import { SyncingIndicator } from "@/components/SyncingIndicator";
@@ -100,32 +100,43 @@ export function NutritionHero({
         onEditTargets={onEditTargets}
       />
 
-      {/* Date Navigator — iOS-native pill chevrons + central date pill */}
-      <div className="relative flex items-center justify-center gap-2.5">
+      {/* Date Navigator — Cal AI / MyFitnessPal pattern. Bare chevron
+          glyphs (no chip bg, no outline) flank a single subtle date pill.
+          Two-line date stack when off-today gives a "Today" jump cue below
+          the weekday without a separate reset button. */}
+      <div className="relative flex items-center justify-center gap-1">
         <button
           onClick={() => { setSelectedDate(format(subDays(new Date(selectedDate), 1), "yyyy-MM-dd")); triggerHapticSelection(); }}
           aria-label="Previous day"
-          className="h-10 w-10 rounded-full flex items-center justify-center bg-muted/40 dark:bg-white/[0.06] border border-border/30 text-foreground/80 hover:bg-muted/60 hover:text-foreground active:scale-95 transition-all touch-manipulation"
+          className="h-10 w-10 rounded-full flex items-center justify-center text-muted-foreground/70 active:text-foreground active:bg-foreground/5 transition-colors touch-manipulation"
         >
-          <ChevronLeft className="h-5 w-5" strokeWidth={2.4} />
+          <ChevronLeft className="h-[22px] w-[22px]" strokeWidth={2.2} />
         </button>
-        <div className="inline-flex items-center gap-2">
-          <button
-            onClick={() => { setSelectedDate(format(new Date(), "yyyy-MM-dd")); triggerHapticSelection(); }}
-            className="flex items-center gap-1.5 h-10 px-4 rounded-full bg-muted/40 dark:bg-white/[0.06] border border-border/30 text-[14px] font-semibold text-foreground hover:bg-muted/60 active:scale-[0.97] transition-all touch-manipulation"
-          >
-            <CalendarIcon className="h-3.5 w-3.5 text-primary" strokeWidth={2.4} />
-            {selectedDate === todayStr ? "Today" : format(new Date(selectedDate), "EEE, MMM d")}
-          </button>
-          <SyncingIndicator active={mealsLoading && mealsVisibleCount > 0} />
-        </div>
+        <button
+          onClick={() => { setSelectedDate(format(new Date(), "yyyy-MM-dd")); triggerHapticSelection(); }}
+          className="min-w-[160px] h-11 px-5 rounded-full bg-foreground/[0.04] dark:bg-white/[0.05] active:bg-foreground/[0.08] dark:active:bg-white/[0.09] active:scale-[0.98] transition-all touch-manipulation flex flex-col items-center justify-center leading-none"
+        >
+          {selectedDate === todayStr ? (
+            <span className="text-[15px] font-semibold tracking-tight">Today</span>
+          ) : (
+            <>
+              <span className="text-[15px] font-semibold tracking-tight">
+                {format(new Date(selectedDate), "EEE, MMM d")}
+              </span>
+              <span className="text-[10px] text-muted-foreground/70 mt-0.5 uppercase tracking-wider">
+                Tap for today
+              </span>
+            </>
+          )}
+        </button>
         <button
           onClick={() => { setSelectedDate(format(addDays(new Date(selectedDate), 1), "yyyy-MM-dd")); triggerHapticSelection(); }}
           aria-label="Next day"
-          className="h-10 w-10 rounded-full flex items-center justify-center bg-muted/40 dark:bg-white/[0.06] border border-border/30 text-foreground/80 hover:bg-muted/60 hover:text-foreground active:scale-95 transition-all touch-manipulation"
+          className="h-10 w-10 rounded-full flex items-center justify-center text-muted-foreground/70 active:text-foreground active:bg-foreground/5 transition-colors touch-manipulation"
         >
-          <ChevronRight className="h-5 w-5" strokeWidth={2.4} />
+          <ChevronRight className="h-[22px] w-[22px]" strokeWidth={2.2} />
         </button>
+        <SyncingIndicator active={mealsLoading && mealsVisibleCount > 0} />
       </div>
 
     </>

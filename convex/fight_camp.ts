@@ -475,6 +475,22 @@ export const addSessionMedia = mutation({
     const session = await ctx.db.get(sessionId);
     if (!session) throw new Error("Session not found");
     if (session.userId !== userId) throw new Error("Not authorized");
+
+    // Resolve the gym the post should appear in. Prefer the session's own
+    // `gymId` (already denormalised by the leaderboard pipeline). Fall back
+    // to the uploader's primary active membership so a quick-log selfie
+    // from a session that wasn't gym-tagged still lands in their gym's
+    // feed. NULL = personal-only — the post never appears in `listFeed`.
+    let gymId = session.gymId;
+    if (!gymId) {
+      const primary = await ctx.db
+        .query("gym_members")
+        .withIndex("by_user", (q) => q.eq("userId", userId))
+        .filter((q) => q.eq(q.field("status"), "active"))
+        .first();
+      if (primary) gymId = primary.gymId;
+    }
+
     return await ctx.db.insert("session_media", {
       sessionId,
       userId,
@@ -482,6 +498,8 @@ export const addSessionMedia = mutation({
       kind,
       capturedAt: capturedAt ?? session.date,
       caption: caption?.trim() || undefined,
+      gymId,
+      visibility: "gym",
     });
   },
 });

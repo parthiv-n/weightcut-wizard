@@ -306,6 +306,7 @@ export const recomputeForUserDate = internalAction({
       isCampCompleted: false,
       sessions: inputs.sessions,
       sleepHours: inputs.sleepHours,
+      assumedSleepDates: inputs.assumedSleepDates,
       weights: inputs.weights,
       hooperByDate: inputs.hooperByDate,
       meals: inputs.meals,

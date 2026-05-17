@@ -16,6 +16,8 @@ import { ActiveSessionView } from "@/components/gym/ActiveSessionView";
 import { SessionHistoryList } from "@/components/gym/SessionHistoryList";
 import { SessionHistoryCalendar } from "@/components/gym/SessionHistoryCalendar";
 import { SessionDetailSheet } from "@/components/gym/SessionDetailSheet";
+import { PostWorkoutMediaSheet } from "@/components/gym/PostWorkoutMediaSheet";
+import type { Id } from "@/../convex/_generated/dataModel";
 import { SessionAnalyticsCard } from "@/components/gym/SessionAnalyticsCard";
 import { ExercisePickerSheet } from "@/components/gym/ExercisePickerSheet";
 import { ExerciseStatsSheet } from "@/components/gym/ExerciseStatsSheet";
@@ -92,6 +94,25 @@ export default function GymTracker() {
     try { localStorage.setItem(HISTORY_VIEW_KEY, historyView); } catch { /* ignore */ }
   }, [historyView]);
   const newPRSetIdsRef = useRef(new Set<string>());
+
+  // Track the just-saved calendar entry id so we can prompt the user to
+  // attach a photo/video. The id resolves to a Convex `fight_camp_calendar`
+  // row that `addSessionMedia` will stamp with the user's gym, landing the
+  // post in the gym social feed.
+  const [pendingMediaSessionId, setPendingMediaSessionId] = useState<Id<"fight_camp_calendar"> | null>(null);
+  const [pendingMediaSessionType, setPendingMediaSessionType] = useState<string | undefined>(undefined);
+
+  // Wrap `finishSession` so the GymTracker (not the inner ActiveSessionView)
+  // owns the post-save UX. We capture the active session's type BEFORE
+  // calling finish since it clears `activeSession` on success.
+  const handleFinishSession = useCallback(async (opts: { durationMinutes?: number; notes?: string; perceivedFatigue?: number }) => {
+    const sessionTypeAtFinish = activeSession?.sessionType;
+    const result = await finishSession(opts);
+    if (result.ok && result.calendarEntryId) {
+      setPendingMediaSessionType(sessionTypeAtFinish);
+      setPendingMediaSessionId(result.calendarEntryId);
+    }
+  }, [activeSession?.sessionType, finishSession]);
 
   const [startingWorkout, setStartingWorkout] = useState(false);
   const handleStartWorkout = useCallback(async () => {
@@ -275,7 +296,7 @@ export default function GymTracker() {
   const formatVol = (v: number) => v >= 1000 ? `${(v / 1000).toFixed(1)}k` : `${v}`;
 
   return (
-    <div className="animate-page-in space-y-2.5 px-5 py-3 sm:p-5 md:p-6 max-w-7xl mx-auto md:pb-6" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 5rem)" }}>
+    <div className="space-y-2.5 px-5 py-3 sm:p-5 md:p-6 max-w-7xl mx-auto md:pb-6" style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 5rem)" }}>
       {gymAiTask && (
         <AICompactOverlay
           isOpen={true}
@@ -349,7 +370,7 @@ export default function GymTracker() {
               onDeleteSet={deleteSet}
               onDuplicateLastSet={duplicateLastSet}
               onRemoveExercise={removeExerciseFromSession}
-              onFinish={finishSession}
+              onFinish={handleFinishSession}
               onDiscard={discardSession}
               onExerciseTap={handleExerciseTap}
             />
@@ -621,6 +642,15 @@ export default function GymTracker() {
         pr={statsExercise ? getPRForExercise(statsExercise.id) : null}
         open={statsOpen}
         onOpenChange={setStatsOpen}
+      />
+
+      <PostWorkoutMediaSheet
+        sessionId={pendingMediaSessionId}
+        sessionType={pendingMediaSessionType}
+        onClose={() => {
+          setPendingMediaSessionId(null);
+          setPendingMediaSessionType(undefined);
+        }}
       />
 
       <RoutineGeneratorSheet

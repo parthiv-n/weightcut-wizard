@@ -17,6 +17,9 @@ interface FoodSearchResult {
     carbs_per_100g: number;
     fats_per_100g: number;
     serving_size?: string;
+    /** Typical serving in grams, when USDA declares one. Drives the
+     *  "1 serving" quick-preset chip below the gram input. */
+    serving_grams?: number | null;
 }
 
 interface FoodSearchDialogProps {
@@ -81,18 +84,19 @@ function FoodStatPanel({
         <span className="text-[9px] text-muted-foreground uppercase tracking-wider font-semibold">kcal</span>
       </div>
       <div className="flex items-center gap-2.5 text-[11px] font-semibold flex-shrink-0 ml-auto">
-        {/* Each macro gets a fixed-width right-aligned number slot so the
-            digits line up across rows regardless of value (1g vs 100g). */}
+        {/* Display rounds to whole grams so the number column never exceeds
+            3 chars — guarantees the digits can't bleed left into the
+            previous macro chip's letter. */}
         <span className="text-blue-400 inline-flex items-baseline">
-          <span className="tabular-nums w-[22px] text-right">{protein}</span>
+          <span className="tabular-nums min-w-[24px] text-right">{Math.round(protein)}</span>
           <span className="opacity-60 ml-0.5">P</span>
         </span>
         <span className="text-orange-400 inline-flex items-baseline">
-          <span className="tabular-nums w-[22px] text-right">{carbs}</span>
+          <span className="tabular-nums min-w-[24px] text-right">{Math.round(carbs)}</span>
           <span className="opacity-60 ml-0.5">C</span>
         </span>
         <span className="text-purple-400 inline-flex items-baseline">
-          <span className="tabular-nums w-[22px] text-right">{fats}</span>
+          <span className="tabular-nums min-w-[24px] text-right">{Math.round(fats)}</span>
           <span className="opacity-60 ml-0.5">F</span>
         </span>
       </div>
@@ -521,15 +525,16 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                                         {g}g
                                     </button>
                                 ))}
-                                {selectedFood.serving_size && (
+                                {selectedFood.serving_grams && selectedFood.serving_grams !== 100 && (
                                     <button
-                                        onClick={() => {
-                                            const match = selectedFood.serving_size?.match(/(\d+(?:\.\d+)?)\s*g/i);
-                                            if (match) setServingGrams(Math.round(parseFloat(match[1])));
-                                        }}
-                                        className="px-2.5 py-1 rounded-full text-[13px] font-medium bg-muted/40 text-muted-foreground active:bg-muted/60"
+                                        onClick={() => setServingGrams(selectedFood.serving_grams!)}
+                                        className={`px-2.5 py-1 rounded-full text-[13px] font-medium transition-colors ${
+                                            servingGrams === selectedFood.serving_grams
+                                                ? "bg-primary text-primary-foreground"
+                                                : "bg-muted/40 text-muted-foreground active:bg-muted/60"
+                                        }`}
                                     >
-                                        1 srv ({selectedFood.serving_size})
+                                        1 srv ({selectedFood.serving_size ?? `${selectedFood.serving_grams}g`})
                                     </button>
                                 )}
                             </div>
@@ -555,9 +560,6 @@ export function FoodSearchDialog({ open, onOpenChange, onFoodSelected, mealType 
                                     <p className="text-[13px] uppercase tracking-wider text-muted-foreground">Fats</p>
                                 </div>
                             </div>
-                            <p className="text-[13px] text-muted-foreground/50 text-center">
-                                Per 100g: {selectedFood.calories_per_100g} kcal · P {selectedFood.protein_per_100g}g · C {selectedFood.carbs_per_100g}g · F {selectedFood.fats_per_100g}g
-                            </p>
                         </div>
 
                         <div className="border-t border-border/30 pt-1">

@@ -15,7 +15,12 @@ export const ScoringConfigV1: ScoringConfig = {
     acuteWindowDays: 7,
     chronicWindowDays: 28,
   },
-  sleep: { targetHoursPerNight: 8, debtPenaltyPerHour: 8 },
+  sleep: {
+    targetHoursPerNight: 8,
+    debtPenaltyPerHour: 8,
+    defaultAssumedHours: 7,
+    minTrainingDurationForAssumption: 20,
+  },
   weightCut: {
     sustainableRatePctPerWeek: [0.3, 1.0],
     decayEdgePct: 1.5,

@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { internalQuery, internalMutation } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import { CURRENT_CONFIG } from "../src/scoring/config";
 
 export const fetchScoringInputs = internalQuery({
   args: { userId: v.id("users"), date: v.string() },
@@ -25,6 +26,13 @@ export const fetchScoringInputs = internalQuery({
       .collect();
     const sessions = await ctx.db
       .query("gym_sessions")
+      .withIndex("by_user_date", (q) => q.eq("userId", userId).gte("date", lookbackStartIso))
+      .collect();
+    // Mirrors the union used in `loggedTodayBundle` so the assumed-sleep
+    // rescue (below) fires whether the user logged via the GymTracker
+    // (gym_sessions) or the fight-camp calendar.
+    const calendarEntries = await ctx.db
+      .query("fight_camp_calendar")
       .withIndex("by_user_date", (q) => q.eq("userId", userId).gte("date", lookbackStartIso))
       .collect();
     const wellness = await ctx.db
@@ -63,11 +71,41 @@ export const fetchScoringInputs = internalQuery({
       )
       .collect();
 
+    // "Forgot to log sleep" rescue: if the user has no sleep_log for the
+    // target date but logged a meaningful training session that day (≥ N
+    // minutes, where N is tunable in ScoringConfig), inject a default
+    // sleep entry so the score isn't penalised for a missing log. The
+    // assumption is NOT written to `sleep_logs` — when the user later
+    // enters their real hours, the standard upsert + scheduled recompute
+    // (see convex/sleep_logs.ts) overrides the assumption cleanly.
+    const minDuration = CURRENT_CONFIG.sleep.minTrainingDurationForAssumption;
+    const hasSleepForTargetDate = sleep.some((s) => s.date === date);
+    const meaningfulGym = sessions.some(
+      (s) =>
+        s.date === date &&
+        s.status === "completed" &&
+        (s.durationMinutes ?? 0) >= minDuration,
+    );
+    const meaningfulCalendar = calendarEntries.some(
+      (c) =>
+        c.date === date &&
+        (c.sessionType ?? "").toLowerCase() !== "rest" &&
+        (c.durationMinutes ?? 0) >= minDuration,
+    );
+    const trainedToday = meaningfulGym || meaningfulCalendar;
+    const sleepLogsForScoring = sleep.map((s) => ({ date: s.date, hours: s.hours }));
+    const assumedSleepDates: string[] = [];
+    if (!hasSleepForTargetDate && trainedToday) {
+      sleepLogsForScoring.push({ date, hours: CURRENT_CONFIG.sleep.defaultAssumedHours });
+      assumedSleepDates.push(date);
+    }
+
     return {
       date,
       profile,
       weights: weights.map((w) => ({ date: w.date, weightKg: w.weightKg })),
-      sleepHours: sleep.map((s) => ({ date: s.date, hours: s.hours })),
+      sleepHours: sleepLogsForScoring,
+      assumedSleepDates,
       // gym_sessions has no session-level `rpe`; use `perceivedFatigue` as proxy.
       sessions: sessions
         .filter((s) => s.durationMinutes != null && s.perceivedFatigue != null)

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useAction, useMutation } from "convex/react";
 import { useAIAction } from "@/hooks/useAIAction";
 import { api } from "@/../convex/_generated/api";
@@ -14,6 +14,19 @@ import { lookupUSDA } from "@/lib/usdaLookup";
 import { Capacitor } from "@capacitor/core";
 import { Search, Database, CheckCircle, PieChart, Camera } from "lucide-react";
 import type { AiLineItem, Ingredient, ManualMealForm, ManualNutritionDialogState, BarcodeBaseMacros, INITIAL_MANUAL_MEAL, INITIAL_MANUAL_NUTRITION_DIALOG } from "@/pages/nutrition/types";
+
+// Validate + clamp a bounding box from the vision model. Returns undefined
+// when the value is missing or out of range, which lets the UI fall back
+// to scattered positions instead of anchoring labels to nonsense coords.
+function normalizeBbox(raw: unknown): AiLineItem["bbox"] | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const r = raw as { x?: unknown; y?: unknown; w?: unknown; h?: unknown };
+  const nums = [r.x, r.y, r.w, r.h].map((v) => (typeof v === "number" ? v : Number(v)));
+  if (nums.some((n) => !Number.isFinite(n) || n < 0 || n > 1)) return undefined;
+  const [x, y, w, h] = nums;
+  if (w <= 0 || h <= 0 || x + w > 1.001 || y + h > 1.001) return undefined;
+  return { x, y, w, h };
+}
 
 interface UseAIMealAnalysisParams {
   manualMeal: ManualMealForm;
@@ -61,6 +74,24 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
   // Photo capture state
   const [photoBase64, setPhotoBase64] = useState<string | null>(null);
   const [photoAnalyzing, setPhotoAnalyzing] = useState(false);
+
+  // Per-macro overrides applied on top of the AI-summed totals. Lets the
+  // user say "actually it was more like 750 cal" after the photo analysis
+  // without forcing them to edit every individual line item. Saved totals
+  // use override ?? sum; line items stay at AI values for the breakdown.
+  const [overrideTotals, setOverrideTotals] = useState<{
+    calories?: number;
+    protein_g?: number;
+    carbs_g?: number;
+    fats_g?: number;
+  }>({});
+
+  // Drop stale overrides when the line-item list is fully cleared
+  // (e.g., the dialog closed and reopened, or every item was removed).
+  // Avoids "edited" badges hanging around with no meal underneath them.
+  useEffect(() => {
+    if (aiLineItems.length === 0) setOverrideTotals({});
+  }, [aiLineItems.length]);
 
   const capturePhoto = useCallback(async () => {
     try {
@@ -140,6 +171,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     setAiAnalyzing(true);
     setAiAnalysisComplete(false);
     setAiLineItems([]);
+    setOverrideTotals({});
 
     const taskId = addTask({
       id: `photo-meal-${Date.now()}`,
@@ -181,6 +213,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
           protein_g: item.protein_g || 0,
           carbs_g: item.carbs_g || 0,
           fats_g: item.fats_g || 0,
+          bbox: normalizeBbox(item.bbox),
         })));
       } else {
         setAiLineItems([{
@@ -242,6 +275,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
     setAiAnalyzing(true);
     setAiAnalysisComplete(false);
+    setOverrideTotals({});
     const taskId = addTask({
       id: `meal-analysis-${Date.now()}`,
       type: "meal-analysis",
@@ -314,10 +348,13 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
   const handleSaveAiMeal = useCallback(async () => {
     if (aiLineItems.length === 0) return;
 
-    const totalCalories = aiLineItems.reduce((s, i) => s + i.calories, 0);
-    const totalProtein = aiLineItems.reduce((s, i) => s + i.protein_g, 0);
-    const totalCarbs = aiLineItems.reduce((s, i) => s + i.carbs_g, 0);
-    const totalFats = aiLineItems.reduce((s, i) => s + i.fats_g, 0);
+    // User-edited macro values take precedence over the AI-summed line
+    // items. Line items still ship in the saved meal as the ingredient
+    // breakdown — only the headline macros reflect the override.
+    const totalCalories = overrideTotals.calories ?? aiLineItems.reduce((s, i) => s + i.calories, 0);
+    const totalProtein = overrideTotals.protein_g ?? aiLineItems.reduce((s, i) => s + i.protein_g, 0);
+    const totalCarbs = overrideTotals.carbs_g ?? aiLineItems.reduce((s, i) => s + i.carbs_g, 0);
+    const totalFats = overrideTotals.fats_g ?? aiLineItems.reduce((s, i) => s + i.fats_g, 0);
 
     const itemBreakdown = aiLineItems
       .map(i => `${i.quantity} ${i.name} (${i.calories} cal)`)
@@ -385,12 +422,13 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       setAiAnalysisComplete(false);
       setAiMealDescription("");
       setPhotoBase64(null);
+      setOverrideTotals({});
       setManualMeal(prev => ({ ...prev, meal_name: "" }));
     } catch (error) {
       logger.error("Error saving AI meal", error);
       toast({ title: "Error", description: "Failed to add meal", variant: "destructive" });
     }
-  }, [aiLineItems, manualMeal, aiMealDescription, photoBase64, generatePhotoUploadUrl, saveMealToDb, setIsQuickAddSheetOpen, setManualMeal, toast]);
+  }, [aiLineItems, overrideTotals, manualMeal, aiMealDescription, photoBase64, generatePhotoUploadUrl, saveMealToDb, setIsQuickAddSheetOpen, setManualMeal, toast]);
 
   const handleAiAnalyzeIngredient = useCallback(async () => {
     if (!aiIngredientDescription.trim()) {
@@ -715,5 +753,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     photoAnalyzing,
     capturePhoto,
     handlePhotoAnalyze,
+    // Per-macro overrides for inline-edit of AI totals
+    overrideTotals, setOverrideTotals,
   };
 }

@@ -5,6 +5,8 @@ import { useUser } from "@/contexts/UserContext";
 import { localCache } from "@/lib/localCache";
 import { celebrateSuccess } from "@/lib/haptics";
 import { logger } from "@/lib/logger";
+import { convex } from "@/integrations/convex/client";
+import { api } from "@/../convex/_generated/api";
 import type { Meal, Ingredient, MealTemplate } from "@/pages/nutrition/types";
 
 const FAVORITES_KEY = "meal_favorites";
@@ -128,11 +130,23 @@ export function useQuickMealActions({ meals, selectedDate, saveMealToDb }: UseQu
   const [copyingPreviousDay, setCopyingPreviousDay] = useState(false);
   const [previousDayMealCount, setPreviousDayMealCount] = useState(0);
 
+  // Query yesterday's count straight from Convex so the badge reflects the
+  // server, not whatever happens to be in localCache from a previous
+  // session. The cache was unreliable: if yesterday hadn't been opened in
+  // this session the count would always be 0 and the chip wouldn't render.
   useEffect(() => {
+    let cancelled = false;
     if (!userId) { setPreviousDayMealCount(0); return; }
     const yesterday = format(subDays(new Date(selectedDate), 1), "yyyy-MM-dd");
-    const cached = localCache.getForDate<Meal[]>(userId, "nutrition_logs", yesterday);
-    setPreviousDayMealCount(cached?.length || 0);
+    convex
+      .query(api.meals.listWithTotals, { date: yesterday })
+      .then((rows) => {
+        if (!cancelled) setPreviousDayMealCount(Array.isArray(rows) ? rows.length : 0);
+      })
+      .catch(() => {
+        if (!cancelled) setPreviousDayMealCount(0);
+      });
+    return () => { cancelled = true; };
   }, [userId, selectedDate]);
 
   const copyPreviousDay = useCallback(async () => {
@@ -141,12 +155,14 @@ export function useQuickMealActions({ meals, selectedDate, saveMealToDb }: UseQu
 
     try {
       const yesterday = format(subDays(new Date(selectedDate), 1), "yyyy-MM-dd");
-      // Cache-only: NutritionHero's daily fetch populates `nutrition_logs`
-      // cache keyed by date. Falls back to "nothing to copy" if yesterday
-      // hasn't been viewed yet — better than firing a misleading toast.
-      const yesterdayMeals: Meal[] = localCache.getForDate<Meal[]>(userId, "nutrition_logs", yesterday) ?? [];
+      // Pull yesterday's meals fresh from Convex. The previous implementation
+      // read from localCache only — if the user hadn't opened yesterday in
+      // this session, the array was empty and we'd silently copy nothing.
+      // listWithTotals returns the full meal rows with macros + meal_type
+      // intact, so the copy is faithful.
+      const yesterdayMeals = (await convex.query(api.meals.listWithTotals, { date: yesterday })) as Meal[];
 
-      if (yesterdayMeals.length === 0) {
+      if (!yesterdayMeals || yesterdayMeals.length === 0) {
         toast({ title: "Nothing to copy", description: "No meals logged yesterday" });
         return;
       }

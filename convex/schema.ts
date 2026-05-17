@@ -87,6 +87,12 @@ export default defineSchema({
     // still validate against the schema. Nothing currently writes to it.
     emailLower: v.optional(v.string()),
 
+    // Drives the gym-feed engagement badge on the bottom nav. We compare
+    // this to the `_creationTime` of likes/comments on the user's own
+    // posts to compute "how many unseen interactions". One write per
+    // feed-open is far cheaper than per-event seen-flag flipping.
+    lastSeenEngagementAt: v.optional(v.number()),
+
     updatedAt: v.optional(v.number()),
   })
     .index("by_user", ["userId"])
@@ -367,9 +373,64 @@ export default defineSchema({
     // Optional per-clip caption — short user note ("guillotine entry",
     // "left-hook timing"). Surfaces in the lightbox + library tile.
     caption: v.optional(v.string()),
+    // Denormalised at insert time so the gym-feed query is a single
+    // index scan on `by_gym_created` rather than a per-post join through
+    // `gym_members`. Set from the session's `gymId` (which is itself
+    // denormalised on `fight_camp_calendar`) or from the uploader's
+    // primary active membership. NULL = "personal-only post, not in any
+    // gym feed". A daily cron nulls this on rows > 90 days so they drop
+    // out of the feed but stay in the personal library.
+    gymId: v.optional(v.id("gyms")),
+    // Future-proofing for a per-post privacy toggle. Defaults to "gym"
+    // (visible to whole-gym feed) for v1. "private" rows are kept out of
+    // the feed query even when `gymId` is set.
+    visibility: v.optional(v.union(v.literal("gym"), v.literal("private"))),
+    // Cached engagement counters. Stored on the post row so the feed
+    // query returns them in O(1) without scanning the likes/comments
+    // tables — critical when a post hits 500+ likes. Atomically patched
+    // by `toggleLike` / `addComment` / `deleteComment` mutations.
+    // `?? 0` at read time so existing rows that pre-date this field
+    // validate without a migration.
+    likeCount: v.optional(v.number()),
+    commentCount: v.optional(v.number()),
   })
     .index("by_session", ["sessionId"])
-    .index("by_user_captured", ["userId", "capturedAt"]),
+    .index("by_user_captured", ["userId", "capturedAt"])
+    // Drives the gym social feed: descending paginate by `_creationTime`
+    // within a single `gymId` is exactly the page-1 read shape.
+    .index("by_gym_created", ["gymId"]),
+
+  /**
+   * Per-(post, user) like membership row. Indexed for O(1) "did I like
+   * this post?" + O(1) like/un-like toggle. `postOwnerId` is denormalised
+   * so the engagement-badge query can scan all events on the calling
+   * user's posts via `by_owner_created` without a join.
+   */
+  feed_likes: defineTable({
+    postId: v.id("session_media"),
+    postOwnerId: v.id("users"),
+    userId: v.id("users"),
+  })
+    .index("by_post_user", ["postId", "userId"])
+    .index("by_owner_created", ["postOwnerId"])
+    .index("by_user", ["userId"]),
+
+  /**
+   * Flat comments on a feed post. Chronological per-post via `by_post`
+   * (cursor-paginated, ASC). `postOwnerId` denormalised for the badge.
+   * 500-char body cap enforced server-side in the mutation.
+   */
+  feed_comments: defineTable({
+    postId: v.id("session_media"),
+    postOwnerId: v.id("users"),
+    userId: v.id("users"),
+    body: v.string(),
+    // Soft-delete hook for moderation v2. Unused in v1 — delete is hard.
+    deletedAt: v.optional(v.number()),
+  })
+    .index("by_post", ["postId"])
+    .index("by_owner_created", ["postOwnerId"])
+    .index("by_user", ["userId"]),
 
   fight_week_logs: defineTable({
     userId: v.id("users"),
@@ -538,6 +599,11 @@ export default defineSchema({
     ),
     shareData: v.boolean(),
     joinedAt: v.number(),
+    // Coach-only toggle: when true, the gym's social feed surfaces on the
+    // coach's dashboard widget. Per-gym (not per-coach) because a coach
+    // who runs multiple gyms may want the feed for some but not others.
+    // Default is undefined / false — coaches opt in from gym settings.
+    feedVisibleOnDashboard: v.optional(v.boolean()),
   })
     .index("by_gym", ["gymId"])
     .index("by_user", ["userId"])

@@ -131,9 +131,10 @@ export function SessionDetailSheet({ session, open, onOpenChange, onDelete, onUp
             {/* Stats */}
             {(() => {
               const hasDuration = session.duration_minutes != null && session.duration_minutes > 0;
+              const hasVolume = session.totalVolume > 0;
               const hasFatigue = session.perceived_fatigue != null && session.perceived_fatigue > 0;
-              const count = 2 + (hasDuration ? 1 : 0) + (hasFatigue ? 1 : 0);
-              const cols = count <= 2 ? "grid-cols-2" : count === 3 ? "grid-cols-3" : "grid-cols-2";
+              const count = 1 + (hasDuration ? 1 : 0) + (hasVolume ? 1 : 0) + (hasFatigue ? 1 : 0);
+              const cols = count === 1 ? "grid-cols-1" : count === 2 ? "grid-cols-2" : count === 3 ? "grid-cols-3" : "grid-cols-2";
               return (
                 <motion.div variants={staggerItem} className={`grid ${cols} gap-2 mt-4 mb-5`}>
                   {hasDuration && (
@@ -148,11 +149,13 @@ export function SessionDetailSheet({ session, open, onOpenChange, onDelete, onUp
                     <div className="display-number text-base">{session.exerciseCount}</div>
                     <div className="text-[10px] text-muted-foreground mt-0.5">Exercises</div>
                   </div>
-                  <div className="card-surface rounded-2xl border border-border text-center p-3">
-                    <TrendingUp className="h-4 w-4 mx-auto mb-1.5 text-primary" />
-                    <div className="display-number text-base">{formatVolume(session.totalVolume)} <span className="text-xs text-muted-foreground font-normal">kg</span></div>
-                    <div className="text-[10px] text-muted-foreground mt-0.5">Volume</div>
-                  </div>
+                  {hasVolume && (
+                    <div className="card-surface rounded-2xl border border-border text-center p-3">
+                      <TrendingUp className="h-4 w-4 mx-auto mb-1.5 text-primary" />
+                      <div className="display-number text-base">{formatVolume(session.totalVolume)} <span className="text-xs text-muted-foreground font-normal">kg</span></div>
+                      <div className="text-[10px] text-muted-foreground mt-0.5">Volume</div>
+                    </div>
+                  )}
                   {hasFatigue && (
                     <div className="card-surface rounded-2xl border border-border text-center p-3">
                       <Brain className="h-4 w-4 mx-auto mb-1.5 text-primary" />

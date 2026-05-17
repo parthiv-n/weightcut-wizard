@@ -26,40 +26,35 @@ export function FightFormStatChips({ weight, trend, latestScore, latestLabel }: 
   const okCount = trend?.filter((p) => p.state === "ok").length ?? 0;
 
   return (
-    <div className="grid grid-cols-2 gap-2 px-1">
-      <div className="card-surface rounded-2xl p-3">
-        <div className="section-header mb-1">Weight</div>
+    <div className="grid grid-cols-2 gap-2 px-1 items-stretch">
+      <div className="card-surface rounded-2xl px-3 py-2 flex flex-col justify-center">
+        <div className="section-header">Weight</div>
         {weight ? (
-          <>
+          <div className="flex items-baseline justify-between gap-1.5 mt-0.5">
             <div className="display-number text-sm whitespace-nowrap tabular-nums">
               {weight.current.toFixed(1)} → {weight.goal.toFixed(1)} kg
             </div>
-            <div className="text-xs text-muted-foreground mt-0.5">
-              {Math.round(weight.pctComplete * 100)}% complete
+            <div className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+              {Math.round(weight.pctComplete * 100)}%
             </div>
-          </>
+          </div>
         ) : (
-          <div className="text-sm text-muted-foreground">Log a weight to begin</div>
+          <div className="text-sm text-muted-foreground mt-0.5">Log a weight to begin</div>
         )}
       </div>
 
-      <div className="card-surface rounded-2xl p-3 flex flex-col">
-        <div className="flex items-baseline justify-between mb-1">
+      <div className="card-surface rounded-2xl px-3 py-2 flex flex-col justify-center">
+        <div className="flex items-baseline justify-between">
           <div className="section-header">14-day Trend</div>
           {latestScore != null && (
-            <div className="display-number text-base tabular-nums">{Math.round(latestScore)}</div>
+            <div className="display-number text-sm tabular-nums">{Math.round(latestScore)}</div>
           )}
         </div>
-        <div className="flex-1 min-h-[28px]">
+        <div className="min-h-[18px] mt-0.5">
           <FightFormTrendSparkline
             points={trend}
             accentClass={accent ? `${accent.stroke} ${accent.fill}` : undefined}
           />
-        </div>
-        <div className="text-[10px] text-muted-foreground mt-0.5">
-          {okCount > 0
-            ? `${okCount} scored ${okCount === 1 ? "day" : "days"}`
-            : "Score not unlocked yet"}
         </div>
       </div>
     </div>

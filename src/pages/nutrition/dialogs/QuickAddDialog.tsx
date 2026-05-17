@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -10,12 +10,20 @@ import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { AICompactOverlay } from "@/components/AICompactOverlay";
 import { MealPhotoScanOverlay } from "@/components/nutrition/MealPhotoScanOverlay";
 import type { ManualMealForm } from "@/pages/nutrition/types";
+import { selectLabeledItems, shortName, layoutLabels } from "@/lib/aiLineItemLabels";
+
+interface MacroOverrides {
+  calories?: number;
+  protein_g?: number;
+  carbs_g?: number;
+  fats_g?: number;
+}
 
 interface AiMealShape {
   aiMealDescription: string;
   setAiMealDescription: React.Dispatch<React.SetStateAction<string>>;
   aiAnalyzing: boolean;
-  aiLineItems: Array<{ name: string; quantity: string; calories: number; protein_g: number; carbs_g: number; fats_g: number }>;
+  aiLineItems: Array<{ name: string; quantity: string; calories: number; protein_g: number; carbs_g: number; fats_g: number; bbox?: { x: number; y: number; w: number; h: number } }>;
   setAiLineItems: React.Dispatch<React.SetStateAction<any[]>>;
   aiAnalysisComplete: boolean;
   setAiAnalysisComplete: React.Dispatch<React.SetStateAction<boolean>>;
@@ -26,6 +34,8 @@ interface AiMealShape {
   handlePhotoAnalyze: () => void;
   handleAiAnalyzeMeal: () => void;
   handleSaveAiMeal: () => void;
+  overrideTotals: MacroOverrides;
+  setOverrideTotals: React.Dispatch<React.SetStateAction<MacroOverrides>>;
   barcodeBaseMacros: any;
   setBarcodeBaseMacros: React.Dispatch<React.SetStateAction<any>>;
   servingMultiplier: number;
@@ -100,8 +110,16 @@ export function QuickAddDialog({
   // "Fix Results" reveals the detailed line-item editor (Cal-AI pattern:
   // the macro card view is primary; per-item edits are one tap away).
   const [showLineItemEditor, setShowLineItemEditor] = useState(false);
+  // Which macro tile is currently in inline-edit mode (null when none).
+  // Lets the user tap a tile to override the AI's headline value — e.g.
+  // when they know the actual serving was bigger than the photo suggests.
+  const [editingMacro, setEditingMacro] = useState<null | "calories" | "protein_g" | "carbs_g" | "fats_g">(null);
+  const [editingDraft, setEditingDraft] = useState("");
   useEffect(() => {
-    if (!aiMeal.aiAnalysisComplete) setShowLineItemEditor(false);
+    if (!aiMeal.aiAnalysisComplete) {
+      setShowLineItemEditor(false);
+      setEditingMacro(null);
+    }
   }, [aiMeal.aiAnalysisComplete]);
   useEffect(() => {
     if (open && quickAddTab === "ai" && !hasSeenAiPlaceholder) {
@@ -115,10 +133,73 @@ export function QuickAddDialog({
     onError: (error: string) => onToast({ title: "Voice Input", description: error, variant: "destructive" }),
   });
 
-  const totalAiLineItemCalories = aiMeal.aiLineItems.reduce((s, i) => s + i.calories, 0);
-  const totalAiProtein = aiMeal.aiLineItems.reduce((s, i) => s + i.protein_g, 0);
-  const totalAiCarbs = aiMeal.aiLineItems.reduce((s, i) => s + i.carbs_g, 0);
-  const totalAiFats = aiMeal.aiLineItems.reduce((s, i) => s + i.fats_g, 0);
+  // Pick the calorie-heaviest items + lay out their bubble positions over
+  // the photo. Memoized because the layout pass walks the list once and
+  // resolves collisions — cheap, but no point re-running on unrelated
+  // re-renders (e.g. the meal-name input keystrokes).
+  const placedLabels = useMemo(
+    () => layoutLabels(selectLabeledItems(aiMeal.aiLineItems, 4)),
+    [aiMeal.aiLineItems],
+  );
+
+  const summedAiCalories = aiMeal.aiLineItems.reduce((s, i) => s + i.calories, 0);
+  const summedAiProtein = aiMeal.aiLineItems.reduce((s, i) => s + i.protein_g, 0);
+  const summedAiCarbs = aiMeal.aiLineItems.reduce((s, i) => s + i.carbs_g, 0);
+  const summedAiFats = aiMeal.aiLineItems.reduce((s, i) => s + i.fats_g, 0);
+  // Displayed values respect any inline-edited override; raw sums feed
+  // the save flow only when the user hasn't overridden that macro.
+  const totalAiLineItemCalories = aiMeal.overrideTotals.calories ?? summedAiCalories;
+  const totalAiProtein = aiMeal.overrideTotals.protein_g ?? summedAiProtein;
+  const totalAiCarbs = aiMeal.overrideTotals.carbs_g ?? summedAiCarbs;
+  const totalAiFats = aiMeal.overrideTotals.fats_g ?? summedAiFats;
+
+  const beginEditMacro = (
+    key: "calories" | "protein_g" | "carbs_g" | "fats_g",
+    currentValue: number,
+  ) => {
+    triggerHapticSelection();
+    setEditingMacro(key);
+    setEditingDraft(String(Math.round(currentValue)));
+  };
+  const commitEditMacro = () => {
+    if (!editingMacro) return;
+    const trimmed = editingDraft.trim();
+    aiMeal.setOverrideTotals((prev) => {
+      const next = { ...prev };
+      if (trimmed === "") {
+        // Empty input clears just this macro's override; siblings stay.
+        delete next[editingMacro!];
+        return next;
+      }
+      const n = parseFloat(trimmed);
+      if (!Number.isFinite(n) || n < 0) return prev;
+      const rounded = Math.round(n * 10) / 10;
+      next[editingMacro!] = rounded;
+
+      // Keep calories and macros in lockstep using Atwater factors
+      // (protein 4, carbs 4, fat 9 kcal/g). Bumping a macro recomputes
+      // the calorie headline; bumping calories scales the macros
+      // proportionally so their Atwater sum lands on the new number.
+      const currentProtein = next.protein_g ?? summedAiProtein;
+      const currentCarbs = next.carbs_g ?? summedAiCarbs;
+      const currentFats = next.fats_g ?? summedAiFats;
+
+      if (editingMacro === "calories") {
+        const atwater = 4 * currentProtein + 4 * currentCarbs + 9 * currentFats;
+        if (atwater > 0) {
+          const ratio = rounded / atwater;
+          next.protein_g = Math.round(currentProtein * ratio * 10) / 10;
+          next.carbs_g = Math.round(currentCarbs * ratio * 10) / 10;
+          next.fats_g = Math.round(currentFats * ratio * 10) / 10;
+        }
+      } else {
+        next.calories = Math.round(4 * currentProtein + 4 * currentCarbs + 9 * currentFats);
+      }
+      return next;
+    });
+    setEditingMacro(null);
+    setEditingDraft("");
+  };
 
   const handleAddIngredient = async () => {
     if (!aiMeal.newIngredient.name.trim() || !aiMeal.newIngredient.grams) {
@@ -459,31 +540,31 @@ export function QuickAddDialog({
                       className="w-full h-44 object-cover"
                     />
                     <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-black/30 via-transparent to-black/15" />
-                    {/* Up to 3 ingredient bubbles, scattered */}
-                    {aiMeal.aiLineItems.slice(0, 3).map((item, idx) => {
-                      const positions = [
-                        { top: "10%", left: "8%" },
-                        { top: "20%", right: "10%" },
-                        { bottom: "18%", left: "14%" },
-                      ];
-                      const firstWord = item.name.split(/[\s,]+/)[0];
-                      return (
-                        <div
-                          key={idx}
-                          className="absolute bg-white/95 dark:bg-card/95 backdrop-blur-md text-foreground px-2.5 py-1 rounded-full shadow-lg flex flex-col items-center leading-tight"
-                          style={positions[idx]}
-                        >
-                          <span className="text-[10px] font-semibold tracking-tight">{firstWord}</span>
-                          <span className="text-[10px] font-bold tabular-nums">{Math.round(item.calories)}</span>
-                        </div>
-                      );
-                    })}
+                    {/* Labels only the most calorie-heavy items, anchored to
+                        each food via the vision bbox where available. Names
+                        are squashed to a readable short form ("French Fries"
+                        → "Fries"). Layout clamps to edge insets and nudges
+                        overlapping bubbles apart. See aiLineItemLabels.ts. */}
+                    {placedLabels.map(({ x, y, item }, idx) => (
+                      <div
+                        key={idx}
+                        className="absolute bg-white/95 dark:bg-card/95 backdrop-blur-md text-foreground px-2.5 py-1 rounded-full shadow-lg flex flex-col items-center leading-tight"
+                        style={{
+                          left: `${x * 100}%`,
+                          top: `${y * 100}%`,
+                          transform: "translate(-50%, -50%)",
+                        }}
+                      >
+                        <span className="text-[10px] font-semibold tracking-tight">{shortName(item.name)}</span>
+                        <span className="text-[10px] font-bold tabular-nums">{Math.round(item.calories)}</span>
+                      </div>
+                    ))}
                   </div>
                 )}
 
                 {/* Meal-type chip row + AI-generated name (editable) */}
                 <div className="space-y-2">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center justify-center gap-1.5">
                     {MEAL_TYPES.map((t) => {
                       const active = manualMeal.meal_type === t.value;
                       return (
@@ -514,37 +595,71 @@ export function QuickAddDialog({
                   />
                 </div>
 
-                {/* 2×2 macro grid — round icon tile + value + edit pencil */}
+                {/* 2×2 macro grid — tap a tile to inline-edit that macro.
+                    Useful when the user knows the serving was off (e.g. AI
+                    said 500cal but they ate 1.5× the photo). The override is
+                    used on save; line items below stay at AI values. */}
                 <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { label: "Calories", value: Math.round(totalAiLineItemCalories), unit: "", Icon: Flame, color: "#f97316", tint: "rgba(249, 115, 22, 0.12)" },
-                    { label: "Carbs", value: Math.round(totalAiCarbs), unit: "g", Icon: Wheat, color: "#f59e0b", tint: "rgba(245, 158, 11, 0.12)" },
-                    { label: "Protein", value: Math.round(totalAiProtein), unit: "g", Icon: Drumstick, color: "#ef4444", tint: "rgba(239, 68, 68, 0.12)" },
-                    { label: "Fats", value: Math.round(totalAiFats), unit: "g", Icon: Droplet, color: "#3b82f6", tint: "rgba(59, 130, 246, 0.12)" },
-                  ].map((m) => (
-                    <button
-                      key={m.label}
-                      type="button"
-                      onClick={() => setShowLineItemEditor(true)}
-                      className="card-surface rounded-2xl px-3 py-3 flex items-center gap-2.5 active:scale-[0.98] transition-transform text-left"
-                    >
+                  {([
+                    { key: "calories" as const, label: "Calories", value: Math.round(totalAiLineItemCalories), unit: "", Icon: Flame, color: "#f97316", tint: "rgba(249, 115, 22, 0.12)" },
+                    { key: "carbs_g" as const, label: "Carbs", value: Math.round(totalAiCarbs), unit: "g", Icon: Wheat, color: "#f59e0b", tint: "rgba(245, 158, 11, 0.12)" },
+                    { key: "protein_g" as const, label: "Protein", value: Math.round(totalAiProtein), unit: "g", Icon: Drumstick, color: "#ef4444", tint: "rgba(239, 68, 68, 0.12)" },
+                    { key: "fats_g" as const, label: "Fats", value: Math.round(totalAiFats), unit: "g", Icon: Droplet, color: "#3b82f6", tint: "rgba(59, 130, 246, 0.12)" },
+                  ]).map((m) => {
+                    const isEditing = editingMacro === m.key;
+                    const isOverridden = aiMeal.overrideTotals[m.key] !== undefined;
+                    return (
                       <div
-                        className="h-9 w-9 rounded-full flex items-center justify-center flex-shrink-0"
-                        style={{ background: m.tint }}
+                        key={m.label}
+                        className={`card-surface rounded-2xl px-3 py-3 flex items-center gap-2.5 text-left transition-transform ${
+                          isEditing ? "ring-2 ring-primary/40" : "active:scale-[0.98]"
+                        }`}
+                        onClick={() => { if (!isEditing) beginEditMacro(m.key, m.value); }}
+                        role="button"
+                        tabIndex={0}
                       >
-                        <m.Icon className="h-4 w-4" style={{ color: m.color }} strokeWidth={2.4} />
+                        <div
+                          className="h-9 w-9 rounded-full flex items-center justify-center flex-shrink-0"
+                          style={{ background: m.tint }}
+                        >
+                          <m.Icon className="h-4 w-4" style={{ color: m.color }} strokeWidth={2.4} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[11px] font-semibold text-muted-foreground/70 leading-none">
+                            {m.label}
+                            {isOverridden && !isEditing && (
+                              <span className="ml-1 text-primary/80">·&nbsp;edited</span>
+                            )}
+                          </p>
+                          {isEditing ? (
+                            <input
+                              autoFocus
+                              type="number"
+                              inputMode="decimal"
+                              value={editingDraft}
+                              onChange={(e) => setEditingDraft(e.target.value)}
+                              onBlur={commitEditMacro}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") { e.preventDefault(); (e.currentTarget as HTMLInputElement).blur(); }
+                                if (e.key === "Escape") { setEditingMacro(null); setEditingDraft(""); }
+                              }}
+                              onClick={(e) => e.stopPropagation()}
+                              className="w-full bg-transparent border-0 outline-none text-[15px] font-bold tabular-nums text-foreground leading-none mt-1 p-0 focus:ring-0"
+                              aria-label={`Edit ${m.label}`}
+                            />
+                          ) : (
+                            <p className="text-[15px] font-bold tabular-nums text-foreground leading-none mt-1">
+                              {m.value}<span className="text-[11px] font-semibold text-muted-foreground/60">{m.unit}</span>
+                            </p>
+                          )}
+                        </div>
+                        <Pencil
+                          className={`h-3 w-3 flex-shrink-0 ${isOverridden ? "text-primary" : "text-muted-foreground/40"}`}
+                          strokeWidth={2.2}
+                        />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[11px] font-semibold text-muted-foreground/70 leading-none">
-                          {m.label}
-                        </p>
-                        <p className="text-[15px] font-bold tabular-nums text-foreground leading-none mt-1">
-                          {m.value}<span className="text-[11px] font-semibold text-muted-foreground/60">{m.unit}</span>
-                        </p>
-                      </div>
-                      <Pencil className="h-3 w-3 text-muted-foreground/40 flex-shrink-0" strokeWidth={2.2} />
-                    </button>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {/* Line-item editor (revealed by Fix Results) */}

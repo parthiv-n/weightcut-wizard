@@ -30,9 +30,7 @@ export const SessionAnalyticsCard = memo(function SessionAnalyticsCard({
 
       <div className="relative">
         <div className="flex items-center gap-2 text-sm font-semibold">
-          <div className="h-7 w-7 rounded-lg bg-primary/15 flex items-center justify-center">
-            <BarChart3 className="h-3.5 w-3.5 text-primary" />
-          </div>
+          <BarChart3 className="h-4 w-4 text-muted-foreground" />
           Weekly Overview
         </div>
 
