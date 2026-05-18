@@ -2,7 +2,7 @@ import type { TutorialFlow } from "../types";
 
 export const onboardingFlow: TutorialFlow = {
   id: "onboarding",
-  version: 10,
+  version: 11,
   steps: [
     {
       id: "welcome",
@@ -145,6 +145,23 @@ export const onboardingFlow: TutorialFlow = {
         "Log the nights, watch the trend across a week, a month, three months. Sleep is the cheapest performance gain you've got. Spend it.",
       position: "center",
       navigateTo: "/sleep",
+    },
+    {
+      id: "your-corner",
+      title: "Your corner",
+      description:
+        "The Corner is your gym feed. Drop a photo or clip after a session, scroll your teammates' work, double tap to give them love.",
+      position: "center",
+      navigateTo: "/community",
+    },
+    {
+      id: "feed-view-once",
+      title: "See it once",
+      description:
+        "Each post shows up once. Swipe it away and it's gone from your feed for good. Your own posts stay in your profile so you keep the record.",
+      position: "center",
+      route: "/community",
+      wizardPose: "point",
     },
     {
       id: "quick-tips",

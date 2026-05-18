@@ -15,6 +15,7 @@ export const ONBOARDING_SECTIONS: ProgressSection[] = [
   { id: "cut", label: "Cut", stepIds: ["fight-week-page", "rehydration-page"] },
   { id: "camps", label: "Camps", stepIds: ["fight-camps-page", "training-calendar-page"] },
   { id: "recovery", label: "Recovery", stepIds: ["recovery-page", "sleep-page"] },
+  { id: "corner", label: "Corner", stepIds: ["your-corner", "feed-view-once"] },
   { id: "sendoff", label: "Wrap", stepIds: ["quick-tips", "pro-features", "all-done"] },
 ];
 

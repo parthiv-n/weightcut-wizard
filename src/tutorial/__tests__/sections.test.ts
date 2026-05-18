@@ -24,14 +24,16 @@ const allSteps: TutorialStep[] = [
   step("training-calendar-page"),
   step("recovery-page"),
   step("sleep-page"),
+  step("your-corner"),
+  step("feed-view-once"),
   step("quick-tips"),
   step("pro-features"),
   step("all-done"),
 ];
 
 describe("ONBOARDING_SECTIONS", () => {
-  it("has nine sections", () => {
-    expect(ONBOARDING_SECTIONS).toHaveLength(9);
+  it("has ten sections", () => {
+    expect(ONBOARDING_SECTIONS).toHaveLength(10);
   });
   it("covers every onboarding step id exactly once", () => {
     const ids = ONBOARDING_SECTIONS.flatMap((s) => s.stepIds);
@@ -61,6 +63,6 @@ describe("computeSegmentFills", () => {
       (s) => s.id !== "fight-week-page" && s.id !== "rehydration-page",
     );
     const fills = computeSegmentFills(filtered, 0);
-    expect(fills).toHaveLength(8);
+    expect(fills).toHaveLength(9);
   });
 });
