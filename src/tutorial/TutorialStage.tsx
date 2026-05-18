@@ -5,6 +5,7 @@ import { StatusBar, Style } from "@capacitor/status-bar";
 import { Capacitor } from "@capacitor/core";
 import { ImpactStyle } from "@capacitor/haptics";
 import { triggerHaptic, triggerHapticSelection, triggerHapticSuccess, triggerHapticWarning } from "@/lib/haptics";
+import { logger } from "@/lib/logger";
 import { WizardCharacter } from "./WizardCharacter";
 import { SpeechBubble } from "./SpeechBubble";
 import { TutorialProgressBar } from "./TutorialProgressBar";
@@ -29,7 +30,9 @@ class StageErrorBoundary extends Component<{ children: ReactNode }, { hasError: 
   static getDerivedStateFromError() {
     return { hasError: true };
   }
-  componentDidCatch() {}
+  componentDidCatch(error: Error, info: { componentStack?: string | null }) {
+    logger.warn("TutorialStage render error", { error, componentStack: info.componentStack });
+  }
   render() {
     if (this.state.hasError) return null;
     return this.props.children;
@@ -55,6 +58,20 @@ function StageInner({
   const [bubbleComplete, setBubbleComplete] = useState(false);
   const [forceComplete, setForceComplete] = useState(false);
   const prevSectionRef = useRef<string | null>(null);
+  const successFiredRef = useRef(false);
+
+  const isLastStep = currentStepIndex === totalSteps - 1;
+
+  useEffect(() => {
+    successFiredRef.current = false;
+  }, [currentStep?.id]);
+
+  useEffect(() => {
+    if (isLastStep && bubbleComplete && !successFiredRef.current) {
+      successFiredRef.current = true;
+      triggerHapticSuccess();
+    }
+  }, [isLastStep, bubbleComplete]);
 
   useEffect(() => {
     if (!isActive) return;
@@ -76,7 +93,7 @@ function StageInner({
       triggerHaptic(ImpactStyle.Light);
     }
     prevSectionRef.current = sectionId;
-  }, [currentStep, flowId]);
+  }, [currentStep?.id, flowId]);
 
   const handleBackdropTap = useCallback(() => {
     if (!bubbleComplete) {
@@ -99,11 +116,6 @@ function StageInner({
   if (!isActive || !currentStep) return null;
 
   const isFirstStep = currentStepIndex === 0;
-  const isLastStep = currentStepIndex === totalSteps - 1;
-
-  if (isLastStep && bubbleComplete) {
-    triggerHapticSuccess();
-  }
 
   return createPortal(
     <div
