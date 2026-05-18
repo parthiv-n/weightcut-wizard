@@ -9,6 +9,7 @@ export interface ProgressSection {
 export const ONBOARDING_SECTIONS: ProgressSection[] = [
   { id: "welcome", label: "Welcome", stepIds: ["welcome"] },
   { id: "dashboard", label: "Dashboard", stepIds: ["dashboard-overview"] },
+  { id: "score", label: "Score", stepIds: ["score-number", "score-labels", "score-components", "score-phases", "score-ceilings", "score-daily-use"] },
   { id: "nutrition", label: "Nutrition", stepIds: ["nutrition-page", "nutrition-features"] },
   { id: "weight", label: "Weight", stepIds: ["weight-tracker-page"] },
   { id: "cut", label: "Cut", stepIds: ["fight-week-page", "rehydration-page"] },

@@ -9,6 +9,12 @@ function step(id: string): TutorialStep {
 const allSteps: TutorialStep[] = [
   step("welcome"),
   step("dashboard-overview"),
+  step("score-number"),
+  step("score-labels"),
+  step("score-components"),
+  step("score-phases"),
+  step("score-ceilings"),
+  step("score-daily-use"),
   step("nutrition-page"),
   step("nutrition-features"),
   step("weight-tracker-page"),
@@ -24,8 +30,8 @@ const allSteps: TutorialStep[] = [
 ];
 
 describe("ONBOARDING_SECTIONS", () => {
-  it("has eight sections", () => {
-    expect(ONBOARDING_SECTIONS).toHaveLength(8);
+  it("has nine sections", () => {
+    expect(ONBOARDING_SECTIONS).toHaveLength(9);
   });
   it("covers every onboarding step id exactly once", () => {
     const ids = ONBOARDING_SECTIONS.flatMap((s) => s.stepIds);
@@ -42,10 +48,10 @@ describe("computeSegmentFills", () => {
   });
   it("fills a multi-step segment proportionally", () => {
     const fills = computeSegmentFills(allSteps, 2);
-    expect(fills[2]).toBeCloseTo(0.5, 5);
+    expect(fills[2]).toBeCloseTo(1 / 6, 5);
   });
   it("marks completed segments as 1", () => {
-    const fills = computeSegmentFills(allSteps, 4);
+    const fills = computeSegmentFills(allSteps, 8);
     expect(fills[0]).toBe(1);
     expect(fills[1]).toBe(1);
     expect(fills[2]).toBe(1);
@@ -55,6 +61,6 @@ describe("computeSegmentFills", () => {
       (s) => s.id !== "fight-week-page" && s.id !== "rehydration-page",
     );
     const fills = computeSegmentFills(filtered, 0);
-    expect(fills).toHaveLength(7);
+    expect(fills).toHaveLength(8);
   });
 });

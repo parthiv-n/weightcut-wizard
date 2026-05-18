@@ -2,7 +2,7 @@ import type { TutorialFlow } from "../types";
 
 export const onboardingFlow: TutorialFlow = {
   id: "onboarding",
-  version: 9,
+  version: 10,
   steps: [
     {
       id: "welcome",
@@ -18,6 +18,55 @@ export const onboardingFlow: TutorialFlow = {
       title: "This is home",
       description:
         "Your ring tracks the day, the wisdom keeps you sharp, the badges mark the work. Open this first, every morning.",
+      position: "center",
+      route: "/dashboard",
+    },
+    {
+      id: "score-number",
+      title: "About that ring",
+      description:
+        "The number in the ring is your Fight Form Score, 0 to 100, blending your week against your camp. It's a three day rolling average, so one rough day won't sink it.",
+      position: "center",
+      route: "/dashboard",
+    },
+    {
+      id: "score-labels",
+      title: "Four labels, one read",
+      description:
+        "Sharp from 80 up. Sharpening sixty to seventy nine. Off Pace forty to fifty nine. At Risk under forty. Read the label first, the number second.",
+      position: "center",
+      route: "/dashboard",
+    },
+    {
+      id: "score-components",
+      title: "Five parts make it up",
+      description:
+        "Training load, sleep, weight cut, wellness, nutrition. Tap the dots under the ring to see which one is pulling you up and which one is holding you back.",
+      position: "center",
+      route: "/dashboard",
+      wizardPose: "point",
+    },
+    {
+      id: "score-phases",
+      title: "Phase matters",
+      description:
+        "Weights shift with your camp phase. Build leans on training and the cut. Peak leans on sleep and the cut. Fight Week stacks the cut, sleep, and wellness.",
+      position: "center",
+      route: "/dashboard",
+    },
+    {
+      id: "score-ceilings",
+      title: "Safety caps",
+      description:
+        "Some signals cap the score. Cutting more than two percent of bodyweight in a week caps it at fifty. Big sleep debt caps it at sixty five. A training spike caps it at forty five. A lock icon shows when one fires.",
+      position: "center",
+      route: "/dashboard",
+    },
+    {
+      id: "score-daily-use",
+      title: "What to do with it",
+      description:
+        "Check it in the morning. The label tells you to push or recover. Read the limiter, pick that as your next lever. Work the components, and the number follows.",
       position: "center",
       route: "/dashboard",
     },
