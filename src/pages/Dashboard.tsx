@@ -7,10 +7,6 @@ import { FightFormRing } from "@/components/dashboard/FightFormRing";
 import { FightFormStatChips } from "@/components/dashboard/FightFormStatChips";
 import { FightFormInsightStrip } from "@/components/dashboard/FightFormInsightStrip";
 import { FightFormDeltaBanner } from "@/components/dashboard/FightFormDeltaBanner";
-import { FightFormCalibrationTour } from "@/components/dashboard/FightFormCalibrationTour";
-import { useTutorial } from "@/tutorial/useTutorial";
-import { tutorialPersistence } from "@/tutorial/tutorialPersistence";
-import { onboardingFlow } from "@/tutorial/flows/onboardingFlow";
 import { TodayPanel } from "@/components/dashboard/TodayPanel";
 import { FightFormScoreSheet } from "@/components/dashboard/FightFormScoreSheet";
 // Lazy-load recharts wrapper so the ~100KB charts bundle defers until first paint.
@@ -121,10 +117,6 @@ export default function Dashboard() {
     FEATURE_FLAGS.enableFightFormScore ? { days: 14 } : "skip",
   );
   const ffRecompute = useMutation(api.fightFormScore.recomputeNow);
-  // Calibration tour fires the first time the user lands on the dashboard
-  // in `state: "ok"` with real sub-scores (i.e. right after their first
-  // unlock). Gated by a localStorage flag so it never re-appears.
-  const [tourOpen, setTourOpen] = useState(false);
   // One-shot Sharp crossing celebration. Fires once per calendar date when
   // the user transitions from below 80 to 80+; expires automatically after
   // the animation runs so it doesn't loop on re-renders.
@@ -224,42 +216,6 @@ export default function Dashboard() {
   }, [userId, hasCutPlan, loadCutPlan]);
 
   useEffect(() => { trackInstallDate(); }, []);
-
-  // Fire the one-time calibration tour the first time we see the score
-  // unlocked with real sub-scores. Gating rules:
-  //   1. Score must be in `ok` state with real sub-scores (already checked).
-  //   2. The MAIN onboarding tutorial must be done. Without this gate the
-  //      Fight Form tour modal pops on top of an in-progress tutorial
-  //      tooltip and the two compete for the screen.
-  //   3. The user hasn't already seen this tour (localStorage flag,
-  //      versioned so we can re-run on future redesigns).
-  // The 600ms delay lets the ring's score arc settle visually before
-  // the modal pops on top of it. We re-check on a window-focus event so
-  // the tour fires the moment the user lands back on /dashboard after
-  // skipping/finishing the main tutorial elsewhere.
-  const { isActive: tutorialActive } = useTutorial();
-  useEffect(() => {
-    if (!ffScoreData || ffScoreData.state !== "ok" || !ffScoreData.subScores) return;
-    if (localStorage.getItem("wcw_ff_tour_seen_v1")) return;
-    if (!userId) return;
-    if (tutorialActive) return;
-    if (!tutorialPersistence.isFlowCompleted(userId, onboardingFlow)) return;
-    const t = setTimeout(() => setTourOpen(true), 600);
-    return () => clearTimeout(t);
-  }, [ffScoreData, tutorialActive, userId]);
-
-  // Settings → "Replay Fight Form Tutorial" clears the localStorage flag
-  // and bumps a window event so the gate above re-fires immediately
-  // without the user having to refresh the page.
-  useEffect(() => {
-    const onReplay = () => {
-      if (ffScoreData && ffScoreData.state === "ok" && ffScoreData.subScores) {
-        setTourOpen(true);
-      }
-    };
-    window.addEventListener("wcw:replay-ff-tour", onReplay);
-    return () => window.removeEventListener("wcw:replay-ff-tour", onReplay);
-  }, [ffScoreData]);
 
   // Sharp crossing celebration. Conditions for firing:
   //   1. State is "ok" and the displayed score is in Sharp territory (>=80).
@@ -950,15 +906,6 @@ export default function Dashboard() {
           topDriver={ffScore.topDriver}
           topLimiter={ffScore.topLimiter}
           appliedCeiling={ffScore.appliedCeiling}
-        />
-
-        <FightFormCalibrationTour
-          open={tourOpen}
-          onClose={() => {
-            localStorage.setItem("wcw_ff_tour_seen_v1", "1");
-            setTourOpen(false);
-          }}
-          subScores={ffScore.subScores}
         />
 
         <AchievementSheet
