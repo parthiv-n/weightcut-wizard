@@ -39,14 +39,15 @@ import type { Id } from "../../../convex/_generated/dataModel";
 const STACK_DEPTH = 3;
 const FLICK_OFFSET_PX = 120;
 const FLICK_VELOCITY = 600;
-const EXIT_DURATION_MS = 240;
-const REDUCED_EXIT_DURATION_MS = 100;
+const EXIT_DURATION_MS = 280;
+const REDUCED_EXIT_DURATION_MS = 110;
 const PREFETCH_TRIGGER = 5; // load more when within N cards of end
 
-// iOS-pop-tier spring for the fling exit. Stiff + low mass = snappy start.
-const EXIT_SPRING = { type: "spring", stiffness: 520, damping: 36, mass: 0.7 } as const;
+// iOS-pop-tier spring for the fling exit. Tuned for snappy start with
+// a smooth follow-through rather than a hard mechanical snap.
+const EXIT_SPRING = { type: "spring", stiffness: 420, damping: 34, mass: 0.8 } as const;
 // Snap-back spring when a drag is released below the flick threshold.
-const SNAPBACK_SPRING = { type: "spring", stiffness: 600, damping: 32, mass: 0.6 } as const;
+const SNAPBACK_SPRING = { type: "spring", stiffness: 520, damping: 30, mass: 0.7 } as const;
 // Softer spring for the card behind rising to top position.
 const SETTLE_SPRING = { type: "spring", stiffness: 220, damping: 28, mass: 1 } as const;
 

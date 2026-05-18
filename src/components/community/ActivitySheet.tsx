@@ -42,6 +42,7 @@ export function ActivitySheet({
       <SheetContent
         side="right"
         className="w-full sm:max-w-md p-0 flex flex-col"
+        style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
       >
         <SheetHeader className="px-5 pt-5 pb-3 border-b border-border/40">
           <SheetTitle>Activity</SheetTitle>

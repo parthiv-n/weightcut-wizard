@@ -19,10 +19,7 @@
  * query lands the subtitle simply stays in skeleton state; never
  * crashes the page.
  */
-import { Plus } from "lucide-react";
 import { useQuery } from "convex/react";
-import { triggerHaptic } from "@/lib/haptics";
-import { ImpactStyle } from "@capacitor/haptics";
 
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
@@ -76,14 +73,14 @@ export function GymHeader({
   // memberCount is intentionally destructured-and-ignored to preserve
   // the legacy call signature. Subtitle reads the live server count.
   memberCount: _memberCount,
-  onInviteClick,
+  // onInviteClick retained on the prop contract for backwards compat,
+  // but the inline pill it powered has been removed from this header.
+  // The invite affordance now lives on the EmptyFeed card only.
+  onInviteClick: _onInviteClick,
   onActivityClick,
 }: GymHeaderProps) {
   void _memberCount;
-  const handleInvite = () => {
-    triggerHaptic(ImpactStyle.Light);
-    onInviteClick();
-  };
+  void _onInviteClick;
 
   // Always call the hook (rules-of-hooks) — fall back to an already-deployed
   // query ref + a "skip" sentinel so the call is a no-op when either
@@ -110,37 +107,33 @@ export function GymHeader({
 
   return (
     <>
-      <header className="flex items-center justify-between px-5 pt-1 pb-3">
+      <header className="flex items-start justify-between px-5 pt-1 pb-3">
         <div className="flex-1 min-w-0 mr-3">
           <h1 className="text-[22px] font-semibold leading-tight truncate">
             {gymName}
           </h1>
           {isLoading ? (
-            <Skeleton className="mt-1 h-3.5 w-40" />
+            <div className="mt-1 space-y-1">
+              <Skeleton className="h-3.5 w-24" />
+              <Skeleton className="h-3.5 w-32" />
+            </div>
           ) : hasCounts ? (
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {memberCount} {memberCount === 1 ? "member" : "members"} ·{" "}
-              {activePosters} training this week
-            </p>
+            <div className="mt-1 space-y-0.5">
+              <p className="text-sm text-muted-foreground">
+                {memberCount} {memberCount === 1 ? "member" : "members"}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {activePosters} training this week
+              </p>
+            </div>
           ) : null}
         </div>
 
-        {/* Right-side controls: activity bell + invite pill */}
+        {/* Right-side: activity bell only. The "Bring a teammate" pill
+            has been removed from this header — invites live on the
+            EmptyFeed card now. */}
         <div className="flex items-center gap-2 flex-shrink-0">
           <ActivityBell gymId={gymId ?? null} onClick={onActivityClick} />
-
-          {/* Compact pill — always present so the affordance is consistent
-              with the rest of the tab. At <5 members the large CTA below
-              does the heavy lifting; this stays as a low-friction shortcut. */}
-          <button
-            type="button"
-            onClick={handleInvite}
-            aria-label="Bring a teammate"
-            className="glass-card shrink-0 h-9 rounded-full px-3 flex items-center gap-1.5 active:scale-95 transition-transform"
-          >
-            <Plus className="h-4 w-4" strokeWidth={2.4} />
-            <span className="text-xs font-medium">Bring a teammate</span>
-          </button>
         </div>
       </header>
     </>

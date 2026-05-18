@@ -23,7 +23,7 @@
  * The page is full-screen, dark, with `pt-[env(safe-area-inset-top)]`
  * so the gym header doesn't collide with the iOS notch / status bar.
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "motion/react";
 import { Camera } from "lucide-react";
@@ -57,17 +57,30 @@ export default function Community() {
   // pre-resolution render.
   const { results: posts, status, loadMore } = useGymFeed(gymId);
 
-  // Stack state lifted here so the info-card can bind to whatever post
-  // is currently on top.
-  const { topIndex, advance, reset } = usePolaroidStack({ postCount: posts.length });
-  const [activeTopIndex, setActiveTopIndex] = useState(topIndex);
-  useEffect(() => {
-    setActiveTopIndex(topIndex);
-  }, [topIndex]);
+  // Locally-tracked dismissed post ids. The polaroid stack filters
+  // against this set so a flicked post leaves the stack immediately and
+  // does not reappear if the reactive listFeed lags or returns it again
+  // before the server-side feed_views filter catches up. Without this,
+  // advancing a numeric topIndex against a reactively shrinking posts
+  // array caused the stack to skip cards or pop them back in.
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+
+  const effectivePosts = useMemo(
+    () => posts.filter((p) => !dismissedIds.has(p.id as string)),
+    [posts, dismissedIds],
+  );
+
+  // Stack state — only motion primitives are used; topIndex/advance
+  // from the hook are intentionally ignored since dismissedIds drives
+  // visibility now.
+  const { reset } = usePolaroidStack({ postCount: effectivePosts.length });
   // Reset the deck whenever the gym switches — otherwise a persisted
   // index from a prior gym would point into an unrelated feed.
   useEffect(() => {
-    if (gymId) reset();
+    if (gymId) {
+      setDismissedIds(new Set());
+      reset();
+    }
     // We deliberately don't depend on `reset` (stable from hook) — only
     // on gymId. Including reset would trigger an extra reset on first
     // mount because of the closure identity change.
@@ -80,12 +93,26 @@ export default function Community() {
 
   const handlePostSwiped = useCallback(
     (postId: Id<"session_media">) => {
+      setDismissedIds((prev) => {
+        if (prev.has(postId as string)) return prev;
+        const next = new Set(prev);
+        next.add(postId as string);
+        return next;
+      });
       markPostViewed({ postId }).catch((err) => {
         logger.warn("markPostViewed failed", { err: String(err) });
       });
     },
     [markPostViewed],
   );
+
+  // No-op advance: dismissal is handled in handlePostSwiped which fires
+  // before this. The stack still calls advance() inside its exit-cleanup
+  // timeout (it resets x/y motion values on its own), so we just satisfy
+  // the prop contract.
+  const handleAdvance = useCallback(() => {
+    /* dismissal already handled in handlePostSwiped */
+  }, []);
 
   // Engagement-seen mutation — clear the bottom-nav red dot once the
   // user has *opened* the tab. Idempotent server-side, so we don't
@@ -175,14 +202,24 @@ export default function Community() {
               onInviteClick={() => navigate("/my-gym")}
               onLogSessionClick={() => navigate("/training-calendar")}
             />
+          ) : effectivePosts.length === 0 ? (
+            // All known posts consumed this session. Same friendly state
+            // as the global empty feed — encourage the user to log a
+            // session so the feed refills.
+            <EmptyFeed
+              onInviteClick={() => navigate("/my-gym")}
+              onLogSessionClick={() => navigate("/training-calendar")}
+            />
           ) : (
             <CommunityFeedSection
-              posts={posts}
+              posts={effectivePosts}
               status={status}
               loadMore={loadMore}
-              topIndex={activeTopIndex}
-              onTopIndexChange={setActiveTopIndex}
-              advance={advance}
+              topIndex={0}
+              onTopIndexChange={() => {
+                /* unused — dismissedIds drives the head */
+              }}
+              advance={handleAdvance}
               onOpenProfile={(uid) => navigate(`/profile/${uid}`)}
               onOpenComments={openComments}
               onPostSwiped={handlePostSwiped}
