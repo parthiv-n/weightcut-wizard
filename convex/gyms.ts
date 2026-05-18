@@ -186,6 +186,72 @@ export const getByInviteCode = query({
   },
 });
 
+/**
+ * Aggregate counts for the Corner gym header.
+ *
+ * Returns:
+ *  - `memberCount` — currently-active members of the gym. Bounded via
+ *    `.take(500)` so a hypothetical 5000-member chain doesn't blow the
+ *    per-query read budget; typical gyms come in under 200 so this is
+ *    effectively the true count for v1.
+ *  - `activePosters7d` — distinct users who posted to the gym feed in the
+ *    last 7 days. Read off the `by_gym_created` index (the same one the
+ *    feed uses) so the storage cost is one extra short index scan per
+ *    Corner-header render — no separate aggregate table needed.
+ *
+ * Access: auth-required, gym-membership gated. Non-members get a `null`
+ * return rather than a thrown error. The throw used to surface as a
+ * generic "Server Error" in the client console during transient states
+ * (just-joined membership, just-left, mismatched cached gymId on a feed
+ * page that the user can still legitimately reach). Returning null keeps
+ * the count data gated (no leak to random signed-in users) while letting
+ * the client degrade gracefully to the no-subtitle state.
+ */
+export const getMemberCount = query({
+  args: { gymId: v.id("gyms") },
+  handler: async (ctx, { gymId }) => {
+    const userId = await requireUserId(ctx);
+    const membership = await ctx.db
+      .query("gym_members")
+      .withIndex("by_gym_user", (q) => q.eq("gymId", gymId).eq("userId", userId))
+      .unique();
+    if (!membership || membership.status !== "active") {
+      return null;
+    }
+
+    // `by_gym` is `[gymId]` so this is a range scan bounded to one gym.
+    // `.take(500)` caps the scan; the `status` filter then drops out
+    // non-active rows from that capped window. For v1 every gym fits.
+    const members = await ctx.db
+      .query("gym_members")
+      .withIndex("by_gym", (q) => q.eq("gymId", gymId))
+      .filter((q) => q.eq(q.field("status"), "active"))
+      .take(500);
+    const memberCount = members.length;
+
+    // Active-poster window: 7 days. We pull the 200 newest posts off the
+    // gym's `by_gym_created` index — at the volumes we expect (≤30
+    // posts/day per chatty gym) 200 covers the whole 7d window with room
+    // to spare. Trim to the 7d threshold post-fetch and dedupe by author.
+    const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+    const cutoff = Date.now() - SEVEN_DAYS_MS;
+    const recentPosts = await ctx.db
+      .query("session_media")
+      .withIndex("by_gym_created", (q) => q.eq("gymId", gymId))
+      .order("desc")
+      .take(200);
+    const activeUserIds = new Set<Id<"users">>();
+    for (const p of recentPosts) {
+      if (p._creationTime > cutoff) {
+        activeUserIds.add(p.userId);
+      }
+    }
+    const activePosters7d = activeUserIds.size;
+
+    return { memberCount, activePosters7d };
+  },
+});
+
 /** Gyms owned by the current coach. Used by CoachDashboard. */
 export const listOwned = query({
   args: {},
