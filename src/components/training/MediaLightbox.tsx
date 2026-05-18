@@ -20,7 +20,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Download, Loader2, X } from "lucide-react";
+import { Download, Loader2, Trash2, X } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { Capacitor } from "@capacitor/core";
 import { triggerHaptic } from "@/lib/haptics";
@@ -287,7 +287,7 @@ export function MediaLightbox({
               aria-label="Delete media"
               className="h-9 w-9 rounded-full bg-white/15 backdrop-blur-md flex items-center justify-center active:bg-white/25 transition-colors text-rose-300"
             >
-              <span className="text-[12px] font-semibold">Del</span>
+              <Trash2 className="h-4 w-4" strokeWidth={2.2} />
             </button>
           )}
         </div>

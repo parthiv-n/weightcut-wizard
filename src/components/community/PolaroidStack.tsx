@@ -104,7 +104,13 @@ export function PolaroidStack({
 
   // Track which card is mid-flick so we render its exit animation
   // without unmounting the still-visible underneath cards.
-  const [exitingPostId, setExitingPostId] = useState<Id<"session_media"> | null>(null);
+  //
+  // We capture the FULL post object (not just the id) because the
+  // parent's dismissedIds filter may remove this post from `posts`
+  // synchronously when the swipe commits. Rendering the exit from a
+  // captured snapshot makes the fly-away independent of the parent's
+  // visibility filter.
+  const [exitingPost, setExitingPost] = useState<FeedPost | null>(null);
   const exitDirRef = useRef<1 | -1>(1);
   // Capture release velocity so the exit target carries momentum past the edge.
   const exitVelocityRef = useRef<{ vx: number; vy: number }>({ vx: 0, vy: 0 });
@@ -154,29 +160,29 @@ export function PolaroidStack({
 
   const commitFlick = useCallback(
     (direction: 1 | -1, vx = 0, vy = 0) => {
-      if (!topPost) return;
+      if (!topPost || exitingPost) return;
       exitDirRef.current = direction;
       exitVelocityRef.current = { vx, vy };
-      // Fire the callback BEFORE advancing so parent's optimistic state
-      // matches the in-flight animation.
+      // Capture the post in local state BEFORE notifying the parent so
+      // the exit animation has the post data even after the parent's
+      // dismissedIds filter removes it from `posts`.
+      setExitingPost(topPost);
       onSwipeCommit?.(topPost.id);
-      setExitingPostId(topPost.id);
       triggerHaptic(ImpactStyle.Medium);
 
-      // After the exit animation, advance the stack and reset motion
-      // values so the next top card starts at rest. We schedule the
-      // advance via setTimeout rather than `onAnimationComplete` so
-      // the timing is deterministic even if motion re-evaluates the
-      // animation prop mid-flight.
+      // After the exit animation, drop the snapshot and reset motion
+      // values so the next top card starts at rest. We schedule via
+      // setTimeout (not onAnimationComplete) so timing is deterministic
+      // even if motion re-evaluates the animation prop mid-flight.
       const exitMs = prefersReducedMotion ? REDUCED_EXIT_DURATION_MS : EXIT_DURATION_MS;
       window.setTimeout(() => {
-        setExitingPostId(null);
+        setExitingPost(null);
         x.set(0);
         y.set(0);
         advance();
       }, exitMs);
     },
-    [topPost, advance, x, y, onSwipeCommit, prefersReducedMotion],
+    [topPost, exitingPost, advance, x, y, onSwipeCommit, prefersReducedMotion],
   );
 
   const handleDragEnd = useCallback(
@@ -220,7 +226,7 @@ export function PolaroidStack({
     onSingleTap: () => {
       // Tap-to-flick: random direction so consecutive taps don't all
       // pile up on the same side. No real velocity for a tap so pass 0.
-      if (!topPost || exitingPostId) return;
+      if (!topPost || exitingPost) return;
       const dir = Math.random() > 0.5 ? 1 : -1;
       commitFlick(dir, 0, 0);
     },
@@ -248,71 +254,69 @@ export function PolaroidStack({
     return <EmptyStackState onPostClick={onPostClick} />;
   }
 
+  // Render the exiting card OUTSIDE of the visible-map so it survives
+  // the parent's dismissedIds filter (which removes the post from
+  // `posts` synchronously when the swipe commits).
+  const exitingNode = (() => {
+    if (!exitingPost) return null;
+    const dir = exitDirRef.current;
+    const { vx, vy } = exitVelocityRef.current;
+    const velocityBoost = Math.min(Math.abs(vx) / 1200, 0.4);
+    const exitX = dir * window.innerWidth * (1.4 + velocityBoost);
+    const exitY = vy * 0.3;
+    const exitRotate = prefersReducedMotion
+      ? computeRotation(exitingPost.id)
+      : dir * 18;
+    const rotationDeg = computeRotation(exitingPost.id);
+
+    if (prefersReducedMotion) {
+      return (
+        <motion.div
+          key={exitingPost.id}
+          className="absolute inset-0"
+          style={{ zIndex: 40 }}
+          initial={{ x: x.get(), y: y.get(), rotate: rotationDeg, opacity: 1 }}
+          animate={{ x: exitX, y: exitY, rotate: exitRotate, opacity: 0 }}
+          transition={{ duration: REDUCED_EXIT_DURATION_MS / 1000, ease: "linear" }}
+        >
+          <PolaroidCard post={exitingPost} stackPosition={0} isTop rotationDeg={rotationDeg} />
+        </motion.div>
+      );
+    }
+
+    return (
+      <motion.div
+        key={exitingPost.id}
+        className="absolute inset-0"
+        style={{ zIndex: 40 }}
+        initial={{ x: x.get(), y: y.get(), rotate: rotate.get(), opacity: 1 }}
+        animate={{ x: exitX, y: exitY, rotate: exitRotate, opacity: 0 }}
+        transition={{
+          x: EXIT_SPRING,
+          y: EXIT_SPRING,
+          rotate: EXIT_SPRING,
+          // Opacity fades only in the last 40% of travel.
+          opacity: { delay: 0.16, duration: 0.18, ease: "easeIn" },
+        }}
+      >
+        <PolaroidCard post={exitingPost} stackPosition={0} isTop rotationDeg={rotationDeg} />
+      </motion.div>
+    );
+  })();
+
   return (
     <div className="relative mx-auto" style={{ width: 312, height: 396 }}>
+      {exitingNode}
+
       {visible.map((post, idx) => {
         const stackPos = idx as 0 | 1 | 2;
-        const isTop = idx === 0 && exitingPostId !== post.id;
-        const isExiting = exitingPostId === post.id;
+        // If a card is mid-flight, the new visible[0] is the NEXT post.
+        // Render it as a background card (not top) for the duration of
+        // the exit animation so it doesn't catch taps for a card that's
+        // about to land on it. Once the exit completes, exitingPost
+        // clears and idx=0 becomes the real top again.
+        const isTop = idx === 0 && !exitingPost;
         const rotationDeg = computeRotation(post.id);
-
-        if (isExiting) {
-          // The flicked card animates off-screen via explicit `animate`.
-          // Exit target is a function of the release direction + velocity
-          // so the card carries momentum past the screen edge rather than
-          // jumping to a fixed offset.
-          const dir = exitDirRef.current;
-          const { vx, vy } = exitVelocityRef.current;
-          // Base exit: 140% of vw. Scale by velocity (clamped) so a fast
-          // flick carries further — max 1.8× vw, min 1.4× vw.
-          const velocityBoost = Math.min(Math.abs(vx) / 1200, 0.4);
-          const exitX = dir * window.innerWidth * (1.4 + velocityBoost);
-          // Y carry-through: preserve vertical velocity direction + scale.
-          const exitY = vy * 0.3;
-          // Rotation deepens with direction; reduced-motion path skips rotation.
-          const exitRotate = prefersReducedMotion ? rotationDeg : dir * 18;
-
-          if (prefersReducedMotion) {
-            // Reduced-motion: short fade, no rotation change.
-            return (
-              <motion.div
-                key={post.id}
-                className="absolute inset-0"
-                style={{ zIndex: 40 }}
-                initial={{ x: x.get(), y: y.get(), rotate: rotationDeg, opacity: 1 }}
-                animate={{ x: exitX, y: exitY, rotate: exitRotate, opacity: 0 }}
-                transition={{ duration: REDUCED_EXIT_DURATION_MS / 1000, ease: "linear" }}
-              >
-                <PolaroidCard post={post} stackPosition={0} isTop rotationDeg={rotationDeg} />
-              </motion.div>
-            );
-          }
-
-          return (
-            <motion.div
-              key={post.id}
-              className="absolute inset-0"
-              style={{ zIndex: 40 }}
-              initial={{ x: x.get(), y: y.get(), rotate: rotate.get(), opacity: 1 }}
-              animate={{ x: exitX, y: exitY, rotate: exitRotate, opacity: 0 }}
-              transition={{
-                x: EXIT_SPRING,
-                y: EXIT_SPRING,
-                rotate: EXIT_SPRING,
-                // Opacity fades only in the last 40% of travel — achieved via
-                // a delay that equals 60% of the expected spring settling time.
-                opacity: { delay: 0.13, duration: 0.18, ease: "easeIn" },
-              }}
-            >
-              <PolaroidCard
-                post={post}
-                stackPosition={0}
-                isTop
-                rotationDeg={rotationDeg}
-              />
-            </motion.div>
-          );
-        }
 
         if (isTop) {
           // The top card is the only one that listens to drag + tap.
@@ -350,7 +354,9 @@ export function PolaroidStack({
 
         // Background cards — static layout per stack position. No
         // gesture wiring, no pointer events (the card sets
-        // `pointer-events-none` when not top).
+        // `pointer-events-none` when not top). When a flick is in flight
+        // the would-be next card sits here at stack position 0 so it
+        // visually settles into place as the old top lifts off.
         return (
           <PolaroidCard
             key={post.id}
