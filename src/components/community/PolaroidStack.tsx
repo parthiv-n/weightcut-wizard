@@ -27,7 +27,7 @@
  *   positions naturally via the layout offsets.
  */
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { motion, useMotionValue, useTransform, useDragControls, useReducedMotion, type PanInfo } from "motion/react";
+import { animate, motion, useMotionValue, useTransform, useDragControls, useReducedMotion, type PanInfo } from "motion/react";
 import { triggerHaptic } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import { useDoubleTap } from "@/hooks/useDoubleTap";
@@ -39,12 +39,14 @@ import type { Id } from "../../../convex/_generated/dataModel";
 const STACK_DEPTH = 3;
 const FLICK_OFFSET_PX = 120;
 const FLICK_VELOCITY = 600;
-const EXIT_DURATION_MS = 350;
-const REDUCED_EXIT_DURATION_MS = 120;
+const EXIT_DURATION_MS = 240;
+const REDUCED_EXIT_DURATION_MS = 100;
 const PREFETCH_TRIGGER = 5; // load more when within N cards of end
 
-// iOS-pop-tier spring for the fling exit.
-const EXIT_SPRING = { type: "spring", stiffness: 380, damping: 32, mass: 0.9 } as const;
+// iOS-pop-tier spring for the fling exit. Stiff + low mass = snappy start.
+const EXIT_SPRING = { type: "spring", stiffness: 520, damping: 36, mass: 0.7 } as const;
+// Snap-back spring when a drag is released below the flick threshold.
+const SNAPBACK_SPRING = { type: "spring", stiffness: 600, damping: 32, mass: 0.6 } as const;
 // Softer spring for the card behind rising to top position.
 const SETTLE_SPRING = { type: "spring", stiffness: 220, damping: 28, mass: 1 } as const;
 
@@ -185,15 +187,13 @@ export function PolaroidStack({
       if (shouldFlick) {
         commitFlick(dx > 0 ? 1 : -1, vx, vy);
       }
-      // If not flicked, motion's `animate={false}` + the wrapper's
-      // implicit spring on x/y handles snap-back automatically because
-      // we never set a target — but to be safe and match the spec's
-      // tighter snap-back spring, we animate explicitly.
+      // Below the flick threshold — spring the card smoothly back to
+      // centre. `motion.set()` is synchronous, which makes the snap-back
+      // visually instantaneous. Animating gives the gesture proper
+      // weight without slowing the user down.
       else {
-        // Touch-back to centre with the firmer snap spring. Setting the
-        // motion values directly triggers their internal spring.
-        x.set(0);
-        y.set(0);
+        animate(x, 0, SNAPBACK_SPRING);
+        animate(y, 0, SNAPBACK_SPRING);
       }
     },
     [commitFlick, x, y],
@@ -324,7 +324,7 @@ export function PolaroidStack({
               style={{ x, y, rotate, zIndex: 30 }}
               drag="x"
               dragControls={dragControls}
-              dragElastic={0.7}
+              dragElastic={0.55}
               dragMomentum={false}
               onDragEnd={handleDragEnd}
               onClick={handleCardClick}

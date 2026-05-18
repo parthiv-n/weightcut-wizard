@@ -179,11 +179,7 @@ export default function Community() {
               onOpenProfile={(uid) => navigate(`/profile/${uid}`)}
               onOpenComments={openComments}
               onPostSwiped={handlePostSwiped}
-              onPostClick={() => {
-                // Hook for the composer — wired in a parallel agent's
-                // PR. The button is a no-op until then so the user
-                // still gets feedback.
-              }}
+              onPostClick={() => navigate("/training-calendar")}
             />
           )}
         </main>

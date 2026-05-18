@@ -294,23 +294,48 @@ export const TrainingWeekWidget = memo(function TrainingWeekWidget({ userId, com
           })}
         </div>
 
-        {/* Type pills — compact, max 2 */}
+        {/* Type pills — single-line carousel. When >2 types we duplicate
+            the row and run the `animate-marquee` keyframe (defined in
+            tailwind.config) so every label scrolls into view without
+            ever wrapping or being clipped. Fewer than that, we just
+            render the row statically. */}
         {typeEntries.length > 0 && (
-          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-            {typeEntries.slice(0, 2).map(([type, count]) => (
-              <span
-                key={type}
-                className="inline-flex items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-full"
-                style={{
-                  background: `${getSessionColor(type, customColors)}15`,
-                  color: getSessionColor(type, customColors),
-                }}
-              >
-                <span className="w-1 h-1 rounded-full" style={{ background: getSessionColor(type, customColors) }} />
-                {type} {count}
-              </span>
-            ))}
-          </div>
+          typeEntries.length <= 2 ? (
+            <div className="flex items-center gap-1.5 mt-1.5 whitespace-nowrap overflow-hidden">
+              {typeEntries.map(([type, count]) => (
+                <span
+                  key={type}
+                  className="inline-flex flex-shrink-0 items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-full"
+                  style={{
+                    background: `${getSessionColor(type, customColors)}15`,
+                    color: getSessionColor(type, customColors),
+                  }}
+                >
+                  <span className="w-1 h-1 rounded-full" style={{ background: getSessionColor(type, customColors) }} />
+                  {type} {count}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <div className="mt-1.5 overflow-hidden" aria-label="Session types this week">
+              <div className="flex items-center gap-1.5 w-max animate-marquee hover:[animation-play-state:paused] pr-1.5">
+                {[...typeEntries, ...typeEntries].map(([type, count], i) => (
+                  <span
+                    key={`${type}-${i}`}
+                    aria-hidden={i >= typeEntries.length}
+                    className="inline-flex flex-shrink-0 items-center gap-1 text-[9px] font-medium px-1.5 py-0.5 rounded-full"
+                    style={{
+                      background: `${getSessionColor(type, customColors)}15`,
+                      color: getSessionColor(type, customColors),
+                    }}
+                  >
+                    <span className="w-1 h-1 rounded-full" style={{ background: getSessionColor(type, customColors) }} />
+                    {type} {count}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )
         )}
       </div>
     );
@@ -392,23 +417,49 @@ export const TrainingWeekWidget = memo(function TrainingWeekWidget({ userId, com
         })}
       </div>
 
-      {/* Type legend pills */}
+      {/* Type legend pills — single-line carousel. ≤3 pills fit
+          comfortably on most widths so we render them static. With more,
+          we duplicate the row and run the `animate-marquee` keyframe so
+          every session type scrolls into view without ever wrapping or
+          being clipped by the card's `overflow-hidden`. Pauses on
+          hover (desktop); on touch we let it loop. */}
       {typeEntries.length > 0 && (
-        <div className="flex items-center gap-2 mt-3 flex-wrap">
-          {typeEntries.slice(0, 4).map(([type, count]) => (
-            <span
-              key={type}
-              className="inline-flex items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full"
-              style={{
-                background: `${getSessionColor(type, customColors)}15`,
-                color: getSessionColor(type, customColors),
-              }}
-            >
-              <span className="w-1.5 h-1.5 rounded-full" style={{ background: getSessionColor(type, customColors) }} />
-              {type} {count}
-            </span>
-          ))}
-        </div>
+        typeEntries.length <= 3 ? (
+          <div className="flex items-center gap-2 mt-3 whitespace-nowrap overflow-hidden">
+            {typeEntries.map(([type, count]) => (
+              <span
+                key={type}
+                className="inline-flex flex-shrink-0 items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full"
+                style={{
+                  background: `${getSessionColor(type, customColors)}15`,
+                  color: getSessionColor(type, customColors),
+                }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: getSessionColor(type, customColors) }} />
+                {type} {count}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-3 overflow-hidden" aria-label="Session types this week">
+            <div className="flex items-center gap-2 w-max animate-marquee hover:[animation-play-state:paused] pr-2">
+              {[...typeEntries, ...typeEntries].map(([type, count], i) => (
+                <span
+                  key={`${type}-${i}`}
+                  aria-hidden={i >= typeEntries.length}
+                  className="inline-flex flex-shrink-0 items-center gap-1.5 text-[11px] font-medium px-2.5 py-1 rounded-full"
+                  style={{
+                    background: `${getSessionColor(type, customColors)}15`,
+                    color: getSessionColor(type, customColors),
+                  }}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full" style={{ background: getSessionColor(type, customColors) }} />
+                  {type} {count}
+                </span>
+              ))}
+            </div>
+          </div>
+        )
       )}
     </div>
   );
