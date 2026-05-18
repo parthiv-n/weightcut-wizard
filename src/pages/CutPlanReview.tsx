@@ -1,43 +1,23 @@
+/**
+ * CutPlanReview — standalone review of the cut plan persisted on the
+ * profile. Renders the same `InlinePlanDisplay` v3 timeline as the
+ * onboarding finale so the user sees ONE consistent plan UI everywhere
+ * (the previous bespoke wall-of-text version was replaced 2026-05-18).
+ *
+ * The plan source is `localStorage.wcw_cut_plan`, written by Onboarding
+ * after a successful AI generation. The shape matches the server's
+ * `CutPlanSchema` v2 (weeklyPlan with phase/heroLine/keyMetric/
+ * dailyFocus, plus phases[], personalNote, toughestWeek, fightWeek).
+ */
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { TrendingDown, Shield, Zap, ChevronRight, Download, Droplets, Flame, Utensils, Wheat, X } from "lucide-react";
+import { TrendingDown, Download, X } from "lucide-react";
 import { triggerHaptic } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { CutPlanCard } from "@/components/share/cards/CutPlanCard";
-
-interface WeekPlan {
-  week: number;
-  targetWeight: number;
-  calories: number;
-  protein_g: number;
-  carbs_g: number;
-  fats_g: number;
-  focus: string;
-  tips?: string[];
-}
-
-interface FightWeekStrategy {
-  lowCarb: string;
-  sodium: string;
-  waterLoading: string;
-  nutrition: string;
-}
-
-interface CutPlan {
-  weeklyPlan: WeekPlan[];
-  summary: string;
-  totalWeeks: number;
-  weeklyLossTarget: string;
-  maintenanceCalories?: number;
-  deficit?: number;
-  targetCalories?: number;
-  safetyNotes: string;
-  fightWeek?: FightWeekStrategy;
-  fightWeekStrategy?: string; // backwards compat
-  keyPrinciples: string[];
-}
+import { InlinePlanDisplay } from "@/components/onboarding/InlinePlanDisplay";
 
 export default function CutPlanReview() {
   const navigate = useNavigate();
@@ -47,14 +27,13 @@ export default function CutPlanReview() {
     try {
       const raw = localStorage.getItem("wcw_cut_plan");
       if (!raw) return null;
-      return JSON.parse(raw) as CutPlan & { currentWeight?: number; goalWeight?: number; targetDate?: string };
+      return JSON.parse(raw) as any;
     } catch {
       return null;
     }
   }, []);
 
   if (!planData) {
-    // No plan available — show message with link to dashboard
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-6">
         <div className="text-center space-y-4">
@@ -68,18 +47,14 @@ export default function CutPlanReview() {
     );
   }
 
-  const plan = planData as CutPlan;
-  const currentWeight = (planData as any).currentWeight || plan.weeklyPlan[0]?.targetWeight || 0;
-  const goalWeight = (planData as any).goalWeight || plan.weeklyPlan[plan.weeklyPlan.length - 1]?.targetWeight || 0;
-  const targetDate = (planData as any).targetDate || "";
-  // Same component renders both fight-camp and weight-loss plans — adapt the
-  // copy based on planType written by Onboarding. /cut-plan vs /weight-plan
-  // routes share this view but pull different labels.
-  const isWeightLoss = (planData as any).planType === "weight_loss";
-  const headerTitle = isWeightLoss ? "Your Weight Loss Plan" : "Your Weight Cut Plan";
-  const headerSubtitle = isWeightLoss
-    ? "Personalised · Sustainable · Adaptive"
-    : "Personalised · Science-backed · Adaptive";
+  const isWeightLoss = planData?.planType === "weight_loss";
+  const currentWeight =
+    planData.currentWeight ?? planData.weeklyPlan?.[0]?.targetWeight ?? 0;
+  const goalWeight =
+    planData.goalWeight ??
+    planData.weeklyPlan?.[planData.weeklyPlan.length - 1]?.targetWeight ??
+    0;
+  const targetDate = planData.targetDate || "";
   const shareTitle = isWeightLoss ? "My Weight Loss Plan" : "My Weight Cut Plan";
   const shareCardTitle = isWeightLoss ? "Weight Loss Plan" : "Weight Cut Plan";
   const shareCardText = isWeightLoss
@@ -89,20 +64,14 @@ export default function CutPlanReview() {
   const handleContinue = () => {
     triggerHaptic(ImpactStyle.Medium);
     localStorage.setItem("wcw_cut_plan_seen", "true");
-    // Re-assert so tutorial triggers on dashboard arrival (onboarding may have consumed it).
-    // TutorialContext auto-starts the onboarding tutorial flow when /dashboard
-    // detects this flag in localStorage.
     localStorage.setItem("wcw_onboarding_just_completed", "true");
     navigate("/dashboard", { replace: true });
   };
 
   return (
     <div className="min-h-screen bg-background text-foreground safe-area-inset-top safe-area-inset-bottom">
-      <div className="max-w-lg mx-auto px-4 py-6 pb-[calc(env(safe-area-inset-bottom,0px)+6rem)] relative">
-        {/* Close button — falls back to /dashboard when there's no browser
-            history (e.g. user opened /cut-plan directly from a deep link or
-            after a fresh app launch). Absolute-positioned so it doesn't
-            shift the centred header. */}
+      <div className="max-w-lg mx-auto px-4 pt-6 relative">
+        {/* Close button — sticks at top-right above the timeline. */}
         <button
           type="button"
           onClick={() => {
@@ -111,203 +80,28 @@ export default function CutPlanReview() {
             else navigate("/dashboard", { replace: true });
           }}
           aria-label="Close cut plan"
-          className="absolute top-4 right-3 h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground/70 bg-muted/40 dark:bg-white/[0.06] border border-border/30 active:text-foreground active:bg-muted/60 transition-colors z-10"
+          className="absolute top-4 right-3 h-9 w-9 rounded-full flex items-center justify-center text-muted-foreground/70 bg-muted/40 dark:bg-white/[0.06] border border-border/30 active:text-foreground active:bg-muted/60 transition-colors z-30"
         >
           <X className="h-4 w-4" strokeWidth={2.4} />
         </button>
 
-        {/* Header */}
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-primary/10 mb-4">
-            <TrendingDown className="h-7 w-7 text-primary" />
-          </div>
-          <h1 className="text-xl font-bold tracking-tight mb-1">{headerTitle}</h1>
-          <p className="text-sm text-muted-foreground">{headerSubtitle}</p>
-        </div>
+        {/* Reuse the onboarding plan timeline — same component, same data
+            shape. Its built-in sticky CTA fires `handleContinue` which
+            sets the post-onboarding flags and routes to /dashboard. */}
+        <InlinePlanDisplay
+          plan={planData}
+          planType={isWeightLoss ? "weight_loss" : "cut"}
+          onContinue={handleContinue}
+        />
 
-        {/* Summary — structured breakdown */}
-        <div className="card-surface rounded-2xl p-4 mb-3 space-y-3">
-          {/* Key stats at a glance */}
-          <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-lg bg-muted/30 dark:bg-white/[0.03] p-2.5 text-center">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Start</p>
-              <p className="text-lg font-bold tabular-nums">{currentWeight}<span className="text-xs font-normal text-muted-foreground ml-0.5">kg</span></p>
-            </div>
-            <div className="rounded-lg bg-primary/5 border border-primary/10 p-2.5 text-center">
-              <p className="text-[10px] text-primary uppercase tracking-wider">Target</p>
-              <p className="text-lg font-bold tabular-nums text-primary">{goalWeight}<span className="text-xs font-normal text-primary/60 ml-0.5">kg</span></p>
-            </div>
-          </div>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="rounded-lg bg-muted/30 dark:bg-white/[0.03] p-2 text-center">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Duration</p>
-              <p className="text-sm font-bold tabular-nums">{plan.totalWeeks} <span className="text-[10px] font-normal text-muted-foreground">wks</span></p>
-            </div>
-            <div className="rounded-lg bg-muted/30 dark:bg-white/[0.03] p-2 text-center">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Weekly Loss</p>
-              <p className="text-sm font-bold tabular-nums">{plan.weeklyLossTarget}</p>
-            </div>
-            <div className="rounded-lg bg-muted/30 dark:bg-white/[0.03] p-2 text-center">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Total</p>
-              <p className="text-sm font-bold tabular-nums">{Math.abs(currentWeight - goalWeight).toFixed(1)} <span className="text-[10px] font-normal text-muted-foreground">kg</span></p>
-            </div>
-          </div>
-          {/* AI summary as supporting text */}
-          <p className="text-[12px] text-muted-foreground leading-relaxed">{plan.summary}</p>
-        </div>
-
-        {/* Your Numbers */}
-        <div className="grid grid-cols-3 gap-2 mb-3">
-          {plan.maintenanceCalories && (
-            <div className="card-surface rounded-2xl p-3 text-center">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Maintenance</p>
-              <p className="text-lg font-bold display-number">{Math.round(plan.maintenanceCalories / 100) * 100}</p>
-              <p className="text-[10px] text-muted-foreground">kcal/day</p>
-            </div>
-          )}
-          {plan.deficit && (
-            <div className="card-surface rounded-2xl p-3 text-center">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Deficit</p>
-              <p className="text-lg font-bold display-number text-destructive">-{Math.round(plan.deficit / 100) * 100}</p>
-              <p className="text-[10px] text-muted-foreground">kcal/day</p>
-            </div>
-          )}
-          {plan.targetCalories && (
-            <div className="card-surface rounded-2xl p-3 text-center">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Target</p>
-              <p className="text-lg font-bold display-number text-primary">{Math.round(plan.targetCalories / 100) * 100}</p>
-              <p className="text-[10px] text-muted-foreground">kcal/day</p>
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center gap-3 mb-4">
-          <div className="card-surface rounded-2xl p-3 flex-1 text-center">
-            <p className="text-[10px] text-muted-foreground">Weekly Loss</p>
-            <p className="text-sm font-bold display-number">{plan.weeklyLossTarget}</p>
-          </div>
-          <div className="card-surface rounded-2xl p-3 flex-1 text-center">
-            <p className="text-[10px] text-muted-foreground">Duration</p>
-            <p className="text-sm font-bold display-number">{plan.totalWeeks} weeks</p>
-          </div>
-        </div>
-
-        {/* Week-by-week */}
-        <p className="section-header mb-2">Week-by-Week Plan</p>
-        <div className="space-y-2 mb-4">
-          {plan.weeklyPlan.map((week) => (
-            <div key={week.week} className="card-surface rounded-2xl p-3">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-bold text-foreground">Week {week.week}</span>
-                <span className="text-xs font-bold display-number text-primary">{week.targetWeight.toFixed(1)} kg</span>
-              </div>
-              <div className="grid grid-cols-4 gap-2 mb-2">
-                <div className="text-center">
-                  <p className="text-[10px] text-muted-foreground">Cal</p>
-                  <p className="text-xs font-semibold display-number">{Math.round(week.calories / 100) * 100}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-[10px] text-muted-foreground">Protein</p>
-                  <p className="text-xs font-semibold display-number">{week.protein_g}g</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-[10px] text-muted-foreground">Carbs</p>
-                  <p className="text-xs font-semibold display-number">{week.carbs_g}g</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-[10px] text-muted-foreground">Fat</p>
-                  <p className="text-xs font-semibold display-number">{week.fats_g}g</p>
-                </div>
-              </div>
-              <p className="text-[11px] text-muted-foreground">{week.focus}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Key Principles */}
-        <p className="section-header mb-2">Key Principles</p>
-        <div className="card-surface rounded-2xl p-4 mb-3 space-y-2">
-          {plan.keyPrinciples.map((p, i) => (
-            <div key={i} className="flex items-start gap-2">
-              <div className="w-1.5 h-1.5 rounded-full bg-primary mt-1.5 shrink-0" />
-              <p className="text-sm text-muted-foreground">{p}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Fight Week Strategy — structured sections (cutting flow only) */}
-        {!isWeightLoss && <p className="section-header mb-2">Fight Week — Final Week Game Plan</p>}
-
-        {!isWeightLoss && plan.fightWeek ? (
-          <div className="space-y-2 mb-4">
-            <div className="card-surface rounded-2xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Wheat className="h-4 w-4 text-amber-400" />
-                <span className="text-sm font-semibold">Low Carb</span>
-              </div>
-              <p className="text-sm text-muted-foreground leading-relaxed">{plan.fightWeek.lowCarb}</p>
-            </div>
-
-            <div className="card-surface rounded-2xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Flame className="h-4 w-4 text-orange-400" />
-                <span className="text-sm font-semibold">Sodium</span>
-              </div>
-              <p className="text-sm text-muted-foreground leading-relaxed">{plan.fightWeek.sodium}</p>
-            </div>
-
-            <div className="card-surface rounded-2xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Droplets className="h-4 w-4 text-cyan-400" />
-                <span className="text-sm font-semibold">Water Loading</span>
-              </div>
-              <p className="text-sm text-muted-foreground leading-relaxed">{plan.fightWeek.waterLoading}</p>
-            </div>
-
-            <div className="card-surface rounded-2xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <Utensils className="h-4 w-4 text-green-400" />
-                <span className="text-sm font-semibold">What to Eat</span>
-              </div>
-              <p className="text-sm text-muted-foreground leading-relaxed">{plan.fightWeek.nutrition}</p>
-            </div>
-          </div>
-        ) : !isWeightLoss && plan.fightWeekStrategy ? (
-          <div className="card-surface rounded-2xl p-4 mb-4 border-l-2 border-l-warning">
-            <div className="flex items-center gap-2 mb-1.5">
-              <Zap className="h-4 w-4 text-warning" />
-              <span className="text-sm font-semibold">Final Week</span>
-            </div>
-            <p className="text-sm text-muted-foreground leading-relaxed">{plan.fightWeekStrategy}</p>
-          </div>
-        ) : null}
-
-        {/* Safety */}
-        <div className="card-surface rounded-2xl p-4 mb-3">
-          <div className="flex items-center gap-2 mb-1.5">
-            <Shield className="h-4 w-4 text-success" />
-            <span className="text-sm font-semibold">Safety</span>
-          </div>
-          <p className="text-xs text-muted-foreground leading-relaxed">{plan.safetyNotes}</p>
-        </div>
-
-        {/* Disclaimer */}
-        <div className="rounded-2xl bg-muted/50 p-4 mb-6">
-          <p className="text-xs text-muted-foreground leading-relaxed">
-            This is a rough plan to help you feel on track. Use the tools in the app to recalculate if you're slightly ahead or behind schedule. <span className="font-semibold text-foreground">FightCamp Wizard adapts alongside you</span> — not a cookie-cutter plan.
-          </p>
-        </div>
-
-        {/* Action buttons */}
-        <div className="space-y-3">
-          <Button onClick={handleContinue} className="w-full h-12 text-base font-bold">
-            Continue to Dashboard
-            <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
+        {/* Secondary "Save to Gallery" share button — anchored above the
+            sticky CTA via extra bottom padding inherited from
+            InlinePlanDisplay's `pb-24`. */}
+        <div className="-mt-16 mb-20">
           <Button
             onClick={() => setShareOpen(true)}
             variant="outline"
-            className="w-full"
+            className="w-full h-10 text-sm"
           >
             <Download className="h-4 w-4 mr-2" />
             Save to Gallery
@@ -325,7 +119,7 @@ export default function CutPlanReview() {
         {({ cardRef, aspect }) => (
           <CutPlanCard
             ref={cardRef}
-            plan={plan}
+            plan={planData}
             currentWeight={currentWeight}
             goalWeight={goalWeight}
             targetDate={targetDate}

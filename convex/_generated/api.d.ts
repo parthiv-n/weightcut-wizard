@@ -17,6 +17,7 @@ import type * as _shared_fightWeekMath from "../_shared/fightWeekMath.js";
 import type * as _shared_groq from "../_shared/groq.js";
 import type * as _shared_loadMetrics from "../_shared/loadMetrics.js";
 import type * as _shared_math from "../_shared/math.js";
+import type * as _shared_normalizePlanTopLevel from "../_shared/normalizePlanTopLevel.js";
 import type * as _shared_normalizeWeeklyPlan from "../_shared/normalizeWeeklyPlan.js";
 import type * as _shared_parseResponse from "../_shared/parseResponse.js";
 import type * as _shared_recoveryContext from "../_shared/recoveryContext.js";
@@ -108,6 +109,7 @@ declare const fullApi: ApiFromModules<{
   "_shared/groq": typeof _shared_groq;
   "_shared/loadMetrics": typeof _shared_loadMetrics;
   "_shared/math": typeof _shared_math;
+  "_shared/normalizePlanTopLevel": typeof _shared_normalizePlanTopLevel;
   "_shared/normalizeWeeklyPlan": typeof _shared_normalizeWeeklyPlan;
   "_shared/parseResponse": typeof _shared_parseResponse;
   "_shared/recoveryContext": typeof _shared_recoveryContext;

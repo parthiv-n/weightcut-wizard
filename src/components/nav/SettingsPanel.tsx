@@ -1,5 +1,5 @@
-import { Moon, Sun, ChevronRight, BookOpen, Bell, Trash2, Shield, FileText, LifeBuoy, Heart, Trophy, Zap, RotateCcw, Crown } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Moon, Sun, ChevronRight, BookOpen, Bell, Trash2, Shield, FileText, LifeBuoy, Heart, Trophy, Zap, RotateCcw, Crown, TrendingDown } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { ProfilePictureUpload } from "@/components/ProfilePictureUpload";
@@ -80,6 +80,60 @@ function SubscriptionSection() {
           <RotateCcw className="h-4 w-4 text-muted-foreground shrink-0" />
           <p className="text-[13px] font-medium">Restore Purchases</p>
         </div>
+      </button>
+    </div>
+  );
+}
+
+/**
+ * Single-row "View your plan" entry that mirrors the same affordance on
+ * Goals + Dashboard. Detects the plan via `localStorage.wcw_cut_plan` —
+ * the same source `/cut-plan` and `/weight-plan` read — and routes to
+ * the matching CutPlanReview screen so the user lands on the canonical
+ * InlinePlanDisplay timeline. Renders nothing when no plan is present
+ * so settings stays tidy for users who skipped the AI generator.
+ */
+function PlanLinkSection({ onClose }: { onClose: () => void }) {
+  const navigate = useNavigate();
+  const raw = typeof window !== "undefined" ? window.localStorage.getItem("wcw_cut_plan") : null;
+  if (!raw) return null;
+
+  let planType: "weight_loss" | "weight_cut" = "weight_cut";
+  let summary = "";
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed?.planType === "weight_loss") planType = "weight_loss";
+    if (parsed?.totalWeeks && parsed?.weeklyLossTarget) {
+      summary = `${parsed.totalWeeks} weeks · ${parsed.weeklyLossTarget}`;
+    }
+  } catch {
+    // Malformed payload — still surface the row so the user can re-open
+    // the plan screen (which will show its own empty state).
+  }
+
+  const route = planType === "weight_loss" ? "/weight-plan" : "/cut-plan";
+  const label = planType === "weight_loss" ? "View Weight Loss Plan" : "View Cut Plan";
+
+  return (
+    <div className="rounded-lg bg-muted/20 overflow-hidden divide-y divide-border/20">
+      <button
+        type="button"
+        onClick={() => {
+          onClose();
+          // Defer one tick so the sheet close animation can start before
+          // the route change — feels less jarring than an instant swap.
+          setTimeout(() => navigate(route), 50);
+        }}
+        className="w-full flex items-center justify-between px-3 py-2 active:bg-muted/40 transition-colors text-left"
+      >
+        <div className="flex items-center gap-2">
+          <TrendingDown className="h-4 w-4 text-primary shrink-0" />
+          <div>
+            <p className="text-[13px] font-medium">{label}</p>
+            {summary && <p className="text-[13px] text-muted-foreground">{summary}</p>}
+          </div>
+        </div>
+        <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
       </button>
     </div>
   );
@@ -190,6 +244,9 @@ export function SettingsPanel({
 
           {/* Subscription */}
           <SubscriptionSection />
+
+          {/* Cut/Weight Plan — only renders when a plan exists locally. */}
+          <PlanLinkSection onClose={onClose} />
 
           {/* Preferences */}
           <div className="rounded-lg bg-muted/20 overflow-hidden divide-y divide-border/20">

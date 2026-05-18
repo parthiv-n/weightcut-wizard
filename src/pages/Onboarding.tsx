@@ -23,7 +23,7 @@ import { presentPaywallIfNeeded } from "@/lib/purchases";
 import { Capacitor } from "@capacitor/core";
 import { AnimatePresence, motion } from "motion/react";
 import { springs } from "@/lib/motion";
-import { XPProgressBar, DaysToFightSlam, WeightLossSlam, LossFrameCard, DeclarationButton, TaleOfTheTapeCard, MathWhisper, WittyValidation, sportVocab } from "@/components/onboarding/Gamification";
+import { XPProgressBar, DaysToFightSlam, WeightLossSlam, LossFrameCard, DeclarationButton, TaleOfTheTapeCard, WeeklyMilestonesScrubber, BlurredWeekOnePreview, MathWhisper, WittyValidation, sportVocab } from "@/components/onboarding/Gamification";
 
 const ACTIVITY_MULTIPLIERS: Record<string, number> = {
   sedentary: 1.2,
@@ -934,6 +934,56 @@ export default function Onboarding() {
     setPlanGenerationFailed(false);
     handleContinueToDashboard();
   }, [handleContinueToDashboard]);
+
+  // Public commitment hook — generates a portrait PNG of the Tale of
+  // the Tape card and opens the iOS share sheet (IG Story / Messages /
+  // etc). Imports are lazy so html-to-image (~50kb) doesn't ship in the
+  // initial onboarding bundle for users who never tap share.
+  const tapeCardRef = useRef<HTMLDivElement | null>(null);
+  const handleShareCampCard = useCallback(async () => {
+    triggerHapticSelection();
+    const node = tapeCardRef.current;
+    if (!node) return;
+    try {
+      const [{ toPng }, { Share }, { Capacitor }, { Filesystem, Directory }] = await Promise.all([
+        import("html-to-image"),
+        import("@capacitor/share"),
+        import("@capacitor/core"),
+        import("@capacitor/filesystem"),
+      ]);
+      const dataUrl = await toPng(node, {
+        pixelRatio: 3, // crisp on IG Story / retina
+        cacheBust: true,
+        backgroundColor: "#020204",
+      });
+      if (Capacitor.isNativePlatform()) {
+        // iOS Share API needs a file URL, not a data URL. Write the PNG
+        // to the cache directory then share that path.
+        const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
+        const fileName = `camp-card-${Date.now()}.png`;
+        const writeResult = await Filesystem.writeFile({
+          path: fileName,
+          data: base64,
+          directory: Directory.Cache,
+        });
+        await Share.share({
+          title: "My fight camp",
+          text: "Day 1 of camp. Locked in.",
+          url: writeResult.uri,
+          dialogTitle: "Share your camp",
+        });
+      } else {
+        // Web fallback — download the PNG.
+        const a = document.createElement("a");
+        a.href = dataUrl;
+        a.download = "camp-card.png";
+        a.click();
+      }
+    } catch (err) {
+      logger.error("Share camp card failed", err);
+      toast({ variant: "destructive", title: "Couldn't share card", description: "Please try again." });
+    }
+  }, [toast]);
 
   // ── Slam re-arm booleans ──────────────────────────────────────────
   // Each slam shows on the rising edge of (armed && data-valid). The
@@ -1852,16 +1902,31 @@ export default function Onboarding() {
             <div className="space-y-3">
               {/* Tale-of-the-Tape — finale stat readout. Aggressiveness
                   appears here as a stat (read-only) so the user can see
-                  what they picked without us asking the question again. */}
-              <TaleOfTheTapeCard
-                stats={[
-                  { label: "Height", value: formData.height_cm ? `${formData.height_cm} cm` : "—" },
-                  { label: "Weight", value: formData.current_weight_kg ? `${formData.current_weight_kg} kg` : "—" },
-                  { label: "Goal", value: formData.goal_weight_kg ? `${formData.goal_weight_kg} kg` : "—" },
-                  { label: "Timeline", value: formData.target_weeks ? `${formData.target_weeks} weeks` : "—" },
-                  { label: "Pace", value: formData.plan_aggressiveness || "balanced" },
-                ]}
-              />
+                  what they picked without us asking the question again.
+                  Wrapped in a ref'd div so the share-card flow can
+                  rasterize it via html-to-image. */}
+              <div ref={tapeCardRef}>
+                <TaleOfTheTapeCard
+                  onShare={handleShareCampCard}
+                  stats={[
+                    { label: "Height", value: formData.height_cm ? `${formData.height_cm} cm` : "—" },
+                    { label: "Weight", value: formData.current_weight_kg ? `${formData.current_weight_kg} kg` : "—" },
+                    { label: "Goal", value: formData.goal_weight_kg ? `${formData.goal_weight_kg} kg` : "—" },
+                    { label: "Timeline", value: formData.target_weeks ? `${formData.target_weeks} weeks` : "—" },
+                    { label: "Pace", value: formData.plan_aggressiveness || "balanced" },
+                  ]}
+                />
+              </div>
+
+              {/* Weekly projection scrubber — only when we have the
+                  inputs needed for a meaningful path. */}
+              {formData.current_weight_kg && formData.goal_weight_kg && formData.target_weeks && (
+                <WeeklyMilestonesScrubber
+                  currentKg={parseFloat(formData.current_weight_kg)}
+                  goalKg={parseFloat(formData.goal_weight_kg)}
+                  weeks={Math.max(1, parseInt(formData.target_weeks))}
+                />
+              )}
 
               {/* Projected weight-loss chart — same visual language as
                   the cutting flow's chart but simpler: linear current →
@@ -1873,6 +1938,21 @@ export default function Onboarding() {
                 goalKg={parseFloat(formData.goal_weight_kg) || 0}
                 weeks={parseInt(formData.target_weeks) || 0}
               />
+
+              {/* Day-1 preview teaser — blurred macros + training so the
+                  user feels there's something concrete waiting on the
+                  other side of the Generate button. Always rendered
+                  pre-plan; suppressed once the real plan resolves. */}
+              {!generatedPlan && (
+                <BlurredWeekOnePreview
+                  sex={formData.sex}
+                  age={formData.age ? parseInt(formData.age) : undefined}
+                  heightCm={formData.height_cm ? parseFloat(formData.height_cm) : undefined}
+                  currentKg={formData.current_weight_kg ? parseFloat(formData.current_weight_kg) : undefined}
+                  trainingFrequency={formData.training_frequency ? parseInt(formData.training_frequency) : undefined}
+                  aggressiveness={formData.plan_aggressiveness}
+                />
+              )}
 
               {/* In-page plan display — slides in below the card once the
                   AI plan resolves. The Continue button inside this
@@ -2028,16 +2108,33 @@ export default function Onboarding() {
               }
             >
               <div className="space-y-3">
-                {/* Tale-of-the-Tape — finale stat readout for cutting. */}
-                <TaleOfTheTapeCard
-                  stats={[
-                    { label: "Height", value: formData.height_cm ? `${formData.height_cm} cm` : "—" },
-                    { label: "Weight", value: formData.current_weight_kg ? `${formData.current_weight_kg} kg` : "—" },
-                    { label: "Goal", value: formData.goal_weight_kg ? `${formData.goal_weight_kg} kg` : "—" },
-                    { label: "Days to fight", value: daysToFight ? String(daysToFight) : "—" },
-                    { label: "Experience", value: formData.experience_level || "—" },
-                  ]}
-                />
+                {/* Tale-of-the-Tape — finale stat readout for cutting.
+                    Wrapped in a ref'd div so the share-card flow can
+                    rasterize it via html-to-image. */}
+                <div ref={tapeCardRef}>
+                  <TaleOfTheTapeCard
+                    onShare={handleShareCampCard}
+                    stats={[
+                      { label: "Height", value: formData.height_cm ? `${formData.height_cm} cm` : "—" },
+                      { label: "Weight", value: formData.current_weight_kg ? `${formData.current_weight_kg} kg` : "—" },
+                      { label: "Goal", value: formData.goal_weight_kg ? `${formData.goal_weight_kg} kg` : "—" },
+                      { label: "Days to fight", value: daysToFight ? String(daysToFight) : "—" },
+                      { label: "Experience", value: formData.experience_level || "—" },
+                    ]}
+                  />
+                </div>
+
+                {/* Weekly projection scrubber — cutting flow uses the
+                    sustained-cut weeks (cutWeeks from `stats`) as the
+                    timeline since the dehydration days are separate. */}
+                {validInputs && stats && formData.current_weight_kg && fightWeekTarget > 0 && (
+                  <WeeklyMilestonesScrubber
+                    currentKg={parseFloat(formData.current_weight_kg)}
+                    goalKg={fightWeekTarget}
+                    weeks={stats.cutWeeks}
+                  />
+                )}
+
                 {validInputs && stats ? (
                   <>
                     {chartContent}
@@ -2066,6 +2163,18 @@ export default function Onboarding() {
                       Need a fight date in the future plus your weight class and pre-dehydration target to project your cut.
                     </p>
                   </div>
+                )}
+
+                {/* Day-1 preview teaser — blurred macros + training. */}
+                {!generatedPlan && (
+                  <BlurredWeekOnePreview
+                    sex={formData.sex}
+                    age={formData.age ? parseInt(formData.age) : undefined}
+                    heightCm={formData.height_cm ? parseFloat(formData.height_cm) : undefined}
+                    currentKg={formData.current_weight_kg ? parseFloat(formData.current_weight_kg) : undefined}
+                    trainingFrequency={formData.training_frequency ? parseInt(formData.training_frequency) : undefined}
+                    aggressiveness={formData.plan_aggressiveness}
+                  />
                 )}
 
                 {/* In-page plan display — slides in below the chart once the

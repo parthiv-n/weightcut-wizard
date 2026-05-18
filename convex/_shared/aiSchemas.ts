@@ -1,6 +1,23 @@
-/** Zod schemas for plan-generating AI outputs. Ported from
- *  supabase/functions/_shared/aiSchemas.ts but using the npm `zod` import. */
+/** Zod schemas for plan-generating AI outputs.
+ *
+ *  v2 (2026-05-18): card-based timeline rewrite. The plan returned by the
+ *  AI is consumed by `InlinePlanDisplay.tsx` as a series of week cards
+ *  with a hero metric, headline copy, and 3-5 bullet daily focus items.
+ *  All long-form prose fields were either dropped or tightened so the
+ *  UI doesn't have to render walls of text. See the matching prompt in
+ *  `actions/generateCutPlan.ts` / `generateWeightPlan.ts` for how the
+ *  LLM is told to fill the new shape.
+ */
 import { z } from "zod";
+
+/** Phase classification — used for the timeline color rail + phase pills. */
+const WeekPhaseSchema = z.enum([
+  "foundation",
+  "build",
+  "peak",
+  "final",
+  "fight_week",
+]);
 
 const WeeklyEntrySchema = z.object({
   week: z.number().int().min(1).max(52),
@@ -9,42 +26,69 @@ const WeeklyEntrySchema = z.object({
   protein_g: z.number().min(40).max(400),
   carbs_g: z.number().min(0).max(700),
   fats_g: z.number().min(15).max(250),
-  focus: z.string().max(500).optional().default(""),
+  /** Phase classification. Drives the card's color rail + phase pill. */
+  phase: WeekPhaseSchema,
+  /** Single memorable sentence summarising the week's intent. ≤80 chars. */
+  heroLine: z.string().min(4).max(80),
+  /** Card headline metric (e.g. "−1.2 kg" or "Protein 2.0 g/kg"). ≤24 chars. */
+  keyMetric: z.string().min(1).max(24),
+  /** 3–5 imperative bullet items, each ≤60 chars. Replaces paragraph `focus`. */
+  dailyFocus: z.array(z.string().min(2).max(60)).min(2).max(5),
+  /** Optional "watch out for" inline chip on the expanded card. */
+  risk: z.string().max(80).optional(),
+  /** Optional "recover with" inline chip on the expanded card. */
+  recovery: z.string().max(80).optional(),
+});
+
+/** Macro phase summary — drives the phase strip above the week timeline. */
+const PhaseSummarySchema = z.object({
+  name: WeekPhaseSchema,
+  label: z.string().min(2).max(24),
+  weekStart: z.number().int().min(1).max(20),
+  weekEnd: z.number().int().min(1).max(20),
+  intent: z.string().min(4).max(120),
 });
 
 export const CutPlanSchema = z.object({
   weeklyPlan: z.array(WeeklyEntrySchema).min(1).max(20),
-  summary: z.string().min(10).max(2000),
+
+  // Card-timeline additions
+  phases: z.array(PhaseSummarySchema).min(1).max(4),
+  /** 1–2 sentences directly addressing the user's `primary_struggle`. */
+  personalNote: z.string().min(10).max(280),
+  /** Highlights the week the user should mentally prepare for. */
+  toughestWeek: z.object({
+    week: z.number().int().min(1).max(20),
+    reason: z.string().min(4).max(120),
+  }),
+
+  // Tightened narrative fields
+  summary: z.string().min(10).max(500),
+  safetyNotes: z.string().max(300).optional().default(""),
+  keyPrinciples: z.array(z.string().max(120)).min(2).max(6).optional(),
+
+  // Server-computed scalars (unchanged)
   totalWeeks: z.number().int().min(1).max(20).optional(),
   weeklyLossTarget: z.string().max(50).optional(),
   maintenanceCalories: z.number().int().min(1000).max(6000).optional(),
   deficit: z.number().int().min(0).max(1500).optional(),
   targetCalories: z.number().int().min(800).max(5000).optional(),
-  safetyNotes: z.string().max(1000).optional().default(""),
-  keyPrinciples: z.array(z.string().max(500)).min(1).max(10).optional(),
+
+  // Fight-week block (cutting flow only) — tightened from 2000 to 240/each
   fightWeek: z
     .object({
-      lowCarb: z.string().max(2000),
-      sodium: z.string().max(2000),
-      waterLoading: z.string().max(2000),
-      nutrition: z.string().max(2000),
+      lowCarb: z.string().max(240),
+      sodium: z.string().max(240),
+      waterLoading: z.string().max(240),
+      nutrition: z.string().max(240),
     })
     .optional(),
-  mealIdeas: z
-    .array(
-      z.object({
-        name: z.string().min(1).max(120),
-        description: z.string().max(500),
-        approxCalories: z.number().int().min(50).max(2000),
-      }),
-    )
-    .max(20)
-    .optional(),
-  weeklyChecklist: z.array(z.string().max(300)).max(10).optional(),
+
   confidence: z.number().min(0).max(1).optional(),
 });
 
 export type CutPlan = z.infer<typeof CutPlanSchema>;
+export type WeekPhase = z.infer<typeof WeekPhaseSchema>;
 
 const HourlyStepSchema = z.object({
   hour: z.number().int().min(1).max(48),

@@ -1,19 +1,19 @@
-/** Generate cut plan — heavy reasoning, Pro-only, logs decision. */
+/** Generate cut plan — free for everyone, card-timeline shape. */
 "use node";
 
 import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { callGroqWithRetry } from "../_shared/groq";
-import { CutPlanSchema } from "../_shared/aiSchemas";
+import { CutPlanSchema, type WeekPhase } from "../_shared/aiSchemas";
 import { mifflinStJeor, requiredDeficit, macroSplit } from "../_shared/math";
 import { normaliseWeeklyPlan } from "../_shared/normalizeWeeklyPlan";
+import { normalisePlanTopLevel } from "../_shared/normalizePlanTopLevel";
 import {
   loadAthleteSnapshot,
   logDecision,
   requireUserIdFromAction,
   SECOND_PERSON_DIRECTIVE,
 } from "./_helpers";
-import { enforceFeatureGate } from "../_shared/featureGates";
 
 export const run = action({
   args: {
@@ -28,8 +28,12 @@ export const run = action({
   },
   handler: async (ctx, args) => {
     const userId = await requireUserIdFromAction(ctx);
-    await enforceFeatureGate(ctx, userId, "AI_CUT_PLAN");
+    // Free for everyone — see featureGates.ts for the policy reason.
     const snap = await loadAthleteSnapshot(ctx, userId);
+    const primaryStruggle: string | undefined =
+      typeof snap.profile?.primaryStruggle === "string"
+        ? snap.profile.primaryStruggle
+        : undefined;
     const days = Math.max(
       1,
       Math.ceil((new Date(args.targetDate).getTime() - Date.now()) / 86400000),
@@ -52,12 +56,30 @@ export const run = action({
     const targetCal = Math.max(1200, maintenanceCal - deficit.dailyDeficitKcal);
     const macros = macroSplit(targetCal, args.currentWeight, "cut");
 
-    const systemPrompt = `You are an evidence-based combat-sports nutritionist. Output ONLY valid JSON matching this schema:
-{ "weeklyPlan": [{ "week": n, "targetWeight": n, "calories": n, "protein_g": n, "carbs_g": n, "fats_g": n, "focus": "..." }], "summary": "...", "totalWeeks": n, "weeklyLossTarget": "...", "maintenanceCalories": n, "deficit": n, "targetCalories": n, "safetyNotes": "...", "keyPrinciples": ["..."], "fightWeek": { "lowCarb": "...", "sodium": "...", "waterLoading": "...", "nutrition": "..." } }
+    const systemPrompt = `You are an evidence-based combat-sports nutritionist building a card-based fight-camp plan. Output ONLY valid JSON matching the schema. Use the deterministic numbers below verbatim — never invent calories or macros that contradict them.
 
 ${SECOND_PERSON_DIRECTIVE}
 
-Every narrative string (summary, focus, safetyNotes, keyPrinciples, fightWeek.*) MUST address the user as "you" / "your" - this is YOUR cut plan being handed to YOU. Use the deterministic numbers below. Never invent calories or macros that contradict them.
+USER STRUGGLE: ${primaryStruggle ?? "unspecified"}
+You MUST address this struggle directly in \`personalNote\` (1-2 sentences, ≤280 chars) and weave one mitigating tactic into the relevant week's \`dailyFocus\` bullets.
+
+Per week, return:
+- \`phase\`: one of foundation | build | peak | final | fight_week (the LAST week MUST be fight_week)
+- \`heroLine\`: ≤80 chars, ONE memorable sentence (e.g. "Week 3 is the grind — protein bumps to 2.0 g/kg")
+- \`keyMetric\`: ≤24 chars headline (e.g. "−1.2 kg", "Sodium 4 g")
+- \`dailyFocus\`: 3-5 bullets, each ≤60 chars, imperative voice ("Weigh in 7am pre-water"). NO PARAGRAPHS.
+- \`risk\` / \`recovery\`: ≤80 chars each, optional
+
+Also return:
+- \`phases[]\`: 2-3 macro phases with name + label + weekStart + weekEnd + 1-line \`intent\` (≤120 chars)
+- \`toughestWeek\`: { week, reason ≤120 chars }
+- \`personalNote\`: 10-280 chars, references the struggle above
+- \`summary\`: ≤500 chars, ONE paragraph max
+- \`safetyNotes\`: ≤300 chars, optional
+- \`keyPrinciples\`: 3-5 short rules, each ≤120 chars
+- \`fightWeek\`: { lowCarb, sodium, waterLoading, nutrition } — each ≤240 chars
+
+BANNED: paragraph-length focus strings, motivational fluff, repeating numbers already in \`calories\`/\`protein_g\`, generic advice that ignores the user struggle above, em-dashes (—) or en-dashes (–) anywhere in the output — use commas or periods instead.
 
 DETERMINISTIC FACTS:
 - BMR: ${bmr}, maintenance: ${maintenanceCal}, target: ${targetCal} kcal
@@ -67,10 +89,6 @@ DETERMINISTIC FACTS:
 
 ${snap.block}`;
 
-    // Try Groq first; fall back to a deterministic plan if every retry
-    // fails (rate limit, timeout, schema). Better to ship a numerically
-    // sound plan the user can refine than to strand them on the retry
-    // card during a Groq outage.
     let aiResult: any = null;
     try {
       aiResult = await callGroqWithRetry({
@@ -79,7 +97,7 @@ ${snap.block}`;
           { role: "system", content: systemPrompt },
           {
             role: "user",
-            content: `Generate a ${weekCount}-week cut plan for an athlete cutting from ${args.currentWeight}kg to ${finalTarget}kg in ${days} days. Include weekly tapered targets and a fightWeek protocol block.`,
+            content: `Generate a ${weekCount}-week cut plan for an athlete cutting from ${args.currentWeight}kg to ${finalTarget}kg in ${days} days. Tapered weekly targets, 2-3 phase summary, structured per-week cards with heroLine + dailyFocus bullets, personalNote tied to the struggle, toughestWeek call-out, and a fightWeek protocol block.`,
           },
         ],
         temperature: 0.4,
@@ -93,17 +111,20 @@ ${snap.block}`;
       );
     }
 
-    const fallbackPlan = aiResult ?? buildDeterministicCutPlan({
-      weekCount,
-      startWeight: args.currentWeight,
-      finalTarget,
-      targetCal,
-      deficitKcal: deficit.dailyDeficitKcal,
-      macros,
-      daysRemaining: days,
-    });
+    const fallbackPlan =
+      aiResult ??
+      buildDeterministicCutPlan({
+        weekCount,
+        startWeight: args.currentWeight,
+        finalTarget,
+        targetCal,
+        deficitKcal: deficit.dailyDeficitKcal,
+        macros,
+        daysRemaining: days,
+        primaryStruggle,
+      });
 
-    const normalised = normaliseWeeklyPlan({
+    const weeklyPlan = normaliseWeeklyPlan({
       weeklyPlan: fallbackPlan.weeklyPlan,
       weekCount,
       startWeight: args.currentWeight,
@@ -112,19 +133,29 @@ ${snap.block}`;
       defaultProtein: macros.protein_g,
       defaultCarbs: macros.carb_g,
       defaultFats: macros.fat_g,
+      flow: "cut",
     });
+
+    const topLevel = normalisePlanTopLevel({
+      raw: fallbackPlan,
+      weeklyPlan,
+      primaryStruggle,
+    });
+
     const plan = {
-      ...fallbackPlan,
-      weeklyPlan: normalised,
+      weeklyPlan,
+      ...topLevel,
       maintenanceCalories: maintenanceCal,
       targetCalories: targetCal,
       deficit: deficit.dailyDeficitKcal,
+      totalWeeks: weekCount,
+      weeklyLossTarget: `${((args.currentWeight - finalTarget) / weekCount).toFixed(2)} kg/week`,
     };
 
     logDecision(ctx, {
       userId,
       feature: "generate-cut-plan",
-      inputSnapshot: { ...args, bmr, maintenanceCal, targetCal },
+      inputSnapshot: { ...args, bmr, maintenanceCal, targetCal, primaryStruggle },
       outputJson: plan,
       predictionFacts: {
         predicted_kcal: targetCal,
@@ -139,9 +170,8 @@ ${snap.block}`;
 });
 
 /**
- * Deterministic cut plan builder used when Groq is rate-limited.
- * Produces a CutPlan-shaped object (passes Zod) with reasonable
- * weekly tapered targets + a fightWeek block. Math-driven, no AI.
+ * Deterministic cut plan in the v2 card-timeline shape. Used when Groq
+ * is rate-limited or returns a malformed plan. Math-driven, no AI.
  */
 function buildDeterministicCutPlan(opts: {
   weekCount: number;
@@ -151,23 +181,79 @@ function buildDeterministicCutPlan(opts: {
   deficitKcal: number;
   macros: { protein_g: number; carb_g: number; fat_g: number };
   daysRemaining: number;
-}): {
-  weeklyPlan: any[];
-  summary: string;
-  totalWeeks: number;
-  weeklyLossTarget: string;
-  safetyNotes: string;
-  keyPrinciples: string[];
-  fightWeek: { lowCarb: string; sodium: string; waterLoading: string; nutrition: string };
-} {
-  const { weekCount, startWeight, finalTarget, targetCal, deficitKcal, macros, daysRemaining } = opts;
+  primaryStruggle?: string;
+}) {
+  const {
+    weekCount,
+    startWeight,
+    finalTarget,
+    targetCal,
+    deficitKcal,
+    macros,
+    daysRemaining,
+  } = opts;
   const totalKg = +(startWeight - finalTarget).toFixed(2);
   const perWeekKg = +(totalKg / weekCount).toFixed(2);
+
+  const phaseFor = (i: number): WeekPhase => {
+    if (i === weekCount - 1) return "fight_week";
+    if (weekCount <= 2) return "build";
+    const pct = i / (weekCount - 1);
+    if (pct <= 0.2) return "foundation";
+    if (pct <= 0.6) return "build";
+    return "peak";
+  };
 
   const weeklyPlan = Array.from({ length: weekCount }, (_, i) => {
     const week = i + 1;
     const t = (i + 1) / weekCount;
     const targetWeight = +(startWeight - totalKg * t).toFixed(1);
+    const phase = phaseFor(i);
+    const kgRemaining = +(targetWeight - finalTarget).toFixed(1);
+    const heroLine =
+      phase === "fight_week"
+        ? "Fight week — cut carbs, load water, drop salt."
+        : phase === "foundation"
+          ? "Lock the routine — same wake, same weigh-in."
+          : phase === "peak"
+            ? `Peak intensity — ${kgRemaining.toFixed(1)} kg to fight weight.`
+            : `Week ${week} — hold pace at ${perWeekKg.toFixed(2)} kg/week.`;
+    const keyMetric = phase === "fight_week" ? "Water + salt" : `−${perWeekKg.toFixed(1)} kg`;
+    const dailyFocus =
+      phase === "fight_week"
+        ? [
+            "Carbs ≤1 g/kg days -7 to -3",
+            "Sodium 4-5 g, then <500 mg from day -2",
+            "Water 8L → 4L → 1L → nothing",
+            "Sip electrolytes post-weigh-in",
+          ]
+        : phase === "foundation"
+          ? [
+              "Weigh in 7am pre-water",
+              `Hit ${macros.protein_g}g protein every day`,
+              "Sleep 8h+, no screens after 10pm",
+              "Log every meal as you eat it",
+            ]
+          : phase === "peak"
+            ? [
+                "Sparring + intensity stay on schedule",
+                `Carbs around training, fats on rest days`,
+                "Track 7-day weight trend, not daily",
+                "One flexible meal per week max",
+              ]
+            : [
+                `${targetCal} kcal target, deficit ${Math.round(deficitKcal)} kcal`,
+                `${macros.protein_g}g protein split across 4 meals`,
+                "Recovery day every 3rd session",
+              ];
+    const risk =
+      phase === "peak"
+        ? "Hard sparring days — fuel pre-session with 60g carbs"
+        : undefined;
+    const recovery =
+      phase === "peak"
+        ? "Contrast shower + 8h sleep after intense sessions"
+        : undefined;
     return {
       week,
       targetWeight,
@@ -175,37 +261,73 @@ function buildDeterministicCutPlan(opts: {
       protein_g: macros.protein_g,
       carbs_g: macros.carb_g,
       fats_g: macros.fat_g,
-      focus:
-        week === 1
-          ? "Lock in the pattern. Same wake time, same weigh-in, same routine every day."
-          : week === weekCount
-            ? "Fight week — manage water, sodium, and carbs per the protocol below."
-            : `Hold pace at ${perWeekKg.toFixed(2)} kg/week. Sparring + intensity sessions stay on schedule.`,
+      phase,
+      heroLine,
+      keyMetric,
+      dailyFocus,
+      risk,
+      recovery,
     };
   });
 
+  // Derive phases array
+  const phaseGroups: { name: WeekPhase; weekStart: number; weekEnd: number }[] = [];
+  for (const row of weeklyPlan) {
+    const last = phaseGroups[phaseGroups.length - 1];
+    if (last && last.name === row.phase) last.weekEnd = row.week;
+    else
+      phaseGroups.push({ name: row.phase, weekStart: row.week, weekEnd: row.week });
+  }
+  const phaseLabel: Record<WeekPhase, string> = {
+    foundation: "Foundation",
+    build: "Build",
+    peak: "Peak",
+    final: "Final Week",
+    fight_week: "Fight Week",
+  };
+  const phaseIntent: Record<WeekPhase, string> = {
+    foundation: "Lock in the rhythm. Same wake, same weigh-in, same meals.",
+    build: "Steady deficit. Weeks 3-4 may stall — that's rebalancing, not failure.",
+    peak: "Drive weight down hard. Toughest sessions land here.",
+    final: "Hold the deficit, protect lean mass, finish strong.",
+    fight_week: "Carbs → water → salt → weigh-in. Then refuel.",
+  };
+  const phases = phaseGroups.map((g) => ({
+    name: g.name,
+    label: phaseLabel[g.name],
+    weekStart: g.weekStart,
+    weekEnd: g.weekEnd,
+    intent: phaseIntent[g.name],
+  }));
+
   return {
     weeklyPlan,
-    summary: `Your cut: ${targetCal} kcal/day to drop ~${perWeekKg.toFixed(2)} kg/week, hitting ${finalTarget} kg by fight day in ${daysRemaining} days. Trust the daily reps; the math handles the rest.`,
+    phases,
+    personalNote: "Built around your numbers and your timeline — repeat the daily reps and the math handles the rest.",
+    toughestWeek: {
+      week: Math.max(1, Math.ceil(weekCount * 0.6)),
+      reason: "Deepest deficit + hardest sessions stack here. Sleep is non-negotiable.",
+    },
+    summary: `${targetCal} kcal/day to drop ~${perWeekKg.toFixed(2)} kg/week, hitting ${finalTarget} kg by fight day in ${daysRemaining} days. Trust the daily reps; the math handles the rest.`,
     totalWeeks: weekCount,
     weeklyLossTarget: `${perWeekKg.toFixed(2)} kg/week`,
     safetyNotes:
-      "Stop the cut and reassess if you feel persistently dizzy, can't sleep, or sparring drops noticeably. Two-week stalls = ease the deficit by 100-200 kcal.",
+      "Stop and reassess if you feel persistently dizzy or sparring drops noticeably. Two-week stalls = ease the deficit by 100-200 kcal.",
     keyPrinciples: [
       `Hit ${macros.protein_g}g protein every day — protect lean mass through the cut.`,
       `Stay within ${Math.round(deficitKcal)} kcal of target. Training days closer to maintenance, rest days deeper.`,
       "Weigh in mornings, post-bathroom, before water. Track the 7-day average.",
-      "Sleep 8+ hours through cut weeks; under-recovery wrecks the cut faster than under-eating.",
+      "Sleep 8+ hours. Under-recovery wrecks the cut faster than under-eating.",
     ],
     fightWeek: {
       lowCarb:
         "Days -7 to -3: cut carbs to ~1 g/kg bodyweight. Keeps glycogen low so the water-load drops weight cleanly later.",
       sodium:
-        "Days -7 to -3: bump sodium to 4-5 g/day, then drop to <500 mg from day -2 onward. The body sheds extra water on the drop.",
+        "Days -7 to -3: sodium 4-5 g/day, then drop to <500 mg from day -2. The body sheds water on the drop.",
       waterLoading:
-        "Days -5 to -3: drink 8 L/day. Day -2: cut to 4 L. Day -1: 1 L sips. Morning of weigh-in: nothing.",
+        "Days -5 to -3: 8 L/day. Day -2: 4 L. Day -1: 1 L sips. Morning of weigh-in: nothing.",
       nutrition:
-        "Post weigh-in: sip electrolytes (Na 1500 mg, K 400 mg per 500 mL) + 0.5 g/kg carbs/hour with low-fibre starches (white rice, banana). 12 hr to fight: real meals, normal portions.",
+        "Post weigh-in: electrolytes (Na 1500 mg, K 400 mg per 500 mL) + 0.5 g/kg carbs/hour. White rice, banana. 12 hr to fight: real meals.",
     },
   };
 }

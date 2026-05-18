@@ -13,7 +13,6 @@ import { celebrateSuccess, triggerHaptic, triggerHapticSelection } from "@/lib/h
 import { GoalsSkeleton } from "@/components/ui/skeleton-loader";
 import { SwipeDial } from "@/components/ui/SwipeDial";
 import { ProfilePictureUpload } from "@/components/ProfilePictureUpload";
-import { CutPlanDialog } from "@/components/dashboard/CutPlanDialog";
 
 const ACTIVITY_MULTIPLIERS = {
   sedentary: 1.2,
@@ -89,7 +88,8 @@ export default function Goals() {
   // re-open it from the profile without hunting through Dashboard. Mirrors
   // Dashboard's lazy-rehydrate: trust localStorage first, fall back to the
   // profile row (cut_plan_json) which iOS WebView occasionally wipes.
-  const [cutPlanOpen, setCutPlanOpen] = useState(false);
+  // Tap → navigate to /cut-plan (or /weight-plan) which renders the
+  // canonical InlinePlanDisplay timeline; no bespoke sheet here anymore.
   const [cutPlanSummary, setCutPlanSummary] = useState<{
     totalWeeks: number;
     weeklyLossTarget: string;
@@ -364,16 +364,16 @@ export default function Goals() {
         </Section>
 
         {/* ── Your Plan ─────────────────────────────────────────────────
-            Opens the same bottom-sheet view of the generated plan that the
-            dashboard surfaces, so users can revisit week-by-week targets
-            without leaving the profile. */}
+            Routes to /cut-plan (or /weight-plan for weight-loss users),
+            both of which render the canonical InlinePlanDisplay timeline
+            via CutPlanReview — the same UI shown post-onboarding. */}
         {cutPlanSummary && (
           <Section title={cutPlanSummary.planType === "weight_loss" ? "Your Weight Loss Plan" : "Your Cut Plan"}>
             <button
               type="button"
               onClick={() => {
                 triggerHaptic(ImpactStyle.Light);
-                setCutPlanOpen(true);
+                navigate(cutPlanSummary.planType === "weight_loss" ? "/weight-plan" : "/cut-plan");
               }}
               className="w-full flex items-center gap-3 px-3 py-3 min-h-[44px] active:bg-muted/30 transition-colors text-left"
             >
@@ -617,8 +617,6 @@ export default function Goals() {
           </button>
         </div>
       </div>
-
-      <CutPlanDialog open={cutPlanOpen} onOpenChange={setCutPlanOpen} />
     </div>
   );
 }

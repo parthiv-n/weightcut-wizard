@@ -38,7 +38,6 @@ import { triggerHaptic, triggerHapticSelection } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import { logger } from "@/lib/logger";
 import { trackInstallDate, maybeRequestReview } from "@/lib/appReview";
-import { CutPlanDialog } from "@/components/dashboard/CutPlanDialog";
 import { SleepLogger } from "@/components/dashboard/SleepLogger";
 import { TrainingInsightsWidget } from "@/components/dashboard/TrainingInsightsWidget";
 import NewAnnouncementWidget from "@/components/dashboard/NewAnnouncementWidget";
@@ -96,7 +95,6 @@ export default function Dashboard() {
   const [wisdomSheetOpen, setWisdomSheetOpen] = useState(false);
   const [questionnaireOpen, setQuestionnaireOpen] = useState(false);
   const [achievementSheetOpen, setAchievementSheetOpen] = useState(false);
-  const [cutPlanOpen, setCutPlanOpen] = useState(false);
   const [hasCutPlan, setHasCutPlan] = useState<boolean>(() => !!localStorage.getItem("wcw_cut_plan"));
   const [expandedInfo, setExpandedInfo] = useState<'risk' | 'pace' | null>(null);
   const [frequentMeals, setFrequentMeals] = useState<Array<{ name: string; count: number; avgCalories: number }>>([]);
@@ -900,7 +898,7 @@ export default function Dashboard() {
                     variant={weightUnit === 'kg' ? 'default' : 'ghost'}
                     size="sm"
                     onClick={() => { setWeightUnit('kg'); triggerHapticSelection(); }}
-                    className="h-5 min-h-0 text-[13px] px-1.5 rounded-full"
+                    className="h-3 min-h-0 text-[9px] px-1 rounded-full leading-none"
                   >
                     kg
                   </Button>
@@ -908,7 +906,7 @@ export default function Dashboard() {
                     variant={weightUnit === 'lb' ? 'default' : 'ghost'}
                     size="sm"
                     onClick={() => { setWeightUnit('lb'); triggerHapticSelection(); }}
-                    className="h-5 min-h-0 text-[13px] px-1.5 rounded-full"
+                    className="h-3 min-h-0 text-[9px] px-1 rounded-full leading-none"
                   >
                     lb
                   </Button>
@@ -1107,7 +1105,7 @@ export default function Dashboard() {
                   variant={weightUnit === 'kg' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => { setWeightUnit('kg'); triggerHapticSelection(); }}
-                  className="h-5 min-h-0 text-[13px] px-1.5 rounded-full"
+                  className="h-3 min-h-0 text-[9px] px-1 rounded-full leading-none"
                 >
                   kg
                 </Button>
@@ -1115,7 +1113,7 @@ export default function Dashboard() {
                   variant={weightUnit === 'lb' ? 'default' : 'ghost'}
                   size="sm"
                   onClick={() => { setWeightUnit('lb'); triggerHapticSelection(); }}
-                  className="h-5 min-h-0 text-[13px] px-1.5 rounded-full"
+                  className="h-3 min-h-0 text-[9px] px-1 rounded-full leading-none"
                 >
                   lb
                 </Button>
@@ -1151,7 +1149,21 @@ export default function Dashboard() {
         {isFighter(profile?.goal_type) && hasCutPlan ? (
           <div className="grid grid-cols-2 gap-2">
             <button
-              onClick={() => { setCutPlanOpen(true); triggerHaptic(ImpactStyle.Light); }}
+              onClick={() => {
+                triggerHaptic(ImpactStyle.Light);
+                // Route to the canonical CutPlanReview screen. planType lives on
+                // the stored payload; fall back to /cut-plan (fighter copy) when
+                // the field is missing on legacy plans.
+                let route = "/cut-plan";
+                try {
+                  const raw = localStorage.getItem("wcw_cut_plan");
+                  if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed?.planType === "weight_loss") route = "/weight-plan";
+                  }
+                } catch { /* malformed — default route stands */ }
+                navigate(route);
+              }}
               className="card-surface rounded-2xl border border-border/50 p-3 flex items-center gap-2.5 active:scale-[0.98] transition-all text-left"
             >
               <div className="h-9 w-9 rounded-2xl bg-primary/10 flex items-center justify-center flex-shrink-0">
@@ -1368,7 +1380,6 @@ export default function Dashboard() {
         categories={allAchievements}
       />
 
-      <CutPlanDialog open={cutPlanOpen} onOpenChange={setCutPlanOpen} />
     </ErrorBoundary>
   );
 }

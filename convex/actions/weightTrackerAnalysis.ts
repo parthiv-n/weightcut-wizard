@@ -1,193 +1,450 @@
-/** Weight tracker analysis — full nutrition protocol with macros + meal timing. Pro-only. */
+/**
+ * weightTrackerAnalysis — refreshes the weight-tracker plan using the SAME
+ * card-timeline shape as `generateWeightPlan`, so the WeightTracker page can
+ * render the result through the shared `InlinePlanDisplay` component without
+ * any per-surface forking.
+ *
+ * Functionally a sibling of `generateWeightPlan.run`: it uses the same
+ * Mifflin-St Jeor BMR -> activity multiplier -> requiredDeficit -> macroSplit
+ * math helpers and the same CutPlanSchema scaffold. The key differences:
+ *
+ *   1. It accepts the user's recent weight history so the prompt can lean on
+ *      observed trend / plateau context (the post-onboarding generator only
+ *      sees the static profile snapshot).
+ *   2. It pulls height / age / sex / activity from the profile snapshot
+ *      rather than requiring the client to pass them.
+ *   3. It is FREE for everyone (no feature gate), matching the policy used by
+ *      `generateWeightPlan`.
+ *   4. It auto-derives sensible defaults when the profile lacks a target date
+ *      (12-week horizon) or goal weight (no-op pass-through).
+ *
+ * Output shape is intentionally identical to `generateWeightPlan`'s output so
+ * the front-end can swap in `InlinePlanDisplay` directly.
+ */
 "use node";
 
 import { v } from "convex/values";
 import { action } from "../_generated/server";
-import { callGroqText } from "../_shared/groq";
-import { parseJSON } from "../_shared/parseResponse";
-import { projectWeight } from "../_shared/math";
-import { loadAthleteSnapshot, requireUserIdFromAction, SECOND_PERSON_DIRECTIVE } from "./_helpers";
-import { enforceFeatureGate } from "../_shared/featureGates";
+import { callGroqWithRetry } from "../_shared/groq";
+import { CutPlanSchema, type WeekPhase } from "../_shared/aiSchemas";
+import { mifflinStJeor, requiredDeficit, macroSplit } from "../_shared/math";
+import { normaliseWeeklyPlan } from "../_shared/normalizeWeeklyPlan";
+import { normalisePlanTopLevel } from "../_shared/normalizePlanTopLevel";
+import {
+  loadAthleteSnapshot,
+  logDecision,
+  requireUserIdFromAction,
+  SECOND_PERSON_DIRECTIVE,
+} from "./_helpers";
+
+const DAY_MS = 86_400_000;
+
+/** Cap the camp horizon at 20 weeks so the timeline UI stays scrollable. */
+const MAX_WEEKS = 20;
+/** Minimum 1 week so we always render at least one card. */
+const MIN_WEEKS = 1;
+
+/** Default horizon when the profile has no target date. Picks a comfortable
+ *  12-week window which is the most common goal length. */
+const DEFAULT_WEEK_HORIZON = 12;
 
 export const run = action({
   args: {
-    weightHistory: v.array(
-      v.object({ date: v.string(), weight_kg: v.union(v.number(), v.string()) }),
+    weightHistory: v.optional(
+      v.array(
+        v.object({ date: v.string(), weight_kg: v.union(v.number(), v.string()) }),
+      ),
     ),
-    goalWeight: v.number(),
-    targetDate: v.string(),
-    currentWeight: v.number(),
+    currentWeight: v.optional(v.number()),
+    goalWeight: v.optional(v.number()),
+    targetDate: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await requireUserIdFromAction(ctx);
-    await enforceFeatureGate(ctx, userId, "AI_WEIGHT_ANALYSIS");
+    // NOTE: intentionally no `enforceFeatureGate` here — mirrors the
+    // generateWeightPlan policy so every tier can refresh their plan.
     const snap = await loadAthleteSnapshot(ctx, userId);
+    const profile = snap.profile ?? {};
 
-    // Numeric weight history for trend math.
-    const numeric = args.weightHistory
-      .map((l) => ({ date: l.date, weight: Number(l.weight_kg) }))
-      .filter((l) => Number.isFinite(l.weight));
+    // ── Resolve inputs from args, then fall back to profile ────────────
+    const currentWeight =
+      typeof args.currentWeight === "number" && Number.isFinite(args.currentWeight)
+        ? args.currentWeight
+        : Number(profile.current_weight_kg);
 
-    const today = new Date();
-    const target = new Date(args.targetDate);
-    const daysRemaining = Math.max(
-      1,
-      Math.ceil((target.getTime() - today.getTime()) / 86400000),
-    );
-    const weeksRemaining = Math.max(1, daysRemaining / 7);
+    const goalWeight =
+      typeof args.goalWeight === "number" && Number.isFinite(args.goalWeight)
+        ? args.goalWeight
+        : Number(profile.fight_week_target_kg ?? profile.goal_weight_kg);
 
-    const weightDifference = args.goalWeight - args.currentWeight;
-    const isMaintenanceMode = args.currentWeight <= args.goalWeight;
-    const weightToGain =
-      isMaintenanceMode && weightDifference > 0 ? weightDifference : 0;
-    const weightToLose =
-      !isMaintenanceMode && weightDifference < 0 ? Math.abs(weightDifference) : 0;
-    const requiredWeeklyLoss =
-      weightToLose > 0 ? weightToLose / weeksRemaining : 0;
-    const requiredWeeklyGain =
-      weightToGain > 0 ? weightToGain / weeksRemaining : 0;
-
-    // Body adaptation patterns from logged history.
-    const patterns = (() => {
-      if (numeric.length < 2) return null;
-      const sorted = [...numeric].sort(
-        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+    if (!Number.isFinite(currentWeight) || !Number.isFinite(goalWeight)) {
+      throw new Error(
+        "Current weight and goal weight are required. Please complete your profile.",
       );
-      const firstWeight = sorted[0].weight;
-      const lastWeight = sorted[sorted.length - 1].weight;
-      const daysDiff =
-        (new Date(sorted[sorted.length - 1].date).getTime() -
-          new Date(sorted[0].date).getTime()) /
-        86400000;
-      const weeksDiff = daysDiff / 7;
-      const avgWeeklyLoss =
-        weeksDiff > 0 ? (firstWeight - lastWeight) / weeksDiff : 0;
+    }
 
-      let plateauDetected = false;
-      if (sorted.length >= 7) {
-        const recent = sorted.slice(-7);
-        const weights = recent.map((w) => w.weight);
-        if (Math.max(...weights) - Math.min(...weights) < 0.3)
-          plateauDetected = true;
-      }
+    const heightCm = Number(profile.height_cm);
+    const age = Number(profile.age);
+    const sexRaw = String(profile.sex ?? "").toLowerCase();
+    const sex: "male" | "female" = sexRaw === "female" ? "female" : "male";
 
-      let trend: "stable" | "declining" | "increasing" = "stable";
-      const recent = sorted.slice(-14);
-      if (recent.length >= 2) {
-        const change = recent[0].weight - recent[recent.length - 1].weight;
-        if (change > 0.5) trend = "declining";
-        else if (change < -0.5) trend = "increasing";
-      }
+    if (!Number.isFinite(heightCm) || !Number.isFinite(age)) {
+      throw new Error(
+        "Height and age are required for plan math. Please update your profile.",
+      );
+    }
 
-      return {
-        avgWeeklyLoss: avgWeeklyLoss.toFixed(2),
-        plateauDetected,
-        trend,
-        dataPoints: sorted.length,
-        weightRange: `${lastWeight.toFixed(1)}-${firstWeight.toFixed(1)}kg`,
-      };
-    })();
+    // ── Resolve timeline horizon ───────────────────────────────────────
+    const targetDateRaw = args.targetDate ?? profile.target_date ?? null;
+    const today = new Date();
+    let daysRemaining: number;
+    if (targetDateRaw) {
+      const t = new Date(targetDateRaw).getTime();
+      daysRemaining = Number.isFinite(t)
+        ? Math.max(1, Math.ceil((t - today.getTime()) / DAY_MS))
+        : DEFAULT_WEEK_HORIZON * 7;
+    } else {
+      daysRemaining = DEFAULT_WEEK_HORIZON * 7;
+    }
+    const weekCount = Math.max(
+      MIN_WEEKS,
+      Math.min(MAX_WEEKS, Math.ceil(daysRemaining / 7)),
+    );
+    const targetDateIso = targetDateRaw
+      ? new Date(targetDateRaw).toISOString().slice(0, 10)
+      : new Date(today.getTime() + weekCount * 7 * DAY_MS)
+          .toISOString()
+          .slice(0, 10);
 
-    const projected = projectWeight(numeric, daysRemaining);
+    // ── Deterministic math ─────────────────────────────────────────────
+    const bmr = mifflinStJeor({
+      weightKg: currentWeight,
+      heightCm,
+      ageYears: age,
+      sex,
+    });
+    const maintenanceCal = Math.round(bmr * 1.55);
+    const deficit = requiredDeficit({
+      currentKg: currentWeight,
+      targetKg: goalWeight,
+      daysRemaining,
+      tdee: maintenanceCal,
+    });
+    const goalIsLoss = currentWeight > goalWeight;
+    const targetCal = goalIsLoss
+      ? Math.max(1200, maintenanceCal - deficit.dailyDeficitKcal)
+      : maintenanceCal + 300;
+    const macros = macroSplit(
+      targetCal,
+      currentWeight,
+      goalIsLoss ? "cut" : "maintain",
+    );
 
-    const systemPrompt = `You are a JSON API. Respond with ONLY the JSON object. NEVER use em dashes in any text, use commas, periods, or regular hyphens instead.
-You are the FightCamp Wizard - evidence-based sports nutrition specialist for combat athletes. Every narrative string MUST address the user as "you" / "your".
+    // ── Pull a primary struggle for the personalNote, when available ───
+    const primaryStruggle: string | undefined =
+      typeof (profile as any)?.primaryStruggle === "string"
+        ? (profile as any).primaryStruggle
+        : undefined;
+
+    // ── Build trend context from history ───────────────────────────────
+    const history = Array.isArray(args.weightHistory) ? args.weightHistory : [];
+    const numericHistory = history
+      .map((h) => ({ date: h.date, weight: Number(h.weight_kg) }))
+      .filter((h) => Number.isFinite(h.weight))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    let trendBlock = "";
+    if (numericHistory.length >= 2) {
+      const first = numericHistory[0];
+      const last = numericHistory[numericHistory.length - 1];
+      const days =
+        (new Date(last.date).getTime() - new Date(first.date).getTime()) / DAY_MS;
+      const weeks = days / 7;
+      const avgWeeklyLoss = weeks > 0 ? (first.weight - last.weight) / weeks : 0;
+      const recent7 = numericHistory.slice(-7).map((p) => p.weight);
+      const plateau =
+        recent7.length >= 5 && Math.max(...recent7) - Math.min(...recent7) < 0.3;
+      trendBlock = `\n\nOBSERVED TREND (${numericHistory.length} logs over ${Math.round(days)} days):
+- Avg weekly change: ${avgWeeklyLoss.toFixed(2)} kg/wk
+- Plateau (last 7 entries within 0.3kg): ${plateau ? "Yes" : "No"}`;
+    }
+
+    // ── Prompt scaffold mirrors generateWeightPlan, sans em-dashes ─────
+    const systemPrompt = `You are an evidence-based nutritionist refreshing a card-based ${goalIsLoss ? "weight-loss" : "weight-gain"} plan based on the user's latest weigh-ins. Output ONLY valid JSON matching the schema. Use the deterministic numbers below verbatim, never invent calories or macros that contradict them.
 
 ${SECOND_PERSON_DIRECTIVE}
 
-RULES:
-- fightWeekTarget = diet-only target (fat loss). These are bodyweight numbers in kg.
-- IF currentWeight <= fightWeekTarget: calorieDeficit MUST be 0, recommendedCalories = TDEE (maintenance)
-- IF currentWeight > fightWeekTarget: deficit 500-750 kcal/d (safe) or 750-1000 (aggressive), NEVER >1000
-- Minimum calories: Males 1500, Females 1200
-- Weekly loss: GREEN <=1.0 kg/wk, YELLOW 1.0-1.5, RED >1.5
-- Protein: 2.0-2.5 g/kg | Carbs: scale with training | Fats: 20-30% total kcal
-- ALWAYS generate a full plan regardless of how aggressive the goal is
-- If requiredWeeklyLoss > 1.5: set riskLevel="red" and include a strong medical warning inside strategicGuidance, but still provide complete calorie/macro recommendations
+USER STRUGGLE: ${primaryStruggle ?? "unspecified"}
+You MUST address this struggle directly in \`personalNote\` (1-2 sentences, max 280 chars) and weave one mitigating tactic into the relevant week's \`dailyFocus\` bullets.
 
-STYLE - be a sports nutritionist writing a personalised protocol. Be specific with numbers. No filler.
-- reasoningExplanation: 3-4 sentences. Explain WHY these calorie and macro numbers were chosen for YOU. Derive YOUR deficit from YOUR TDEE and the required weekly loss rate. Justify protein in g/kg of YOUR bodyweight. Justify the carb/fat split relative to YOUR training demands. Connect the numbers to YOU reaching YOUR goal weight by the target date.
-- strategicGuidance: 4-5 sentences. Explain calorie strategy with training-day vs rest-day cycling. Explain how to structure the deficit, when to refeed (every 7-10 days if deficit >500 kcal), and hydration target (e.g., 40ml/kg bodyweight minimum).
-- mealTiming: distribute recommendedCalories and proteinGrams across 4-5 meal slots. Each slot MUST include name, time, caloriePercent (integer, all slots sum to 100), calories, proteinGrams, and focus (ONE sentence). Include a pre-training and post-training slot. mealTiming.notes = 1-2 sentences on overall distribution. DO NOT name specific foods.
-- weeklyWorkflow: 3-4 steps for the weekly check-in process (when/how to weigh, comparing 3-day average to target, adjustments if stalled, diet break trigger). Each step 2-3 sentences with specific numbers.
-- trainingConsiderations: 4-5 sentences. Prioritise preserving compound lift strength, reduce volume by 20-30%, drop accessory volume first, limit HIIT, schedule sparring on higher-calorie days, consider a deload week every 3-4 weeks during an extended cut.
-- timeline: 3-4 sentences. Break the cut into named phases (Aggressive, Moderate, Maintenance/Peak Week) with specific target weights per phase and calorie levels.
-- weeklyPlan: each week value 30-50 words with training-day and rest-day calorie targets, protein target, cardio, hydration, target weight for the end of that week.
+Per week, return:
+- \`phase\`: one of foundation | build | peak | final (the LAST week MUST be \`final\`, there is no fight_week in this flow)
+- \`heroLine\`: max 80 chars, ONE memorable sentence
+- \`keyMetric\`: max 24 chars headline (e.g. "-0.6 kg")
+- \`dailyFocus\`: 3-5 bullets, each max 60 chars, imperative voice. NO PARAGRAPHS.
+- \`risk\` / \`recovery\`: max 80 chars each, optional
 
-DO NOT include specific food recommendations (no meal suggestions, no food names). Focus on calorie/macro numbers, training adjustments, hydration, and weekly monitoring.
+Also return:
+- \`phases[]\`: 2-3 macro phases with name + label + weekStart + weekEnd + 1-line \`intent\` (max 120 chars)
+- \`toughestWeek\`: { week, reason max 120 chars }
+- \`personalNote\`: 10-280 chars, references the struggle above
+- \`summary\`: max 500 chars, ONE paragraph max
+- \`safetyNotes\`: max 300 chars, optional
+- \`keyPrinciples\`: 3-5 short rules, each max 120 chars
+- Do NOT include \`fightWeek\`, this is the general weight-goal flow.
 
-OUTPUT (return ONLY this JSON):
-{
-  "riskLevel": "green|yellow|red",
-  "requiredWeeklyLoss": 0.8,
-  "recommendedCalories": 2200,
-  "calorieDeficit": 500,
-  "proteinGrams": 160,
-  "carbsGrams": 200,
-  "fatsGrams": 70,
-  "reasoningExplanation": "string",
-  "strategicGuidance": "string",
-  "weeklyWorkflow": ["Step 1: ...", "Step 2: ...", "Step 3: ..."],
-  "trainingConsiderations": "string",
-  "timeline": "string",
-  "weeklyPlan": { "week1": "string", "week2": "string", "ongoing": "string" },
-  "mealTiming": {
-    "distribution": [
-      { "name": "Breakfast", "time": "7:30 AM", "caloriePercent": 25, "calories": 550, "proteinGrams": 40, "focus": "string" },
-      { "name": "Pre-Training", "time": "45 min pre-session", "caloriePercent": 15, "calories": 330, "proteinGrams": 25, "focus": "string" },
-      { "name": "Post-Training", "time": "within 30 min", "caloriePercent": 25, "calories": 550, "proteinGrams": 45, "focus": "string" },
-      { "name": "Dinner", "time": "7:30 PM", "caloriePercent": 35, "calories": 770, "proteinGrams": 50, "focus": "string" }
-    ],
-    "notes": "string"
-  }
-}
+BANNED: paragraph-length focus strings, motivational fluff, repeating numbers already in \`calories\`/\`protein_g\`, generic advice that ignores the user struggle above, em-dashes or en-dashes anywhere in the output. Use commas or periods instead.
+
+DETERMINISTIC FACTS:
+- BMR: ${bmr}, maintenance: ${maintenanceCal}, target: ${targetCal} kcal
+- Macros: ${macros.protein_g}P / ${macros.carb_g}C / ${macros.fat_g}F
+- Weeks: ${weekCount}, days remaining: ${daysRemaining}
+- Start: ${currentWeight}kg, goal: ${goalWeight}kg${trendBlock}
 
 ${snap.block}`;
 
-    const weightStatus =
-      weightToGain > 0
-        ? `GAIN ${weightToGain.toFixed(1)}kg (below target) | Required: +${requiredWeeklyGain.toFixed(2)} kg/wk`
-        : weightToLose > 0
-          ? `LOSE ${weightToLose.toFixed(1)}kg | Required: -${requiredWeeklyLoss.toFixed(2)} kg/wk`
-          : `At target (maintenance)`;
-
-    let userPrompt = `Weight strategy:
-- Current: ${args.currentWeight}kg | Goal (fight week target): ${args.goalWeight}kg
-- Status: ${weightStatus}
-- Timeline: ${daysRemaining}d (${weeksRemaining.toFixed(1)} weeks)
-- Required weekly loss: ${requiredWeeklyLoss.toFixed(2)} kg/wk`;
-
-    if (patterns) {
-      userPrompt += `\n\nWEIGHT PATTERNS (${patterns.dataPoints} entries):
-- Avg weekly loss: ${patterns.avgWeeklyLoss} kg/wk | Trend: ${patterns.trend} | Range: ${patterns.weightRange}
-- Plateau: ${patterns.plateauDetected ? "Yes (7+ days stable)" : "No"}`;
+    // ── Call LLM with retry, fall back to deterministic plan on failure ─
+    let aiResult: any = null;
+    try {
+      aiResult = await callGroqWithRetry({
+        model: "openai/gpt-oss-120b",
+        messages: [
+          { role: "system", content: systemPrompt },
+          {
+            role: "user",
+            content: `Refresh the ${weekCount}-week ${goalIsLoss ? "weight-loss" : "weight-gain"} plan with structured per-week cards (heroLine + dailyFocus bullets), 2-3 phases, personalNote tied to the user's struggle, and a toughestWeek call-out. Account for the observed trend above when picking the toughest week and any adjustment tactics.`,
+          },
+        ],
+        temperature: 0.4,
+        max_tokens: 4096,
+        response_format: { type: "json_object" },
+        schema: CutPlanSchema,
+      });
+    } catch (err) {
+      console.warn(
+        `[weightTrackerAnalysis] Groq failed, using deterministic fallback: ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
 
-    if (projected != null) {
-      userPrompt += `\n\nDeterministic projection at target date (14d slope): ${projected.toFixed(1)}kg`;
-    }
+    const fallbackPlan =
+      aiResult ??
+      buildDeterministicWeightPlan({
+        weekCount,
+        startWeight: currentWeight,
+        finalTarget: goalWeight,
+        goalIsLoss,
+        targetCal,
+        deficitKcal: deficit.dailyDeficitKcal,
+        macros,
+      });
 
-    if (isMaintenanceMode) {
-      userPrompt += `\n\nMAINTENANCE MODE: At/below target. calorieDeficit=0, recommendedCalories=TDEE.${weightToGain > 0 ? ` Gain ${weightToGain.toFixed(1)}kg via maintenance calories, not surplus.` : ""}`;
-    }
-
-    const content = await callGroqText({
-      model: "llama-3.1-8b-instant",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      temperature: 0.1,
-      max_tokens: 2500,
-      response_format: { type: "json_object" },
+    const weeklyPlan = normaliseWeeklyPlan({
+      weeklyPlan: fallbackPlan.weeklyPlan,
+      weekCount,
+      startWeight: currentWeight,
+      finalTarget: goalWeight,
+      defaultCalories: targetCal,
+      defaultProtein: macros.protein_g,
+      defaultCarbs: macros.carb_g,
+      defaultFats: macros.fat_g,
+      flow: "weight_loss",
     });
-    const parsed = parseJSON(content);
 
-    // Backfill the deterministic requiredWeeklyLoss so the UI never sees NaN.
-    if (typeof parsed.requiredWeeklyLoss !== "number") {
-      parsed.requiredWeeklyLoss = requiredWeeklyLoss;
-    }
+    const topLevel = normalisePlanTopLevel({
+      raw: fallbackPlan,
+      weeklyPlan,
+      primaryStruggle,
+    });
 
-    return parsed;
+    // Drop fightWeek if the LLM hallucinated one, this surface is non-fighter.
+    const { fightWeek: _drop, ...topLevelNoFW } = topLevel;
+    void _drop;
+
+    const plan = {
+      weeklyPlan,
+      ...topLevelNoFW,
+      maintenanceCalories: maintenanceCal,
+      targetCalories: targetCal,
+      deficit: deficit.dailyDeficitKcal,
+      totalWeeks: weekCount,
+      weeklyLossTarget: `${((currentWeight - goalWeight) / weekCount).toFixed(2)} kg/week`,
+      // Echo back the inputs so InlinePlanDisplay can render the hero ring
+      // and the "by <date>" goal label without an extra props prop chain.
+      currentWeight,
+      goalWeight,
+      targetDate: targetDateIso,
+      planType: "weight_loss" as const,
+    };
+
+    logDecision(ctx, {
+      userId,
+      feature: "weight-tracker-analysis",
+      inputSnapshot: {
+        currentWeight,
+        goalWeight,
+        targetDate: targetDateIso,
+        bmr,
+        maintenanceCal,
+        targetCal,
+        primaryStruggle,
+        historyPoints: numericHistory.length,
+      },
+      outputJson: plan,
+      predictionFacts: {
+        predicted_kcal: targetCal,
+        predicted_loss_per_week_kg: parseFloat(
+          ((currentWeight - goalWeight) / weekCount).toFixed(2),
+        ),
+      },
+      model: aiResult ? "openai/gpt-oss-120b" : "deterministic-fallback",
+    });
+
+    return plan;
   },
 });
+
+/** Deterministic fallback in the v2 card-timeline shape. Used when Groq is
+ *  unavailable so the UI never crashes on an empty plan. Mirrors the helper
+ *  in `generateWeightPlan.ts` so both surfaces degrade identically. */
+function buildDeterministicWeightPlan(opts: {
+  weekCount: number;
+  startWeight: number;
+  finalTarget: number;
+  goalIsLoss: boolean;
+  targetCal: number;
+  deficitKcal: number;
+  macros: { protein_g: number; carb_g: number; fat_g: number };
+}) {
+  const {
+    weekCount,
+    startWeight,
+    finalTarget,
+    goalIsLoss,
+    targetCal,
+    deficitKcal,
+    macros,
+  } = opts;
+  const totalChangeKg = +(startWeight - finalTarget).toFixed(2);
+  const perWeekKg = +(totalChangeKg / weekCount).toFixed(2);
+  const direction = goalIsLoss ? "loss" : "gain";
+
+  const phaseFor = (i: number): WeekPhase => {
+    if (i === weekCount - 1) return "final";
+    if (weekCount <= 2) return "build";
+    const pct = i / (weekCount - 1);
+    if (pct <= 0.25) return "foundation";
+    if (pct <= 0.75) return "build";
+    return "peak";
+  };
+
+  const weeklyPlan = Array.from({ length: weekCount }, (_, i) => {
+    const week = i + 1;
+    const t = (i + 1) / weekCount;
+    const targetWeight = +(startWeight - totalChangeKg * t).toFixed(1);
+    const phase = phaseFor(i);
+    const heroLine =
+      phase === "final"
+        ? "Final week, hold the routine, finish strong."
+        : phase === "foundation"
+          ? "Lock in calorie target plus morning weigh-in."
+          : phase === "peak"
+            ? `Steady ${direction}, ${perWeekKg.toFixed(2)} kg/week.`
+            : `Week ${week}, repeat, repeat, repeat.`;
+    const keyMetric =
+      perWeekKg > 0
+        ? `-${perWeekKg.toFixed(2)} kg`
+        : `+${Math.abs(perWeekKg).toFixed(2)} kg`;
+    const dailyFocus =
+      phase === "foundation"
+        ? [
+            "Weigh in 7am pre water",
+            `Hit ${targetCal} kcal target every day`,
+            `${macros.protein_g}g protein across 3 to 4 meals`,
+            "Log every meal as you eat it",
+          ]
+        : phase === "peak"
+          ? [
+              "Track 7 day average, not daily scale",
+              "One flexible meal per week max",
+              "Strength plus 2 conditioning sessions",
+              "Sleep 7 to 9 hours every night",
+            ]
+          : phase === "final"
+            ? [
+                "Hold target, no last minute changes",
+                "Mornings: weigh, log, repeat",
+                "Prep next week meals on Sunday",
+              ]
+            : [
+                `${targetCal} kcal target`,
+                `${macros.protein_g}g protein floor`,
+                "Track every meal as you eat it",
+              ];
+    return {
+      week,
+      targetWeight,
+      calories: targetCal,
+      protein_g: macros.protein_g,
+      carbs_g: macros.carb_g,
+      fats_g: macros.fat_g,
+      phase,
+      heroLine,
+      keyMetric,
+      dailyFocus,
+    };
+  });
+
+  const phaseGroups: { name: WeekPhase; weekStart: number; weekEnd: number }[] = [];
+  for (const row of weeklyPlan) {
+    const last = phaseGroups[phaseGroups.length - 1];
+    if (last && last.name === row.phase) last.weekEnd = row.week;
+    else
+      phaseGroups.push({ name: row.phase, weekStart: row.week, weekEnd: row.week });
+  }
+  const phaseLabel: Record<WeekPhase, string> = {
+    foundation: "Foundation",
+    build: "Build",
+    peak: "Drive",
+    final: "Final Week",
+    fight_week: "Fight Week",
+  };
+  const phaseIntent: Record<WeekPhase, string> = {
+    foundation: "Lock in the rhythm. Same wake, same weigh in, same meals.",
+    build: "Steady deficit. The scale moves; trust the trend.",
+    peak: "Hardest stretch. Routine carries you through the dip.",
+    final: "Hold the line. No last minute changes.",
+    fight_week: "Fight week, not applicable to this plan.",
+  };
+  const phases = phaseGroups.map((g) => ({
+    name: g.name,
+    label: phaseLabel[g.name],
+    weekStart: g.weekStart,
+    weekEnd: g.weekEnd,
+    intent: phaseIntent[g.name],
+  }));
+
+  return {
+    weeklyPlan,
+    phases,
+    personalNote:
+      "Built around your numbers and your timeline, repeat the daily reps and the math handles the rest.",
+    toughestWeek: {
+      week: Math.max(1, Math.ceil(weekCount * 0.6)),
+      reason:
+        "Plateau zone. The scale slows; the work does not. Eat to plan, sleep, repeat.",
+    },
+    summary: goalIsLoss
+      ? `${targetCal} kcal/day to drop about ${perWeekKg.toFixed(2)} kg per week, hitting ${finalTarget} kg in ${weekCount} weeks. Trust the daily reps; the math handles the rest.`
+      : `${targetCal} kcal/day with a small surplus to gain about ${Math.abs(perWeekKg).toFixed(2)} kg per week, reaching ${finalTarget} kg in ${weekCount} weeks.`,
+    totalWeeks: weekCount,
+    weeklyLossTarget: `${perWeekKg.toFixed(2)} kg/week`,
+    safetyNotes:
+      "Persistent fatigue, dizziness, or a 2 week stall? Ease the deficit by 100 to 200 kcal. Do not drop below 1200 kcal women, 1500 men.",
+    keyPrinciples: [
+      `${macros.protein_g}g protein every day, protect lean mass.`,
+      "Weigh in daily, same conditions; track the 7 day average.",
+      `Stay within ${Math.round(deficitKcal)} kcal of target on training days.`,
+      "Sleep 7 to 9 hours; under recovery wrecks adherence.",
+    ],
+  };
+}
