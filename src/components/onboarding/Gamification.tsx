@@ -17,7 +17,7 @@ import {
   motion,
   useReducedMotion,
 } from "motion/react";
-import { Sparkles, Trophy, ShieldCheck, Lock } from "lucide-react";
+import { Sparkles, Trophy, ShieldCheck, Lock, Share2 } from "lucide-react";
 import { triggerHaptic, triggerHapticSelection } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 
@@ -584,7 +584,7 @@ export function DeclarationButton({
       onPointerUp={end}
       onPointerLeave={end}
       onPointerCancel={end}
-      className="relative w-full h-14 rounded-2xl bg-primary text-primary-foreground text-[15px] font-bold tracking-wide active:scale-[0.99] transition-transform overflow-hidden"
+      className="no-tap-select relative w-full h-14 rounded-2xl bg-primary text-primary-foreground text-[15px] font-bold tracking-wide active:scale-[0.99] transition-transform overflow-hidden"
       style={{
         touchAction: "none",
         // `isolation: isolate` forces a fresh stacking context on this button
@@ -630,15 +630,35 @@ export interface TaleStat {
 }
 
 export function TaleOfTheTapeCard({
-  name,
-  sport,
   stats,
+  onShare,
 }: {
-  name: string;
-  sport: string;
   stats: TaleStat[];
+  /** Optional share-card affordance — rendered as a small icon button
+   *  in the top-right of the card. Tap fires the parent's share flow. */
+  onShare?: () => void;
 }) {
   const reduced = useReducedMotion();
+  const firedRef = useRef(false);
+
+  // Stamp-in haptic sequence — fire one Light haptic per stat row as it
+  // springs in (aligned to the existing 0.18 + i*0.07s stagger), then a
+  // Heavy haptic on the final row to "seal" the card. Only fires once
+  // per mount; navigation back + forward will replay it.
+  useEffect(() => {
+    if (reduced || firedRef.current) return;
+    firedRef.current = true;
+    const timers: number[] = [];
+    stats.forEach((_, i) => {
+      const isLast = i === stats.length - 1;
+      const t = window.setTimeout(() => {
+        triggerHaptic(isLast ? ImpactStyle.Heavy : ImpactStyle.Light);
+      }, 180 + i * 70 + 80); // +80ms aligns the tick with the spring's settle
+      timers.push(t);
+    });
+    return () => { timers.forEach(window.clearTimeout); };
+  }, [reduced, stats]);
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: reduced ? 1 : 0.96 }}
@@ -647,14 +667,20 @@ export function TaleOfTheTapeCard({
       className="relative rounded-3xl border-2 border-primary/30 bg-gradient-to-b from-primary/[0.10] via-card to-card overflow-hidden p-5"
       style={{ willChange: "transform, opacity" }}
     >
+      {onShare && (
+        <button
+          type="button"
+          onClick={onShare}
+          aria-label="Share your camp card"
+          className="absolute top-3 right-3 h-9 w-9 flex items-center justify-center rounded-full bg-muted/40 border border-border/40 active:scale-90 transition-transform"
+        >
+          <Share2 className="h-4 w-4 text-foreground/80" />
+        </button>
+      )}
       <div className="text-center mb-4">
-        <p className="text-[10px] uppercase tracking-[0.18em] font-bold text-primary/70 mb-1">
+        <h3 className="text-[28px] font-black uppercase tracking-wide leading-none text-foreground">
           Tale of the Tape
-        </p>
-        <h3 className="text-[26px] font-black leading-none">{name || "Fighter"}</h3>
-        <p className="text-[12px] uppercase tracking-wider text-muted-foreground mt-1">
-          {sport}
-        </p>
+        </h3>
       </div>
       <div className="rounded-2xl bg-muted/30 border border-border/40 divide-y divide-border/30">
         {stats.map((s, i) => (
@@ -739,5 +765,286 @@ export function WittyValidation({ children }: { children: React.ReactNode }) {
     >
       {children}
     </motion.p>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// WeeklyMilestonesScrubber — horizontal dot path showing projected
+// weekly weight checkpoints. For cuts ≥5 weeks, shades a "plateau
+// zone" band on weeks 3-4 so users aren't surprised when the scale
+// stalls. Linear interpolation between current and goal — directional
+// only, not a clinical prediction.
+// ─────────────────────────────────────────────────────────────────────
+export function WeeklyMilestonesScrubber({
+  currentKg,
+  goalKg,
+  weeks,
+}: {
+  currentKg: number;
+  goalKg: number;
+  weeks: number;
+}) {
+  const reduced = useReducedMotion();
+
+  // Pick at most 5 checkpoints so the strip stays readable on narrow
+  // phones — always include W1, the goal week, and 2-3 evenly-spaced
+  // intermediate weeks.
+  const checkpoints = useMemo(() => {
+    if (weeks <= 0 || !Number.isFinite(weeks)) return [];
+    const totalKg = currentKg - goalKg;
+    if (totalKg <= 0) return [];
+    const weekList: number[] = [];
+    if (weeks <= 4) {
+      for (let w = 1; w <= weeks; w += 1) weekList.push(w);
+    } else {
+      const step = Math.max(1, Math.round((weeks - 1) / 3));
+      weekList.push(1);
+      for (let w = 1 + step; w < weeks; w += step) weekList.push(w);
+      if (weekList[weekList.length - 1] !== weeks) weekList.push(weeks);
+    }
+    return weekList.map((w) => {
+      const pct = w / weeks;
+      const projected = currentKg - totalKg * pct;
+      return {
+        week: w,
+        delta: currentKg - projected, // kg lost by this point (positive)
+        projectedKg: projected,
+        isGoal: w === weeks,
+      };
+    });
+  }, [currentKg, goalKg, weeks]);
+
+  if (checkpoints.length === 0) return null;
+
+  const showPlateauZone = weeks >= 5;
+
+  return (
+    <div className="rounded-2xl border border-border/40 bg-card/60 px-4 py-3.5">
+      <div className="flex items-baseline justify-between mb-3">
+        <p className="text-[10px] uppercase tracking-[0.15em] font-bold text-muted-foreground">
+          Projected Path
+        </p>
+        <p className="text-[10px] uppercase tracking-[0.15em] font-bold text-primary/70">
+          {weeks}w
+        </p>
+      </div>
+
+      {/* Rail + plateau band + dots */}
+      <div className="relative">
+        {/* Base rail */}
+        <div className="absolute left-1.5 right-1.5 top-1/2 -translate-y-1/2 h-[2px] bg-muted/40 rounded-full" />
+        {/* Plateau zone band (weeks 3-4) — drawn under the dots so they remain crisp. */}
+        {showPlateauZone && (
+          <div
+            className="absolute top-1/2 -translate-y-1/2 h-3 rounded-full bg-amber-500/15 border border-amber-500/25"
+            style={{
+              left: `calc(${(2 / weeks) * 100}% + 6px)`,
+              right: `calc(${((weeks - 4) / weeks) * 100}% + 6px)`,
+            }}
+            aria-hidden
+          />
+        )}
+
+        <div className="relative flex items-center justify-between">
+          {checkpoints.map((cp, i) => (
+            <motion.div
+              key={cp.week}
+              initial={{ opacity: 0, scale: reduced ? 1 : 0.6 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{
+                delay: 0.1 + i * 0.06,
+                type: "spring",
+                stiffness: 360,
+                damping: 22,
+              }}
+              className="relative z-10 flex flex-col items-center"
+              style={{ minWidth: 28 }}
+            >
+              <div
+                className={`h-3 w-3 rounded-full ${
+                  cp.isGoal
+                    ? "bg-primary ring-2 ring-primary/30"
+                    : "bg-foreground/70"
+                }`}
+              />
+            </motion.div>
+          ))}
+        </div>
+      </div>
+
+      {/* Labels under each dot */}
+      <div className="flex items-start justify-between mt-2">
+        {checkpoints.map((cp) => (
+          <div
+            key={cp.week}
+            className="flex flex-col items-center text-center"
+            style={{ minWidth: 28 }}
+          >
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground/80">
+              W{cp.week}
+            </span>
+            <span
+              className={`text-[11px] font-bold tabular-nums leading-tight ${
+                cp.isGoal ? "text-primary" : "text-foreground"
+              }`}
+            >
+              {cp.isGoal ? "✓" : `-${cp.delta.toFixed(1)}`}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {showPlateauZone && (
+        <p className="text-[10px] text-amber-400/80 mt-2 text-center">
+          Plateau zone weeks 3–4. Normal. Trust the protocol.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// BlurredWeekOnePreview — fake "Day 1" plan card behind a blur scrim.
+// Brains can't leave blurred content unrevealed; the user is motivated
+// to tap "Generate My Plan" to see the real numbers. Macros are derived
+// from a Mifflin-St Jeor BMR estimate × activity factor × deficit so
+// the visible-but-blurry numbers are realistic, not pulled from air.
+// ─────────────────────────────────────────────────────────────────────
+function dayOneCalorieEstimate({
+  sex,
+  age,
+  heightCm,
+  currentKg,
+  trainingFrequency,
+  aggressiveness,
+}: {
+  sex?: string;
+  age?: number;
+  heightCm?: number;
+  currentKg?: number;
+  trainingFrequency?: number;
+  aggressiveness?: string;
+}): { cal: number; proteinG: number; fatG: number } {
+  // Sensible fallbacks so we never render "NaN cal".
+  const w = currentKg && currentKg > 0 ? currentKg : 75;
+  const h = heightCm && heightCm > 0 ? heightCm : 178;
+  const a = age && age > 0 ? age : 28;
+  // Mifflin-St Jeor
+  const bmr =
+    (sex || "").toLowerCase().startsWith("f")
+      ? 10 * w + 6.25 * h - 5 * a - 161
+      : 10 * w + 6.25 * h - 5 * a + 5;
+  // Activity factor from training frequency (sessions/week)
+  const tf = trainingFrequency && trainingFrequency > 0 ? trainingFrequency : 4;
+  const activity =
+    tf <= 2 ? 1.375 : tf <= 4 ? 1.55 : tf <= 6 ? 1.725 : 1.9;
+  const tdee = bmr * activity;
+  // Deficit scaled by aggressiveness
+  const deficitPct =
+    aggressiveness === "aggressive"
+      ? 0.22
+      : aggressiveness === "moderate"
+        ? 0.15
+        : 0.10; // safe / balanced
+  const cal = Math.max(1400, Math.round((tdee * (1 - deficitPct)) / 10) * 10);
+  // 1.8 g/kg protein floor, 0.9 g/kg fat
+  const proteinG = Math.round(w * 1.8);
+  const fatG = Math.round(w * 0.9);
+  return { cal, proteinG, fatG };
+}
+
+export function BlurredWeekOnePreview({
+  sex,
+  age,
+  heightCm,
+  currentKg,
+  trainingFrequency,
+  aggressiveness,
+}: {
+  sex?: string;
+  age?: number;
+  heightCm?: number;
+  currentKg?: number;
+  trainingFrequency?: number;
+  aggressiveness?: string;
+}) {
+  const reduced = useReducedMotion();
+  const { cal, proteinG, fatG } = useMemo(
+    () =>
+      dayOneCalorieEstimate({
+        sex,
+        age,
+        heightCm,
+        currentKg,
+        trainingFrequency,
+        aggressiveness,
+      }),
+    [sex, age, heightCm, currentKg, trainingFrequency, aggressiveness],
+  );
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: reduced ? 0 : 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.2, duration: 0.35 }}
+      className="relative rounded-2xl overflow-hidden border border-border/40 bg-card"
+    >
+      {/* The blurred "card" content — readable enough to tease, blurred
+          enough that the user knows it's locked until they generate. */}
+      <div
+        className="px-4 py-3.5 select-none"
+        style={{
+          filter: "blur(5px)",
+          // Slight 3D nudge so the scrim+lock pop off the card visually.
+          transform: "scale(1.02)",
+        }}
+        aria-hidden
+      >
+        <div className="flex items-baseline justify-between mb-2">
+          <p className="text-[10px] uppercase tracking-[0.15em] font-bold text-muted-foreground">
+            Day 1 · Mon
+          </p>
+          <p className="text-[10px] uppercase tracking-wider text-primary/70 font-bold">
+            Sample
+          </p>
+        </div>
+        <div className="grid grid-cols-3 gap-2 mb-2">
+          <div className="rounded-xl bg-muted/30 p-2 text-center">
+            <p className="text-[16px] font-bold tabular-nums text-foreground">
+              {cal.toLocaleString()}
+            </p>
+            <p className="text-[9px] uppercase text-muted-foreground">cal</p>
+          </div>
+          <div className="rounded-xl bg-muted/30 p-2 text-center">
+            <p className="text-[16px] font-bold tabular-nums text-foreground">
+              {proteinG}g
+            </p>
+            <p className="text-[9px] uppercase text-muted-foreground">protein</p>
+          </div>
+          <div className="rounded-xl bg-muted/30 p-2 text-center">
+            <p className="text-[16px] font-bold tabular-nums text-foreground">
+              {fatG}g
+            </p>
+            <p className="text-[9px] uppercase text-muted-foreground">fat</p>
+          </div>
+        </div>
+        <p className="text-[11px] text-foreground/80">
+          90 min · zone-2 conditioning, technical sparring
+        </p>
+      </div>
+
+      {/* Scrim + lock overlay — the actual visible UI. */}
+      <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/30 backdrop-blur-[1px]">
+        <div className="h-9 w-9 rounded-full bg-background/90 border border-border flex items-center justify-center shadow-sm">
+          <Lock className="h-4 w-4 text-primary" />
+        </div>
+        <p className="text-[12px] font-semibold text-foreground mt-2">
+          Unlock with Generate
+        </p>
+        <p className="text-[10px] text-muted-foreground mt-0.5 px-4 text-center">
+          Day-by-day macros, training, and recovery
+        </p>
+      </div>
+    </motion.div>
   );
 }

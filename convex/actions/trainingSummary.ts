@@ -1,4 +1,4 @@
-/** Training summary — gem-gated, summarises a week of training. */
+/** Training summary — Pro-only, summarises a week of training. */
 "use node";
 
 import { v } from "convex/values";
@@ -7,7 +7,7 @@ import { internal } from "../_generated/api";
 import { callGroqText } from "../_shared/groq";
 import { parseJSON } from "../_shared/parseResponse";
 import { requireUserIdFromAction, SECOND_PERSON_DIRECTIVE } from "./_helpers";
-import { enforceGemGate } from "../_shared/subscriptionGuard";
+import { enforceFeatureGate } from "../_shared/featureGates";
 import {
   sanitizeUserText,
   PROMPT_INJECTION_GUARD_INSTRUCTION,
@@ -17,7 +17,7 @@ export const run = action({
   args: { weekStart: v.string() },
   handler: async (ctx, { weekStart }) => {
     const userId = await requireUserIdFromAction(ctx);
-    await enforceGemGate(ctx, userId);
+    await enforceFeatureGate(ctx, userId, "AI_TRAINING_SUMMARY");
     const data = await ctx.runQuery(internal.actions_internal.fetchTrainingWeek, {
       userId,
       weekStart,

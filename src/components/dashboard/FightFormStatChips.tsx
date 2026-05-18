@@ -27,11 +27,11 @@ export function FightFormStatChips({ weight, trend, latestScore, latestLabel }: 
 
   return (
     <div className="grid grid-cols-2 gap-2 px-1 items-stretch">
-      <div className="card-surface rounded-2xl px-3 py-2 flex flex-col justify-center">
+      <div className="card-surface rounded-2xl px-3 py-2 flex flex-col justify-center overflow-hidden min-w-0">
         <div className="section-header">Weight</div>
         {weight ? (
-          <div className="flex items-baseline justify-between gap-1.5 mt-0.5">
-            <div className="display-number text-sm whitespace-nowrap tabular-nums">
+          <div className="flex items-baseline justify-between gap-1.5 mt-0.5 min-w-0">
+            <div className="display-number text-[13px] tabular-nums min-w-0 truncate">
               {weight.current.toFixed(1)} → {weight.goal.toFixed(1)} kg
             </div>
             <div className="text-[10px] text-muted-foreground tabular-nums shrink-0">
@@ -43,11 +43,11 @@ export function FightFormStatChips({ weight, trend, latestScore, latestLabel }: 
         )}
       </div>
 
-      <div className="card-surface rounded-2xl px-3 py-2 flex flex-col justify-center">
-        <div className="flex items-baseline justify-between">
-          <div className="section-header">14-day Trend</div>
+      <div className="card-surface rounded-2xl px-3 py-2 flex flex-col justify-center overflow-hidden min-w-0">
+        <div className="flex items-baseline justify-between gap-1.5 min-w-0">
+          <div className="section-header truncate min-w-0">14-day Trend</div>
           {latestScore != null && (
-            <div className="display-number text-sm tabular-nums">{Math.round(latestScore)}</div>
+            <div className="display-number text-sm tabular-nums shrink-0">{Math.round(latestScore)}</div>
           )}
         </div>
         <div className="min-h-[18px] mt-0.5">

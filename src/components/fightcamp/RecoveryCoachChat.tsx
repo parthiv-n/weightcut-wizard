@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Brain, Loader2, Mic, MicOff, Send, Trash2 } from "lucide-react";
-import { useAction } from "convex/react";
 import { useAIAction } from "@/hooks/useAIAction";
 import { api } from "@/../convex/_generated/api";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { useToast } from "@/hooks/use-toast";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { triggerHapticSelection } from "@/lib/haptics";
@@ -37,9 +37,10 @@ function newId() {
 }
 
 export function RecoveryCoachChat({ userId, userName }: RecoveryCoachChatProps) {
-  const { checkAIAccess, openNoGemsDialog, handleAILimitError, onAICallSuccess } = useSubscription();
+  const { openPaywall, handlePaywallError } = useSubscription();
+  const { hasAccess: hasAiAccess } = useFeatureAccess("AI_RECOVERY_COACH");
   const { toast } = useToast();
-  const recoveryCoachAction = useAIAction(api.actions.recoveryCoach.run);
+  const recoveryCoachAction = useAIAction(api.actions.recoveryCoach.run, "AI_RECOVERY_COACH");
 
   const [messages, setMessages] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -107,8 +108,8 @@ export function RecoveryCoachChat({ userId, userName }: RecoveryCoachChatProps) 
     if (!trimmed || sending) return;
     if (isListening) stopListening();
 
-    if (!checkAIAccess()) {
-      openNoGemsDialog();
+    if (!hasAiAccess) {
+      openPaywall();
       return;
     }
 
@@ -132,7 +133,7 @@ export function RecoveryCoachChat({ userId, userName }: RecoveryCoachChatProps) 
         });
       } catch (err: any) {
         if (controller.signal.aborted) return;
-        if (await handleAILimitError(err)) {
+        if (await handlePaywallError(err)) {
           setMessages(messages);
           return;
         }
@@ -142,7 +143,6 @@ export function RecoveryCoachChat({ userId, userName }: RecoveryCoachChatProps) 
       const assistantText: string = data?.choices?.[0]?.message?.content ?? "";
       if (!assistantText) throw new Error("Empty response");
 
-      onAICallSuccess();
       const assistantMsg: Msg = {
         id: newId(),
         role: "assistant",
@@ -168,12 +168,12 @@ export function RecoveryCoachChat({ userId, userName }: RecoveryCoachChatProps) 
     sending,
     isListening,
     stopListening,
-    checkAIAccess,
-    openNoGemsDialog,
+    hasAiAccess,
+    openPaywall,
     messages,
     userName,
-    handleAILimitError,
-    onAICallSuccess,
+    handlePaywallError,
+    recoveryCoachAction,
     toast,
   ]);
 
@@ -206,7 +206,7 @@ export function RecoveryCoachChat({ userId, userName }: RecoveryCoachChatProps) 
             <h2 className="text-[15px] font-bold tracking-tight">Recovery Coach</h2>
             <div className="flex items-center gap-1 text-[10px] text-muted-foreground/70">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Online · 1 gem per message
+              Online · Pro feature
             </div>
           </div>
         </div>

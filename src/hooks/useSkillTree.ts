@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { useAIAction } from "@/hooks/useAIAction";
 import { api } from "@/../convex/_generated/api";
 import type { Id } from "@/../convex/_generated/dataModel";
 import { useAuth } from "@/contexts/UserContext";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { normalizeTechniqueName, processChains, buildGraphData } from "@/lib/techniqueGraph";
 import { createAIAbortController } from "@/lib/timeoutWrapper";
@@ -28,8 +29,9 @@ interface SkillTreeState {
 
 export function useSkillTree() {
   const { userId } = useAuth();
-  const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
-  const generateTechniqueChainsAction = useAIAction(api.actions.generateTechniqueChains.run);
+  const { openPaywall, handlePaywallError } = useSubscription();
+  const { hasAccess: hasAiAccess } = useFeatureAccess("AI_TECHNIQUE_CHAINS");
+  const generateTechniqueChainsAction = useAIAction(api.actions.generateTechniqueChains.run, "AI_TECHNIQUE_CHAINS");
   const upsertTechnique = useMutation(api.techniques.upsertTechnique);
   const upsertEdges = useMutation(api.techniques.upsertEdges);
   const logTechniqueMut = useMutation(api.techniques.logTechnique);
@@ -110,8 +112,8 @@ export function useSkillTree() {
     controller: AbortController,
   ) => {
     try {
-      if (!checkAIAccess()) {
-        openNoGemsDialog();
+      if (!hasAiAccess) {
+        openPaywall();
         return;
       }
 
@@ -123,13 +125,12 @@ export function useSkillTree() {
         });
       } catch (chainError: any) {
         if (controller.signal.aborted) return;
-        if (await handleAILimitError(chainError)) return;
+        if (await handlePaywallError(chainError)) return;
         if (chainError?.name === "AbortError") throw chainError;
         throw new Error(chainError?.message || "Chain generation failed");
       }
 
       if (controller.signal.aborted) return;
-      onAICallSuccess();
       const chainData = chainResponse as TechniqueChainResponse;
 
       if (!chainData?.chains?.length) return;

@@ -1,4 +1,4 @@
-/** Hydration insights — fast, gem-gated. */
+/** Hydration insights — fast, Pro-only. */
 "use node";
 
 import { v } from "convex/values";
@@ -6,7 +6,7 @@ import { action } from "../_generated/server";
 import { callGroqText } from "../_shared/groq";
 import { parseJSON } from "../_shared/parseResponse";
 import { requireUserIdFromAction, SECOND_PERSON_DIRECTIVE } from "./_helpers";
-import { enforceGemGate } from "../_shared/subscriptionGuard";
+import { enforceFeatureGate } from "../_shared/featureGates";
 
 export const run = action({
   args: {
@@ -21,7 +21,7 @@ export const run = action({
   },
   handler: async (ctx, { last7Days, bodyweight }) => {
     const userId = await requireUserIdFromAction(ctx);
-    await enforceGemGate(ctx, userId);
+    await enforceFeatureGate(ctx, userId, "AI_HYDRATION_INSIGHTS");
     const totalMl = last7Days.reduce((s, l) => s + l.amount_ml, 0);
     const days = last7Days.length || 1;
     const avgMl = Math.round(totalMl / days);

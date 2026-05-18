@@ -25,7 +25,7 @@ interface UseDoubleTapOptions {
 export function useDoubleTap({
   onSingleTap,
   onDoubleTap,
-  delay = 280,
+  delay = 180,
   minDelay = 60,
 }: UseDoubleTapOptions) {
   const lastTapAtRef = useRef(0);

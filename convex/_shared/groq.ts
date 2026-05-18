@@ -6,8 +6,8 @@
  * adds Zod validation + up to 2 retries with appended error feedback).
  *
  * Throws a typed `GroqError` on failure so action handlers can short-circuit
- * cleanly. INSUFFICIENT_GEMS / unauthenticated checks happen BEFORE this is
- * called.
+ * cleanly. Feature-gate (`PRO_FEATURE_REQUIRED:*`) and authentication checks
+ * happen BEFORE this is called.
  */
 
 import type { z } from "zod";

@@ -14,7 +14,7 @@ import { TutorialManager } from "./tutorialManager";
 import { tutorialPersistence } from "./tutorialPersistence";
 import { onboardingFlow } from "./flows/onboardingFlow";
 import { featureFlows } from "./flows/featureFlows";
-import { TutorialOverlay } from "./TutorialOverlay";
+import { TutorialStage } from "./TutorialStage";
 import type {
   TutorialStep,
   TutorialManagerState,
@@ -291,15 +291,16 @@ export function TutorialProvider({ children }: { children: ReactNode }) {
   return (
     <TutorialContext.Provider value={value}>
       {children}
-      <TutorialOverlay
+      <TutorialStage
         isActive={showOverlay}
         currentStep={state.currentStep}
         currentStepIndex={state.currentStepIndex}
         totalSteps={state.totalSteps}
+        activeSteps={state.activeSteps}
+        flowId={state.currentFlow?.id ?? null}
         onNext={next}
         onPrev={prev}
         onSkip={skip}
-        resolveTarget={(step) => managerRef.current.resolveTarget(step)}
       />
     </TutorialContext.Provider>
   );

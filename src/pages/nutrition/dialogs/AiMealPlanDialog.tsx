@@ -55,9 +55,20 @@ export function AiMealPlanDialog({
           <button
             onClick={onGenerate}
             disabled={generatingPlan}
-            className="w-full py-2.5 text-[14px] font-semibold text-primary active:bg-muted/50 transition-colors border-t border-border/40 mt-1 disabled:opacity-40"
+            className="relative w-full py-2.5 text-[14px] font-semibold text-primary active:bg-muted/50 transition-colors border-t border-border/40 mt-1 disabled:opacity-40"
           >
-            {generatingPlan ? "Generating..." : <>Generate Meal Ideas{gemBadge}</>}
+            {generatingPlan ? (
+              "Generating..."
+            ) : (
+              <>
+                Generate Meal Ideas
+                {gemBadge && (
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                    {gemBadge}
+                  </span>
+                )}
+              </>
+            )}
           </button>
         </div>
       </DialogContent>

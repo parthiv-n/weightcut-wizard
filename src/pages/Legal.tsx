@@ -307,14 +307,14 @@ function TermsOfService() {
 
       <SubTitle>Free Tier</SubTitle>
       <P>
-        Free users receive 1 AI gem per day and may earn additional gems by watching rewarded ads
-        (up to 5 per day). Each AI feature usage costs 1 gem. The "daily-wisdom" feature is free
-        for all users.
+        The free tier includes weight tracking, nutrition logging, training session logging, and
+        the daily-wisdom feature. AI-powered features (meal analysis, coach chat, weight insights,
+        meal planning, etc.) require a Pro subscription.
       </P>
 
       <SubTitle>Pro Subscription</SubTitle>
       <BulletList items={[
-        "Pro unlocks unlimited AI features with no gem cost",
+        "Pro unlocks unlimited AI features across the app",
         "Available as a monthly or annual subscription via Apple In-App Purchase",
         "Payment is charged to your Apple ID account at confirmation of purchase",
         "Subscription automatically renews unless cancelled at least 24 hours before the end of the current billing period",

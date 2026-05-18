@@ -29,7 +29,7 @@ export function TodayPanel({ adherence, nextWorkout }: Props) {
         {allDone && <span className="text-xs text-emerald-400">All set</span>}
       </div>
       <div className="grid grid-cols-2 gap-2 mt-2">
-        {ITEMS.map((it) => (
+        {ITEMS.map((it, idx) => (
           <Link
             key={it.key}
             to={it.href}

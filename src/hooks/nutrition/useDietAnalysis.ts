@@ -1,9 +1,10 @@
 import { useRef, useCallback } from "react";
-import { useAction } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
+import { useAIAction } from "@/hooks/useAIAction";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { useAITask } from "@/contexts/AITaskContext";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { createAIAbortController, extractEdgeFunctionError } from "@/lib/timeoutWrapper";
@@ -34,9 +35,10 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
 
   const { userId, profile: contextProfile } = useUser();
   const { toast } = useToast();
-  const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
+  const { openPaywall, handlePaywallError } = useSubscription();
+  const { hasAccess: hasAiAccess } = useFeatureAccess("AI_DIET_ANALYSIS");
   const { addTask, completeTask, failTask } = useAITask();
-  const analyseDietAction = useAction(api.actions.analyseDiet.run);
+  const analyseDietAction = useAIAction(api.actions.analyseDiet.run, "AI_DIET_ANALYSIS");
 
   const handleAnalyseDiet = useCallback(async (forceRefresh = false) => {
     if (!userId || meals.length === 0) return;
@@ -50,8 +52,8 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
       }
     }
 
-    if (!checkAIAccess()) {
-      openNoGemsDialog();
+    if (!hasAiAccess) {
+      openPaywall();
       return;
     }
 
@@ -103,12 +105,11 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
           date: selectedDate,
         });
       } catch (error: any) {
-        if (await handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
+        if (await handlePaywallError(error)) { failTask(taskId, "Pro required"); return; }
         throw new Error(error?.message || "Could not analyse your diet");
       }
 
       if (dietController.signal.aborted) return;
-      onAICallSuccess();
 
       const result = data.analysisData as DietAnalysisResult;
       setDietAnalysis(result);
@@ -127,7 +128,7 @@ export function useDietAnalysis(params: UseDietAnalysisParams) {
     } finally {
       setDietAnalysisLoading(false);
     }
-  }, [userId, meals, selectedDate, dailyCalorieTarget, aiMacroGoals, setDietAnalysis, setDietAnalysisLoading, aiAbortRef, contextProfile, toast, checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError]);
+  }, [userId, meals, selectedDate, dailyCalorieTarget, aiMacroGoals, setDietAnalysis, setDietAnalysisLoading, aiAbortRef, contextProfile, toast, hasAiAccess, openPaywall, handlePaywallError, addTask, completeTask, failTask, analyseDietAction]);
 
   return { handleAnalyseDiet };
 }

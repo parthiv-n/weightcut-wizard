@@ -1,4 +1,4 @@
-/** Recovery coach — Groq `llama-3.1-8b-instant`. Gem-gated. */
+/** Recovery coach — Groq `llama-3.1-8b-instant`. Pro-only. */
 "use node";
 
 import { v } from "convex/values";
@@ -8,7 +8,7 @@ import { callGroqText } from "../_shared/groq";
 import { computeLoadMetrics, type SessionRow } from "../_shared/loadMetrics";
 import { buildRecoveryContext } from "../_shared/recoveryContext";
 import { loadAthleteSnapshot, requireUserIdFromAction, SECOND_PERSON_DIRECTIVE } from "./_helpers";
-import { enforceGemGate } from "../_shared/subscriptionGuard";
+import { enforceFeatureGate } from "../_shared/featureGates";
 import {
   sanitizeUserText,
   PROMPT_INJECTION_GUARD_INSTRUCTION,
@@ -28,7 +28,7 @@ export const run = action({
   },
   handler: async (ctx, { messages, userName }) => {
     const userId = await requireUserIdFromAction(ctx);
-    await enforceGemGate(ctx, userId);
+    await enforceFeatureGate(ctx, userId, "AI_RECOVERY_COACH");
 
     const recovery = await ctx.runQuery(
       internal.actions_internal.fetchRecoveryData,

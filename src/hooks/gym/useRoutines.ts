@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
-import { useAction, useMutation, useQuery } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
+import { useAIAction } from "@/hooks/useAIAction";
 import { api } from "@/../convex/_generated/api";
 import type { Id } from "@/../convex/_generated/dataModel";
 import { useToast } from "@/hooks/use-toast";
@@ -7,6 +8,7 @@ import { useUser } from "@/contexts/UserContext";
 import { useAITask } from "@/contexts/AITaskContext";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { logger } from "@/lib/logger";
 import { Dumbbell, Activity, CheckCircle } from "lucide-react";
 import type {
@@ -22,13 +24,9 @@ export function useRoutines() {
   const { safeAsync, isMounted } = useSafeAsync();
   const { toast } = useToast();
   const { addTask, completeTask, failTask } = useAITask();
-  const {
-    checkAIAccess,
-    openNoGemsDialog,
-    onAICallSuccess,
-    handleAILimitError,
-  } = useSubscription();
-  const workoutGeneratorAction = useAction(api.actions.workoutGenerator.run);
+  const { openPaywall, handlePaywallError } = useSubscription();
+  const { hasAccess: hasAiAccess } = useFeatureAccess("AI_WORKOUT_GENERATOR");
+  const workoutGeneratorAction = useAIAction(api.actions.workoutGenerator.run, "AI_WORKOUT_GENERATOR");
   const rawRoutines = useQuery(api.routines.listForUser, userId ? {} : "skip");
   const createRoutineMut = useMutation(api.routines.createRoutine);
   const updateRoutineMut = useMutation(api.routines.updateRoutine);
@@ -57,8 +55,8 @@ export function useRoutines() {
 
   const generateRoutine = useCallback(
     async (params: RoutineGenerationParams) => {
-      if (!checkAIAccess()) {
-        openNoGemsDialog();
+      if (!hasAiAccess) {
+        openPaywall();
         return null;
       }
 
@@ -96,11 +94,10 @@ export function useRoutines() {
             notes,
           });
         } catch (error: any) {
-          if (await handleAILimitError(error)) { failTask(taskId, "Limit reached"); return null; }
+          if (await handlePaywallError(error)) { failTask(taskId, "Pro required"); return null; }
           throw error;
         }
 
-        onAICallSuccess();
         const routine = data?.routineData || data;
         if (!routine?.exercises) {
           failTask(taskId, "No exercises returned");
@@ -128,10 +125,13 @@ export function useRoutines() {
       }
     },
     [
-      checkAIAccess,
-      openNoGemsDialog,
-      onAICallSuccess,
-      handleAILimitError,
+      hasAiAccess,
+      openPaywall,
+      handlePaywallError,
+      workoutGeneratorAction,
+      addTask,
+      completeTask,
+      failTask,
       safeAsync,
       isMounted,
       toast,

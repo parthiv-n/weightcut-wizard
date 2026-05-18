@@ -1,4 +1,4 @@
-/** Wizard chat — gem-gated, conversational coach with broad athlete context. */
+/** Wizard chat — Pro-only, conversational coach with broad athlete context. */
 "use node";
 
 import { v } from "convex/values";
@@ -6,7 +6,7 @@ import { action } from "../_generated/server";
 import { internal } from "../_generated/api";
 import { callGroqText } from "../_shared/groq";
 import { requireUserIdFromAction, SECOND_PERSON_DIRECTIVE } from "./_helpers";
-import { enforceGemGate } from "../_shared/subscriptionGuard";
+import { enforceFeatureGate } from "../_shared/featureGates";
 import {
   sanitizeUserText,
   PROMPT_INJECTION_GUARD_INSTRUCTION,
@@ -92,7 +92,7 @@ export const run = action({
   },
   handler: async (ctx, { messages, userName }) => {
     const userId = await requireUserIdFromAction(ctx);
-    await enforceGemGate(ctx, userId);
+    await enforceFeatureGate(ctx, userId, "AI_WIZARD_CHAT");
 
     const data = await ctx.runQuery(
       internal.actions_internal.fetchWizardChatData,

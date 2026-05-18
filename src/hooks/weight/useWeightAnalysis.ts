@@ -1,75 +1,126 @@
+/**
+ * useWeightAnalysis — drives the "Get AI weight strategy" surface inside the
+ * WeightTracker page. After the 2026-05-18 refactor this hook is functionally
+ * a re-skin of the onboarding plan generator: it calls
+ * `api.actions.weightTrackerAnalysis.run` (which now returns the same
+ * card-timeline shape as `generateWeightPlan`) and exposes the resulting plan
+ * directly so the page can render it through the shared `InlinePlanDisplay`.
+ *
+ * Notable behaviour:
+ *  - Paywalled: post-onboarding refreshes are gated behind `AI_WEIGHT_ANALYSIS`.
+ *    The onboarding-time sibling (`generateWeightPlan`) stays free so a brand
+ *    new user can get their first plan; subsequent re-analyses require Pro.
+ *  - Cache: persists the plan via `AIPersistence` so it survives a refresh.
+ *    The cache key was renamed from `weight_analysis` -> `weight_plan_v2` so
+ *    legacy entries (the rich macros/protocol shape) never bleed into the new
+ *    `InlinePlanDisplay` renderer. The hook also actively deletes the legacy
+ *    key on load so we don't leak storage.
+ *  - `applyNutritionTargets` still pushes the plan's macros into the user's
+ *    profile so the Nutrition page picks them up. We read from `targetCalories`
+ *    and the first week of `weeklyPlan` (where InlinePlanDisplay sources its
+ *    headline macro strip from).
+ */
 import { useState, useRef } from "react";
-import { useMutation, useAction } from "convex/react";
+import { useMutation } from "convex/react";
 import { useAIAction } from "@/hooks/useAIAction";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { useAITask } from "@/contexts/AITaskContext";
-import { useSubscription } from "@/hooks/useSubscription";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { createAIAbortController } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
 import { nutritionCache } from "@/lib/nutritionCache";
 import { api } from "../../../convex/_generated/api";
 import { Scale, TrendingDown, CheckCircle } from "lucide-react";
-import type { AIAnalysis, Profile, DebugData } from "@/pages/weight/types";
+import type { Profile } from "@/pages/weight/types";
+
+/** The new analysis-result shape returned by `weightTrackerAnalysis.run`
+ *  matches `InlinePlanDisplay`'s expected `PlanData` (see
+ *  `src/components/onboarding/InlinePlanDisplay.tsx`). We keep this as `any`
+ *  here so we don't have to duplicate the structural type, but the action's
+ *  contract is enforced by `CutPlanSchema` + the normalisers. */
+export type WeightAnalysisPlan = any;
 
 interface UseWeightAnalysisParams {
   profile: Profile | null;
 }
 
+/** Cache key. v2 marks the new InlinePlanDisplay-compatible shape so legacy
+ *  payloads from the pre-refactor protocol shape are not loaded. */
+const CACHE_KEY = "weight_plan_v2";
+/** Old cache key from the rich macros/protocol era; purged on load. */
+const LEGACY_CACHE_KEY = "weight_analysis";
+
 export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
   const { userId, refreshProfile } = useUser();
   const { toast } = useToast();
   const { addTask, completeTask, failTask } = useAITask();
-  const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
   const updateGoalsMut = useMutation(api.profiles.updateGoals);
-  const weightTrackerAnalysisAction = useAIAction(api.actions.weightTrackerAnalysis.run);
+  // Pro-gated via `useAIAction`: the server-side `enforceFeatureGate`
+  // throws `PRO_FEATURE_REQUIRED:AI_WEIGHT_ANALYSIS` for free users, but
+  // the wrapper also runs an upfront client gate so we open the paywall
+  // BEFORE dispatching the action and avoid the user-visible error toast.
+  // Note: the onboarding sibling (`generateWeightPlan`) is intentionally
+  // ungated — every user gets one plan to start with.
+  const weightTrackerAnalysisAction = useAIAction(
+    api.actions.weightTrackerAnalysis.run,
+    "AI_WEIGHT_ANALYSIS",
+  );
   const aiAbortRef = useRef<AbortController | null>(null);
 
   const [analyzingWeight, setAnalyzingWeight] = useState(false);
-  const [aiAnalysis, setAiAnalysis] = useState<AIAnalysis | null>(null);
-  const [aiAnalysisWeight, setAiAnalysisWeight] = useState<number | null>(null);
-  const [aiAnalysisTarget, setAiAnalysisTarget] = useState<number | null>(null);
+  const [analysisPlan, setAnalysisPlan] = useState<WeightAnalysisPlan | null>(null);
+  const [analysisOpen, setAnalysisOpen] = useState(false);
   const [unsafeGoalDialogOpen, setUnsafeGoalDialogOpen] = useState(false);
-  const [debugDialogOpen, setDebugDialogOpen] = useState(false);
-  const [debugData, setDebugData] = useState<DebugData | null>(null);
   const [targetsApplied, setTargetsApplied] = useState(false);
   const [applyingTargets, setApplyingTargets] = useState(false);
 
+  /** Restore the most recent generated plan from local storage. Silently
+   *  removes the legacy `weight_analysis` payload so we never accidentally
+   *  feed the old protocol shape to `InlinePlanDisplay`. */
   const loadPersistedAnalysis = () => {
     if (!userId) return;
+    // Purge the pre-refactor cache key first.
     try {
-      const persisted = AIPersistence.load(userId, "weight_analysis");
-      if (persisted) {
-        const { analysis, currentWeight, fightWeekTarget } = persisted;
-        // Shape check: the rich macros/protocol shape has requiredWeeklyLoss as a number.
-        // The migration-era stripped shape lacks it and crashes the UI on .toFixed.
-        if (analysis && typeof analysis.requiredWeeklyLoss === "number") {
-          setAiAnalysis(analysis);
-          setAiAnalysisWeight(currentWeight);
-          setAiAnalysisTarget(fightWeekTarget);
-        } else if (analysis) {
-          AIPersistence.remove(userId, "weight_analysis");
-        }
+      AIPersistence.remove(userId, LEGACY_CACHE_KEY);
+    } catch {
+      /* best-effort */
+    }
+    try {
+      const persisted = AIPersistence.load(userId, CACHE_KEY);
+      // Structural sanity: must have weeklyPlan[] to be usable.
+      if (
+        persisted &&
+        Array.isArray(persisted.weeklyPlan) &&
+        persisted.weeklyPlan.length > 0
+      ) {
+        setAnalysisPlan(persisted);
+      } else if (persisted) {
+        AIPersistence.remove(userId, CACHE_KEY);
       }
     } catch (error) {
-      logger.error("Error loading persisted analysis", error);
+      logger.error("Error loading persisted weight plan", error);
     }
   };
 
   const clearAnalysis = () => {
     if (!userId) return;
-    setAiAnalysis(null);
-    setAiAnalysisWeight(null);
-    setAiAnalysisTarget(null);
-    AIPersistence.remove(userId, "weight_analysis");
+    setAnalysisPlan(null);
+    setAnalysisOpen(false);
+    AIPersistence.remove(userId, CACHE_KEY);
     setTargetsApplied(false);
   };
 
-  const isGoalUnrealistic = (currentWeight: number, fightWeekTarget: number, targetDate: string): boolean => {
+  const isGoalUnrealistic = (
+    currentWeight: number,
+    fightWeekTarget: number,
+    targetDate: string,
+  ): boolean => {
     const target = new Date(targetDate);
     const today = new Date();
-    const daysRemaining = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    const daysRemaining = Math.ceil(
+      (target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+    );
     const weeksRemaining = Math.max(1, daysRemaining / 7);
     const weightRemaining = currentWeight - fightWeekTarget;
     const requiredWeeklyLoss = weightRemaining / weeksRemaining;
@@ -79,7 +130,8 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
   const getAIAnalysis = async () => {
     if (!profile) return;
 
-    const fightWeekTarget = profile.fight_week_target_kg || profile.goal_weight_kg;
+    const fightWeekTarget =
+      profile.fight_week_target_kg || profile.goal_weight_kg;
     if (!fightWeekTarget) {
       toast({
         title: "Target Weight Required",
@@ -89,39 +141,38 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
       return;
     }
 
-    if (!checkAIAccess()) {
-      openNoGemsDialog();
-      return;
-    }
-
     aiAbortRef.current?.abort();
     const controller = createAIAbortController();
     aiAbortRef.current = controller;
 
     setAnalyzingWeight(true);
+    setAnalysisOpen(true);
     const taskId = addTask({
       id: `weight-analysis-${Date.now()}`,
       type: "weight-analysis",
-      label: "Analyzing Progress",
+      label: "Refreshing Your Plan",
       steps: [
-        { icon: Scale, label: "Loading weight data" },
-        { icon: TrendingDown, label: "Analyzing trends" },
-        { icon: CheckCircle, label: "Generating insights" },
+        { icon: Scale, label: "Loading your numbers" },
+        { icon: TrendingDown, label: "Calculating calorie target" },
+        { icon: CheckCircle, label: "Building week timeline" },
       ],
       returnPath: "/weight",
     });
 
     try {
-
       const currentWeight = profile.current_weight_kg;
-      const currentWeightSource = "profile.current_weight_kg";
 
-      if (isGoalUnrealistic(currentWeight, fightWeekTarget, profile.target_date)) {
+      if (
+        profile.target_date &&
+        isGoalUnrealistic(currentWeight, fightWeekTarget, profile.target_date)
+      ) {
         setUnsafeGoalDialogOpen(true);
       }
 
+      // The action falls back to profile fields when args are omitted, but we
+      // pass them explicitly so the UI stays the source of truth for the
+      // exact numbers it shows the user.
       const requestPayload = {
-        weightHistory: [] as Array<{ date: string; weight_kg: number }>,
         currentWeight,
         goalWeight: fightWeekTarget,
         targetDate: profile.target_date,
@@ -135,76 +186,47 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
         error = err;
       }
 
-      // The Convex action returns parsed analysis JSON directly (no `analysis` wrapper).
-      // Normalise to the shape the rest of this hook expects.
-      const analysis = data && !data.analysis ? data : data?.analysis;
-
-      if (analysis && userId) {
-        AIPersistence.save(userId, "weight_analysis", { analysis, currentWeight, fightWeekTarget }, 24);
-      }
       if (controller.signal.aborted) return;
 
-      const debugInfo: DebugData = {
-        requestPayload,
-        rawResponse: data || error,
-        parsedResponse: analysis || null,
-        currentWeightSource,
-        currentWeightValue: currentWeight,
-        latestWeightLog: null,
-        profileData: {
-          current_weight_kg: profile.current_weight_kg,
-          goal_weight_kg: profile.goal_weight_kg,
-          fight_week_target_kg: profile.fight_week_target_kg,
-          target_date: profile.target_date,
-          activity_level: profile.activity_level,
-          age: profile.age,
-          sex: profile.sex,
-          height_cm: profile.height_cm,
-          tdee: profile.tdee
-        }
-      };
-      setDebugData(debugInfo);
-
       if (error) {
-        if (await handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
         const msg = error?.message || "AI analysis unavailable";
+        failTask(taskId, msg);
         toast({
           title: "AI analysis unavailable",
           description: msg,
-          variant: "destructive"
+          variant: "destructive",
         });
-      } else if (analysis) {
-        if (typeof analysis.requiredWeeklyLoss !== "number") {
-          failTask(taskId, "Server returned an unexpected response shape");
-          toast({
-            title: "AI analysis unavailable",
-            description: "The server returned an incomplete response. Please try again.",
-            variant: "destructive",
-          });
-          return;
-        }
-        onAICallSuccess();
-        setTargetsApplied(false);
-        setAiAnalysis(analysis);
-        setAiAnalysisWeight(currentWeight);
-        setAiAnalysisTarget(fightWeekTarget);
-
-        if (userId) {
-          AIPersistence.save(userId, "weight_analysis", {
-            analysis,
-            currentWeight,
-            fightWeekTarget,
-          }, 24);
-        }
-        completeTask(taskId, analysis);
+        return;
       }
+
+      if (
+        !data ||
+        !Array.isArray(data.weeklyPlan) ||
+        data.weeklyPlan.length === 0
+      ) {
+        failTask(taskId, "Server returned an unexpected response shape");
+        toast({
+          title: "AI analysis unavailable",
+          description: "The server returned an incomplete plan. Please try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Persist + render.
+      if (userId) {
+        AIPersistence.save(userId, CACHE_KEY, data, 24);
+      }
+      setTargetsApplied(false);
+      setAnalysisPlan(data);
+      completeTask(taskId, data);
     } catch (err: any) {
-      if (err?.name === 'AbortError' || controller.signal.aborted) return;
+      if (err?.name === "AbortError" || controller.signal.aborted) return;
       failTask(taskId, err?.message || "Something went wrong");
       toast({
         title: "AI analysis unavailable",
         description: err?.message || "Something went wrong",
-        variant: "destructive"
+        variant: "destructive",
       });
     } finally {
       setAnalyzingWeight(false);
@@ -216,24 +238,44 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
     setAnalyzingWeight(false);
   };
 
+  /** Push the plan's headline calorie + macro targets into the user's
+   *  nutrition profile. Reads from `targetCalories` (server-computed) and the
+   *  first weekly row, which is the same source `InlinePlanDisplay`'s stat
+   *  strip renders from. */
   const applyNutritionTargets = async () => {
-    if (!userId || !aiAnalysis) return;
+    if (!userId || !analysisPlan) return;
+    const week1 = Array.isArray(analysisPlan.weeklyPlan)
+      ? analysisPlan.weeklyPlan[0]
+      : null;
+    if (!week1) return;
+    const recommendedCalories: number | undefined =
+      typeof analysisPlan.targetCalories === "number"
+        ? analysisPlan.targetCalories
+        : typeof week1.calories === "number"
+          ? week1.calories
+          : undefined;
+    if (typeof recommendedCalories !== "number") return;
+
     setApplyingTargets(true);
     try {
       await updateGoalsMut({
         manualNutritionOverride: false,
-        aiRecommendedCalories: aiAnalysis.recommendedCalories,
-        aiRecommendedProteinG: aiAnalysis.proteinGrams,
-        aiRecommendedCarbsG: aiAnalysis.carbsGrams,
-        aiRecommendedFatsG: aiAnalysis.fatsGrams,
+        aiRecommendedCalories: recommendedCalories,
+        aiRecommendedProteinG: week1.protein_g,
+        aiRecommendedCarbsG: week1.carbs_g,
+        aiRecommendedFatsG: week1.fats_g,
       });
-      nutritionCache.remove(userId, 'profile');
-      nutritionCache.remove(userId, 'macroGoals');
+      nutritionCache.remove(userId, "profile");
+      nutritionCache.remove(userId, "macroGoals");
       await refreshProfile();
       setTargetsApplied(true);
     } catch (err: any) {
       logger.error("Error applying nutrition targets", err);
-      toast({ title: "Failed to apply targets", description: err?.message || "Please try again.", variant: "destructive" });
+      toast({
+        title: "Failed to apply targets",
+        description: err?.message || "Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setApplyingTargets(false);
     }
@@ -241,12 +283,11 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
 
   return {
     analyzingWeight,
-    aiAnalysis,
-    aiAnalysisWeight,
-    aiAnalysisTarget,
-    unsafeGoalDialogOpen, setUnsafeGoalDialogOpen,
-    debugDialogOpen, setDebugDialogOpen,
-    debugData,
+    analysisPlan,
+    analysisOpen,
+    setAnalysisOpen,
+    unsafeGoalDialogOpen,
+    setUnsafeGoalDialogOpen,
     loadPersistedAnalysis,
     clearAnalysis,
     getAIAnalysis,

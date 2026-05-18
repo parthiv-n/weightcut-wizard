@@ -66,10 +66,6 @@ function toClientShape(
     sleep_hours: row.sleepHours,
     training_frequency: row.trainingFrequency,
     training_types: row.trainingTypes,
-    gems: row.gems,
-    last_free_gem_date: row.lastFreeGemDate,
-    ads_watched_today: row.adsWatchedToday,
-    ads_watched_date: row.adsWatchedDate,
     subscription_tier: row.subscriptionTier,
     subscription_expires_at: row.subscriptionExpiresAt
       ? new Date(row.subscriptionExpiresAt).toISOString()
@@ -143,6 +139,136 @@ export const getAvatarUrl = query({
   },
 });
 
+/**
+ * Public-ish profile view for the Corner tab.
+ *
+ * Visibility rules (intentional — keeps profile existence private):
+ *  - Self → always visible.
+ *  - Same-gym viewer (both active in at least one shared gym) → visible.
+ *  - Anyone else → returns `null`. We don't 403 because the Corner UI may
+ *    deep-link a profile from a share card; a hard error would leak the
+ *    "this user exists" signal we don't want to broadcast.
+ *
+ * Stats are computed conservatively from existing tables (no new denorm):
+ *  - `sessionsLogged` → `fight_camp_calendar` rows for the user. Capped at
+ *    500 via `.take(500)` so a chatty user with thousands of historical
+ *    sessions can't blow up the per-query read budget. The cap is exposed
+ *    to the client as-is (501+ users will display "500+").
+ *  - `campsCompleted` → `fight_camps` rows with `isCompleted === true`.
+ *  - `kgCutTotal` → sum of (startingWeightKg − endWeightKg) across
+ *    completed camps. Camps missing either field contribute 0 — never NaN.
+ *
+ * Gym block is the viewer-facing identity for "where does this person
+ * train". Pulled from the user's active `gym_members` row via the
+ * `by_user_status` index (one indexed point-lookup); if the user has no
+ * active membership the `gymId` / `gymName` come back as `null` and
+ * `sameGym` is `false`.
+ */
+export const getByUserId = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId: targetUserId }) => {
+    const viewerId = await requireUserId(ctx);
+    const isSelf = viewerId === targetUserId;
+
+    // Resolve target's active gym (the user's "home" gym for v1 — multi-gym
+    // plumbing exists but the Corner UI shows a single primary gym).
+    const targetMembership = await ctx.db
+      .query("gym_members")
+      .withIndex("by_user_status", (q) =>
+        q.eq("userId", targetUserId).eq("status", "active"),
+      )
+      .first();
+
+    // Same-gym check via the viewer's active memberships. We collect all of
+    // the viewer's active rows (typically 1, never more than a handful) and
+    // probe each against the target via the `by_gym_user` index.
+    let sameGym = false;
+    if (!isSelf) {
+      const viewerGyms = await ctx.db
+        .query("gym_members")
+        .withIndex("by_user_status", (q) =>
+          q.eq("userId", viewerId).eq("status", "active"),
+        )
+        .collect();
+      for (const vg of viewerGyms) {
+        const peer = await ctx.db
+          .query("gym_members")
+          .withIndex("by_gym_user", (q) =>
+            q.eq("gymId", vg.gymId).eq("userId", targetUserId),
+          )
+          .unique();
+        if (peer && peer.status === "active") {
+          sameGym = true;
+          break;
+        }
+      }
+      // Hide existence from non-peers — privacy-preserving null.
+      if (!sameGym) {
+        return null;
+      }
+    }
+
+    const profile = await findByUser(ctx, targetUserId);
+    if (!profile) return null;
+
+    // Resolve gym name (single doc read; cheap). Falls back to null when
+    // the user is not currently in any active gym.
+    const gym = targetMembership ? await ctx.db.get(targetMembership.gymId) : null;
+    const avatarUrl = profile.avatarStorageId
+      ? await ctx.storage.getUrl(profile.avatarStorageId)
+      : null;
+
+    // ── Stats ────────────────────────────────────────────────────────────
+    // `take(500)` is the hard ceiling — bounds the worst-case read cost at
+    // 500 docs for a power-user. The number is reported back as-is, the
+    // client decides whether to render "500+" or the raw count.
+    const sessions = await ctx.db
+      .query("fight_camp_calendar")
+      .withIndex("by_user_date", (q) => q.eq("userId", targetUserId))
+      .take(500);
+    const sessionsLogged = sessions.length;
+
+    const camps = await ctx.db
+      .query("fight_camps")
+      .withIndex("by_user", (q) => q.eq("userId", targetUserId))
+      .collect();
+    let campsCompleted = 0;
+    let kgCutTotal = 0;
+    for (const c of camps) {
+      if (c.isCompleted === true) {
+        campsCompleted += 1;
+        const start = typeof c.startingWeightKg === "number" ? c.startingWeightKg : null;
+        const end = typeof c.endWeightKg === "number" ? c.endWeightKg : null;
+        // Only count camps with BOTH endpoints — partial data would inflate
+        // / deflate the total in either direction. Defaults to 0 contribution.
+        if (start !== null && end !== null) {
+          const delta = start - end;
+          // Guard against negative deltas (rare data-entry typos where end
+          // > start) so the public stat never reads as "−2.3 kg cut".
+          if (delta > 0) kgCutTotal += delta;
+        }
+      }
+    }
+    // Round to 1 decimal so the UI doesn't have to deal with float crud.
+    kgCutTotal = Math.round(kgCutTotal * 10) / 10;
+
+    return {
+      userId: targetUserId,
+      displayName: profile.displayName ?? "Athlete",
+      avatarUrl,
+      role: profile.role,
+      gymId: targetMembership?.gymId ?? null,
+      gymName: gym?.name ?? null,
+      sameGym: isSelf ? true : sameGym,
+      stats: {
+        sessionsLogged,
+        kgCutTotal,
+        campsCompleted,
+      },
+    };
+  },
+});
+
 /** Cut plan (potentially large JSONB) — separated so callers that don't
  *  need it can avoid pulling it on every profile read. */
 export const getCutPlan = query({
@@ -178,8 +304,6 @@ export const ensureExists = mutation({
       activityLevel: "",
       goalType: "",
       role: "fighter",
-      gems: 0,
-      adsWatchedToday: 0,
       subscriptionTier: "free",
     });
   },
@@ -319,52 +443,10 @@ export const updateGoals = mutation({
 });
 
 // ───────────────────────────────────────────────────────────────────────
-// INTERNAL — gem deduction (called from Phase-4 actions before Groq).
-// Replaces Postgres RPCs `deduct_gem` and `grant_daily_free_gem`.
+// (Gem deduction / ad-reward / spend / daily-free-gem mutations removed.
+// AI access is now controlled solely by tier via
+// `convex/_shared/featureGates.ts`. See the gems-and-ads removal refactor.)
 // ───────────────────────────────────────────────────────────────────────
-
-export const deductGem = internalMutation({
-  args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => {
-    const profile = await ctx.db
-      .query("profiles")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .unique();
-    if (!profile) throw new Error("Profile not found");
-    if (profile.gems <= 0) throw new Error("No gems available");
-    await ctx.db.patch(profile._id, {
-      gems: profile.gems - 1,
-      updatedAt: Date.now(),
-    });
-  },
-});
-
-/**
- * Public ad-reward endpoint. Replaces the Postgres `reward_ad_gem` RPC.
- * Grants one gem and increments the per-day ads counter; caps at 5 ads/day.
- */
-export const rewardAdGem = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const userId = await requireUserId(ctx);
-    const profile = await findByUser(ctx, userId);
-    if (!profile) throw new Error("Profile not found");
-    const today = new Date().toISOString().slice(0, 10);
-    const sameDay = profile.adsWatchedDate === today;
-    const adsWatchedToday = sameDay ? (profile.adsWatchedToday ?? 0) : 0;
-    if (adsWatchedToday >= 5) {
-      return { success: false, gems: profile.gems, adsRemaining: 0 };
-    }
-    const nextAds = adsWatchedToday + 1;
-    await ctx.db.patch(profile._id, {
-      gems: profile.gems + 1,
-      adsWatchedToday: nextAds,
-      adsWatchedDate: today,
-      updatedAt: Date.now(),
-    });
-    return { success: true, gems: profile.gems + 1, adsRemaining: 5 - nextAds };
-  },
-});
 
 /**
  * Reset all tracking data for the current user — keeps `profiles` row + fight
@@ -402,24 +484,6 @@ export const resetTrackingData = mutation({
     await drop("meal_plans", "by_user");
     await drop("fight_week_plans", "by_user");
     await drop("fight_week_logs", "by_user_date");
-  },
-});
-
-/**
- * User-initiated gem spend. Idempotent and gated by gem balance.
- */
-export const spendGem = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const userId = await requireUserId(ctx);
-    const profile = await findByUser(ctx, userId);
-    if (!profile) throw new Error("Profile not found");
-    if (profile.gems <= 0) throw new Error("No gems available");
-    await ctx.db.patch(profile._id, {
-      gems: profile.gems - 1,
-      updatedAt: Date.now(),
-    });
-    return { gems: profile.gems - 1 };
   },
 });
 
@@ -649,25 +713,5 @@ export const updateSubscriptionFromRevenueCat = internalMutation({
 
     await ctx.db.patch(profile._id, patch as any);
     return { ok: true };
-  },
-});
-
-/** Grants one free gem per UTC day. Idempotent — replays on the same day
- *  are no-ops. Callers should fire-and-forget at app mount. */
-export const grantDailyFreeGem = internalMutation({
-  args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => {
-    const profile = await ctx.db
-      .query("profiles")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .unique();
-    if (!profile) return;
-    const today = new Date().toISOString().slice(0, 10);
-    if (profile.lastFreeGemDate === today) return;
-    await ctx.db.patch(profile._id, {
-      gems: profile.gems + 1,
-      lastFreeGemDate: today,
-      updatedAt: Date.now(),
-    });
   },
 });

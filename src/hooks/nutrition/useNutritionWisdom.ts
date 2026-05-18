@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
-import { useAction } from "convex/react";
 import { useAIAction } from "@/hooks/useAIAction";
 import { api } from "@/../convex/_generated/api";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { logger } from "@/lib/logger";
@@ -30,8 +30,9 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
   const { userId } = useUser();
   const { toast } = useToast();
   const { safeAsync, isMounted } = useSafeAsync();
-  const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
-  const mealPlannerAction = useAIAction(api.actions.mealPlanner.run);
+  const { openPaywall, handlePaywallError } = useSubscription();
+  const { hasAccess: hasAiAccess } = useFeatureAccess("AI_MEAL_PLANNER");
+  const mealPlannerAction = useAIAction(api.actions.mealPlanner.run, "AI_MEAL_PLANNER");
 
   const [trainingWisdom, setTrainingWisdom] = useState<TrainingFoodTip | null>(null);
   const [trainingWisdomLoading, setTrainingWisdomLoading] = useState(false);
@@ -102,9 +103,9 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
 
     safeAsync(setAiWisdomLoading)(true);
     try {
-      if (!checkAIAccess()) {
-        // Only show paywall if user explicitly tapped something
-        if (userInitiated) openNoGemsDialog();
+      if (!hasAiAccess) {
+        // Only open paywall if user explicitly tapped something
+        if (userInitiated) openPaywall();
         return;
       }
 
@@ -122,14 +123,13 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
         });
       } catch (error: any) {
         if (!isMounted()) return;
-        if (userInitiated && await handleAILimitError(error)) return;
+        if (userInitiated && await handlePaywallError(error)) return;
         if (!userInitiated) return;
         throw new Error(error?.message || "Could not generate nutrition advice");
       }
 
       if (!isMounted()) return;
       if (data?.error) throw new Error(data.error);
-      onAICallSuccess();
 
       let advice: string | null = null;
       if (data?.mealPlan) {
@@ -169,8 +169,8 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
       }
     }
 
-    if (!checkAIAccess()) {
-      openNoGemsDialog();
+    if (!hasAiAccess) {
+      openPaywall();
       return;
     }
 
@@ -209,13 +209,12 @@ export function useNutritionWisdom(params: UseNutritionWisdomParams) {
         });
       } catch (error: any) {
         if (!isMounted()) return;
-        if (await handleAILimitError(error)) return;
+        if (await handlePaywallError(error)) return;
         throw new Error(error?.message || "Could not generate training food ideas");
       }
 
       if (!isMounted()) return;
       if (data?.error) throw new Error(data.error);
-      onAICallSuccess();
 
       let trainingData: TrainingFoodTip | null = null;
 

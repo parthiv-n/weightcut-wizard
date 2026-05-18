@@ -1,4 +1,4 @@
-/** Rehydration protocol — deterministic numerics + LLM narrative. NOT gem-gated. */
+/** Rehydration protocol — deterministic numerics + LLM narrative. Pro-only. */
 "use node";
 
 import { v } from "convex/values";
@@ -6,6 +6,7 @@ import { action } from "../_generated/server";
 import { callGroqText, GroqError } from "../_shared/groq";
 import { parseJSON } from "../_shared/parseResponse";
 import { requireUserIdFromAction, logDecision, SECOND_PERSON_DIRECTIVE } from "./_helpers";
+import { enforceFeatureGate } from "../_shared/featureGates";
 import {
   buildDeterministicRehydration,
   DEFAULT_WARNINGS,
@@ -86,6 +87,7 @@ export const run = action({
   },
   handler: async (ctx, args) => {
     const userId = await requireUserIdFromAction(ctx);
+    await enforceFeatureGate(ctx, userId, "AI_REHYDRATION_PROTOCOL");
 
     const det = buildDeterministicRehydration({
       weighInWeightKg: args.weighInWeightKg,

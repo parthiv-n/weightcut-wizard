@@ -2,121 +2,192 @@ import type { TutorialFlow } from "../types";
 
 export const onboardingFlow: TutorialFlow = {
   id: "onboarding",
-  version: 8,
+  version: 11,
   steps: [
     {
       id: "welcome",
-      title: "Welcome to FightCamp Wizard",
+      title: "Good, you made it",
       description:
-        "Let's take a quick tour of your app. We'll walk through every screen so you know exactly where everything is.",
+        "I'm the wizard, your corner for everything outside the cage. I'll keep your cut clean and your camp honest. Two minutes, then you're off.",
+      position: "center",
+      route: "/dashboard",
+      wizardPose: "wave",
+    },
+    {
+      id: "dashboard-overview",
+      title: "This is home",
+      description:
+        "Your ring tracks the day, the wisdom keeps you sharp, the badges mark the work. Open this first, every morning.",
       position: "center",
       route: "/dashboard",
     },
     {
-      id: "dashboard-overview",
-      title: "Your Dashboard",
+      id: "score-number",
+      title: "About that ring",
       description:
-        "This is your home base. You'll see your weight progress bar, weekly consistency ring, AI daily wisdom, weight history chart, training activity, and achievement badges — all at a glance.",
+        "The number in the ring is your Fight Form Score, 0 to 100, blending your week against your camp. It's a three day rolling average, so one rough day won't sink it.",
+      position: "center",
+      route: "/dashboard",
+    },
+    {
+      id: "score-labels",
+      title: "Four labels, one read",
+      description:
+        "Sharp from 80 up. Sharpening sixty to seventy nine. Off Pace forty to fifty nine. At Risk under forty. Read the label first, the number second.",
+      position: "center",
+      route: "/dashboard",
+    },
+    {
+      id: "score-components",
+      title: "Five parts make it up",
+      description:
+        "Training load, sleep, weight cut, wellness, nutrition. Tap the dots under the ring to see which one is pulling you up and which one is holding you back.",
+      position: "center",
+      route: "/dashboard",
+      wizardPose: "point",
+    },
+    {
+      id: "score-phases",
+      title: "Phase matters",
+      description:
+        "Weights shift with your camp phase. Build leans on training and the cut. Peak leans on sleep and the cut. Fight Week stacks the cut, sleep, and wellness.",
+      position: "center",
+      route: "/dashboard",
+    },
+    {
+      id: "score-ceilings",
+      title: "Safety caps",
+      description:
+        "Some signals cap the score. Cutting more than two percent of bodyweight in a week caps it at fifty. Big sleep debt caps it at sixty five. A training spike caps it at forty five. A lock icon shows when one fires.",
+      position: "center",
+      route: "/dashboard",
+    },
+    {
+      id: "score-daily-use",
+      title: "What to do with it",
+      description:
+        "Check it in the morning. The label tells you to push or recover. Read the limiter, pick that as your next lever. Work the components, and the number follows.",
       position: "center",
       route: "/dashboard",
     },
     {
       id: "nutrition-page",
-      title: "Nutrition",
+      title: "Food in, fight out",
       description:
-        "Your nutrition hub. Log meals by scanning a barcode, searching the database, or using AI Quick Fill. Generate personalised meal plans, analyse your daily vitamin and mineral intake, and get a diet quality score.",
+        "Scan a barcode, search a food, or let Quick Fill read the plate. Build a personalised plan, then analyse the micros so nothing slips.",
       position: "center",
       navigateTo: "/nutrition",
     },
     {
       id: "nutrition-features",
-      title: "AI Diet Tools",
+      title: "Two tools, one job",
       description:
-        "Use the Analyse button to get an AI breakdown of your day's nutrition — find missing micronutrients like iron, magnesium and B-vitamins. Use Generate to create meal plans tailored to your calorie and macro targets.",
+        "Analyse looks back, finding the gaps and quiet deficiencies. Generate looks forward, building meals around the macros you actually need.",
       position: "center",
       route: "/nutrition",
+      wizardPose: "point",
     },
     {
       id: "weight-tracker-page",
-      title: "Weight Tracker",
+      title: "Weigh in, every day",
       description:
-        "Track your daily weigh-ins and see your progress chart over time. Filter by week, month or all-time. Use the AI analysis to get insights on your weight trend, pace, and recommendations.",
+        "One number, same time, no drama. Filter by week, month or all, and I'll analyse the trend so you see the truth, not the noise.",
       position: "center",
       navigateTo: "/weight",
     },
     {
       id: "fight-week-page",
-      title: "Fight Week",
+      title: "The last seven days",
       description:
-        "Your fight week command centre. Get AI-generated advice for your final week — water loading, sodium manipulation, and weight management strategies tailored to your cut.",
+        "This is where the cut gets real. Water load, sodium taper, the lot. Follow it step by step and you'll walk to the scale calm.",
       position: "center",
       navigateTo: "/weight-cut",
       condition: (state) => state.goalType === "cutting",
     },
     {
       id: "rehydration-page",
-      title: "Rehydration Planner",
+      title: "After the scale",
       description:
-        "Switch to the Rehydration tab after weigh-in. Enter how much weight you lost and get a personalised hourly protocol — fluid schedules, electrolyte timing, and carb refuelling plan.",
+        "The fight is won in the hours after weigh-in. Sip the plan I lay out, hour by hour, fluid, salt and carbs in order. Don't freelance here.",
       position: "center",
       navigateTo: "/weight-cut?tab=rehydration",
       condition: (state) => state.goalType === "cutting",
+      wizardPose: "point",
     },
     {
       id: "fight-camps-page",
-      title: "Fight Camps",
+      title: "Organise the chaos",
       description:
-        "Organise your training into fight camps. Create a camp for each event, track your weight cut progress, upload photos, and review past camps to improve.",
+        "Every camp gets its own home. Track the cut, log the sessions, drop in photos. When the next one starts, you'll know exactly what worked.",
       position: "center",
       navigateTo: "/fight-camps",
     },
     {
       id: "training-calendar-page",
-      title: "Training Calendar",
+      title: "Log the rounds",
       description:
-        "Log your training sessions — BJJ, Muay Thai, wrestling, strength, running and more. View your sessions by day, track RPE and intensity, and generate AI training summaries each week.",
+        "BJJ, Muay Thai, wrestling, strength, all in one place with an RPE. Each week I'll write you a short summary, so the patterns surface.",
       position: "center",
       navigateTo: "/training-calendar",
     },
     {
       id: "recovery-page",
-      title: "Recovery Dashboard",
+      title: "The other half of fitness",
       description:
-        "Your recovery hub. Every session you log in the Training Calendar feeds into recovery metrics here — fatigue levels, sleep quality, soreness trends, and an AI recovery coach. The more you log, the smarter it gets.",
+        "Tell me how you slept, how sore you are, how the tank feels. The more you log, the sharper my recovery coach gets at calling your next move.",
       position: "center",
       navigateTo: "/recovery",
     },
     {
       id: "sleep-page",
-      title: "Sleep Tracking",
+      title: "Hours in the bank",
       description:
-        "Log your sleep daily from the dashboard widget. Your hours are tracked over time and displayed in a graph on the Sleep page — filter by week, month, or 3 months. Consistent logging helps the AI give better recovery and cut advice.",
+        "Log the nights, watch the trend across a week, a month, three months. Sleep is the cheapest performance gain you've got. Spend it.",
       position: "center",
       navigateTo: "/sleep",
     },
     {
-      id: "quick-tips",
-      title: "Quick Tips",
+      id: "your-corner",
+      title: "Your corner",
       description:
-        "Use the + button in the nav bar to quickly log food or weight. Tap the sparkle button on the dashboard to chat with your AI coach — ask training advice, recovery tips, or anything about your cut.",
+        "The Corner is your gym feed. Drop a photo or clip after a session, scroll your teammates' work, double tap to give them love.",
       position: "center",
-      navigateTo: "/dashboard",
+      navigateTo: "/community",
     },
     {
-      id: "ai-gems",
-      title: "AI Gems",
+      id: "feed-view-once",
+      title: "See it once",
       description:
-        "You get 2 free AI calls daily plus 1 bonus gem every 24 hours. Need more? Watch a short ad to earn extra gems — up to 5 per day. Or go Pro for unlimited AI access. Check your gem balance anytime in Settings.",
+        "Each post shows up once. Swipe it away and it's gone from your feed for good. Your own posts stay in your profile so you keep the record.",
+      position: "center",
+      route: "/community",
+      wizardPose: "point",
+    },
+    {
+      id: "quick-tips",
+      title: "Two buttons to know",
+      description:
+        "The plus on the nav is your fast log, weight, meals, sessions, in seconds. The sparkle opens me up for a chat, any question, any time.",
+      position: "center",
+      navigateTo: "/dashboard",
+      wizardPose: "point",
+    },
+    {
+      id: "pro-features",
+      title: "A quick note on Pro",
+      description:
+        "Manual logging, barcode and food search are yours, free, forever. The AI tools, the plans, the analysis, those live in Pro. Upgrade from Settings when you're ready.",
       position: "center",
       route: "/dashboard",
     },
     {
       id: "all-done",
-      title: "You're All Set!",
+      title: "That's the kit",
       description:
-        "Explore at your own pace. You can replay this tour anytime from Settings in the More menu.",
+        "You can replay this from Settings whenever you like. Now go and do the work. I'll be here when you check in.",
       position: "center",
       route: "/dashboard",
+      wizardPose: "celebrate",
     },
   ],
 };

@@ -6,7 +6,7 @@ import ReactMarkdown from "react-markdown";
 import { triggerHapticSelection, triggerHapticSuccess, triggerHaptic } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import wizardAvatar from "@/assets/wizard-logo.webp";
-import { useSubscription } from "@/hooks/useSubscription";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 
 const FAB_SIZE = 48;
 const EDGE_MARGIN = 16;
@@ -22,12 +22,11 @@ function loadSavedPosition(): { x: number; y: number } | null {
 
 export function FloatingWizardChat() {
   const { messages, isLoading, sendMessage, clearChat } = useWizardBackground();
-  const { isPremium, gems, openNoGemsDialog } = useSubscription();
+  const { hasAccess } = useFeatureAccess("AI_WIZARD_CHAT");
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const hasAccess = isPremium || gems > 0;
 
   // Drag state — all refs for 60fps performance (no React re-renders during drag)
   const fabRef = useRef<HTMLButtonElement>(null);

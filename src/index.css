@@ -576,6 +576,16 @@ All colors MUST be HSL.
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* Premium-feel button — no text selection, no iOS callout, no tap
+     flash. Apply to any CTA where the user holds or repeatedly taps
+     and the highlighted-text look would feel webby. */
+  .no-tap-select {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
   /* Prevent horizontal scrolling on mobile */
   .no-horizontal-scroll {
     overflow-x: hidden;

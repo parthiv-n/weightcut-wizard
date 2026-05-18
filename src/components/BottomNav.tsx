@@ -27,6 +27,10 @@ import { SettingsPanel } from "@/components/nav/SettingsPanel";
 const mainNavItems = [
   { title: "Dashboard", url: "/dashboard", icon: Home },
   { title: "Nutrition", url: "/nutrition", icon: Utensils },
+  // Corner — gym-scoped social feed. Inserted as a new middle slot
+  // alongside the existing nav (no slot replaced); engagement red-dot
+  // moved here from the More button.
+  { title: "Corner", url: "/community", icon: Users },
   { title: "Weight", url: "/weight", icon: Weight },
 ];
 
@@ -183,19 +187,6 @@ export const BottomNav = memo(function BottomNav() {
     setTimeout(() => replayTutorial("onboarding"), 600);
   };
 
-  // Replay just the Fight Form calibration tour. Clears the localStorage
-  // gate the dashboard reads, then dispatches a window event that
-  // Dashboard listens to so the tour pops without a reload.
-  const handleReplayFightScoreTutorial = () => {
-    setSettingsDialogOpen(false);
-    setMoreMenuOpen(false);
-    try { localStorage.removeItem("wcw_ff_tour_seen_v1"); } catch {}
-    navigate("/dashboard");
-    setTimeout(() => {
-      window.dispatchEvent(new Event("wcw:replay-ff-tour"));
-    }, 600);
-  };
-
   const handleUpdateProfile = async () => {
     try {
       setUserName(editedName);
@@ -241,7 +232,8 @@ export const BottomNav = memo(function BottomNav() {
 
   const DashboardIcon = mainNavItems[0].icon;
   const NutritionIcon = mainNavItems[1].icon;
-  const WeightIcon = mainNavItems[2].icon;
+  const CornerIcon = mainNavItems[2].icon;
+  const WeightIcon = mainNavItems[3].icon;
 
   if (!isMobile) return null;
 
@@ -275,21 +267,32 @@ export const BottomNav = memo(function BottomNav() {
               tutorial="nav-nutrition"
             />
 
-            {/* More — moved to the centre slot for one-thumb reachability */}
+            {/* Corner — gym-scoped social feed, new middle slot. Red-dot
+                badge surfaces here (previously on More) because the
+                social tab IS where the user goes to clear unread
+                engagement. */}
+            <NavItemWithBadge
+              to={mainNavItems[2].url}
+              icon={CornerIcon}
+              label={mainNavItems[2].title}
+              isActive={location.pathname === mainNavItems[2].url || location.pathname.startsWith("/profile/")}
+              tutorial="nav-corner"
+              badge={hasUnreadFeedEngagement}
+            />
+
             <NavButton
               onClick={() => { setMoreMenuOpen(true); triggerHapticSelection(); }}
               icon={MoreHorizontal}
               label="More"
               isActive={filteredMoreMenuItems.some(i => i.url === location.pathname)}
               tutorial="nav-more"
-              badge={hasUnreadFeedEngagement}
             />
 
             <NavItem
-              to={mainNavItems[2].url}
+              to={mainNavItems[3].url}
               icon={WeightIcon}
-              label={mainNavItems[2].title}
-              isActive={location.pathname === mainNavItems[2].url}
+              label={mainNavItems[3].title}
+              isActive={location.pathname === mainNavItems[3].url}
               tutorial="nav-weight"
             />
 
@@ -347,7 +350,6 @@ export const BottomNav = memo(function BottomNav() {
         }}
         onSave={handleUpdateProfile}
         onReplayTutorial={handleReplayTutorial}
-        onReplayFightScoreTutorial={handleReplayFightScoreTutorial}
         onDeleteAccount={() => { setSettingsDialogOpen(false); setDeleteAccountDialogOpen(true); }}
         goalType={goalType}
         onToggleGoalType={handleToggleGoalType}
@@ -440,6 +442,42 @@ function NavItem({ to, icon: Icon, label, isActive, tutorial }: NavItemProps) {
         className={`relative h-[22px] w-[22px] transition-colors duration-150 ${isActive ? "text-primary" : "text-muted-foreground/75"}`}
         strokeWidth={isActive ? 2.4 : 1.9}
       />
+    </NavLink>
+  );
+}
+
+interface NavItemWithBadgeProps extends NavItemProps {
+  badge?: boolean;
+}
+
+/** NavItem variant that overlays a small red dot when `badge` is true.
+ *  Used by the Corner tab for unread-engagement indication. */
+function NavItemWithBadge({ to, icon: Icon, label, isActive, tutorial, badge }: NavItemWithBadgeProps) {
+  return (
+    <NavLink
+      to={to}
+      data-tutorial={tutorial}
+      onClick={() => triggerHaptic(ImpactStyle.Light)}
+      aria-label={label}
+      className="relative flex h-11 w-11 items-center justify-center rounded-full"
+    >
+      {isActive && (
+        <motion.div
+          layoutId="nav-active-pill"
+          className="absolute inset-0 rounded-full bg-primary/15"
+          transition={{ type: "spring", damping: 26, stiffness: 320 }}
+        />
+      )}
+      <Icon
+        className={`relative h-[22px] w-[22px] transition-colors duration-150 ${isActive ? "text-primary" : "text-muted-foreground/75"}`}
+        strokeWidth={isActive ? 2.4 : 1.9}
+      />
+      {badge && (
+        <span
+          aria-hidden
+          className="absolute top-1.5 right-2 h-2 w-2 rounded-full bg-destructive ring-2 ring-background"
+        />
+      )}
     </NavLink>
   );
 }

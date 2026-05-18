@@ -1,5 +1,7 @@
 export type TooltipPosition = "top" | "bottom" | "left" | "right" | "center";
 export type GoalType = "cutting" | "bulking" | "maintaining";
+export type WizardPose = "idle" | "wave" | "point" | "celebrate";
+export type VoicePace = "normal" | "slow";
 
 export interface UserTutorialState {
   goalType: GoalType;
@@ -18,6 +20,8 @@ export interface TutorialStep {
   navigateTo?: string;                                // navigate to this route before showing step
   condition?: (state: UserTutorialState) => boolean;  // skip if false
   spotlightOffset?: { x?: number; y?: number; width?: number; height?: number; yPercent?: number }; // manual spotlight nudge (yPercent: % of viewport height)
+  wizardPose?: WizardPose;
+  voicePace?: VoicePace;
 }
 
 export interface TutorialFlow {

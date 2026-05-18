@@ -53,24 +53,22 @@ export function NutritionHero({
     <>
       {/* Wizard's Nutrition Wisdom */}
       <button
-        className="w-full text-left rounded-2xl card-surface p-3 border border-border hover:border-primary/30 active:scale-[0.99] transition-all group"
+        className="w-full text-left rounded-2xl card-surface px-3 py-2 border border-border hover:border-primary/30 active:scale-[0.99] transition-all group"
         onClick={() => wisdom.generateTrainingFoodIdeas()}
       >
-        <div className="flex items-center gap-3">
-          <div className="rounded-full bg-primary/15 p-1.5 flex-shrink-0 group-hover:bg-primary/20 transition-colors">
-            <img src={wizardLogo} alt="Wizard" className="w-8 h-8 rounded-full object-cover" />
+        <div className="flex items-center gap-2.5">
+          <div className="rounded-full bg-primary/15 p-1 flex-shrink-0 group-hover:bg-primary/20 transition-colors">
+            <img src={wizardLogo} alt="Wizard" className="w-6 h-6 rounded-full object-cover" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5">
-                <h3 className="font-semibold text-sm">Wizard's Daily Wisdom</h3>
-              </div>
+              <h3 className="font-semibold text-[13px] leading-tight">Wizard's Daily Wisdom</h3>
               <div className="flex items-center gap-1 flex-shrink-0">
                 {wisdom.trainingWisdomLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />}
                 <ChevronRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-primary transition-colors" />
               </div>
             </div>
-            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+            <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug line-clamp-2">
               {wisdom.aiWisdomLoading ? (
                 <span className="inline-flex items-center gap-1">
                   <Loader2 className="h-3 w-3 animate-spin text-primary/50" />
@@ -82,7 +80,6 @@ export function NutritionHero({
                 wisdom.getNutritionWisdom()
               )}
             </p>
-            <p className="text-[13px] text-primary/50 mt-1 font-medium">Tap for pre & post training food ideas →</p>
           </div>
         </div>
       </button>

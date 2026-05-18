@@ -94,7 +94,7 @@ export function QuickLogDialog({ open, onOpenChange, onLogFood, onLogWeight, onL
     triggerHapticSelection();
     if (Capacitor.isNativePlatform()) {
       try {
-        const { Camera, CameraResultType, CameraSource, CameraDirection } = await import("@capacitor/camera");
+        const { Camera, CameraResultType, CameraSource } = await import("@capacitor/camera");
         const perms = await Camera.checkPermissions();
         if (perms.camera !== "granted") {
           const requested = await Camera.requestPermissions({ permissions: ["camera"] });
@@ -103,15 +103,20 @@ export function QuickLogDialog({ open, onOpenChange, onLogFood, onLogWeight, onL
             return;
           }
         }
+        // Use the native camera UI without forcing a direction so the
+        // user can choose front or rear. Front-camera shots from iOS's
+        // native UI are saved un-mirrored by default — previously we
+        // pinned `direction: Front` which on some builds returned the
+        // image with the preview's mirror baked in, making selfies
+        // appear inverted in the log.
         const photo = await Camera.getPhoto({
           quality: 80,
           allowEditing: false,
           resultType: CameraResultType.Uri,
           source: CameraSource.Camera,
-          direction: CameraDirection.Front,
           width: 1600,
           height: 1600,
-          promptLabelHeader: "Training selfie",
+          promptLabelHeader: "Training photo",
           promptLabelPhoto: "Take Photo",
         });
         if (photo.webPath) {
@@ -127,9 +132,11 @@ export function QuickLogDialog({ open, onOpenChange, onLogFood, onLogWeight, onL
         logger.warn("QuickLog camera failed", { error: err });
       }
     } else {
-      // Web fallback: hidden file input with `capture=user` so mobile Safari
-      // opens the front camera directly. Desktop browsers ignore capture and
-      // fall back to the standard file picker.
+      // Web fallback: hidden file input with `capture=environment` so
+      // mobile Safari opens the universal camera (rear-default, with
+      // the same "switch camera" affordance the native picker offers).
+      // Desktop browsers ignore `capture` and fall back to the standard
+      // file picker.
       photoInputRef.current?.click();
     }
   };
@@ -440,7 +447,7 @@ export function QuickLogDialog({ open, onOpenChange, onLogFood, onLogWeight, onL
                 <div className="relative inline-block">
                   <img
                     src={trainingPhoto.previewUrl}
-                    alt="Training selfie"
+                    alt="Training photo"
                     className="h-20 w-20 rounded-2xl object-cover border border-border/40"
                   />
                   <button
@@ -459,14 +466,14 @@ export function QuickLogDialog({ open, onOpenChange, onLogFood, onLogWeight, onL
                   className="h-20 w-20 rounded-2xl border border-dashed border-border/60 bg-muted/30 dark:bg-white/[0.04] flex flex-col items-center justify-center gap-1 text-muted-foreground/85 active:scale-[0.97] transition-transform"
                 >
                   <CameraIcon className="h-5 w-5" strokeWidth={1.9} />
-                  <span className="text-[10px] font-semibold">Selfie</span>
+                  <span className="text-[10px] font-semibold">Photo</span>
                 </button>
               )}
               <input
                 ref={photoInputRef}
                 type="file"
                 accept="image/*"
-                capture="user"
+                capture="environment"
                 className="hidden"
                 onChange={handlePhotoInputChange}
               />

@@ -15,12 +15,12 @@ import {
   Shield,
   User,
   Clock,
-  Gem,
+  Crown,
 } from "lucide-react";
 import { useAITask } from "@/contexts/AITaskContext";
 import { AICompactOverlay } from "@/components/AICompactOverlay";
 import { useRehydrationProtocol } from "@/hooks/hydration/useRehydrationProtocol";
-import { useGems } from "@/hooks/useGems";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { HydrationSkeleton } from "@/components/hydration/HydrationSkeleton";
 import { InputsUsedChipRow } from "@/components/hydration/InputsUsedChipRow";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -44,7 +44,7 @@ export default function Hydration() {
     currentWeight, profileParts,
     handleGenerateProtocol, handleAICancel,
   } = useRehydrationProtocol();
-  const { gems, isPremium: gemsIsPremium } = useGems();
+  const { hasAccess: hasAiAccess } = useFeatureAccess("AI_REHYDRATION_PROTOCOL");
 
   const [activeTab, setActiveTab] = useState<"fluid" | "carbs">("fluid");
   const [warningsOpen, setWarningsOpen] = useState(false);
@@ -360,13 +360,19 @@ export default function Hydration() {
 
             <Button
               type="submit"
-              className={`w-full h-11 mt-1 font-semibold text-sm rounded-2xl transition-all active:scale-[0.98] ${lastError && !loading ? "ring-1 ring-red-500/30" : ""}`}
+              className={`relative w-full h-11 mt-1 font-semibold text-sm rounded-2xl transition-all active:scale-[0.98] ${lastError && !loading ? "ring-1 ring-red-500/30" : ""}`}
               disabled={loading || !currentWeight || !weightLost || parseFloat(weightLost) <= 0}
             >
               {loading ? (
                 <span className="inline-flex items-center gap-2"><span className="h-3 w-3 rounded-full border-2 border-current border-t-transparent animate-spin" />Building plan...</span>
               ) : lastError ? "Try again" : (
-                <>Generate Protocol{!gemsIsPremium && <span className="inline-flex items-center gap-0.5 ml-1.5 text-primary-foreground/60"><Gem className="h-3 w-3" /><span className="text-[10px] font-medium tabular-nums">{gems}</span></span>}</>
+                <span className="inline-flex items-center gap-1.5">Generate Protocol</span>
+              )}
+              {!loading && !lastError && !hasAiAccess && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex items-center gap-0.5 text-primary-foreground/70 pointer-events-none">
+                  <Crown className="h-3 w-3" />
+                  <span className="text-[10px] font-medium uppercase tracking-wider">Pro</span>
+                </span>
               )}
             </Button>
           </form>

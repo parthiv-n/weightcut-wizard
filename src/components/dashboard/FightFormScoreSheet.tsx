@@ -1,8 +1,6 @@
 import { useState } from "react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Progress } from "@/components/ui/progress";
-import { ChevronRight } from "lucide-react";
-import { FightFormHowItWorksTour } from "./FightFormHowItWorksTour";
 import { ShareButton } from "@/components/share/ShareButton";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { FightFormScoreCard } from "@/components/share/cards/FightFormScoreCard";
@@ -165,7 +163,6 @@ export function FightFormScoreSheet(p: Props) {
           </div>
         )}
 
-        <ScoreGuide />
       </SheetContent>
 
       <ShareCardDialog
@@ -266,19 +263,3 @@ export function FightFormScoreSheet(p: Props) {
   );
 }
 
-function ScoreGuide() {
-  const [tourOpen, setTourOpen] = useState(false);
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setTourOpen(true)}
-        className="mt-6 border-t border-border/50 pt-4 flex w-full items-center justify-between text-left hover:opacity-80 transition-opacity"
-      >
-        <span className="section-header">How your score works</span>
-        <ChevronRight className="size-4 text-muted-foreground" />
-      </button>
-      <FightFormHowItWorksTour open={tourOpen} onClose={() => setTourOpen(false)} />
-    </>
-  );
-}

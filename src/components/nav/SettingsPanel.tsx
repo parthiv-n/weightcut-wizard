@@ -1,21 +1,19 @@
-import { Moon, Sun, ChevronRight, BookOpen, Bell, Trash2, Mail, Shield, FileText, LifeBuoy, Heart, Trophy, Zap, RotateCcw, Crown, Gem, Play } from "lucide-react";
-import { Link } from "react-router-dom";
+import { Moon, Sun, ChevronRight, BookOpen, Bell, Trash2, Shield, FileText, LifeBuoy, Heart, Trophy, Zap, RotateCcw, Crown, TrendingDown } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { ProfilePictureUpload } from "@/components/ProfilePictureUpload";
 import { Capacitor } from "@capacitor/core";
 import { useState } from "react";
 import { getSettings, saveSettings, scheduleReminder, cancelReminder, type ReminderSettings } from "@/lib/weightReminder";
 import { useSubscription } from "@/hooks/useSubscription";
-import { useGems } from "@/hooks/useGems";
 import { restorePurchases, isPremiumFromCustomerInfo, presentCustomerCenter } from "@/lib/purchases";
 import { PremiumBadge } from "@/components/subscription/PremiumBadge";
 import { useProfile } from "@/contexts/UserContext";
 import { useToast as useToastSub } from "@/hooks/use-toast";
 
 function SubscriptionSection() {
-  const { isPremium, tier, expiresAt, openPaywall } = useSubscription();
+  const { isPremium, rawTier, expiresAt, openPaywall } = useSubscription();
   const { refreshProfile } = useProfile();
   const { toast } = useToastSub();
   const [restoringPurchases, setRestoringPurchases] = useState(false);
@@ -42,7 +40,7 @@ function SubscriptionSection() {
     const expiryLabel = expiresAt
       ? `Renews ${expiresAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
       : "Active";
-    const planLabel = tier === "premium_lifetime" ? "Lifetime" : tier === "premium_annual" ? "Annual" : "Monthly";
+    const planLabel = rawTier === "premium_lifetime" ? "Lifetime" : rawTier === "premium_annual" ? "Annual" : "Monthly";
 
     return (
       <div className="rounded-lg bg-muted/20 overflow-hidden divide-y divide-border/20">
@@ -87,27 +85,55 @@ function SubscriptionSection() {
   );
 }
 
-function GemsSection() {
-  const { gems, adsRemaining, canWatchAd, loading, isPremium, watchAdForGem } = useGems();
+/**
+ * Single-row "View your plan" entry that mirrors the same affordance on
+ * Goals + Dashboard. Detects the plan via `localStorage.wcw_cut_plan` —
+ * the same source `/cut-plan` and `/weight-plan` read — and routes to
+ * the matching CutPlanReview screen so the user lands on the canonical
+ * InlinePlanDisplay timeline. Renders nothing when no plan is present
+ * so settings stays tidy for users who skipped the AI generator.
+ */
+function PlanLinkSection({ onClose }: { onClose: () => void }) {
+  const navigate = useNavigate();
+  const raw = typeof window !== "undefined" ? window.localStorage.getItem("wcw_cut_plan") : null;
+  if (!raw) return null;
 
-  if (isPremium) return null;
+  let planType: "weight_loss" | "weight_cut" = "weight_cut";
+  let summary = "";
+  try {
+    const parsed = JSON.parse(raw);
+    if (parsed?.planType === "weight_loss") planType = "weight_loss";
+    if (parsed?.totalWeeks && parsed?.weeklyLossTarget) {
+      summary = `${parsed.totalWeeks} weeks · ${parsed.weeklyLossTarget}`;
+    }
+  } catch {
+    // Malformed payload — still surface the row so the user can re-open
+    // the plan screen (which will show its own empty state).
+  }
+
+  const route = planType === "weight_loss" ? "/weight-plan" : "/cut-plan";
+  const label = planType === "weight_loss" ? "View Weight Loss Plan" : "View Cut Plan";
 
   return (
     <div className="rounded-lg bg-muted/20 overflow-hidden divide-y divide-border/20">
-      <div className="flex items-center justify-between px-3 py-2">
+      <button
+        type="button"
+        onClick={() => {
+          onClose();
+          // Defer one tick so the sheet close animation can start before
+          // the route change — feels less jarring than an instant swap.
+          setTimeout(() => navigate(route), 50);
+        }}
+        className="w-full flex items-center justify-between px-3 py-2 active:bg-muted/40 transition-colors text-left"
+      >
         <div className="flex items-center gap-2">
-          <Gem className="h-4 w-4 text-primary shrink-0" />
-          <p className="text-[13px] font-medium">AI Gems</p>
+          <TrendingDown className="h-4 w-4 text-primary shrink-0" />
+          <div>
+            <p className="text-[13px] font-medium">{label}</p>
+            {summary && <p className="text-[13px] text-muted-foreground">{summary}</p>}
+          </div>
         </div>
-        <span className="text-[13px] font-bold text-primary tabular-nums">{gems}</span>
-      </div>
-      <button type="button" onClick={watchAdForGem} disabled={!canWatchAd || loading}
-        className="w-full flex items-center justify-between px-3 py-2 active:bg-muted/40 transition-colors text-left disabled:opacity-50">
-        <div className="flex items-center gap-2">
-          <Play className="h-4 w-4 text-green-500 shrink-0" />
-          <p className="text-[13px] font-medium">{loading ? 'Loading...' : 'Watch Ad'}</p>
-        </div>
-        <span className="text-[13px] text-muted-foreground">{adsRemaining > 0 ? `${adsRemaining} left` : 'Limit reached'}</span>
+        <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
       </button>
     </div>
   );
@@ -126,11 +152,6 @@ interface SettingsPanelProps {
   onAvatarChange: (url: string) => void;
   onSave: () => void;
   onReplayTutorial: () => void;
-  /** Optional companion to `onReplayTutorial` — clears the Fight Form
-   *  calibration tour flag so it re-fires next time the dashboard
-   *  renders with an unlocked score. Hidden when not provided so
-   *  consumers (coach Settings, etc.) can opt out. */
-  onReplayFightScoreTutorial?: () => void;
   onDeleteAccount: () => void;
   goalType?: 'cutting' | 'losing';
   onToggleGoalType?: (fighterMode: boolean) => void;
@@ -143,7 +164,6 @@ export function SettingsPanel({
   theme, onToggleTheme,
   onAvatarChange, onSave,
   onReplayTutorial,
-  onReplayFightScoreTutorial,
   onDeleteAccount,
   goalType,
   onToggleGoalType,
@@ -219,8 +239,8 @@ export function SettingsPanel({
           {/* Subscription */}
           <SubscriptionSection />
 
-          {/* Gems */}
-          <GemsSection />
+          {/* Cut/Weight Plan — only renders when a plan exists locally. */}
+          <PlanLinkSection onClose={onClose} />
 
           {/* Preferences */}
           <div className="rounded-lg bg-muted/20 overflow-hidden divide-y divide-border/20">
@@ -297,16 +317,6 @@ export function SettingsPanel({
               </div>
               <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
             </button>
-            {onReplayFightScoreTutorial && (
-              <button type="button" onClick={onReplayFightScoreTutorial}
-                className="w-full flex items-center justify-between px-3 py-2 active:bg-muted/40 transition-colors text-left">
-                <div className="flex items-center gap-2">
-                  <BookOpen className="h-4 w-4 text-primary shrink-0" />
-                  <p className="text-[13px] font-medium">Replay Fight Score Tutorial</p>
-                </div>
-                <ChevronRight className="h-3 w-3 text-muted-foreground shrink-0" />
-              </button>
-            )}
             <Link to="/legal?tab=privacy" className="flex items-center justify-between px-3 py-2 active:bg-muted/40 transition-colors">
               <div className="flex items-center gap-2">
                 <Shield className="h-4 w-4 text-muted-foreground shrink-0" />

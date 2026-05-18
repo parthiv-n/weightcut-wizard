@@ -23,12 +23,13 @@ import { ManipulationCard, type SodiumStrategy, type FibreStrategy } from "@/com
 import { DehydrationTacticsCard, type DehydrationTactic } from "@/components/fightweek/DehydrationTacticsCard";
 import { PostWeighInCard, type PostWeighInData } from "@/components/fightweek/PostWeighInCard";
 import { sanitizeAIText } from "@/lib/sanitizeAIText";
-import { Activity, Shield, CheckCircle, AlertTriangle, Info, Trash2 } from "lucide-react";
+import { Activity, Shield, CheckCircle, AlertTriangle, Info, Trash2, Crown } from "lucide-react";
 import { ShareButton } from "@/components/share/ShareButton";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { FightWeekSummaryCard } from "@/components/share/cards/FightWeekSummaryCard";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { useAITask } from "@/contexts/AITaskContext";
 import { AICompactOverlay } from "@/components/AICompactOverlay";
 import { ToastAction } from "@/components/ui/toast";
@@ -123,10 +124,11 @@ export default function FightWeek() {
 
   const { toast } = useToast();
   const { userId, profile, refreshProfile } = useUser();
-  const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
+  const { openPaywall, handlePaywallError } = useSubscription();
+  const { hasAccess: hasAiAccess } = useFeatureAccess("AI_FIGHT_WEEK_ANALYSIS");
   const { tasks: aiTasks, dismissTask: aiDismiss, addTask, completeTask, failTask } = useAITask();
   const { safeAsync, isMounted } = useSafeAsync();
-  const fightWeekAnalysisAction = useAIAction(api.actions.fightWeekAnalysis.run);
+  const fightWeekAnalysisAction = useAIAction(api.actions.fightWeekAnalysis.run, "AI_FIGHT_WEEK_ANALYSIS");
   const upsertFightWeekPlan = useMutation(api.fight_camp.upsertPlan);
   const updateProfileGoals = useMutation(api.profiles.updateGoals);
   const activePlan = useQuery(api.fight_camp.getActivePlan, userId ? {} : "skip");
@@ -286,8 +288,8 @@ export default function FightWeek() {
   const generateProtocol = async () => {
     if (!userId || !inputsValid) return;
 
-    if (!checkAIAccess()) {
-      openNoGemsDialog();
+    if (!hasAiAccess) {
+      openPaywall();
       return;
     }
 
@@ -327,7 +329,7 @@ export default function FightWeek() {
       } catch (err: any) {
         if (controller.signal.aborted) return;
         if (!isMounted()) return;
-        if (await handleAILimitError(err)) { failTask(taskId, "Limit reached"); return; }
+        if (await handlePaywallError(err)) { failTask(taskId, "Pro required"); return; }
         const msg = err?.message || "Protocol generation unavailable";
         failTask(taskId, msg);
         setLastError(msg);
@@ -346,7 +348,6 @@ export default function FightWeek() {
       }
 
       if (data?.plan) {
-        onAICallSuccess();
         const plan = data.plan as FightWeekAIPlan;
 
         // Safety net: if the AI returned fewer timeline days than requested,
@@ -644,14 +645,24 @@ export default function FightWeek() {
             <Button
               onClick={generateProtocol}
               disabled={isGenerating || !normalDailyCarbs}
-              className={`w-full h-12 rounded-2xl text-[15px] font-semibold bg-primary text-primary-foreground active:scale-[0.98] transition-transform disabled:opacity-40 ${lastError && !isGenerating ? "ring-2 ring-red-500/40" : ""}`}
+              className={`relative w-full h-12 rounded-2xl text-[15px] font-semibold bg-primary text-primary-foreground active:scale-[0.98] transition-transform disabled:opacity-40 ${lastError && !isGenerating ? "ring-2 ring-red-500/40" : ""}`}
             >
               {isGenerating ? (
                 <span className="inline-flex items-center gap-2">
                   <span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
                   Building your plan…
                 </span>
-              ) : lastError ? "Try again" : aiPlan ? "Regenerate plan" : "Build my fight-week plan"}
+              ) : (
+                <span className="inline-flex items-center gap-1.5">
+                  {lastError ? "Try again" : aiPlan ? "Regenerate plan" : "Build my fight-week plan"}
+                </span>
+              )}
+              {!isGenerating && !hasAiAccess && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex items-center gap-0.5 text-primary-foreground/70 pointer-events-none">
+                  <Crown className="h-3 w-3" />
+                  <span className="text-[10px] font-medium uppercase tracking-wider">Pro</span>
+                </span>
+              )}
             </Button>
           )}
           {!inputsValid && (

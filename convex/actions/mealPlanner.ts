@@ -1,4 +1,4 @@
-/** Meal planner — heavy reasoning, gem-gated, logs decision for reconcile. */
+/** Meal planner — heavy reasoning, Pro-only, logs decision for reconcile. */
 "use node";
 
 import { v } from "convex/values";
@@ -15,7 +15,7 @@ import {
   requireUserIdFromAction,
   SECOND_PERSON_DIRECTIVE,
 } from "./_helpers";
-import { enforceGemGate } from "../_shared/subscriptionGuard";
+import { enforceFeatureGate } from "../_shared/featureGates";
 
 export const run = action({
   args: {
@@ -25,7 +25,7 @@ export const run = action({
   },
   handler: async (ctx, { prompt }) => {
     const userId = await requireUserIdFromAction(ctx);
-    await enforceGemGate(ctx, userId);
+    await enforceFeatureGate(ctx, userId, "AI_MEAL_PLANNER");
     // Strip control chars, bidi overrides, zero-width chars, and known
     // injection patterns ("ignore previous instructions", role headers,
     // chat-template tokens) before the prompt ever reaches Groq.

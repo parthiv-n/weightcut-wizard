@@ -6,9 +6,10 @@ import { Progress } from "@/components/ui/progress";
 // Lazy-load recharts wrapper so the ~100KB charts bundle defers until first paint.
 const WeightTrackerChart = lazy(() => import("@/components/charts/WeightTrackerChart"));
 import { format } from "date-fns";
-import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Activity, Scale, Trash2, RefreshCw, ChevronDown, Check, CheckCircle2, Gem, Minus, Plus, Loader2 } from "lucide-react";
+import { TrendingDown, TrendingUp, Calendar, CalendarClock, Target, AlertTriangle, Activity, Trash2, ChevronDown, CheckCircle2, Crown, Minus, Plus, Loader2, Check } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { useUser } from "@/contexts/UserContext";
 import {
@@ -20,24 +21,36 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { AIGeneratingOverlay } from "@/components/AIGeneratingOverlay";
 import { useAITask } from "@/contexts/AITaskContext";
 import { AICompactOverlay } from "@/components/AICompactOverlay";
 import { ShareButton } from "@/components/share/ShareButton";
 import { ShareCardDialog } from "@/components/share/ShareCardDialog";
 import { WeightTrackerCard } from "@/components/share/cards/WeightTrackerCard";
 import { WeighInResultCard } from "@/components/share/cards/WeighInResultCard";
+import { InlinePlanDisplay } from "@/components/onboarding/InlinePlanDisplay";
 import type { Profile } from "@/pages/weight/types";
 import { isFighter } from "@/lib/goalType";
 import { useWeightData } from "@/hooks/weight/useWeightData";
 import { useWeightAnalysis } from "@/hooks/weight/useWeightAnalysis";
-import { useGems } from "@/hooks/useGems";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { triggerHapticSelection } from "@/lib/haptics";
+import { WeightInsightsBlock } from "@/pages/weight/WeightInsightsBlock";
+import { useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { useMyGyms } from "@/hooks/coach/useMyGyms";
+import { MadeWeightShareSheet } from "@/components/community/MadeWeightShareSheet";
+import type { MadeWeightInput } from "@/lib/madeWeightCard";
 
 export default function WeightTracker() {
-  const { userId, profile: contextProfile } = useUser();
+  const { userId, profile: contextProfile, userName, avatarUrl } = useUser();
   const profile = contextProfile as unknown as Profile;
-  const { gems, isPremium: gemsIsPremium } = useGems();
+  // Gym branding + active camp inputs for the Made Weight share card.
+  // Both queries skip when userId hasn't resolved, so cold-launch is a no-op.
+  const { gyms } = useMyGyms(userId);
+  const activeCamp = useQuery(api.fight_camp.getActiveCamp, userId ? {} : "skip");
+  const [madeWeightOpen, setMadeWeightOpen] = useState(false);
+  const [madeWeightInput, setMadeWeightInput] = useState<MadeWeightInput | null>(null);
+  const { hasAccess: hasAiAccess } = useFeatureAccess("AI_WEIGHT_ANALYSIS");
   const [searchParams, setSearchParams] = useSearchParams();
   const [timeFilter, setTimeFilter] = useState<"1W" | "1M" | "ALL">("1M");
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -55,7 +68,9 @@ export default function WeightTracker() {
   } = useWeightData({ profile });
 
   const {
-    analyzingWeight, aiAnalysis, aiAnalysisWeight, aiAnalysisTarget,
+    analyzingWeight,
+    analysisPlan,
+    analysisOpen, setAnalysisOpen,
     unsafeGoalDialogOpen, setUnsafeGoalDialogOpen,
     loadPersistedAnalysis, clearAnalysis, getAIAnalysis, handleAICancel,
     targetsApplied, applyingTargets, applyNutritionTargets,
@@ -86,22 +101,54 @@ export default function WeightTracker() {
       setTimeout(() => setShowWeightSuccess(false), 1500);
       const fwt = profile.fight_week_target_kg ?? profile.goal_weight_kg;
       if (fwt && loggedWeight <= fwt && !editingLogId) {
-        setWeighInShareOpen(true);
+        // Resolve "Made Weight" inputs from camp + recent logs. Falls back
+        // to the onboarding starting weight if no recent log exists.
+        const earliestRecent = (() => {
+          const cutoffMs = Date.now() - 30 * 86400000;
+          const within = weightLogs.filter(
+            (l) => new Date(l.date).getTime() >= cutoffMs,
+          );
+          const earliest = (within[0] ?? weightLogs[0]);
+          // weight_kg may be string-typed when arriving from older callers;
+          // coerce via Number() so we don't depend on a specific shape.
+          return earliest ? Number(earliest.weight_kg) : undefined;
+        })();
+        const startingWeightKg =
+          activeCamp?.startingWeightKg ?? earliestRecent ?? profile.current_weight_kg;
+        const campStartDate = activeCamp
+          ? new Date(activeCamp._creationTime).toISOString().slice(0, 10)
+          : undefined;
+        const gym = gyms[0];
+        setMadeWeightInput({
+          startingWeightKg: startingWeightKg ?? loggedWeight,
+          finalWeightKg: loggedWeight,
+          weighInDate: new Date().toISOString().slice(0, 10),
+          campStartDate,
+          displayName: userName || profile.display_name || "Fighter",
+          gymName: gym?.gym_name,
+          gymLogoUrl: gym?.gym_logo_url ?? null,
+          avatarUrl: avatarUrl ?? profile.avatar_url ?? null,
+          weightUnit: "kg",
+        });
+        setMadeWeightOpen(true);
       }
     }
   };
 
-  const getWeeklyLossRequired = () => {
-    if (!profile) return 0;
-    const current = getCurrentWeight();
-    const targetDate = new Date(profile.target_date);
-    const today = new Date();
-    const daysRemaining = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    const weeksRemaining = Math.max(1, daysRemaining / 7);
-    const target = profile.fight_week_target_kg || profile.goal_weight_kg;
-    if (!target) return 0;
-    const weightRemaining = current - target;
-    return weightRemaining / weeksRemaining;
+  /** Derived: weekly loss target encoded in the AI plan, in kg/week. The new
+   *  plan shape doesn't expose a top-level `requiredWeeklyLoss` like the old
+   *  protocol JSON did, so we derive it from the first vs second week of the
+   *  plan, falling back to start-to-final divided by total weeks. Used purely
+   *  to drive the chart's projection overlay. */
+  const getPlanWeeklyLoss = (): number => {
+    if (!analysisPlan?.weeklyPlan?.length) return 0;
+    const rows = analysisPlan.weeklyPlan;
+    const first = Number(rows[0]?.targetWeight);
+    const last = Number(rows[rows.length - 1]?.targetWeight);
+    if (!Number.isFinite(first) || !Number.isFinite(last)) return 0;
+    const weeks = Math.max(1, rows.length);
+    const perWeek = (first - last) / weeks;
+    return perWeek > 0 ? perWeek : 0;
   };
 
   const getChartData = () => {
@@ -141,14 +188,15 @@ export default function WeightTracker() {
     const data: { date: string; weight: number | null; projected: number | null; fightWeekGoal: number | undefined; fightNightGoal: number | undefined; logId: string | null; fullDate: string }[] = filteredLogs.map((log, idx) => ({
       date: format(new Date(log.date), "MMM dd"),
       weight: log.weight_kg,
-      projected: (aiAnalysis && idx === filteredLogs.length - 1) ? log.weight_kg : null as number | null,
+      projected: (analysisPlan && idx === filteredLogs.length - 1) ? log.weight_kg : null as number | null,
       fightWeekGoal: fightWeekTarget,
       fightNightGoal: profile.goal_weight_kg,
       logId: log.id,
       fullDate: log.date,
     }));
 
-    if (aiAnalysis && aiAnalysis.requiredWeeklyLoss > 0 && filteredLogs.length > 0) {
+    const planWeeklyLoss = getPlanWeeklyLoss();
+    if (analysisPlan && planWeeklyLoss > 0 && filteredLogs.length > 0) {
       const lastLog = filteredLogs[filteredLogs.length - 1];
       const lastWeight = lastLog.weight_kg;
       const lastDate = new Date(lastLog.date);
@@ -161,7 +209,7 @@ export default function WeightTracker() {
 
         const projectedWeight = Math.max(
           fightWeekTarget,
-          lastWeight - (week * aiAnalysis.requiredWeeklyLoss)
+          lastWeight - (week * planWeeklyLoss),
         );
 
         data.push({
@@ -238,23 +286,18 @@ export default function WeightTracker() {
 
   const insight = getInsight();
 
-  const ANALYSIS_STEPS = [
-    { icon: Activity, label: "Analyzing weight trends", color: "text-blue-400" },
-    { icon: TrendingDown, label: "Calculating loss rate", color: "text-green-500" },
-    { icon: Target, label: "Projecting goal completion", color: "text-blue-500" },
-    { icon: CheckCircle2, label: "Formulating strategy", color: "text-yellow-400" },
-  ];
-
   const { tasks: aiTasks, dismissTask: aiDismiss } = useAITask();
   const aiTask = aiTasks.find(t => t.status === "running" && t.type === "weight-analysis");
 
-  // Pick up completed weight analysis from task context
+  // Pick up completed weight analysis from task context (e.g. when the user
+  // navigated away and back while it was running).
   const handledWeightTaskRef = useRef<string | null>(null);
   useEffect(() => {
     const done = aiTasks.find(t => t.status === "done" && t.type === "weight-analysis" && t.result && handledWeightTaskRef.current !== t.id);
     if (done) {
       handledWeightTaskRef.current = done.id;
       loadPersistedAnalysis();
+      setAnalysisOpen(true);
       aiDismiss(done.id);
     }
   }, [aiTasks, aiDismiss]);
@@ -381,7 +424,7 @@ export default function WeightTracker() {
                   goalWeight={profile?.goal_weight_kg}
                   hasFightWeekTarget={!!profile?.fight_week_target_kg}
                   showProjected={showProjected}
-                  hasAiAnalysis={!!aiAnalysis}
+                  hasAiAnalysis={!!analysisPlan}
                   onChartClick={handleChartClick}
                 />
               </Suspense>
@@ -396,7 +439,7 @@ export default function WeightTracker() {
                     </span>
                   )}
                 </div>
-                {aiAnalysis && (
+                {analysisPlan && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -464,35 +507,68 @@ export default function WeightTracker() {
           ); })()}
         </div>
 
-        {/* Stats Overview — Current / Target / Δ / Deadline */}
+        {/* Days-to-fight chip — only shown for fighters with a future
+            target date. Persistent context anchor that doubles as a
+            countdown without competing with the hero log card. */}
+        {profile && isFighter(profile.goal_type) && profile.target_date && (() => {
+          const daysToFight = Math.ceil((new Date(profile.target_date).getTime() - Date.now()) / 86400000);
+          if (daysToFight < 0) return null;
+          return (
+            <div className="flex justify-center">
+              <div className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-sky-500/15 to-blue-500/15 border border-sky-500/30 px-4 py-1.5 text-[12px] font-semibold text-sky-200/90 backdrop-blur-sm">
+                <CalendarClock className="h-3.5 w-3.5" />
+                {daysToFight === 0 ? "Fight day" : `${daysToFight} ${daysToFight === 1 ? "morning" : "mornings"} until fight`}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Stats Overview — Current / Target / Δ / Deadline.
+            Each cell is forced square via aspect-square so the grid
+            stays visually consistent and text never overflows. Value
+            text trimmed from 20→17px and labels from 10→9px so even
+            long ones like "Deadline" / "To lose" fit comfortably. */}
         {profile && (
           <div className="grid grid-cols-4 gap-2">
-            <div className="card-surface rounded-3xl p-3 text-center">
-              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60 font-semibold">Current</p>
-              <p className="text-[20px] font-bold tabular-nums text-foreground mt-1.5 leading-none">{getCurrentWeight().toFixed(1)}</p>
-              <p className="text-[10px] text-muted-foreground/60 mt-1">kg</p>
+            <div className="card-surface rounded-3xl aspect-square p-2 flex flex-col items-center justify-center gap-1 text-center">
+              <p className="text-[9px] uppercase tracking-wider text-muted-foreground/60 font-semibold leading-tight">Current</p>
+              <p className="text-[17px] font-bold tabular-nums text-foreground leading-none">{getCurrentWeight().toFixed(1)}</p>
+              <p className="text-[9px] text-muted-foreground/60 leading-none">kg</p>
             </div>
-            <div className="card-surface rounded-3xl p-3 text-center">
-              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60 font-semibold">Target</p>
-              <p className="text-[20px] font-bold tabular-nums text-foreground mt-1.5 leading-none">{(profile.fight_week_target_kg || profile.goal_weight_kg).toFixed(1)}</p>
-              <p className="text-[10px] text-muted-foreground/60 mt-1">kg</p>
+            <div className="card-surface rounded-3xl aspect-square p-2 flex flex-col items-center justify-center gap-1 text-center">
+              <p className="text-[9px] uppercase tracking-wider text-muted-foreground/60 font-semibold leading-tight">Target</p>
+              <p className="text-[17px] font-bold tabular-nums text-foreground leading-none">{(profile.fight_week_target_kg || profile.goal_weight_kg).toFixed(1)}</p>
+              <p className="text-[9px] text-muted-foreground/60 leading-none">kg</p>
             </div>
-            <div className="card-surface rounded-3xl p-3 text-center">
+            <div className="card-surface rounded-3xl aspect-square p-2 flex flex-col items-center justify-center gap-1 text-center">
               {(() => {
                 const current = getCurrentWeight();
                 const target = profile.fight_week_target_kg || profile.goal_weight_kg;
                 const diff = target - current;
-                if (diff > 0) return (<><p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60 font-semibold">To gain</p><p className="text-[20px] font-bold tabular-nums text-emerald-500 mt-1.5 leading-none">+{diff.toFixed(1)}</p><p className="text-[10px] text-muted-foreground/60 mt-1">kg</p></>);
-                if (diff < 0) return (<><p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60 font-semibold">To lose</p><p className="text-[20px] font-bold tabular-nums text-primary mt-1.5 leading-none">{Math.abs(diff).toFixed(1)}</p><p className="text-[10px] text-muted-foreground/60 mt-1">kg</p></>);
-                return (<><p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60 font-semibold">Status</p><p className="text-[20px] font-bold tabular-nums text-emerald-500 mt-1.5 leading-none">✓</p><p className="text-[10px] text-muted-foreground/60 mt-1">At target</p></>);
+                if (diff > 0) return (<><p className="text-[9px] uppercase tracking-wider text-muted-foreground/60 font-semibold leading-tight">To gain</p><p className="text-[17px] font-bold tabular-nums text-emerald-500 leading-none">+{diff.toFixed(1)}</p><p className="text-[9px] text-muted-foreground/60 leading-none">kg</p></>);
+                if (diff < 0) return (<><p className="text-[9px] uppercase tracking-wider text-muted-foreground/60 font-semibold leading-tight">To lose</p><p className="text-[17px] font-bold tabular-nums text-primary leading-none">{Math.abs(diff).toFixed(1)}</p><p className="text-[9px] text-muted-foreground/60 leading-none">kg</p></>);
+                return (<><p className="text-[9px] uppercase tracking-wider text-muted-foreground/60 font-semibold leading-tight">Status</p><p className="text-[17px] font-bold tabular-nums text-emerald-500 leading-none">✓</p><p className="text-[9px] text-muted-foreground/60 leading-none">At target</p></>);
               })()}
             </div>
-            <div className="card-surface rounded-3xl p-3 text-center">
-              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60 font-semibold">Deadline</p>
-              <p className="text-[14px] font-bold text-foreground mt-1.5 leading-none">{format(new Date(profile.target_date), "MMM dd")}</p>
-              <p className="text-[10px] text-muted-foreground/60 mt-1">{format(new Date(profile.target_date), "yyyy")}</p>
+            <div className="card-surface rounded-3xl aspect-square p-2 flex flex-col items-center justify-center gap-1 text-center">
+              <p className="text-[9px] uppercase tracking-wider text-muted-foreground/60 font-semibold leading-tight">Deadline</p>
+              <p className="text-[13px] font-bold text-foreground leading-none">{format(new Date(profile.target_date), "MMM dd")}</p>
+              <p className="text-[9px] text-muted-foreground/60 leading-none">{format(new Date(profile.target_date), "yyyy")}</p>
             </div>
           </div>
+        )}
+
+        {/* 7-day rolling average banner + predictive trend card.
+            Both gated separately by data-availability so the page
+            degrades gracefully for new users with few logs. */}
+        {profile && weightLogs.length >= 3 && (
+          <WeightInsightsBlock
+            weightLogs={weightLogs}
+            currentWeight={getCurrentWeight()}
+            targetWeight={profile.fight_week_target_kg || profile.goal_weight_kg}
+            targetDate={profile.target_date}
+            isCutting={isFighter(profile.goal_type) || (profile.goal_weight_kg ?? Infinity) < getCurrentWeight()}
+          />
         )}
 
         {/* Progress + Insight */}
@@ -512,265 +588,111 @@ export default function WeightTracker() {
           </div>
         )}
 
-        {/* AI Analysis Loading */}
-        {analyzingWeight && (
+        {/* AI Plan — compact summary card. Tapping opens the full plan sheet
+            (same `InlinePlanDisplay` used by the post-onboarding finale). */}
+        {!analyzingWeight && analysisPlan && (() => {
+          const weeklyPlan = Array.isArray(analysisPlan.weeklyPlan) ? analysisPlan.weeklyPlan : [];
+          const week1 = weeklyPlan[0];
+          const targetCal: number | undefined =
+            typeof analysisPlan.targetCalories === "number"
+              ? analysisPlan.targetCalories
+              : typeof week1?.calories === "number"
+                ? week1.calories
+                : undefined;
+          const proteinG = typeof week1?.protein_g === "number" ? week1.protein_g : undefined;
+          const carbsG = typeof week1?.carbs_g === "number" ? week1.carbs_g : undefined;
+          const fatsG = typeof week1?.fats_g === "number" ? week1.fats_g : undefined;
+          const planWeeks: number =
+            typeof analysisPlan.totalWeeks === "number" ? analysisPlan.totalWeeks : weeklyPlan.length;
+
+          return (
+            <div className="card-surface rounded-3xl p-4 space-y-3 animate-fade-in">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.18em] font-bold text-primary/70">
+                    Your Plan
+                  </p>
+                  <p className="text-[14px] font-semibold text-foreground mt-1">
+                    {planWeeks} week timeline ready
+                  </p>
+                </div>
+                <button
+                  onClick={clearAnalysis}
+                  className="h-8 w-8 flex items-center justify-center rounded-2xl text-muted-foreground/40 active:text-destructive active:bg-destructive/10 transition-colors"
+                  title="Clear plan"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
+              {/* 4-tile macro/cal strip — same colors InlinePlanDisplay uses */}
+              <div className="grid grid-cols-4 gap-2">
+                {[
+                  { label: "Calories", value: targetCal, unit: "kcal", color: "text-foreground" },
+                  { label: "Protein", value: proteinG, unit: "g", color: "text-blue-400" },
+                  { label: "Carbs", value: carbsG, unit: "g", color: "text-orange-400" },
+                  { label: "Fats", value: fatsG, unit: "g", color: "text-purple-400" },
+                ].map((m) => (
+                  <div key={m.label} className="rounded-2xl bg-muted/20 px-2 py-2.5 text-center">
+                    <p className={`text-[16px] font-bold tabular-nums ${m.color}`}>
+                      {typeof m.value === "number" ? Math.round(m.value).toLocaleString() : "—"}
+                    </p>
+                    <p className="text-[10px] text-foreground">{m.unit}</p>
+                    <p className="text-[9px] text-muted-foreground mt-0.5">{m.label}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => setAnalysisOpen(true)}
+                  className="flex-1 rounded-2xl text-xs h-9 bg-primary text-primary-foreground"
+                >
+                  View full plan
+                </Button>
+                <Button
+                  variant={targetsApplied ? "ghost" : "outline"}
+                  size="sm"
+                  className="flex-1 rounded-2xl text-xs h-9"
+                  disabled={applyingTargets || targetsApplied}
+                  onClick={applyNutritionTargets}
+                >
+                  {targetsApplied ? <><Check className="h-3 w-3 mr-1" />Applied</> : applyingTargets ? "Applying..." : "Apply to Nutrition"}
+                </Button>
+              </div>
+
+              <Button
+                onClick={getAIAnalysis}
+                disabled={analyzingWeight}
+                variant="ghost"
+                size="sm"
+                className="w-full rounded-2xl text-[11px] h-7 text-muted-foreground hover:text-foreground"
+              >
+                Refresh plan
+              </Button>
+            </div>
+          );
+        })()}
+
+        {/* AI Analysis Loading skeleton (shown when a refresh is in flight
+            and the sheet is closed; the sheet itself shows its own state). */}
+        {analyzingWeight && !analysisOpen && (
           <div className="card-surface rounded-3xl p-6 flex flex-col items-center gap-3">
             <Loader2 className="h-6 w-6 text-primary animate-spin" />
             <div className="space-y-2 w-full max-w-xs">
               <Skeleton className="h-3 w-full rounded-full" />
               <Skeleton className="h-3 w-3/4 mx-auto rounded-full" />
             </div>
-            <p className="text-[12px] text-muted-foreground/80">Analyzing your weight loss strategy…</p>
+            <p className="text-[12px] text-muted-foreground/80">Refreshing your weight plan…</p>
           </div>
         )}
 
-        {/* AI Analysis */}
-        {!analyzingWeight && aiAnalysis && (() => {
-          const isAtOrBelowTarget = aiAnalysisWeight !== null && aiAnalysisTarget !== null && aiAnalysisWeight <= aiAnalysisTarget;
-          const displayRiskLevel = isAtOrBelowTarget ? 'green' : aiAnalysis.riskLevel;
-          const weightDiff = aiAnalysisWeight !== null && aiAnalysisTarget !== null ? aiAnalysisTarget - aiAnalysisWeight : 0;
-
-          return (
-            <div className="card-surface rounded-3xl p-4 space-y-4 animate-fade-in">
-              {/* Header */}
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-[13px] font-semibold text-foreground">
-                    {displayRiskLevel === 'green' ? 'Safe Pace' : displayRiskLevel === 'yellow' ? 'Moderate Pace' : 'Aggressive Pace'}
-                  </p>
-                  <p className="text-[12px] text-foreground mt-0.5">
-                    {isAtOrBelowTarget ? 'At or below target, maintenance mode' : `${aiAnalysis.requiredWeeklyLoss.toFixed(2)} kg/week required`}
-                  </p>
-                </div>
-                <div className="flex items-center gap-0.5">
-                  <button onClick={getAIAnalysis} disabled={analyzingWeight} className="h-8 w-8 flex items-center justify-center rounded-2xl text-muted-foreground/40 active:text-foreground active:bg-muted/40 transition-colors" title="Refresh"><RefreshCw className="h-3.5 w-3.5" /></button>
-                  <button onClick={clearAnalysis} className="h-8 w-8 flex items-center justify-center rounded-2xl text-muted-foreground/40 active:text-destructive active:bg-destructive/10 transition-colors" title="Delete"><Trash2 className="h-3.5 w-3.5" /></button>
-                </div>
-              </div>
-
-              {/* Now / Goal / Diff */}
-              {aiAnalysisWeight !== null && aiAnalysisTarget !== null && (
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="rounded-2xl bg-muted/20 px-3 py-2.5 text-center">
-                    <p className="text-[18px] font-bold tabular-nums text-foreground">{aiAnalysisWeight.toFixed(1)}</p>
-                    <p className="text-[10px] text-muted-foreground/50">Current kg</p>
-                  </div>
-                  <div className="rounded-2xl bg-muted/20 px-3 py-2.5 text-center">
-                    <p className="text-[18px] font-bold tabular-nums text-foreground">{aiAnalysisTarget.toFixed(1)}</p>
-                    <p className="text-[10px] text-muted-foreground/50">Target kg</p>
-                  </div>
-                  <div className="rounded-2xl bg-muted/20 px-3 py-2.5 text-center">
-                    {weightDiff > 0 ? (
-                      <><p className="text-[18px] font-bold tabular-nums text-green-500">+{weightDiff.toFixed(1)}</p><p className="text-[10px] text-muted-foreground/50">Gain kg</p></>
-                    ) : weightDiff < 0 ? (
-                      <><p className="text-[18px] font-bold tabular-nums text-primary">{Math.abs(weightDiff).toFixed(1)}</p><p className="text-[10px] text-muted-foreground/50">To lose kg</p></>
-                    ) : (
-                      <><p className="text-[18px] font-bold tabular-nums text-green-500">0.0</p><p className="text-[10px] text-muted-foreground/50">At target</p></>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Weekly Progress Bar */}
-              {aiAnalysisWeight !== null && aiAnalysisTarget !== null && profile && aiAnalysis && (
-                (() => {
-                  const startWeight = aiAnalysisWeight;
-                  const targetWeight = aiAnalysisTarget;
-                  const latestWeight = getCurrentWeight();
-                  const isLosing = startWeight > targetWeight;
-
-                  const targetDate = new Date(profile.target_date);
-                  const today = new Date();
-                  const daysRemaining = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                  const weeksRemaining = Math.max(1, Math.ceil(daysRemaining / 7));
-
-                  // Calculate actual progress from logged weight
-                  let progressPercent = 0;
-                  if (isLosing) {
-                    const totalToLose = startWeight - targetWeight;
-                    if (totalToLose > 0 && latestWeight < startWeight) {
-                      // Only fill if user has lost weight (not gained)
-                      const actualLost = startWeight - latestWeight;
-                      progressPercent = Math.min(100, Math.max(0, (actualLost / totalToLose) * 100));
-                    }
-                  } else {
-                    const totalToGain = targetWeight - startWeight;
-                    if (totalToGain > 0 && latestWeight > startWeight) {
-                      const actualGained = latestWeight - startWeight;
-                      progressPercent = Math.min(100, Math.max(0, (actualGained / totalToGain) * 100));
-                    }
-                  }
-
-                  const milestones: Array<{ week: number; expectedWeight: number; position: number; date: Date }> = [];
-
-                  if (isLosing && aiAnalysis.requiredWeeklyLoss > 0) {
-                    const totalToLose = startWeight - targetWeight;
-                    const weeksToTarget = Math.max(1, Math.ceil(totalToLose / aiAnalysis.requiredWeeklyLoss));
-                    const weekCount = Math.min(weeksRemaining, weeksToTarget);
-                    for (let week = 1; week <= weekCount; week++) {
-                      const isLast = week === weekCount;
-                      const expectedWeight = isLast ? targetWeight : startWeight - (week * aiAnalysis.requiredWeeklyLoss);
-                      const weightLost = startWeight - expectedWeight;
-                      const position = totalToLose > 0 ? Math.min(100, Math.max(0, (weightLost / totalToLose) * 100)) : 0;
-                      const date = new Date(today);
-                      date.setDate(date.getDate() + week * 7);
-                      milestones.push({ week, expectedWeight, position, date });
-                    }
-                  } else if (!isLosing) {
-                    const totalToGain = targetWeight - startWeight;
-                    const weeklyGain = Math.abs(aiAnalysis.requiredWeeklyLoss) || 0.2;
-                    const weeksToTarget = totalToGain > 0 ? Math.max(1, Math.ceil(totalToGain / weeklyGain)) : 1;
-                    const weekCount = Math.min(weeksRemaining, weeksToTarget);
-                    for (let week = 1; week <= weekCount; week++) {
-                      const isLast = week === weekCount;
-                      const expectedWeight = isLast ? targetWeight : startWeight + (week * weeklyGain);
-                      const weightGained = expectedWeight - startWeight;
-                      const position = totalToGain > 0 ? Math.min(100, Math.max(0, (weightGained / totalToGain) * 100)) : 0;
-                      const date = new Date(today);
-                      date.setDate(date.getDate() + week * 7);
-                      milestones.push({ week, expectedWeight, position, date });
-                    }
-                  }
-
-                  return (
-                    <div className="py-2 space-y-2">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-semibold text-muted-foreground">{startWeight.toFixed(1)} kg</span>
-                        <span className="text-[9px] text-muted-foreground">
-                          {latestWeight !== startWeight && (
-                            <span className="text-primary font-semibold mr-1">Now: {latestWeight.toFixed(1)} kg</span>
-                          )}
-                          {weeksRemaining} {weeksRemaining === 1 ? 'week' : 'weeks'} left
-                        </span>
-                        <span className="text-[10px] font-semibold text-primary">{targetWeight.toFixed(1)} kg</span>
-                      </div>
-                      <div className="relative h-3 bg-muted rounded-full overflow-visible">
-                        <div className="h-full bg-gradient-to-r from-primary to-primary/80 rounded-full transition-all duration-500" style={{ width: `${progressPercent}%` }} />
-                        {milestones.slice(0, -1).map(({ week, expectedWeight, position }) => (
-                          <div key={week} className="absolute top-0 bottom-0 w-0.5 bg-foreground/30" style={{ left: `${position}%` }} title={`Week ${week}: ${expectedWeight.toFixed(1)} kg`} />
-                        ))}
-                        <div className="absolute top-1/2 -translate-y-1/2 w-2 h-2 bg-primary rounded-full border-2 border-background shadow-sm z-10" style={{ left: `${progressPercent}%`, marginLeft: '-4px' }} />
-                      </div>
-                      {milestones.length > 0 && (
-                        <div className="flex gap-1.5 overflow-x-auto pb-1 pt-1 snap-x scroll-smooth [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-                          {milestones.map(({ week, expectedWeight, date }) => (
-                            <div
-                              key={`card-${week}`}
-                              className="snap-start shrink-0 w-16 flex flex-col items-center justify-center rounded-2xl bg-muted/30 border border-border/40 px-2 py-1.5"
-                            >
-                              <span className="text-[9px] uppercase tracking-wider text-muted-foreground/70 leading-none">W{week}</span>
-                              <span className="text-[13px] font-bold tabular-nums text-foreground leading-tight mt-1">
-                                {expectedWeight.toFixed(1)}
-                              </span>
-                              <span className="text-[8px] text-muted-foreground/60 mt-0.5">kg</span>
-                              <span className="text-[8px] text-muted-foreground/70 tabular-nums mt-0.5">
-                                {format(date, "MMM dd")}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()
-              )}
-
-              {/* Macros */}
-              <div className="grid grid-cols-4 gap-2">
-                {[
-                  { label: "Calories", value: aiAnalysis.recommendedCalories, unit: "kcal", sub: `${aiAnalysis.calorieDeficit > 0 ? '-' : ''}${aiAnalysis.calorieDeficit} deficit`, color: "text-primary" },
-                  { label: "Protein", value: aiAnalysis.proteinGrams, unit: "g", color: "text-blue-400" },
-                  { label: "Carbs", value: aiAnalysis.carbsGrams, unit: "g", color: "text-orange-400" },
-                  { label: "Fats", value: aiAnalysis.fatsGrams, unit: "g", color: "text-purple-400" },
-                ].map((m) => (
-                  <div key={m.label} className="rounded-2xl bg-muted/20 px-2 py-2.5 text-center">
-                    <p className={`text-[16px] font-bold tabular-nums ${m.color}`}>{m.value}</p>
-                    <p className="text-[10px] text-foreground">{m.unit}</p>
-                    {m.sub && <p className="text-[9px] text-foreground mt-0.5">{m.sub}</p>}
-                  </div>
-                ))}
-              </div>
-
-              {/* Apply */}
-              <Button
-                variant={targetsApplied ? "ghost" : "outline"}
-                size="sm"
-                className="w-full rounded-2xl text-xs h-9"
-                disabled={applyingTargets || targetsApplied}
-                onClick={applyNutritionTargets}
-              >
-                {targetsApplied ? <><Check className="h-3 w-3 mr-1" />Applied to Nutrition</> : applyingTargets ? "Applying..." : "Apply to Nutrition Targets"}
-              </Button>
-
-              {/* Guidance — list style */}
-              <div className="space-y-0 rounded-2xl overflow-hidden border border-border/20">
-                {/* Why These Targets */}
-                <div className="px-3.5 py-3">
-                  <p className="text-[13px] font-semibold text-primary mb-1">Why These Targets</p>
-                  <p className="text-[12px] text-foreground leading-relaxed">{(aiAnalysis.reasoningExplanation || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}</p>
-                </div>
-                {/* Strategy */}
-                <div className="px-3.5 py-3 border-t border-border/10">
-                  <p className="text-[13px] font-semibold text-primary mb-1">Calorie Strategy</p>
-                  <p className="text-[12px] text-foreground leading-relaxed">{(aiAnalysis.strategicGuidance || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}</p>
-                </div>
-                {/* Training */}
-                <div className="px-3.5 py-3 border-t border-border/10">
-                  <p className="text-[13px] font-semibold text-primary mb-1">Training</p>
-                  <p className="text-[12px] text-foreground leading-relaxed">{(aiAnalysis.trainingConsiderations || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}</p>
-                </div>
-                {/* Timeline */}
-                <div className="px-3.5 py-3 border-t border-border/10">
-                  <p className="text-[13px] font-semibold text-primary mb-1">Timeline</p>
-                  <p className="text-[12px] text-foreground leading-relaxed">{(aiAnalysis.timeline || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}</p>
-                </div>
-              </div>
-
-              {/* Weekly Check-in */}
-              {aiAnalysis.weeklyWorkflow && aiAnalysis.weeklyWorkflow.length > 0 && (
-                <div>
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold mb-2">Weekly Check-in</p>
-                  <div className="space-y-1.5">
-                    {aiAnalysis.weeklyWorkflow.map((step: string, i: number) => (
-                      <div key={i} className="flex items-start gap-2.5">
-                        <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <span className="text-[10px] font-bold text-primary tabular-nums">{i + 1}</span>
-                        </div>
-                        <p className="text-[12px] text-foreground leading-relaxed">{(step || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Weekly Plan */}
-              {aiAnalysis.weeklyPlan && (
-                <div>
-                  <p className="text-[10px] uppercase tracking-widest text-muted-foreground/60 font-semibold mb-2">Weekly Plan</p>
-                  <div className="space-y-1.5">
-                    {[
-                      { label: "Week 1", text: aiAnalysis.weeklyPlan.week1 },
-                      { label: "Week 2", text: aiAnalysis.weeklyPlan.week2 },
-                      { label: "Ongoing", text: aiAnalysis.weeklyPlan.ongoing },
-                    ].map((w) => w.text ? (
-                      <div key={w.label} className="rounded-2xl bg-muted/20 px-3.5 py-2.5">
-                        <p className="text-[10px] font-semibold text-primary/60 mb-0.5">{w.label}</p>
-                        <p className="text-[12px] text-foreground leading-relaxed">{(w.text || '').replace(/\u2014/g, ' - ').replace(/\u2013/g, '-')}</p>
-                      </div>
-                    ) : null)}
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })()}
-
-        {/* Get AI Button */}
-        {!aiAnalysis && profile && (
+        {/* Get AI Button — primary entry when no plan exists yet. */}
+        {!analysisPlan && profile && (
           <Button
             onClick={getAIAnalysis}
             disabled={analyzingWeight}
-            className="w-full rounded-3xl h-12 text-[14px] font-semibold bg-muted/40 dark:bg-white/[0.06] border border-border/30 text-foreground hover:bg-muted/60 active:scale-[0.98] transition-all"
+            className="relative w-full rounded-3xl h-12 text-[14px] font-semibold bg-muted/40 dark:bg-white/[0.06] border border-border/30 text-foreground hover:bg-muted/60 active:scale-[0.98] transition-all"
           >
             {analyzingWeight ? (
               <span className="inline-flex items-center gap-2">
@@ -781,12 +703,12 @@ export default function WeightTracker() {
               <span className="inline-flex items-center gap-2">
                 <Activity className="h-4 w-4 text-primary" strokeWidth={2.4} />
                 Get AI weight strategy
-                {!gemsIsPremium && (
-                  <span className="inline-flex items-center gap-0.5 ml-0.5 text-muted-foreground">
-                    <Gem className="h-3 w-3" />
-                    <span className="text-[11px] font-medium tabular-nums">{gems}</span>
-                  </span>
-                )}
+              </span>
+            )}
+            {!analyzingWeight && !hasAiAccess && (
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex items-center gap-0.5 text-primary/70 pointer-events-none">
+                <Crown className="h-3 w-3" />
+                <span className="text-[10px] font-medium uppercase tracking-wider">Pro</span>
               </span>
             )}
           </Button>
@@ -816,6 +738,53 @@ export default function WeightTracker() {
 
       </div>
 
+      {/* Full plan sheet — bottom-anchored, scrollable, hosts the shared
+          `InlinePlanDisplay`. The sheet auto-opens when the user kicks off
+          a new analysis (see `getAIAnalysis`) and on completion of a
+          background task picked up by the AITask effect above. */}
+      <Sheet
+        open={analysisOpen}
+        onOpenChange={(open) => {
+          if (!open && analyzingWeight) {
+            // Allow closing the sheet while a refresh is in flight; cancel
+            // the inflight request so we don't waste tokens.
+            handleAICancel();
+          }
+          setAnalysisOpen(open);
+        }}
+      >
+        <SheetContent
+          side="bottom"
+          className="h-[92vh] max-h-[92vh] overflow-y-auto rounded-t-3xl border-t border-border/40 p-0"
+        >
+          <SheetHeader className="px-4 pt-4 pb-2 text-left">
+            <SheetTitle className="text-[15px] font-semibold">
+              Your AI Weight Plan
+            </SheetTitle>
+          </SheetHeader>
+          <div className="px-4 pb-8">
+            {analyzingWeight && !analysisPlan ? (
+              <div className="py-12 flex flex-col items-center gap-3">
+                <Loader2 className="h-6 w-6 text-primary animate-spin" />
+                <p className="text-[12px] text-muted-foreground">
+                  Building your plan…
+                </p>
+              </div>
+            ) : analysisPlan ? (
+              <InlinePlanDisplay
+                plan={analysisPlan}
+                planType="weight_loss"
+                onContinue={() => setAnalysisOpen(false)}
+              />
+            ) : (
+              <div className="py-12 text-center text-[12px] text-muted-foreground">
+                No plan yet. Tap "Get AI weight strategy" to generate one.
+              </div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
+
       <ShareCardDialog open={shareOpen} onOpenChange={setShareOpen} title="Share Weight Progress" shareTitle="Weight Journey" shareText="Check out my weight progress on FightCamp Wizard">
         {({ cardRef, aspect }) => (
           <WeightTrackerCard ref={cardRef} weightLogs={weightLogs} goalWeight={profile?.fight_week_target_kg ?? profile?.goal_weight_kg} timeFilter={timeFilter} aspect={aspect} />
@@ -833,6 +802,14 @@ export default function WeightTracker() {
           />
         )}
       </ShareCardDialog>
+
+      {/* Auto-opens when a logged weigh-in meets or beats the user's target.
+          Polaroid-style 1080² card with gym branding for off-platform shares. */}
+      <MadeWeightShareSheet
+        open={madeWeightOpen}
+        onOpenChange={setMadeWeightOpen}
+        input={madeWeightInput}
+      />
     </>
   );
 }

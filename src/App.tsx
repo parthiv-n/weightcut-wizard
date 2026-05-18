@@ -14,7 +14,6 @@ import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { WizardBackgroundProvider } from "@/contexts/WizardBackgroundContext";
 import { AITaskProvider } from "@/contexts/AITaskContext";
 import { PaywallOverlay } from "@/components/subscription/PaywallOverlay";
-import { NoGemsOverlay } from "@/components/subscription/NoGemsOverlay";
 import { GlobalLoadingOverlay } from "@/components/GlobalLoadingOverlay";
 import { PageTransition } from "@/components/PageTransition";
 import { NavigationDirectionProvider } from "@/hooks/useNavigationDirection";
@@ -55,6 +54,9 @@ const AthleteDetail = lazy(() => import("./pages/coach/AthleteDetail"));
 const JoinGym = lazy(() => import("./pages/JoinGym"));
 const MyGym = lazy(() => import("./pages/MyGym"));
 const GymFeed = lazy(() => import("./pages/GymFeed"));
+const Community = lazy(() => import("./pages/Community"));
+const Profile = lazy(() => import("./pages/Profile"));
+const CommunityModeration = lazy(() => import("./pages/community/Moderation"));
 
 // Prioritized idle preloading — critical routes first, rest deferred
 const _idle = window.requestIdleCallback || ((cb: IdleRequestCallback) => setTimeout(cb, 50));
@@ -72,6 +74,9 @@ _idle(() => {
     import("./pages/MyGym").catch(() => {});
     import("./pages/JoinGym").catch(() => {});
     import("./pages/coach/CoachLogin").catch(() => {});
+    // Corner tab — preload once the dashboard has settled.
+    import("./pages/Community").catch(() => {});
+    import("./pages/Profile").catch(() => {});
   }, 3000);
   setTimeout(() => {
     import("./pages/Recovery").catch(() => {});
@@ -101,12 +106,11 @@ function RouteTracker() {
     }
   }, [location.pathname]);
 
-  // Set light status bar text for dark background + initialize AdMob
+  // Set light status bar text for dark background
   useEffect(() => {
     if (Capacitor.isNativePlatform()) {
       StatusBar.setStyle({ style: Style.Dark });
       document.documentElement.classList.add("native-app");
-      import("@/lib/admob").then(({ initializeAdMob }) => initializeAdMob()).catch(() => {});
     }
   }, []);
 
@@ -234,7 +238,6 @@ const App = () => (
             <Toaster />
             <Sonner />
             <PaywallOverlay />
-            <NoGemsOverlay />
             <GlobalLoadingOverlay />
             <BrowserRouter
               future={{
@@ -314,7 +317,10 @@ const App = () => (
                   {/* Skill Tree temporarily hidden from UI */}
                   <Route path="/gym" element={<ErrorBoundary><Suspense fallback={<DashboardSkeleton />}><GymTracker /></Suspense></ErrorBoundary>} />
                   <Route path="/my-gym" element={<ErrorBoundary><Suspense fallback={<DashboardSkeleton />}><MyGym /></Suspense></ErrorBoundary>} />
-                  <Route path="/gym-feed" element={<ErrorBoundary><Suspense fallback={<DashboardSkeleton />}><GymFeed /></Suspense></ErrorBoundary>} />
+                  <Route path="/gym-feed" element={<Navigate to="/community" replace />} />
+                  <Route path="/community" element={<ErrorBoundary><Suspense fallback={<DashboardSkeleton />}><Community /></Suspense></ErrorBoundary>} />
+                  <Route path="/community/moderation" element={<ErrorBoundary><Suspense fallback={<DashboardSkeleton />}><CommunityModeration /></Suspense></ErrorBoundary>} />
+                  <Route path="/profile/:userId" element={<ErrorBoundary><Suspense fallback={<DashboardSkeleton />}><Profile /></Suspense></ErrorBoundary>} />
                 </Route>
 
                 <Route path="*" element={<NotFound />} />

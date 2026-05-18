@@ -68,14 +68,5 @@
     <string>FightCamp Wizard uses speech recognition to convert your voice into session notes.</string>
     <key>NSPhotoLibraryAddUsageDescription</key>
     <string>FightCamp Wizard needs access to save photos to your library.</string>
-    <key>GADApplicationIdentifier</key>
-    <string>ca-app-pub-5228937380128191~8853975628</string>
-    <key>SKAdNetworkItems</key>
-    <array>
-        <dict>
-            <key>SKAdNetworkIdentifier</key>
-            <string>cstr6suwn9.skadnetwork</string>
-        </dict>
-    </array>
 </dict>
 </plist>

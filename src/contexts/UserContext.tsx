@@ -41,10 +41,7 @@ export interface ProfileData {
   is_premium?: boolean;
   subscription_tier?: string;
   subscription_expires_at?: string | null;
-  gems?: number;
-  last_free_gem_date?: string;
-  ads_watched_today?: number;
-  ads_watched_date?: string;
+  trial_ends_at?: number | string | null;
   cut_plan_json?: any;
   [key: string]: any;
 }
@@ -92,7 +89,6 @@ interface ProfileContextType {
   setAvatarUrl: (url: string) => void;
   refreshProfile: () => Promise<boolean>;
   updateCurrentWeight: (weight: number) => Promise<void>;
-  syncDailyGem: () => Promise<void>;
   loadCutPlan: () => Promise<any | null>;
 }
 
@@ -235,12 +231,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
     // Cut plan now lives in the profile row served by `profiles.getMine`.
     // Phase 3 may split this into a separate query if payload size warrants it.
     return profileRef.current?.cut_plan_json ?? null;
-  }, []);
-
-  const syncDailyGem = useCallback(async (): Promise<void> => {
-    // Phase 3 will replace this with a `mutations.gems.grantDaily` call.
-    // For now, no-op — the gem count comes through the reactive profile.
-    logger.info("syncDailyGem: noop pending Phase-3 mutation");
   }, []);
 
   const loadUserData = useCallback(async (): Promise<void> => {
@@ -460,10 +450,9 @@ export function UserProvider({ children }: { children: ReactNode }) {
     setAvatarUrl: updateAvatarUrl,
     refreshProfile,
     updateCurrentWeight,
-    syncDailyGem,
     loadCutPlan,
   }), [profile, userName, avatarUrl, currentWeight, isProfileStale,
-       updateUserName, updateAvatarUrl, refreshProfile, updateCurrentWeight, syncDailyGem, loadCutPlan]);
+       updateUserName, updateAvatarUrl, refreshProfile, updateCurrentWeight, loadCutPlan]);
 
   return (
     <AuthContext.Provider value={authValue}>
@@ -501,7 +490,6 @@ const PROFILE_FALLBACK: ProfileContextType = {
   setAvatarUrl: () => {},
   refreshProfile: async () => false,
   updateCurrentWeight: async () => {},
-  syncDailyGem: async () => {},
   loadCutPlan: async () => null,
 };
 

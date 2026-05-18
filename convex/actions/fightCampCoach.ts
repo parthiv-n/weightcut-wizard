@@ -1,4 +1,4 @@
-/** Fight-camp coach — gem-gated chat focused on fight-week prep. */
+/** Fight-camp coach — Pro-only chat focused on fight-week prep. */
 "use node";
 
 import { v } from "convex/values";
@@ -10,7 +10,7 @@ import {
   PROMPT_INJECTION_GUARD_INSTRUCTION,
 } from "../_shared/sanitizeUserText";
 import { loadAthleteSnapshot, requireUserIdFromAction, SECOND_PERSON_DIRECTIVE } from "./_helpers";
-import { enforceGemGate } from "../_shared/subscriptionGuard";
+import { enforceFeatureGate } from "../_shared/featureGates";
 
 export const run = action({
   args: {
@@ -24,7 +24,7 @@ export const run = action({
   },
   handler: async (ctx, { messages, userName }) => {
     const userId = await requireUserIdFromAction(ctx);
-    await enforceGemGate(ctx, userId);
+    await enforceFeatureGate(ctx, userId, "AI_FIGHT_CAMP_COACH");
     const fightWeek = await ctx.runQuery(
       internal.actions_internal.fetchFightWeekData,
       { userId },

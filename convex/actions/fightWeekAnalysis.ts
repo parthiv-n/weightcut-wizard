@@ -1,4 +1,4 @@
-/** Fight-week analysis — deterministic engine + LLM narrative. Gem-gated. */
+/** Fight-week analysis — deterministic engine + LLM narrative. Pro-only. */
 "use node";
 
 import { v } from "convex/values";
@@ -7,7 +7,7 @@ import { internal } from "../_generated/api";
 import { callGroqText, GroqError } from "../_shared/groq";
 import { parseJSON } from "../_shared/parseResponse";
 import { requireUserIdFromAction, logDecision, SECOND_PERSON_DIRECTIVE } from "./_helpers";
-import { enforceGemGate } from "../_shared/subscriptionGuard";
+import { enforceFeatureGate } from "../_shared/featureGates";
 import {
   computeFightWeekProjection,
   estimateSaunaSessions,
@@ -120,7 +120,7 @@ export const run = action({
   },
   handler: async (ctx, args) => {
     const userId = await requireUserIdFromAction(ctx);
-    await enforceGemGate(ctx, userId);
+    await enforceFeatureGate(ctx, userId, "AI_FIGHT_WEEK_ANALYSIS");
 
     const data = await ctx.runQuery(internal.actions_internal.fetchFightWeekData, { userId });
     const camp = data.upcomingCamp;

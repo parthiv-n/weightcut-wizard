@@ -23,7 +23,7 @@ import { presentPaywallIfNeeded } from "@/lib/purchases";
 import { Capacitor } from "@capacitor/core";
 import { AnimatePresence, motion } from "motion/react";
 import { springs } from "@/lib/motion";
-import { XPProgressBar, CuttingNowChip, OnboardingMascot, DaysToFightSlam, WeightLossSlam, LossFrameCard, DeclarationButton, TaleOfTheTapeCard, MathWhisper, WittyValidation, sportVocab } from "@/components/onboarding/Gamification";
+import { XPProgressBar, DaysToFightSlam, WeightLossSlam, LossFrameCard, DeclarationButton, TaleOfTheTapeCard, WeeklyMilestonesScrubber, BlurredWeekOnePreview, MathWhisper, WittyValidation, sportVocab } from "@/components/onboarding/Gamification";
 
 const ACTIVITY_MULTIPLIERS: Record<string, number> = {
   sedentary: 1.2,
@@ -33,7 +33,11 @@ const ACTIVITY_MULTIPLIERS: Record<string, number> = {
   extra_active: 1.9,
 };
 
-const TOTAL_STEPS = 15;
+// Mirrors the real outer step ceiling (`step` clamps to 13 in `goNext`
+// and `isLast{Cutting,Losing}` both gate on `step === 13`). Displayed
+// as "Round X of TOTAL_STEPS" — keep this in sync with the actual flow
+// length so the user doesn't see "Round 13 of 15" on the finale.
+const TOTAL_STEPS = 13;
 
 // ── Selectable card ──
 function OptionCard({ selected, icon, label, description, onClick }: {
@@ -112,14 +116,14 @@ function PlanRetryCard({
         <button
           type="button"
           onClick={onRetry}
-          className="flex-1 h-11 rounded-2xl bg-primary text-primary-foreground text-[14px] font-semibold active:scale-[0.98] transition-transform"
+          className="no-tap-select flex-1 h-11 rounded-2xl bg-primary text-primary-foreground text-[14px] font-semibold active:scale-[0.98] transition-transform"
         >
           Retry
         </button>
         <button
           type="button"
           onClick={onSkip}
-          className="flex-1 h-11 rounded-2xl bg-muted/40 text-foreground text-[14px] font-medium active:scale-[0.98] transition-transform"
+          className="no-tap-select flex-1 h-11 rounded-2xl bg-muted/40 text-foreground text-[14px] font-medium active:scale-[0.98] transition-transform"
         >
           Skip
         </button>
@@ -213,21 +217,24 @@ function LosingProjectionChart({
 }
 
 // ── Screen layout wrapper ──
-function StepLayout({ step, title, subtitle, children, footer, mascotBump }: {
+function StepLayout({ step, title, subtitle, children, footer }: {
   step: number; title: string; subtitle: string; children: React.ReactNode; footer?: React.ReactNode; mascotBump?: number;
 }) {
+  // Container fills the parent (motion.div fills the remaining viewport
+  // after the gamification header). Children scroll internally only if
+  // they overflow the available space; the footer stays pinned at the
+  // bottom so the CTA never gets pushed offscreen.
   return (
-    <div className="relative flex flex-col h-[calc(100dvh-56px)] px-5 pb-4">
-      <OnboardingMascot bumpCount={mascotBump ?? step} />
-      <div className="pt-4 pb-3">
-        <p className="text-[10px] uppercase tracking-[0.15em] text-primary/60 font-bold mb-2">
+    <div className="relative flex flex-col h-full min-h-0 px-5 pb-2">
+      <div className="pt-2 pb-1.5">
+        <p className="text-[10px] uppercase tracking-[0.15em] text-primary/60 font-bold mb-1">
           Round {step} of {TOTAL_STEPS}
         </p>
         <h1 className="text-[22px] font-bold leading-tight text-foreground">{title}</h1>
-        <p className="text-[13px] text-muted-foreground mt-1.5 leading-relaxed">{subtitle}</p>
+        <p className="text-[13px] text-muted-foreground mt-1 leading-snug">{subtitle}</p>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1">{children}</div>
-      {footer && <div className="pt-3">{footer}</div>}
+      {footer && <div className="pt-2 pb-[env(safe-area-inset-bottom,0px)]">{footer}</div>}
     </div>
   );
 }
@@ -355,11 +362,30 @@ export default function Onboarding() {
   const [fightSubDirection, setFightSubDirection] = useState(1);
 
   // Gate for the DaysToFightSlam: only arm once the user has explicitly
-  // picked a fight date. Prevents iOS WKWebView's native date picker from
-  // auto-committing today's date on autoFocus and tripping the slam before
-  // any real interaction. Sticky — once true, stays true (re-entering the
-  // sub-step naturally re-arms via the rising-edge guard in the slam).
+  // picked a fight date AND tapped Continue. Prevents iOS WKWebView's
+  // native date picker from auto-committing today's date on focus and
+  // tripping the slam before any real interaction. Sticky — once true,
+  // stays true (re-entering the sub-step naturally re-arms via the
+  // rising-edge guard in the slam).
   const [fightDateUserChanged, setFightDateUserChanged] = useState(false);
+
+  // When the user taps Continue on the fight-date sub-step, we arm the
+  // slam first and defer the actual sub-step advance until the slam
+  // dismisses. This keeps the moment of reveal anchored to a deliberate
+  // user action instead of firing the instant the native picker closes.
+  const [pendingDateAdvance, setPendingDateAdvance] = useState(false);
+
+  // Same pattern for the WeightLossSlam: only arm once the user taps
+  // Continue from the weight step (cutting step 6 / losing step 4), and
+  // defer the step advance until the slam dismisses so the hero-number
+  // reveal lands on the page the user just finished — not the next one.
+  const [weightUserChanged, setWeightUserChanged] = useState(false);
+  const [pendingWeightAdvance, setPendingWeightAdvance] = useState(false);
+
+  // Hidden native date input — opened programmatically when the user
+  // taps the visible date card. Keeps iOS from auto-opening the picker
+  // on step entry while still using the platform-native UI.
+  const fightDateInputRef = useRef<HTMLInputElement | null>(null);
 
   // submitRef lets goNext call handleSubmit (defined later) when the user
   // finishes the last step of either flow without forcing a code reorder.
@@ -372,10 +398,33 @@ export default function Onboarding() {
     // target, 4 optional camp name. The camp-name page is skippable so its
     // Continue button is always enabled (falls back to "Fight Camp").
     if (isFighterFlow && step === 3 && fightSubStep < 4) {
+      // Fight-date sub-step: arm the slam now and defer the sub-step
+      // advance until the slam dismisses, so the reveal lands on this
+      // page (not after we've already animated to the next one).
+      if (fightSubStep === 1 && formData.target_date && !fightDateUserChanged) {
+        setFightDateUserChanged(true);
+        setPendingDateAdvance(true);
+        return;
+      }
       setFightSubDirection(1);
       setFightSubStep(s => s + 1);
       return;
     }
+    // Weight-step Continue: arm the WeightLossSlam and defer the step
+    // advance until it dismisses. Mirror of the fight-date pattern above.
+    // Cutting flow: step 6 (current weight, last data piece).
+    // Losing flow:  step 4 (goal weight, last data piece).
+    const isWeightStep = (isFighterFlow && step === 6) || (!isFighterFlow && step === 4);
+    const weightDataReady =
+      !!formData.current_weight_kg &&
+      !!formData.goal_weight_kg &&
+      (isFighterFlow ? !!formData.target_date : !!formData.target_weeks);
+    if (isWeightStep && weightDataReady && !weightUserChanged) {
+      setWeightUserChanged(true);
+      setPendingWeightAdvance(true);
+      return;
+    }
+
     // End-of-flow: cutting ends at step 13 (preview chart + generate);
     // losing ends at step 13 (plan_aggressiveness). Submit instead of advancing.
     const isLastCutting = isFighterFlow && step === 13;
@@ -394,7 +443,39 @@ export default function Onboarding() {
       }
       return next;
     });
-  }, [isFighterFlow, step, fightSubStep]);
+  }, [
+    isFighterFlow,
+    step,
+    fightSubStep,
+    formData.target_date,
+    formData.current_weight_kg,
+    formData.goal_weight_kg,
+    formData.target_weeks,
+    fightDateUserChanged,
+    weightUserChanged,
+  ]);
+
+  // When the DaysToFightSlam dismisses (either auto-fade or user tap),
+  // complete the deferred sub-step advance so the user lands on the
+  // weight-class page right after the reveal.
+  const handleDaysSlamDismiss = useCallback(() => {
+    if (pendingDateAdvance) {
+      setPendingDateAdvance(false);
+      setFightSubDirection(1);
+      setFightSubStep(s => s + 1);
+    }
+  }, [pendingDateAdvance]);
+
+  // Same handler for the WeightLossSlam — advances the outer `step` once
+  // the slam dismisses, so the reveal lands on the weight page rather
+  // than the next one.
+  const handleWeightSlamDismiss = useCallback(() => {
+    if (pendingWeightAdvance) {
+      setPendingWeightAdvance(false);
+      setDirection(1);
+      setStep(prev => Math.min(prev + 1, 13));
+    }
+  }, [pendingWeightAdvance]);
 
   const goBack = useCallback(() => {
     triggerHapticSelection();
@@ -854,6 +935,56 @@ export default function Onboarding() {
     handleContinueToDashboard();
   }, [handleContinueToDashboard]);
 
+  // Public commitment hook — generates a portrait PNG of the Tale of
+  // the Tape card and opens the iOS share sheet (IG Story / Messages /
+  // etc). Imports are lazy so html-to-image (~50kb) doesn't ship in the
+  // initial onboarding bundle for users who never tap share.
+  const tapeCardRef = useRef<HTMLDivElement | null>(null);
+  const handleShareCampCard = useCallback(async () => {
+    triggerHapticSelection();
+    const node = tapeCardRef.current;
+    if (!node) return;
+    try {
+      const [{ toPng }, { Share }, { Capacitor }, { Filesystem, Directory }] = await Promise.all([
+        import("html-to-image"),
+        import("@capacitor/share"),
+        import("@capacitor/core"),
+        import("@capacitor/filesystem"),
+      ]);
+      const dataUrl = await toPng(node, {
+        pixelRatio: 3, // crisp on IG Story / retina
+        cacheBust: true,
+        backgroundColor: "#020204",
+      });
+      if (Capacitor.isNativePlatform()) {
+        // iOS Share API needs a file URL, not a data URL. Write the PNG
+        // to the cache directory then share that path.
+        const base64 = dataUrl.replace(/^data:image\/png;base64,/, "");
+        const fileName = `camp-card-${Date.now()}.png`;
+        const writeResult = await Filesystem.writeFile({
+          path: fileName,
+          data: base64,
+          directory: Directory.Cache,
+        });
+        await Share.share({
+          title: "My fight camp",
+          text: "Day 1 of camp. Locked in.",
+          url: writeResult.uri,
+          dialogTitle: "Share your camp",
+        });
+      } else {
+        // Web fallback — download the PNG.
+        const a = document.createElement("a");
+        a.href = dataUrl;
+        a.download = "camp-card.png";
+        a.click();
+      }
+    } catch (err) {
+      logger.error("Share camp card failed", err);
+      toast({ variant: "destructive", title: "Couldn't share card", description: "Please try again." });
+    }
+  }, [toast]);
+
   // ── Slam re-arm booleans ──────────────────────────────────────────
   // Each slam shows on the rising edge of (armed && data-valid). The
   // booleans below are true while the user is on the screen that owns
@@ -863,8 +994,12 @@ export default function Onboarding() {
   // - WeightLossSlam: cutting → step 6 (current weight, last piece);
   //                   losing  → step 4 (goal weight, last piece).
   const daysSlamArmed = isFighterFlow && step === 3 && fightSubStep === 1 && fightDateUserChanged;
+  // Weight slam now requires `weightUserChanged` (set in goNext on
+  // Continue) so the reveal fires on the deliberate user action, not
+  // the instant the user types in their weight.
   const weightSlamArmed =
-    (isFighterFlow && step === 6) || (!isFighterFlow && step === 4);
+    ((isFighterFlow && step === 6) || (!isFighterFlow && step === 4)) &&
+    weightUserChanged;
 
   // Same gate as the redirect useEffect — when stayOnOnboarding is true
   // we MUST keep the page mounted even if `hasProfile` has flipped, or
@@ -877,41 +1012,37 @@ export default function Onboarding() {
 
   // ── Render screens ──
   return (
-    <div className="min-h-screen bg-background dark:bg-[#020204]">
-      {/* Persistent gamification header — XP bar + social-proof chip
-          stay PINNED at the top of the viewport like a normal progress
-          bar, regardless of scroll. The old thin gradient progress bar
-          + separate back-arrow row above this got removed once the XP
-          bar took over: it was redundant feedback eating vertical
-          space. The back arrow now lives inside this same sticky
-          wrapper, top-left, so the user keeps the gesture without the
-          extra header row. z-[10005] keeps the bar above the slams'
-          z-[10003] backdrop so the XP bar stays sharp + readable while
-          the slam dims the rest of the screen. */}
+    <div className="h-[100dvh] flex flex-col bg-background dark:bg-[#020204] overflow-hidden">
+      {/* Gamification header — sits at the very top of the viewport as
+          a NORMAL block element (not sticky). It scrolls away with the
+          content if the user does scroll. The outer container is sized
+          to exactly 100dvh and flex-col, so the header + content fit
+          the viewport without page-level scroll on most screens. The
+          back arrow lives inside this wrapper, top-left, to keep the
+          gesture without an extra header row. */}
       <div
-        className="sticky z-[10005] bg-background/85 backdrop-blur-md pb-2 border-b border-border/30"
-        style={{ top: "env(safe-area-inset-top, 0px)" }}
+        className="shrink-0 bg-background/85 backdrop-blur-md pb-1 border-b border-border/30"
+        style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
       >
-        {/* Compact back-arrow row — sits flush above the XP bar so we
-            don't lose the gesture, but takes only the minimal height
-            an icon button needs (no duplicate progress track). */}
-        <div className="px-3 pt-2 h-8 flex items-center">
+        {/* Compact back-arrow row — flush above the XP bar so we don't
+            lose the back gesture, but takes only the minimal height an
+            icon button needs (no duplicate progress track). */}
+        <div className="px-3 pt-1 h-7 flex items-center">
           {step > 1 ? (
             <button
               onClick={goBack}
               aria-label="Back"
-              className="h-8 w-8 flex items-center justify-center rounded-full hover:bg-muted/50 active:scale-95 transition-all"
+              className="h-7 w-7 flex items-center justify-center rounded-full hover:bg-muted/50 active:scale-95 transition-all"
             >
               <ChevronLeft className="h-5 w-5 text-foreground" />
             </button>
           ) : (
-            // Reserve the same 32px so the XP bar's vertical position
+            // Reserve the same 28px so the XP bar's vertical position
             // doesn't jump on step 1 → step 2.
-            <div className="h-8 w-8" />
+            <div className="h-7 w-7" />
           )}
         </div>
         <XPProgressBar step={step} totalSteps={13} />
-        <CuttingNowChip achievementLabel={achievementLabel} />
       </div>
 
       <AnimatePresence mode="wait" initial={false}>
@@ -921,13 +1052,14 @@ export default function Onboarding() {
           animate={{ opacity: 1, x: 0 }}
           exit={{ opacity: 0, x: direction > 0 ? -60 : 60 }}
           transition={springs.responsive}
+          className="flex-1 min-h-0 flex flex-col"
         >
 
         {/* ── Screen 1: Flow Split — "What brings you here?" ── */}
         {step === 1 && (
           <StepLayout step={1} title="What brings you here?" subtitle="We'll build your plan around this."
             footer={<Button onClick={goNext} disabled={!formData.goal_type}
-              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+              className="no-tap-select w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
           >
             <div className="space-y-2.5">
               {[
@@ -945,7 +1077,7 @@ export default function Onboarding() {
         {step === 2 && formData.goal_type === "cutting" && (
           <StepLayout step={2} title="What's your discipline?" subtitle={`Pick your sport${userName ? `, ${userName}` : ""} — we'll tailor everything to it.`}
             footer={<Button onClick={goNext} disabled={formData.athlete_types.length === 0}
-              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+              className="no-tap-select w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
           >
             <div className="space-y-2.5">
               {[
@@ -969,7 +1101,7 @@ export default function Onboarding() {
         {step === 2 && formData.goal_type === "losing" && (
           <StepLayout step={2} title="What's your current weight?" subtitle="Step on the scale — this is your starting line."
             footer={<Button onClick={goNext} disabled={!formData.current_weight_kg}
-              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+              className="no-tap-select w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
           >
             <div className="flex flex-col items-center pt-8 gap-6">
               <div className="text-center">
@@ -997,7 +1129,7 @@ export default function Onboarding() {
         {step === 3 && formData.goal_type === "losing" && (
           <StepLayout step={3} title="What's your goal weight?" subtitle="The weight you want to reach."
             footer={<Button onClick={goNext} disabled={!formData.goal_weight_kg}
-              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+              className="no-tap-select w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
           >
             <div className="flex flex-col items-center pt-8 gap-6">
               <div className="text-center">
@@ -1030,7 +1162,7 @@ export default function Onboarding() {
         {step === 4 && formData.goal_type === "losing" && (
           <StepLayout step={4} title="How long do you want to take?" subtitle="We'll calculate your weekly target."
             footer={<Button onClick={goNext} disabled={!formData.target_weeks || parseInt(formData.target_weeks) < 1}
-              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+              className="no-tap-select w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
           >
             <div className="flex flex-col items-center pt-6 gap-5">
               <div className="text-center">
@@ -1114,7 +1246,7 @@ export default function Onboarding() {
               mascotBump={step * 10 + fightSubStep}
               footer={
                 <Button onClick={goNext} disabled={continueDisabled}
-                  className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>
+                  className="no-tap-select w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>
               }
             >
               <AnimatePresence mode="wait" initial={false}>
@@ -1140,7 +1272,15 @@ export default function Onboarding() {
                     </div>
                   )}
 
-                  {/* Sub-page 1: Fight date */}
+                  {/* Sub-page 1: Fight date. iOS WKWebView's `showPicker()`
+                      on a visually-hidden (sr-only) input is unreliable —
+                      tap registers but the calendar doesn't open in
+                      simulator / older WebKit. Workaround: render the
+                      native <input type="date"> as a full-bleed overlay
+                      on top of the styled "tap target" so iOS opens its
+                      native date picker on the actual element the user
+                      tapped. The overlay is opacity-0 so it stays
+                      invisible while remaining hit-testable. */}
                   {fightSubStep === 1 && (
                     <div className="flex flex-col items-center pt-8 gap-6">
                       <div className="text-center">
@@ -1149,19 +1289,34 @@ export default function Onboarding() {
                           initial={{ opacity: 0, y: 12, scale: 0.9 }}
                           animate={{ opacity: 1, y: 0, scale: 1 }}
                           transition={{ duration: 0.2, ease: "easeOut" }}
-                          className="text-3xl font-bold tabular-nums text-foreground inline-block"
+                          className={`text-3xl font-bold tabular-nums inline-block ${formData.target_date ? "text-foreground" : "text-muted-foreground/30"}`}
                         >
                           {formData.target_date
                             ? new Date(formData.target_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
                             : "—"}
                         </motion.span>
                       </div>
-                      <Input type="date" value={formData.target_date}
-                        onChange={e => {
-                          setFormData(prev => ({ ...prev, target_date: e.target.value, has_fight: "yes" }));
-                          if (e.target.value) setFightDateUserChanged(true);
-                        }}
-                        className="h-14 rounded-2xl bg-card border-border/50 text-center text-base font-semibold max-w-[260px]" />
+                      <div className="relative w-full max-w-[260px]">
+                        <div className="pointer-events-none h-14 rounded-2xl bg-card border border-border/50 flex items-center justify-center text-base font-semibold text-foreground">
+                          {formData.target_date
+                            ? new Date(formData.target_date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+                            : <span className="text-muted-foreground">Tap to pick fight date</span>}
+                        </div>
+                        <input
+                          ref={fightDateInputRef}
+                          type="date"
+                          value={formData.target_date}
+                          onChange={e => {
+                            setFormData(prev => ({ ...prev, target_date: e.target.value, has_fight: "yes" }));
+                            // NOTE: fightDateUserChanged is intentionally NOT
+                            // flipped here — the slam is armed on Continue,
+                            // not on picker close, so the reveal is anchored
+                            // to a deliberate forward action.
+                          }}
+                          aria-label="Fight date"
+                          className="no-tap-select absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        />
+                      </div>
                     </div>
                   )}
 
@@ -1268,7 +1423,7 @@ export default function Onboarding() {
                                 <>
                                   <p className="text-[11px] text-red-400/80 flex items-start gap-1.5"><span className="mt-0.5">•</span>Significant risk of impaired reaction time and decision-making</p>
                                   <p className="text-[11px] text-red-400/80 flex items-start gap-1.5"><span className="mt-0.5">•</span>Strength reduction of 10-20% even with proper rehydration</p>
-                                  <p className="text-[11px] text-red-400/80 flex items-start gap-1.5"><span className="mt-0.5">•</span>Kidney stress increases sharply — consult a doctor</p>
+                                  <p className="text-[11px] text-red-400/80 flex items-start gap-1.5"><span className="mt-0.5">•</span>Consider working with a sports nutritionist to manage the load — we'll guide you through the rest</p>
                                 </>
                               )}
                             </div>
@@ -1328,7 +1483,7 @@ export default function Onboarding() {
         {((step === 4 && formData.goal_type !== "losing") || (step === 5 && formData.goal_type === "losing")) && (
           <StepLayout step={step} title="How old are you?" subtitle="We'll use this to dial in your metabolic rate."
             footer={<Button onClick={goNext} disabled={!formData.age}
-              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+              className="no-tap-select w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
           >
             <div className="flex flex-col items-center pt-8 gap-8">
               <div className="text-center">
@@ -1371,7 +1526,7 @@ export default function Onboarding() {
         {((step === 5 && formData.goal_type !== "losing") || (step === 6 && formData.goal_type === "losing")) && (
           <StepLayout step={step} title="What's your height?" subtitle="Used to calculate your metabolic rate."
             footer={<Button onClick={goNext} disabled={!formData.height_cm}
-              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+              className="no-tap-select w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
           >
             <div className="flex flex-col items-center pt-8 gap-6">
               <div className="text-center">
@@ -1403,7 +1558,7 @@ export default function Onboarding() {
         {step === 6 && formData.goal_type !== "losing" && (
           <StepLayout step={6} title="What's your current weight?" subtitle="Step on the scale. Be honest — this is your starting line."
             footer={<Button onClick={goNext} disabled={!formData.current_weight_kg}
-              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+              className="no-tap-select w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
           >
             <div className="flex flex-col items-center pt-8 gap-6">
               <div className="text-center">
@@ -1449,7 +1604,7 @@ export default function Onboarding() {
                         <Alert className="border-red-500/30 bg-red-500/5 rounded-2xl">
                           <AlertTriangle className="h-4 w-4 text-red-500" />
                           <AlertDescription className="text-xs text-red-400">
-                            <strong className="text-red-300">High risk cut.</strong> Losing {weeklyLoss.toFixed(1)} kg/week ({bodyPct.toFixed(0)}% bodyweight) increases risk of muscle loss and performance decline. Consult a sports doctor. We'll still build your plan.
+                            <strong className="text-red-300">High risk cut.</strong> Losing {weeklyLoss.toFixed(1)} kg/week ({bodyPct.toFixed(0)}% bodyweight) can sap your strength, reaction time, and endurance, and may cost you muscle. Consider working with a sports nutritionist alongside the app to dial in your fuelling — we'll still build your plan and keep you on track.
                           </AlertDescription>
                         </Alert>
                       )}
@@ -1527,7 +1682,7 @@ export default function Onboarding() {
           <StepLayout step={7} title="Estimate your body fat" subtitle="Drag the slider. Skip if you're not sure."
             footer={
               <div className="space-y-2">
-                <Button onClick={goNext} className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90">Continue</Button>
+                <Button onClick={goNext} className="no-tap-select w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90">Continue</Button>
                 <button onClick={() => { setFormData(prev => ({ ...prev, body_fat_pct: "" })); goNext(); }} className="w-full text-center text-xs text-muted-foreground/60 py-2 hover:text-muted-foreground transition-colors">
                   Skip this step
                 </button>
@@ -1595,7 +1750,7 @@ export default function Onboarding() {
         {step === 8 && (
           <StepLayout step={8} title="What's your experience level?" subtitle="No judgment. We just need to know where you're at."
             footer={<Button onClick={goNext} disabled={!formData.experience_level}
-              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+              className="no-tap-select w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
           >
             <div className="space-y-2.5">
               {[
@@ -1614,7 +1769,7 @@ export default function Onboarding() {
         {step === 9 && (
           <StepLayout step={9} title="How often do you train?" subtitle="All sessions — pads, sparring, gym, running."
             footer={<Button onClick={goNext} disabled={!formData.training_frequency}
-              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+              className="no-tap-select w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
           >
             <div className="space-y-2.5">
               {[
@@ -1634,7 +1789,7 @@ export default function Onboarding() {
         {step === 10 && (
           <StepLayout step={10} title="What does your training include?" subtitle="Select all that apply."
             footer={<Button onClick={goNext} disabled={formData.training_types.length === 0}
-              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+              className="no-tap-select w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
           >
             <div className="space-y-2.5">
               {["Pads", "Sparring", "Strength & Conditioning", "Running"].map(t => (
@@ -1649,7 +1804,7 @@ export default function Onboarding() {
         {step === 11 && (
           <StepLayout step={11} title="How many hours do you sleep?" subtitle="Recovery is half the game."
             footer={<Button onClick={goNext} disabled={!formData.sleep_hours}
-              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+              className="no-tap-select w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
           >
             <div className="space-y-2.5">
               {[
@@ -1676,11 +1831,11 @@ export default function Onboarding() {
         {step === 12 && formData.goal_type !== "losing" && (
           <StepLayout step={12} title="What do you struggle with most?" subtitle="Be real. We'll build around your weak spots."
             footer={<Button onClick={goNext} disabled={!formData.primary_struggle}
-              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+              className="no-tap-select w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
           >
             <div className="space-y-2.5">
               {[
-                { value: "making_weight", label: "Making weight", icon: <TrendingDown className="h-5 w-5 text-red-400" /> },
+                { value: "cut_stress", label: "Stress during weight cuts", icon: <TrendingDown className="h-5 w-5 text-red-400" /> },
                 { value: "low_energy", label: "Low energy in training", icon: <Zap className="h-5 w-5 text-yellow-400" /> },
                 { value: "binge_eating", label: "Binge eating after cuts", icon: <Utensils className="h-5 w-5 text-orange-400" /> },
                 { value: "no_progress", label: "Not seeing progress", icon: <Brain className="h-5 w-5 text-purple-400" /> },
@@ -1700,7 +1855,7 @@ export default function Onboarding() {
         {step === 12 && formData.goal_type === "losing" && (
           <StepLayout step={12} title="How aggressive do you want to go?" subtitle="Picks the pace of your cut. You can change it later in Settings."
             footer={<Button onClick={goNext} disabled={!formData.plan_aggressiveness}
-              className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
+              className="no-tap-select w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Continue</Button>}
           >
             <div className="space-y-2.5">
               {[
@@ -1740,26 +1895,38 @@ export default function Onboarding() {
                 </div>
               ) : (
                 <Button onClick={goNext} disabled={loading}
-                  className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Generate plan</Button>
+                  className="no-tap-select w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">Generate plan</Button>
               )
             }
           >
             <div className="space-y-3">
-              {/* Tale-of-the-Tape — fighter intro reveal at the top of
-                  the finale. Aggressiveness now appears here as a stat
-                  (read-only) so the user can see what they picked
-                  without us asking the question again. */}
-              <TaleOfTheTapeCard
-                name={userName || "Fighter"}
-                sport={(formData.athlete_type || formData.athlete_types[0] || vocab.campNoun).toString()}
-                stats={[
-                  { label: "Height", value: formData.height_cm ? `${formData.height_cm} cm` : "—" },
-                  { label: "Weight", value: formData.current_weight_kg ? `${formData.current_weight_kg} kg` : "—" },
-                  { label: "Goal", value: formData.goal_weight_kg ? `${formData.goal_weight_kg} kg` : "—" },
-                  { label: "Timeline", value: formData.target_weeks ? `${formData.target_weeks} weeks` : "—" },
-                  { label: "Pace", value: formData.plan_aggressiveness || "balanced" },
-                ]}
-              />
+              {/* Tale-of-the-Tape — finale stat readout. Aggressiveness
+                  appears here as a stat (read-only) so the user can see
+                  what they picked without us asking the question again.
+                  Wrapped in a ref'd div so the share-card flow can
+                  rasterize it via html-to-image. */}
+              <div ref={tapeCardRef}>
+                <TaleOfTheTapeCard
+                  onShare={handleShareCampCard}
+                  stats={[
+                    { label: "Height", value: formData.height_cm ? `${formData.height_cm} cm` : "—" },
+                    { label: "Weight", value: formData.current_weight_kg ? `${formData.current_weight_kg} kg` : "—" },
+                    { label: "Goal", value: formData.goal_weight_kg ? `${formData.goal_weight_kg} kg` : "—" },
+                    { label: "Timeline", value: formData.target_weeks ? `${formData.target_weeks} weeks` : "—" },
+                    { label: "Pace", value: formData.plan_aggressiveness || "balanced" },
+                  ]}
+                />
+              </div>
+
+              {/* Weekly projection scrubber — only when we have the
+                  inputs needed for a meaningful path. */}
+              {formData.current_weight_kg && formData.goal_weight_kg && formData.target_weeks && (
+                <WeeklyMilestonesScrubber
+                  currentKg={parseFloat(formData.current_weight_kg)}
+                  goalKg={parseFloat(formData.goal_weight_kg)}
+                  weeks={Math.max(1, parseInt(formData.target_weeks))}
+                />
+              )}
 
               {/* Projected weight-loss chart — same visual language as
                   the cutting flow's chart but simpler: linear current →
@@ -1771,6 +1938,21 @@ export default function Onboarding() {
                 goalKg={parseFloat(formData.goal_weight_kg) || 0}
                 weeks={parseInt(formData.target_weeks) || 0}
               />
+
+              {/* Day-1 preview teaser — blurred macros + training so the
+                  user feels there's something concrete waiting on the
+                  other side of the Generate button. Always rendered
+                  pre-plan; suppressed once the real plan resolves. */}
+              {!generatedPlan && (
+                <BlurredWeekOnePreview
+                  sex={formData.sex}
+                  age={formData.age ? parseInt(formData.age) : undefined}
+                  heightCm={formData.height_cm ? parseFloat(formData.height_cm) : undefined}
+                  currentKg={formData.current_weight_kg ? parseFloat(formData.current_weight_kg) : undefined}
+                  trainingFrequency={formData.training_frequency ? parseInt(formData.training_frequency) : undefined}
+                  aggressiveness={formData.plan_aggressiveness}
+                />
+              )}
 
               {/* In-page plan display — slides in below the card once the
                   AI plan resolves. The Continue button inside this
@@ -1919,25 +2101,40 @@ export default function Onboarding() {
                   </div>
                 ) : (
                   <Button onClick={goNext} disabled={loading || !validInputs}
-                    className="w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">
+                    className="no-tap-select w-full h-12 rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/20 hover:opacity-90 disabled:opacity-50">
                     Generate plan
                   </Button>
                 )
               }
             >
               <div className="space-y-3">
-                {/* Tale-of-the-Tape — fighter intro reveal at the top of the finale. */}
-                <TaleOfTheTapeCard
-                  name={userName || "Fighter"}
-                  sport={(formData.athlete_type || formData.athlete_types[0] || vocab.campNoun).toString()}
-                  stats={[
-                    { label: "Height", value: formData.height_cm ? `${formData.height_cm} cm` : "—" },
-                    { label: "Weight", value: formData.current_weight_kg ? `${formData.current_weight_kg} kg` : "—" },
-                    { label: "Goal", value: formData.goal_weight_kg ? `${formData.goal_weight_kg} kg` : "—" },
-                    { label: "Days to fight", value: daysToFight ? String(daysToFight) : "—" },
-                    { label: "Experience", value: formData.experience_level || "—" },
-                  ]}
-                />
+                {/* Tale-of-the-Tape — finale stat readout for cutting.
+                    Wrapped in a ref'd div so the share-card flow can
+                    rasterize it via html-to-image. */}
+                <div ref={tapeCardRef}>
+                  <TaleOfTheTapeCard
+                    onShare={handleShareCampCard}
+                    stats={[
+                      { label: "Height", value: formData.height_cm ? `${formData.height_cm} cm` : "—" },
+                      { label: "Weight", value: formData.current_weight_kg ? `${formData.current_weight_kg} kg` : "—" },
+                      { label: "Goal", value: formData.goal_weight_kg ? `${formData.goal_weight_kg} kg` : "—" },
+                      { label: "Days to fight", value: daysToFight ? String(daysToFight) : "—" },
+                      { label: "Experience", value: formData.experience_level || "—" },
+                    ]}
+                  />
+                </div>
+
+                {/* Weekly projection scrubber — cutting flow uses the
+                    sustained-cut weeks (cutWeeks from `stats`) as the
+                    timeline since the dehydration days are separate. */}
+                {validInputs && stats && formData.current_weight_kg && fightWeekTarget > 0 && (
+                  <WeeklyMilestonesScrubber
+                    currentKg={parseFloat(formData.current_weight_kg)}
+                    goalKg={fightWeekTarget}
+                    weeks={stats.cutWeeks}
+                  />
+                )}
+
                 {validInputs && stats ? (
                   <>
                     {chartContent}
@@ -1966,6 +2163,18 @@ export default function Onboarding() {
                       Need a fight date in the future plus your weight class and pre-dehydration target to project your cut.
                     </p>
                   </div>
+                )}
+
+                {/* Day-1 preview teaser — blurred macros + training. */}
+                {!generatedPlan && (
+                  <BlurredWeekOnePreview
+                    sex={formData.sex}
+                    age={formData.age ? parseInt(formData.age) : undefined}
+                    heightCm={formData.height_cm ? parseFloat(formData.height_cm) : undefined}
+                    currentKg={formData.current_weight_kg ? parseFloat(formData.current_weight_kg) : undefined}
+                    trainingFrequency={formData.training_frequency ? parseInt(formData.training_frequency) : undefined}
+                    aggressiveness={formData.plan_aggressiveness}
+                  />
                 )}
 
                 {/* In-page plan display — slides in below the chart once the
@@ -2001,12 +2210,13 @@ export default function Onboarding() {
       </AnimatePresence>
 
       {/* Overlay layer — fires once when fight date first lands. */}
-      <DaysToFightSlam days={daysToFight} armed={daysSlamArmed} />
+      <DaysToFightSlam days={daysToFight} armed={daysSlamArmed} onDismiss={handleDaysSlamDismiss} />
       <WeightLossSlam
         totalKg={totalKgToLose}
         weeks={slamWeeks}
         perWeekKg={perWeekKg}
         armed={weightSlamArmed}
+        onDismiss={handleWeightSlamDismiss}
       />
       {/* Milestone achievement now renders INLINE next to the
           social-proof chip in the sticky header (see CuttingNowChip
