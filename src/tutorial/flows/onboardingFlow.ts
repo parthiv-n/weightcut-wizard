@@ -2,121 +2,126 @@ import type { TutorialFlow } from "../types";
 
 export const onboardingFlow: TutorialFlow = {
   id: "onboarding",
-  version: 8,
+  version: 9,
   steps: [
     {
       id: "welcome",
-      title: "Welcome to FightCamp Wizard",
+      title: "Good, you made it",
       description:
-        "Let's take a quick tour of your app. We'll walk through every screen so you know exactly where everything is.",
+        "I'm the wizard, your corner for everything outside the cage. I'll keep your cut clean and your camp honest. Two minutes, then you're off.",
       position: "center",
       route: "/dashboard",
+      wizardPose: "wave",
     },
     {
       id: "dashboard-overview",
-      title: "Your Dashboard",
+      title: "This is home",
       description:
-        "This is your home base. You'll see your weight progress bar, weekly consistency ring, AI daily wisdom, weight history chart, training activity, and achievement badges — all at a glance.",
+        "Your ring tracks the day, the wisdom keeps you sharp, the badges mark the work. Open this first, every morning.",
       position: "center",
       route: "/dashboard",
     },
     {
       id: "nutrition-page",
-      title: "Nutrition",
+      title: "Food in, fight out",
       description:
-        "Your nutrition hub. Log meals by scanning a barcode, searching the database, or using AI Quick Fill. Generate personalised meal plans, analyse your daily vitamin and mineral intake, and get a diet quality score.",
+        "Scan a barcode, search a food, or let Quick Fill read the plate. Build a personalised plan, then analyse the micros so nothing slips.",
       position: "center",
       navigateTo: "/nutrition",
     },
     {
       id: "nutrition-features",
-      title: "AI Diet Tools",
+      title: "Two tools, one job",
       description:
-        "Use the Analyse button to get an AI breakdown of your day's nutrition — find missing micronutrients like iron, magnesium and B-vitamins. Use Generate to create meal plans tailored to your calorie and macro targets.",
+        "Analyse looks back, finding the gaps and quiet deficiencies. Generate looks forward, building meals around the macros you actually need.",
       position: "center",
       route: "/nutrition",
+      wizardPose: "point",
     },
     {
       id: "weight-tracker-page",
-      title: "Weight Tracker",
+      title: "Weigh in, every day",
       description:
-        "Track your daily weigh-ins and see your progress chart over time. Filter by week, month or all-time. Use the AI analysis to get insights on your weight trend, pace, and recommendations.",
+        "One number, same time, no drama. Filter by week, month or all, and I'll analyse the trend so you see the truth, not the noise.",
       position: "center",
       navigateTo: "/weight",
     },
     {
       id: "fight-week-page",
-      title: "Fight Week",
+      title: "The last seven days",
       description:
-        "Your fight week command centre. Get AI-generated advice for your final week — water loading, sodium manipulation, and weight management strategies tailored to your cut.",
+        "This is where the cut gets real. Water load, sodium taper, the lot. Follow it step by step and you'll walk to the scale calm.",
       position: "center",
       navigateTo: "/weight-cut",
       condition: (state) => state.goalType === "cutting",
     },
     {
       id: "rehydration-page",
-      title: "Rehydration Planner",
+      title: "After the scale",
       description:
-        "Switch to the Rehydration tab after weigh-in. Enter how much weight you lost and get a personalised hourly protocol — fluid schedules, electrolyte timing, and carb refuelling plan.",
+        "The fight is won in the hours after weigh-in. Sip the plan I lay out, hour by hour, fluid, salt and carbs in order. Don't freelance here.",
       position: "center",
       navigateTo: "/weight-cut?tab=rehydration",
       condition: (state) => state.goalType === "cutting",
+      wizardPose: "point",
     },
     {
       id: "fight-camps-page",
-      title: "Fight Camps",
+      title: "Organise the chaos",
       description:
-        "Organise your training into fight camps. Create a camp for each event, track your weight cut progress, upload photos, and review past camps to improve.",
+        "Every camp gets its own home. Track the cut, log the sessions, drop in photos. When the next one starts, you'll know exactly what worked.",
       position: "center",
       navigateTo: "/fight-camps",
     },
     {
       id: "training-calendar-page",
-      title: "Training Calendar",
+      title: "Log the rounds",
       description:
-        "Log your training sessions — BJJ, Muay Thai, wrestling, strength, running and more. View your sessions by day, track RPE and intensity, and generate AI training summaries each week.",
+        "BJJ, Muay Thai, wrestling, strength, all in one place with an RPE. Each week I'll write you a short summary, so the patterns surface.",
       position: "center",
       navigateTo: "/training-calendar",
     },
     {
       id: "recovery-page",
-      title: "Recovery Dashboard",
+      title: "The other half of fitness",
       description:
-        "Your recovery hub. Every session you log in the Training Calendar feeds into recovery metrics here — fatigue levels, sleep quality, soreness trends, and an AI recovery coach. The more you log, the smarter it gets.",
+        "Tell me how you slept, how sore you are, how the tank feels. The more you log, the sharper my recovery coach gets at calling your next move.",
       position: "center",
       navigateTo: "/recovery",
     },
     {
       id: "sleep-page",
-      title: "Sleep Tracking",
+      title: "Hours in the bank",
       description:
-        "Log your sleep daily from the dashboard widget. Your hours are tracked over time and displayed in a graph on the Sleep page — filter by week, month, or 3 months. Consistent logging helps the AI give better recovery and cut advice.",
+        "Log the nights, watch the trend across a week, a month, three months. Sleep is the cheapest performance gain you've got. Spend it.",
       position: "center",
       navigateTo: "/sleep",
     },
     {
       id: "quick-tips",
-      title: "Quick Tips",
+      title: "Two buttons to know",
       description:
-        "Use the + button in the nav bar to quickly log food or weight. Tap the sparkle button on the dashboard to chat with your AI coach — ask training advice, recovery tips, or anything about your cut.",
+        "The plus on the nav is your fast log, weight, meals, sessions, in seconds. The sparkle opens me up for a chat, any question, any time.",
       position: "center",
       navigateTo: "/dashboard",
+      wizardPose: "point",
     },
     {
       id: "pro-features",
-      title: "Pro Features",
+      title: "A quick note on Pro",
       description:
-        "AI coaching, meal analysis, fight-week planning, and the wisdom engine are part of WeightCut Pro. Upgrade anytime from Settings to unlock everything. Manual food search and barcode scanning are always free.",
+        "Manual logging, barcode and food search are yours, free, forever. The AI tools, the plans, the analysis, those live in Pro. Upgrade from Settings when you're ready.",
       position: "center",
       route: "/dashboard",
     },
     {
       id: "all-done",
-      title: "You're All Set!",
+      title: "That's the kit",
       description:
-        "Explore at your own pace. You can replay this tour anytime from Settings in the More menu.",
+        "You can replay this from Settings whenever you like. Now go and do the work. I'll be here when you check in.",
       position: "center",
       route: "/dashboard",
+      wizardPose: "celebrate",
     },
   ],
 };
