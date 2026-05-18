@@ -174,11 +174,25 @@ export const listFeed = query({
       ]),
     );
 
+    // Batch-fetch sessions: multiple posts often share the same sessionId
+    // (a user posting several photos from one training block). Collecting
+    // unique IDs and fetching once mirrors the `uniqueAuthorIds` block above
+    // and cuts ~N/2 db.get calls on a typical page.
+    const uniqueSessionIds = [...new Set(
+      visiblePage.map((m) => m.sessionId).filter(Boolean),
+    )];
+    const sessionDocs = await Promise.all(
+      uniqueSessionIds.map((sid) => ctx.db.get(sid)),
+    );
+    const sessionMap = new Map(
+      uniqueSessionIds.map((sid, i) => [sid, sessionDocs[i]]),
+    );
+
     const posts = await Promise.all(
       visiblePage.map(async (m) => {
         const author = authorMap.get(m.userId);
-        const [session, viewerLike, mediaUrl, thumbUrl] = await Promise.all([
-          ctx.db.get(m.sessionId),
+        const session = sessionMap.get(m.sessionId) ?? null;
+        const [viewerLike, mediaUrl, thumbUrl] = await Promise.all([
           // O(1) point lookup — "did the calling user like this post?".
           ctx.db
             .query("feed_likes")

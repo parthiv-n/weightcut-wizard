@@ -23,7 +23,7 @@ import { usePaginatedQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 
-const INITIAL_PAGE = 12;
+const INITIAL_PAGE = 6;
 const LOAD_MORE_PAGE = 8;
 
 /**
@@ -59,6 +59,8 @@ export interface FeedPost {
   viewerLiked: boolean;
   /** Optional LQIP — present when the backfill action has run. */
   thumbDataUrl?: string | null;
+  /** 256-px thumbnail URL for stack positions 1/2 (lower bandwidth). */
+  thumbUrl?: string | null;
   width?: number | null;
   height?: number | null;
 }

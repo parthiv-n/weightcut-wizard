@@ -107,7 +107,12 @@ function PolaroidCardBase({
               // back-nav still works because the destination card is
               // always the top of the stack at restore time.
               layoutId={isTop ? `post-${post.id}-image` : undefined}
-              src={post.url}
+              // For the top card we load the full-res image immediately.
+              // For background cards (positions 1/2) the 256-px thumb is
+              // visually indistinguishable at their scale — use it when
+              // available so the initial network cost is ~70% lower. Fall
+              // back to the full URL when thumbUrl is absent.
+              src={isTop ? post.url : (post.thumbUrl ?? post.url)}
               alt={post.caption ?? "Training media"}
               draggable={false}
               onLoad={() => setImgLoaded(true)}
@@ -180,6 +185,7 @@ function areEqual(prev: PolaroidCardProps, next: PolaroidCardProps): boolean {
     // re-hydration on the storage URL). Compare so we trigger the
     // fade-in animation when the real image arrives.
     prev.post.url === next.post.url &&
+    prev.post.thumbUrl === next.post.thumbUrl &&
     prev.post.thumbDataUrl === next.post.thumbDataUrl
   );
 }
