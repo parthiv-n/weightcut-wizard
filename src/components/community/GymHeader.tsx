@@ -27,6 +27,7 @@ import { ImpactStyle } from "@capacitor/haptics";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ActivityBell } from "./ActivityBell";
 
 interface GymHeaderProps {
   gymName: string;
@@ -44,6 +45,7 @@ interface GymHeaderProps {
    */
   memberCount?: number | null;
   onInviteClick: () => void;
+  onActivityClick: () => void;
 }
 
 interface MemberCountResult {
@@ -75,6 +77,7 @@ export function GymHeader({
   // the legacy call signature. Subtitle reads the live server count.
   memberCount: _memberCount,
   onInviteClick,
+  onActivityClick,
 }: GymHeaderProps) {
   void _memberCount;
   const handleInvite = () => {
@@ -122,18 +125,23 @@ export function GymHeader({
           ) : null}
         </div>
 
-        {/* Compact pill — always present so the affordance is consistent
-            with the rest of the tab. At <5 members the large CTA below
-            does the heavy lifting; this stays as a low-friction shortcut. */}
-        <button
-          type="button"
-          onClick={handleInvite}
-          aria-label="Bring a teammate"
-          className="glass-card shrink-0 h-9 rounded-full px-3 flex items-center gap-1.5 active:scale-95 transition-transform"
-        >
-          <Plus className="h-4 w-4" strokeWidth={2.4} />
-          <span className="text-xs font-medium">Bring a teammate</span>
-        </button>
+        {/* Right-side controls: activity bell + invite pill */}
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <ActivityBell gymId={gymId ?? null} onClick={onActivityClick} />
+
+          {/* Compact pill — always present so the affordance is consistent
+              with the rest of the tab. At <5 members the large CTA below
+              does the heavy lifting; this stays as a low-friction shortcut. */}
+          <button
+            type="button"
+            onClick={handleInvite}
+            aria-label="Bring a teammate"
+            className="glass-card shrink-0 h-9 rounded-full px-3 flex items-center gap-1.5 active:scale-95 transition-transform"
+          >
+            <Plus className="h-4 w-4" strokeWidth={2.4} />
+            <span className="text-xs font-medium">Bring a teammate</span>
+          </button>
+        </div>
       </header>
     </>
   );

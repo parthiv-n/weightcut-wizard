@@ -48,9 +48,11 @@ export const WeightProgressRing = memo(function WeightProgressRing({ currentWeig
         </div>
       </div>
 
-      {/* Current / Target */}
-      <div className="text-[10px] text-muted-foreground/60 text-center mt-1.5">
-        {currentWeight.toFixed(1)}kg → {goalWeight.toFixed(1)}kg
+      {/* Current / Target — one-line tabular row. `kg` only on the
+          target so the line stays compact on narrow widgets; `nowrap`
+          stops the trailing unit from wrapping off the card. */}
+      <div className="text-[9px] text-muted-foreground/60 text-center mt-1.5 whitespace-nowrap tabular-nums">
+        {currentWeight.toFixed(1)} → {goalWeight.toFixed(1)} kg
       </div>
     </div>
   );

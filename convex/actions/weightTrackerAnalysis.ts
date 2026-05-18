@@ -36,6 +36,7 @@ import {
   requireUserIdFromAction,
   SECOND_PERSON_DIRECTIVE,
 } from "./_helpers";
+import { enforceFeatureGate } from "../_shared/featureGates";
 
 const DAY_MS = 86_400_000;
 
@@ -61,8 +62,12 @@ export const run = action({
   },
   handler: async (ctx, args) => {
     const userId = await requireUserIdFromAction(ctx);
-    // NOTE: intentionally no `enforceFeatureGate` here — mirrors the
-    // generateWeightPlan policy so every tier can refresh their plan.
+    // Pro-gated. The onboarding sibling (`generateWeightPlan`) stays
+    // free — a new user needs a plan to start — but post-onboarding
+    // refreshes are a paying-tier feature. The gate throws
+    // `PRO_FEATURE_REQUIRED:AI_WEIGHT_ANALYSIS` which the client's
+    // `useAIAction` wrapper catches and opens the paywall.
+    await enforceFeatureGate(ctx, userId, "AI_WEIGHT_ANALYSIS");
     const snap = await loadAthleteSnapshot(ctx, userId);
     const profile = snap.profile ?? {};
 

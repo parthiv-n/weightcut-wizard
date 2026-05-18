@@ -7,7 +7,9 @@
  * directly so the page can render it through the shared `InlinePlanDisplay`.
  *
  * Notable behaviour:
- *  - No paywall: the action is free for everyone (matches generateWeightPlan).
+ *  - Paywalled: post-onboarding refreshes are gated behind `AI_WEIGHT_ANALYSIS`.
+ *    The onboarding-time sibling (`generateWeightPlan`) stays free so a brand
+ *    new user can get their first plan; subsequent re-analyses require Pro.
  *  - Cache: persists the plan via `AIPersistence` so it survives a refresh.
  *    The cache key was renamed from `weight_analysis` -> `weight_plan_v2` so
  *    legacy entries (the rich macros/protocol shape) never bleed into the new
@@ -19,7 +21,8 @@
  *    headline macro strip from).
  */
 import { useState, useRef } from "react";
-import { useAction, useMutation } from "convex/react";
+import { useMutation } from "convex/react";
+import { useAIAction } from "@/hooks/useAIAction";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { useAITask } from "@/contexts/AITaskContext";
@@ -53,10 +56,15 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
   const { toast } = useToast();
   const { addTask, completeTask, failTask } = useAITask();
   const updateGoalsMut = useMutation(api.profiles.updateGoals);
-  // No `useAIAction` wrapper / no feature gate: weightTrackerAnalysis is free
-  // for every tier to mirror the generateWeightPlan policy.
-  const weightTrackerAnalysisAction = useAction(
+  // Pro-gated via `useAIAction`: the server-side `enforceFeatureGate`
+  // throws `PRO_FEATURE_REQUIRED:AI_WEIGHT_ANALYSIS` for free users, but
+  // the wrapper also runs an upfront client gate so we open the paywall
+  // BEFORE dispatching the action and avoid the user-visible error toast.
+  // Note: the onboarding sibling (`generateWeightPlan`) is intentionally
+  // ungated — every user gets one plan to start with.
+  const weightTrackerAnalysisAction = useAIAction(
     api.actions.weightTrackerAnalysis.run,
+    "AI_WEIGHT_ANALYSIS",
   );
   const aiAbortRef = useRef<AbortController | null>(null);
 
