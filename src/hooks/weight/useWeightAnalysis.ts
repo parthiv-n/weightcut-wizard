@@ -1,10 +1,11 @@
 import { useState, useRef } from "react";
-import { useMutation, useAction } from "convex/react";
+import { useMutation } from "convex/react";
 import { useAIAction } from "@/hooks/useAIAction";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { useAITask } from "@/contexts/AITaskContext";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { createAIAbortController } from "@/lib/timeoutWrapper";
 import { logger } from "@/lib/logger";
@@ -21,9 +22,10 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
   const { userId, refreshProfile } = useUser();
   const { toast } = useToast();
   const { addTask, completeTask, failTask } = useAITask();
-  const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
+  const { openPaywall, handlePaywallError } = useSubscription();
+  const { hasAccess: hasAiAccess } = useFeatureAccess("AI_WEIGHT_ANALYSIS");
   const updateGoalsMut = useMutation(api.profiles.updateGoals);
-  const weightTrackerAnalysisAction = useAIAction(api.actions.weightTrackerAnalysis.run);
+  const weightTrackerAnalysisAction = useAIAction(api.actions.weightTrackerAnalysis.run, "AI_WEIGHT_ANALYSIS");
   const aiAbortRef = useRef<AbortController | null>(null);
 
   const [analyzingWeight, setAnalyzingWeight] = useState(false);
@@ -89,8 +91,8 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
       return;
     }
 
-    if (!checkAIAccess()) {
-      openNoGemsDialog();
+    if (!hasAiAccess) {
+      openPaywall();
       return;
     }
 
@@ -166,7 +168,7 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
       setDebugData(debugInfo);
 
       if (error) {
-        if (await handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
+        if (await handlePaywallError(error)) { failTask(taskId, "Pro required"); return; }
         const msg = error?.message || "AI analysis unavailable";
         toast({
           title: "AI analysis unavailable",
@@ -183,7 +185,6 @@ export function useWeightAnalysis({ profile }: UseWeightAnalysisParams) {
           });
           return;
         }
-        onAICallSuccess();
         setTargetsApplied(false);
         setAiAnalysis(analysis);
         setAiAnalysisWeight(currentWeight);

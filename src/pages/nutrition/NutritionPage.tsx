@@ -1,15 +1,14 @@
 import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { CheckCircle } from "lucide-react";
+import { CheckCircle, Crown } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
-import { Gem } from "lucide-react";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { nutritionLogSchema } from "@/lib/validation";
 import { useUser } from "@/contexts/UserContext";
 import { logger } from "@/lib/logger";
 import { useAITask } from "@/contexts/AITaskContext";
-import { useGems } from "@/hooks/useGems";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 
 import type { Meal, ManualMealForm } from "@/pages/nutrition/types";
 import {
@@ -109,12 +108,23 @@ export default function NutritionPage() {
   });
   const quickActions = useQuickMealActions({ meals, selectedDate, saveMealToDb: mealOps.saveMealToDb });
   const macroCalc = useMacroCalculation();
-  const { gems, isPremium: gemsIsPremium } = useGems();
+  // Surface a Pro badge alongside AI-feature CTAs for free users. Treated as a
+  // single banner because every AI feature on this page gates to the same tier.
+  const { hasAccess: hasNutritionAiAccess } = useFeatureAccess("AI_MEAL_ANALYSIS");
 
-  const gemBadge = !gemsIsPremium ? (
-    <span className="inline-flex items-center gap-0.5 ml-1.5 text-muted-foreground">
-      <Gem className="h-3 w-3" />
-      <span className="text-[13px] font-medium tabular-nums">{gems}</span>
+  const proBadge = !hasNutritionAiAccess ? (
+    <span className="inline-flex items-center gap-0.5 text-primary/70">
+      <Crown className="h-3 w-3" />
+      <span className="text-[10px] font-medium uppercase tracking-wider">Pro</span>
+    </span>
+  ) : null;
+
+  // Variant tuned for solid primary-bg buttons (e.g. the Analyze CTA inside
+  // QuickAddDialog) where `text-primary/70` would melt into the background.
+  const proBadgeOnPrimary = !hasNutritionAiAccess ? (
+    <span className="inline-flex items-center gap-0.5 text-primary-foreground/80">
+      <Crown className="h-3 w-3" />
+      <span className="text-[10px] font-medium uppercase tracking-wider">Pro</span>
     </span>
   ) : null;
 
@@ -428,9 +438,14 @@ export default function NutritionPage() {
             <button
               onClick={() => dietAnalysisHook.handleAnalyseDiet()}
               disabled={nutritionData.dietAnalysisLoading}
-              className="card-surface w-full p-3.5 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform rounded-2xl"
+              className="relative card-surface w-full p-3.5 flex items-center justify-center gap-2 active:scale-[0.98] transition-transform rounded-2xl"
             >
-              <span className="text-sm font-medium text-foreground">Analyse Diet{gemBadge}</span>
+              <span className="text-sm font-medium text-foreground">Analyse Diet</span>
+              {proBadge && (
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                  {proBadge}
+                </span>
+              )}
             </button>
           )}
         </div>
@@ -472,7 +487,7 @@ export default function NutritionPage() {
           onCancelAi={cancelAI}
           onDismissTask={dismissTask}
           onToast={toast}
-          gemBadge={gemBadge}
+          gemBadge={proBadgeOnPrimary}
         />
 
         <AiMealPlanDialog
@@ -483,7 +498,7 @@ export default function NutritionPage() {
           setAiPrompt={mealPlan.setAiPrompt}
           generatingPlan={mealPlan.generatingPlan}
           onGenerate={mealPlan.handleGenerateMealPlan}
-          gemBadge={gemBadge}
+          gemBadge={proBadge}
         />
 
         <ManualNutritionDialog

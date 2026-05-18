@@ -1,62 +1,70 @@
-import { useSubscriptionContext } from "@/contexts/SubscriptionContext";
 import { useCallback } from "react";
+import { useSubscriptionContext } from "@/contexts/SubscriptionContext";
+import {
+  FEATURE_GATES,
+  meetsTier,
+  parseProFeatureError,
+  type FeatureKey,
+  type Tier,
+} from "@/lib/featureGates";
 
+/**
+ * Public surface for tier / paywall state used throughout the app.
+ *
+ * Replaces the previous gem-based API. Components should:
+ *   1. Call `checkFeatureAccess(featureKey)` (or `useFeatureAccess`) before
+ *      invoking an AI action so free users see the paywall instead of
+ *      bouncing off a server-side error.
+ *   2. Call `handlePaywallError(error)` on any caught error from an AI
+ *      action; if the error is a `PRO_FEATURE_REQUIRED:*` it'll open the
+ *      paywall automatically and return true.
+ */
 export function useSubscription() {
   const ctx = useSubscriptionContext();
 
-  // Gems are the sole limiter: premium = unlimited, free = 1 gem per AI call
-  const checkAIAccess = useCallback((): boolean => {
-    const allowed = ctx.isPremium || ctx.gems > 0;
-    console.log("[AI Access Check]", {
-      allowed,
-      isPremium: ctx.isPremium,
-      gems: ctx.gems,
-    });
-    return allowed;
-  }, [ctx.isPremium, ctx.gems]);
+  /** Synchronous client-side gate check for any feature. */
+  const checkFeatureAccess = useCallback(
+    (featureKey: FeatureKey): boolean => {
+      const required = FEATURE_GATES[featureKey].minTier;
+      return meetsTier(ctx.tier, required);
+    },
+    [ctx.tier],
+  );
 
   /**
-   * Handle a 429/rate-limit error from an edge function.
-   * Parses the response body to sync gem count and show the right dialog.
+   * Inspect an error thrown by an AI action and, if it's a
+   * `PRO_FEATURE_REQUIRED:*` rejection, open the paywall. Returns `true`
+   * when the error was handled so the caller can suppress a generic toast.
    */
-  const handleAILimitError = useCallback(async (error: any): Promise<boolean> => {
-    if (ctx.isPremium) return false;
-    const errBody = typeof error === "object" && "context" in error ? (error as any).context : null;
-    const status = errBody?.status;
-    console.log("[AI Limit Error]", { status, isPremium: ctx.isPremium, gems: ctx.gems });
-    if (status !== 429) return false;
-
-    // Parse the Response body
-    let body: any = null;
-    try {
-      if (errBody && typeof errBody.json === "function") {
-        body = await errBody.json();
+  const handlePaywallError = useCallback(
+    (error: unknown): boolean => {
+      const featureKey = parseProFeatureError(error);
+      if (!featureKey) return false;
+      if (ctx.isPremium) {
+        // Edge case: server says no, RC says yes. The wrapper already tried
+        // to self-heal; don't spam the paywall on a stale profile.
+        return true;
       }
-    } catch { /* body already consumed or not JSON */ }
-    console.log("[AI Limit Error] Parsed body:", body);
-
-    // Sync gem count from server
-    const serverGems = typeof body?.gems === "number" ? body.gems : undefined;
-    ctx.onAICallBlocked(serverGems);
-
-    // Show no-gems dialog (the only reason a free user gets 429 in gem-only system)
-    ctx.openNoGemsDialog();
-    return true;
-  }, [ctx]);
+      ctx.openPaywall();
+      return true;
+    },
+    [ctx],
+  );
 
   return {
     isPremium: ctx.isPremium,
-    tier: ctx.tier,
+    tier: ctx.tier as Tier,
+    rawTier: ctx.rawTier,
     expiresAt: ctx.expiresAt,
-    gems: ctx.gems,
-    checkAIAccess,
+    isInTrial: ctx.isInTrial,
+    trialEndsAt: ctx.trialEndsAt,
+    isSubscriptionResolved: ctx.isSubscriptionResolved,
+    isPaywallOpen: ctx.isPaywallOpen,
+    checkFeatureAccess,
+    handlePaywallError,
     openPaywall: ctx.openPaywall,
-    openNoGemsDialog: ctx.openNoGemsDialog,
-    closeNoGemsDialog: ctx.closeNoGemsDialog,
-    isNoGemsOpen: ctx.isNoGemsOpen,
-    handleAILimitError,
-    refreshGems: ctx.refreshGems,
-    onAICallSuccess: ctx.onAICallSuccess,
-    onAICallBlocked: ctx.onAICallBlocked,
+    closePaywall: ctx.closePaywall,
+    showWelcomePro: ctx.showWelcomePro,
+    dismissWelcomePro: ctx.dismissWelcomePro,
   };
 }

@@ -1,4 +1,4 @@
-/** Lookup ingredient — fast nutrition lookup for a single ingredient. Gem-gated. */
+/** Lookup ingredient — fast nutrition lookup for a single ingredient. Pro-only. */
 "use node";
 
 import { v } from "convex/values";
@@ -6,7 +6,7 @@ import { action } from "../_generated/server";
 import { callGroqText } from "../_shared/groq";
 import { parseJSON } from "../_shared/parseResponse";
 import { requireUserIdFromAction } from "./_helpers";
-import { enforceGemGate } from "../_shared/subscriptionGuard";
+import { enforceFeatureGate } from "../_shared/featureGates";
 import { sanitizeUserText } from "../_shared/sanitizeUserText";
 
 export const run = action({
@@ -16,7 +16,7 @@ export const run = action({
   },
   handler: async (ctx, { name, grams }) => {
     const userId = await requireUserIdFromAction(ctx);
-    await enforceGemGate(ctx, userId);
+    await enforceFeatureGate(ctx, userId, "AI_LOOKUP_INGREDIENT");
     const safe = sanitizeUserText(name, { maxLength: 200, raw: true });
     if (!safe) throw new Error("Ingredient name required");
     const targetGrams = grams ?? 100;

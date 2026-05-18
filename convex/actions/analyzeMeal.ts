@@ -5,7 +5,7 @@
  * Stage 2: gpt-oss-120b reasoning -> calories + macros JSON.
  * Stage 3 (persist=true): atomic insert via api.meals.createMealWithItems.
  *
- * Gem-gated.
+ * Pro-only.
  */
 "use node";
 
@@ -19,7 +19,7 @@ import {
   PROMPT_INJECTION_GUARD_INSTRUCTION,
 } from "../_shared/sanitizeUserText";
 import { requireUserIdFromAction } from "./_helpers";
-import { enforceGemGate } from "../_shared/subscriptionGuard";
+import { enforceFeatureGate } from "../_shared/featureGates";
 
 /**
  * Strip whitespace + any inadvertent `data:image/*;base64,` prefix from the
@@ -83,7 +83,7 @@ export const run = action({
     { mealDescription, imageBase64, date, mealType, persist },
   ) => {
     const userId = await requireUserIdFromAction(ctx);
-    await enforceGemGate(ctx, userId);
+    await enforceFeatureGate(ctx, userId, "AI_MEAL_ANALYSIS");
 
     const cleanDesc = mealDescription
       ? sanitizeUserText(mealDescription, { maxLength: 1000, raw: true })

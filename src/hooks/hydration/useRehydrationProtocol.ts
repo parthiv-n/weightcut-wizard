@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useAction } from "convex/react";
 import { api } from "@/../convex/_generated/api";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { useAITask } from "@/contexts/AITaskContext";
+import { useAIAction } from "@/hooks/useAIAction";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { createAIAbortController } from "@/lib/timeoutWrapper";
@@ -19,8 +20,9 @@ export function useRehydrationProtocol() {
   const { toast } = useToast();
   const { addTask, completeTask, failTask } = useAITask();
   const { safeAsync, isMounted } = useSafeAsync();
-  const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
-  const rehydrationProtocolAction = useAction(api.actions.rehydrationProtocol.run);
+  const { openPaywall, handlePaywallError } = useSubscription();
+  const { hasAccess: hasAiAccess } = useFeatureAccess("AI_REHYDRATION_PROTOCOL");
+  const rehydrationProtocolAction = useAIAction(api.actions.rehydrationProtocol.run, "AI_REHYDRATION_PROTOCOL");
   const aiAbortRef = useRef<AbortController | null>(null);
 
   const currentWeight = contextProfile?.current_weight_kg ?? 0;
@@ -128,8 +130,8 @@ export function useRehydrationProtocol() {
     e.preventDefault();
     if (!currentWeight) return;
 
-    if (!checkAIAccess()) {
-      openNoGemsDialog();
+    if (!hasAiAccess) {
+      openPaywall();
       return;
     }
 
@@ -175,7 +177,7 @@ export function useRehydrationProtocol() {
           sex: sexNarrow,
         });
       } catch (err: any) {
-        if (await handleAILimitError(err)) { failTask(taskId, "Limit reached"); return; }
+        if (await handlePaywallError(err)) { failTask(taskId, "Pro required"); return; }
         throw new Error(err?.message || "Failed to generate protocol");
       }
 
@@ -183,7 +185,6 @@ export function useRehydrationProtocol() {
       if (!isMounted()) return;
 
       if (data?.protocol) {
-        onAICallSuccess();
         setProtocol(data.protocol);
         setLastError(null);
 

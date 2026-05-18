@@ -73,15 +73,29 @@ export default defineSchema({
     trainingFrequency: v.optional(v.number()),
     trainingTypes: v.optional(v.array(v.string())),
 
-    // Subscription / gems
-    gems: v.number(),
-    lastFreeGemDate: v.optional(v.string()),
-    adsWatchedToday: v.number(),
-    adsWatchedDate: v.optional(v.string()),
+    // Subscription
+    //
+    // Gem/ad columns (`gems`, `lastFreeGemDate`, `adsWatchedToday`,
+    // `adsWatchedDate`) were removed as part of the gems-and-ads removal
+    // refactor. Convex tolerates extra fields on existing rows; no
+    // backfill is required. New rows simply don't write them.
     subscriptionTier: v.string(),
     subscriptionExpiresAt: v.optional(v.number()),
     subscriptionUpdatedAt: v.optional(v.number()),
     revenuecatCustomerId: v.optional(v.string()),
+    // Trial fields — populated only when the trial flow ships. Kept
+    // optional so existing rows pass validation without a migration.
+    trialStartedAt: v.optional(v.number()),
+    trialEndsAt: v.optional(v.number()),
+    // Legacy gem/ad columns — the gem system was ripped out, but
+    // existing prod rows still carry these fields. Keep them as
+    // `v.optional` so schema validation passes during the deploy
+    // transition. Nothing writes them anymore. A future migration can
+    // null them out and a follow-up release can drop the columns.
+    gems: v.optional(v.number()),
+    lastFreeGemDate: v.optional(v.string()),
+    adsWatchedToday: v.optional(v.number()),
+    adsWatchedDate: v.optional(v.string()),
     // Legacy field — used to drive a cross-deployment premium fallback that
     // was rolled back. Left as `v.optional` so existing rows with this field
     // still validate against the schema. Nothing currently writes to it.

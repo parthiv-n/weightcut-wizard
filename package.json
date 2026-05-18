@@ -16,7 +16,6 @@
   },
   "dependencies": {
     "@auth/core": "^0.37.4",
-    "@capacitor-community/admob": "^8.0.0",
     "@capacitor-community/apple-sign-in": "^7.1.0",
     "@capacitor-community/in-app-review": "^7.0.0",
     "@capacitor/app": "^8.0.1",
@@ -74,6 +73,7 @@
     "embla-carousel-react": "^8.6.0",
     "html-to-image": "^1.11.13",
     "input-otp": "^1.4.2",
+    "jose": "^6.2.3",
     "lucide-react": "^0.462.0",
     "motion": "^12.34.3",
     "next-themes": "^0.3.0",

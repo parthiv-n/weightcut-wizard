@@ -65,7 +65,7 @@ export function WelcomeProDialog({ open, onClose }: WelcomeProDialogProps) {
               You're Pro
             </h2>
             <p className="text-sm text-muted-foreground mt-2 max-w-[240px] leading-relaxed">
-              Unlimited AI access unlocked. No gems needed — every feature is yours.
+              Unlimited AI access unlocked. Every feature is yours.
             </p>
           </div>
 

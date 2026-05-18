@@ -1,13 +1,11 @@
-import { useEffect, useState, useCallback, type SVGProps, type ReactNode } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import wizardNutrition from "@/assets/wizard-nutrition.webp";
 import { useAuth } from "@/contexts/UserContext";
 import { WizardLoader } from "@/components/ui/WizardLoader";
-
-const FEATURE_ROTATE_MS = 2200;
 
 // Cold-start grace period: Convex auth can briefly report
 // `{ isLoading: false, isAuthenticated: false }` between mount and
@@ -16,105 +14,58 @@ const FEATURE_ROTATE_MS = 2200;
 // fade and the dashboard. We hold the splash for this long on first paint.
 const BOOT_GRACE_MS = 1200;
 
-// SF-Symbols-inspired feature glyphs — single-stroke, rounded caps, balanced
-// proportions. Hand-rolled inline so the set feels bespoke rather than the
-// default lucide icons that show up in every AI-generated app.
-type IconProps = SVGProps<SVGSVGElement>;
-const IconBase = ({ className, children, ...rest }: IconProps & { children: ReactNode }) => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={1.5}
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className={className}
-    aria-hidden="true"
-    {...rest}
-  >
-    {children}
-  </svg>
-);
+// ── Price model ──────────────────────────────────────────────────────
+// Headline UK monthly costs for the three professional services
+// FightCamp Wizard collapses into one app. Sources: Boxing Science /
+// John Gaule Nutrition (nutritionist), More Than Muscle / Strength
+// Ambassadors (S&C), TreatCompare / HMDG Barometer (physio).
+// Erring slightly conservative so the number reads credible, not hyped.
+const PRO_COSTS = {
+  nutritionist: 160,
+  sandc: 300,
+  recovery: 300,
+} as const;
+const PRO_TOTAL = PRO_COSTS.nutritionist + PRO_COSTS.sandc + PRO_COSTS.recovery; // £760
+const APP_PRICE = 12.99;
+const MONTHLY_SAVINGS = Math.round(PRO_TOTAL - APP_PRICE); // £747
 
-const ScaleIcon = (p: IconProps) => (
-  <IconBase {...p}>
-    <rect x="3" y="6" width="18" height="14" rx="3.2" />
-    <rect x="9" y="9" width="6" height="3" rx="0.6" />
-    <path d="M8 16.5h8" />
-  </IconBase>
-);
+// Bar chart geometry — heights are percentages of the plot area so the
+// stack reads at a glance: nutritionist is the small one, S&C and
+// recovery tie for the chunky ones, app price is a hairline next door.
+// We pick a compact plot height (96px) so the legend underneath stays
+// visible on iPhone SE without overflow.
+const PLOT_HEIGHT_PX = 96;
+const PRO_SEG_PCT = {
+  nutritionist: (PRO_COSTS.nutritionist / PRO_TOTAL) * 100, // ~21%
+  sandc: (PRO_COSTS.sandc / PRO_TOTAL) * 100, // ~39.5%
+  recovery: (PRO_COSTS.recovery / PRO_TOTAL) * 100, // ~39.5%
+};
+// App bar would mathematically be ~1.6px tall at 96px plot height —
+// floor it so it's still readable + tappable without misrepresenting
+// the comparison (the size disparity is the message anyway).
+const APP_BAR_PX = Math.max(10, Math.round((APP_PRICE / PRO_TOTAL) * PLOT_HEIGHT_PX));
 
-const SparklesIcon = (p: IconProps) => (
-  <IconBase {...p}>
-    <path d="M12 3l1.4 4.6 4.6 1.4-4.6 1.4L12 15l-1.4-4.6L6 9l4.6-1.4z" />
-    <path d="M18.5 14.5l.45 1.55 1.55.45-1.55.45-.45 1.55-.45-1.55-1.55-.45 1.55-.45z" />
-    <path d="M5.5 15.5l.4 1.35 1.35.4-1.35.4-.4 1.35-.4-1.35-1.35-.4 1.35-.4z" />
-  </IconBase>
-);
-
-const ForkKnifeIcon = (p: IconProps) => (
-  <IconBase {...p}>
-    <path d="M8 3v6" />
-    <path d="M11 3v6" />
-    <path d="M8 9a3 3 0 0 0 3-3" />
-    <path d="M9.5 9v12" />
-    <path d="M16 3v18" />
-    <path d="M16 3c-1.6 1-2.6 3-2.6 5.6S14.4 13 16 13" />
-  </IconBase>
-);
-
-const DropIcon = (p: IconProps) => (
-  <IconBase {...p}>
-    <path d="M12 3.5c-2.5 3.2-6 7.4-6 11.2A6 6 0 0 0 18 14.7c0-3.8-3.5-8-6-11.2z" />
-    <path d="M8.8 14.6c.2 1.6 1.4 2.9 3 3.1" />
-  </IconBase>
-);
-
-const StopwatchIcon = (p: IconProps) => (
-  <IconBase {...p}>
-    <circle cx="12" cy="13.5" r="7.5" />
-    <path d="M12 9.5v4l2.5 1.5" />
-    <path d="M9.5 3h5" />
-    <path d="M12 3v2.5" />
-    <path d="M18.5 6.5l1.5 1.5" />
-  </IconBase>
-);
-
-const DonutIcon = (p: IconProps) => (
-  <IconBase {...p}>
-    <circle cx="12" cy="12" r="8" />
-    <path d="M12 4v8h8" />
-  </IconBase>
-);
-
-const GaugeIcon = (p: IconProps) => (
-  <IconBase {...p}>
-    <path d="M3.5 16.5a8.5 8.5 0 0 1 17 0" />
-    <path d="M12 16.5L16.5 10" />
-    <circle cx="12" cy="16.5" r="1.1" fill="currentColor" stroke="none" />
-  </IconBase>
-);
-
-const MoonIcon = (p: IconProps) => (
-  <IconBase {...p}>
-    <path d="M20.5 14.5A8 8 0 1 1 9.5 3.5a6 6 0 0 0 11 11z" />
-  </IconBase>
-);
-
-const FEATURES = [
-  { icon: ScaleIcon, label: "Weight Management" },
-  { icon: SparklesIcon, label: "AI Game Plans" },
-  { icon: ForkKnifeIcon, label: "Meal Planning" },
-  { icon: DropIcon, label: "Rehydration" },
-  { icon: StopwatchIcon, label: "Fight Camp" },
-  { icon: DonutIcon, label: "Macro Tracking" },
-  { icon: GaugeIcon, label: "Performance" },
-  { icon: MoonIcon, label: "Recovery" },
-];
+// Legend row used under the bar chart. Colour dot matches the
+// corresponding segment in the stacked bar so the user can map
+// the geometry to a real service at a glance.
+function LegendRow({ color, label, price }: { color: string; label: string; price: number }) {
+  return (
+    <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2.5 min-w-0">
+        <span className={`h-2 w-2 rounded-full flex-shrink-0 ${color}`} aria-hidden />
+        <span className="text-[13px] text-foreground/90 truncate">{label}</span>
+      </div>
+      <span className="text-[13px] font-semibold tabular-nums text-muted-foreground flex-shrink-0">
+        £{price}<span className="text-[10px] font-medium ml-0.5">/mo</span>
+      </span>
+    </div>
+  );
+}
 
 const Index = () => {
   const navigate = useNavigate();
   const { userId, hasProfile, isLoading, isCoach } = useAuth();
+  const prefersReducedMotion = useReducedMotion();
 
   // Hold the splash for a brief window even when auth has "settled" to
   // no-session — Convex can flicker through that state on cold start
@@ -133,17 +84,14 @@ const Index = () => {
       return;
     }
     if (userId) {
-      // Convex actions don't need warmup — co-located with deployment.
       if (isCoach) {
-        // Don't honour an athlete-side lastRoute for a coach
         navigate("/coach", { replace: true });
         return;
       }
       if (hasProfile) {
         // Restore the last protected route the user was on if RouteTracker
-        // persisted one. Falls back to /dashboard for first-ever launches or
-        // when the stored value is unsafe (must start with `/` and not point
-        // back at the splash itself, which would loop).
+        // persisted one. Falls back to /dashboard for first-ever launches
+        // or when the stored value is unsafe.
         let target = "/dashboard";
         try {
           const stored = localStorage.getItem("lastRoute");
@@ -167,85 +115,168 @@ const Index = () => {
   }, [userId, hasProfile, isLoading, isCoach, navigate]);
 
   const [exiting, setExiting] = useState(false);
-
   const navigateWithTransition = useCallback(
     (path: string) => {
       setExiting(true);
-      setTimeout(() => navigate(path), 250);
+      setTimeout(() => navigate(path), 220);
     },
     [navigate],
   );
-
-  // Cycle through features — one big icon + label at a time, fading
-  // between each. Honour the reduced-motion preference: hold on the
-  // first feature instead of auto-advancing.
-  const prefersReducedMotion = useReducedMotion();
-  const [featureIndex, setFeatureIndex] = useState(0);
-  useEffect(() => {
-    if (prefersReducedMotion) return;
-    const t = setInterval(() => {
-      setFeatureIndex((i) => (i + 1) % FEATURES.length);
-    }, FEATURE_ROTATE_MS);
-    return () => clearInterval(t);
-  }, [prefersReducedMotion]);
-  const currentFeature = FEATURES[featureIndex];
-  const FeatureIcon = currentFeature.icon;
 
   if (isLoading || userId || !bootGraceExpired) {
     return <WizardLoader />;
   }
 
-  return (
-    <div className="min-h-screen bg-background dark:bg-[#020204] text-foreground flex flex-col overflow-hidden">
-      {/* Top bar */}
-      <div className="fixed top-[max(0.75rem,env(safe-area-inset-top))] right-[max(0.75rem,env(safe-area-inset-right))] z-50">
-        <ThemeToggle />
-      </div>
+  // Staggered bar reveal: nutritionist → S&C → recovery → app bar.
+  // Each segment grows from the bottom with `originY: 1`.
+  const segmentTransition = { duration: 0.9, ease: [0.22, 1, 0.36, 1] as const };
+  const segmentAnim = (delay: number) =>
+    prefersReducedMotion
+      ? { initial: { scaleY: 1 }, animate: { scaleY: 1 }, transition: { duration: 0 } }
+      : {
+          initial: { scaleY: 0 },
+          animate: { scaleY: 1 },
+          transition: { ...segmentTransition, delay },
+        };
 
-      {/* Content */}
+  return (
+    <div
+      className="min-h-[100dvh] bg-background dark:bg-[#020204] text-foreground flex flex-col transition-opacity duration-200"
+      style={{ opacity: exiting ? 0 : 1 }}
+    >
+      {/* Top bar — logo left, theme toggle right */}
       <div
-        className="flex-1 flex flex-col items-center justify-center px-6 pt-16 pb-8 transition-all duration-[250ms] ease-out"
+        className="flex items-center justify-between px-5"
         style={{
-          opacity: exiting ? 0 : 1,
-          transform: exiting ? "scale(0.97) translateY(-8px)" : "scale(1) translateY(0)",
+          paddingTop: "calc(env(safe-area-inset-top, 0px) + 10px)",
+          paddingBottom: "8px",
         }}
       >
-        {/* Logo */}
         <img
           src={wizardNutrition}
           alt="FightCamp Wizard"
-          className="h-24 w-24 rounded-2xl object-contain ring-1 ring-primary/20 bg-background/50 p-1 mb-6"
+          className="h-9 w-9 rounded-xl object-contain ring-1 ring-primary/20 bg-background/50 p-0.5"
         />
+        <ThemeToggle />
+      </div>
 
-        {/* Scrolling marquee headline */}
-        <div className="w-screen mb-6 overflow-hidden select-none" aria-hidden="true">
-          <div className="animate-marquee flex whitespace-nowrap">
-            {[...Array(4)].map((_, i) => (
-              <span
-                key={i}
-                className="text-[56px] sm:text-[72px] font-black uppercase tracking-tighter text-foreground dark:text-white mx-6"
-                style={{ fontStretch: "condensed" }}
+      {/* Body */}
+      <div className="flex-1 flex flex-col px-6 pt-2">
+        {/* Headline */}
+        <div className="text-center">
+          <h1 className="text-[26px] font-black tracking-tight leading-tight text-foreground">
+            Stop paying a team.
+          </h1>
+          <p className="text-[13px] text-muted-foreground mt-1.5 leading-snug">
+            Make weight without four invoices.
+          </p>
+        </div>
+
+        {/* Savings hero */}
+        <motion.div
+          initial={prefersReducedMotion ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
+          className="text-center mt-4"
+        >
+          <p className="text-[10px] uppercase tracking-[0.18em] text-primary/70 font-bold">
+            You save
+          </p>
+          <p className="display-number text-[48px] font-black leading-none tabular-nums text-primary mt-1">
+            £{MONTHLY_SAVINGS}
+            <span className="text-[18px] text-muted-foreground font-semibold ml-1">/mo</span>
+          </p>
+          <p className="text-[11px] text-muted-foreground/70 mt-1">
+            £{((PRO_TOTAL - APP_PRICE) * 12).toLocaleString("en-GB", { maximumFractionDigits: 0 })} a year vs hiring the team
+          </p>
+        </motion.div>
+
+        {/* Chart card — each column owns its own label + price + bar,
+            all centered on the bar's horizontal axis. Price labels live
+            in normal flex flow (never absolute) so nothing can clip on
+            small viewports. */}
+        <div className="glass-card rounded-2xl border border-border/50 p-4 mt-3">
+          <div className="flex items-end justify-between gap-6">
+            {/* Pro stack column */}
+            <div className="flex-1 flex flex-col items-center">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground font-semibold">
+                The team
+              </p>
+              <p className="text-[24px] font-black tabular-nums leading-none text-foreground mt-1">
+                £{PRO_TOTAL}
+                <span className="text-[11px] text-muted-foreground/80 font-semibold ml-0.5">/mo</span>
+              </p>
+              <div
+                className="w-full max-w-[120px] mt-3 rounded-xl overflow-hidden flex flex-col-reverse ring-1 ring-border/30"
+                style={{ height: `${PLOT_HEIGHT_PX}px` }}
               >
+                {/* Nutrition (bottom, smallest) → S&C → Recovery (top).
+                    Each segment grows from the bottom with a staggered
+                    scaleY for a satisfying "stack rising" reveal. */}
+                <motion.div
+                  {...segmentAnim(0.15)}
+                  style={{ originY: 1, height: `${PRO_SEG_PCT.nutritionist}%` }}
+                  className="w-full bg-amber-500/85 border-b border-background/30"
+                />
+                <motion.div
+                  {...segmentAnim(0.27)}
+                  style={{ originY: 1, height: `${PRO_SEG_PCT.sandc}%` }}
+                  className="w-full bg-destructive/75 border-b border-background/30"
+                />
+                <motion.div
+                  {...segmentAnim(0.39)}
+                  style={{ originY: 1, height: `${PRO_SEG_PCT.recovery}%` }}
+                  className="w-full bg-violet-400/75"
+                />
+              </div>
+            </div>
+
+            {/* App column */}
+            <div className="flex-1 flex flex-col items-center">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-primary font-semibold">
                 FightCamp Wizard
-              </span>
-            ))}
+              </p>
+              <p className="text-[24px] font-black tabular-nums leading-none text-primary mt-1">
+                £{APP_PRICE}
+                <span className="text-[11px] text-muted-foreground/80 font-semibold ml-0.5">/mo</span>
+              </p>
+              <div
+                className="w-full max-w-[120px] mt-3 flex flex-col-reverse"
+                style={{ height: `${PLOT_HEIGHT_PX}px` }}
+              >
+                <motion.div
+                  initial={prefersReducedMotion ? { scaleY: 1 } : { scaleY: 0 }}
+                  animate={{ scaleY: 1 }}
+                  transition={
+                    prefersReducedMotion
+                      ? { duration: 0 }
+                      : { delay: 1.1, type: "spring", stiffness: 260, damping: 18 }
+                  }
+                  style={{ originY: 1, height: `${APP_BAR_PX}px` }}
+                  className="w-full bg-primary rounded-lg shadow-lg shadow-primary/30"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Legend — full-word service names with colour dots that
+              match the bar segments. Ordered to match the stack from
+              bottom-to-top so the cheapest service (Nutrition) leads. */}
+          <div className="mt-3 pt-3 border-t border-border/40 space-y-1.5">
+            <LegendRow color="bg-amber-500/85" label="Nutrition" price={PRO_COSTS.nutritionist} />
+            <LegendRow color="bg-destructive/75" label="Strength & Conditioning" price={PRO_COSTS.sandc} />
+            <LegendRow color="bg-violet-400/75" label="Recovery" price={PRO_COSTS.recovery} />
           </div>
         </div>
 
-        {/* Accessible hidden h1 */}
-        <h1 className="sr-only">FightCamp Wizard</h1>
+        <div className="flex-1" />
 
-        {/* Tagline */}
-        <p className="text-[15px] text-muted-foreground text-center max-w-[320px] leading-relaxed mb-10">
-          Your AI-powered companion for peak athletic performance
-        </p>
-
-        {/* CTA buttons */}
-        <div className="w-full max-w-[320px] space-y-3 mb-10">
+        {/* CTA stack */}
+        <div className="w-full space-y-2.5 pb-2">
           <button
             onClick={() => navigateWithTransition("/auth?mode=signup")}
             disabled={exiting}
-            className="w-full h-[54px] rounded-2xl bg-primary text-primary-foreground font-bold text-[16px] flex items-center justify-center gap-2 active:scale-[0.97] transition-transform disabled:opacity-70"
+            className="no-tap-select w-full h-[54px] rounded-2xl bg-primary text-primary-foreground font-bold text-[16px] flex items-center justify-center gap-2 active:scale-[0.97] transition-transform disabled:opacity-70 shadow-lg shadow-primary/20"
           >
             Get Started
             <ChevronRight className="h-4 w-4" />
@@ -253,59 +284,25 @@ const Index = () => {
           <button
             onClick={() => navigateWithTransition("/auth")}
             disabled={exiting}
-            className="w-full h-[54px] rounded-2xl border border-border text-foreground font-semibold text-[15px] flex items-center justify-center active:scale-[0.97] transition-transform hover:bg-muted/30 disabled:opacity-70"
+            className="no-tap-select w-full h-[46px] rounded-2xl border border-border/70 text-foreground font-semibold text-[14px] flex items-center justify-center active:scale-[0.98] transition-transform hover:bg-muted/30 disabled:opacity-70"
           >
             I already have an account
           </button>
           <button
             onClick={() => navigateWithTransition("/coach/login")}
             disabled={exiting}
-            className="w-full text-center text-[12px] text-muted-foreground/70 hover:text-muted-foreground transition-colors py-1 disabled:opacity-50"
+            className="no-tap-select w-full text-center text-[12px] text-muted-foreground/70 hover:text-muted-foreground transition-colors py-1 disabled:opacity-50"
           >
             I'm a coach →
           </button>
         </div>
-
-        {/* Feature spotlight — rotating slideshow, one big icon + label at a time */}
-        <div
-          className="w-full max-w-[360px] h-[132px] relative flex items-center justify-center"
-          aria-live="polite"
-          aria-atomic="true"
-        >
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.div
-              key={currentFeature.label}
-              initial={{ opacity: 0, y: 8, scale: 0.96 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -8, scale: 0.96 }}
-              transition={{ duration: 0.45, ease: [0.32, 0.72, 0, 1] }}
-              className="absolute inset-0 flex flex-col items-center justify-center gap-3"
-            >
-              <div className="h-16 w-16 rounded-2xl bg-primary/10 ring-1 ring-primary/20 flex items-center justify-center">
-                <FeatureIcon className="h-9 w-9 text-primary" />
-              </div>
-              <span className="text-[19px] font-semibold tracking-tight text-foreground">
-                {currentFeature.label}
-              </span>
-            </motion.div>
-          </AnimatePresence>
-        </div>
-
-        {/* Dot indicators */}
-        <div className="flex items-center gap-1.5 mt-3" aria-hidden="true">
-          {FEATURES.map((f, i) => (
-            <span
-              key={f.label}
-              className={`h-1 rounded-full transition-all duration-300 ${
-                i === featureIndex ? "w-4 bg-primary" : "w-1 bg-foreground/20"
-              }`}
-            />
-          ))}
-        </div>
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-center gap-2 pb-[max(1.5rem,env(safe-area-inset-bottom))] text-[11px] text-muted-foreground/60">
+      <div
+        className="flex items-center justify-center gap-2 text-[11px] text-muted-foreground/60"
+        style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+      >
         <button
           onClick={() => navigate("/legal?tab=privacy")}
           className="hover:text-foreground transition-colors"

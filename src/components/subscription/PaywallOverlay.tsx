@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { X, Zap, Check, Loader2, RotateCcw, Clock, Crown } from "lucide-react";
-import { useNextGemCountdown } from "@/components/subscription/AILimitTimer";
+import { X, Zap, Check, Loader2, RotateCcw, Crown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useSubscriptionContext } from "@/contexts/SubscriptionContext";
 import { useProfile } from "@/contexts/UserContext";
@@ -100,7 +99,7 @@ const FEATURES = [
 ];
 
 export function PaywallOverlay() {
-  const { isPaywallOpen, closePaywall, refreshGems } = useSubscriptionContext();
+  const { isPaywallOpen, closePaywall } = useSubscriptionContext();
   const { refreshProfile } = useProfile();
   const [activating, setActivating] = useState(false);
   const activatePremium = useAction(api.actions.activatePremium.run);
@@ -134,7 +133,6 @@ export function PaywallOverlay() {
       // RC_NOT_ENTITLED / RC_VERIFY_NETWORK_FAILED / CONFIG_MISSING_*.
       await activatePremium({});
       await refreshProfile();
-      await refreshGems();
       logger.info("activatePro: RC-verified premium activated");
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -150,7 +148,7 @@ export function PaywallOverlay() {
       setActivating(false);
       closePaywall();
     }
-  }, [activatePremium, refreshProfile, refreshGems, closePaywall, toast]);
+  }, [activatePremium, refreshProfile, closePaywall, toast]);
 
   useEffect(() => {
     if (!isPaywallOpen || !isNativePlatform) return;
@@ -201,10 +199,8 @@ export function PaywallOverlay() {
  * Custom paywall for web/non-native platforms.
  */
 function WebFallbackPaywall({ activatePro }: { activatePro: (info: any) => Promise<void> }) {
-  const { closePaywall, refreshGems } = useSubscriptionContext();
+  const { closePaywall } = useSubscriptionContext();
   const { toast } = useToast();
-  const { gems, isPremium } = useSubscriptionContext();
-  const countdown = useNextGemCountdown(gems, isPremium);
   const [selectedPlan, setSelectedPlan] = useState<"monthly" | "yearly">("yearly");
   const [offerings, setOfferings] = useState<any>(null);
   const [purchasing, setPurchasing] = useState(false);
@@ -283,11 +279,7 @@ function WebFallbackPaywall({ activatePro }: { activatePro: (info: any) => Promi
 
         <h1 className="text-2xl font-bold text-foreground text-center">Go Pro</h1>
         <p className="text-sm text-muted-foreground text-center mt-2 max-w-[280px]">
-          {countdown ? (
-            <>Next free gem in <span className="inline-flex items-center gap-1 font-bold text-foreground tabular-nums"><Clock className="h-3.5 w-3.5 inline" /> {countdown}</span></>
-          ) : (
-            "Unlock unlimited AI access."
-          )}
+          Unlock unlimited AI access.
         </p>
 
         <div className="w-full max-w-sm mt-7 space-y-3">

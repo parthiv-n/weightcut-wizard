@@ -1,4 +1,4 @@
-/** Generate weight plan — same envelope as cut plan but for general weight goals. */
+/** Generate weight plan — same envelope as cut plan but for general weight goals. Pro-only. */
 "use node";
 
 import { v } from "convex/values";
@@ -13,6 +13,7 @@ import {
   requireUserIdFromAction,
   SECOND_PERSON_DIRECTIVE,
 } from "./_helpers";
+import { enforceFeatureGate } from "../_shared/featureGates";
 
 export const run = action({
   args: {
@@ -27,6 +28,9 @@ export const run = action({
   },
   handler: async (ctx, args) => {
     const userId = await requireUserIdFromAction(ctx);
+    // The weight-plan generator shares a feature key with the cut planner —
+    // both are heavy generative outputs that need the same Pro entitlement.
+    await enforceFeatureGate(ctx, userId, "AI_CUT_PLAN");
     const snap = await loadAthleteSnapshot(ctx, userId);
     const days = Math.max(
       1,

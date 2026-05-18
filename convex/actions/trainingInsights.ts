@@ -3,10 +3,10 @@
 
 import { v } from "convex/values";
 import { action } from "../_generated/server";
-import { internal } from "../_generated/api";
 import { callGroqText } from "../_shared/groq";
 import { parseJSON } from "../_shared/parseResponse";
 import { requireUserIdFromAction, SECOND_PERSON_DIRECTIVE } from "./_helpers";
+import { enforceFeatureGate } from "../_shared/featureGates";
 import {
   sanitizeUserText,
   PROMPT_INJECTION_GUARD_INSTRUCTION,
@@ -30,19 +30,10 @@ export const run = action({
   },
   handler: async (ctx, args) => {
     const userId = await requireUserIdFromAction(ctx);
-
-    // Hard premium gate — this widget is premium-only, gems do not unlock it.
-    const profile = await ctx.runQuery(internal.profiles_internal.getByUserId, {
-      userId,
-    });
-    const isPremium = !!(
-      profile?.subscriptionTier &&
-      profile.subscriptionTier !== "free" &&
-      (!profile.subscriptionExpiresAt || profile.subscriptionExpiresAt > Date.now())
-    );
-    if (!isPremium) {
-      throw new Error("Premium required - upgrade to access training insights");
-    }
+    // Pro-only — handled via the central feature-gate registry so any future
+    // tier change is one entry in `featureGates.ts`. The error code matches
+    // the contract `callWithProRecovery` on the client matches against.
+    await enforceFeatureGate(ctx, userId, "AI_TRAINING_INSIGHTS");
 
     const sessionType = sanitizeUserText(args.session_type, {
       maxLength: 60,

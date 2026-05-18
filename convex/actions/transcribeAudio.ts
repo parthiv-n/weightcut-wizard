@@ -13,12 +13,14 @@
 import { v } from "convex/values";
 import { action } from "../_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { enforceFeatureGate } from "../_shared/featureGates";
 
 export const run = action({
   args: { audio: v.string() },
   handler: async (ctx, { audio }) => {
     const userId = await getAuthUserId(ctx);
     if (!userId) throw new Error("Not authenticated");
+    await enforceFeatureGate(ctx, userId, "AI_AUDIO_TRANSCRIBE");
     if (!audio || audio.length === 0) {
       throw new Error("No audio data provided");
     }

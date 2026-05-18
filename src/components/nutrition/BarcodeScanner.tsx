@@ -12,7 +12,6 @@ import { useAuth } from "@/contexts/UserContext";
 import { Capacitor } from "@capacitor/core";
 import { Camera as CapCamera, CameraPermissionState } from "@capacitor/camera";
 import { logger } from "@/lib/logger";
-import { useSubscription } from "@/hooks/useSubscription";
 
 interface BarcodeScannerProps {
   onFoodScanned: (foodData: {
@@ -40,7 +39,6 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className, label }: Ba
   const scanTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
   const { userId } = useAuth();
-  const { checkAIAccess, openPaywall, onAICallSuccess } = useSubscription();
   const scanBarcodeAction = useAction(api.actions.scanBarcode.run);
 
   const requestNativePermission = async (): Promise<boolean> => {
@@ -70,12 +68,6 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className, label }: Ba
         setScannedProduct(cachedData);
         setIsProcessing(false);
         toast({ title: "Product found!", description: `${cachedData.productName} scanned successfully` });
-        return;
-      }
-
-      if (!checkAIAccess()) {
-        openPaywall();
-        setIsProcessing(false);
         return;
       }
 
@@ -113,7 +105,6 @@ export const BarcodeScanner = ({ onFoodScanned, disabled, className, label }: Ba
         return;
       }
 
-      onAICallSuccess();
       setScannedProduct(data);
       setIsProcessing(false);
 

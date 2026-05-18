@@ -1,4 +1,4 @@
-/** Weight tracker analysis — full nutrition protocol with macros + meal timing. Gem-gated. */
+/** Weight tracker analysis — full nutrition protocol with macros + meal timing. Pro-only. */
 "use node";
 
 import { v } from "convex/values";
@@ -7,7 +7,7 @@ import { callGroqText } from "../_shared/groq";
 import { parseJSON } from "../_shared/parseResponse";
 import { projectWeight } from "../_shared/math";
 import { loadAthleteSnapshot, requireUserIdFromAction, SECOND_PERSON_DIRECTIVE } from "./_helpers";
-import { enforceGemGate } from "../_shared/subscriptionGuard";
+import { enforceFeatureGate } from "../_shared/featureGates";
 
 export const run = action({
   args: {
@@ -20,7 +20,7 @@ export const run = action({
   },
   handler: async (ctx, args) => {
     const userId = await requireUserIdFromAction(ctx);
-    await enforceGemGate(ctx, userId);
+    await enforceFeatureGate(ctx, userId, "AI_WEIGHT_ANALYSIS");
     const snap = await loadAthleteSnapshot(ctx, userId);
 
     // Numeric weight history for trend math.

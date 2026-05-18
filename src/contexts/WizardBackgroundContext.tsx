@@ -5,7 +5,8 @@ import { api } from "@/../convex/_generated/api";
 import { Capacitor } from "@capacitor/core";
 import { LocalNotifications } from "@capacitor/local-notifications";
 import { useAuth, useUser } from "./UserContext";
-import { useSubscriptionContext } from "./SubscriptionContext";
+import { useSubscription } from "@/hooks/useSubscription";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { syncWeightReminder } from "@/lib/weightReminder";
 import { logger } from "@/lib/logger";
 
@@ -27,8 +28,9 @@ const WizardBackgroundContext = createContext<WizardBackgroundContextType | unde
 export function WizardBackgroundProvider({ children }: { children: ReactNode }) {
   const { userId } = useAuth();
   const { userName } = useUser();
-  const { isPremium, openNoGemsDialog, onAICallSuccess, onAICallBlocked, gems } = useSubscriptionContext();
-  const wizardChatAction = useAIAction(api.actions.wizardChat.run);
+  const { openPaywall, handlePaywallError } = useSubscription();
+  const { hasAccess } = useFeatureAccess("AI_WIZARD_CHAT");
+  const wizardChatAction = useAIAction(api.actions.wizardChat.run, "AI_WIZARD_CHAT");
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -102,15 +104,15 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
     // Save immediate user message to storage so it persists even if they close app mid-fetch
     localStorage.setItem(`wizard_chat_history_${userId}`, JSON.stringify(newMessages));
 
-    // Pre-flight subscription check (localStorage-backed, synchronous)
-    if (!isPremium && gems <= 0) {
+    // Pre-flight Pro check — short-circuit before the network call.
+    if (!hasAccess) {
       const limitMessages: Message[] = [...newMessages, {
         role: "assistant",
-        content: "Sorry, you've used all your AI tokens for today. Upgrade to **Premium** for unlimited access, or wait until tomorrow when your free tokens refresh."
+        content: "AI Coach is a **Pro** feature. Upgrade to Pro to chat with the wizard and unlock unlimited AI access across the app."
       }];
       setMessages(limitMessages);
       localStorage.setItem(`wizard_chat_history_${userId}`, JSON.stringify(limitMessages));
-      openNoGemsDialog();
+      openPaywall();
       setIsLoading(false);
       return;
     }
@@ -131,25 +133,21 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
           userName: userName || undefined,
         });
       } catch (err: any) {
-        // Limit / NO_GEMS errors come through here as thrown errors with .data.
-        const msg: string = err?.message || "";
-        const isLimit = /NO_GEMS|limit|429/i.test(msg);
-        if (isLimit && !isPremium) {
-          onAICallBlocked();
+        // PRO_FEATURE_REQUIRED bubbles up from the server when a free user
+        // bypasses the client check; route through the shared paywall handler.
+        if (await handlePaywallError(err)) {
           const limitMessages: Message[] = [...newMessages, {
             role: "assistant",
-            content: "Sorry, you've run out of AI gems. Upgrade to **Premium** for unlimited access, watch an ad to earn a gem, or wait until tomorrow when your free tokens refresh."
+            content: "AI Coach is a **Pro** feature. Upgrade to Pro to keep chatting and unlock unlimited AI access across the app."
           }];
           setMessages(limitMessages);
           localStorage.setItem(`wizard_chat_history_${userId}`, JSON.stringify(limitMessages));
-          openNoGemsDialog();
           setIsLoading(false);
           return;
         }
-        throw new Error(msg || "Failed to get response from Wizard");
+        throw new Error(err?.message || "Failed to get response from Wizard");
       }
 
-      onAICallSuccess();
       const assistantMessage = data.choices[0].message.content;
 
       const finalMessages: Message[] = [...newMessages, { role: "assistant", content: assistantMessage }];
@@ -169,7 +167,7 @@ export function WizardBackgroundProvider({ children }: { children: ReactNode }) 
     } finally {
       setIsLoading(false);
     }
-  }, [userId, isLoading, isPremium, onAICallBlocked, openNoGemsDialog, gems, onAICallSuccess]);
+  }, [userId, isLoading, hasAccess, openPaywall, handlePaywallError, userName, wizardChatAction]);
 
   const value = useMemo(
     () => ({ messages, isLoading, sendMessage, clearChat, loadHistory }),

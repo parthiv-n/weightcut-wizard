@@ -31,7 +31,7 @@ export function EmptyMealsBanner({
         <div className="flex-1 min-w-0">
           <p className="text-[13px] font-medium leading-tight truncate">Nothing logged yet</p>
           <p className="text-[11px] text-muted-foreground/70 leading-tight truncate">
-            Tap a meal below or Quick Add to start
+            Tap a meal below or Quick Add
           </p>
         </div>
         <button

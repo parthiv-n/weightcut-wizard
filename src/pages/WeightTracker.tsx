@@ -6,7 +6,7 @@ import { Progress } from "@/components/ui/progress";
 // Lazy-load recharts wrapper so the ~100KB charts bundle defers until first paint.
 const WeightTrackerChart = lazy(() => import("@/components/charts/WeightTrackerChart"));
 import { format } from "date-fns";
-import { TrendingDown, TrendingUp, Calendar, Target, AlertTriangle, Activity, Scale, Trash2, RefreshCw, ChevronDown, Check, CheckCircle2, Gem, Minus, Plus, Loader2 } from "lucide-react";
+import { TrendingDown, TrendingUp, Calendar, CalendarClock, Target, AlertTriangle, Activity, Scale, Trash2, RefreshCw, ChevronDown, Check, CheckCircle2, Crown, Minus, Plus, Loader2 } from "lucide-react";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
@@ -31,13 +31,14 @@ import type { Profile } from "@/pages/weight/types";
 import { isFighter } from "@/lib/goalType";
 import { useWeightData } from "@/hooks/weight/useWeightData";
 import { useWeightAnalysis } from "@/hooks/weight/useWeightAnalysis";
-import { useGems } from "@/hooks/useGems";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { triggerHapticSelection } from "@/lib/haptics";
+import { WeightInsightsBlock } from "@/pages/weight/WeightInsightsBlock";
 
 export default function WeightTracker() {
   const { userId, profile: contextProfile } = useUser();
   const profile = contextProfile as unknown as Profile;
-  const { gems, isPremium: gemsIsPremium } = useGems();
+  const { hasAccess: hasAiAccess } = useFeatureAccess("AI_WEIGHT_ANALYSIS");
   const [searchParams, setSearchParams] = useSearchParams();
   const [timeFilter, setTimeFilter] = useState<"1W" | "1M" | "ALL">("1M");
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
@@ -464,35 +465,68 @@ export default function WeightTracker() {
           ); })()}
         </div>
 
-        {/* Stats Overview — Current / Target / Δ / Deadline */}
+        {/* Days-to-fight chip — only shown for fighters with a future
+            target date. Persistent context anchor that doubles as a
+            countdown without competing with the hero log card. */}
+        {profile && isFighter(profile.goal_type) && profile.target_date && (() => {
+          const daysToFight = Math.ceil((new Date(profile.target_date).getTime() - Date.now()) / 86400000);
+          if (daysToFight < 0) return null;
+          return (
+            <div className="flex justify-center">
+              <div className="inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-sky-500/15 to-blue-500/15 border border-sky-500/30 px-4 py-1.5 text-[12px] font-semibold text-sky-200/90 backdrop-blur-sm">
+                <CalendarClock className="h-3.5 w-3.5" />
+                {daysToFight === 0 ? "Fight day" : `${daysToFight} ${daysToFight === 1 ? "morning" : "mornings"} until fight`}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Stats Overview — Current / Target / Δ / Deadline.
+            Each cell is forced square via aspect-square so the grid
+            stays visually consistent and text never overflows. Value
+            text trimmed from 20→17px and labels from 10→9px so even
+            long ones like "Deadline" / "To lose" fit comfortably. */}
         {profile && (
           <div className="grid grid-cols-4 gap-2">
-            <div className="card-surface rounded-3xl p-3 text-center">
-              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60 font-semibold">Current</p>
-              <p className="text-[20px] font-bold tabular-nums text-foreground mt-1.5 leading-none">{getCurrentWeight().toFixed(1)}</p>
-              <p className="text-[10px] text-muted-foreground/60 mt-1">kg</p>
+            <div className="card-surface rounded-3xl aspect-square p-2 flex flex-col items-center justify-center gap-1 text-center">
+              <p className="text-[9px] uppercase tracking-wider text-muted-foreground/60 font-semibold leading-tight">Current</p>
+              <p className="text-[17px] font-bold tabular-nums text-foreground leading-none">{getCurrentWeight().toFixed(1)}</p>
+              <p className="text-[9px] text-muted-foreground/60 leading-none">kg</p>
             </div>
-            <div className="card-surface rounded-3xl p-3 text-center">
-              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60 font-semibold">Target</p>
-              <p className="text-[20px] font-bold tabular-nums text-foreground mt-1.5 leading-none">{(profile.fight_week_target_kg || profile.goal_weight_kg).toFixed(1)}</p>
-              <p className="text-[10px] text-muted-foreground/60 mt-1">kg</p>
+            <div className="card-surface rounded-3xl aspect-square p-2 flex flex-col items-center justify-center gap-1 text-center">
+              <p className="text-[9px] uppercase tracking-wider text-muted-foreground/60 font-semibold leading-tight">Target</p>
+              <p className="text-[17px] font-bold tabular-nums text-foreground leading-none">{(profile.fight_week_target_kg || profile.goal_weight_kg).toFixed(1)}</p>
+              <p className="text-[9px] text-muted-foreground/60 leading-none">kg</p>
             </div>
-            <div className="card-surface rounded-3xl p-3 text-center">
+            <div className="card-surface rounded-3xl aspect-square p-2 flex flex-col items-center justify-center gap-1 text-center">
               {(() => {
                 const current = getCurrentWeight();
                 const target = profile.fight_week_target_kg || profile.goal_weight_kg;
                 const diff = target - current;
-                if (diff > 0) return (<><p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60 font-semibold">To gain</p><p className="text-[20px] font-bold tabular-nums text-emerald-500 mt-1.5 leading-none">+{diff.toFixed(1)}</p><p className="text-[10px] text-muted-foreground/60 mt-1">kg</p></>);
-                if (diff < 0) return (<><p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60 font-semibold">To lose</p><p className="text-[20px] font-bold tabular-nums text-primary mt-1.5 leading-none">{Math.abs(diff).toFixed(1)}</p><p className="text-[10px] text-muted-foreground/60 mt-1">kg</p></>);
-                return (<><p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60 font-semibold">Status</p><p className="text-[20px] font-bold tabular-nums text-emerald-500 mt-1.5 leading-none">✓</p><p className="text-[10px] text-muted-foreground/60 mt-1">At target</p></>);
+                if (diff > 0) return (<><p className="text-[9px] uppercase tracking-wider text-muted-foreground/60 font-semibold leading-tight">To gain</p><p className="text-[17px] font-bold tabular-nums text-emerald-500 leading-none">+{diff.toFixed(1)}</p><p className="text-[9px] text-muted-foreground/60 leading-none">kg</p></>);
+                if (diff < 0) return (<><p className="text-[9px] uppercase tracking-wider text-muted-foreground/60 font-semibold leading-tight">To lose</p><p className="text-[17px] font-bold tabular-nums text-primary leading-none">{Math.abs(diff).toFixed(1)}</p><p className="text-[9px] text-muted-foreground/60 leading-none">kg</p></>);
+                return (<><p className="text-[9px] uppercase tracking-wider text-muted-foreground/60 font-semibold leading-tight">Status</p><p className="text-[17px] font-bold tabular-nums text-emerald-500 leading-none">✓</p><p className="text-[9px] text-muted-foreground/60 leading-none">At target</p></>);
               })()}
             </div>
-            <div className="card-surface rounded-3xl p-3 text-center">
-              <p className="text-[10px] uppercase tracking-[0.12em] text-muted-foreground/60 font-semibold">Deadline</p>
-              <p className="text-[14px] font-bold text-foreground mt-1.5 leading-none">{format(new Date(profile.target_date), "MMM dd")}</p>
-              <p className="text-[10px] text-muted-foreground/60 mt-1">{format(new Date(profile.target_date), "yyyy")}</p>
+            <div className="card-surface rounded-3xl aspect-square p-2 flex flex-col items-center justify-center gap-1 text-center">
+              <p className="text-[9px] uppercase tracking-wider text-muted-foreground/60 font-semibold leading-tight">Deadline</p>
+              <p className="text-[13px] font-bold text-foreground leading-none">{format(new Date(profile.target_date), "MMM dd")}</p>
+              <p className="text-[9px] text-muted-foreground/60 leading-none">{format(new Date(profile.target_date), "yyyy")}</p>
             </div>
           </div>
+        )}
+
+        {/* 7-day rolling average banner + predictive trend card.
+            Both gated separately by data-availability so the page
+            degrades gracefully for new users with few logs. */}
+        {profile && weightLogs.length >= 3 && (
+          <WeightInsightsBlock
+            weightLogs={weightLogs}
+            currentWeight={getCurrentWeight()}
+            targetWeight={profile.fight_week_target_kg || profile.goal_weight_kg}
+            targetDate={profile.target_date}
+            isCutting={isFighter(profile.goal_type) || (profile.goal_weight_kg ?? Infinity) < getCurrentWeight()}
+          />
         )}
 
         {/* Progress + Insight */}
@@ -770,7 +804,7 @@ export default function WeightTracker() {
           <Button
             onClick={getAIAnalysis}
             disabled={analyzingWeight}
-            className="w-full rounded-3xl h-12 text-[14px] font-semibold bg-muted/40 dark:bg-white/[0.06] border border-border/30 text-foreground hover:bg-muted/60 active:scale-[0.98] transition-all"
+            className="relative w-full rounded-3xl h-12 text-[14px] font-semibold bg-muted/40 dark:bg-white/[0.06] border border-border/30 text-foreground hover:bg-muted/60 active:scale-[0.98] transition-all"
           >
             {analyzingWeight ? (
               <span className="inline-flex items-center gap-2">
@@ -781,12 +815,12 @@ export default function WeightTracker() {
               <span className="inline-flex items-center gap-2">
                 <Activity className="h-4 w-4 text-primary" strokeWidth={2.4} />
                 Get AI weight strategy
-                {!gemsIsPremium && (
-                  <span className="inline-flex items-center gap-0.5 ml-0.5 text-muted-foreground">
-                    <Gem className="h-3 w-3" />
-                    <span className="text-[11px] font-medium tabular-nums">{gems}</span>
-                  </span>
-                )}
+              </span>
+            )}
+            {!analyzingWeight && !hasAiAccess && (
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex items-center gap-0.5 text-primary/70 pointer-events-none">
+                <Crown className="h-3 w-3" />
+                <span className="text-[10px] font-medium uppercase tracking-wider">Pro</span>
               </span>
             )}
           </Button>

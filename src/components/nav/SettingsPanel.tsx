@@ -1,21 +1,19 @@
-import { Moon, Sun, ChevronRight, BookOpen, Bell, Trash2, Mail, Shield, FileText, LifeBuoy, Heart, Trophy, Zap, RotateCcw, Crown, Gem, Play } from "lucide-react";
+import { Moon, Sun, ChevronRight, BookOpen, Bell, Trash2, Shield, FileText, LifeBuoy, Heart, Trophy, Zap, RotateCcw, Crown } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { ProfilePictureUpload } from "@/components/ProfilePictureUpload";
 import { Capacitor } from "@capacitor/core";
 import { useState } from "react";
 import { getSettings, saveSettings, scheduleReminder, cancelReminder, type ReminderSettings } from "@/lib/weightReminder";
 import { useSubscription } from "@/hooks/useSubscription";
-import { useGems } from "@/hooks/useGems";
 import { restorePurchases, isPremiumFromCustomerInfo, presentCustomerCenter } from "@/lib/purchases";
 import { PremiumBadge } from "@/components/subscription/PremiumBadge";
 import { useProfile } from "@/contexts/UserContext";
 import { useToast as useToastSub } from "@/hooks/use-toast";
 
 function SubscriptionSection() {
-  const { isPremium, tier, expiresAt, openPaywall } = useSubscription();
+  const { isPremium, rawTier, expiresAt, openPaywall } = useSubscription();
   const { refreshProfile } = useProfile();
   const { toast } = useToastSub();
   const [restoringPurchases, setRestoringPurchases] = useState(false);
@@ -42,7 +40,7 @@ function SubscriptionSection() {
     const expiryLabel = expiresAt
       ? `Renews ${expiresAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`
       : "Active";
-    const planLabel = tier === "premium_lifetime" ? "Lifetime" : tier === "premium_annual" ? "Annual" : "Monthly";
+    const planLabel = rawTier === "premium_lifetime" ? "Lifetime" : rawTier === "premium_annual" ? "Annual" : "Monthly";
 
     return (
       <div className="rounded-lg bg-muted/20 overflow-hidden divide-y divide-border/20">
@@ -82,32 +80,6 @@ function SubscriptionSection() {
           <RotateCcw className="h-4 w-4 text-muted-foreground shrink-0" />
           <p className="text-[13px] font-medium">Restore Purchases</p>
         </div>
-      </button>
-    </div>
-  );
-}
-
-function GemsSection() {
-  const { gems, adsRemaining, canWatchAd, loading, isPremium, watchAdForGem } = useGems();
-
-  if (isPremium) return null;
-
-  return (
-    <div className="rounded-lg bg-muted/20 overflow-hidden divide-y divide-border/20">
-      <div className="flex items-center justify-between px-3 py-2">
-        <div className="flex items-center gap-2">
-          <Gem className="h-4 w-4 text-primary shrink-0" />
-          <p className="text-[13px] font-medium">AI Gems</p>
-        </div>
-        <span className="text-[13px] font-bold text-primary tabular-nums">{gems}</span>
-      </div>
-      <button type="button" onClick={watchAdForGem} disabled={!canWatchAd || loading}
-        className="w-full flex items-center justify-between px-3 py-2 active:bg-muted/40 transition-colors text-left disabled:opacity-50">
-        <div className="flex items-center gap-2">
-          <Play className="h-4 w-4 text-green-500 shrink-0" />
-          <p className="text-[13px] font-medium">{loading ? 'Loading...' : 'Watch Ad'}</p>
-        </div>
-        <span className="text-[13px] text-muted-foreground">{adsRemaining > 0 ? `${adsRemaining} left` : 'Limit reached'}</span>
       </button>
     </div>
   );
@@ -218,9 +190,6 @@ export function SettingsPanel({
 
           {/* Subscription */}
           <SubscriptionSection />
-
-          {/* Gems */}
-          <GemsSection />
 
           {/* Preferences */}
           <div className="rounded-lg bg-muted/20 overflow-hidden divide-y divide-border/20">

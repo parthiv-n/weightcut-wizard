@@ -1,4 +1,4 @@
-/** Generate cut plan — heavy reasoning, NOT gem-gated, logs decision. */
+/** Generate cut plan — heavy reasoning, Pro-only, logs decision. */
 "use node";
 
 import { v } from "convex/values";
@@ -13,6 +13,7 @@ import {
   requireUserIdFromAction,
   SECOND_PERSON_DIRECTIVE,
 } from "./_helpers";
+import { enforceFeatureGate } from "../_shared/featureGates";
 
 export const run = action({
   args: {
@@ -27,6 +28,7 @@ export const run = action({
   },
   handler: async (ctx, args) => {
     const userId = await requireUserIdFromAction(ctx);
+    await enforceFeatureGate(ctx, userId, "AI_CUT_PLAN");
     const snap = await loadAthleteSnapshot(ctx, userId);
     const days = Math.max(
       1,

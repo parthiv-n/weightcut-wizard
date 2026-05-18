@@ -5,6 +5,7 @@ import { api } from "@/../convex/_generated/api";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { useAITask } from "@/contexts/AITaskContext";
 import { useSafeAsync } from "@/hooks/useSafeAsync";
 import { AIPersistence } from "@/lib/aiPersistence";
@@ -41,10 +42,12 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
   const { userId } = useUser();
   const { toast } = useToast();
   const { isMounted } = useSafeAsync();
-  const { checkAIAccess, openNoGemsDialog, onAICallSuccess, onAICallBlocked, handleAILimitError } = useSubscription();
+  const { openPaywall, handlePaywallError } = useSubscription();
+  const { hasAccess: hasMealAccess } = useFeatureAccess("AI_MEAL_ANALYSIS");
+  const { hasAccess: hasIngredientAccess } = useFeatureAccess("AI_LOOKUP_INGREDIENT");
   const { addTask, completeTask, failTask } = useAITask();
-  const analyzeMealAction = useAIAction(api.actions.analyzeMeal.run);
-  const lookupIngredientAction = useAIAction(api.actions.lookupIngredient.run);
+  const analyzeMealAction = useAIAction(api.actions.analyzeMeal.run, "AI_MEAL_ANALYSIS");
+  const lookupIngredientAction = useAIAction(api.actions.lookupIngredient.run, "AI_LOOKUP_INGREDIENT");
   const generatePhotoUploadUrl = useMutation(api.meals.generatePhotoUploadUrl);
   const aiAbortRef = useRef<AbortController | null>(null);
 
@@ -161,7 +164,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       toast({ title: "No photo", description: "Take a photo first", variant: "destructive" });
       return;
     }
-    if (!checkAIAccess()) { openNoGemsDialog(); return; }
+    if (!hasMealAccess) { openPaywall(); return; }
 
     aiAbortRef.current?.abort();
     const controller = createAIAbortController();
@@ -196,13 +199,12 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
         });
       } catch (err: any) {
         if (controller.signal.aborted) return;
-        if (await handleAILimitError(err)) { onAICallBlocked(); failTask(taskId, "Limit reached"); return; }
+        if (await handlePaywallError(err)) { failTask(taskId, "Pro required"); return; }
         throw new Error(err?.message || "Photo analysis failed");
       }
 
       if (controller.signal.aborted) return;
       if (data?.error) throw new Error(data.error);
-      onAICallSuccess();
 
       const nutritionData = data.nutritionData;
       if (nutritionData.items && Array.isArray(nutritionData.items) && nutritionData.items.length > 0) {
@@ -239,7 +241,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       setPhotoAnalyzing(false);
       setAiAnalyzing(false);
     }
-  }, [photoBase64, aiMealDescription, checkAIAccess, openNoGemsDialog, onAICallSuccess, onAICallBlocked, handleAILimitError, toast, addTask, completeTask, failTask, setManualMeal]);
+  }, [photoBase64, aiMealDescription, hasMealAccess, openPaywall, handlePaywallError, analyzeMealAction, toast, addTask, completeTask, failTask, setManualMeal]);
 
   const extractIngredientName = (userInput: string): string => {
     let cleaned = userInput.trim();
@@ -263,9 +265,9 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     const mealCacheKey = `meal_${aiMealDescription.toLowerCase().trim().replace(/\s+/g, '_').slice(0, 60)}`;
     const cachedData = userId ? AIPersistence.load(userId, mealCacheKey) : null;
 
-    // If no cache, check AI access before showing any overlay
-    if (!cachedData && !checkAIAccess()) {
-      openNoGemsDialog();
+    // If no cache, check Pro access before showing any overlay
+    if (!cachedData && !hasMealAccess) {
+      openPaywall();
       return;
     }
 
@@ -299,13 +301,12 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
           });
         } catch (error: any) {
           if (controller.signal.aborted) return;
-          if (await handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
+          if (await handlePaywallError(error)) { failTask(taskId, "Pro required"); return; }
           throw new Error(error?.message || "Failed to analyze meal");
         }
 
         if (controller.signal.aborted) return;
         if (data?.error) throw new Error(data.error);
-        onAICallSuccess();
         nutritionData = data.nutritionData;
         if (userId && nutritionData) {
           AIPersistence.save(userId, mealCacheKey, nutritionData, 24 * 7);
@@ -343,7 +344,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     } finally {
       setAiAnalyzing(false);
     }
-  }, [aiMealDescription, userId, setManualMeal, toast, checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError]);
+  }, [aiMealDescription, userId, setManualMeal, toast, hasMealAccess, openPaywall, handlePaywallError, analyzeMealAction, addTask, completeTask, failTask]);
 
   const handleSaveAiMeal = useCallback(async () => {
     if (aiLineItems.length === 0) return;
@@ -436,8 +437,8 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       return;
     }
 
-    if (!checkAIAccess()) {
-      openNoGemsDialog();
+    if (!hasMealAccess) {
+      openPaywall();
       return;
     }
 
@@ -465,13 +466,12 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
         });
       } catch (error: any) {
         if (ingController.signal.aborted) return;
-        if (await handleAILimitError(error)) { failTask(ingTaskId, "Limit reached"); return; }
+        if (await handlePaywallError(error)) { failTask(ingTaskId, "Pro required"); return; }
         throw new Error(error?.message || "Failed to analyze ingredient");
       }
 
       if (ingController.signal.aborted) return;
       if (data?.error) throw new Error(data.error);
-      onAICallSuccess();
 
       const { nutritionData } = data;
 
@@ -622,7 +622,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
     fats_per_100g: number;
     source?: string;
   } | null> => {
-    // 1. Try USDA first — free, fast, no gems consumed
+    // 1. Try USDA first — free, fast, no Pro required
     const usdaResult = await lookupUSDA(ingredientName);
     if (usdaResult && usdaResult.calories_per_100g > 0) {
       return usdaResult;
@@ -630,7 +630,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
 
     // 2. Fall back to AI lookup only if USDA returned nothing
     try {
-      if (!checkAIAccess()) {
+      if (!hasIngredientAccess) {
         setIngredientLookupError("No results found in food database. Please enter nutrition info manually.");
         return null;
       }
@@ -639,8 +639,8 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       try {
         data = await lookupIngredientAction({ name: ingredientName });
       } catch (error: any) {
-        if (await handleAILimitError(error)) {
-          setIngredientLookupError("Daily AI limit reached. Please enter nutrition info manually.");
+        if (await handlePaywallError(error)) {
+          setIngredientLookupError("Upgrade to Pro to use AI ingredient lookup, or enter nutrition info manually.");
           return null;
         }
         logger.error("Ingredient lookup error", error);
@@ -655,7 +655,6 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       // The Convex action returns a flat shape with per100g rates. Normalise to
       // the per_100g fields the UI expects.
       if (data?.per100g) {
-        onAICallSuccess();
         return {
           calories_per_100g: data.per100g.calories ?? 0,
           protein_per_100g: data.per100g.protein_g ?? 0,
@@ -665,7 +664,6 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
         };
       }
       if (data?.nutritionData) {
-        onAICallSuccess();
         return data.nutritionData;
       }
 
@@ -674,7 +672,7 @@ export function useAIMealAnalysis(params: UseAIMealAnalysisParams) {
       logger.error("Error looking up ingredient", error);
       return null;
     }
-  }, [checkAIAccess, handleAILimitError, onAICallSuccess, setIngredientLookupError]);
+  }, [hasIngredientAccess, handlePaywallError, lookupIngredientAction, setIngredientLookupError]);
 
   const handleManualNutritionSubmit = useCallback(() => {
     if (!manualNutritionDialog.calories_per_100g) {

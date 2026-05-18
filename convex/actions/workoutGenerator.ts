@@ -1,4 +1,4 @@
-/** Workout generator — fast Groq, NOT gem-gated (subscription check on client). */
+/** Workout generator — fast Groq, Pro-only. */
 "use node";
 
 import { v } from "convex/values";
@@ -7,6 +7,7 @@ import { callGroqText } from "../_shared/groq";
 import { parseJSON } from "../_shared/parseResponse";
 import { sanitizeUserText } from "../_shared/sanitizeUserText";
 import { requireUserIdFromAction, loadAthleteSnapshot, SECOND_PERSON_DIRECTIVE } from "./_helpers";
+import { enforceFeatureGate } from "../_shared/featureGates";
 
 const VALID_GOALS = new Set([
   "hypertrophy",
@@ -40,6 +41,7 @@ export const run = action({
   },
   handler: async (ctx, args) => {
     const userId = await requireUserIdFromAction(ctx);
+    await enforceFeatureGate(ctx, userId, "AI_WORKOUT_GENERATOR");
     const snap = await loadAthleteSnapshot(ctx, userId);
 
     // Sanitize and recover the rich generation context that the hook flattens

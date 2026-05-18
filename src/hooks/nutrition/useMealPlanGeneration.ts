@@ -1,10 +1,10 @@
 import { useState, useCallback } from "react";
-import { useAction } from "convex/react";
 import { useAIAction } from "@/hooks/useAIAction";
 import { api } from "@/../convex/_generated/api";
 import { useToast } from "@/hooks/use-toast";
 import { useUser } from "@/contexts/UserContext";
 import { useSubscription } from "@/hooks/useSubscription";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { useAITask } from "@/contexts/AITaskContext";
 import { AIPersistence } from "@/lib/aiPersistence";
 import { createAIAbortController } from "@/lib/timeoutWrapper";
@@ -35,9 +35,10 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
   const { isSessionValid, checkSessionValidity, refreshSession, userId, profile: contextProfile } = useUser();
   const profile = contextProfile;
   const { toast } = useToast();
-  const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
+  const { openPaywall, handlePaywallError } = useSubscription();
+  const { hasAccess: hasAiAccess } = useFeatureAccess("AI_MEAL_PLANNER");
   const { addTask, completeTask, failTask } = useAITask();
-  const mealPlannerAction = useAIAction(api.actions.mealPlanner.run);
+  const mealPlannerAction = useAIAction(api.actions.mealPlanner.run, "AI_MEAL_PLANNER");
 
   const [generatingPlan, setGeneratingPlan] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
@@ -49,8 +50,8 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
       return;
     }
 
-    if (!checkAIAccess()) {
-      openNoGemsDialog();
+    if (!hasAiAccess) {
+      openPaywall();
       return;
     }
 
@@ -99,7 +100,7 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
         data = await mealPlannerAction({ prompt: aiPrompt, userData, action: "generate" });
       } catch (err: any) {
         if (controller.signal.aborted) return;
-        if (await handleAILimitError(err)) { failTask(taskId, "Limit reached"); return; }
+        if (await handlePaywallError(err)) { failTask(taskId, "Pro required"); return; }
         throw new Error(err?.message || "Failed to generate meal plan");
       }
 
@@ -107,7 +108,6 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
       if (data?.error) {
         throw new Error(data.error);
       }
-      onAICallSuccess();
 
       const { mealPlan, dailyCalorieTarget: target, safetyStatus: status, safetyMessage: message } = data;
 
@@ -240,7 +240,7 @@ export function useMealPlanGeneration(params: UseMealPlanGenerationParams) {
     } finally {
       setGeneratingPlan(false);
     }
-  }, [aiPrompt, isSessionValid, checkSessionValidity, userId, profile, selectedDate, dailyCalorieTarget, safetyStatus, safetyMessage, mealPlanIdeas, setMealPlanIdeas, setDailyCalorieTarget, setSafetyStatus, setSafetyMessage, aiAbortRef, refreshSession, toast, checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError]);
+  }, [aiPrompt, isSessionValid, checkSessionValidity, userId, profile, selectedDate, dailyCalorieTarget, safetyStatus, safetyMessage, mealPlanIdeas, setMealPlanIdeas, setDailyCalorieTarget, setSafetyStatus, setSafetyMessage, aiAbortRef, refreshSession, toast, hasAiAccess, openPaywall, handlePaywallError, addTask, completeTask, failTask, mealPlannerAction]);
 
   return {
     generatingPlan, setGeneratingPlan,

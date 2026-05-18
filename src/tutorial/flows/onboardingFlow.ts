@@ -103,10 +103,10 @@ export const onboardingFlow: TutorialFlow = {
       navigateTo: "/dashboard",
     },
     {
-      id: "ai-gems",
-      title: "AI Gems",
+      id: "pro-features",
+      title: "Pro Features",
       description:
-        "You get 2 free AI calls daily plus 1 bonus gem every 24 hours. Need more? Watch a short ad to earn extra gems — up to 5 per day. Or go Pro for unlimited AI access. Check your gem balance anytime in Settings.",
+        "AI coaching, meal analysis, fight-week planning, and the wisdom engine are part of WeightCut Pro. Upgrade anytime from Settings to unlock everything. Manual food search and barcode scanning are always free.",
       position: "center",
       route: "/dashboard",
     },

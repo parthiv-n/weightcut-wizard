@@ -1,20 +1,18 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { format, startOfWeek, endOfWeek } from "date-fns";
-import { Brain, Loader2, ChevronDown, Trash2, CheckCircle, X, Dumbbell, Activity, Gem } from "lucide-react";
-import { useAction, useConvex, useMutation, useQuery } from "convex/react";
+import { Brain, Loader2, ChevronDown, Trash2, CheckCircle, X, Dumbbell, Activity, Crown } from "lucide-react";
+import { useConvex, useMutation, useQuery } from "convex/react";
 import { useAIAction } from "@/hooks/useAIAction";
 import { api } from "@/../convex/_generated/api";
 import type { Id } from "@/../convex/_generated/dataModel";
 import { useToast } from "@/hooks/use-toast";
-import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { useSubscription } from "@/hooks/useSubscription";
+import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { logger } from "@/lib/logger";
 import { localCache } from "@/lib/localCache";
 import { getSessionColor } from "@/lib/sessionColors";
-import { useSubscription } from "@/hooks/useSubscription";
 import { useAITask } from "@/contexts/AITaskContext";
 import { AICompactOverlay } from "@/components/AICompactOverlay";
-import { useGems } from "@/hooks/useGems";
 
 type TrainingSummary = {
     sportSections: {
@@ -85,10 +83,10 @@ function mergeSummaries(existing: TrainingSummary, incoming: TrainingSummary): T
 
 export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrigger, customColors }: TrainingSummarySectionProps) {
     const { toast } = useToast();
-    const { gems, isPremium: gemsIsPremium } = useGems();
-    const { checkAIAccess, openNoGemsDialog, onAICallSuccess, handleAILimitError } = useSubscription();
+    const { openPaywall, handlePaywallError } = useSubscription();
+    const { hasAccess: hasAiAccess } = useFeatureAccess("AI_TRAINING_SUMMARY");
     const { tasks, addTask, completeTask, failTask, dismissTask } = useAITask();
-    const trainingSummaryAction = useAIAction(api.actions.trainingSummary.run);
+    const trainingSummaryAction = useAIAction(api.actions.trainingSummary.run, "AI_TRAINING_SUMMARY");
     const upsertSummaryMut = useMutation(api.fight_camp.upsertSummary);
     const deleteSummaryMut = useMutation(api.fight_camp.deleteSummary);
     const summariesRaw = useQuery(api.fight_camp.listAllSummaries, userId ? { limit: 20 } : "skip");
@@ -213,8 +211,8 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
 
     const handleGenerateOrUpdate = async () => {
         if (sessionsWithNotes.length === 0) return;
-        if (!checkAIAccess()) {
-            openNoGemsDialog();
+        if (!hasAiAccess) {
+            openPaywall();
             return;
         }
         abortRef.current?.abort();
@@ -250,7 +248,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
                 data = await trainingSummaryAction({ weekStart: calendarWeekStart });
             } catch (error: any) {
                 if (controller.signal.aborted) return;
-                if (await handleAILimitError(error)) { failTask(taskId, "Limit reached"); return; }
+                if (await handlePaywallError(error)) { failTask(taskId, "Pro required"); return; }
                 throw error;
             }
             if (controller.signal.aborted) return;
@@ -260,7 +258,6 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
                 throw new Error("AI returned malformed summary — please retry.");
             }
 
-            onAICallSuccess();
             const fingerprint = computeFingerprint(weekSessions);
             const allSessionIds = sessionsWithNotes.map(s => s.id);
 
@@ -332,7 +329,7 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
                 <button
                     onClick={buttonState !== "up_to_date" ? handleGenerateOrUpdate : undefined}
                     disabled={isGenerating || buttonState === "up_to_date"}
-                    className="w-full p-4 rounded-2xl card-surface border border-border/50 flex items-center justify-center gap-2 hover:bg-accent/30 transition-all disabled:opacity-60"
+                    className="relative w-full p-4 rounded-2xl card-surface border border-border/50 flex items-center justify-center gap-2 hover:bg-accent/30 transition-all disabled:opacity-60"
                 >
                     {isGenerating ? (
                         <div className="flex items-center gap-2 w-full justify-center">
@@ -355,14 +352,16 @@ export function TrainingSummarySection({ userId, selectedDate, sessionLoggedTrig
                         </>
                     ) : (
                         <>
-                            <Brain className="h-5 w-5 text-primary" />
-                            <span className="text-sm font-semibold text-primary">
-                                {buttonState === "update" ? "Update Training Summary" : "Generate Training Summary"}
+                            <span className="inline-flex items-center gap-2">
+                                <Brain className="h-5 w-5 text-primary" />
+                                <span className="text-sm font-semibold text-primary">
+                                    {buttonState === "update" ? "Update Training Summary" : "Generate Training Summary"}
+                                </span>
                             </span>
-                            {!gemsIsPremium && (
-                                <span className="inline-flex items-center gap-0.5 ml-1.5 text-muted-foreground">
-                                    <Gem className="h-3 w-3" />
-                                    <span className="text-[10px] font-medium tabular-nums">{gems}</span>
+                            {!hasAiAccess && (
+                                <span className="absolute right-3 top-1/2 -translate-y-1/2 inline-flex items-center gap-0.5 text-primary/70 pointer-events-none">
+                                    <Crown className="h-3 w-3" />
+                                    <span className="text-[10px] font-medium uppercase tracking-wider">Pro</span>
                                 </span>
                             )}
                         </>

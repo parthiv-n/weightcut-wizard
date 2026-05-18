@@ -66,10 +66,6 @@ function toClientShape(
     sleep_hours: row.sleepHours,
     training_frequency: row.trainingFrequency,
     training_types: row.trainingTypes,
-    gems: row.gems,
-    last_free_gem_date: row.lastFreeGemDate,
-    ads_watched_today: row.adsWatchedToday,
-    ads_watched_date: row.adsWatchedDate,
     subscription_tier: row.subscriptionTier,
     subscription_expires_at: row.subscriptionExpiresAt
       ? new Date(row.subscriptionExpiresAt).toISOString()
@@ -178,8 +174,6 @@ export const ensureExists = mutation({
       activityLevel: "",
       goalType: "",
       role: "fighter",
-      gems: 0,
-      adsWatchedToday: 0,
       subscriptionTier: "free",
     });
   },
@@ -319,52 +313,10 @@ export const updateGoals = mutation({
 });
 
 // ───────────────────────────────────────────────────────────────────────
-// INTERNAL — gem deduction (called from Phase-4 actions before Groq).
-// Replaces Postgres RPCs `deduct_gem` and `grant_daily_free_gem`.
+// (Gem deduction / ad-reward / spend / daily-free-gem mutations removed.
+// AI access is now controlled solely by tier via
+// `convex/_shared/featureGates.ts`. See the gems-and-ads removal refactor.)
 // ───────────────────────────────────────────────────────────────────────
-
-export const deductGem = internalMutation({
-  args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => {
-    const profile = await ctx.db
-      .query("profiles")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .unique();
-    if (!profile) throw new Error("Profile not found");
-    if (profile.gems <= 0) throw new Error("No gems available");
-    await ctx.db.patch(profile._id, {
-      gems: profile.gems - 1,
-      updatedAt: Date.now(),
-    });
-  },
-});
-
-/**
- * Public ad-reward endpoint. Replaces the Postgres `reward_ad_gem` RPC.
- * Grants one gem and increments the per-day ads counter; caps at 5 ads/day.
- */
-export const rewardAdGem = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const userId = await requireUserId(ctx);
-    const profile = await findByUser(ctx, userId);
-    if (!profile) throw new Error("Profile not found");
-    const today = new Date().toISOString().slice(0, 10);
-    const sameDay = profile.adsWatchedDate === today;
-    const adsWatchedToday = sameDay ? (profile.adsWatchedToday ?? 0) : 0;
-    if (adsWatchedToday >= 5) {
-      return { success: false, gems: profile.gems, adsRemaining: 0 };
-    }
-    const nextAds = adsWatchedToday + 1;
-    await ctx.db.patch(profile._id, {
-      gems: profile.gems + 1,
-      adsWatchedToday: nextAds,
-      adsWatchedDate: today,
-      updatedAt: Date.now(),
-    });
-    return { success: true, gems: profile.gems + 1, adsRemaining: 5 - nextAds };
-  },
-});
 
 /**
  * Reset all tracking data for the current user — keeps `profiles` row + fight
@@ -402,24 +354,6 @@ export const resetTrackingData = mutation({
     await drop("meal_plans", "by_user");
     await drop("fight_week_plans", "by_user");
     await drop("fight_week_logs", "by_user_date");
-  },
-});
-
-/**
- * User-initiated gem spend. Idempotent and gated by gem balance.
- */
-export const spendGem = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const userId = await requireUserId(ctx);
-    const profile = await findByUser(ctx, userId);
-    if (!profile) throw new Error("Profile not found");
-    if (profile.gems <= 0) throw new Error("No gems available");
-    await ctx.db.patch(profile._id, {
-      gems: profile.gems - 1,
-      updatedAt: Date.now(),
-    });
-    return { gems: profile.gems - 1 };
   },
 });
 
@@ -649,25 +583,5 @@ export const updateSubscriptionFromRevenueCat = internalMutation({
 
     await ctx.db.patch(profile._id, patch as any);
     return { ok: true };
-  },
-});
-
-/** Grants one free gem per UTC day. Idempotent — replays on the same day
- *  are no-ops. Callers should fire-and-forget at app mount. */
-export const grantDailyFreeGem = internalMutation({
-  args: { userId: v.id("users") },
-  handler: async (ctx, { userId }) => {
-    const profile = await ctx.db
-      .query("profiles")
-      .withIndex("by_user", (q) => q.eq("userId", userId))
-      .unique();
-    if (!profile) return;
-    const today = new Date().toISOString().slice(0, 10);
-    if (profile.lastFreeGemDate === today) return;
-    await ctx.db.patch(profile._id, {
-      gems: profile.gems + 1,
-      lastFreeGemDate: today,
-      updatedAt: Date.now(),
-    });
   },
 });

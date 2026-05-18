@@ -509,7 +509,7 @@ export function QuickAddDialog({
                   else aiMeal.handleAiAnalyzeMeal();
                 }}
                 disabled={aiMeal.aiAnalyzing || (!aiMeal.photoBase64 && !aiMeal.aiMealDescription.trim())}
-                className="flex-1 h-12 rounded-2xl text-[15px] font-semibold bg-primary text-primary-foreground active:scale-[0.98] transition-transform disabled:opacity-40"
+                className="relative flex-1 h-12 rounded-2xl text-[15px] font-semibold bg-primary text-primary-foreground active:scale-[0.98] transition-transform disabled:opacity-40"
               >
                 {aiMeal.aiAnalyzing ? (
                   <span className="inline-flex items-center gap-2">
@@ -517,11 +517,17 @@ export function QuickAddDialog({
                     Analyzing…
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5">
-                    <Sparkles className="h-4 w-4" />
-                    {aiMeal.photoBase64 ? "Analyze photo" : "Analyze"}
-                    {gemBadge}
-                  </span>
+                  <>
+                    <span className="inline-flex items-center gap-1.5">
+                      <Sparkles className="h-4 w-4" />
+                      {aiMeal.photoBase64 ? "Analyze photo" : "Analyze"}
+                    </span>
+                    {gemBadge && (
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                        {gemBadge}
+                      </span>
+                    )}
+                  </>
                 )}
               </Button>
             </div>

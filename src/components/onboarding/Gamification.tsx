@@ -584,7 +584,7 @@ export function DeclarationButton({
       onPointerUp={end}
       onPointerLeave={end}
       onPointerCancel={end}
-      className="relative w-full h-14 rounded-2xl bg-primary text-primary-foreground text-[15px] font-bold tracking-wide active:scale-[0.99] transition-transform overflow-hidden"
+      className="no-tap-select relative w-full h-14 rounded-2xl bg-primary text-primary-foreground text-[15px] font-bold tracking-wide active:scale-[0.99] transition-transform overflow-hidden"
       style={{
         touchAction: "none",
         // `isolation: isolate` forces a fresh stacking context on this button
@@ -630,12 +630,8 @@ export interface TaleStat {
 }
 
 export function TaleOfTheTapeCard({
-  name,
-  sport,
   stats,
 }: {
-  name: string;
-  sport: string;
   stats: TaleStat[];
 }) {
   const reduced = useReducedMotion();
@@ -648,13 +644,9 @@ export function TaleOfTheTapeCard({
       style={{ willChange: "transform, opacity" }}
     >
       <div className="text-center mb-4">
-        <p className="text-[10px] uppercase tracking-[0.18em] font-bold text-primary/70 mb-1">
+        <h3 className="text-[28px] font-black uppercase tracking-wide leading-none text-foreground">
           Tale of the Tape
-        </p>
-        <h3 className="text-[26px] font-black leading-none">{name || "Fighter"}</h3>
-        <p className="text-[12px] uppercase tracking-wider text-muted-foreground mt-1">
-          {sport}
-        </p>
+        </h3>
       </div>
       <div className="rounded-2xl bg-muted/30 border border-border/40 divide-y divide-border/30">
         {stats.map((s, i) => (
