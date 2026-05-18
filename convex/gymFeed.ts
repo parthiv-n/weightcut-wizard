@@ -117,6 +117,15 @@ export const listFeed = query({
     // side so a runaway pagination call can't pull thousands of rows.
     const numItems = Math.min(Math.max(paginationOpts.numItems, 1), 50);
 
+    // Fetch the full set of postIds this viewer has already swiped away so
+    // we can drop them from the returned page. Collected once per query;
+    // bounded by gym-feed lifetime × members, not by total post count.
+    const viewedRows = await ctx.db
+      .query("feed_views")
+      .withIndex("by_user", (q) => q.eq("userId", viewerId))
+      .collect();
+    const viewedPostIds = new Set(viewedRows.map((r) => r.postId));
+
     const page = await ctx.db
       .query("session_media")
       .withIndex("by_gym_created", (q) => q.eq("gymId", gymId))
@@ -132,11 +141,17 @@ export const listFeed = query({
       )
       .paginate({ cursor: paginationOpts.cursor, numItems });
 
+    // Filter out posts the viewer has already swiped away, but always
+    // keep the viewer's own posts (author exemption mirrors the mutation).
+    const visiblePage = page.page.filter(
+      (m) => m.userId === viewerId || !viewedPostIds.has(m._id),
+    );
+
     // Dedupe author lookups: a chatty user posting 5 of the 12 visible
     // polaroids previously caused 5 redundant `profiles.by_user` reads.
     // Collect unique userIds, batch-fetch profiles + avatar URLs once,
     // then read from the map per-post. (Perf P0 — flagged 2026-05-18.)
-    const uniqueAuthorIds = [...new Set(page.page.map((m) => m.userId))];
+    const uniqueAuthorIds = [...new Set(visiblePage.map((m) => m.userId))];
     const authorProfiles = await Promise.all(
       uniqueAuthorIds.map((uid) =>
         ctx.db
@@ -160,7 +175,7 @@ export const listFeed = query({
     );
 
     const posts = await Promise.all(
-      page.page.map(async (m) => {
+      visiblePage.map(async (m) => {
         const author = authorMap.get(m.userId);
         const [session, viewerLike, mediaUrl, thumbUrl] = await Promise.all([
           ctx.db.get(m.sessionId),

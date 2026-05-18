@@ -467,6 +467,21 @@ export default defineSchema({
     .index("by_user", ["userId"]),
 
   /**
+   * One-time-view tracking for the polaroid feed. A row is inserted when a
+   * non-author viewer swipes a post away. `listFeed` filters out rows whose
+   * `_id` appears in the viewer's viewed set so the post never resurfaces.
+   * The author's own posts are exempt — no row is ever written for the
+   * poster themselves. Idempotent insert in `markPostViewed`.
+   */
+  feed_views: defineTable({
+    postId: v.id("session_media"),
+    userId: v.id("users"),
+    viewedAt: v.number(),
+  })
+    .index("by_user_post", ["userId", "postId"])
+    .index("by_user", ["userId"]),
+
+  /**
    * Moderation reports on a feed post. Gym admins triage via the
    * `by_gym_status` index. Three user reports auto-soft-delete the post
    * (see feedSocial.reportPost) — the gym admin can then unhide or

@@ -266,6 +266,39 @@ export const markEngagementSeen = mutation({
   },
 });
 
+// ─── One-time view ─────────────────────────────────────────────────────
+
+/**
+ * Mark a post as viewed for the calling user. Used by the polaroid feed's
+ * swipe-away gesture so that already-consumed posts drop out of the
+ * viewer's listFeed. Idempotent: re-marking is a no-op. The post author
+ * never marks their own posts as viewed (client guards as well, but we
+ * double-check server-side).
+ */
+export const markPostViewed = mutation({
+  args: { postId: v.id("session_media") },
+  handler: async (ctx, { postId }) => {
+    const post = await ctx.db.get(postId);
+    if (!post) return null;
+    if (!post.gymId) return null;
+    const { userId } = await requireGymViewer(ctx, post.gymId);
+    // Author exemption: never log a "view" against the poster themselves.
+    if (post.userId === userId) return null;
+    // Idempotency: skip if a row already exists.
+    const existing = await ctx.db
+      .query("feed_views")
+      .withIndex("by_user_post", (q) => q.eq("userId", userId).eq("postId", postId))
+      .unique();
+    if (existing) return null;
+    await ctx.db.insert("feed_views", {
+      postId,
+      userId,
+      viewedAt: Date.now(),
+    });
+    return null;
+  },
+});
+
 // ─── Moderation ────────────────────────────────────────────────────────
 
 /**
