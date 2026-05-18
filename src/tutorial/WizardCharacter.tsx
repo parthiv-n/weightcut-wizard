@@ -57,12 +57,14 @@ export function WizardCharacter({ pose, onTap }: WizardCharacterProps) {
         scaleY: { duration: 0.28 },
       }}
     >
-      <img
-        src={wizardLogo}
-        alt=""
-        className="h-full w-full object-contain pointer-events-none select-none"
-        draggable={false}
-      />
+      <div className="h-full w-full overflow-hidden rounded-full">
+        <img
+          src={wizardLogo}
+          alt=""
+          className="h-full w-full object-cover pointer-events-none select-none"
+          draggable={false}
+        />
+      </div>
       {!prefersReduced &&
         SPARKLES.map((s, i) => (
           <motion.span

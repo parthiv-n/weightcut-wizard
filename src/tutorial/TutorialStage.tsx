@@ -1,6 +1,7 @@
 import { Component, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "motion/react";
+import { X } from "lucide-react";
 import { StatusBar, Style } from "@capacitor/status-bar";
 import { Capacitor } from "@capacitor/core";
 import { ImpactStyle } from "@capacitor/haptics";
@@ -126,16 +127,33 @@ function StageInner({
     >
       <motion.div
         className="absolute inset-0"
-        style={{
-          backdropFilter: "blur(6px) brightness(0.45)",
-          WebkitBackdropFilter: "blur(6px) brightness(0.45)",
-        }}
+        style={{ background: "transparent" }}
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         transition={{ duration: 0.22 }}
         onClick={handleBackdropTap}
       />
+
+      {/* Skip pill, top-right, screen-relative */}
+      <button
+        type="button"
+        onClick={handleSkip}
+        aria-label="Skip tutorial"
+        className="absolute z-10 flex h-9 items-center gap-1.5 rounded-full px-3 text-[12px] font-medium text-white/85"
+        style={{
+          top: "calc(env(safe-area-inset-top) + 14px)",
+          right: "calc(env(safe-area-inset-right) + 14px)",
+          background: "rgba(0,0,0,0.55)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          border: "1px solid rgba(255,255,255,0.10)",
+          WebkitTapHighlightColor: "transparent",
+        }}
+      >
+        <X className="h-3.5 w-3.5" strokeWidth={2.4} />
+        Skip
+      </button>
 
       {flowId === "onboarding" && (
         <div className="absolute inset-x-0 top-0">
@@ -172,7 +190,6 @@ function StageInner({
           isLastStep={isLastStep}
           onBack={onPrev}
           onNext={handleNext}
-          onSkip={handleSkip}
         />
       </div>
     </div>,
