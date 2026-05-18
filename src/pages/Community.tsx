@@ -73,6 +73,19 @@ export default function Community() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gymId]);
 
+  // mark-post-viewed mutation — fires when the user swipes a card away.
+  // Server-side idempotent; filters the post from future feed loads.
+  const markPostViewed = useMutation(api.feedSocial.markPostViewed);
+
+  const handlePostSwiped = useCallback(
+    (postId: Id<"session_media">) => {
+      markPostViewed({ postId }).catch((err) => {
+        logger.warn("markPostViewed failed", { err: String(err) });
+      });
+    },
+    [markPostViewed],
+  );
+
   // Engagement-seen mutation — clear the bottom-nav red dot once the
   // user has *opened* the tab. Idempotent server-side, so we don't
   // need to gate on whether there were unreads.
@@ -151,7 +164,10 @@ export default function Community() {
             // Empty feed: encourage the user to post their first session.
             // Solo-member gyms see this same card; they can post and the
             // feed will populate with their own posts on the next tick.
-            <EmptyFeed onInviteClick={() => navigate("/my-gym")} />
+            <EmptyFeed
+              onInviteClick={() => navigate("/my-gym")}
+              onLogSessionClick={() => navigate("/training-calendar")}
+            />
           ) : (
             <CommunityFeedSection
               posts={posts}
@@ -162,6 +178,7 @@ export default function Community() {
               advance={advance}
               onOpenProfile={(uid) => navigate(`/profile/${uid}`)}
               onOpenComments={openComments}
+              onPostSwiped={handlePostSwiped}
               onPostClick={() => {
                 // Hook for the composer — wired in a parallel agent's
                 // PR. The button is a no-op until then so the user
@@ -191,26 +208,35 @@ export default function Community() {
 
 interface EmptyFeedProps {
   onInviteClick: () => void;
+  onLogSessionClick: () => void;
 }
 
-function EmptyFeed({ onInviteClick }: EmptyFeedProps) {
+function EmptyFeed({ onInviteClick, onLogSessionClick }: EmptyFeedProps) {
   return (
     <section className="glass-card rounded-2xl border border-border/50 p-6 mt-6 text-center">
       <div className="mx-auto h-16 w-16 rounded-2xl bg-foreground/[0.06] dark:bg-white/[0.08] flex items-center justify-center mb-4">
         <Camera className="h-8 w-8 text-foreground" strokeWidth={1.5} />
       </div>
-      <h2 className="text-lg font-semibold">No posts yet</h2>
+      <h2 className="text-lg font-semibold">Feed cleared</h2>
       <p className="text-sm text-muted-foreground mt-1 max-w-[30ch] mx-auto">
-        Share a session from your Training Calendar and it will land here. Bring teammates in if you want more company.
+        You've seen every post for now. Log a session and bring it back to life.
       </p>
 
       <Button
         type="button"
-        onClick={onInviteClick}
+        onClick={onLogSessionClick}
         className="mt-6 rounded-full px-6"
       >
-        Bring a teammate
+        Log a training session
       </Button>
+
+      <button
+        type="button"
+        onClick={onInviteClick}
+        className="mt-3 block w-full text-sm text-muted-foreground underline-offset-2 hover:underline"
+      >
+        Bring a teammate
+      </button>
     </section>
   );
 }
@@ -226,6 +252,7 @@ interface CommunityFeedSectionProps {
   advance: () => void;
   onOpenProfile: (userId: Id<"users">) => void;
   onOpenComments: (postId: Id<"session_media">, count: number) => void;
+  onPostSwiped: (postId: Id<"session_media">) => void;
   onPostClick: () => void;
 }
 
@@ -238,6 +265,7 @@ function CommunityFeedSection({
   advance,
   onOpenProfile,
   onOpenComments,
+  onPostSwiped,
   onPostClick,
 }: CommunityFeedSectionProps) {
   const topPost = posts[topIndex];
@@ -269,6 +297,7 @@ function CommunityFeedSection({
           onIndexChange={onTopIndexChange}
           onOpenProfile={onOpenProfile}
           onDoubleTapLike={() => topEngagement.doubleTapLike()}
+          onSwipeCommit={onPostSwiped}
           onPostClick={onPostClick}
         />
       </div>

@@ -27,7 +27,7 @@
  *   positions naturally via the layout offsets.
  */
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { motion, useMotionValue, useTransform, useDragControls, type PanInfo } from "motion/react";
+import { motion, useMotionValue, useTransform, useDragControls, useReducedMotion, type PanInfo } from "motion/react";
 import { triggerHaptic } from "@/lib/haptics";
 import { ImpactStyle } from "@capacitor/haptics";
 import { useDoubleTap } from "@/hooks/useDoubleTap";
@@ -40,7 +40,13 @@ const STACK_DEPTH = 3;
 const FLICK_OFFSET_PX = 120;
 const FLICK_VELOCITY = 600;
 const EXIT_DURATION_MS = 350;
+const REDUCED_EXIT_DURATION_MS = 120;
 const PREFETCH_TRIGGER = 5; // load more when within N cards of end
+
+// iOS-pop-tier spring for the fling exit.
+const EXIT_SPRING = { type: "spring", stiffness: 380, damping: 32, mass: 0.9 } as const;
+// Softer spring for the card behind rising to top position.
+const SETTLE_SPRING = { type: "spring", stiffness: 220, damping: 28, mass: 1 } as const;
 
 interface PolaroidStackProps {
   posts: FeedPost[];
@@ -60,6 +66,9 @@ interface PolaroidStackProps {
   /** Advance the deck — owned by the parent hook so sessionStorage stays
    *  in sync. */
   advance: () => void;
+  /** Called with the post id the moment a swipe commits (before advance).
+   *  Use this to fire markPostViewed or any other side-effect. */
+  onSwipeCommit?: (postId: Id<"session_media">) => void;
 }
 
 interface GloveBurst {
@@ -78,7 +87,9 @@ export function PolaroidStack({
   onPostClick,
   topIndex,
   advance,
+  onSwipeCommit,
 }: PolaroidStackProps) {
+  const prefersReducedMotion = useReducedMotion();
   // Motion primitives for the top card. We instantiate them HERE rather
   // than reach into `usePolaroidStack` so the hook stays decoupled from
   // the stack's render tree (testable in isolation, can drive multiple
@@ -92,6 +103,8 @@ export function PolaroidStack({
   // without unmounting the still-visible underneath cards.
   const [exitingPostId, setExitingPostId] = useState<Id<"session_media"> | null>(null);
   const exitDirRef = useRef<1 | -1>(1);
+  // Capture release velocity so the exit target carries momentum past the edge.
+  const exitVelocityRef = useRef<{ vx: number; vy: number }>({ vx: 0, vy: 0 });
 
   // Glove-tap delight burst layer. Multiple bursts can stack if the
   // user double-taps rapidly — each is keyed and self-removes.
@@ -137,9 +150,13 @@ export function PolaroidStack({
   const topPost = visible[0];
 
   const commitFlick = useCallback(
-    (direction: 1 | -1) => {
+    (direction: 1 | -1, vx = 0, vy = 0) => {
       if (!topPost) return;
       exitDirRef.current = direction;
+      exitVelocityRef.current = { vx, vy };
+      // Fire the callback BEFORE advancing so parent's optimistic state
+      // matches the in-flight animation.
+      onSwipeCommit?.(topPost.id);
       setExitingPostId(topPost.id);
       triggerHaptic(ImpactStyle.Medium);
 
@@ -148,23 +165,25 @@ export function PolaroidStack({
       // advance via setTimeout rather than `onAnimationComplete` so
       // the timing is deterministic even if motion re-evaluates the
       // animation prop mid-flight.
+      const exitMs = prefersReducedMotion ? REDUCED_EXIT_DURATION_MS : EXIT_DURATION_MS;
       window.setTimeout(() => {
         setExitingPostId(null);
         x.set(0);
         y.set(0);
         advance();
-      }, EXIT_DURATION_MS);
+      }, exitMs);
     },
-    [topPost, advance, x, y],
+    [topPost, advance, x, y, onSwipeCommit, prefersReducedMotion],
   );
 
   const handleDragEnd = useCallback(
     (_e: unknown, info: PanInfo) => {
       const dx = info.offset.x;
       const vx = info.velocity.x;
+      const vy = info.velocity.y;
       const shouldFlick = Math.abs(dx) > FLICK_OFFSET_PX || Math.abs(vx) > FLICK_VELOCITY;
       if (shouldFlick) {
-        commitFlick(dx > 0 ? 1 : -1);
+        commitFlick(dx > 0 ? 1 : -1, vx, vy);
       }
       // If not flicked, motion's `animate={false}` + the wrapper's
       // implicit spring on x/y handles snap-back automatically because
@@ -199,10 +218,10 @@ export function PolaroidStack({
   const doubleTap = useDoubleTap({
     onSingleTap: () => {
       // Tap-to-flick: random direction so consecutive taps don't all
-      // pile up on the same side.
+      // pile up on the same side. No real velocity for a tap so pass 0.
       if (!topPost || exitingPostId) return;
       const dir = Math.random() > 0.5 ? 1 : -1;
-      commitFlick(dir);
+      commitFlick(dir, 0, 0);
     },
     onDoubleTap: () => {
       if (!topPost) return;
@@ -238,19 +257,51 @@ export function PolaroidStack({
 
         if (isExiting) {
           // The flicked card animates off-screen via explicit `animate`.
+          // Exit target is a function of the release direction + velocity
+          // so the card carries momentum past the screen edge rather than
+          // jumping to a fixed offset.
+          const dir = exitDirRef.current;
+          const { vx, vy } = exitVelocityRef.current;
+          // Base exit: 140% of vw. Scale by velocity (clamped) so a fast
+          // flick carries further — max 1.8× vw, min 1.4× vw.
+          const velocityBoost = Math.min(Math.abs(vx) / 1200, 0.4);
+          const exitX = dir * window.innerWidth * (1.4 + velocityBoost);
+          // Y carry-through: preserve vertical velocity direction + scale.
+          const exitY = vy * 0.3;
+          // Rotation deepens with direction; reduced-motion path skips rotation.
+          const exitRotate = prefersReducedMotion ? rotationDeg : dir * 18;
+
+          if (prefersReducedMotion) {
+            // Reduced-motion: short fade, no rotation change.
+            return (
+              <motion.div
+                key={post.id}
+                className="absolute inset-0"
+                style={{ zIndex: 40 }}
+                initial={{ x: x.get(), y: y.get(), rotate: rotationDeg, opacity: 1 }}
+                animate={{ x: exitX, y: exitY, rotate: exitRotate, opacity: 0 }}
+                transition={{ duration: REDUCED_EXIT_DURATION_MS / 1000, ease: "linear" }}
+              >
+                <PolaroidCard post={post} stackPosition={0} isTop rotationDeg={rotationDeg} />
+              </motion.div>
+            );
+          }
+
           return (
             <motion.div
               key={post.id}
               className="absolute inset-0"
               style={{ zIndex: 40 }}
               initial={{ x: x.get(), y: y.get(), rotate: rotate.get(), opacity: 1 }}
-              animate={{
-                x: exitDirRef.current * window.innerWidth * 1.4,
-                y: 0,
-                rotate: exitDirRef.current * 30,
-                opacity: 0,
+              animate={{ x: exitX, y: exitY, rotate: exitRotate, opacity: 0 }}
+              transition={{
+                x: EXIT_SPRING,
+                y: EXIT_SPRING,
+                rotate: EXIT_SPRING,
+                // Opacity fades only in the last 40% of travel — achieved via
+                // a delay that equals 60% of the expected spring settling time.
+                opacity: { delay: 0.13, duration: 0.18, ease: "easeIn" },
               }}
-              transition={{ duration: EXIT_DURATION_MS / 1000, ease: [0.32, 0.72, 0, 1] }}
             >
               <PolaroidCard
                 post={post}

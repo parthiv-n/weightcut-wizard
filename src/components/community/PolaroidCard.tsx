@@ -80,7 +80,7 @@ function PolaroidCardBase({
       className={`absolute inset-0 ${isTop ? "" : "pointer-events-none"}`}
       style={{ zIndex: offsets.z }}
       animate={staticTransform}
-      transition={{ type: "spring", damping: 18, stiffness: 220, mass: 0.9 }}
+      transition={{ type: "spring", stiffness: 220, damping: 28, mass: 1 }}
     >
       <div className="bg-white p-4 pb-10 rounded-sm shadow-2xl select-none">
         {/* Image well */}
