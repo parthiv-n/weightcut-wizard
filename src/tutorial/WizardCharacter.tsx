@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from "motion/react";
-import wizardLogo from "@/assets/wizard-logo.webp";
+import wizardLogo from "@/assets/wizard-tutorial.png";
 import type { WizardPose } from "./types";
 
 interface WizardCharacterProps {
@@ -46,7 +46,7 @@ export function WizardCharacter({ pose, onTap }: WizardCharacterProps) {
       type="button"
       onClick={onTap}
       aria-label="Wizard"
-      className="relative h-[120px] w-[120px] flex items-center justify-center bg-transparent"
+      className="relative h-[140px] w-[140px] flex items-center justify-center bg-transparent"
       style={{ willChange: "transform", touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
       animate={{ ...idleLoop, ...poseAnim }}
       transition={{
@@ -57,14 +57,12 @@ export function WizardCharacter({ pose, onTap }: WizardCharacterProps) {
         scaleY: { duration: 0.28 },
       }}
     >
-      <div className="h-full w-full overflow-hidden rounded-full">
-        <img
-          src={wizardLogo}
-          alt=""
-          className="h-full w-full object-cover pointer-events-none select-none"
-          draggable={false}
-        />
-      </div>
+      <img
+        src={wizardLogo}
+        alt=""
+        className="h-full w-full object-contain pointer-events-none select-none"
+        draggable={false}
+      />
       {!prefersReduced &&
         SPARKLES.map((s, i) => (
           <motion.span
