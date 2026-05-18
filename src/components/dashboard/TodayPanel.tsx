@@ -33,14 +33,7 @@ export function TodayPanel({ adherence, nextWorkout }: Props) {
           <Link
             key={it.key}
             to={it.href}
-            // Right-column items (Training, Check-in) are pushed to the
-            // end of their cell with justify-end so their content sits
-            // equidistant from the right card border as Weight/Sleep do
-            // from the left — fixes the lopsided "items hugging the
-            // middle" look the left-aligned grid had.
-            className={`flex items-center gap-2 rounded-lg py-1.5 px-2 hover:bg-muted/40 transition ${
-              idx % 2 === 1 ? "justify-end" : ""
-            }`}
+            className="flex items-center gap-2 rounded-lg py-1.5 px-2 hover:bg-muted/40 transition"
           >
             {adherence[it.key] ? (
               <CheckCircle2 className="size-4 text-emerald-400" />

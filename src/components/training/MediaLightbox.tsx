@@ -19,6 +19,7 @@
  *    container, so it doesn't fight the scroller's horizontal axis.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Download, Loader2, X } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { Capacitor } from "@capacitor/core";
@@ -241,9 +242,9 @@ export function MediaLightbox({
   const active = items[activeIndex] ?? items[0];
   const opacity = Math.max(0.4, 1 - dragY / 600);
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[10001] bg-black flex flex-col touch-none"
+      className="fixed inset-0 z-[10002] bg-black flex flex-col touch-none"
       style={{
         opacity,
         transform: `translateY(${dragY}px)`,
@@ -352,7 +353,8 @@ export function MediaLightbox({
           </p>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
