@@ -141,11 +141,9 @@ export const listFeed = query({
       )
       .paginate({ cursor: paginationOpts.cursor, numItems });
 
-    // Filter out posts the viewer has already swiped away, but always
-    // keep the viewer's own posts (author exemption mirrors the mutation).
-    const visiblePage = page.page.filter(
-      (m) => m.userId === viewerId || !viewedPostIds.has(m._id),
-    );
+    // Filter out posts the viewer has already swiped away. Every viewer
+    // (including the author) sees each post exactly once.
+    const visiblePage = page.page.filter((m) => !viewedPostIds.has(m._id));
 
     // Dedupe author lookups: a chatty user posting 5 of the 12 visible
     // polaroids previously caused 5 redundant `profiles.by_user` reads.

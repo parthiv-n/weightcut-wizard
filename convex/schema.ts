@@ -107,6 +107,11 @@ export default defineSchema({
     // feed-open is far cheaper than per-event seen-flag flipping.
     lastSeenEngagementAt: v.optional(v.number()),
 
+    // Drives the activity-feed unread badge (bell icon). Updated when the
+    // user opens the activity sheet. Items with `_creationTime` newer than
+    // this are counted as unread in `feedActivity.unreadActivityCount`.
+    lastActivitySeenAt: v.optional(v.number()),
+
     updatedAt: v.optional(v.number()),
   })
     .index("by_user", ["userId"])

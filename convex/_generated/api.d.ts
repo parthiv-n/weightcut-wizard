@@ -63,6 +63,7 @@ import type * as deleteAccountMutations from "../deleteAccountMutations.js";
 import type * as device_tokens from "../device_tokens.js";
 import type * as exercise_prs from "../exercise_prs.js";
 import type * as exercises from "../exercises.js";
+import type * as feedActivity from "../feedActivity.js";
 import type * as feedSocial from "../feedSocial.js";
 import type * as fightFormScore from "../fightFormScore.js";
 import type * as fightFormScore_internal from "../fightFormScore_internal.js";
@@ -155,6 +156,7 @@ declare const fullApi: ApiFromModules<{
   device_tokens: typeof device_tokens;
   exercise_prs: typeof exercise_prs;
   exercises: typeof exercises;
+  feedActivity: typeof feedActivity;
   feedSocial: typeof feedSocial;
   fightFormScore: typeof fightFormScore;
   fightFormScore_internal: typeof fightFormScore_internal;

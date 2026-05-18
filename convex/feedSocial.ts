@@ -282,8 +282,6 @@ export const markPostViewed = mutation({
     if (!post) return null;
     if (!post.gymId) return null;
     const { userId } = await requireGymViewer(ctx, post.gymId);
-    // Author exemption: never log a "view" against the poster themselves.
-    if (post.userId === userId) return null;
     // Idempotency: skip if a row already exists.
     const existing = await ctx.db
       .query("feed_views")
