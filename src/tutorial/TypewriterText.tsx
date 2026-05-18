@@ -71,11 +71,14 @@ export function TypewriterText({
 
   const isTyping = count < text.length;
   return (
-    <span>
-      {text.slice(0, count)}
-      {isTyping && !prefersReduced && (
-        <span className="inline-block w-[2px] h-[1em] align-[-0.15em] ml-[1px] bg-current animate-pulse" />
-      )}
+    <span className="relative inline-block w-full align-baseline">
+      <span aria-hidden className="invisible whitespace-pre-wrap">{text}</span>
+      <span className="absolute inset-0 whitespace-pre-wrap">
+        {text.slice(0, count)}
+        {isTyping && !prefersReduced && (
+          <span className="inline-block w-[2px] h-[1em] align-[-0.15em] ml-[1px] bg-current animate-pulse" />
+        )}
+      </span>
     </span>
   );
 }

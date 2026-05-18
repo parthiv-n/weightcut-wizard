@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { motion, useReducedMotion } from "motion/react";
+import { useEffect } from "react";
+import { motion, useAnimation, useReducedMotion } from "motion/react";
 import { TypewriterText } from "./TypewriterText";
 import { endsAtSentence } from "./typewriter";
 import type { VoicePace } from "./types";
@@ -25,11 +25,11 @@ export function SpeechBubble({
   onTypingComplete,
 }: SpeechBubbleProps) {
   const prefersReduced = useReducedMotion();
-  const [pulseKey, setPulseKey] = useState(0);
+  const pulseControls = useAnimation();
 
   useEffect(() => {
-    setPulseKey(0);
-  }, [revealKey]);
+    pulseControls.set({ scale: 1 });
+  }, [revealKey, pulseControls]);
 
   return (
     <motion.div
@@ -52,11 +52,7 @@ export function SpeechBubble({
       exit={prefersReduced ? { opacity: 0 } : { scale: 0.6, opacity: 0, y: 8 }}
       transition={prefersReduced ? { duration: 0.12 } : bubbleSpring}
     >
-      <motion.div
-        key={`pulse-${pulseKey}`}
-        animate={pulseKey > 0 && !prefersReduced ? { scale: [1, 1.02, 1] } : {}}
-        transition={{ duration: 0.12 }}
-      >
+      <motion.div animate={pulseControls}>
         <h3 className="text-base font-semibold leading-tight text-white">{headline}</h3>
         <p className="mt-2 text-[13.5px] leading-relaxed text-white/85">
           <TypewriterText
@@ -66,7 +62,7 @@ export function SpeechBubble({
             onComplete={onTypingComplete}
             onTick={(revealedSoFar) => {
               if (!prefersReduced && endsAtSentence(revealedSoFar)) {
-                setPulseKey((k) => k + 1);
+                pulseControls.start({ scale: [1, 1.02, 1], transition: { duration: 0.12 } });
               }
             }}
           />
