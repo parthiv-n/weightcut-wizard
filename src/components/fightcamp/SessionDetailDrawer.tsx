@@ -96,13 +96,15 @@ export function SessionDetailDrawer({
   );
 
   // Build the unified list the lightbox renders. Combines (a) the legacy
-  // single `media_url` from the row when no multi-attachments exist, with
-  // (b) the new session_media rows. The legacy entry is suppressed once
-  // the user adds new media so we don't double-count it.
+  // single `media_url` from the row, with (b) the new session_media rows.
+  // The legacy entry is ALWAYS shown when `media_url` is non-null — even
+  // if the user has since added more attachments — because the legacy
+  // attachment and the new ones are independent records, not duplicates
+  // of the same image. Suppressing the legacy on the presence of new
+  // media meant attaching a second photo made the first one vanish.
   const lightboxItems: LightboxItem[] = useMemo(() => {
     const items: LightboxItem[] = [];
-    const legacyOnly = (mediaList?.length ?? 0) === 0 && !!session?.media_url;
-    if (legacyOnly && session) {
+    if (session?.media_url) {
       items.push({
         id: `legacy-${session.id}`,
         url: session.media_url,
