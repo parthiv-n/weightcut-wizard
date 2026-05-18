@@ -38,6 +38,7 @@ import { GymHeader } from "@/components/community/GymHeader";
 import { PolaroidStack } from "@/components/community/PolaroidStack";
 import { SessionInfoCard } from "@/components/community/SessionInfoCard";
 import { StackSkeleton } from "@/components/community/StackSkeleton";
+import { ActivitySheet } from "@/components/community/ActivitySheet";
 import { CommentsSheet } from "@/components/gym-feed/CommentsSheet";
 import { Button } from "@/components/ui/button";
 import { useFeedEngagement } from "@/hooks/useFeedEngagement";
@@ -99,6 +100,11 @@ export default function Community() {
     // re-running on mount of a remount is fine.
   }, [gymId, markEngagementSeen]);
 
+  // Activity sheet state — mounted at page root, opened by the bell
+  // in GymHeader. Sheet auto-fires markActivitySeen on open to clear
+  // the unread badge.
+  const [activityOpen, setActivityOpen] = useState(false);
+
   // Comments sheet state — mounted once at page root so it survives
   // deck advances (matches the existing TikTokFeedSwiper pattern).
   const [commentsPostId, setCommentsPostId] = useState<Id<"session_media"> | null>(null);
@@ -147,6 +153,7 @@ export default function Community() {
             gymName={primaryGym.gym_name}
             memberCount={null}
             onInviteClick={() => navigate("/my-gym")}
+            onActivityClick={() => setActivityOpen(true)}
           />
         )}
 
@@ -184,6 +191,14 @@ export default function Community() {
           )}
         </main>
       </motion.div>
+
+      {/* Activity sheet — opens from the bell in the header. */}
+      <ActivitySheet
+        open={activityOpen}
+        onClose={() => setActivityOpen(false)}
+        gymId={gymId}
+        onOpenComments={(postId) => openComments(postId, 0)}
+      />
 
       {/* Comments sheet — mounted at page root, gated on postId. */}
       <CommentsSheet
