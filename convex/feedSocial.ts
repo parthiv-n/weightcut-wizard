@@ -265,3 +265,262 @@ export const markEngagementSeen = mutation({
     return { ok: true as const };
   },
 });
+
+// ─── Moderation ────────────────────────────────────────────────────────
+
+/**
+ * Open-report threshold that auto-soft-deletes a post. Tuned so a small
+ * coordinated brigade can't bury legitimate content (1-2 reports is
+ * noise) while still acting fast on genuine spam/abuse (3 distinct
+ * gym-mates is meaningful signal). The gym admin can restore the post
+ * via `restorePost` if the autodelete was wrong.
+ */
+const AUTO_SOFT_DELETE_REPORT_THRESHOLD = 3;
+
+/**
+ * File a moderation report on a feed post. Idempotent on
+ * (postId, reporterUserId) via the `by_post_reporter` index — calling
+ * twice with the same caller is a no-op (the existing row is patched
+ * with the new reason/note rather than duplicated).
+ *
+ * Access: caller must be an active member of the post's gym. A user
+ * outside the gym can't see the post in the first place; allowing
+ * them to report it would be a vector for cross-gym brigading.
+ *
+ * Auto-moderation: once a post accumulates `AUTO_SOFT_DELETE_REPORT_
+ * THRESHOLD` open reports, we soft-delete it on the spot. The
+ * `deletedAt` filter in `gymFeed.listFeed` then drops it from every
+ * member's feed within the next reactive tick. A gym admin can review
+ * the queue via `listGymReports` and call `restorePost` to undo a
+ * false-positive autodelete.
+ */
+export const reportPost = mutation({
+  args: {
+    postId: v.id("session_media"),
+    reason: v.union(
+      v.literal("spam"),
+      v.literal("inappropriate"),
+      v.literal("harassment"),
+      v.literal("other"),
+    ),
+    note: v.optional(v.string()),
+  },
+  handler: async (ctx, { postId, reason, note }) => {
+    const post = await ctx.db.get(postId);
+    if (!post || !post.gymId) {
+      throw new Error("Post not available");
+    }
+    const { userId: reporterUserId } = await requireGymViewer(ctx, post.gymId);
+
+    // Author can't report their own post — they should use
+    // `softDeletePost` directly. Silently no-op so the UI doesn't
+    // need to special-case the menu.
+    if (post.userId === reporterUserId) {
+      return { reported: false as const, autoSoftDeleted: false };
+    }
+
+    const trimmedNote = note?.trim();
+    const existing = await ctx.db
+      .query("post_reports")
+      .withIndex("by_post_reporter", (q) =>
+        q.eq("postId", postId).eq("reporterUserId", reporterUserId),
+      )
+      .unique();
+
+    if (existing) {
+      // Refresh reason/note + reopen if it was previously resolved.
+      await ctx.db.patch(existing._id, {
+        reason,
+        note: trimmedNote || undefined,
+        status: "open",
+      });
+    } else {
+      await ctx.db.insert("post_reports", {
+        postId,
+        gymId: post.gymId,
+        reporterUserId,
+        reason,
+        note: trimmedNote || undefined,
+        status: "open",
+      });
+    }
+
+    // Count distinct OPEN reports against this post and auto-hide if
+    // we hit the threshold. We scan by `by_post` (one index probe) and
+    // filter in memory — open-report counts on a single post are
+    // bounded by gym size, never large enough to need a richer index.
+    let autoSoftDeleted = false;
+    if (!post.deletedAt) {
+      const allReports = await ctx.db
+        .query("post_reports")
+        .withIndex("by_post", (q) => q.eq("postId", postId))
+        .collect();
+      const openCount = allReports.filter((r) => r.status === "open").length;
+      if (openCount >= AUTO_SOFT_DELETE_REPORT_THRESHOLD) {
+        await ctx.db.patch(postId, { deletedAt: Date.now() });
+        autoSoftDeleted = true;
+      }
+    }
+
+    return { reported: true as const, autoSoftDeleted };
+  },
+});
+
+/**
+ * Soft-delete a feed post. Sets `deletedAt: Date.now()` so the post
+ * stops appearing in `listFeed` / `listProfilePosts` / `recentFor
+ * CoachWidget` on the next reactive tick.
+ *
+ * Authorisation:
+ *  - the post's author, OR
+ *  - a coach (`memberRole === "coach"`) in the same gym.
+ *
+ * Idempotent — re-calling on an already-deleted row just patches the
+ * timestamp.
+ */
+export const softDeletePost = mutation({
+  args: { postId: v.id("session_media") },
+  handler: async (ctx, { postId }) => {
+    const userId = await requireUserId(ctx);
+    const post = await ctx.db.get(postId);
+    if (!post) throw new Error("Post not found");
+
+    const isAuthor = post.userId === userId;
+    let isGymCoach = false;
+    if (!isAuthor && post.gymId) {
+      const membership = await ctx.db
+        .query("gym_members")
+        .withIndex("by_gym_user", (q) =>
+          q.eq("gymId", post.gymId!).eq("userId", userId),
+        )
+        .unique();
+      isGymCoach =
+        !!membership &&
+        membership.status === "active" &&
+        membership.memberRole === "coach";
+    }
+    if (!isAuthor && !isGymCoach) throw new Error("Not allowed");
+
+    await ctx.db.patch(postId, { deletedAt: Date.now() });
+    return { ok: true as const };
+  },
+});
+
+/**
+ * Restore a soft-deleted post. Coach-only (same gym) — the author
+ * can soft-delete their own post but only the gym's coach can undo a
+ * takedown. This prevents an author from un-hiding a post the
+ * moderation system or coach pulled down.
+ *
+ * Idempotent — calling on an already-visible post is a no-op patch.
+ */
+export const restorePost = mutation({
+  args: { postId: v.id("session_media") },
+  handler: async (ctx, { postId }) => {
+    const userId = await requireUserId(ctx);
+    const post = await ctx.db.get(postId);
+    if (!post) throw new Error("Post not found");
+    if (!post.gymId) throw new Error("Post not part of a gym feed");
+
+    const membership = await ctx.db
+      .query("gym_members")
+      .withIndex("by_gym_user", (q) =>
+        q.eq("gymId", post.gymId!).eq("userId", userId),
+      )
+      .unique();
+    if (
+      !membership ||
+      membership.status !== "active" ||
+      membership.memberRole !== "coach"
+    ) {
+      throw new Error("Coach only");
+    }
+
+    // `patch` with `undefined` clears the field per Convex semantics —
+    // the row is visible to feed queries again on the next tick.
+    await ctx.db.patch(postId, { deletedAt: undefined });
+
+    // Also mark every open report against this post as `dismissed` so
+    // the moderation queue doesn't keep flagging a restored post.
+    const openReports = await ctx.db
+      .query("post_reports")
+      .withIndex("by_post", (q) => q.eq("postId", postId))
+      .collect();
+    await Promise.all(
+      openReports
+        .filter((r) => r.status === "open")
+        .map((r) => ctx.db.patch(r._id, { status: "dismissed" })),
+    );
+    return { ok: true as const };
+  },
+});
+
+/**
+ * Coach-only moderation queue for one gym. Lists open reports (default)
+ * or any status the caller asks for. Returns the report row joined
+ * with a lightweight post-preview block so the admin UI doesn't need
+ * a second round-trip per row.
+ *
+ * Access: caller must be an active coach in `gymId`.
+ */
+export const listGymReports = query({
+  args: {
+    gymId: v.id("gyms"),
+    status: v.optional(
+      v.union(
+        v.literal("open"),
+        v.literal("resolved"),
+        v.literal("dismissed"),
+      ),
+    ),
+  },
+  handler: async (ctx, { gymId, status }) => {
+    const { membership } = await requireGymViewer(ctx, gymId);
+    if (membership.memberRole !== "coach") {
+      throw new Error("Coach only");
+    }
+
+    const filterStatus = status ?? "open";
+    const reports = await ctx.db
+      .query("post_reports")
+      .withIndex("by_gym_status", (q) =>
+        q.eq("gymId", gymId).eq("status", filterStatus),
+      )
+      .order("desc")
+      .collect();
+
+    return await Promise.all(
+      reports.map(async (r) => {
+        const [post, reporterProfile] = await Promise.all([
+          ctx.db.get(r.postId),
+          ctx.db
+            .query("profiles")
+            .withIndex("by_user", (q) => q.eq("userId", r.reporterUserId))
+            .unique(),
+        ]);
+        const postPreview = post
+          ? {
+              id: post._id,
+              kind: post.kind,
+              url: await ctx.storage.getUrl(post.storageId),
+              caption: post.caption ?? null,
+              authorUserId: post.userId,
+              deletedAt: post.deletedAt ?? null,
+            }
+          : null;
+        return {
+          id: r._id,
+          createdAt: r._creationTime,
+          reason: r.reason,
+          note: r.note ?? null,
+          status: r.status,
+          reporter: {
+            userId: r.reporterUserId,
+            displayName: reporterProfile?.displayName ?? "Member",
+          },
+          post: postPreview,
+        };
+      }),
+    );
+  },
+});

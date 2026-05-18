@@ -1,4 +1,4 @@
-import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Calendar, HeartPulse, Dumbbell, TrendingDown, Moon, Users, Swords } from "lucide-react";
+import { Home, Utensils, Plus, Weight, Target, MoreHorizontal, Trophy, Calendar, HeartPulse, Dumbbell, TrendingDown, Moon, Users } from "lucide-react";
 import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import { useState, useEffect, memo } from "react";
 import { motion, LayoutGroup } from "motion/react";
@@ -30,7 +30,7 @@ const mainNavItems = [
   // Corner — gym-scoped social feed. Inserted as a new middle slot
   // alongside the existing nav (no slot replaced); engagement red-dot
   // moved here from the More button.
-  { title: "Corner", url: "/community", icon: Swords },
+  { title: "Corner", url: "/community", icon: Users },
   { title: "Weight", url: "/weight", icon: Weight },
 ];
 

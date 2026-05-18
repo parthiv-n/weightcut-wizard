@@ -15,7 +15,6 @@ import { StrainSparkline } from "@/components/coach/StrainSparkline";
 import { FightTargetBadge } from "@/components/coach/FightTargetBadge";
 import { AnnouncementComposeSheet } from "@/components/coach/AnnouncementComposeSheet";
 import { CoachFightOffersTile } from "@/components/coach/CoachFightOffersTile";
-import { InviteAthletePanel } from "@/components/coach/InviteAthletePanel";
 import { LeaderboardSection } from "@/components/leaderboard/LeaderboardSection";
 import { GymFeedWidget } from "@/components/coach/GymFeedWidget";
 import { localCache } from "@/lib/localCache";
@@ -157,7 +156,16 @@ export default function CoachDashboard() {
     <ErrorBoundary>
       <div
         className="animate-page-in space-y-5 px-5 py-3 sm:p-5 md:p-6 w-full max-w-3xl mx-auto"
-        style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 5rem)" }}
+        style={{
+          // Coach surface lives OUTSIDE the ProtectedAppLayout, so it
+          // doesn't inherit the global `safe-area-inset-top` padding.
+          // Without this, notched iPhones clip the profile/settings
+          // chip in the top-right of the header (logout becomes
+          // unreachable). 1rem keeps a comfortable visual gap on
+          // non-notched and desktop where env() resolves to 0.
+          paddingTop: "calc(env(safe-area-inset-top, 0px) + 1rem)",
+          paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 5rem)",
+        }}
       >
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -418,9 +426,10 @@ export default function CoachDashboard() {
                 </div>
               )}
 
-              {/* Invite-by-user-id panel — creates a pending gym_invite row
-                  that the target athlete must accept on their dashboard. */}
-              <InviteAthletePanel gymId={gym.id} />
+              {/* Invite-by-user-id panel removed — fighters can only join
+                  via the gym's invite code (shared from this dashboard's
+                  header / settings). The user-id flow created friction
+                  and silently added members without clear consent. */}
             </section>
           );
         })}

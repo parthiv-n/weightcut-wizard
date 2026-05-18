@@ -64,15 +64,24 @@ export function LeaderboardSection({
 
   const { podium, ranks, myRank, totalRankedFighters } = data;
 
-  // Empty
+  // Empty — copy is viewer-aware. The athlete-side copy nudges them to
+  // log a session ("be the first"); the coach-side copy explains the
+  // gym's state factually instead, since a coach can't post training
+  // for the leaderboard themselves.
   if (totalRankedFighters === 0) {
+    const emptyCopy =
+      filter === "All"
+        ? viewer === "coach"
+          ? "No training data from your fighters yet this week. Once they start logging sessions, rankings will appear here."
+          : "Be the first to train this week."
+        : viewer === "coach"
+          ? `No ${filter} sessions logged by your fighters this week.`
+          : `No ${filter} training logged this week.`;
     return (
       <section className="space-y-3">
         <DisciplineFilterTabs value={filter} onChange={setFilter} />
         <div className="glass-card rounded-2xl border border-border/50 p-4 text-center text-sm text-muted-foreground">
-          {filter === "All"
-            ? "Be the first to train this week."
-            : `No ${filter} training logged this week.`}
+          {emptyCopy}
         </div>
       </section>
     );

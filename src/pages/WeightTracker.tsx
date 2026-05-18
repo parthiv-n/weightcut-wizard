@@ -35,10 +35,21 @@ import { useWeightAnalysis } from "@/hooks/weight/useWeightAnalysis";
 import { useFeatureAccess } from "@/hooks/useFeatureAccess";
 import { triggerHapticSelection } from "@/lib/haptics";
 import { WeightInsightsBlock } from "@/pages/weight/WeightInsightsBlock";
+import { useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { useMyGyms } from "@/hooks/coach/useMyGyms";
+import { MadeWeightShareSheet } from "@/components/community/MadeWeightShareSheet";
+import type { MadeWeightInput } from "@/lib/madeWeightCard";
 
 export default function WeightTracker() {
-  const { userId, profile: contextProfile } = useUser();
+  const { userId, profile: contextProfile, userName, avatarUrl } = useUser();
   const profile = contextProfile as unknown as Profile;
+  // Gym branding + active camp inputs for the Made Weight share card.
+  // Both queries skip when userId hasn't resolved, so cold-launch is a no-op.
+  const { gyms } = useMyGyms(userId);
+  const activeCamp = useQuery(api.fight_camp.getActiveCamp, userId ? {} : "skip");
+  const [madeWeightOpen, setMadeWeightOpen] = useState(false);
+  const [madeWeightInput, setMadeWeightInput] = useState<MadeWeightInput | null>(null);
   const { hasAccess: hasAiAccess } = useFeatureAccess("AI_WEIGHT_ANALYSIS");
   const [searchParams, setSearchParams] = useSearchParams();
   const [timeFilter, setTimeFilter] = useState<"1W" | "1M" | "ALL">("1M");
@@ -90,7 +101,36 @@ export default function WeightTracker() {
       setTimeout(() => setShowWeightSuccess(false), 1500);
       const fwt = profile.fight_week_target_kg ?? profile.goal_weight_kg;
       if (fwt && loggedWeight <= fwt && !editingLogId) {
-        setWeighInShareOpen(true);
+        // Resolve "Made Weight" inputs from camp + recent logs. Falls back
+        // to the onboarding starting weight if no recent log exists.
+        const earliestRecent = (() => {
+          const cutoffMs = Date.now() - 30 * 86400000;
+          const within = weightLogs.filter(
+            (l) => new Date(l.date).getTime() >= cutoffMs,
+          );
+          const earliest = (within[0] ?? weightLogs[0]);
+          // weight_kg may be string-typed when arriving from older callers;
+          // coerce via Number() so we don't depend on a specific shape.
+          return earliest ? Number(earliest.weight_kg) : undefined;
+        })();
+        const startingWeightKg =
+          activeCamp?.startingWeightKg ?? earliestRecent ?? profile.current_weight_kg;
+        const campStartDate = activeCamp
+          ? new Date(activeCamp._creationTime).toISOString().slice(0, 10)
+          : undefined;
+        const gym = gyms[0];
+        setMadeWeightInput({
+          startingWeightKg: startingWeightKg ?? loggedWeight,
+          finalWeightKg: loggedWeight,
+          weighInDate: new Date().toISOString().slice(0, 10),
+          campStartDate,
+          displayName: userName || profile.display_name || "Fighter",
+          gymName: gym?.gym_name,
+          gymLogoUrl: gym?.gym_logo_url ?? null,
+          avatarUrl: avatarUrl ?? profile.avatar_url ?? null,
+          weightUnit: "kg",
+        });
+        setMadeWeightOpen(true);
       }
     }
   };
@@ -762,6 +802,14 @@ export default function WeightTracker() {
           />
         )}
       </ShareCardDialog>
+
+      {/* Auto-opens when a logged weigh-in meets or beats the user's target.
+          Polaroid-style 1080² card with gym branding for off-platform shares. */}
+      <MadeWeightShareSheet
+        open={madeWeightOpen}
+        onOpenChange={setMadeWeightOpen}
+        input={madeWeightInput}
+      />
     </>
   );
 }

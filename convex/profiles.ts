@@ -139,6 +139,136 @@ export const getAvatarUrl = query({
   },
 });
 
+/**
+ * Public-ish profile view for the Corner tab.
+ *
+ * Visibility rules (intentional — keeps profile existence private):
+ *  - Self → always visible.
+ *  - Same-gym viewer (both active in at least one shared gym) → visible.
+ *  - Anyone else → returns `null`. We don't 403 because the Corner UI may
+ *    deep-link a profile from a share card; a hard error would leak the
+ *    "this user exists" signal we don't want to broadcast.
+ *
+ * Stats are computed conservatively from existing tables (no new denorm):
+ *  - `sessionsLogged` → `fight_camp_calendar` rows for the user. Capped at
+ *    500 via `.take(500)` so a chatty user with thousands of historical
+ *    sessions can't blow up the per-query read budget. The cap is exposed
+ *    to the client as-is (501+ users will display "500+").
+ *  - `campsCompleted` → `fight_camps` rows with `isCompleted === true`.
+ *  - `kgCutTotal` → sum of (startingWeightKg − endWeightKg) across
+ *    completed camps. Camps missing either field contribute 0 — never NaN.
+ *
+ * Gym block is the viewer-facing identity for "where does this person
+ * train". Pulled from the user's active `gym_members` row via the
+ * `by_user_status` index (one indexed point-lookup); if the user has no
+ * active membership the `gymId` / `gymName` come back as `null` and
+ * `sameGym` is `false`.
+ */
+export const getByUserId = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, { userId: targetUserId }) => {
+    const viewerId = await requireUserId(ctx);
+    const isSelf = viewerId === targetUserId;
+
+    // Resolve target's active gym (the user's "home" gym for v1 — multi-gym
+    // plumbing exists but the Corner UI shows a single primary gym).
+    const targetMembership = await ctx.db
+      .query("gym_members")
+      .withIndex("by_user_status", (q) =>
+        q.eq("userId", targetUserId).eq("status", "active"),
+      )
+      .first();
+
+    // Same-gym check via the viewer's active memberships. We collect all of
+    // the viewer's active rows (typically 1, never more than a handful) and
+    // probe each against the target via the `by_gym_user` index.
+    let sameGym = false;
+    if (!isSelf) {
+      const viewerGyms = await ctx.db
+        .query("gym_members")
+        .withIndex("by_user_status", (q) =>
+          q.eq("userId", viewerId).eq("status", "active"),
+        )
+        .collect();
+      for (const vg of viewerGyms) {
+        const peer = await ctx.db
+          .query("gym_members")
+          .withIndex("by_gym_user", (q) =>
+            q.eq("gymId", vg.gymId).eq("userId", targetUserId),
+          )
+          .unique();
+        if (peer && peer.status === "active") {
+          sameGym = true;
+          break;
+        }
+      }
+      // Hide existence from non-peers — privacy-preserving null.
+      if (!sameGym) {
+        return null;
+      }
+    }
+
+    const profile = await findByUser(ctx, targetUserId);
+    if (!profile) return null;
+
+    // Resolve gym name (single doc read; cheap). Falls back to null when
+    // the user is not currently in any active gym.
+    const gym = targetMembership ? await ctx.db.get(targetMembership.gymId) : null;
+    const avatarUrl = profile.avatarStorageId
+      ? await ctx.storage.getUrl(profile.avatarStorageId)
+      : null;
+
+    // ── Stats ────────────────────────────────────────────────────────────
+    // `take(500)` is the hard ceiling — bounds the worst-case read cost at
+    // 500 docs for a power-user. The number is reported back as-is, the
+    // client decides whether to render "500+" or the raw count.
+    const sessions = await ctx.db
+      .query("fight_camp_calendar")
+      .withIndex("by_user_date", (q) => q.eq("userId", targetUserId))
+      .take(500);
+    const sessionsLogged = sessions.length;
+
+    const camps = await ctx.db
+      .query("fight_camps")
+      .withIndex("by_user", (q) => q.eq("userId", targetUserId))
+      .collect();
+    let campsCompleted = 0;
+    let kgCutTotal = 0;
+    for (const c of camps) {
+      if (c.isCompleted === true) {
+        campsCompleted += 1;
+        const start = typeof c.startingWeightKg === "number" ? c.startingWeightKg : null;
+        const end = typeof c.endWeightKg === "number" ? c.endWeightKg : null;
+        // Only count camps with BOTH endpoints — partial data would inflate
+        // / deflate the total in either direction. Defaults to 0 contribution.
+        if (start !== null && end !== null) {
+          const delta = start - end;
+          // Guard against negative deltas (rare data-entry typos where end
+          // > start) so the public stat never reads as "−2.3 kg cut".
+          if (delta > 0) kgCutTotal += delta;
+        }
+      }
+    }
+    // Round to 1 decimal so the UI doesn't have to deal with float crud.
+    kgCutTotal = Math.round(kgCutTotal * 10) / 10;
+
+    return {
+      userId: targetUserId,
+      displayName: profile.displayName ?? "Athlete",
+      avatarUrl,
+      role: profile.role,
+      gymId: targetMembership?.gymId ?? null,
+      gymName: gym?.name ?? null,
+      sameGym: isSelf ? true : sameGym,
+      stats: {
+        sessionsLogged,
+        kgCutTotal,
+        campsCompleted,
+      },
+    };
+  },
+});
+
 /** Cut plan (potentially large JSONB) — separated so callers that don't
  *  need it can avoid pulling it on every profile read. */
 export const getCutPlan = query({

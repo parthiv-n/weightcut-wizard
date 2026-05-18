@@ -407,12 +407,32 @@ export default defineSchema({
     // validate without a migration.
     likeCount: v.optional(v.number()),
     commentCount: v.optional(v.number()),
+    // 256px JPEG thumb used by the profile grid + polaroid stack so the
+    // feed doesn't blow image bandwidth fetching full-resolution.
+    // Backfilled by a one-shot internal action on rows missing it.
+    thumbStorageId: v.optional(v.id("_storage")),
+    // Tiny base64 LQIP (~2KB, 24×24 blurred) inlined into the feed
+    // payload so the first paint is instant before the real image
+    // resolves. No round-trip needed.
+    thumbDataUrl: v.optional(v.string()),
+    // Captured at upload time so layout can reserve the right aspect
+    // ratio in the grid (currently always 1:1 square, but post videos
+    // may differ in v2).
+    width: v.optional(v.number()),
+    height: v.optional(v.number()),
+    // Soft-delete: filtered out of every read. Populated by the post
+    // owner OR a gym admin via the moderation flow. Hard-delete still
+    // available via the existing cron path.
+    deletedAt: v.optional(v.number()),
   })
     .index("by_session", ["sessionId"])
     .index("by_user_captured", ["userId", "capturedAt"])
     // Drives the gym social feed: descending paginate by `_creationTime`
     // within a single `gymId` is exactly the page-1 read shape.
-    .index("by_gym_created", ["gymId"]),
+    .index("by_gym_created", ["gymId"])
+    // Profile grid hot path — descending paginate of one user's posts.
+    // `_creationTime` auto-appended; no separate timestamp field needed.
+    .index("by_user_created", ["userId"]),
 
   /**
    * Per-(post, user) like membership row. Indexed for O(1) "did I like
@@ -445,6 +465,33 @@ export default defineSchema({
     .index("by_post", ["postId"])
     .index("by_owner_created", ["postOwnerId"])
     .index("by_user", ["userId"]),
+
+  /**
+   * Moderation reports on a feed post. Gym admins triage via the
+   * `by_gym_status` index. Three user reports auto-soft-delete the post
+   * (see feedSocial.reportPost) — the gym admin can then unhide or
+   * confirm the takedown.
+   */
+  post_reports: defineTable({
+    postId: v.id("session_media"),
+    gymId: v.id("gyms"),
+    reporterUserId: v.id("users"),
+    reason: v.union(
+      v.literal("spam"),
+      v.literal("inappropriate"),
+      v.literal("harassment"),
+      v.literal("other"),
+    ),
+    note: v.optional(v.string()),
+    status: v.union(
+      v.literal("open"),
+      v.literal("resolved"),
+      v.literal("dismissed"),
+    ),
+  })
+    .index("by_gym_status", ["gymId", "status"])
+    .index("by_post", ["postId"])
+    .index("by_post_reporter", ["postId", "reporterUserId"]),
 
   fight_week_logs: defineTable({
     userId: v.id("users"),
@@ -621,7 +668,10 @@ export default defineSchema({
   })
     .index("by_gym", ["gymId"])
     .index("by_user", ["userId"])
-    .index("by_gym_user", ["gymId", "userId"]),
+    .index("by_gym_user", ["gymId", "userId"])
+    // "Resolve viewer → active gym" in one read. Hot path for the
+    // Corner tab and every gym-feed gate on the bottom nav.
+    .index("by_user_status", ["userId", "status"]),
 
   /**
    * Pending gym invites — a coach proposes adding an athlete (or vice-versa)
